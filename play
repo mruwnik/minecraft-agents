@@ -1,0 +1,20 @@
+#!/bin/bash
+# Start a Claude Code session as a Minecraft agent, creating the agent first if needed.
+#   ./play              a new agent with a drawn name
+#   ./play Aviendha     that agent (created if it doesn't exist yet)
+#   ./play Aviendha --model sonnet   extra arguments go to `claude`
+set -euo pipefail
+here="$(dirname "$(readlink -f "$0")")"
+name="${1:-}"
+[ $# -gt 0 ] && shift
+if [ -z "$name" ] || [ ! -f "$here/agents/$name/config.json" ]; then
+  created="$(node "$here/tools/new-agent.mjs" $name)"
+  echo "$created"
+  name="$(sed -n 's/^created agents\/\([A-Za-z0-9_]*\).*/\1/p' <<<"$created")"
+  if grep -q "NOT WHITELISTED" <<<"$created"; then
+    echo "Press Enter when the whitelist command has been run."
+    read -r
+  fi
+fi
+cd "$here/agents/$name"
+exec claude "$@" "You are $name. Read BRIEFING.md in this folder, then ../../harness/claude-code.md, ../../AGENT_GUIDE.md, ../../WORLD.md and journal.md, in that order. Start your body with ./start as a background command unless ./mc state already answers ok, wait for events by blocking on ./mc wait as the guide says (the Monitor tail from the harness notes is your fallback, since this is a session of its own), say hello in chat, and play. Keep going on your own; write your journal before you stop."

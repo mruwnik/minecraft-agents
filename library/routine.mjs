@@ -1,0 +1,48 @@
+// Run a list of steps in order, once per game day: the chore list of a homestead.
+// `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
+import fs from 'node:fs'
+import path from 'node:path'
+import { routineSteps } from '../src/lib.mjs'
+
+const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
+const readRole = name => {
+  const file = path.join(ROLES_DIR, `${name}.json`)
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null
+}
+
+export default {
+  doc: 'routine steps=|name= [place=] [days=1]: run a list of steps in order, once per game day, sleeping through the nights',
+  stops: 'days= done (a step that fails is noted, and the next one still runs)',
+  args: { steps: 'any', name: 'string', place: 'string', days: 'number', until: 'number' },
+
+  async run (api, a) {
+    const { steps, error } = routineSteps(a, readRole)
+    if (error) throw new Error(error)
+    const summary = { days: 0, ran: 0 }
+
+    const day = async () => {
+      for (const { action, ...args } of steps) {
+        await api.checkpoint()
+        const outcome = await api.act(action, args).then(r => r, e => ({ failed: e.message }))
+        summary.ran++
+        if (outcome.failed) summary.failed = summary.failed ?? `${action}: ${outcome.failed}`
+        api.note(`${action}${outcome.failed ? ` FAILED ${outcome.failed}` : ' ok'}`)
+      }
+      summary.days++
+      api.report(summary)
+    }
+
+    const nextDay = async () => {
+      await api.until(() => api.clock().night, { timeout: 1200, every: 10, what: 'the day never ended' })
+      await api.checkpoint()
+      await api.until(() => api.clock().day, { timeout: 1200, every: 10, what: 'the night never ended' })
+    }
+
+    for (;;) {
+      await day()
+      await api.checkpoint()
+      if (!(a.days > summary.days)) return summary
+      await nextDay()
+    }
+  }
+}
