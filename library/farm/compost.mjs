@@ -1,15 +1,15 @@
 // Feed a composter what a farm cannot use, and take the bone meal out when it fills.
 // 7 raises fill a composter; each item has its own chance of raising it (COMPOST_CHANCE), so this is a gamble per item, not a count.
-import { compostPlan } from '../../src/lib.mjs'
+import { compostPlan, planStructure } from '../../src/lib.mjs'
 
 const RANGE = 32
 // the composter to walk to: the one I was given, the one the plan marks with K, or the nearest one
 async function composterAt (api, a) {
   if (a.x !== undefined) return { x: a.x, y: a.y, z: a.z }
   if (a.place) {
-    const cell = api.plan(a.place).cells.find(c => c.ch === 'K')
+    const cell = planStructure(api.plan(a.place).cells, 'K')
     if (!cell) throw new Error(`${a.place} has no K (composter) cell in its plan`)
-    return { x: cell.x, y: cell.y, z: cell.z }
+    return cell
   }
   const { positions = [] } = await api.act('find_blocks', { block: 'composter', maxDistance: a.range ?? RANGE })
   const found = positions[0]

@@ -1,4 +1,4 @@
-// Create a new agent: a folder under agents/ with its own name, config, log, journal and tool wrappers.
+// Create a new agent: a folder under state/agents/ with its own name, config, log, journal and tool wrappers.
 //   node tools/new-agent.mjs                      draw a name from Dan's generator (~/.claude/hooks/choose_name.py)
 //   node tools/new-agent.mjs Lightsong            use this name
 //   node tools/new-agent.mjs [Name] --harness codex   the program that will run the agent: one of the notes files in harness/ (default claude-code)
@@ -10,7 +10,7 @@ import { minecraftName, parseChosenName, nextPort, newAgentArgs } from '../src/l
 
 const DIR = import.meta.dirname
 const ROOT = path.join(DIR, '..')
-const AGENTS = path.join(ROOT, 'agents')
+const AGENTS = path.join(ROOT, 'state', 'agents')
 const NAME_SCRIPT = path.join(os.homedir(), '.claude/hooks/choose_name.py')
 const HARNESSES = fs.readdirSync(path.join(ROOT, 'harness')).filter(f => f.endsWith('.md') && f !== 'README.md').map(f => f.slice(0, -3)).sort()
 
@@ -44,8 +44,8 @@ const script = (name, body) => fs.writeFileSync(path.join(home, name), `#!/bin/b
 
 fs.mkdirSync(path.join(home, 'snapshots'), { recursive: true })
 fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, character: { name: character.name, source: character.source, note: character.note } }, null, 1) + '\n')
-script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../tools/mc.mjs" "$@"')
-script('start', '# start this agent\'s body (run it in the background); output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../tools/start-body" "$(dirname "$(readlink -f "$0")")"')
+script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../../tools/mc.mjs" "$@"')
+script('start', '# start this agent\'s body (run it in the background); output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")"')
 fs.writeFileSync(path.join(home, 'journal.md'), `# ${character.username}'s journal\n\nNewest entry last. Keep entries short: what you did, what you learned, what you promised, where things are.\n`)
 fs.writeFileSync(path.join(home, 'BRIEFING.md'), `# You are ${character.username}
 
@@ -65,13 +65,13 @@ get to shelter and sleep, or stop your body (\`./mc quit\`) and block on \`./mc 
 
 Read, in this order:
 
-1. \`../../harness/${wanted.harness}.md\`: how your harness waits and delegates.
-2. \`../../AGENT_GUIDE.md\`: the full toolset, the house rules, and how to avoid wasting tokens.
+1. \`../../../harness/${wanted.harness}.md\`: how your harness waits and delegates.
+2. \`../../../AGENT_GUIDE.md\`: the full toolset, the house rules, and how to avoid wasting tokens.
 3. \`../../WORLD.md\`: this server, its people, shared places and customs.
 4. \`journal.md\`: what you did last time.
 `)
 
-console.log(`created agents/${character.username}  (${character.source}${character.note ? ', ' + character.note : ''})  api port ${apiPort}  harness ${wanted.harness}`)
+console.log(`created state/agents/${character.username}  (${character.source}${character.note ? ', ' + character.note : ''})  api port ${apiPort}  harness ${wanted.harness}`)
 // whitelist through the narrow RCON tool; if that isn't set up or the server is down, fall back to asking Dan
 try {
   console.log(execFileSync('node', [path.join(DIR, 'rcon.mjs'), character.username], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim())

@@ -16,7 +16,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { planAnchor, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within } from '../src/lib.mjs'
+import { planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -1833,7 +1833,7 @@ for (const [name, map, expected] of [
 test('parsePlan: an empty map is an error', () => assert.match(parsePlan('  \n \n').error, /no cells/))
 test('parsePlan: an absurd map is an error', () => assert.match(parsePlan('w'.repeat(200)).error, /at most 64/))
 
-test('planCells: the anchor is the north-west corner and y is the crop level', () => {
+test('planCells: the anchor is the north-west corner and y is the ground block', () => {
   assert.deepEqual(planCells({ plan: 'w~\n.c', x: 10, y: 63, z: -90 }).map(c => `${c.ch}@${c.x},${c.y},${c.z}`),
     ['w@10,63,-90', '~@11,63,-90', '.@10,63,-89', 'c@11,63,-89'])
 })
@@ -1859,6 +1859,10 @@ test('planBill counts the seeds, the water and every block to place', () => {
   assert.deepEqual(planBill(planRows('#GT#', '#ww#', '#~c#', '#CK#')),
     { wheat_seeds: 2, carrot: 1, water_bucket: 1, oak_fence: 9, oak_fence_gate: 1, torch: 1, chest: 1, composter: 1 })
 })
+test('planStructure: what a plan marks stands ON its ground cell, at y+1', () => {
+  assert.deepEqual(planStructure(planCells({ plan: 'wC', x: 0, y: 63, z: 0 }), 'C'), { x: 1, y: 64, z: 0 })
+  assert.equal(planStructure(planCells({ plan: 'ww', x: 0, y: 63, z: 0 }), 'K'), null)
+})
 test('planSummary is one line', () => assert.equal(planSummary(planRows('ww~', 'ww~')), '3x2 wheat:4 water:2'))
 
 // ---------------------------------------------------------------- composite actions: what a farm needs
@@ -1872,33 +1876,58 @@ test('fieldCensus counts what is ripe, growing, empty, untilled and dry', () => 
   const world = fakeWorld({
     '0,63,0': 'farmland', '0,64,0': 'wheat#7', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '0,63,1': 'water', '1,63,1': 'dirt'
   })
-  assert.deepEqual(fieldCensus(planCells({ plan: 'ww\n~w', x: 0, y: 64, z: 0 }), world),
+  assert.deepEqual(fieldCensus(planCells({ plan: 'ww\n~w', x: 0, y: 63, z: 0 }), world),
     { crops: { wheat: 2 }, cells: 4, ripe: 1, growing: 1, empty: 1, untilled: 1, dry: 0 })
 })
 test('fieldCensus: a channel with no water in it is dry', () => {
-  assert.equal(fieldCensus(planCells({ plan: '~', x: 0, y: 64, z: 0 }), fakeWorld({ '0,63,0': 'air' })).dry, 1)
+  assert.equal(fieldCensus(planCells({ plan: '~', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'air' })).dry, 1)
 })
 
-// Chani anchored her wheat field at the FARMLAND level: 28 wheat stood one block above the plan and farm.fields called
-// every bed empty and untilled. A plan's y is the CROP level, so the world's own copy of a plan is looked for one up and
-// one down before its cells are believed to be bare.
+// Item 1b (Dan, 2026-09-22): a plan's y is the GROUND block, the farmland / pen floor / path the plan describes.
+// Two agents anchored their plans there and the code read it as the level they STAND on: Chani's census called her
+// 28 wheat empty beds, and pen.build dug the turf out of her sheep pen to lay a floor one block lower.
+test('a plan\u0027s y is the ground block: the crop stands on it at y+1', () => {
+  assert.deepEqual(fieldCensus(planCells({ plan: 'w', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'farmland', '0,64,0': 'wheat#7' })),
+    { crops: { wheat: 1 }, cells: 1, ripe: 1, growing: 0, empty: 0, untilled: 0, dry: 0 })
+})
+test('a plan\u0027s y is the ground block: the water source is AT it', () => {
+  assert.equal(fieldCensus(planCells({ plan: '~', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'water' })).dry, 0)
+})
+
+// A plan anchored a block off reads as a field of empty, untilled beds (Chani's wheat field), or has pen.build dig the
+// turf out and lay the floor one lower (her sheep pen). Two checks, both ways round: the world's own copy of the plan
+// standing one up or one down, and - on ground nothing is built on yet - cells that are open air over solid ground,
+// which is the level you stand on rather than the ground block a plan names.
 for (const [name, plan, world, expected] of [
   ['a plan that matches where it says it is stands still', 'ww', { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'farmland', '1,64,0': 'wheat#3' }, 0],
   ['crops one block up mean the anchor is one low', 'ww', { '0,64,0': 'farmland', '0,65,0': 'wheat#3', '1,64,0': 'farmland', '1,65,0': 'wheat#3' }, 1],
   ['a pen one block down means the anchor is one high', '##', { '0,63,0': 'oak_fence', '1,63,0': 'oak_fence' }, -1],
   ['one stray block is not enough to move an anchor', 'www', { '0,65,0': 'wheat#3' }, 0],
   ['bare ground has nothing to judge by', 'ww', {}, 0],
-  ['water alone cannot move an anchor: a channel is water at y-1 either way', '~~', { '0,63,0': 'water', '1,63,0': 'water' }, 0]
+  ['water alone cannot move an anchor: a channel is water at y either way', '~~', { '0,63,0': 'water', '1,63,0': 'water' }, 0],
+  ['fresh ground: cells of open air over solid ground are the level you stand on', 'ww',
+    { '0,63,0': 'air', '0,62,0': 'grass_block', '1,63,0': 'short_grass', '1,62,0': 'grass_block' }, -1],
+  ['fresh ground: the plan sitting ON the turf is right', 'ww',
+    { '0,63,0': 'grass_block', '0,62,0': 'dirt', '1,63,0': 'grass_block', '1,62,0': 'dirt' }, 0],
+  ['fresh ground: one cell of air is not a level', 'ww', { '0,63,0': 'air', '0,62,0': 'grass_block' }, 0],
+  ['fresh ground: air over air is a hole, not a level', 'ww',
+    { '0,63,0': 'air', '0,62,0': 'air', '1,63,0': 'air', '1,62,0': 'air' }, 0]
 ]) {
-  test(`planAnchor: ${name}`, () => assert.equal(planAnchor(planCells({ plan, x: 0, y: 64, z: 0 }), fakeWorld(world)).off, expected))
+  test(`planAnchor: ${name}`, () => assert.equal(planAnchor(planCells({ plan, x: 0, y: 63, z: 0 }), fakeWorld(world)).off, expected))
 }
 test('planAnchor: the note says which y to re-save the plan with', () => {
-  const found = planAnchor(planCells({ plan: 'ww', x: 0, y: 64, z: 0 }), fakeWorld({ '0,65,0': 'wheat#3', '1,65,0': 'wheat#3' }))
-  assert.match(found.note, /says y=64/)
-  assert.match(found.note, /re-save it with y=65/)
+  const found = planAnchor(planCells({ plan: 'ww', x: 0, y: 63, z: 0 }), fakeWorld({ '0,65,0': 'wheat#3', '1,65,0': 'wheat#3' }))
+  assert.match(found.note, /says y=63/)
+  assert.match(found.note, /re-save it with y=64/)
+})
+test('planAnchor: fresh ground says you gave the level you stand on', () => {
+  const found = planAnchor(planCells({ plan: 'ww', x: 0, y: 63, z: 0 }),
+    fakeWorld({ '0,63,0': 'air', '0,62,0': 'grass_block', '1,63,0': 'air', '1,62,0': 'grass_block' }))
+  assert.match(found.note, /level you stand on/)
+  assert.match(found.note, /re-save it with y=62/)
 })
 
-const jobsFor = (plan, world, items) => farmJobs({ cells: planCells({ plan, x: 0, y: 64, z: 0 }), worldAt: fakeWorld(world), items })
+const jobsFor = (plan, world, items) => farmJobs({ cells: planCells({ plan, x: 0, y: 63, z: 0 }), worldAt: fakeWorld(world), items })
 const jobLine = j => j.item ? `${j.do} ${j.item} at ${j.x},${j.y},${j.z}` : `${j.do} ${j.x},${j.y},${j.z}`
 for (const [name, plan, world, items, expected] of [
   ['bare farmland is planted', 'w', { '0,63,0': 'farmland' }, { wheat_seeds: 64 }, ['plant wheat_seeds at 0,64,0']],
@@ -1929,6 +1958,9 @@ test('farmJobs: a skipped cell says why, and carries no item to fetch', () => {
 })
 test('farmJobs flags the seed I do not carry', () => {
   assert.deepEqual(jobsFor('c', { '0,63,0': 'farmland' }, {}).map(j => [j.do, j.item, j.have]), [['plant', 'carrot', false]])
+})
+test('farmJobs: what a plan puts ON the ground goes at y+1', () => {
+  assert.deepEqual(jobsFor('#', { '0,63,0': 'grass_block' }, { oak_fence: 4 }).map(jobLine), ['place oak_fence at 0,64,0'])
 })
 test('farmJobs does the ground work before the planting', () => {
   assert.deepEqual(jobsFor('w~', { '0,63,0': 'dirt', '0,63,1': 'air' }, { wheat_seeds: 1, water_bucket: 1 }).map(j => j.do), ['till', 'plant'])
@@ -2011,7 +2043,7 @@ const fakeApi = ({ world = {}, place, places = [], items = {}, drops = [], freeS
   }
   return { api, calls, report, checkpoints }
 }
-const fakePlace = (plan, x = 0, y = 64, z = 0) => {
+const fakePlace = (plan, x = 0, y = 63, z = 0) => {
   const parsed = parsePlan(plan)
   return { name: 'test-field', kind: 'farm', x, y, z, plan, parsed, cells: planCells({ plan, x, y, z }), bill: planBill(parsed) }
 }
@@ -2381,7 +2413,7 @@ test('farm.plan: name= alone prints what is saved, with its bill of materials', 
 
 test('farm.fields: every plan in range, counted from the map without walking', async () => {
   const { api, calls } = fakeApi({
-    places: [{ name: 'north-field', kind: 'farm', x: 0, y: 64, z: 0, plan: 'ww' }],
+    places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: 'ww' }],
     world: { '0,64,0': 'wheat#7', '1,64,0': 'wheat#3', '0,63,0': 'farmland', '1,63,0': 'farmland' }
   })
   const out = await farmFields.run(api, {})
@@ -2390,32 +2422,44 @@ test('farm.fields: every plan in range, counted from the map without walking', a
 
 test('farm.fields: a plan anchored one block low is counted where its crops really stand, and says so', async () => {
   const { api } = fakeApi({
-    places: [{ name: 'north-field', kind: 'farm', x: 0, y: 64, z: 0, plan: 'ww' }],
+    places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: 'ww' }],
     world: { '0,65,0': 'wheat#7', '1,65,0': 'wheat#3', '0,64,0': 'farmland', '1,64,0': 'farmland' }
   })
   const out = await farmFields.run(api, {})
   assert.match(out.text, /crops\(wheat:2\) cells=2 ripe=1 growing=1 empty=0 untilled=0 dry=0/)
-  assert.match(out.text, /anchor: the plan says y=64.*re-save it with y=65/)
+  assert.match(out.text, /anchor: the plan says y=63.*re-save it with y=64/)
 })
 
 test('farm.plan: saving a plan over blocks that stand one level up warns which y to use', async () => {
   const { api } = fakeApi({ places: [], world: { '0,65,0': 'wheat#3', '1,65,0': 'wheat#3' } })
-  const out = await farmPlan.run(api, { name: 'north-field', map: 'ww~', x: 0, y: 64, z: 0 })
-  assert.match(out.warn, /re-save it with y=65/)
+  const out = await farmPlan.run(api, { name: 'north-field', map: 'ww~', x: 0, y: 63, z: 0 })
+  assert.match(out.warn, /re-save it with y=64/)
 })
 
 test('farm.maintain: a plan anchored at the wrong level is refused, not tilled a block under the farm', async () => {
   const place = fakePlace('ww')
   const { api, calls } = fakeApi({ place, world: { '0,65,0': 'wheat#3', '1,65,0': 'wheat#3', '0,64,0': 'farmland', '1,64,0': 'farmland' }, items: { wheat_seeds: 32 } })
-  await assert.rejects(maintainFarm.run(api, { place: 'test-field' }), /re-save it with y=65/)
+  await assert.rejects(maintainFarm.run(api, { place: 'test-field' }), /re-save it with y=64/)
   assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2'])
 })
 
 test('farm.build: a plan anchored at the wrong level is refused before a block is moved', async () => {
   const place = fakePlace('ww')
   const { api, calls } = fakeApi({ place, world: { '0,65,0': 'wheat#3', '1,65,0': 'wheat#3', '0,64,0': 'farmland', '1,64,0': 'farmland' }, items: { wheat_seeds: 32 } })
-  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /re-save it with y=65/)
+  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /re-save it with y=64/)
   assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2'])
+})
+
+// The other way round, and the one Dan watched happen: a plan saved at the level you STAND on, over ground nothing is
+// built on yet. Chani's pen.build dug the turf out of chani-sheep-pen and laid its floor a block lower.
+test('farm.build: a plan saved at the level you stand on is refused, with the y to re-save it with', async () => {
+  const place = fakePlace('ww', 0, 64, 0)
+  const { api, calls } = fakeApi({
+    place, items: { wheat_seeds: 32, dirt: 8 },
+    world: { '0,64,0': 'air', '1,64,0': 'short_grass', '0,63,0': 'grass_block', '1,63,0': 'grass_block' }
+  })
+  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /level you stand on.*re-save it with y=63/)
+  assert.deepEqual(calls, ['goto x=0 y=65 z=0 range=2'])
 })
 
 test('farm.fields: a place that is on the map but has no plan is not a field', async () => {
@@ -2716,7 +2760,7 @@ for (const [name, job, expected] of [
 
 // the ground a plan needs before anything can be tilled or planted: a floor under every cell and open air in it
 const groundOf = (plan, world) => groundJobs({
-  cells: planCells({ plan, x: 0, y: 64, z: 0 }),
+  cells: planCells({ plan, x: 0, y: 63, z: 0 }),
   worldAt: (x, y, z) => world[`${x},${y},${z}`] === undefined ? null : { name: world[`${x},${y},${z}`] },
   solid: name => name !== 'air' && name !== 'water' && name !== 'short_grass'
 })
@@ -2734,8 +2778,12 @@ for (const [name, plan, world, expected] of [
   ['weeds are left to the job list, they are not levelling', 'w', { '0,63,0': 'dirt', '0,64,0': 'short_grass', '0,65,0': 'air' }, []],
   ['what the plan already has is never dug out', 'C', { '0,63,0': 'dirt', '0,64,0': 'chest', '0,65,0': 'air' }, []],
   ['a crop already growing is never dug out', 'w', { '0,63,0': 'farmland', '0,64,0': 'wheat', '0,65,0': 'air' }, []],
-  ['a channel is floored two below, because the water sits one below', '~', { '0,62,0': 'air', '0,63,0': 'air', '0,64,0': 'air', '0,65,0': 'air' },
+  ['a channel is floored one below, because its source sits at the plan\u0027s y', '~', { '0,62,0': 'air', '0,63,0': 'air', '0,64,0': 'air', '0,65,0': 'air' },
     [{ do: 'fill', x: 0, y: 62, z: 0, why: 'air where the floor should be', item: 'dirt' }]],
+  // Chani's sheep pen, 99,71,-73: pen.build dug the grass layer out and laid its floor one block lower, because the
+  // plan's y was read as the level she stood on. The ground a plan names is the floor: it is never dug.
+  ['the ground the plan names is the floor, never something to dig out', '.', { '0,63,0': 'grass_block', '0,64,0': 'air', '0,65,0': 'air' }, []],
+  ['a pen floor of turf needs no levelling either', '#', { '0,63,0': 'grass_block', '0,64,0': 'air', '0,65,0': 'air' }, []],
   ['cells out of sight are left alone', 'w', {}, []]
 ]) {
   test(`groundJobs: ${name}`, () => assert.deepEqual(groundOf(plan, world), expected))
@@ -2812,7 +2860,8 @@ for (const [name, before, after, expected] of [
 }
 
 // ---------------------------------------------------------------- pen.build: where to stand when asking whether it holds
-const cellsOf = plan => planCells({ plan, x: 10, y: 64, z: 20 })
+// the plan's y is the pen FLOOR, so the spot to stand on (where pen.check wants feet) is one block above it
+const cellsOf = plan => planCells({ plan, x: 10, y: 63, z: 20 })
 for (const [name, plan, expected] of [
   ['the open floor inside the walls', '###\n#.#\n#G#', { x: 11, y: 64, z: 21 }],
   ['the middle of a bigger floor', '#####\n#...#\n#...#\n#...#\n##G##', { x: 12, y: 64, z: 22 }],
@@ -2825,7 +2874,7 @@ for (const [name, plan, expected] of [
 test('pen.build: builds the plan, then says it holds', async () => {
   const world = { '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'dirt', '12,63,21': 'dirt', '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt' }
   const { api, calls } = fakeApi({
-    place: { ...fakePlace('###\n#.#\n#G#', 10, 64, 20), kind: 'pen' }, world, items: { oak_fence: 20, oak_fence_gate: 2 },
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), kind: 'pen' }, world, items: { oak_fence: 20, oak_fence_gate: 2 },
     answers: {
       place: ({ item, x, y, z }) => { world[`${x},${y},${z}`] = item; return {} },
       'pen.check': { pen: 'holds', cells: 1, sheep: 0 }
@@ -2839,7 +2888,7 @@ test('pen.build: builds the plan, then says it holds', async () => {
 test('pen.build: it refuses to call a leaking pen finished', async () => {
   const world = { '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'dirt', '12,63,21': 'dirt', '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt' }
   const { api } = fakeApi({
-    place: { ...fakePlace('###\n#.#\n#G#', 10, 64, 20), kind: 'pen' }, world, items: { oak_fence: 20, oak_fence_gate: 2 },
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), kind: 'pen' }, world, items: { oak_fence: 20, oak_fence_gate: 2 },
     answers: {
       place: ({ item, x, y, z }) => { world[`${x},${y},${z}`] = item; return {} },
       'pen.check': { pen: 'LEAKS', via: '11,64,22', advice: 'shut the gate' }

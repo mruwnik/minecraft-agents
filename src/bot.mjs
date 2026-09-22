@@ -28,9 +28,9 @@ const { Vec3 } = vec3
 const armorManager = armorManagerMod.default ?? armorManagerMod
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
-// the bot folder itself: src/ is the code, and library/ state/ logs/ textures/ beside it are shared by every body
+// the bot folder itself: src/ is the code, and library/ state/ textures/ beside it are shared by every body
 const ROOT = path.resolve(DIR, '..')
-for (const dir of ['state', 'logs']) fs.mkdirSync(path.join(ROOT, dir), { recursive: true })
+fs.mkdirSync(path.join(ROOT, 'state'), { recursive: true })
 // `node src/bot.mjs <home>` runs another body: its config.json, events.jsonl and snapshots/ live in <home>,
 // while state/zones.json and textures/ stay here, shared by every bot.
 const HOME = path.resolve(process.argv[2] ?? ROOT)
@@ -54,7 +54,7 @@ fs.watchFile(ZONES_FILE, { interval: 2000 }, () => zones.splice(0, zones.length,
 const saveZones = () => fs.writeFileSync(ZONES_FILE, JSON.stringify(zones, null, 1))
 // Points of interest shared by every agent (./mc mark / places / unmark, and goto place=<name>).
 const PLACES_FILE = path.join(ROOT, 'state', 'places.json')
-const GATES_FILE = path.join(ROOT, 'logs', 'gates.log')
+const GATES_FILE = path.join(ROOT, 'state', 'gates.log')
 const readPlaces = () => fs.existsSync(PLACES_FILE) ? JSON.parse(fs.readFileSync(PLACES_FILE, 'utf8')) : []
 // every body shares this file: write beside it and rename, so a reader never catches it half written
 const savePlaces = places => {

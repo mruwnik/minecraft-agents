@@ -1,6 +1,6 @@
 // Gather seed stock, renewable ways only: grass for wheat seed, the top of a wild stand for cane and bamboo, a farm's
 // surplus chest for carrots, potatoes and beetroot, a wild patch for melon and pumpkin. Never the last plant of a stand.
-import { seedSource } from '../../src/lib.mjs'
+import { planStructure, seedSource } from '../../src/lib.mjs'
 
 const ROUNDS = 8
 const RANGE = 64
@@ -42,7 +42,7 @@ export default {
 
     if (source.from === 'chest') {
       if (!a.place) throw new Error(`${a.crop} does not grow from nothing: take some from a farm's surplus chest with place=<a marked farm whose plan has a C cell>, or trade for it`)
-      const cell = api.plan(a.place).cells.find(c => c.ch === 'C')
+      const cell = planStructure(api.plan(a.place).cells, 'C')
       if (!cell) throw new Error(`${a.place} has no C (chest) cell in its plan`)
       await api.act('withdraw', { items: { [source.item]: want }, x: cell.x, y: cell.y, z: cell.z })
       return { crop: a.crop, item: source.item, got: held(api, source.item) - had, from: source.from }

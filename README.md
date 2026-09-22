@@ -17,13 +17,15 @@ Mineflayer speaks protocol 26.1; ViaVersion + ViaBackwards in `../plugins` bridg
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
     tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), new-agent.mjs, patch-deps.mjs, rcon.mjs
     test/       every *.test.mjs; `npm test` runs them all (`node --test test/*.test.mjs`)
-    state/      shared between bodies: places.json (the map), zones.json (protected boxes), clock.json (the world's time)
-    logs/       gates.log (who opened which gate, from every body)
-    agents/     one folder per agent: its config.json, BRIEFING.md, journal.md, events.jsonl, snapshots/, ./mc and ./start
+    state/      everything this world made, and the only folder besides node_modules/ and textures/ that git ignores:
+                agents/<Name>/ (one folder per agent: config.json, BRIEFING.md, journal.md, events.jsonl,
+                snapshots/, its own ./mc and ./start), places.json (the shared map), zones.json (protected
+                boxes), clock.json (the world's time), gates.log (who opened which gate), WORLD.md and BUGS.md
     roles/      knowledge and routines an agent can read on demand; harness/ notes per program that runs an agent
     textures/   block textures for `./mc look` (not checked in; see Vision below)
 
-`./mc` and `./play` stay at the top, beside AGENT_GUIDE.md, WORLD.md and BUGS.md: agents have those paths memorised.
+`./mc`, `./play` and `AGENT_GUIDE.md` stay at the top, with `harness/`: they are true on any server. What belongs to
+THIS world is under `state/`, `WORLD.md` and `BUGS.md` included, so an agent still reads `../../WORLD.md` from its folder.
 
 ## Keeping the driver's context small
 
@@ -75,7 +77,7 @@ Blocks without a texture (newer than the jar, or entity-rendered like signs) get
     node tools/new-agent.mjs Lightsong   # Minecraft username), or takes the one given
     node tools/new-agent.mjs Nona --harness codex   # the program that will run it: a notes file in harness/ (default claude-code)
 
-creates `agents/<Name>/` with everything that agent owns:
+creates `state/agents/<Name>/` with everything that agent owns:
 
     config.json    username, its own apiPort, its harness, and the character the name comes from
     BRIEFING.md    who the agent is, how its folder works and what to read next; hand this to a new agent as its first read
@@ -85,7 +87,7 @@ creates `agents/<Name>/` with everything that agent owns:
 
 Shared by everyone, in this directory: the code, `AGENT_GUIDE.md` (toolset, house rules, token habits; true on any
 server and harness), `harness/<name>.md` (what is specific to Claude Code, Codex, ...: waiting, timeouts, delegation),
-`WORLD.md` (this server: who plays, shared places, customs; changes often), `state/places.json`
+`state/WORLD.md` (this server: who plays, shared places, customs; changes often), `state/places.json`
 (the common map of points of interest: `./mc mark`, `./mc places`, `goto place=<name>`), `state/zones.json`
 (protected builds; a change by one bot reaches the others within seconds) and `textures/`.
 Each name must be whitelisted once, on the server console: `whitelist add <Name>`.

@@ -13,7 +13,7 @@ points marked *verify* are best guesses. If one is wrong, append what you found 
   `./mc events last=10`, `./mc events type=chat last=5` (also `type=died`, `type=whisper`) for history, and keep
   `./mc` calls short and chained (`./mc run steps=...`). Never open `events.jsonl`, `bot.log` or another agent's
   folder in full; if you must look inside a big file, `grep` for one thing and `tail -n 5` it.
-- **Work only inside `agents/<Name>`** (your folder). Everything you need is there or reached through `./mc`; the
+- **Work only inside `state/agents/<Name>`** (your folder). Everything you need is there or reached through `./mc`; the
   shared code in `../..` is read-only for you except appending to `../../BUGS.md`.
 - **Sandbox: the body needs local network access** (verified 2026-09-22 with Sazed's first start). Codex's default
   sandbox blocks all sockets, even loopback: the body could neither bind its own API nor reach the server, and died

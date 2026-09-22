@@ -1070,7 +1070,9 @@ export function parsePlan (map) {
   return { rows: kept, width, height: kept.length, cells: kept.flatMap((row, dz) => [...row].flatMap((ch, dx) => ch === ' ' ? [] : [{ dx, dz, ch }])) }
 }
 
-// every cell in world coordinates: x east of the anchor, z south of it, y the crop/floor level
+// Every cell in world coordinates: x east of the anchor, z south of it, y the GROUND block — the farmland, pen floor
+// or path the plan describes, the level `till` asks for. What the plan puts on it (crop, fence, gate, torch, chest,
+// composter, flower, sapling) stands at y+1; a water source lies AT y, with its cover at y+1.
 export const planCells = place => (parsePlan(place.plan).cells ?? []).map(c => ({ ...c, x: place.x + c.dx, y: place.y, z: place.z + c.dz }))
 
 // farmland stays wet within 4 blocks of a water source, level with it or one above it: a plan that breaks that rule
@@ -1134,11 +1136,11 @@ export function fieldCensus (cells, worldAt) {
   for (const cell of cells) {
     const spec = PLAN_LEGEND[cell.ch]
     if (!spec) continue
-    const here = worldAt(cell.x, cell.y, cell.z)
-    const below = worldAt(cell.x, cell.y - 1, cell.z)
-    if (spec.kind === 'water') { if (below && below.name !== 'water') out.dry++; continue }
+    const ground = worldAt(cell.x, cell.y, cell.z)
+    const here = worldAt(cell.x, cell.y + 1, cell.z)
+    if (spec.kind === 'water') { if (ground && ground.name !== 'water') out.dry++; continue }
     if (spec.kind !== 'crop') continue
-    if (spec.ground === 'farmland' && below && below.name !== 'farmland') out.untilled++
+    if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') out.untilled++
     if (here?.name !== spec.crop) { out.empty++; continue }
     out.crops[spec.crop] = (out.crops[spec.crop] ?? 0) + 1
     if (ripeCrop(here.name, here.properties?.age)) out.ripe++
@@ -1147,28 +1149,47 @@ export function fieldCensus (cells, worldAt) {
   return out
 }
 
-// A plan whose y is one off reads as a field of empty, untilled beds: Chani anchored her wheat field at the FARMLAND
-// level, so 28 wheat stood one block above the plan and the census called every bed empty. A plan's y is the CROP
-// level. This looks for the world's own copy of the plan one block up and one down before the cells are believed bare.
-// Water is no evidence of a shift on its own (a channel holds its water at y-1 whichever way the plan is read), and one
-// matching block is a coincidence, so it takes two.
+// A plan whose y is one off reads as a field of empty, untilled beds (Chani's wheat field: 28 wheat stood one block
+// above where the code looked) or has a build dig the turf out and lay its floor one lower (her sheep pen). A plan's y
+// is the GROUND block, and this answers `off`: what to add to that y to reach the level the world is really at.
+// Two ways to tell, in order:
+//  - the world's own copy of the plan, standing one block up or one down. Water is no evidence of a shift on its own
+//    (a channel reads as water either way), and one matching block is a coincidence, so it takes two.
+//  - nothing built there yet, but every cell the plan names is open air (or grass) over solid ground: that is the level
+//    you STAND on, one above the ground block a plan wants.
 const anchorHit = (spec, here) => {
   if (!here) return false
   if (spec.kind === 'crop') return here.name === spec.crop
   if (spec.kind === 'gate') return here.name.endsWith('_fence_gate')
   return Boolean(spec.item) && here.name === spec.item
 }
+const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
+const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
+// what you can stand in: air, or the grass and flowers that grow on open ground
+const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
+// what you can stand on
+const isFooting = name => Boolean(name) && !isOpenCell(name) && name !== 'water' && name !== 'lava'
+function freshGround (cells, worldAt, y) {
+  const seen = cells.filter(c => PLAN_LEGEND[c.ch] && worldAt(c.x, c.y, c.z))
+  const standing = seen.filter(c => isOpenCell(worldAt(c.x, c.y, c.z).name) && isFooting(worldAt(c.x, c.y - 1, c.z)?.name))
+  if (seen.length < 2 || standing.length !== seen.length) return { off: 0 }
+  return {
+    off: -1,
+    fresh: standing.length,
+    note: `the plan says y=${y}, but all ${standing.length} of its cells are open air over solid ground at y=${y - 1}: you gave the level you stand on. ${CONVENTION}, so re-save it with y=${y - 1}`
+  }
+}
 export function planAnchor (cells, worldAt) {
   const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
-  const score = dy => solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + dy, c.z))).length
+  const score = dy => solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z))).length
   const here = score(0)
   const best = [{ dy: 1, n: score(1) }, { dy: -1, n: score(-1) }].sort((a, b) => b.n - a.n)[0]
-  if (!best || best.n < 2 || best.n <= here) return { off: 0 }
-  const y = cells[0].y
+  const y = cells[0]?.y
+  if (!best || best.n < 2 || best.n <= here) return cells.length ? freshGround(cells, worldAt, y) : { off: 0 }
   return {
     off: best.dy,
     found: best.n,
-    note: `the plan says y=${y}, but ${best.n} of the blocks it describes stand at y=${y + best.dy}: a plan's y is the CROP level (farmland and water lie at y-1), so re-save it with y=${y + best.dy}`
+    note: `the plan says y=${y}, but ${best.n} of the blocks it describes stand at y=${y + best.dy + 1}: ${CONVENTION}, so re-save it with y=${y + best.dy}`
   }
 }
 
@@ -1192,30 +1213,31 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
   for (const cell of cells) {
     const spec = PLAN_LEGEND[cell.ch]
     if (!spec) continue
-    const here = worldAt(cell.x, cell.y, cell.z)
-    const below = worldAt(cell.x, cell.y - 1, cell.z)
+    // the plan's y is the ground the cell is made of; what the plan puts on it stands one above
+    const ground = worldAt(cell.x, cell.y, cell.z)
+    const here = worldAt(cell.x, cell.y + 1, cell.z)
     const standing = here && here.name !== 'air' ? here.name : null
     if (spec.kind === 'water') {
-      if (!below || below.name === 'water') continue
+      if (!ground || ground.name === 'water') continue
       // a channel somebody walked over and filled in: dig the cell out before pouring, or the water lands on the ground beside it
       // (and pouring onto a bed that could not be dug out would only put the water one block too high)
-      if (below.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y - 1, z: cell.z, why: `${below.name} where the channel should be` })) continue
-      // `pour` names the solid block to pour ONTO and the water lands one above it: the water belongs at y-1, so pour onto y-2
-      push({ do: 'pour', x: cell.x, y: cell.y - 2, z: cell.z, why: `the channel at ${cell.x},${cell.y - 1},${cell.z} is dry` }, 'water_bucket')
+      if (ground.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where the channel should be` })) continue
+      // `pour` names the solid block to pour ONTO and the water lands one above it: the source belongs at y, so pour onto y-1
+      push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry` }, 'water_bucket')
       continue
     }
     if (spec.kind === 'path') continue
     if (spec.kind === 'crop') {
       if (standing === spec.crop) continue
       if (standing && !WEEDS.has(standing)) continue
-      if (standing && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${standing} grew on the bed` })) continue
-      if (spec.ground === 'farmland' && below && below.name !== 'farmland') push({ do: 'till', x: cell.x, y: cell.y - 1, z: cell.z, why: `${below.name} where farmland should be` })
-      push({ do: 'plant', x: cell.x, y: cell.y, z: cell.z, why: 'an empty bed' }, spec.seed)
+      if (standing && clear({ do: 'clear', x: cell.x, y: cell.y + 1, z: cell.z, why: `${standing} grew on the bed` })) continue
+      if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') push({ do: 'till', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where farmland should be` })
+      push({ do: 'plant', x: cell.x, y: cell.y + 1, z: cell.z, why: 'an empty bed' }, spec.seed)
       continue
     }
     if (!spec.item || standing === spec.item || (spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
     if (standing) continue
-    push({ do: 'place', x: cell.x, y: cell.y, z: cell.z, why: `no ${spec.item} there` }, spec.item)
+    push({ do: 'place', x: cell.x, y: cell.y + 1, z: cell.z, why: `no ${spec.item} there` }, spec.item)
   }
   return jobs.sort((a, b) => JOB_ORDER.indexOf(a.do) - JOB_ORDER.indexOf(b.do))
 }
@@ -1288,15 +1310,23 @@ export function placeTarget (places, a, who) {
   return { at: { x: Math.floor(to.x), y: Math.floor(to.y), z: Math.floor(to.z) } }
 }
 
-// Where to stand to ask whether a pen holds: the floor cell the plan marks inside its walls, nearest the middle, because
-// penAround starts from where my feet are and a wall cell is not a spot to stand on.
+// Where to stand to ask whether a pen holds: over the floor cell the plan marks inside its walls, nearest the middle,
+// because penAround starts from where my feet are and a wall cell is not a spot to stand on. The plan's y is the floor
+// block itself, so feet go one above it.
 export function penInside (cells) {
   const floor = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path')
   if (!floor.length) return null
   const mid = { x: (Math.min(...floor.map(c => c.x)) + Math.max(...floor.map(c => c.x))) / 2, z: (Math.min(...floor.map(c => c.z)) + Math.max(...floor.map(c => c.z))) / 2 }
   const near = (a, b) => (Math.abs(a.x - mid.x) + Math.abs(a.z - mid.z)) - (Math.abs(b.x - mid.x) + Math.abs(b.z - mid.z))
   const { x, y, z } = [...floor].sort(near)[0]
-  return { x, y, z }
+  return { x, y: y + 1, z }
+}
+
+// Where the block a plan marks with one character really stands: the plan's y is the ground it sits on, so a chest,
+// composter or torch is at y+1. Every composite that walks to one asks for it this way.
+export function planStructure (cells, ch) {
+  const cell = cells.find(c => c.ch === ch)
+  return cell ? { x: cell.x, y: cell.y + 1, z: cell.z } : null
 }
 
 // what a plan needs that I do not carry. Counted before a build starts: half a farm is worse than none.
@@ -1315,14 +1345,15 @@ export function groundJobs ({ cells, worldAt, solid }) {
   for (const cell of cells) {
     const spec = PLAN_LEGEND[cell.ch]
     if (!spec) continue
-    // a channel holds its water one below the cell, so the block it is poured onto is two below
-    const floorY = spec.kind === 'water' ? cell.y - 2 : cell.y - 1
+    // the plan's y IS the floor of a cell, so it is never dug out; a channel holds its source at that level, and the
+    // block the water is poured onto is the one below it
+    const floorY = spec.kind === 'water' ? cell.y - 1 : cell.y
     const floor = worldAt(cell.x, floorY, cell.z)
     if (floor && !solid(floor.name)) fills.push({ do: 'fill', x: cell.x, y: floorY, z: cell.z, why: `${floor.name} where the floor should be`, item: FLOOR_ITEM[spec.ground] ?? 'dirt' })
-    for (const y of [cell.y, cell.y + 1]) {
+    for (const y of [cell.y + 1, cell.y + 2]) {
       const here = worldAt(cell.x, y, cell.z)
       if (!here || !solid(here.name) || planHas(spec, here.name)) continue
-      jobs.push({ do: 'clear', x: cell.x, y, z: cell.z, why: y === cell.y ? `${here.name} stands in the cell` : `${here.name} stands where the plan wants open air` })
+      jobs.push({ do: 'clear', x: cell.x, y, z: cell.z, why: y === cell.y + 1 ? `${here.name} stands in the cell` : `${here.name} stands where the plan wants open air` })
     }
   }
   // dig first, fill afterwards: the boulder often stands over the hole

@@ -7,7 +7,7 @@ session) lives here, one file per harness family:
     claude-code.md   Claude Code (the `play` launcher, the minecraft-agent skill, subagents, the Monitor tool)
     codex.md         OpenAI Codex CLI
 
-Which file an agent reads is the `harness` in its `agents/<Name>/config.json`, set by `node tools/new-agent.mjs [Name]
+Which file an agent reads is the `harness` in its `state/agents/<Name>/config.json`, set by `node tools/new-agent.mjs [Name]
 --harness <name>` (default `claude-code`); its BRIEFING.md points there too.
 
 ## Adding a family

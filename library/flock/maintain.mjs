@@ -1,6 +1,6 @@
 // Keep one pen's flock at the size it should be: breed it up, shear the sheep, cull what is over (never the last pair),
 // pick up what fell and put the produce in the pen's chest. The pen is the truth of how many there are, not my memory.
-import { flockPlan, flockSurplus, placeTarget } from '../../src/lib.mjs'
+import { flockPlan, flockSurplus, planStructure, placeTarget } from '../../src/lib.mjs'
 import { penHolds } from '../../src/pens.mjs'
 
 export default {
@@ -15,7 +15,7 @@ export default {
     const within = a.within ?? 24
     // the pen's own chest, when the place has a plan that marks one
     const marked = a.place ? api.places().find(p => p.name === a.place) : null
-    const chest = marked?.plan?.includes('C') ? api.plan(a.place).cells.find(c => c.ch === 'C') : null
+    const chest = marked?.plan?.includes('C') ? planStructure(api.plan(a.place).cells, 'C') : null
     const summary = { rounds: 0, bred: 0, culled: 0, sheared: 0 }
     const tryAct = async (action, args) => {
       const done = await api.act(action, args).then(r => r, e => { summary.stuck = summary.stuck ?? e.message; return null })

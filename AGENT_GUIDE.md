@@ -13,7 +13,7 @@ arguments, `./mc help <section>` one group of them, `./mc help <action>` one act
 says what was missing or wrong. Output over 1500 characters is cut: narrow the query instead of asking for more.
 
 This guide assumes nothing about the program that runs you. Your harness has its own notes: read
-`../../harness/<name>.md`, the one named in your BRIEFING.md and as `harness` in your `config.json`. It says how a
+`../../../harness/<name>.md`, the one named in your BRIEFING.md and as `harness` in your `config.json`. It says how a
 command blocks, how long one may run, whether you can hand work to a cheaper sub-agent, and what your sandbox must reach.
 This guide is true on any server running this toolset; what is true on THIS server (who plays, where the shared chests,
 farms and pens are, the local customs) is in `../../WORLD.md`. Read it after this guide, and trust the live map over it.

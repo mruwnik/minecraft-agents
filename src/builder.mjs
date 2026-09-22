@@ -6,7 +6,8 @@ const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'p
 
 export async function buildFromPlan (api, a) {
   const plan = api.plan(a.place)
-  const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
+  // the plan's y is the ground block, so the body stands one above it
+  const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
   const counts = {}
   const missing = {}
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid })

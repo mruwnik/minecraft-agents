@@ -1,8 +1,9 @@
 // The map of a place: an ASCII plan of a farm, saved on the shared map under its name. The plan is the truth of what
 // SHOULD be there; the world is the truth of what is, and farm.maintain closes the gap between them.
-// Legend: crops w c p b s m k B, ~ water, . path, # fence, G gate, T torch, C chest, K composter, F furnace, t table,
-// space = outside the plan. Rows run south (z), columns east (x) from x,y,z, the NORTH-WEST corner at crop/floor level
-// (the ground under it is y-1). It only reads the map and writes it back, so it never takes the body over.
+// Legend: crops w c p b s m k B, ~ water, . path, # fence, G gate, T torch, C chest, K composter, F flower, t sapling,
+// space = outside the plan. Rows run south (z), columns east (x) from x,y,z, the NORTH-WEST corner at GROUND level: the
+// farmland, floor or path itself, with crops, fences and chests standing at y+1 and a water source at y.
+// It only reads the map and writes it back, so it never takes the body over.
 import { parsePlan, planAnchor, planCells, planErrors, planBill, planSummary, compact } from '../../src/lib.mjs'
 
 export default {
@@ -30,8 +31,8 @@ export default {
       map: parsed.rows.join('\n'),
       ...where
     })
-    // y is the CROP level: a plan saved at the farmland level reads as a field of empty beds ever after, so the world
-    // is asked here, while the person who wrote the map is still listening
+    // y is the GROUND level: a plan saved at the level you stand on has its whole build laid one block too high, so the
+    // world is asked here, while the person who wrote the map is still listening
     const { note } = planAnchor(planCells({ ...where, plan: parsed.rows.join('\n') }), api.block)
     return { saved: a.name, at: where, is: planSummary(parsed), needs: planBill(parsed), ...(note ? { warn: note } : {}) }
   }

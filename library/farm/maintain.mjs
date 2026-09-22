@@ -1,9 +1,8 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
-import { farmJobs, farmSurplus, jobCall, planAnchor, planBill, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { farmJobs, farmSurplus, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
-const cellOf = (plan, ch) => plan.cells.find(c => c.ch === ch)
 // enough seed to sow the whole plan twice over stays in my pockets; the rest goes in the chest
 const seedReserve = plan => Object.fromEntries(Object.entries(planBill(plan.parsed)).filter(([item]) => SEED_ITEMS.has(item)).map(([item, n]) => [item, n * 2]))
 
@@ -15,9 +14,10 @@ export default {
   async run (api, a) {
     const plan = api.plan(a.place)
     const within = a.within ?? Math.max(8, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height)) + 2)
-    const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
-    const chest = cellOf(plan, 'C')
-    const composter = cellOf(plan, 'K')
+    // the plan's y is the ground block; the body stands one above it, and so do the chest and composter the plan marks
+    const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
+    const chest = planStructure(plan.cells, 'C')
+    const composter = planStructure(plan.cells, 'K')
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, built: 0 }
     const keep = seedReserve(plan)
 
