@@ -12,6 +12,10 @@ Mineflayer speaks protocol 26.1; ViaVersion + ViaBackwards in `../plugins` bridg
 
 ## Where things live
 
+Never move or rename a folder under `state/` (or `state/` itself) while a body runs from it: the body appends
+events by an absolute path fixed at start, so the first write after the move kills it. `./mc quit` every body
+first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down this way).
+
     src/        the body: bot.mjs (reflexes, primitives, the composite runner, the HTTP API), lib.mjs (pure helpers,
                 tested), eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
