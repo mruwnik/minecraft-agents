@@ -1,0 +1,16 @@
+#!/bin/bash
+# runs one agent's body (called by agents/<Name>/start). A dead body is silent, and its driver would wait for ever: when the body
+# ends badly, leave a body_down line in its events.jsonl, which the driver's event monitor picks up.
+cd "$1" || exit 1
+# a healthy body uses about 200 MB. A runaway should die early, not at 4 GB, and leave report.*.json with the JavaScript stack that did it
+# keep the last five runs' logs: a restart used to wipe the evidence of a crash, and on a day of fixes bodies restart every few minutes
+for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done
+[ -f bot.log ] && mv bot.log bot.log.1
+node ../../tools/patch-deps.mjs > bot.log 2>&1
+node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../src/bot.mjs . >> bot.log 2>&1 &
+body=$!
+trap 'kill $body 2>/dev/null' TERM INT
+wait $body
+code=$?
+[ $code -eq 0 ] || echo "{\"seq\":0,\"t\":\"$(date -u +%FT%TZ)\",\"type\":\"body_down\",\"exit\":$code,\"advice\":\"your body stopped (crash or kill): ./start it again in the background; a crash leaves its cause at the end of bot.log\"}" >> events.jsonl
+exit $code
