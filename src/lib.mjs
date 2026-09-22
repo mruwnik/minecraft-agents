@@ -515,6 +515,46 @@ export const BREEDING_FOOD = {
 }
 export const breedingFood = (mob, carried) => (BREEDING_FOOD[mob] ?? []).find(food => carried.includes(food)) ?? null
 
+// Bees belong to an apiary, not a pen: flock.lead/maintain must never accept them, but the low-level feed and animals
+// senses still need to know what they eat. Keep this beside, rather than inside, BREEDING_FOOD for that reason.
+export const BEE_FLOWERS = [
+  'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip',
+  'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'sunflower', 'lilac', 'rose_bush', 'peony',
+  'torchflower', 'pink_petals', 'wildflowers', 'flowering_azalea', 'flowering_azalea_leaves'
+]
+export const CREATURE_FOOD = { ...BREEDING_FOOD, bee: BEE_FLOWERS }
+export const creatureFood = (mob, carried) => (CREATURE_FOOD[mob] ?? []).find(food => carried.includes(food)) ?? null
+
+const HIVE_NAMES = new Set(['beehive', 'bee_nest'])
+const CAMPFIRE_NAMES = new Set(['campfire', 'soul_campfire'])
+const FACING_STEP = { north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0] }
+
+// The facts that make one hive safe to work. Smoke travels up at most five cells; a full solid block before the
+// campfire stops it. A carpet is deliberately not `solid`, which matches the usual safe cover over a fire.
+export function hiveState ({ x, y, z, block, blockAt }) {
+  if (!HIVE_NAMES.has(block?.name)) return null
+  const honey = Number(block.properties?.honey_level ?? 0)
+  const facing = block.properties?.facing
+  const [dx, dy, dz] = FACING_STEP[facing] ?? [0, 0, 0]
+  const front = blockAt(x + dx, y + dy, z + dz)
+  // Unknown is not clear: harvesting is safety-sensitive, so require the entrance cell to be loaded and observed.
+  const entranceClear = Boolean(facing) && Boolean(front) && !front.solid
+  let campfire = null
+  for (let down = 1; down <= 5; down++) {
+    const seen = blockAt(x, y - down, z)
+    if (CAMPFIRE_NAMES.has(seen?.name)) {
+      const lit = seen.properties?.lit
+      if (lit !== false && String(lit) !== 'false') campfire = { x, y: y - down, z }
+      break
+    }
+    if (seen?.solid) break
+  }
+  return { x, y, z, name: block.name, honey, ripe: honey >= 5, facing, entranceClear, smoked: Boolean(campfire), campfire }
+}
+
+export const apiaryGoods = items => Object.fromEntries(Object.entries(items)
+  .filter(([name, count]) => count > 0 && ['honeycomb', 'honey_bottle'].includes(name)))
+
 // a position 2 cm clear of whatever the hitbox lies flush against (see flushCells): out of the pinned state without digging
 export function nudgeAway (pos) {
   const clear = v => { const f = v - Math.floor(v); return f <= 0.305 ? Math.floor(v) + 0.32 : f >= 0.695 ? Math.floor(v) + 0.68 : v }
@@ -733,12 +773,25 @@ export function penLeak ({ start, topsAt, rimsAt = () => [], radius = 24, withFl
       const climbs = at > 0 && path[at][1] !== path[at - 1][1]
       return { enclosed: false, via: path.slice(Math.max(at, 0), climbs ? at + 3 : at + 1).map(key).join(' ') }
     }
+    // Where a step into the next column can put it. Up to a half step it climbs; otherwise it steps off the edge and
+    // falls to the FIRST surface below, never through one: a pen on a skin of ground over a cave used to read as LEAKS
+    // by a path under its own floor (claude-test-pen, 113,67,-125), and the block a fence stands on is no way down either.
+    const landingIn = (x, z, from) => {
+      const under = [...topsAt(x, z), ...rimsAt(x, z)].filter(top => top <= from)
+      if (!under.length) return []
+      const first = Math.max(...under)
+      return topsAt(x, z).includes(first) ? [first] : []
+    }
+    const waysInto = (x, z, from, onRim) => [
+      ...topsAt(x, z).filter(top => top > from && top - from <= 1 && (!onRim || top % 1 !== 0)),
+      ...(onRim ? [] : landingIn(x, z, from))
+    ]
     // round a corner too, when at least one side of it is open: between two posts that only touch at the corner nothing squeezes
-    const passable = (dx, dz) => topsAt(x + dx, z + dz).some(top => top - y <= 1)
+    const passable = (dx, dz) => waysInto(x + dx, z + dz, y, false).length > 0
     const steps = [[1, 0], [-1, 0], [0, 1], [0, -1], ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].filter(([dx, dz]) => passable(dx, 0) || passable(0, dz))]
     for (const [dx, dz] of steps) {
       const onRim = rimsAt(x, z).includes(y)
-      const ways = [...topsAt(x + dx, z + dz).filter(top => top - y <= 1 && (!onRim || (top > y && top % 1 !== 0))), ...rimsAt(x + dx, z + dz).filter(rim => rim - y <= 0.5 && (!onRim || rim >= y))]
+      const ways = [...waysInto(x + dx, z + dz, y, onRim), ...rimsAt(x + dx, z + dz).filter(rim => rim - y <= 0.5 && (!onRim || rim >= y))]
       for (const top of ways) {
         const next = [x + dx, top, z + dz]
         if (from.has(key(next))) continue
@@ -1198,8 +1251,31 @@ export function planAnchor (cells, worldAt) {
 // what may be broken to clear a crop bed: weeds and the flowers that spring up around bone meal. A crop cell holding anything
 // else (cobblestone, someone's torch) is left alone and shows up as `empty` in the census instead.
 const WEEDS = new Set(['short_grass', 'tall_grass', 'fern', 'large_fern', 'dead_bush', 'snow', 'dandelion', 'poppy', 'cornflower',
-  'oxeye_daisy', 'azure_bluet', 'blue_orchid', 'allium', 'lily_of_the_valley', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip'])
+  'oxeye_daisy', 'azure_bluet', 'blue_orchid', 'allium', 'lily_of_the_valley', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip',
+  'bush', 'firefly_bush', 'leaf_litter', 'wildflowers', 'short_dry_grass', 'tall_dry_grass'])
 const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'plant', 'place']
+// A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
+// A field tilled in one pass and sown in the next loses the beds the body walked back over (15 of 28, round 2 item 3),
+// so every till is followed at once by the planting of its own cell, and the walk does each bed once.
+const sowAsTilled = jobs => {
+  const plants = new Map(jobs.filter(j => j.do === 'plant').map(j => [`${j.x},${j.y},${j.z}`, j]))
+  const sown = new Set()
+  const out = []
+  for (const job of jobs) {
+    if (job.do === 'plant' && sown.has(job)) continue
+    out.push(job)
+    const after = job.do === 'till' ? plants.get(`${job.x},${job.y + 1},${job.z}`) : null
+    if (!after) continue
+    out.push(after)
+    sown.add(after)
+  }
+  return out
+}
+
+// what a hand-tilled bed has to be told, whether or not it has water: nothing keeps bare farmland
+export const tillWarning = (dry, total) => dry
+  ? `${dry} of ${total} have no water within 4 blocks (level with them or one up): plant them AT ONCE or they turn back to dirt within minutes; to keep a field, pour water beside it`
+  : 'plant them now: bare farmland turns back to dirt the moment anything jumps on it, and a field tilled in one pass and sown in the next loses the beds it walked back over'
 export function farmJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
   const push = (job, item) => jobs.push({ ...job, ...(item ? { item, have: (items[item] ?? 0) > 0 } : {}) })
@@ -1236,10 +1312,13 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
       continue
     }
     if (!spec.item || standing === spec.item || (spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
-    if (standing) continue
+    // a plant in the way of a wall is weeding, not somebody's block: a bush grew into claude-test-pen's west wall and
+    // the build walked past it, leaving a pen that looked finished and leaked
+    if (standing && !WEEDS.has(standing)) continue
+    if (standing && clear({ do: 'clear', x: cell.x, y: cell.y + 1, z: cell.z, why: `${standing} grew where the ${spec.item} goes` })) continue
     push({ do: 'place', x: cell.x, y: cell.y + 1, z: cell.z, why: `no ${spec.item} there` }, spec.item)
   }
-  return jobs.sort((a, b) => JOB_ORDER.indexOf(a.do) - JOB_ORDER.indexOf(b.do))
+  return sowAsTilled(jobs.sort((a, b) => JOB_ORDER.indexOf(a.do) - JOB_ORDER.indexOf(b.do)))
 }
 
 // each job a plan asks for, as the primitive that does it. Shared by farm.maintain and farm.build: the same list of

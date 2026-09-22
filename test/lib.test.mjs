@@ -16,7 +16,12 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import apiaryInspect from '../library/apiary/inspect.mjs'
+import apiaryBreed from '../library/apiary/breed.mjs'
+import apiaryHarvest from '../library/apiary/harvest.mjs'
+import apiaryMaintain from '../library/apiary/maintain.mjs'
+import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, hiveState, apiaryGoods } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -951,6 +956,28 @@ test('penLeak: a long pen checked from one end still holds', () => {
   const rows = ['###', '#S#', ...Array(18).fill('#.#'), '###']
   assert.deepEqual(penLeak({ start: startOf(rows), topsAt: penMap(rows) }), { enclosed: true, cells: 19 })
 })
+// claude-test-pen at 113,67,-125 stands on a skin of grass over a cave, and pen.check called it a leak by a path three
+// blocks UNDER its floor: every standable surface in a neighbouring column counted, however deep. An animal that steps
+// off an edge falls to the FIRST surface below it, and never through the block a fence stands on.
+test('penLeak: a cave under the pen is not a way out', () => {
+  const rows = ['      ', ' #### ', ' #S.# ', ' #..# ', ' #### ', '      ']
+  // the floor is a skin of grass over the cavern: every floor column has a second standable surface far below
+  const cave = (x, z) => rows[z]?.[x] === '#' ? penMap(rows)(x, z) : [...penMap(rows)(x, z), -3]
+  assert.deepEqual(penLeak({ start: startOf(rows), topsAt: cave, radius: 2 }), { enclosed: true, cells: 4 })
+})
+test('penLeak: a cave under the fence line is not a way out either', () => {
+  const rows = ['      ', ' #### ', ' #S.# ', ' #..# ', ' #### ', '      ']
+  // the fence columns carry no standable top at all, only the cave below and the ledge their post leaves
+  const tops = (x, z) => rows[z]?.[x] === '#' ? [-3] : [0]
+  const rims = (x, z) => rows[z]?.[x] === '#' ? [0] : []
+  assert.deepEqual(penLeak({ start: startOf(rows), topsAt: tops, rimsAt: rims, radius: 2 }), { enclosed: true, cells: 4 })
+})
+test('penLeak: a drop to lower ground is still a way out', () => {
+  const rows = ['      ', ' #### ', ' #S.  ', ' #..# ', ' #### ', '      ']
+  const lower = (x, z) => rows[z]?.[x] === ' ' ? [-3] : penMap(rows)(x, z)
+  assert.equal(penLeak({ start: startOf(rows), topsAt: lower, radius: 2 }).enclosed, false)
+})
+
 test('penLeak: higher ground outside lets them in, not out', () => {
   const rows = [' BBBB ', ' #### ', ' #S.# ', ' #..# ', ' #### ', '      ']
   assert.deepEqual(penLeak({ start: startOf(rows), topsAt: penMap(rows), radius: 2 }), { enclosed: true, cells: 4 })
@@ -1962,6 +1989,46 @@ test('farmJobs flags the seed I do not carry', () => {
 test('farmJobs: what a plan puts ON the ground goes at y+1', () => {
   assert.deepEqual(jobsFor('#', { '0,63,0': 'grass_block' }, { oak_fence: 4 }).map(jobLine), ['place oak_fence at 0,64,0'])
 })
+// A bush grew where claude-test-pen's west wall goes, and the build walked past it: the pen stood with a hole in it
+// and pen.check called it a leak. A plant in the way of a fence, chest or torch is weeding, not somebody's block.
+for (const [name, plan, world, items, expected] of [
+  ['a bush where a fence belongs is cleared first', '#', { '0,63,0': 'grass_block', '0,64,0': 'bush' }, { oak_fence: 4 },
+    ['clear 0,64,0', 'place oak_fence at 0,64,0']],
+  ['grass where a chest belongs is cleared first', 'C', { '0,63,0': 'grass_block', '0,64,0': 'short_grass' }, { chest: 1 },
+    ['clear 0,64,0', 'place chest at 0,64,0']],
+  ['somebody\u0027s block where a fence belongs is left alone', '#', { '0,63,0': 'grass_block', '0,64,0': 'cobblestone' }, { oak_fence: 4 }, []],
+  ['a bush on a crop bed is cleared too', 'w', { '0,63,0': 'farmland', '0,64,0': 'bush' }, { wheat_seeds: 4 },
+    ['clear 0,64,0', 'plant wheat_seeds at 0,64,0']]
+]) {
+  test(`farmJobs: ${name}`, () => assert.deepEqual(jobsFor(plan, world, items).map(jobLine), expected))
+}
+// Item 3 (fixes round 2): a first pass over a 28-bed field planted 15 of them. Bare farmland goes back to dirt - dry
+// within minutes, and any of it the moment something jumps on it - so a field tilled in one pass and sown in the next
+// loses the beds the body walked back over. Each till is followed AT ONCE by the planting of its own cell.
+for (const [name, plan, world, items, expected] of [
+  ['each bed is sown the moment it is tilled', 'ww',
+    { '0,63,0': 'dirt', '1,63,0': 'dirt' }, { wheat_seeds: 64 },
+    ['till 0,63,0', 'plant wheat_seeds at 0,64,0', 'till 1,63,0', 'plant wheat_seeds at 1,64,0']],
+  ['a bed that only wants seed is sown after the tilled ones', 'ww',
+    { '0,63,0': 'farmland', '1,63,0': 'dirt' }, { wheat_seeds: 64 },
+    ['till 1,63,0', 'plant wheat_seeds at 1,64,0', 'plant wheat_seeds at 0,64,0']],
+  ['the weeding still comes before any of it', 'w',
+    { '0,63,0': 'dirt', '0,64,0': 'short_grass' }, { wheat_seeds: 64 },
+    ['clear 0,64,0', 'till 0,63,0', 'plant wheat_seeds at 0,64,0']],
+  ['a till with no seed to follow it is still done', 'w', { '0,63,0': 'dirt' }, {},
+    ['till 0,63,0', 'plant wheat_seeds at 0,64,0']]
+]) {
+  test(`farmJobs: ${name}`, () => assert.deepEqual(jobsFor(plan, world, items).map(jobLine), expected))
+}
+
+// the plain `till` primitive says the same thing, for a hand-tilled bed nobody is about to sow
+for (const [name, dry, total, expected] of [
+  ['dry beds name the number and the cure', 2, 4, /^2 of 4 have no water within 4 blocks .*plant them AT ONCE/],
+  ['wet beds are warned about trampling instead', 0, 4, /turns back to dirt the moment anything jumps on it/]
+]) {
+  test(`tillWarning: ${name}`, () => assert.match(tillWarning(dry, total), expected))
+}
+
 test('farmJobs does the ground work before the planting', () => {
   assert.deepEqual(jobsFor('w~', { '0,63,0': 'dirt', '0,63,1': 'air' }, { wheat_seeds: 1, water_bucket: 1 }).map(j => j.do), ['till', 'plant'])
 })
@@ -3091,6 +3158,120 @@ test('flock.maintain: shears that fail for another reason are reported', async (
     { wheat: 8 }, { shear: new Error('flock.maintain/shear: you carry no shears') })
   const summary = await flockMaintain.run(api, { mob: 'sheep', place: 'paddock', size: 2 })
   assert.equal(summary.stuck, 'flock.maintain/shear: you carry no shears')
+})
+
+// ---------------------------------------------------------------- apiary: bees are livestock, but never a ground flock
+test('bee food is available to the feed primitive without making bees a flock animal', () => {
+  assert.equal(BREEDING_FOOD.bee, undefined)
+  assert.deepEqual([CREATURE_FOOD.bee, creatureFood('bee', ['bread', 'poppy'])], [BEE_FLOWERS, 'poppy'])
+})
+
+const apiaryBlock = world => (x, y, z) => world[`${x},${y},${z}`] ?? null
+const block = (name, properties = {}, solid = true) => ({ name, properties, solid })
+
+test('hiveState: a ripe hive with a clear entrance and lit smoke is safe', () => {
+  const world = {
+    '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
+    '10,65,11': block('air', {}, false),
+    '10,63,10': block('campfire', { lit: true })
+  }
+  assert.deepEqual(hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'], blockAt: apiaryBlock(world) }), {
+    x: 10, y: 65, z: 10, name: 'beehive', honey: 5, ripe: true, facing: 'south', entranceClear: true, smoked: true,
+    campfire: { x: 10, y: 63, z: 10 }
+  })
+})
+
+test('hiveState: a solid smoke obstruction and a blocked entrance are both named', () => {
+  const world = {
+    '10,65,10': block('bee_nest', { honey_level: 3, facing: 'north' }),
+    '10,65,9': block('oak_log'),
+    '10,64,10': block('stone'),
+    '10,63,10': block('campfire', { lit: true })
+  }
+  const seen = hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'], blockAt: apiaryBlock(world) })
+  assert.deepEqual([seen.honey, seen.ripe, seen.entranceClear, seen.smoked], [3, false, false, false])
+})
+
+test('hiveState: an unseen entrance is not assumed safe', () => {
+  const hive = block('beehive', { honey_level: 5, facing: 'south' })
+  const seen = hiveState({ x: 10, y: 65, z: 10, block: hive, blockAt: () => null })
+  assert.equal(seen.entranceClear, false)
+})
+
+const APIARY = { name: 'orchard-apiary', kind: 'apiary', x: 10, y: 64, z: 10 }
+const apiaryWorld = () => ({
+  '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
+  '10,65,11': block('air', {}, false),
+  '10,63,10': block('campfire', { lit: true }),
+  '12,64,10': block('dandelion', {}, false)
+})
+const apiaryAnswers = world => ({
+  find_blocks: ({ block: name }) => ({ positions: name === 'beehive' ? [{ x: 10, y: 65, z: 10 }] : [] }),
+  animals: { found: [{ mob: 'bee', id: 21, grown: true, dist: 3 }, { mob: 'bee', id: 22, grown: true, dist: 4 }] },
+  use: () => { world['10,65,10'].properties.honey_level = 0; return {} },
+  collect: { picked: 3 },
+  feed: { fed: 1, with: 'dandelion' }
+})
+const makeApiary = (items = { shears: 1, dandelion: 4 }) => {
+  const world = apiaryWorld()
+  const made = fakeApi({ places: [APIARY], items, answers: apiaryAnswers(world) })
+  made.api.block = apiaryBlock(world)
+  return { ...made, world }
+}
+
+test('apiary.inspect: reports honey, smoke, flowers and only visible bees', async () => {
+  const { api } = makeApiary()
+  const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
+  assert.deepEqual([out.hives, out.ripe, out.unsafe, out.blocked, out.beesVisible, out.grownVisible, out.flowers], [1, 1, 0, 0, 2, 2, 1])
+})
+
+test('apiary.harvest: uses shears only through verified smoke, checks the level and collects comb', async () => {
+  const { api, calls } = makeApiary()
+  const out = await apiaryHarvest.run(api, { place: 'orchard-apiary', mode: 'comb', range: 4 })
+  assert.deepEqual([out.harvested, calls.filter(c => c.startsWith('use') || c.startsWith('collect'))],
+    [1, ['use x=10 y=65 z=10 item=shears', 'collect']])
+})
+
+test('apiary.harvest: an unsmoked ripe hive is refused before it is touched', async () => {
+  const made = makeApiary()
+  delete made.world['10,63,10']
+  await assert.rejects(apiaryHarvest.run(made.api, { place: 'orchard-apiary', mode: 'comb', range: 4 }), /no lit campfire/)
+  assert.deepEqual(made.calls.filter(c => c.startsWith('use')), [])
+})
+
+test('apiary.breed: feeds two visible grown bees flowers without invoking flock tools', async () => {
+  const { api, calls } = makeApiary()
+  const out = await apiaryBreed.run(api, { place: 'orchard-apiary', range: 4 })
+  assert.deepEqual([out.fed, calls.filter(c => c.startsWith('feed')), calls.some(c => c.startsWith('flock.'))],
+    [2, ['feed mob=bee id=21', 'feed mob=bee id=22'], false])
+})
+
+test('apiary.maintain: inspects, harvests, then breeds a small visible colony', async () => {
+  const { api, calls } = fakeApi({
+    items: { shears: 1, dandelion: 4 }, places: [APIARY],
+    answers: {
+      'apiary.inspect': { hives: 1, ripe: 1, unsafe: 0, blocked: 0, beesVisible: 2, grownVisible: 2, flowers: 8 },
+      'apiary.harvest': { harvested: 1, unsafe: 0, blocked: 0 },
+      'apiary.breed': { fed: 2 }
+    }
+  })
+  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
+  assert.deepEqual([out.harvested, out.bred, calls], [1, 1, [
+    'apiary.inspect place=orchard-apiary',
+    'apiary.harvest place=orchard-apiary',
+    'apiary.breed place=orchard-apiary count=2'
+  ]])
+})
+
+test('apiaryGoods: only honey products are sent to an output chest', () => {
+  assert.deepEqual(apiaryGoods({ honeycomb: 6, honey_bottle: 2, glass_bottle: 4, dandelion: 8 }), { honeycomb: 6, honey_bottle: 2 })
+})
+
+test('the rancher and beekeeper routines are valid role step lists', () => {
+  for (const file of ['roles/rancher/cattle.json', 'roles/rancher/sheep.json', 'roles/rancher/pigs.json', 'roles/rancher/chickens.json', 'roles/beekeeper/apiary.json']) {
+    const steps = JSON.parse(fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'))
+    assert.equal(routineSteps({ steps, place: 'test-place' }).error, undefined, file)
+  }
 })
 
 

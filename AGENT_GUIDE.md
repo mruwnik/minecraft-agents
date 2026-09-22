@@ -126,16 +126,19 @@ and when you speak to it in chat. The reply always says `stopped=<why>`, so read
 
 A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which the composites then read. The legend is
 `w` wheat, `c` carrot, `p` potato, `b` beetroot, `s` sugar cane, `m` melon, `k` pumpkin, `B` bamboo, `~` water,
-`.` path, `#` fence, `G` gate, `T` torch, `C` chest, `K` composter, `F` furnace, `t` crafting table.
-Its `x y z` is the NORTH-WEST corner at **crop level**: a crop stands at `y`, and its farmland, sand or water lies at
-`y-1`. Anchor a plan one block low (at the farmland) and every bed of it reads as `empty untilled` for ever after:
-`farm.plan` warns you at once (`warn=...re-save it with y=72`), `farm.fields` counts the crops where they really stand
-and prints an `anchor:` line, and `farm.maintain`/`farm.build` refuse rather than dig a floor under someone's field.
+`.` path, `#` fence, `G` gate, `T` torch, `C` chest, `K` composter, `F` flower, `t` sapling.
+Its `x y z` is the NORTH-WEST corner at **ground level**: `y` is the block the farmland, pen floor or path IS - the
+level `till` asks for, the one you point at, not the one you stand on. Everything the plan puts on it stands at `y+1`:
+crops, fences, gates, torches, chests, composters (a water source `~` lies AT `y`, with its cover at `y+1`).
+Get it wrong either way and you are told at once rather than later: `farm.plan` warns when you save it
+(`warn=...re-save it with y=71`), `farm.fields` counts the crops where they really stand and prints an `anchor:` line,
+and `farm.maintain`/`farm.build`/`pen.build` refuse to touch a block - they would till the dirt under somebody's field,
+or dig the turf out of a pen to lay its floor one lower.
 
 | action | what it does | what stops it |
 |---|---|---|
-| `farm.plan name= map='<rows>' [kind=farm] [x= y= z=]` | saves a plan on the shared map at your feet (or at `x= y= z=`), after checking it: unknown letters, farmland with no water within 4 blocks and corner gates are refused with the fix. `farm.plan name=` alone prints a saved one and its bill of materials | nothing: it is instant and writes no blocks |
-| `farm.fields [place=] [range=48]` | a census of every saved plan within range, read from the map without walking: `crops=11 ripe=3 growing=8 empty=0 untilled=1 dry=0`. Cheap: run it before deciding to work | nothing: instant |
+| `farm.plan name= map='<rows>' [kind=farm] [x= y= z=]` | saves a plan on the shared map at your feet (or at `x= y= z=`), after checking it: unknown letters, farmland with no water within 4 blocks and corner gates are refused with the fix. `y` is the GROUND block, so from where you stand it is `y-1`; a `warn=` in the reply says the world disagrees with the `y` you gave. `farm.plan name=` alone prints a saved one and its bill of materials | nothing: it is instant and writes no blocks |
+| `farm.fields [place=] [range=48]` | a census of every saved plan within range, read from the map without walking: `crops=11 ripe=3 growing=8 empty=0 untilled=1 dry=0`. An `anchor:` line means the plan's `y` is a block off the world's copy of it (see the ground-level rule above): re-save it before working the field. Cheap: run it before deciding to work | nothing: instant |
 | `farm.maintain place= [days=1] [deposit=true] [compost=true]` | one sweep of a farm per day: harvests what is ripe, replants, clears weeds, re-tills what turned back to dirt, re-pours dry channels, places the plan's chest/composter/torches, then stores the surplus in the plan's `C` chest and feeds the `K` composter. Needs a hoe, seed and (for channels) a `water_bucket` | `days=` done, `stop`, hurt, hungry, a full inventory with no chest, or two failures in a row |
 | `farm.build place= [partial=true]` | builds a saved plan on the ground it names: digs out what stands in its cells, lays a floor under the ones that have none, then tills, pours, plants and places everything the plan asks for. It counts what is still MISSING from the ground against what you carry first, and without `partial=true` refuses before touching a block (`still needs oak_fence:8`). Run it again on a half-built farm: it picks up where it stopped, and says `already=` when there is nothing left to do | the plan stands, `stop`, hurt, hungry, or a step that failed twice |
 | `pen.build place= [partial=true]` | the same engine on a pen plan (`#` fence, `G` gate, `.` the floor inside): levels the ground, raises the walls, then stands on a `.` cell and runs `pen.check`. It FAILS rather than report done while the pen leaks, naming the gap (`stands but leaks via 127,70,-139`). A corner left open is not a leak: nothing can walk through one | the pen stands and holds, `stop`, hurt, hungry, or a step that failed twice |
@@ -143,8 +146,19 @@ and prints an `anchor:` line, and `farm.maintain`/`farm.build` refuse rather tha
 | `routine steps='[{"action":..},..]'` or `name=farmer/homestead [place=] [days=]` | runs a list of steps in order, once per game day, sleeping through the nights. A step that fails is noted and the next one still runs. `name=` reads a routine a role ships in `roles/<role>/<name>.json`; `$place` in it is filled from `place=` | `days=` done, `stop`, hurt, hungry, night with no bed |
 | `farm.get_seeds crop= count= [place=] [range=64]` | gathers seed the renewable way: wheat seed from breaking grass, sugar cane and bamboo top-cut from a wild stand so the base lives, melon and pumpkin cut off the stem, roots (`carrot`, `potato`, `beetroot`) out of the `C` chest of the farm you name | `count=` reached, `stop`, or two rounds that find nothing (`gaveUp=`) |
 
+An apiary is a marked place (`kind=apiary`), not a pen: bees fly, live inside hive blocks and cannot be counted from a
+fence floor. A safe hive has an open entrance and a lit campfire no more than five blocks below it with a clear smoke
+path. Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
+
+| action | what it does | what stops it |
+|---|---|---|
+| `apiary.inspect place=\|x= y= z= [range=16]` | walks to an apiary and reports every hive or nest nearby: honey level, ripe count, smoke, blocked entrances, flowers and bees currently visible. It says visible rather than pretending to know how many are inside hive blocks | the census is complete or the place cannot be reached |
+| `apiary.harvest place=\|x= y= z= [mode=comb]` | harvests honey-level-5 hives with shears (`comb`) or glass bottles (`bottle`), but only after positively verifying smoke and a clear entrance. It checks the honey level fell and collects comb drops | all safe ripe hives are done, equipment is missing, or no ripe hive is safe |
+| `apiary.breed place=\|x= y= z= [count=2]` | feeds flowers to visible grown bees in dry daylight. Bees use the ordinary low-level `feed`, but never the ground-animal `flock.*` tools | `count=` bees ate, too few are visible, rain/night, or no flower is carried |
+| `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
+
 Roles: `roles/<role>/ROLE.md` is the trade's handbook (what the job needs to know, which composites and marks it uses)
-and `roles/<role>/*.json` are the routines it ships. `roles/farmer/` is the first one.
+and `roles/<role>/*.json` are the routines it ships. The current roles are `farmer`, `rancher` and `beekeeper`.
 
 ## House rules
 

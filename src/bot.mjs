@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -939,7 +939,8 @@ async function workGround (a, work) {
   // dry, unplanted farmland is grass again within minutes: two agents took that for a till that lied (BUGS.md 09-19)
   const waters = bot.findBlocks({ point: worked[0], matching: mcData.blocksByName.water.id, maxDistance: 24, count: 200 }).map(w => w.toArray())
   const dry = dryCells(worked.map(w => w.toArray()), waters)
-  return dry.length ? { ...outcome, dry: `${dry.length} of them have no water within 4 blocks (level with them or one up): plant them AT ONCE or they turn back to dirt within minutes; to keep a field, pour water beside it` } : outcome
+  // wet or not, farmland with nothing planted in it does not last: the warning always comes
+  return { ...outcome, [dry.length ? 'dry' : 'advice']: tillWarning(dry.length, worked.length) }
 }
 
 const long = {
@@ -1276,9 +1277,9 @@ const long = {
 
   // give one animal the food it breeds on: walk to it, hold the food out, put it away again
   async feed (a) {
-    if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot feed ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
-    const foodName = breedingFood(a.mob, bot.inventory.items().map(i => i.name))
-    if (!foodName) throw new Error(`a ${a.mob} eats ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)
+    if (!CREATURE_FOOD[a.mob]) throw new Error(`cannot feed ${a.mob}: one of ${Object.keys(CREATURE_FOOD).join(', ')}`)
+    const foodName = creatureFood(a.mob, bot.inventory.items().map(i => i.name))
+    if (!foodName) throw new Error(`a ${a.mob} eats ${CREATURE_FOOD[a.mob].join(' or ')}: you carry none`)
     const near = e => e.position.distanceTo(bot.entity.position)
     const animal = a.id === undefined
       ? Object.values(bot.entities).filter(e => e.name === a.mob && !isBaby(e.metadata)).sort((x, y) => near(x) - near(y))[0]
@@ -1733,7 +1734,7 @@ const quick = {
     const near = e => e.position.distanceTo(me)
     return {
       found: Object.values(bot.entities)
-        .filter(e => e.name && BREEDING_FOOD[e.name] && wanted(e.name) && near(e) <= (a.within ?? 24))
+        .filter(e => e.name && CREATURE_FOOD[e.name] && wanted(e.name) && near(e) <= (a.within ?? 24))
         .sort((x, y) => near(x) - near(y))
         .map(e => ({
           mob: e.name,
@@ -2176,7 +2177,7 @@ function makeApi (composite, a, alive) {
       until,
       checkpoint,
       block: blockAt,
-      clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), elapsedDays: worldDay() - startedDay }),
+      clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), raining: bot.isRaining, elapsedDays: worldDay() - startedDay }),
       inv: () => inventoryCounts(),
       // is this block something you can stand on, and does a pen with animals in it surround me? (mine.get mends its own shaft)
       solid: name => bot.registry.blocksByName[name]?.boundingBox === 'block',
