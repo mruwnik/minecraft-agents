@@ -16,7 +16,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within } from '../src/lib.mjs'
+import { planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -3092,3 +3092,31 @@ test('flock.maintain: shears that fail for another reason are reported', async (
   const summary = await flockMaintain.run(api, { mob: 'sheep', place: 'paddock', size: 2 })
   assert.equal(summary.stuck, 'flock.maintain/shear: you carry no shears')
 })
+
+
+// ---------------------------------------------------------------- the client jar and its block textures
+// textures/ is not checked in: tools/textures.mjs extracts it from a client jar when a body starts without it
+for (const [name, dirs, expected] of [
+  ['newest first, and numerically: 1.10 is newer than 1.9', ['1.9', '1.10', '1.21.8'], ['1.21.8', '1.10', '1.9']],
+  ['a bare version is older than the same version with a patch', ['1.19', '1.19.2'], ['1.19.2', '1.19']],
+  ['OptiFine builds are somebody else\'s jar', ['1.16.5-OptiFine_HD_U_G8', '1.16.5'], ['1.16.5']],
+  ['pre-releases and release candidates are not releases', ['1.21.4-pre1', '1.21.4-rc3', '1.21.4'], ['1.21.4']],
+  ['loader folders hold no client jar of their own', ['fabric-loader-0.16.7-1.21.1', 'iris-fabric-loader-0.16.7-1.21.1', '1.21.1'], ['1.21.1']],
+  ['snapshots are skipped', ['23w31a', '1.21'], ['1.21']],
+  ['nothing usable', ['fabric-loader-0.16.7-1.21.1'], []],
+  ['no versions installed at all', [], []]
+]) {
+  test(`clientVersions: ${name}`, () => assert.deepEqual(clientVersions(dirs), expected))
+}
+
+for (const [name, entries, expected] of [
+  ['a block texture is taken', ['assets/minecraft/textures/block/dirt.png'], ['assets/minecraft/textures/block/dirt.png']],
+  ['items, entities and the gui are not blocks', ['assets/minecraft/textures/item/apple.png', 'assets/minecraft/textures/entity/creeper.png', 'assets/minecraft/textures/gui/bars.png'], []],
+  ['animation metadata is not a texture', ['assets/minecraft/textures/block/water_still.png.mcmeta'], []],
+  ['the folder entry itself is not a texture', ['assets/minecraft/textures/block/'], []],
+  ['another namespace is not ours', ['assets/create/textures/block/andesite.png'], []],
+  ['the order of the jar is kept', ['assets/minecraft/textures/block/stone.png', 'pack.mcmeta', 'assets/minecraft/textures/block/dirt.png'],
+    ['assets/minecraft/textures/block/stone.png', 'assets/minecraft/textures/block/dirt.png']]
+]) {
+  test(`blockTextures: ${name}`, () => assert.deepEqual(blockTextures(entries), expected))
+}

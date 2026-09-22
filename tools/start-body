@@ -7,6 +7,7 @@ cd "$1" || exit 1
 for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done
 [ -f bot.log ] && mv bot.log bot.log.1
 node ../../../tools/patch-deps.mjs > bot.log 2>&1
+node ../../../tools/textures.mjs >> bot.log 2>&1
 node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../src/bot.mjs . >> bot.log 2>&1 &
 body=$!
 trap 'kill $body 2>/dev/null' TERM INT

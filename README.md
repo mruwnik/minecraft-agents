@@ -15,7 +15,8 @@ Mineflayer speaks protocol 26.1; ViaVersion + ViaBackwards in `../plugins` bridg
     src/        the body: bot.mjs (reflexes, primitives, the composite runner, the HTTP API), lib.mjs (pure helpers,
                 tested), eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
-    tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), new-agent.mjs, patch-deps.mjs, rcon.mjs
+    tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), new-agent.mjs,
+                patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs
     test/       every *.test.mjs; `npm test` runs them all (`node --test test/*.test.mjs`)
     state/      everything this world made, and the only folder besides node_modules/ and textures/ that git ignores:
                 agents/<Name>/ (one folder per agent: config.json, BRIEFING.md, journal.md, events.jsonl,
@@ -65,9 +66,16 @@ An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV s
 less than most text descriptions of the same scene. Entities are flat-coloured boxes (players magenta, hostiles red).
 Not drawn: block light (caves render fully lit, which is handy), translucent water, item/entity models, the sun.
 
-Block textures are Mojang's and are not checked in. Extract them once from any client jar:
+Block textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs` fills it.
+Every body start runs it beside `patch-deps.mjs`. With pictures already there it prints `[textures] already 1083` and
+stops; with none it extracts `assets/minecraft/textures/block/*.png` from a client jar and prints
+`[textures] extracted 1083 from <jar>`. The jar it reads is `$MC_CLIENT_JAR` when that is set, otherwise the newest
+plain release under `~/.minecraft/versions/<version>/<version>.jar` (OptiFine, snapshots, pre-releases and mod-loader
+folders are skipped). Finding no jar is a warning, never a failure: the body still starts, and the pictures still draw.
+To fill `textures/` by hand, or from a jar kept somewhere else:
 
-    python3 -c "import zipfile,os,sys; z=zipfile.ZipFile(sys.argv[1]); os.makedirs('textures',exist_ok=True); [open('textures/'+os.path.basename(n),'wb').write(z.read(n)) for n in z.namelist() if n.startswith('assets/minecraft/textures/block/') and n.endswith('.png')]" ~/.minecraft/versions/1.21.8/1.21.8.jar
+    node tools/textures.mjs
+    MC_CLIENT_JAR=/path/to/1.21.8.jar node tools/textures.mjs
 
 Blocks without a texture (newer than the jar, or entity-rendered like signs) get a colour hashed from their name.
 
