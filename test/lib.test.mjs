@@ -1864,6 +1864,17 @@ test('planCells: the anchor is the north-west corner and y is the ground block',
   assert.deepEqual(planCells({ plan: 'w~\n.c', x: 10, y: 63, z: -90 }).map(c => `${c.ch}@${c.x},${c.y},${c.z}`),
     ['w@10,63,-90', '~@11,63,-90', '.@10,63,-89', 'c@11,63,-89'])
 })
+// Item 4 (fixes round 2, AhuraMazda): the guide said `t` was a crafting table while the legend said sapling, so a `t`
+// cell asked for an oak_sapling nobody wanted and the crafting table never appeared. The legend is the spec's: `t` is a
+// sapling, `F` a flower, and a crafting table has a letter of its own.
+for (const [ch, kind, item] of [['t', 'sapling', 'oak_sapling'], ['F', 'flower', 'dandelion'], ['A', 'table', 'crafting_table']]) {
+  test(`PLAN_LEGEND: ${ch} is a ${kind}`, () => assert.deepEqual([PLAN_LEGEND[ch].kind, PLAN_LEGEND[ch].item], [kind, item]))
+}
+test('planBill: a crafting table cell asks for a crafting table, not a sapling', () =>
+  assert.deepEqual(planBill(planRows('A.t')), { crafting_table: 1, oak_sapling: 1 }))
+test('farmJobs: a crafting table cell is built like any other block the plan puts on the ground', () =>
+  assert.deepEqual(jobsFor('A', { '0,63,0': 'dirt' }, { crafting_table: 1 }).map(jobLine), ['place crafting_table at 0,64,0']))
+
 test('PLAN_LEGEND: every field crop names the seed that replants it', () => {
   assert.deepEqual(['w', 'c', 'p', 'b'].map(ch => [PLAN_LEGEND[ch].crop, PLAN_LEGEND[ch].seed]),
     [['wheat', 'wheat_seeds'], ['carrots', 'carrot'], ['potatoes', 'potato'], ['beetroots', 'beetroot_seeds']])
@@ -1873,7 +1884,7 @@ test('PLAN_LEGEND: every field crop names the seed that replants it', () => {
 const planRows = (...r) => parsePlan(r.join('\n'))
 for (const [name, parsed, expected] of [
   ['a hydrated field is sound', planRows('wwww~wwww'), []],
-  ['a character nobody knows', planRows('wwXw'), ['X at 2,0 is not in the legend (w c p b s m k B ~ . # G T C K F t)']],
+  ['a character nobody knows', planRows('wwXw'), ['X at 2,0 is not in the legend (w c p b s m k B ~ . # G T C K F t A)']],
   ['wheat five blocks from the water', planRows('~wwwww'), ['1 cell is farmland with no water within 4 blocks (5,0): move the channel or shorten the row']],
   ['a whole dry row is one complaint, not eight', planRows('wwwwwwww'), ['8 cells are farmland with no water within 4 blocks (0,0 1,0 2,0 3,0 and 4 more): move the channel or shorten the row']],
   ['a gate in the corner', planRows('G##', '#..', '###'), ['the gate at 0,0 is in a corner: nothing can walk through it. Put it in the middle of a wall']],

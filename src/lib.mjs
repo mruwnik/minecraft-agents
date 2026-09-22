@@ -1107,7 +1107,8 @@ export const PLAN_LEGEND = {
   C: { kind: 'chest', item: 'chest', ground: 'dirt' },
   K: { kind: 'composter', item: 'composter', ground: 'dirt' },
   F: { kind: 'flower', item: 'dandelion', ground: 'grass_block' },
-  t: { kind: 'sapling', item: 'oak_sapling', ground: 'dirt' }
+  t: { kind: 'sapling', item: 'oak_sapling', ground: 'dirt' },
+  A: { kind: 'table', item: 'crafting_table', ground: 'dirt' }
 }
 const PLAN_MAX = 64
 

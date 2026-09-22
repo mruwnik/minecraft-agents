@@ -126,7 +126,7 @@ and when you speak to it in chat. The reply always says `stopped=<why>`, so read
 
 A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which the composites then read. The legend is
 `w` wheat, `c` carrot, `p` potato, `b` beetroot, `s` sugar cane, `m` melon, `k` pumpkin, `B` bamboo, `~` water,
-`.` path, `#` fence, `G` gate, `T` torch, `C` chest, `K` composter, `F` flower, `t` sapling.
+`.` path, `#` fence, `G` gate, `T` torch, `C` chest, `K` composter, `F` flower, `t` sapling, `A` crafting table.
 Its `x y z` is the NORTH-WEST corner at **ground level**: `y` is the block the farmland, pen floor or path IS - the
 level `till` asks for, the one you point at, not the one you stand on. Everything the plan puts on it stands at `y+1`:
 crops, fences, gates, torches, chests, composters (a water source `~` lies AT `y`, with its cover at `y+1`).
