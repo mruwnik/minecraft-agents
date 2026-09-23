@@ -1529,7 +1529,8 @@ export function checkArgs (name, spec, given) {
   const wanted = Object.entries(spec).map(([k, t]) => String(t).endsWith('!') ? k : `${k}?`).join(', ')
   const missing = Object.entries(spec).find(([k, t]) => String(t).endsWith('!') && given[k] === undefined)
   if (missing) return `${name} needs ${missing[0]}=`
-  for (const [key, value] of Object.entries(given)) {
+  // a composite forwards its own optional arguments unset (range: a.range): that is no argument at all, not a wrong one
+  for (const [key, value] of Object.entries(given).filter(([, v]) => v !== undefined)) {
     const type = full[key]
     if (!type) return `${name}: ${key}= is not an argument here (${wanted})`
     const want = String(type).replace('!', '')

@@ -2173,7 +2173,10 @@ for (const [name, spec, given, expected] of [
   ['a missing required argument', { place: 'string!', days: 'number' }, {}, 'maintain_farm needs place='],
   ['a misspelt argument', { place: 'string!', days: 'number' }, { place: 'f', palce: 2 }, 'maintain_farm: palce= is not an argument here (place, days?)'],
   ['a wrong type', { days: 'number' }, { days: 'three' }, 'maintain_farm: days= wants a number, got "three"'],
-  ['the runner is allowed its own arguments', { place: 'string!' }, { place: 'f', timeout: 600 }, null]
+  ['the runner is allowed its own arguments', { place: 'string!' }, { place: 'f', timeout: 600 }, null],
+  // apiary.maintain forwarded range: a.range unset to apiary.inspect and crashed every default run (Mariel, 09-23)
+  ['an optional argument a composite forwards unset is simply absent', { place: 'string!', range: 'number' }, { place: 'f', range: undefined }, null],
+  ['a required argument forwarded unset is still missing', { place: 'string!' }, { place: undefined }, 'maintain_farm needs place=']
 ]) {
   test(`checkArgs: ${name}`, () => assert.equal(checkArgs('maintain_farm', spec, given), expected))
 }
