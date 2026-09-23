@@ -1,6 +1,6 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, penOpenRefusal, penProbes, planAnchor, shortLine } from './lib.mjs'
+import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 
@@ -52,6 +52,9 @@ export async function buildFromPlan (api, a) {
   // of it over or under the first one. Say which y to re-save with and touch nothing
   const anchor = planAnchor(plan.cells, api.block)
   if (anchor.off) throw new Error(`${plan.name} is not where its plan says: ${anchor.note}`)
+  // ...and the same question sideways: the ring, wall or field the plan describes standing a few cells across from it
+  const beside = planBeside(plan.cells, api.block, { name: plan.name })
+  if (beside) throw new Error(`${plan.name} is not where its plan says: ${beside.note}`)
   await api.checkpoint()
   const todo = [...ground(), ...field()]
   // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while

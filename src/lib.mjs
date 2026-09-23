@@ -1101,6 +1101,56 @@ export function hurtCause ({ lost, nearby, sinceCreeperMs, fell, food, oxygen, f
   return fledFrom && sinceFledMs < 30000 ? `hit while the body fled from a ${fledFrom} by itself: that run is why you have moved` : null
 }
 
+// Item 13 (#109). A death has to leave a line that says where the body fell and what did it: Claude's body died
+// unattended on 09-22 and all the file holds is the jump to the world spawn, so nobody could go and fetch the iron kit.
+//
+// The server says exactly what happened, in a system message addressed to nobody: "Claude was slain by Zombie". That
+// beats every guess, so it is read first. A line only counts as mine when it OPENS with my name: a player's chat is
+// wrapped ("<Chani> ...") and anything else that merely contains the name is somebody talking about me, not the server
+// announcing my death. "Claude joined the game" opens with it too, so the tail has to look like a death.
+const DEATH_TAILS = /^(was |fell |drowned|burned |went up in flames|tried to swim in lava|starved |suffocated |froze |blew up|hit the ground|experienced kinetic energy|discovered the floor|withered away|died)/
+export function deathBy (text, username) {
+  const head = `${username} `
+  if (typeof text !== 'string' || !text.startsWith(head)) return null
+  const tail = text.slice(head.length).trim()
+  if (!DEATH_TAILS.test(tail)) return null
+  return tail.startsWith('was ') ? tail.slice(4) : tail
+}
+
+// A wound from a minute ago is not evidence of anything: a body that stood unhurt and then died did not drown a minute
+// ago. Within the window, whatever the hurt reflex worked out is used, and failing that the mobs that were on me.
+const mobList = names => names.length === 1
+  ? `a ${names[0]} was on me`
+  : `${names.slice(0, -1).map(n => `a ${n}`).join(', ')} and a ${names[names.length - 1]} were on me`
+export function deathReport ({ pos, said, wound, now, window = 10000 }) {
+  const fresh = wound && now - wound.at <= window ? wound : null
+  const cause = said ?? fresh?.cause ?? (fresh?.nearby?.length ? mobList(fresh.nearby) : null)
+  return {
+    // where it STOOD: the respawn point is the world spawn and tells nobody anything
+    ...(pos ? { pos } : {}),
+    ...(cause ? { cause } : {}),
+    ...(pos ? {} : { where: 'unknown: I was already gone when the death arrived' })
+  }
+}
+
+// What fell with me. The drops lie where the body died for five minutes, so a line that names the kit is the difference
+// between a run back and a re-smelt ("the iron kit was lost", #109). Tools, weapons and armour are what hurts to lose,
+// so they are named; the rubble behind them is counted. Six names is as long a line as anyone reads.
+const KIT = /_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$|^(bow|crossbow|shield|trident|elytra|flint_and_steel|bucket|water_bucket|lava_bucket)$/
+export function deathKit (items) {
+  const held = Object.entries(items).filter(([, n]) => n > 0)
+  const kit = held.filter(([name]) => KIT.test(name)).map(([name, n]) => n > 1 ? `${name}:${n}` : name)
+  const rubble = held.filter(([name]) => !KIT.test(name)).reduce((n, [, count]) => n + count, 0)
+  const named = kit.slice(0, 6).join(', ')
+  const more = kit.length > 6 ? `${named} and ${kit.length - 6} more` : named
+  if (!kit.length) return rubble ? `${rubble} blocks` : null
+  return rubble ? `${more} and ${rubble} other blocks` : more
+}
+
+// mineflayer's `death` event is the usual source, but the respawn always arrives. A respawn that no death preceded is a
+// death that went unwritten, which is what the 09-22 file looks like: write it from what is known rather than nothing.
+export const deathUnannounced = ({ diedAt, now, window = 5000 }) => !diedAt || now - diedAt > window
+
 export const droppedWalk = ({ hasGoal, moving, digging, seconds, pathAgeMs }) =>
   hasGoal && !moving && !digging && seconds >= 4 && pathAgeMs !== null && pathAgeMs > 3000
 
@@ -1386,6 +1436,34 @@ function freshGround (cells, worldAt, y) {
     off: -1,
     fresh: standing.length,
     note: `the plan says y=${y}, but all ${standing.length} of its cells are open air over solid ground at y=${y - 1}: you gave the level you stand on. ${CONVENTION}, so re-save it with y=${y - 1}`
+  }
+}
+// planAnchor looks one block up and one block down, and nowhere to the side: a pen ring standing a few cells ACROSS
+// from its plan is bare ground as far as it can tell. Chani's pen was marked 2 east and 3 south of the ring it
+// describes, so pen.build read an empty field, laid half a second ring through the middle of the first and let 4
+// sheep out (2026-09-23 02:55Z). This is the sideways half of the same question: where does the thing the plan
+// describes actually stand? Answers null unless a shift within `reach` explains more than half the plan's solid
+// cells and more of them than the plan's own spot does - a neighbour's wall brushing the plan is not its own ring.
+const compassOf = (dx, dz) => [dx && `${Math.abs(dx)} ${dx < 0 ? 'west' : 'east'}`, dz && `${Math.abs(dz)} ${dz < 0 ? 'north' : 'south'}`]
+  .filter(Boolean).join(' and ')
+export function planBeside (cells, worldAt, { name = 'the place', reach = 3 } = {}) {
+  const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
+  if (solidCells.length < 6) return null
+  const score = (dx, dy, dz) => solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x + dx, c.y + 1 + dy, c.z + dz))).length
+  // the plan's own spot, judged the way planAnchor judges it: a build that is simply unfinished is not a plan in the
+  // wrong place, and a plan that already stands where it says is not searched for at all (the whole of a big farm, every shift)
+  const here = Math.max(...[0, -1, 1].map(dy => score(0, dy, 0)))
+  if (here === solidCells.length) return null
+  const shifts = range(-reach, reach).flatMap(dx => range(-reach, reach).flatMap(dz =>
+    dx === 0 && dz === 0 ? [] : [0, -1, 1].map(dy => ({ dx, dy, dz, found: score(dx, dy, dz) }))))
+  const away = s => Math.abs(s.dx) + Math.abs(s.dz) + Math.abs(s.dy)
+  const best = [...shifts].sort((a, b) => b.found - a.found || away(a) - away(b))[0]
+  if (!best || best.found < Math.max(6, solidCells.length / 2) || best.found <= here) return null
+  const at = { x: Math.min(...cells.map(c => c.x)) + best.dx, y: cells[0].y + best.dy, z: Math.min(...cells.map(c => c.z)) + best.dz }
+  return {
+    ...best,
+    at,
+    note: `${best.found} of the ${solidCells.length} blocks it describes stand ${compassOf(best.dx, best.dz)} of where the plan puts them, on ground at y=${at.y}: what the plan describes is already built, just not where the place is marked. A place's x,z is the TOP-LEFT cell of its plan (its lowest x and lowest z) and its y is the GROUND block, so mark it where the thing itself stands and build again: ./mc mark name=${name} x=${at.x} y=${at.y} z=${at.z} (marking again keeps the plan). If you meant to build a SECOND one here, move the plan further off: this one would run through the middle of what stands`
   }
 }
 export function planAnchor (cells, worldAt) {

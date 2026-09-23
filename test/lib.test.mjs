@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -1994,6 +1994,73 @@ for (const [name, events, expected] of [
   test(`errorRepeat: ${name}`, () => assert.deepEqual(replayErrors(events), expected))
 }
 
+// Item 13 (#109). Claude's body died unattended on 09-22 and the events file has only a jump to the world spawn: no line
+// saying where it fell, so nobody could go and fetch the iron kit, and nothing about what did it. Three parts. First:
+// the server says exactly what happened, in a system message addressed to nobody, and reading it beats guessing.
+for (const [name, text, expected] of [
+  ['slain', 'Claude was slain by Zombie', 'slain by Zombie'],
+  ['shot', 'Claude was shot by Skeleton', 'shot by Skeleton'],
+  ['blown up', 'Claude was blown up by Creeper', 'blown up by Creeper'],
+  ['a fall', 'Claude fell from a high place', 'fell from a high place'],
+  ['drowning', 'Claude drowned', 'drowned'],
+  ['fire', 'Claude burned to death', 'burned to death'],
+  ['lava', 'Claude tried to swim in lava', 'tried to swim in lava'],
+  ['starving', 'Claude starved to death', 'starved to death'],
+  ['a wall', 'Claude suffocated in a wall', 'suffocated in a wall'],
+  ['a named weapon', 'Claude was slain by Perrin using Bee Stinger', 'slain by Perrin using Bee Stinger'],
+  ['somebody else dying is not my death', 'Chani was slain by Zombie', null],
+  ['a player saying it in chat is not a death', '<Chani> Claude was slain by Zombie', null],
+  ['my own name inside a sentence is not a death', 'Perrin whispers: Claude was slain by Zombie', null],
+  ['a message that is only my name', 'Claude', null],
+  ['a join message', 'Claude joined the game', null],
+  ['an ordinary system line', 'Set the time to 1000', null]
+]) {
+  test(`deathBy: ${name}`, () => assert.equal(deathBy(text, 'Claude'), expected))
+}
+
+// Second: what the line says. Where the body STOOD, not where it respawns (the world spawn tells nobody anything), and
+// what killed it. The server's own words win; a recent wound is the fallback; a wound from a minute ago is not evidence
+// of anything, because a body that stood unhurt for a minute and then died did not drown a minute ago.
+const wound = (cause, nearby, at) => ({ cause, nearby, at })
+for (const [name, arg, expected] of [
+  ['the server said it', { pos: { x: 1, y: 2, z: 3 }, said: 'slain by Zombie', wound: wound('a fall of 9 blocks', [], 0), now: 0 }, { pos: { x: 1, y: 2, z: 3 }, cause: 'slain by Zombie' }],
+  ['no word from the server, but a fresh wound with a cause', { pos: { x: 1, y: 2, z: 3 }, wound: wound('a fall of 9 blocks', [], 0), now: 3000 }, { pos: { x: 1, y: 2, z: 3 }, cause: 'a fall of 9 blocks' }],
+  ['a fresh wound with mobs round it and no cause', { pos: { x: 1, y: 2, z: 3 }, wound: wound(null, ['zombie'], 0), now: 1000 }, { pos: { x: 1, y: 2, z: 3 }, cause: 'a zombie was on me' }],
+  ['two of them', { pos: { x: 1, y: 2, z: 3 }, wound: wound(null, ['zombie', 'skeleton'], 0), now: 1000 }, { pos: { x: 1, y: 2, z: 3 }, cause: 'a zombie and a skeleton were on me' }],
+  ['three of them', { pos: { x: 1, y: 2, z: 3 }, wound: wound(null, ['zombie', 'skeleton', 'spider'], 0), now: 1000 }, { pos: { x: 1, y: 2, z: 3 }, cause: 'a zombie, a skeleton and a spider were on me' }],
+  ['a wound too old to be the one', { pos: { x: 1, y: 2, z: 3 }, wound: wound('drowning: get to air', [], 0), now: 30000 }, { pos: { x: 1, y: 2, z: 3 } }],
+  ['no wound at all', { pos: { x: 1, y: 2, z: 3 }, now: 1000 }, { pos: { x: 1, y: 2, z: 3 } }],
+  ['the body was already gone: say so rather than write pos=null', { said: 'drowned', now: 0 }, { cause: 'drowned', where: 'unknown: I was already gone when the death arrived' }]
+]) {
+  test(`deathReport: ${name}`, () => assert.deepEqual(deathReport(arg), expected))
+}
+
+// Third: a death nobody announced. The `death` event is the usual source, but the respawn always arrives, so a respawn
+// that no death preceded is a death that went unwritten - which is exactly what the 09-22 file looks like.
+for (const [name, arg, expected] of [
+  ['a respawn right after a death was written: nothing owed', { diedAt: 1000, now: 1200 }, false],
+  ['a respawn with no death ever written', { diedAt: 0, now: 5000 }, true],
+  ['a respawn long after the last death: a second death nobody wrote', { diedAt: 1000, now: 60000 }, true],
+  ['right on the edge of the window, still the same death', { diedAt: 1000, now: 6000, window: 5000 }, false]
+]) {
+  test(`deathUnannounced: ${name}`, () => assert.equal(deathUnannounced(arg), expected))
+}
+
+// And what fell with me. "The iron kit was lost" is the line in #109 that costs an afternoon: the drops sit where the
+// body fell for five minutes, so a died line that names them is the difference between a run back and a re-smelt. Tools
+// and armour first because they are what hurts to lose; the rubble is counted, not listed.
+for (const [name, items, expected] of [
+  ['nothing carried', {}, null],
+  ['the kit', { iron_pickaxe: 1, iron_sword: 1, cobblestone: 64, torch: 12 }, 'iron_pickaxe, iron_sword and 76 other blocks'],
+  ['tools only', { iron_pickaxe: 1, wooden_hoe: 1 }, 'iron_pickaxe, wooden_hoe'],
+  ['armour counts as kit', { iron_helmet: 1, leather_boots: 1, dirt: 32 }, 'iron_helmet, leather_boots and 32 other blocks'],
+  ['rubble only', { dirt: 32, cobblestone: 64 }, '96 blocks'],
+  ['more kit than fits on a line', { iron_pickaxe: 1, iron_sword: 1, iron_axe: 1, iron_shovel: 1, iron_helmet: 1, iron_chestplate: 1, bow: 1 }, 'iron_pickaxe, iron_sword, iron_axe, iron_shovel, iron_helmet, iron_chestplate and 1 more'],
+  ['a stack of tools is still one line', { stone_pickaxe: 3 }, 'stone_pickaxe:3']
+]) {
+  test(`deathKit: ${name}`, () => assert.equal(deathKit(items), expected))
+}
+
 // Aviendha, 09-19: goto dig=true tunnelled 50 blocks down into an underground lake and lost 9 hp drowning in its own shaft. To the pathfinder
 // a water cell costs 1, the same as a step: a digging walk now pays dearly for each and never drops into water from a height
 for (const [name, dig, expected] of [
@@ -2382,6 +2449,57 @@ test('planAnchor: fresh ground says you gave the level you stand on', () => {
     fakeWorld({ '0,63,0': 'air', '0,62,0': 'grass_block', '1,63,0': 'air', '1,62,0': 'grass_block' }))
   assert.match(found.note, /level you stand on/)
   assert.match(found.note, /re-save it with y=62/)
+})
+
+// planAnchor looks one block up and one down and nowhere else, so the ring of a pen standing a few cells TO THE SIDE
+// of its plan is invisible to it: Chani's plan was marked 2 east and 3 south of the pen it describes, pen.build read
+// bare ground, and laid a second ring through the middle of the first while 4 sheep stood in it (2026-09-23 02:55Z).
+// A 6x6 pen ring standing at x=99..104, z=-73..-68 on ground y=70, gate in the middle of its south wall.
+const RING = { plan: '######\n#....#\n#....#\n#....#\n#....#\n##G###', x: 99, y: 70, z: -73 }
+const ringWorld = (extra = {}) => {
+  const world = {}
+  for (let x = 99; x <= 104; x++) {
+    for (let z = -73; z <= -68; z++) {
+      world[`${x},70,${z}`] = 'grass_block'
+      if (x === 99 || x === 104 || z === -73 || z === -68) world[`${x},71,${z}`] = x === 101 && z === -68 ? 'oak_fence_gate' : 'oak_fence'
+    }
+  }
+  return { ...world, ...extra }
+}
+const besideOf = (place, world = ringWorld()) => planBeside(planCells(place), fakeWorld(world), { name: 'chani-sheep-pen' })
+
+for (const [name, place, world, expected] of [
+  ['the ring stands where the plan says', RING, ringWorld(), null],
+  ['the plan was marked 2 east and 3 south of the ring it describes', { ...RING, x: 101, y: 71, z: -70 }, ringWorld(), { dx: -2, dy: -1, dz: -3, found: 20 }],
+  ['a plan two cells north of its ring, level with it', { ...RING, z: -71 }, ringWorld(), { dx: 0, dy: 0, dz: -2, found: 20 }],
+  ['bare ground has nothing standing beside it', { ...RING, x: 101, y: 71, z: -70 }, {}, null],
+  ['a ring further off than the reach belongs to no plan of mine', { ...RING, x: 105, y: 70, z: -69 }, ringWorld(), null],
+  ['a fence line next door, brushing the plan, is not its ring', { ...RING, x: 101, y: 71, z: -70 },
+    { '101,72,-71': 'oak_fence', '102,72,-71': 'oak_fence', '103,72,-71': 'oak_fence', '104,72,-71': 'oak_fence', '105,72,-71': 'oak_fence', '106,72,-71': 'oak_fence' }, null]
+]) {
+  test(`planBeside: ${name}`, () => {
+    const found = besideOf(place, world)
+    assert.deepEqual(found && { dx: found.dx, dy: found.dy, dz: found.dz, found: found.found }, expected)
+  })
+}
+
+test('planBeside: the note says where the ring stands and how to re-mark the place there', () => {
+  const found = besideOf({ ...RING, x: 101, y: 71, z: -70 })
+  assert.match(found.note, /2 west and 3 north/)
+  assert.match(found.note, /mark name=chani-sheep-pen x=99 y=70 z=-73/)
+  assert.deepEqual(found.at, { x: 99, y: 70, z: -73 })
+})
+
+test('pen.build: a plan marked beside the pen it describes is refused before a block is moved', async () => {
+  const world = ringWorld()
+  const { api, calls } = fakeApi({
+    place: { ...fakePlace(RING.plan, 101, 71, -70), name: 'chani-sheep-pen', kind: 'pen' },
+    world,
+    items: { oak_fence: 21, oak_fence_gate: 1, dirt: 12 }
+  })
+  await assert.rejects(buildPen.run(api, { place: 'chani-sheep-pen' }),
+    /chani-sheep-pen is not where its plan says.*2 west and 3 north.*mark name=chani-sheep-pen x=99 y=70 z=-73/s)
+  assert.deepEqual(calls, ['goto x=103 y=72 z=-68 range=2'], 'it walks there and stops')
 })
 
 const jobsFor = (plan, world, items) => farmJobs({ cells: planCells({ plan, x: 0, y: 63, z: 0 }), worldAt: fakeWorld(world), items })
