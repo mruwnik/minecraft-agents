@@ -1428,9 +1428,9 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
   // would dive for it and run out of air), and Chani's farm.maintain gave that up as "twice in a row" on the block
   // under her own channel. A cell like that is never dug: it is listed as skipped, with what would have to happen first.
   const drowned = (x, y, z) => [1, 2, 3].some(dy => worldAt(x, y + dy, z)?.name === 'water')
-  const clear = (job) => drowned(job.x, job.y, job.z)
+  const clear = (job, item) => drowned(job.x, job.y, job.z)
     ? (jobs.push({ ...job, do: 'skip', why: `${job.why}, and water stands over it: drain it or dig it from the shore first` }), true)
-    : (push(job), false)
+    : (push(job, item), false)
   for (const cell of cells) {
     const spec = PLAN_LEGEND[cell.ch]
     if (!spec) continue
@@ -1441,10 +1441,20 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     if (spec.kind === 'water') {
       // a cell nobody can see is nobody's job; a slab already laid in the source is a finished channel, water and floor both
       if (!ground || (holdsWater(ground) && ground.name !== 'water')) continue
-      if (!holdsWater(ground)) {
+      // nothing of a dry channel is worth starting without the water: the dig leaves a pit and the cover lays a slab
+      // on bare ground. One bucket does the whole field, so this asks only whether any water is carried at all
+      const dry = !holdsWater(ground)
+      if (dry && !((items.water_bucket ?? 0) > 0)) {
+        jobs.push({ do: 'skip', x: cell.x, y: cell.y, z: cell.z, item: 'water_bucket', have: false, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry and I carry no water: fill a bucket first` })
+        continue
+      }
+      if (dry) {
         // a channel somebody walked over and filled in: dig the cell out before pouring, or the water lands on the ground beside it
         // (and pouring onto a bed that could not be dug out would only put the water one block too high)
-        if (ground.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where the channel should be` })) continue
+        // the dig and the pour are one job in two halves: a body with no water in hand must not open the hole it
+        // cannot fill. Carrying water_bucket on the DIG stops it at the bill and again when the job runs, which is
+        // the case that left a pit in Chani's field (one bucket bills for a whole field but empties on first use)
+        if (ground.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where the channel should be` }, 'water_bucket')) continue
         // `pour` names the solid block to pour ONTO and the water lands one above it: the source belongs at y, so pour onto y-1
         push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry` }, 'water_bucket')
       }

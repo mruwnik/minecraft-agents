@@ -137,6 +137,10 @@ the farmland, and is built **covered** - a bottom oak slab laid into the source 
 while giving you a floor to walk on. So a channel hydrates its four neighbours as ever, and nothing falls in or scuffs
 the crops stepping round it; `farm.build` and `farm.maintain` ask for one `oak_slab` per `~` cell and cover any that is
 still open water.
+A dry `~` cell is never opened by a body that carries no water: the dig and the pour are one job in two halves, and
+digging the first half left a pit nobody could path past. Without a `water_bucket` the cell is left alone and reported
+as `skipped=` with `missing=water_bucket:1`, and a build you did not pass `partial=true` refuses up front. One bucket
+bills for a whole field however many cells are dry, so refill it at the source between cells.
 Get it wrong either way and you are told at once rather than later: `farm.plan` warns when you save it
 (`warn=...re-save it with y=71`), `farm.fields` counts the crops where they really stand and prints an `anchor:` line,
 and `farm.maintain`/`farm.build`/`pen.build` refuse to touch a block - they would till the dirt under somebody's field,

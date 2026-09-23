@@ -16,10 +16,17 @@ export async function buildFromPlan (api, a) {
   const drowned = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do === 'skip')
   const left = () => [...ground(), ...field()].filter(j => !j.item || (api.inv()[j.item] ?? 0) > 0)
   const skipLine = () => drowned().map(j => `${j.x},${j.y},${j.z} (${j.why})`).join('; ')
-  const summary = () => ({ ...counts, ...(Object.keys(missing).length ? { missing: shortLine(missing) } : {}), ...(drowned().length ? { skipped: skipLine() } : {}) })
+  // a cell that was SKIPPED for want of what it needs is still something the field is short of: a dry channel the body
+  // carries no water for never becomes a job, so nothing would otherwise say why the plan is not finished
+  const shortOfSkipped = () => drowned().reduce((m, j) => !j.item || j.have ? m : { ...m, [j.item]: j.item === 'water_bucket' ? 1 : (m[j.item] ?? 0) + 1 }, { ...missing })
+  const summary = () => {
+    const short = shortOfSkipped()
+    return { ...counts, ...(Object.keys(short).length ? { missing: shortLine(short) } : {}), ...(drowned().length ? { skipped: skipLine() } : {}) }
+  }
 
   const tryJob = async job => {
-    if (job.item && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = (missing[job.item] ?? 0) + 1; return }
+    // counted the way jobsBill counts: one bucket does a whole field, so a dry channel is short one bucket, not one per cell
+    if (job.item && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = job.item === 'water_bucket' ? 1 : (missing[job.item] ?? 0) + 1; return }
     const [action, args] = jobCall(job)
     const failed = await api.act(action, args).then(() => null, e => e.message)
     if (failed) { counts.stuck = counts.stuck ?? failed; return }
@@ -34,13 +41,15 @@ export async function buildFromPlan (api, a) {
   if (anchor.off) throw new Error(`${plan.name} is not where its plan says: ${anchor.note}`)
   await api.checkpoint()
   const todo = [...ground(), ...field()]
-  if (!todo.length) return drowned().length ? summary() : { already: 'everything the plan asks for is already there' }
   // counted before a single block is moved: half a build is worse than none. What is asked for is what is still missing
-  // from the GROUND, not the whole plan, so a half-built one is picked up where it stopped
-  const short = billShortfall(jobsBill(todo), api.inv())
+  // from the GROUND, not the whole plan, so a half-built one is picked up where it stopped. The skipped jobs are counted
+  // in too, and the count comes before the "nothing to do" answer: a dry channel the body carries no water for never
+  // becomes a job at all, so a plan that is only channel would otherwise report itself finished with no water in it
+  const short = billShortfall(jobsBill([...todo, ...drowned()]), api.inv())
   if (Object.keys(short).length && a.partial !== true) {
     throw new Error(`${a.place} still needs ${shortLine(short)} more than I carry: fetch them, or partial=true to build what I can now`)
   }
+  if (!todo.length) return drowned().length ? summary() : { already: 'everything the plan asks for is already there' }
   // the ground first: nothing can be tilled, planted or stood on until the cell has a floor and open air. The plan's own
   // jobs are read again afterwards, because a cell buried under stone has no job to show until the stone is gone
   for (const job of ground()) { await tryJob(job); await api.checkpoint() }

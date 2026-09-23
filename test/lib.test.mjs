@@ -2371,11 +2371,11 @@ for (const [name, plan, world, items, expected] of [
   ['a flower that sprang up on the bed is cleared too', 'w', { '0,63,0': 'farmland', '0,64,0': 'dandelion' }, { wheat_seeds: 64 }, ['clear 0,64,0', 'plant wheat_seeds at 0,64,0']],
   ['somebody else\u0027s block on the bed is left alone', 'w', { '0,63,0': 'farmland', '0,64,0': 'cobblestone' }, { wheat_seeds: 64 }, []],
   ['a dry channel is refilled by pouring onto the block UNDER the water', '~', { '0,63,0': 'air' }, { water_bucket: 1 }, ['pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
-  ['a channel somebody filled in is dug out again first', '~', { '0,63,0': 'dirt' }, { water_bucket: 1 }, ['clear 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
+  ['a channel somebody filled in is dug out again first', '~', { '0,63,0': 'dirt' }, { water_bucket: 1 }, ['clear water_bucket at 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
   ['open water gets a slab laid in it: a channel nobody can fall into', '~', { '0,63,0': 'water' }, { oak_slab: 4 }, ['cover oak_slab at 0,63,0']],
   ['a covered channel is finished', '~', { '0,63,0': 'oak_slab~' }, { oak_slab: 4 }, []],
   ['a dry channel is poured first and covered after', '~', { '0,63,0': 'air' }, { water_bucket: 1, oak_slab: 4 }, ['pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
-  ['a dry slab over nothing is not a channel: pour under it', '~', { '0,63,0': 'oak_slab' }, { water_bucket: 1, oak_slab: 4 }, ['clear 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
+  ['a dry slab over nothing is not a channel: pour under it', '~', { '0,63,0': 'oak_slab' }, { water_bucket: 1, oak_slab: 4 }, ['clear water_bucket at 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
   ['a missing fence is put back', '#', { '0,63,0': 'dirt' }, { oak_fence: 8 }, ['place oak_fence at 0,64,0']],
   ['a fence that stands is left alone', '#', { '0,63,0': 'dirt', '0,64,0': 'oak_fence' }, {}, []],
   ['a path cell is left as it is', '.', { '0,63,0': 'grass_block' }, {}, []],
@@ -3301,6 +3301,37 @@ for (const [name, jobs, expected] of [
 ]) {
   test(`jobsBill: ${name}`, () => assert.deepEqual(jobsBill(jobs), expected))
 }
+
+// Chani, BUGS.md 2026-09-23 00:28Z: farm.build ran out of water buckets and left a `~` cell as a HOLE. Standing near
+// it made every goto fail and she could not path out of her own finished field. The dig that opens a channel and the
+// pour that fills it are one job in two halves, and only the second half was ever conditional on carrying the water:
+// the first half ran, the second was skipped for want of a bucket, and the pit stayed. The dig now carries
+// water_bucket too, so a body with no water in hand never opens the hole it cannot fill - at the bill, and again at
+// the moment the job runs, which is the case that bit her (one bucket bills for a whole field but empties on first use).
+test('farm.build: a channel is never dug out by a body that carries no water', async () => {
+  const world = { '0,63,0': 'grass_block', '1,63,0': 'grass_block' }
+  const { api, calls } = fakeApi({ place: fakePlace('~~'), world, items: {} })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('dig')), [], 'no cell is dug')
+  assert.equal(summary.missing, 'water_bucket:1')
+})
+
+test('farm.build: a plan with a dry channel and no bucket is refused before anything is touched', async () => {
+  const world = { '0,63,0': 'grass_block', '1,63,0': 'grass_block' }
+  const { api, calls } = fakeApi({ place: fakePlace('~~'), world, items: { oak_slab: 4 } })
+  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /still needs water_bucket:1/)
+  assert.deepEqual(calls.filter(c => c.startsWith('dig') || c.startsWith('place')), [])
+})
+
+test('farm.build: a channel IS dug out by a body that carries the water for it', async () => {
+  const world = { '0,63,0': 'grass_block' }
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world, items: { water_bucket: 1, oak_slab: 1 },
+    answers: { dig: ({ x, y, z }) => { world[`${x},${y},${z}`] = 'air'; return {} } }
+  })
+  await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('dig')), ['dig 0,63,0'])
+})
 
 test('farm.build: partial=true builds what it can and names the rest', async () => {
   const world = { '0,63,0': 'dirt', '1,63,0': 'dirt' }
