@@ -929,10 +929,26 @@ export const bedtimeReport = error => /^cancelled: superseded/.test(error)
   ? null
   : /monsters nearby/.test(error) ? `${error}: the server lets nobody sleep with a monster within 8 blocks of the bed. Kill it (attack mob=<its name>) and sleep again, or wait it out indoors; walls and light around the bed keep them off` : error
 
-// above: the names of the 3 blocks over the one to dig. Water beside it is fine (a trench by a pond); water over it means a dive
-export const digRefusal = (above, allowWet) => !allowWet && above.includes('water')
-  ? 'that block is under water: the body would dive for it and run out of air. Work from the shore (dig down beside it, or drain it with sand or dirt first), or pass wet=true if it is shallow and you watch your air'
-  : null
+// a fluid is not a block: the server never sends a break for one, so bot.dig on water sat at doing=dig for 167 seconds (#110)
+export const FLUIDS = new Set(['water', 'lava', 'flowing_water', 'flowing_lava', 'bubble_column'])
+const fluidCure = 'Scoop the source with fill x= y= z= (an empty bucket), or fill the cell in with place item=dirt'
+
+// target: the block to dig. above: the names of the 3 blocks over it. Water beside it is fine (a trench by a pond); water over it means a dive
+export const digRefusal = (target, above, allowWet) => {
+  if (FLUIDS.has(target)) {
+    const burns = target === 'lava' || target === 'flowing_lava'
+    return `${target} is a fluid, not a block: digging it never finishes (one such dig ran 167 seconds before it was cancelled)${burns ? ', and it burns whatever reaches into it' : ''}. ${fluidCure}`
+  }
+  return !allowWet && above.includes('water')
+    ? 'that block is under water: the body would dive for it and run out of air. Work from the shore (dig down beside it, or drain it with sand or dirt first), or pass wet=true if it is shallow and you watch your air'
+    : null
+}
+
+// clear sweeps a box: one fluid cell in it would hang the whole sweep, so they are skipped and named. counts: {water: 3}
+export const fluidsLeft = counts => {
+  const named = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} x${n}`)
+  return named.length ? `${named.join(', ')} left in the box: a fluid cannot be dug. ${fluidCure}` : null
+}
 
 // drops: {id, dist, deep}, deep = water with water under it, a swim. Each drop gets one try
 export const nextDrop = (drops, tried, allowWet) =>
@@ -1678,9 +1694,9 @@ export const PRIMITIVES = {
   goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true' },
   follow: { section: 'move', args: 'player=', doc: 'keep walking after someone until stop' },
   // ---- block
-  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel)' },
+  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel). Not water or lava: use fill or place' },
   place: { section: 'block', args: 'item= x= y= z= [facing=] [half=] | blocks=', doc: 'build: one block, or a whole list of them in the order given' },
-  clear: { section: 'block', args: 'x1= y1= z1= x2= y2= z2= [keep=]', doc: 'dig out a whole box top-down, up to 400 blocks; beds and containers are kept' },
+  clear: { section: 'block', args: 'x1= y1= z1= x2= y2= z2= [keep=]', doc: 'dig out a whole box top-down, up to 400 blocks; beds, containers and fluids are kept' },
   till: { section: 'block', args: 'x= y= z= | blocks=', doc: 'hoe dirt or grass into farmland (give the ground block, not the air above it)' },
   path: { section: 'block', args: 'x= y= z= | blocks=', doc: 'shovel grass into a walking path' },
   fertilize: { section: 'block', args: 'x= y= z= | blocks=', doc: 'bone meal on a crop, a sapling or a grass block' },

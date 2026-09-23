@@ -20,7 +20,7 @@ import apiaryInspect from '../library/apiary/inspect.mjs'
 import apiaryBreed from '../library/apiary/breed.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, hiveState, apiaryGoods } from '../src/lib.mjs'
 
 const terseCases = [
@@ -1148,16 +1148,35 @@ for (const [name, error, expected] of [
 }
 test('bedChoice: only someone else\'s bed', () => assert.match(bedChoice([HERS], BED_ZONES, 'Claude', false).error, /aviendha-base.*one sleeper.*any=true/))
 
-// three drownings came from walking under water after a block or a drop: both now need wet=true
-for (const [name, above, allowWet, expected] of [
-  ['dry', ['air', 'air', 'air'], false, null],
-  ['water beside is not asked about: a trench next to a pond is a farm job', ['air'], false, null],
-  ['under water', ['water', 'air', 'air'], false, /under water.*wet=true/],
-  ['under deep water, two up', ['sand', 'water', 'water'], false, /under water/],
-  ['under water, but told to', ['water', 'water', 'water'], true, null]
+// three drownings came from walking under water after a block or a drop: both now need wet=true.
+// A fluid in the cell itself is worse than wet: dig on water ran 167 seconds doing=dig before it was cancelled (#110)
+for (const [name, target, above, allowWet, expected] of [
+  ['dry', 'stone', ['air', 'air', 'air'], false, null],
+  ['water beside is not asked about: a trench next to a pond is a farm job', 'dirt', ['air'], false, null],
+  ['under water', 'stone', ['water', 'air', 'air'], false, /under water.*wet=true/],
+  ['under deep water, two up', 'stone', ['sand', 'water', 'water'], false, /under water/],
+  ['under water, but told to', 'stone', ['water', 'water', 'water'], true, null],
+  ['the cell is water itself', 'water', ['air', 'air', 'air'], false, /water is a fluid, not a block.*never finishes.*fill x= y= z=.*place item=dirt/],
+  ['water is a fluid however wet I am willing to get', 'water', ['water', 'water', 'water'], true, /water is a fluid, not a block/],
+  ['lava is worse: it burns what it is dug with', 'lava', ['air', 'air', 'air'], false, /lava is a fluid, not a block.*burns/],
+  ['a bubble column is water too', 'bubble_column', ['water', 'air', 'air'], false, /bubble_column is a fluid, not a block/],
+  ['a waterlogged block is a real block: it digs', 'oak_slab', ['water', 'air', 'air'], true, null],
+  ['nothing there at all', undefined, ['air', 'air', 'air'], false, null]
 ]) {
   test(`digRefusal: ${name}`, () => {
-    const got = digRefusal(above, allowWet)
+    const got = digRefusal(target, above, allowWet)
+    assert.equal(expected ? expected.test(got) : got, expected ? true : null)
+  })
+}
+
+// clear digs a whole box: one water cell in it used to hang the sweep the same way, so fluids are skipped and named
+for (const [name, counts, expected] of [
+  ['nothing wet', {}, null],
+  ['one water cell', { water: 1 }, /water x1 left.*a fluid cannot be dug.*fill x= y= z=.*place item=dirt/],
+  ['both, most first', { water: 2, lava: 5 }, /lava x5, water x2 left/]
+]) {
+  test(`fluidsLeft: ${name}`, () => {
+    const got = fluidsLeft(counts)
     assert.equal(expected ? expected.test(got) : got, expected ? true : null)
   })
 }
