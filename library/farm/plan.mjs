@@ -5,7 +5,7 @@
 // farmland, floor or path itself, with crops, fences and chests standing at y+1 and a water source at y. A ~ cell is built
 // COVERED: a bottom oak slab is laid into the source cell, waterlogged, so it still hydrates its four neighbours and is walkable.
 // It only reads the map and writes it back, so it never takes the body over.
-import { parsePlan, planAnchor, planCells, planErrors, planBill, planSummary, compact } from '../../src/lib.mjs'
+import { parsePlan, planAnchor, planCells, planErrors, planLane, planBill, planSummary, compact } from '../../src/lib.mjs'
 
 export default {
   doc: "farm.plan name= [map=] [kind=] [x= y= z=] [note=]: check a plan and save it on the shared map, or print the one saved under that name",
@@ -35,6 +35,11 @@ export default {
     // y is the GROUND level: a plan saved at the level you stand on has its whole build laid one block too high, so the
     // world is asked here, while the person who wrote the map is still listening
     const { note } = planAnchor(planCells({ ...where, plan: parsed.rows.join('\n') }), api.block)
-    return { saved: a.name, at: where, is: planSummary(parsed), needs: planBill(parsed), ...(note ? { warn: note } : {}) }
+    // and whether there is anything to walk on between the gate and the rows. A field with none cannot be worked at
+    // all - every `goto` into it answers "no walkable path", because a walk steps AROUND planted cells rather than
+    // trample them - but the shape is not a contradiction, so it is saved with the fault named rather than refused
+    // (Chani took her own carrot patch's missing lane for a tool bug, BUGS.md 09-23)
+    const warn = [planLane(parsed.cells).noLane, note].filter(Boolean).join('; ')
+    return { saved: a.name, at: where, is: planSummary(parsed), needs: planBill(parsed), ...(warn ? { warn } : {}) }
   }
 }

@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatRetryDue, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatRetryDue, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -2486,6 +2486,42 @@ for (const [name, parsed, expected] of [
   test(`planErrors: ${name}`, () => assert.deepEqual(planErrors(parsed), expected))
 }
 
+// Item 21 (Chani, 09-23): `goto` deliberately steps AROUND planted cells rather than trample them, so a field with no
+// walkable lane through it is a field the body cannot stand in - her carrot patch sandwiched its water row between two
+// carrot rows with nothing but crops between the gate and the far row, and every walk into it answered `no walkable
+// path`. A plan can say that before it is built, and a built field can say it when asked what is standing.
+const laneOf = (...rows) => planLane(parsePlan(rows.join('\n')).cells)
+for (const [name, cells, expected] of [
+  ['a lane from the gate down the rows reaches every crop', laneOf('#G##', '#.c#', '#~c#', '#.c#', '####'), {}],
+  ['no lane: the gate opens onto the crop that blocks it', laneOf('#G##', '#cc#', '#~~#', '#cc#', '####'),
+    { noLane: '3 crop cells have nothing walkable beside them (2,1 1,3 2,3): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['an open field is worked from its edges', laneOf('www', 'www'), {}],
+  ['the middle of a wide open field is out of reach too', laneOf('wwww', 'wwww', 'wwww', 'wwww'),
+    { noLane: '4 crop cells have nothing walkable beside them (1,1 2,1 1,2 2,2): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['a plan with no crops has no rows to walk', laneOf('###', '#.#', '#G#'), {}],
+  ['a fence with no gate leaves its crop unreachable', laneOf('###', '#w#', '###'),
+    { noLane: '1 crop cell has nothing walkable beside it (1,1): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['flowers and saplings are walked through, so they serve the row beside them', laneOf('#G##', '#Fc#', '#tc#', '####'), {}],
+  ['a chest is not a lane: it is a block in the way', laneOf('#G##', '#Cc#', '#Cc#', '####'),
+    { noLane: '2 crop cells have nothing walkable beside them (2,1 2,2): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['more than four unreachable cells are counted, not listed', laneOf('wwwww', 'wwwww', 'wwwww', 'wwwww', 'wwwww'),
+    { noLane: '9 crop cells have nothing walkable beside them (1,1 2,1 3,1 1,2 and 5 more): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['an empty plan is not a complaint', planLane([]), {}]
+]) {
+  test(`planLane: ${name}`, () => assert.deepEqual(cells, expected))
+}
+
+// the census reads the same judgement off the plan the field was built from, so `farm.fields` says it about a field
+// that already stands and not only about a plan about to be saved
+test('fieldCensus: a field with no lane through it says so', () => {
+  const cells = planCells({ plan: '#G##\n#cc#\n#~~#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(fieldCensus(cells, () => null).noLane, /^3 crop cells have nothing walkable beside them/)
+})
+test('fieldCensus: a field with a lane says nothing about it', () => {
+  const cells = planCells({ plan: '#G##\n#.c#\n#~c#\n#.c#\n####', x: 0, y: 63, z: 0 })
+  assert.equal('noLane' in fieldCensus(cells, () => null), false)
+})
+
 test('planBill counts the seeds, the water and every block to place', () => {
   assert.deepEqual(planBill(planRows('#GT#', '#ww#', '#~c#', '#CK#')),
     { wheat_seeds: 2, carrot: 1, water_bucket: 1, oak_slab: 1, oak_fence: 9, oak_fence_gate: 1, torch: 1, chest: 1, composter: 1 })
@@ -3192,6 +3228,29 @@ test('farm.build: a plan saved at the level you stand on is refused, with the y 
   })
   await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /level you stand on.*re-save it with y=63/)
   assert.deepEqual(calls, ['goto x=0 y=65 z=0 range=2'])
+})
+
+// Item 21 (Chani, 09-23): a field with nothing walkable between its gate and its far row cannot be worked at all, and
+// nothing said so until every walk into it had already answered "no walkable path". A lane-less plan is legal - it is a
+// shape, not a contradiction - so it is saved with a warning rather than refused, and the field says it too.
+test('farm.plan: a plan with no lane through its rows is saved, with the cells nothing can stand beside', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  const out = await farmPlan.run(api, { name: 'north-field', map: '#G##\n#cc#\n#~~#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(out.warn, /^3 crop cells have nothing walkable beside them \(2,1 1,3 2,3\): lay a \. path/)
+  assert.equal(calls.length, 1)
+})
+
+test('farm.plan: a plan with a path from the gate down the rows warns about nothing', async () => {
+  const { api } = fakeApi({ places: [] })
+  const out = await farmPlan.run(api, { name: 'north-field', map: '#G##\n#.c#\n#~c#\n#.c#\n####', x: 0, y: 63, z: 0 })
+  assert.equal(out.warn, undefined)
+})
+
+test('farm.fields: a field with no lane through it says so on a line of its own', async () => {
+  const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#~~#\n#cc#\n####' }] })
+  const out = await farmFields.run(api, {})
+  assert.match(out.text, /^north-field 0m crops\(carrots:0\)|^north-field 0m cells=/)
+  assert.match(out.text, /\n {2}lane: 3 crop cells have nothing walkable beside them \(2,1 1,3 2,3\): lay a \. path/)
 })
 
 test('farm.fields: a place that is on the map but has no plan is not a field', async () => {

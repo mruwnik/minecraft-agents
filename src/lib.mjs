@@ -1428,6 +1428,46 @@ export function planErrors (parsed) {
   ]
 }
 
+// A walk into a field steps AROUND planted cells rather than trample them, so a crop with nothing walkable beside it is
+// a crop the body can never stand next to: `goto` answers "no walkable path" and the whole field reads as unreachable.
+// Chani's carrot patch sandwiched its water row between two carrot rows and left nothing but crops between the gate and
+// the far row, and she took her own plan's fault for a tool bug (BUGS.md 09-23). A plan can be told this before it is
+// built, and a field that already stands can be asked. Walked THROUGH: a path, a covered channel, a gate, a flower, a
+// sapling - the ones a body passes without breaking. Not walked through: crops (stepped around), fences, torch posts,
+// chests, composters, tables. Anything outside the plan is walkable, because the plan says nothing about it and the
+// ground around a farm is where a walk starts from.
+const LANE_KINDS = new Set(['path', 'water', 'gate', 'flower', 'sapling'])
+const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+export function planLane (cells) {
+  const crops = (cells ?? []).filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop')
+  if (!crops.length) return {}
+  const key = (dx, dz) => `${dx},${dz}`
+  const map = new Map(cells.map(c => [key(c.dx, c.dz), c]))
+  const bounds = ['dx', 'dz'].map(k => [Math.min(...cells.map(c => c[k])) - 1, Math.max(...cells.map(c => c[k])) + 1])
+  const inside = (dx, dz) => dx >= bounds[0][0] && dx <= bounds[0][1] && dz >= bounds[1][0] && dz <= bounds[1][1]
+  const standable = (dx, dz) => {
+    const cell = map.get(key(dx, dz))
+    return !cell || LANE_KINDS.has(PLAN_LEGEND[cell.ch]?.kind)
+  }
+  // flood in from the ring around the plan, which is all ground the plan never claimed
+  const reached = new Set()
+  const queue = []
+  for (let dx = bounds[0][0]; dx <= bounds[0][1]; dx++) for (const dz of bounds[1]) queue.push([dx, dz])
+  for (let dz = bounds[1][0]; dz <= bounds[1][1]; dz++) for (const dx of bounds[0]) queue.push([dx, dz])
+  while (queue.length) {
+    const [dx, dz] = queue.pop()
+    if (reached.has(key(dx, dz)) || !inside(dx, dz) || !standable(dx, dz)) continue
+    reached.add(key(dx, dz))
+    for (const [sx, sz] of STEPS) queue.push([dx + sx, dz + sz])
+  }
+  const stranded = crops.filter(c => !STEPS.some(([sx, sz]) => reached.has(key(c.dx + sx, c.dz + sz))))
+  if (!stranded.length) return {}
+  const named = stranded.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')
+  const more = stranded.length > 4 ? ` and ${stranded.length - 4} more` : ''
+  const subject = stranded.length === 1 ? '1 crop cell has nothing walkable beside it' : `${stranded.length} crop cells have nothing walkable beside them`
+  return { noLane: `${subject} (${named}${more}): lay a . path from the gate through the rows, or a walk into the field answers no walkable path` }
+}
+
 // what it takes to build this plan from nothing: one water bucket does the whole field, a torch cell needs its post too
 export function planBill (parsed) {
   const bill = {}
@@ -1479,7 +1519,9 @@ export function fieldCensus (cells, worldAt) {
     if (ripeCrop(here.name, here.properties?.age)) out.ripe++
     else out.growing++
   }
-  return out
+  // and whether the body can stand next to what it is being asked to work: read off the plan, not the world, because a
+  // lane is a property of the SHAPE - a field with no lane through it has none whether or not its crops have grown
+  return { ...out, ...planLane(cells) }
 }
 
 // A plan whose y is one off reads as a field of empty, untilled beds (Chani's wheat field: 28 wheat stood one block

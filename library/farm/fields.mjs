@@ -27,8 +27,11 @@ export default {
       const { off, note } = planAnchor(cells, api.block)
       const real = off ? cells.map(c => ({ ...c, y: c.y + off })) : cells
       // clutter is what stands over the plan that the plan never asked for: the rubble a walk or a tree left behind
-      const census = compact({ ...fieldCensus(real, api.block), clutter: clutterLine(clutterBlocks(real, api.block)) }, false)
-      return `${p.name} ${Math.round(Math.hypot(p.x - here.x, p.z - here.z))}m ${census}${note ? `\n  anchor: ${note}` : ''}`
+      // the lane is a sentence, not a count: it goes on a line of its own like the anchor, so the census stays one line
+      const { noLane, ...counts } = fieldCensus(real, api.block)
+      const census = compact({ ...counts, clutter: clutterLine(clutterBlocks(real, api.block)) }, false)
+      const lines = [noLane ? `\n  lane: ${noLane}` : '', note ? `\n  anchor: ${note}` : ''].join('')
+      return `${p.name} ${Math.round(Math.hypot(p.x - here.x, p.z - here.z))}m ${census}${lines}`
     }
     return { text: plans.map(line).join('\n') }
   }
