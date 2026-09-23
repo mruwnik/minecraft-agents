@@ -9,16 +9,19 @@ const isLit = block => isCampfire(block) && block.properties?.lit !== false && S
 // a moss carpet is a plant and burns; every dyed carpet is wool and sits on a fire without catching
 const isCarpet = name => /^[a-z_]+_carpet$/.test(String(name)) && name !== 'moss_carpet'
 
-// The standard column (Dan, 2026-09-23): campfire at y, a carpet ON it at y+1, one air block, the hive at y+3. An open
-// fire burns the bees that land in it, so a lit fire with nothing on it is `open`, and inspect, harvest and maintain
-// all say so before anything is touched. A carpet covers it; so does anything with a collision box sitting straight on
-// it, a wild nest on its fire above all: there is no cell to carpet, and nothing can land in the flame. A moss carpet
-// is a plant, burns, and covers nothing.
+// The standard column (Dan, 2026-09-23): the campfire at least one block underground at y, ground on all four sides of
+// it, a carpet ON it at y+1 (flush with the ground), one air block, the hive at y+3. An open fire burns the bees that
+// land in it, so a lit fire with nothing on it is `open`, and inspect, harvest and maintain all say so before anything
+// is touched. A carpet covers it; so does anything with a collision box sitting straight on it, a wild nest on its fire
+// above all: there is no cell to carpet, and nothing can land in the flame. A moss carpet is a plant, burns, and covers
+// nothing. A fire with any side in the open is `raised`: bees fly into it sideways, so apiary.guard moves it down.
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 export function fireState ({ x, y, z, block, blockAt }) {
   const lit = isLit(block)
   const above = blockAt(x, y + 1, z)
   const guarded = isCarpet(above?.name) || (Boolean(above?.solid) && above.name !== 'moss_carpet')
-  return { x, y, z, lit, guarded, open: lit && !guarded }
+  const sunk = SIDES.every(([dx, dz]) => Boolean(blockAt(x + dx, y, z + dz)?.solid))
+  return { x, y, z, lit, guarded, open: lit && !guarded, sunk }
 }
 
 // The game's own smoke rule (CampfireBlock.isSmokeyPos): look down at most five cells; a lit campfire smokes the hive;
@@ -47,8 +50,10 @@ export function hiveState ({ x, y, z, block, blockAt }) {
   const entranceClear = Boolean(facing) && Boolean(front) && !front.solid
   const campfire = smokeSource(x, y, z, blockAt)
   const fire = campfire ? fireState({ ...campfire, block: blockAt(campfire.x, campfire.y, campfire.z), blockAt }) : null
-  return { x, y, z, name: block.name, honey, ripe: honey >= 5, facing, entranceClear, smoked: Boolean(campfire), guarded: Boolean(fire?.guarded), open: Boolean(fire?.open), campfire }
+  return { x, y, z, name: block.name, honey, ripe: honey >= 5, facing, entranceClear, smoked: Boolean(campfire), guarded: Boolean(fire?.guarded), open: Boolean(fire?.open), raised: Boolean(fire?.lit && !fire.sunk), campfire }
 }
 
 export const carpetCarried = items => Object.keys(items).find(name => items[name] > 0 && isCarpet(name)) ?? null
+export const campfireCarried = items => CAMPFIRES.find(name => items[name] > 0) ?? null
 export const CAMPFIRES = [...CAMPFIRE_NAMES]
+export const CAMPFIRE_RECIPE = 'a campfire (3 sticks, 1 coal or charcoal, 3 logs)'

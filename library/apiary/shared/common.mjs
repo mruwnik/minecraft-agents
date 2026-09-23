@@ -43,6 +43,6 @@ export async function apiarySnapshot (api, a, action) {
   return { at, range, hives, bees, fires, flowers: flowerCount }
 }
 
-export const hiveLine = hive => `${hive.name}@${hive.x},${hive.y},${hive.z}:honey=${hive.honey}${hive.smoked ? '' : ',NO-SMOKE'}${hive.open ? ',OPEN-FIRE' : ''}${hive.entranceClear ? '' : ',BLOCKED'}`
+export const hiveLine = hive => `${hive.name}@${hive.x},${hive.y},${hive.z}:honey=${hive.honey}${hive.smoked ? '' : ',NO-SMOKE'}${hive.open ? ',OPEN-FIRE' : ''}${hive.raised ? ',RAISED-FIRE' : ''}${hive.entranceClear ? '' : ',BLOCKED'}`
 
 export const apiaryFires = async (api, a, action) => (await apiarySnapshot(api, a, action)).fires

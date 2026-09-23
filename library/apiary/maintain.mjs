@@ -2,25 +2,29 @@
 // It never treats "no visible bees" as an empty hive: occupants are commonly indoors at dawn, dusk or in rain.
 import { apiaryGoods } from '../../src/lib.mjs'
 import { carpetCarried } from './shared/common.mjs'
+import { campfireCarried } from './shared/hive.mjs'
 
 export default {
-  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, carpet open fires, safely harvest and tend one apiary',
+  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary',
   stops: 'one round is complete, a ripe hive is unsafe, or a step fails twice',
   args: { place: 'string!', size: 'number', mode: 'string', breed: 'boolean', deposit: 'boolean', range: 'number', until: 'number' },
 
   async run (api, a) {
     const summary = { harvested: 0, bred: 0 }
     const inspect = await api.act('apiary.inspect', { place: a.place, range: a.range })
-    Object.assign(summary, { hives: inspect.hives, ripe: inspect.ripe, unsafe: inspect.unsafe, blocked: inspect.blocked, openFires: inspect.openFires, beesVisible: inspect.beesVisible, flowers: inspect.flowers })
+    Object.assign(summary, { hives: inspect.hives, ripe: inspect.ripe, unsafe: inspect.unsafe, blocked: inspect.blocked, openFires: inspect.openFires, raisedFires: inspect.raisedFires, beesVisible: inspect.beesVisible, flowers: inspect.flowers })
     api.report(summary)
     await api.checkpoint()
 
-    // an open fire burns bees: carpet it before any honey is touched, and stop the round if there is nothing to carpet it with
-    if (inspect.openFires) {
-      if (!carpetCarried(api.inv())) throw new Error(`${inspect.openFires} open fire${inspect.openFires > 1 ? 's' : ''} under the hives and no carpet carried: bees burn in open fire, bring a carpet (2 wool make 3) and run apiary.guard`)
+    // an open fire burns bees: carpet it before any honey is touched, and stop the round if there is nothing to carpet it
+    // with. A raised fire (a side in the open) is moved one block underground when a campfire is carried, else left as it is.
+    if (inspect.openFires && !carpetCarried(api.inv())) throw new Error(`${inspect.openFires} open fire${inspect.openFires > 1 ? 's' : ''} under the hives and no carpet carried: bees burn in open fire, bring a carpet (2 wool make 3) and run apiary.guard`)
+    if (inspect.openFires || (inspect.raisedFires && campfireCarried(api.inv()))) {
       const guard = await api.act('apiary.guard', { place: a.place, range: a.range })
       summary.carpeted = guard.carpeted ?? 0
+      summary.sunk = guard.sunk ?? 0
       summary.openFires = guard.left ?? 0
+      summary.raisedFires = (guard.raised ?? 0) - (guard.sunk ?? 0)
       api.report(summary)
       await api.checkpoint()
     }

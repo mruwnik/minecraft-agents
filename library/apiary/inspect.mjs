@@ -3,7 +3,7 @@
 import { apiarySnapshot, hiveLine } from './shared/common.mjs'
 
 export default {
-  doc: 'apiary.inspect place=|x= y= z= [range=16]: inspect nearby hives, smoke, open fires, entrances, flowers and visible bees',
+  doc: 'apiary.inspect place=|x= y= z= [range=16]: inspect nearby hives, smoke, open or raised fires, entrances, flowers and visible bees',
   stops: 'the census is complete, or the apiary cannot be reached',
   args: { place: 'string', x: 'number', y: 'number', z: 'number', range: 'number' },
 
@@ -13,12 +13,14 @@ export default {
     const unsafe = seen.hives.filter(h => !h.smoked).length
     const blocked = seen.hives.filter(h => !h.entranceClear).length
     const openFires = seen.fires.filter(f => f.open).length
+    const raisedFires = seen.fires.filter(f => f.lit && !f.sunk).length
     return {
       hives: seen.hives.length,
       ripe,
       unsafe,
       blocked,
       openFires,
+      raisedFires,
       beesVisible: seen.bees.length,
       grownVisible: seen.bees.filter(b => b.grown).length,
       flowers: seen.flowers,

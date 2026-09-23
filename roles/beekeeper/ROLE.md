@@ -8,12 +8,15 @@ they are indoors. Apiaries use `apiary.*`, never `flock.*`.
 
 - An unobstructed entrance in the direction the hive faces.
 - Flowers nearby. Bees leave in dry daylight, collect pollen, pollinate crops they cross and return honey to the hive.
-- A lit campfire no more than five blocks below it, with a carpet ON the fire: campfire at y, carpet at y+1, air at
-  y+2, hive at y+3. Smoke passes a carpet that sits on the fire (not one with a gap beneath it), and the carpet keeps
-  bees and beekeepers out of the flame: an open fire burns every bee that lands in it. `apiary.guard` carpets
-  what has nothing on it; carry a carpet (2 wool make 3). A wild nest sitting straight on its fire is already covered
-  by the nest and needs no carpet. `apiary.inspect` is the authority: no smoke means no harvest, and
-  `openFires=` above 0 means no harvest either.
+- A lit campfire no more than five blocks below it, at least one block underground, with a carpet ON the fire: dig
+  one block, campfire in the hole at ground-1, carpet on it at ground level, air at ground+1, hive at ground+2. Smoke
+  passes a carpet that sits on the fire (not one with a gap beneath it); the carpet keeps bees and beekeepers out of
+  the flame from above and the ground on all four sides keeps them out from the sides: an open fire burns every bee
+  that lands in it, a raised one every bee that flies into it. `apiary.guard` sinks a raised fire when you carry a
+  spare campfire (3 sticks, 1 coal or charcoal, 3 logs; mining a campfire gives charcoal, not the fire back) and
+  carpets what has nothing on it (2 wool make 3 carpets). A wild nest sitting straight on its fire is covered by the
+  nest and needs no carpet, but its fire still goes underground. `apiary.inspect` is the authority: no smoke means
+  no harvest, `openFires=` above 0 means no harvest either, and `raisedFires=` above 0 means bring a campfire.
 - Honey level 5 before harvesting. `watch name=honey block=beehive where='{"honey_level":5}' repeat=true` can wake you;
   natural nests need a second `bee_nest` watch.
 

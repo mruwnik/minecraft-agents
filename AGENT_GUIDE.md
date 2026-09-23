@@ -162,18 +162,20 @@ or dig the turf out of a pen to lay its floor one lower.
 
 An apiary is a marked place (`kind=apiary`), not a pen: bees fly, live inside hive blocks and cannot be counted from a
 fence floor. A safe hive has an open entrance and a lit campfire no more than five blocks below it with a clear smoke
-path. **Every fire wears a carpet**: an open campfire burns the bees that fly through it, so the standard column is
-campfire at y, a carpet on it at y+1, air at y+2, the hive at y+3 (smoke passes a carpet that sits on the fire, not
-one with a gap under it). A hive sitting straight on its fire, as a wild nest often does, covers it itself and needs
-no carpet. Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
+path. **Every fire is underground and wears a carpet**: an open campfire burns the bees that land in it and one with a
+side in the open burns the bees that fly into it, so the standard column is a one-block hole with the campfire in it
+at ground-1, a carpet on it at ground level, air at ground+1, the hive at ground+2 (smoke passes a carpet that sits on
+the fire, not one with a gap under it). A hive sitting straight on its fire, as a wild nest often does, covers it
+itself and needs no carpet, but the fire still goes down a block. `apiary.guard` does both when you carry a spare
+campfire and a carpet. Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
 
 | action | what it does | what stops it |
 |---|---|---|
 | `apiary.inspect place=\|x= y= z= [range=16]` | walks to an apiary and reports every hive or nest nearby: honey level, ripe count, smoke, blocked entrances, flowers and bees currently visible. It says visible rather than pretending to know how many are inside hive blocks | the census is complete or the place cannot be reached |
 | `apiary.harvest place=\|x= y= z= [mode=comb]` | harvests honey-level-5 hives with shears (`comb`) or glass bottles (`bottle`), but only after positively verifying smoke, a carpeted fire and a clear entrance. It checks the honey level fell and collects comb drops | all safe ripe hives are done, equipment is missing, or no ripe hive is safe |
-| `apiary.guard place=\|x= y= z= [range=16]` | puts a carpet (any colour you carry; 2 wool make 3) on every lit campfire in range that has nothing on it and says how many are left; a fire with a hive or full block straight on it is already covered | every fire has something on it, or one is open and you carry none |
+| `apiary.guard place=\|x= y= z= [range=16]` | moves every raised lit campfire in range one block underground (needs a spare campfire carried: 3 sticks, 1 coal, 3 logs), then puts a carpet (any colour you carry; 2 wool make 3) on every one that has nothing on it, and says `raised= sunk= carpeted= left=`; a fire with a hive or full block straight on it is already covered | every fire is underground with something on it, or one is open and you carry no carpet |
 | `apiary.breed place=\|x= y= z= [count=2]` | feeds flowers to visible grown bees in dry daylight. Bees use the ordinary low-level `feed`, but never the ground-animal `flock.*` tools | `count=` bees ate, too few are visible, rain/night, or no flower is carried |
-| `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, carpet any open fire (it stops if you carry no carpet), safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
+| `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, sink any raised fire (when you carry a campfire) and carpet any open one (it stops if you carry no carpet), safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
 
 Roles: `roles/<role>/ROLE.md` is the trade's handbook (what the job needs to know, which composites and marks it uses)
 and `roles/<role>/*.json` are the routines it ships. The current roles are `farmer`, `rancher` and `beekeeper`.

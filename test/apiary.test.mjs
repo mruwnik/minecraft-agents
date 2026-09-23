@@ -19,13 +19,17 @@ test('bee food is available to the feed primitive without making bees a flock an
 const blockAt = world => (x, y, z) => world[`${x},${y},${z}`] ?? null
 const block = (name, properties = {}, solid = true) => ({ name, properties, solid })
 const air = () => block('air', {}, false)
-// the standard column: fire at y, a carpet on it, one air block, then the hive (Dan, 09-23: open fires burn the bees)
+// the standard column: fire one block underground at y, ground on all four sides of it, a carpet on it, one air block,
+// then the hive (Dan, 09-23: open fires burn the bees; the fire goes at least one block underground)
+const ground = (x, y, z) => Object.fromEntries([[x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]].map(([gx, gz]) => [`${gx},${y},${gz}`, block('dirt')]))
 const column = (extra = {}) => ({
   '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
   '10,65,11': air(),
   '10,64,10': air(),
   '10,63,10': block('white_carpet'),
   '10,62,10': block('campfire', { lit: true }),
+  ...ground(10, 62, 10),
+  ...ground(10, 61, 10),
   ...extra
 })
 const hive = world => hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'], blockAt: blockAt(world) })
@@ -33,8 +37,12 @@ const hive = world => hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'],
 test('hiveState: the standard column is smoked, guarded and safe', () => {
   assert.deepEqual(hive(column()), {
     x: 10, y: 65, z: 10, name: 'beehive', honey: 5, ripe: true, facing: 'south', entranceClear: true,
-    smoked: true, guarded: true, open: false, campfire: { x: 10, y: 62, z: 10 }
+    smoked: true, guarded: true, open: false, raised: false, campfire: { x: 10, y: 62, z: 10 }
   })
+})
+
+test('hiveState: a lit fire with a side in the open is raised, even under a carpet', () => {
+  assert.equal(hive(column({ '9,62,10': air() })).raised, true)
 })
 
 // a carpet counts as a block with a collision box to the client, which is not the same thing as stopping the smoke:
@@ -71,12 +79,15 @@ test('hiveState: something that is not a hive is nothing', () => {
 })
 
 for (const [name, world, expected] of [
-  ['a lit fire with a carpet on it is guarded', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet') }, { lit: true, guarded: true, open: false }],
-  ['a lit fire with nothing on it is open', { '5,60,5': block('campfire', { lit: true }), '5,61,5': air() }, { lit: true, guarded: false, open: true }],
-  ['an unseen cell over the fire is not a guard', { '5,60,5': block('campfire', { lit: true }) }, { lit: true, guarded: false, open: true }],
-  ['a hive sitting straight on the fire covers it: no cell to carpet, nothing to land in', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('bee_nest', { honey_level: 0, facing: 'north' }) }, { lit: true, guarded: true, open: false }],
-  ['a moss carpet is a plant and no guard', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('moss_carpet') }, { lit: true, guarded: false, open: true }],
-  ['an unlit fire harms nobody', { '5,60,5': block('campfire', { lit: false }), '5,61,5': air() }, { lit: false, guarded: false, open: false }]
+  ['a lit fire with a carpet on it is guarded', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet') }, { lit: true, guarded: true, open: false, sunk: false }],
+  ['a lit fire with nothing on it is open', { '5,60,5': block('campfire', { lit: true }), '5,61,5': air() }, { lit: true, guarded: false, open: true, sunk: false }],
+  ['an unseen cell over the fire is not a guard', { '5,60,5': block('campfire', { lit: true }) }, { lit: true, guarded: false, open: true, sunk: false }],
+  ['a hive sitting straight on the fire covers it: no cell to carpet, nothing to land in', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('bee_nest', { honey_level: 0, facing: 'north' }) }, { lit: true, guarded: true, open: false, sunk: false }],
+  ['a moss carpet is a plant and no guard', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('moss_carpet') }, { lit: true, guarded: false, open: true, sunk: false }],
+  ['an unlit fire harms nobody', { '5,60,5': block('campfire', { lit: false }), '5,61,5': air() }, { lit: false, guarded: false, open: false, sunk: false }],
+  ['ground on all four sides means the fire is underground', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet'), ...ground(5, 60, 5) }, { lit: true, guarded: true, open: false, sunk: true }],
+  ['one open side and it is not', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet'), ...ground(5, 60, 5), '4,60,5': air() }, { lit: true, guarded: true, open: false, sunk: false }],
+  ['water beside it is not ground', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet'), ...ground(5, 60, 5), '4,60,5': block('water', {}, false) }, { lit: true, guarded: true, open: false, sunk: false }]
 ]) {
   test(`fireState: ${name}`, () => assert.deepEqual(fireState({ x: 5, y: 60, z: 5, block: world['5,60,5'], blockAt: blockAt(world) }), { x: 5, y: 60, z: 5, ...expected }))
 }
@@ -94,6 +105,7 @@ const apiaryAnswers = world => ({
   animals: { found: [{ mob: 'bee', id: 21, grown: true, dist: 3 }, { mob: 'bee', id: 22, grown: true, dist: 4 }] },
   use: () => { world['10,65,10'].properties.honey_level = 0; return {} },
   place: ({ x, y, z, item }) => { world[`${x},${y},${z}`] = block(item); return { placed: 1 } },
+  dig: ({ x, y, z }) => { world[`${x},${y},${z}`] = air(); return { dug: 1 } },
   collect: { picked: 3 },
   feed: { fed: 1, with: 'dandelion' }
 })
@@ -103,6 +115,13 @@ const makeApiary = (items = { shears: 1, dandelion: 4 }, world = apiaryWorld()) 
   return { ...made, world }
 }
 const openWorld = () => ({ ...apiaryWorld(), '10,63,10': air() })
+const raisedWorld = () => ({ ...apiaryWorld(), '9,62,10': air() })
+
+test('apiary.inspect: a fire with a side in the open is counted as raised and named in the details', async () => {
+  const { api } = makeApiary(undefined, raisedWorld())
+  const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
+  assert.deepEqual([out.raisedFires, out.openFires, out.details], [1, 0, 'beehive@10,65,10:honey=5,RAISED-FIRE'])
+})
 
 test('apiary.inspect: reports honey, smoke, open fires, flowers and only visible bees', async () => {
   const { api } = makeApiary()
@@ -141,15 +160,32 @@ test('apiary.guard: carpets every open lit fire it can, with any carpet carried'
   const { api, calls } = makeApiary({ red_carpet: 2 }, world)
   const out = await apiaryGuard.run(api, { place: 'orchard-apiary', range: 8 })
   assert.deepEqual([out, calls.filter(c => c.startsWith('place'))], [
-    { fires: 2, open: 1, carpeted: 1, left: 0, with: 'red_carpet' },
+    { fires: 2, raised: 1, sunk: 0, open: 1, carpeted: 1, left: 0, with: 'red_carpet', craft: 'a campfire (3 sticks, 1 coal or charcoal, 3 logs) to sink 1 raised fire' },
     ['place x=10 y=63 z=10 item=red_carpet']
   ])
+})
+
+test('apiary.guard: a raised fire is moved one block underground when a campfire is carried, then carpeted', async () => {
+  const world = raisedWorld()
+  const { api, calls } = makeApiary({ campfire: 1, red_carpet: 2 }, world)
+  const out = await apiaryGuard.run(api, { place: 'orchard-apiary', range: 8 })
+  assert.deepEqual([out, calls.filter(c => c.startsWith('place') || c.startsWith('dig'))], [
+    { fires: 1, raised: 1, sunk: 1, open: 1, carpeted: 1, left: 0, with: 'red_carpet' },
+    ['dig 10,63,10', 'dig 10,62,10', 'dig 10,61,10', 'place x=10 y=61 z=10 item=campfire', 'place x=10 y=62 z=10 item=red_carpet']
+  ])
+})
+
+test('apiary.guard: a raised fire with no campfire carried is carpeted where it is and reported', async () => {
+  const world = { ...raisedWorld(), '10,63,10': air() }
+  const { api, calls } = makeApiary({ red_carpet: 2 }, world)
+  const out = await apiaryGuard.run(api, { place: 'orchard-apiary', range: 8 })
+  assert.deepEqual([out.sunk, out.raised, out.carpeted, calls.filter(c => c.startsWith('dig'))], [0, 1, 1, []])
 })
 
 test('apiary.guard: nothing to do needs no carpet', async () => {
   const { api, calls } = makeApiary({ shears: 1 })
   const out = await apiaryGuard.run(api, { place: 'orchard-apiary', range: 8 })
-  assert.deepEqual([out, calls.filter(c => c.startsWith('place'))], [{ fires: 1, open: 0, carpeted: 0, left: 0 }, []])
+  assert.deepEqual([out, calls.filter(c => c.startsWith('place'))], [{ fires: 1, raised: 0, sunk: 0, open: 0, carpeted: 0, left: 0 }, []])
 })
 
 test('apiary.guard: an open fire and no carpet is a refusal that says what to bring', async () => {
@@ -175,8 +211,8 @@ test('apiary.breed: feeds two visible grown bees flowers without invoking flock 
 const maintainApi = (inspect, items = { shears: 1, dandelion: 4 }) => fakeApi({
   items, places: [APIARY],
   answers: {
-    'apiary.inspect': { hives: 1, ripe: 1, unsafe: 0, blocked: 0, openFires: 0, beesVisible: 2, grownVisible: 2, flowers: 8, ...inspect },
-    'apiary.guard': { fires: 1, open: 1, carpeted: 1, left: 0 },
+    'apiary.inspect': { hives: 1, ripe: 1, unsafe: 0, blocked: 0, openFires: 0, raisedFires: 0, beesVisible: 2, grownVisible: 2, flowers: 8, ...inspect },
+    'apiary.guard': { fires: 1, raised: 1, sunk: 1, open: 1, carpeted: 1, left: 0 },
     'apiary.harvest': { harvested: 1, unsafe: 0, blocked: 0 },
     'apiary.breed': { fed: 2 }
   }
@@ -196,6 +232,12 @@ test('apiary.maintain: an open fire is carpeted before anything else', async () 
   const { api, calls } = maintainApi({ openFires: 1 }, { shears: 1, dandelion: 4, white_carpet: 3 })
   const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
   assert.deepEqual([out.carpeted, calls.slice(0, 2)], [1, ['apiary.inspect place=orchard-apiary', 'apiary.guard place=orchard-apiary']])
+})
+
+test('apiary.maintain: a raised fire is sunk before anything else', async () => {
+  const { api, calls } = maintainApi({ raisedFires: 1 }, { shears: 1, dandelion: 4, campfire: 1, white_carpet: 3 })
+  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
+  assert.deepEqual([out.sunk, out.raisedFires, calls.slice(0, 2)], [1, 0, ['apiary.inspect place=orchard-apiary', 'apiary.guard place=orchard-apiary']])
 })
 
 test('apiary.maintain: an open fire with no carpet to hand stops the round with the reason', async () => {
