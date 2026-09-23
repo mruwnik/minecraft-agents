@@ -1227,6 +1227,10 @@ const EAT_ADVICE = [
   [/switched early/i, 'my hand was emptied mid-meal (a reflex that re-equips?)'],
   [/manually canceled/i, 'the meal was called off']
 ]
+// The reflex runs on every physics tick. While every meal was timing out that was 20 failed eats a second, each one a pair
+// of window clicks at the server: after a failure it waits. A meal that works needs no cooldown, a fed body stops asking.
+export const eatRetryDue = (failedAt, now, wait = 5000) => failedAt === null || now - failedAt >= wait
+
 // ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. edible is what
 // I carry that the reflex would touch (food, minus the banned list), so naming what IS there saves a second call.
 export function eatRefusal ({ food, item, edible }) {
