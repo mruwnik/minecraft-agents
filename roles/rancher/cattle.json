@@ -1,0 +1,3 @@
+[
+  { "action": "flock.maintain", "mob": "cow", "place": "$place", "size": 6, "deposit": true }
+]
