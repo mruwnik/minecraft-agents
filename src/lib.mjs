@@ -330,13 +330,27 @@ export const placeMissed = (before, after) => after === before
 export const strayFluid = (before, cells, fluid) =>
   cells.find(c => c.name === fluid && Number(c.level) === 0 && !before.has(`${c.x},${c.y},${c.z}`)) ?? null
 
-export function placeOutcome (placed, skipped, verb = 'placed', already = 0) {
+// cells: what really stands there now, read back off the world, {x,y,z,name}. The @x,y,z of any reply is where the BODY
+// stands, and AhuraMazda took it for the block he had just placed: he dug what he thought was his own bed remnant and hit
+// someone else's pressure plate. Grouped by block, because a batch usually lays one kind
+export const placedAt = cells => {
+  if (!cells.length) return null
+  const kinds = [...new Set(cells.map(c => c.name))]
+  return kinds.map(kind => {
+    const mine = cells.filter(c => c.name === kind).map(c => `${c.x},${c.y},${c.z}`)
+    const shown = mine.slice(0, 6).join(' ')
+    return `${shown}${mine.length > 6 ? ` and ${mine.length - 6} more` : ''} (${kind})`
+  }).join(' ')
+}
+
+export function placeOutcome (placed, skipped, verb = 'placed', already = 0, cells = []) {
   // one line per different reason: a batch that hit solid ground AND had nothing to attach to showed only the first, and the second stayed a riddle
   const reasons = [...new Set(skipped.map(s => s.why))]
   const why = reasons.map(r => `${skipped.filter(s => s.why === r).length} ${r} (first ${skipped.find(s => s.why === r).at})`).join('; ')
   if (!placed && why) return { error: `${verb} nothing: ${why}${already ? `; ${already} were already there` : ''}` }
   const there = already ? { alreadyThere: already } : {}
-  return why ? { [verb]: placed, skipped: skipped.length, why, ...there } : { [verb]: placed, ...there }
+  const at = placedAt(cells) ? { at: placedAt(cells) } : {}
+  return why ? { [verb]: placed, skipped: skipped.length, why, ...there, ...at } : { [verb]: placed, ...there, ...at }
 }
 
 // the server tells a player which of its items just broke with an entity status (47 main hand .. 52 boots). Nothing else does: my axe

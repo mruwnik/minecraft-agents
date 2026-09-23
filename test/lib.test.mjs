@@ -938,6 +938,17 @@ for (const [name, rows, expected] of penCases) {
 // Ganesha, 21:08Z: three fences placed, reply `placed=0` and nothing else. The blocks stood there; the count did not say why it was 0
 test('placeOutcome: cells that already held the block are told', () => assert.deepEqual(placeOutcome(0, [], 'placed', 3), { placed: 0, alreadyThere: 3 }))
 test('placeOutcome: none already there, no word about it', () => assert.deepEqual(placeOutcome(2, [], 'placed', 0), { placed: 2 }))
+// AhuraMazda trusted the @x,y,z of a place reply (it is where the BODY stands), dug what he thought was his own bed
+// remnant and hit someone else's pressure plate. The reply now carries the placed cells themselves, read back off the world
+for (const [name, cells, expected] of [
+  ['one block: its own cell', [{ x: 59, y: 67, z: -120, name: 'red_bed' }], { placed: 1, at: '59,67,-120 (red_bed)' }],
+  ['a batch: every cell', [{ x: 1, y: 2, z: 3, name: 'oak_fence' }, { x: 2, y: 2, z: 3, name: 'oak_fence' }], { placed: 1, at: '1,2,3 2,2,3 (oak_fence)' }],
+  ['a long batch is cut short', Array.from({ length: 9 }, (_, i) => ({ x: i, y: 2, z: 3, name: 'oak_fence' })), { placed: 1, at: '0,2,3 1,2,3 2,2,3 3,2,3 4,2,3 5,2,3 and 3 more (oak_fence)' }],
+  ['two kinds in one batch', [{ x: 1, y: 2, z: 3, name: 'oak_fence' }, { x: 2, y: 2, z: 3, name: 'oak_fence_gate' }], { placed: 1, at: '1,2,3 (oak_fence) 2,2,3 (oak_fence_gate)' }],
+  ['nothing confirmed: no at= at all', [], { placed: 1 }]
+]) {
+  test(`placeOutcome: ${name}`, () => assert.deepEqual(placeOutcome(1, [], 'placed', 0, cells), expected))
+}
 test('placeOutcome: nothing placed, some skipped, some there: still an error, and it says so', () => assert.deepEqual(placeOutcome(0, [{ at: '1,2,3', why: 'cannot get within reach' }], 'placed', 2), { error: 'placed nothing: 1 cannot get within reach (first 1,2,3); 2 were already there' }))
 
 // Ganesha's pen, 21:08Z: three fences missing in the east wall, on level ground. via= named a slope 15-20 blocks away ("the first climb"), and they

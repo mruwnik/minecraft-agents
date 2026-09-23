@@ -1008,7 +1008,8 @@ const long = {
     const lying = () => Object.values(bot.entities).filter(e => e.name === 'item' && e.position.distanceTo(p.offset(0.5, 0.5, 0.5)) <= 2.5)
     if (lying().length) await sweepDrops(5).catch(() => {})
     const left = lying()[0]?.position.floored()
-    return { dug: block.name, ...(left ? { dropLeft: `its drop still lies at ${left.x},${left.y},${left.z}: go nearer, then collect` } : {}) }
+    // the @x,y,z of the reply is where the body stands: name the cell that was dug, so nobody works from the wrong one
+    return { dug: block.name, at: `${p.x},${p.y},${p.z}`, ...(left ? { dropLeft: `its drop still lies at ${left.x},${left.y},${left.z}: go nearer, then collect` } : {}) }
   },
 
   // clear {x1..z2, keep:[names]}: dig out a box from the top down (demolition, site levelling). Beds and
@@ -1067,6 +1068,9 @@ const long = {
     const unnamed = blocks.find(b => !b.item)
     if (unnamed) throw new Error(`place needs item=<name> for every block (none given for ${unnamed.x},${unnamed.y},${unnamed.z})`)
     let placed = 0
+    // what really stands in each cell afterwards: the reply's @x,y,z is where the BODY is, and a driver read it as the
+    // block he had just placed (AhuraMazda dug someone else's pressure plate that way)
+    const done = []
     const alive = cancelGuard()
     // a cell that cannot be reached or has nothing to attach to yet is skipped and tried once more at the end (its neighbours may exist by then)
     class Skip extends Error {}
@@ -1119,6 +1123,8 @@ const long = {
       }
       bot.setControlState('sneak', false)
       placed++
+      const stands = bot.blockAt(p)?.name
+      if (stands && !isAir(stands)) done.push({ x: p.x, y: p.y, z: p.z, name: stands })
     }
     const attempt = async list => {
       const skipped = []
@@ -1131,7 +1137,7 @@ const long = {
       return skipped
     }
     const secondTry = await attempt((await attempt(blocks)).map(s => s.b))
-    const outcome = placeOutcome(placed, secondTry.map(s => ({ at: `${s.b.x},${s.b.y},${s.b.z}`, why: s.why })), 'placed', already.size)
+    const outcome = placeOutcome(placed, secondTry.map(s => ({ at: `${s.b.x},${s.b.y},${s.b.z}`, why: s.why })), 'placed', already.size, done)
     if (outcome.error) throw new Error(outcome.error)
     return outcome
   },
