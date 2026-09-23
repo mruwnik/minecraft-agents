@@ -47,7 +47,7 @@ export default {
     const names = plans.map(p => p.name).join(',')
     const zoneNames = [...new Set(guarded.map(b => b.zone))]
     if (guarded.length && !todo.length) {
-      throw new Error(`the ${guarded.length} stray block${guarded.length > 1 ? 's' : ''} over ${names} stand inside the protected zone ${zoneNames.join(' and ')}, which is not mine: ask whoever named it, or have them unprotect it`)
+      throw new Error(`the ${guarded.length} stray block${guarded.length > 1 ? 's' : ''} over ${names} ${guarded.length > 1 ? 'stand' : 'stands'} inside the protected zone ${zoneNames.join(' and ')}, which is not mine: ask whoever named it, or have them unprotect it`)
     }
 
     const aside = found.filter(b => b.keep)

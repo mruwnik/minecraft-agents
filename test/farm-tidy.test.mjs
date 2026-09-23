@@ -206,8 +206,15 @@ test('farm.tidy: somebody else\'s block over the field is named, not dug', async
 test('farm.tidy: a stray block inside somebody else\'s zone is refused by name', async () => {
   const zones = [{ name: 'chani-farm', x1: 99, y1: 60, z1: 199, x2: 103, y2: 80, z2: 203 }]
   const { api, calls } = tidyApi({ zones })
-  await assert.rejects(farmTidy.run(api, { place: 'test-field' }), /chani-farm/)
+  await assert.rejects(farmTidy.run(api, { place: 'test-field' }), /the 3 stray blocks over test-field stand inside the protected zone chani-farm/)
   assert.deepEqual(calls.filter(c => c.startsWith('dig')), [])
+})
+
+test('farm.tidy: one block in a foreign zone is refused in the singular', async () => {
+  const zones = [{ name: 'chani-farm', x1: 101, y1: 60, z1: 199, x2: 103, y2: 80, z2: 203 }]
+  const world = { ...built(), '101,72,200': block('cobblestone') }
+  const { api } = tidyApi({ world, zones })
+  await assert.rejects(farmTidy.run(api, { place: 'test-field' }), /the 1 stray block over test-field stands inside the protected zone chani-farm/)
 })
 
 test('farm.tidy: my own zone is no obstacle', async () => {
