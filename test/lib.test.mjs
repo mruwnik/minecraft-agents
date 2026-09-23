@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -2168,15 +2168,46 @@ for (const [name, gates, me, expected] of [
   test(`gatesByReach: ${name}`, () => assert.deepEqual(gatesByReach(gates, me), expected))
 }
 
+// Item 15, the other half: which of the animals standing round me come along, and what the reply says came. Perrin's
+// `count=2` took the two nearest, which were calves, and answered `with=2`: true, useless, and no way to tell from the
+// line that the pen now holds nothing that can breed.
+for (const [name, herd, expected] of [
+  ['grown ones first, nearest of them first', [{ id: 1, grown: false }, { id: 2, grown: true }, { id: 3, grown: true }], [2, 3, 1]],
+  ['all grown: distance order is kept', [{ id: 1, grown: true }, { id: 2, grown: true }], [1, 2]],
+  ['all calves: distance order is kept', [{ id: 1, grown: false }, { id: 2, grown: false }], [1, 2]],
+  ['an animal whose age I could not read counts as grown', [{ id: 1 }, { id: 2, grown: false }], [1, 2]],
+  ['nothing at all', [], []]
+]) {
+  test(`herdOrder: ${name}`, () => assert.deepEqual(herdOrder(herd).map(a => a.id), expected))
+}
+
+for (const [name, mob, came, expected] of [
+  ['two grown cows', 'cow', [{ grown: true }, { grown: true }], 'cow:2'],
+  ['one grown and two calves: the count alone would lie', 'cow', [{ grown: true }, { grown: false }, { grown: false }],
+    'cow:3 (1 grown, 2 calves: a calf will not breed)'],
+  ['nothing came', 'cow', [], 'cow:0'],
+  ['one calf', 'sheep', [{ grown: false }], 'sheep:1 (0 grown, 1 calf: a calf will not breed)']
+]) {
+  test(`ledReport: ${name}`, () => assert.equal(ledReport(mob, came), expected))
+}
+
 // my own lead (within=64) walked to Aviendha's base for the nearest cow: an animal in SOMEBODY's pen is not free for the taking.
 // candidates: nearest first, { id, at, penned }
 for (const [name, candidates, allowPenned, expected] of [
   ['the nearest free one', [{ id: 1, at: '5,64,5', penned: true }, { id: 2, at: '9,64,9', penned: false }], false, { id: 2 }],
   ['asked for: the starter pen is there to take from', [{ id: 1, at: '5,64,5', penned: true }], true, { id: 1 }],
   ['only penned ones about', [{ id: 1, at: '5,64,5', penned: true }], false, { error: 'the only ones in range stand in a pen (nearest at 5,64,5): they are somebody\'s. penned=true takes one anyway: only from the starter pen or a pen of your own' }],
-  ['none at all', [], false, { error: 'none in range' }]
+  ['none at all', [], false, { error: 'none in range' }],
+  // item 15 (Perrin): `flock.lead count=2` out of a 24-cow herd delivered one adult and two calves, silently, and the
+  // breed that followed did nothing. A calf is next year's herd, not this year's pair: the grown one is taken even
+  // when a calf stands nearer, and a calf is only taken when there was no grown one to take.
+  ['a calf standing nearer is passed over', [{ id: 1, at: '5,64,5', penned: false, grown: false }, { id: 2, at: '9,64,9', penned: false, grown: true }], false, { id: 2 }],
+  ['nothing but calves: the nearest comes, and it is said out loud', [{ id: 1, at: '5,64,5', penned: false, grown: false }], false,
+    { id: 1, note: 'the only cow in range is a calf (at 5,64,5): it will not breed, and it stays with its herd until it grows' }],
+  ['a calf in a pen is still somebody\'s', [{ id: 1, at: '5,64,5', penned: true, grown: false }], false,
+    { error: 'the only ones in range stand in a pen (nearest at 5,64,5): they are somebody\'s. penned=true takes one anyway: only from the starter pen or a pen of your own' }]
 ]) {
-  test(`leadPick: ${name}`, () => assert.deepEqual(leadPick(candidates, allowPenned), expected))
+  test(`leadPick: ${name}`, () => assert.deepEqual(leadPick(candidates, allowPenned, 'cow'), expected))
 }
 
 // Dan: "make sure the harvest properly reseeds those canes". The cut is the second segment and the base regrows, but a base that is gone all the

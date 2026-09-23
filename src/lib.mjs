@@ -1274,10 +1274,29 @@ export const herdPassed = (me, gate, animals) => animals.every(a => gap(a, me) <
 export const gatesByReach = (gates, me, reach = 32) => ({ near: gates.filter(g => gap(g, me) <= reach), far: gates.filter(g => gap(g, me) > reach).map(g => g.join(',')).join(' ') })
 
 // which animal a lead goes for: nearest first, but one standing in a pen belongs to somebody (my lead went for Aviendha's cow, 60 blocks off)
-export function leadPick (candidates, allowPenned) {
-  const pick = candidates.find(c => allowPenned || !c.penned)
-  if (pick) return { id: pick.id }
+// and a calf is next year's herd, not this year's breeding pair. Perrin's `flock.lead count=2` out of a 24-cow herd
+// delivered one adult and two calves, silently, and the breed that followed did nothing: the grown one is taken even
+// when a calf stands nearer, and a calf is only taken when there was no grown one to take, which is said out loud.
+export function leadPick (candidates, allowPenned, mob = 'animal') {
+  const free = candidates.filter(c => allowPenned || !c.penned)
+  const grown = free.find(c => c.grown !== false)
+  if (grown) return { id: grown.id }
+  const calf = free[0]
+  if (calf) return { id: calf.id, note: `the only ${mob} in range is a calf (at ${calf.at}): it will not breed, and it stays with its herd until it grows` }
   return { error: candidates.length ? `the only ones in range stand in a pen (nearest at ${candidates[0].at}): they are somebody's. penned=true takes one anyway: only from the starter pen or a pen of your own` : 'none in range' }
+}
+
+// and which of the ones standing round me come along. Grown first, distance order kept within each: a calf only fills a
+// place no grown animal was there to take. An age I could not read is not a reason to leave an animal behind.
+export const herdOrder = herd => [...herd.filter(a => a.grown !== false), ...herd.filter(a => a.grown === false)]
+
+// what the reply says came. `with=3` was true and useless: nothing in the line said the pen now holds one cow and two
+// calves, so the driver bred an empty pair and saw nothing wrong.
+export const ledReport = (mob, came) => {
+  const calves = came.filter(a => a.grown === false).length
+  return calves
+    ? `${mob}:${came.length} (${came.length - calves} grown, ${calves} ${calves === 1 ? 'calf' : 'calves'}: a calf will not breed)`
+    : `${mob}:${came.length}`
 }
 
 // after cutting stalks: the bases that are gone all the same, and which of them I can plant again from my pockets (the cut itself never takes a base: isStalkCut)

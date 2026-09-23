@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -1575,8 +1575,8 @@ const long = {
     const inRange = free().filter(e => near(e) <= (a.within ?? 32)).sort((x, y) => near(x) - near(y))
     if (!inRange.length) throw new Error(`no ${a.mob} within ${a.within ?? 32} blocks${floor ? ' (not counting those already in the pen)' : ''}`)
     // one that stands in a pen is somebody's (my lead went to Aviendha's base for her cow). Only the nearest few are checked: a pen check in open country is a long walk
-    const candidates = inRange.slice(0, 6).map(e => ({ id: e.id, at: `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`, penned: Boolean(penAround(e.position.floored())?.enclosed) }))
-    const picked = leadPick(candidates, a.penned === true)
+    const candidates = inRange.slice(0, 6).map(e => ({ id: e.id, at: `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`, penned: Boolean(penAround(e.position.floored())?.enclosed), grown: !isBaby(e.metadata) }))
+    const picked = leadPick(candidates, a.penned === true, a.mob)
     if (picked.error) throw new Error(`no ${a.mob} to lead: ${picked.error}`)
     const first = inRange.find(e => e.id === picked.id)
     const alive = cancelGuard()
@@ -1588,8 +1588,10 @@ const long = {
       if (candidates.find(c => c.id === picked.id).penned) await goNear(first.position.floored(), 0).catch(() => {})
       else await bot.pathfinder.goto(new goals.GoalFollow(first, 2))
       alive()
-      // the ones that come along are the ones close to me now, where they can see the food
-      const herd = free().filter(e => near(e) <= 8).sort((x, y) => near(x) - near(y)).slice(0, a.count ?? 2)
+      // the ones that come along are the ones close to me now, where they can see the food - the GROWN ones first, or a
+      // lead for a breeding pair comes home with two calves and a herd that cannot breed (Perrin, from 24 cows)
+      const herd = herdOrder(free().filter(e => near(e) <= 8).sort((x, y) => near(x) - near(y))
+        .map(e => Object.assign(e, { grown: !isBaby(e.metadata) }))).slice(0, a.count ?? 2)
       const stroll = makeMoves(false)
       stroll.allowSprinting = false
       stroll.allowParkour = false
@@ -1610,7 +1612,7 @@ const long = {
         if (toGo < bestToGo - 8) { bestToGo = toGo; fetchesSinceProgress = 0 }
         const noPath = walking && lastPath?.status === 'noPath' && lastPath.at > walkingSince
         const verdict = leadVerdict({ distances: herd.filter(e => e.isValid).map(near), holding, heldFor: holding ? (Date.now() - heldSince) / 1000 : 0, fetchesSinceProgress, noPath })
-        if (verdict === 'noway') { bot.pathfinder.setGoal(null); return { arrived: false, with: herd.filter(e => e.isValid && near(e) <= 5).length, toGo: Math.round(toGo), why: `no route on foot from here to ${to.x},${to.y},${to.z}. One of: the spot is not free floor to stand on; the gate is in a corner or something stands outside it (pen.check names such gates: blindGates=); a gap, drop or fence somewhere between here and there. The animals are with you: walk the way yourself (goto), fix what blocks it, then lead again`, pos: pos() } }
+        if (verdict === 'noway') { const along = herd.filter(e => e.isValid && near(e) <= 5); bot.pathfinder.setGoal(null); return { arrived: false, with: along.length, brought: ledReport(a.mob, along), toGo: Math.round(toGo), why: `no route on foot from here to ${to.x},${to.y},${to.z}. One of: the spot is not free floor to stand on; the gate is in a corner or something stands outside it (pen.check names such gates: blindGates=); a gap, drop or fence somewhere between here and there. The animals are with you: walk the way yourself (goto), fix what blocks it, then lead again`, pos: pos() } }
         if (verdict === 'giveup') { bot.pathfinder.setGoal(null); return { arrived: false, with: 0, why: `the ${a.mob} will not follow (fetched it 3 times, got no nearer): is there a fence or water between you? Get them out in the open first, or lead fewer`, pos: pos() } }
         if (verdict === 'lost') { bot.pathfinder.setGoal(null); return { arrived: false, with: 0, why: `the ${a.mob} are gone (despawned or unloaded)`, pos: pos() } }
         if (verdict === 'fetch') {
@@ -1648,7 +1650,8 @@ const long = {
       }
       // food out of sight, or the whole herd walks out again at my heels
       await bot.unequip('hand')
-      const came = herd.filter(e => e.isValid && inPen(e)).length
+      const arrivals = herd.filter(e => e.isValid && inPen(e))
+      const came = arrivals.length
       leading = false
       // counted BEFORE any walk to a gate: Ganesha's body reported from 170 blocks away, the cow long out of sight.
       // From the cells walked, not by eye: a cow beside the fence counted as inside. The gate we came through may still
@@ -1660,7 +1663,9 @@ const long = {
       const riseAt = (feet, dx, dz) => [0, 1, 2, 3].find(up => passable(feet.offset(dx, up, dz)) && passable(feet.offset(dx, up + 1, dz))) ?? Infinity
       const stuck = herd.filter(e => e.isValid && !inPen(e)).map(e => e.position.floored())
         .map(feet => pitAdvice(a.mob, `${feet.x},${feet.y},${feet.z}`, [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => riseAt(feet, dx, dz)))).find(Boolean)
-      return { arrived: true, with: came, animals, stuck, ...census, pos: pos() }
+      // `with=3` was true and useless: nothing in it said that two of the three were calves and the pen now holds
+      // nothing that can breed. brought= says which, and the note says when a calf came for want of anything else
+      return { arrived: true, with: came, brought: ledReport(a.mob, arrivals), animals, stuck, ...(picked.note ? { note: picked.note } : {}), ...census, pos: pos() }
     } finally {
       leading = false
       luring = false
