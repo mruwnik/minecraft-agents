@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>agent bodies</title>
+<body>
+<h1>agent bodies</h1>
+<pre id="out">loading /api/state ...</pre>
+<script>
+const refresh = () => fetch('/api/state').then(r => r.json())
+  .then(s => { document.getElementById('out').textContent = JSON.stringify(s, null, 1) })
+refresh()
+setInterval(refresh, 2000)
+</script>
