@@ -34,13 +34,18 @@ const KEPT = /_bed$|_sign$|_banner$|_shulker_box$|_head$|_skull$|^shulker_box$/
 const kept = name => LIGHTS.test(name) ? 'a light' : (WORKSTATIONS.has(name) || KEPT.test(name)) ? "somebody's block" : null
 const weed = name => isGroundCover(name) || FLOWERS.has(name)
 
+// A plan names one wood for a fence, a gate, a slab or a sapling and the world is full of the others: Chani's wheat
+// field is fenced in birch, its plan says `#` (oak_fence), and every post of it read as clutter until this.
+const KIN = [/_fence_gate$/, /_fence$/, /_slab$/, /_sapling$/]
+const sameKind = (want, got) => want === got || KIN.some(r => r.test(want) && r.test(got))
+
 // what the plan itself puts in the cell `dy` blocks over its ground block
 const planHolds = (spec, dy, name) => {
   if (spec.crop && name === spec.crop) return true
-  if (spec.cover && name === spec.cover) return true
+  if (spec.cover && sameKind(spec.cover, name)) return true
   if (dy !== 1) return spec.kind === 'torch' && LIGHTS.test(name)
   if (spec.kind === 'gate') return name.endsWith('_fence_gate')
-  return Boolean(spec.item) && name === spec.item
+  return Boolean(spec.item) && sameKind(spec.item, name)
 }
 
 // every block standing over the plan's footprint that the plan does not account for, in plan order (row by row).
