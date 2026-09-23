@@ -18,7 +18,7 @@ export default {
     const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
     const chest = planStructure(plan.cells, 'C')
     const composter = planStructure(plan.cells, 'K')
-    const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, built: 0 }
+    const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
     const keep = seedReserve(plan)
 
     const tryJob = async job => {
@@ -28,6 +28,7 @@ export default {
       if (job.do === 'plant') summary.replanted++
       if (job.do === 'till') summary.tilled++
       if (job.do === 'pour') summary.poured++
+      if (job.do === 'cover') summary.covered++
       if (job.do === 'place') summary.built++
     }
 

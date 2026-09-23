@@ -132,7 +132,11 @@ A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which 
 `.` path, `#` fence, `G` gate, `T` torch, `C` chest, `K` composter, `F` flower, `t` sapling, `A` crafting table.
 Its `x y z` is the NORTH-WEST corner at **ground level**: `y` is the block the farmland, pen floor or path IS - the
 level `till` asks for, the one you point at, not the one you stand on. Everything the plan puts on it stands at `y+1`:
-crops, fences, gates, torches, chests, composters (a water source `~` lies AT `y`, with its cover at `y+1`).
+crops, fences, gates, torches, chests, composters. A water source `~` is the exception: it lies AT `y`, in place of
+the farmland, and is built **covered** - a bottom oak slab laid into the source cell, which keeps the water (waterlogged)
+while giving you a floor to walk on. So a channel hydrates its four neighbours as ever, and nothing falls in or scuffs
+the crops stepping round it; `farm.build` and `farm.maintain` ask for one `oak_slab` per `~` cell and cover any that is
+still open water.
 Get it wrong either way and you are told at once rather than later: `farm.plan` warns when you save it
 (`warn=...re-save it with y=71`), `farm.fields` counts the crops where they really stand and prints an `anchor:` line,
 and `farm.maintain`/`farm.build`/`pen.build` refuse to touch a block - they would till the dirt under somebody's field,
@@ -151,14 +155,17 @@ or dig the turf out of a pen to lay its floor one lower.
 
 An apiary is a marked place (`kind=apiary`), not a pen: bees fly, live inside hive blocks and cannot be counted from a
 fence floor. A safe hive has an open entrance and a lit campfire no more than five blocks below it with a clear smoke
-path. Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
+path. **Every fire wears a carpet**: an open campfire burns the bees that fly through it, so the standard column is
+campfire at y, a carpet on it at y+1, air at y+2, the hive at y+3 (smoke passes a carpet that sits on the fire, not
+one with a gap under it). Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
 
 | action | what it does | what stops it |
 |---|---|---|
 | `apiary.inspect place=\|x= y= z= [range=16]` | walks to an apiary and reports every hive or nest nearby: honey level, ripe count, smoke, blocked entrances, flowers and bees currently visible. It says visible rather than pretending to know how many are inside hive blocks | the census is complete or the place cannot be reached |
-| `apiary.harvest place=\|x= y= z= [mode=comb]` | harvests honey-level-5 hives with shears (`comb`) or glass bottles (`bottle`), but only after positively verifying smoke and a clear entrance. It checks the honey level fell and collects comb drops | all safe ripe hives are done, equipment is missing, or no ripe hive is safe |
+| `apiary.harvest place=\|x= y= z= [mode=comb]` | harvests honey-level-5 hives with shears (`comb`) or glass bottles (`bottle`), but only after positively verifying smoke, a carpeted fire and a clear entrance. It checks the honey level fell and collects comb drops | all safe ripe hives are done, equipment is missing, or no ripe hive is safe |
+| `apiary.guard place=\|x= y= z= [range=16]` | puts a carpet (any colour you carry; 2 wool make 3) on every open lit campfire in range and says how many are left | every fire has a carpet, or one is open and you carry none |
 | `apiary.breed place=\|x= y= z= [count=2]` | feeds flowers to visible grown bees in dry daylight. Bees use the ordinary low-level `feed`, but never the ground-animal `flock.*` tools | `count=` bees ate, too few are visible, rain/night, or no flower is carried |
-| `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
+| `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, carpet any open fire (it stops if you carry no carpet), safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
 
 Roles: `roles/<role>/ROLE.md` is the trade's handbook (what the job needs to know, which composites and marks it uses)
 and `roles/<role>/*.json` are the routines it ships. The current roles are `farmer`, `rancher` and `beekeeper`.

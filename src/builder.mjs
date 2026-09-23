@@ -2,7 +2,7 @@
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
 import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, planAnchor, shortLine } from './lib.mjs'
 
-const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', plant: 'planted', place: 'built' }
+const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 
 export async function buildFromPlan (api, a) {
   const plan = api.plan(a.place)

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
 import buildPen from '../library/pen/build.mjs'
@@ -16,12 +17,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import apiaryInspect from '../library/apiary/inspect.mjs'
-import apiaryBreed from '../library/apiary/breed.mjs'
-import apiaryHarvest from '../library/apiary/harvest.mjs'
-import apiaryMaintain from '../library/apiary/maintain.mjs'
 import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
-import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, hiveState, apiaryGoods } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -1962,7 +1958,7 @@ for (const [name, parsed, expected] of [
 
 test('planBill counts the seeds, the water and every block to place', () => {
   assert.deepEqual(planBill(planRows('#GT#', '#ww#', '#~c#', '#CK#')),
-    { wheat_seeds: 2, carrot: 1, water_bucket: 1, oak_fence: 9, oak_fence_gate: 1, torch: 1, chest: 1, composter: 1 })
+    { wheat_seeds: 2, carrot: 1, water_bucket: 1, oak_slab: 1, oak_fence: 9, oak_fence_gate: 1, torch: 1, chest: 1, composter: 1 })
 })
 test('planStructure: what a plan marks stands ON its ground cell, at y+1', () => {
   assert.deepEqual(planStructure(planCells({ plan: 'wC', x: 0, y: 63, z: 0 }), 'C'), { x: 1, y: 64, z: 0 })
@@ -1970,11 +1966,28 @@ test('planStructure: what a plan marks stands ON its ground cell, at y+1', () =>
 })
 test('planSummary is one line', () => assert.equal(planSummary(planRows('ww~', 'ww~')), '3x2 wheat:4 water:2'))
 
+// 7b: a farm's own channel is a hole in the field - the body walks in, the pathfinder will not cross it, and `dig`
+// refuses everything beside it. A plan's water is built covered: a slab laid IN the source keeps the water and the walk
+test('fieldCensus: a slab laid in the channel still waters the field', () => {
+  const world = fakeWorld({ '0,63,0': 'farmland', '0,63,1': 'oak_slab~' })
+  assert.deepEqual(fieldCensus(planCells({ plan: 'w\n~', x: 0, y: 63, z: 0 }), world),
+    { crops: {}, cells: 2, ripe: 0, growing: 0, empty: 1, untilled: 0, dry: 0 })
+})
+test('fieldCensus: an open channel cell is counted as open, a covered one is not', () => {
+  const open = fakeWorld({ '0,63,0': 'farmland', '0,63,1': 'water' })
+  assert.equal(fieldCensus(planCells({ plan: 'w\n~', x: 0, y: 63, z: 0 }), open).open, 1)
+  const covered = fakeWorld({ '0,63,0': 'farmland', '0,63,1': 'oak_slab~' })
+  assert.equal(fieldCensus(planCells({ plan: 'w\n~', x: 0, y: 63, z: 0 }), covered).open, undefined)
+})
+
 // ---------------------------------------------------------------- composite actions: what a farm needs
 // a fake world: '<x>,<y>,<z>' -> block name, with '#<age>' for a crop
 const fakeWorld = table => (x, y, z) => {
-  const name = table[`${x},${y},${z}`]
-  return name === undefined ? null : { name: name.split('#')[0], properties: { age: Number(name.split('#')[1] ?? 0) } }
+  const raw = table[`${x},${y},${z}`]
+  if (raw === undefined) return null
+  // a trailing '~' is a waterlogged block: a slab laid in a channel still holds its water
+  const name = raw.replace(/~$/, '')
+  return { name: name.split('#')[0], properties: { age: Number(name.split('#')[1] ?? 0), ...(raw.endsWith('~') ? { waterlogged: 'true' } : {}) } }
 }
 
 test('fieldCensus counts what is ripe, growing, empty, untilled and dry', () => {
@@ -1982,7 +1995,7 @@ test('fieldCensus counts what is ripe, growing, empty, untilled and dry', () => 
     '0,63,0': 'farmland', '0,64,0': 'wheat#7', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '0,63,1': 'water', '1,63,1': 'dirt'
   })
   assert.deepEqual(fieldCensus(planCells({ plan: 'ww\n~w', x: 0, y: 63, z: 0 }), world),
-    { crops: { wheat: 2 }, cells: 4, ripe: 1, growing: 1, empty: 1, untilled: 1, dry: 0 })
+    { crops: { wheat: 2 }, cells: 4, ripe: 1, growing: 1, empty: 1, untilled: 1, dry: 0, open: 1 })
 })
 test('fieldCensus: a channel with no water in it is dry', () => {
   assert.equal(fieldCensus(planCells({ plan: '~', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'air' })).dry, 1)
@@ -2042,9 +2055,12 @@ for (const [name, plan, world, items, expected] of [
   ['a weed on the bed is cleared first', 'w', { '0,63,0': 'farmland', '0,64,0': 'short_grass' }, { wheat_seeds: 64 }, ['clear 0,64,0', 'plant wheat_seeds at 0,64,0']],
   ['a flower that sprang up on the bed is cleared too', 'w', { '0,63,0': 'farmland', '0,64,0': 'dandelion' }, { wheat_seeds: 64 }, ['clear 0,64,0', 'plant wheat_seeds at 0,64,0']],
   ['somebody else\u0027s block on the bed is left alone', 'w', { '0,63,0': 'farmland', '0,64,0': 'cobblestone' }, { wheat_seeds: 64 }, []],
-  ['a dry channel is refilled by pouring onto the block UNDER the water', '~', { '0,63,0': 'air' }, { water_bucket: 1 }, ['pour water_bucket at 0,62,0']],
-  ['a channel somebody filled in is dug out again first', '~', { '0,63,0': 'dirt' }, { water_bucket: 1 }, ['clear 0,63,0', 'pour water_bucket at 0,62,0']],
-  ['a channel with water in it is left alone', '~', { '0,63,0': 'water' }, { water_bucket: 1 }, []],
+  ['a dry channel is refilled by pouring onto the block UNDER the water', '~', { '0,63,0': 'air' }, { water_bucket: 1 }, ['pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
+  ['a channel somebody filled in is dug out again first', '~', { '0,63,0': 'dirt' }, { water_bucket: 1 }, ['clear 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
+  ['open water gets a slab laid in it: a channel nobody can fall into', '~', { '0,63,0': 'water' }, { oak_slab: 4 }, ['cover oak_slab at 0,63,0']],
+  ['a covered channel is finished', '~', { '0,63,0': 'oak_slab~' }, { oak_slab: 4 }, []],
+  ['a dry channel is poured first and covered after', '~', { '0,63,0': 'air' }, { water_bucket: 1, oak_slab: 4 }, ['pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
+  ['a dry slab over nothing is not a channel: pour under it', '~', { '0,63,0': 'oak_slab' }, { water_bucket: 1, oak_slab: 4 }, ['clear 0,63,0', 'pour water_bucket at 0,62,0', 'cover oak_slab at 0,63,0']],
   ['a missing fence is put back', '#', { '0,63,0': 'dirt' }, { oak_fence: 8 }, ['place oak_fence at 0,64,0']],
   ['a fence that stands is left alone', '#', { '0,63,0': 'dirt', '0,64,0': 'oak_fence' }, {}, []],
   ['a path cell is left as it is', '.', { '0,63,0': 'grass_block' }, {}, []],
@@ -2155,39 +2171,6 @@ for (const [name, mod, expected] of [
 
 // ---------------------------------------------------------------- composite actions: the composites themselves
 // A composite only ever touches the world through `api`, so a fake api makes its sequence of primitives a table test.
-const fakeApi = ({ world = {}, place, places = [], items = {}, drops = [], freeSlots = 27, answers = {} } = {}) => {
-  const calls = []
-  const report = {}
-  const checkpoints = []
-  const api = {
-    act: async (name, args = {}) => {
-      calls.push(`${name} ${compact(args, false)}`.trim())
-      const answer = typeof answers[name] === 'function' ? answers[name](args) : answers[name]
-      if (answer instanceof Error) throw answer
-      return answer ?? {}
-    },
-    until: async () => true,
-    checkpoint: async (extra = {}) => { checkpoints.push(extra) },
-    clock: () => ({ time: 1000, day: true, night: false, elapsedDays: 0 }),
-    inv: () => items,
-    pos: () => ({ x: 0, y: 64, z: 0 }),
-    block: (x, y, z) => {
-      const name = world[`${x},${y},${z}`]
-      const tag = String(name).split('#')[1]
-      return name === undefined ? null : { name: String(name).split('#')[0], properties: { age: Number(tag) || 0, open: tag === 'open' }, solid: name !== 'air' && name !== 'water' }
-    },
-    plan: () => place,
-    places: () => places,
-    drops: () => drops,
-    freeSlots: () => freeSlots,
-    solid: name => Boolean(name) && name !== 'air' && name !== 'water',
-    pen: () => null,
-    pause: async () => {},
-    note: line => calls.push(`note ${line}`),
-    report: partial => Object.assign(report, partial)
-  }
-  return { api, calls, report, checkpoints }
-}
 const fakePlace = (plan, x = 0, y = 63, z = 0) => {
   const parsed = parsePlan(plan)
   return { name: 'test-field', kind: 'farm', x, y, z, plan, parsed, cells: planCells({ plan, x, y, z }), bill: planBill(parsed) }
@@ -2234,6 +2217,26 @@ test('farm.build: a cell its own water stands over is left for the driver, not d
   const summary = await buildFarm.run(api, { place: 'test-field' })
   assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2'])
   assert.match(summary.skipped, /water stands over it/)
+})
+
+// 7b in game: the slab went down and the body walked over it, but the reply read `poured=1 undefined=1` - cover had no
+// name in the builder's tally, so the one job the driver most wants to see was the one it could not read.
+test('farm.build: covering an open channel is counted under its own name', async () => {
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world: { '0,63,0': 'water', '0,62,0': 'stone' }, items: { oak_slab: 1 }
+  })
+  const summary = await buildFarm.run(api, { place: 'test-field' })
+  assert.equal(summary.covered, 1)
+  assert.equal(summary.undefined, undefined)
+  assert.match(calls.join('\n'), /place item=oak_slab x=0 y=63 z=0 half=bottom/)
+})
+
+test('maintain_farm: an open channel is covered, and counted under its own name', async () => {
+  const { api } = fakeApi({
+    place: fakePlace('~'), world: { '0,63,0': 'water', '0,62,0': 'stone' }, items: { oak_slab: 1 }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.equal(summary.covered, 1)
 })
 
 test('maintain_farm: says what it had no seed for, and does not try it', async () => {
@@ -2541,7 +2544,7 @@ for (const [name, argv, expected] of [
 test('farm.plan: a plan that waters every cell is checked, then saved on the shared map', async () => {
   const { api, calls } = fakeApi({ places: [] })
   const out = await farmPlan.run(api, { name: 'north-field', map: 'w~w', x: 10, y: 64, z: -20 })
-  assert.deepEqual([calls, out.saved, out.needs], [['mark name=north-field kind=farm note=3x1 wheat:2 water map=w~w x=10 y=64 z=-20'], 'north-field', { wheat_seeds: 2, water_bucket: 1 }])
+  assert.deepEqual([calls, out.saved, out.needs], [['mark name=north-field kind=farm note=3x1 wheat:2 water map=w~w x=10 y=64 z=-20'], 'north-field', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
 })
 
 test('farm.plan: a plan with a cell nothing waters is refused before anything is dug', async () => {
@@ -2553,7 +2556,7 @@ test('farm.plan: a plan with a cell nothing waters is refused before anything is
 test('farm.plan: name= alone prints what is saved, with its bill of materials', async () => {
   const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 1, y: 64, z: 2, plan: 'w~w' }] })
   const out = await farmPlan.run(api, { name: 'north-field' })
-  assert.match(out.text, /north-field farm @1,64,2\nw~w\n3x1 wheat:2 water needs wheat_seeds:2 water_bucket/)
+  assert.match(out.text, /north-field farm @1,64,2\nw~w\n3x1 wheat:2 water needs wheat_seeds:2 oak_slab water_bucket/)
 })
 
 test('farm.fields: every plan in range, counted from the map without walking', async () => {
@@ -3237,121 +3240,6 @@ test('flock.maintain: shears that fail for another reason are reported', async (
   const summary = await flockMaintain.run(api, { mob: 'sheep', place: 'paddock', size: 2 })
   assert.equal(summary.stuck, 'flock.maintain/shear: you carry no shears')
 })
-
-// ---------------------------------------------------------------- apiary: bees are livestock, but never a ground flock
-test('bee food is available to the feed primitive without making bees a flock animal', () => {
-  assert.equal(BREEDING_FOOD.bee, undefined)
-  assert.deepEqual([CREATURE_FOOD.bee, creatureFood('bee', ['bread', 'poppy'])], [BEE_FLOWERS, 'poppy'])
-})
-
-const apiaryBlock = world => (x, y, z) => world[`${x},${y},${z}`] ?? null
-const block = (name, properties = {}, solid = true) => ({ name, properties, solid })
-
-test('hiveState: a ripe hive with a clear entrance and lit smoke is safe', () => {
-  const world = {
-    '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
-    '10,65,11': block('air', {}, false),
-    '10,63,10': block('campfire', { lit: true })
-  }
-  assert.deepEqual(hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'], blockAt: apiaryBlock(world) }), {
-    x: 10, y: 65, z: 10, name: 'beehive', honey: 5, ripe: true, facing: 'south', entranceClear: true, smoked: true,
-    campfire: { x: 10, y: 63, z: 10 }
-  })
-})
-
-test('hiveState: a solid smoke obstruction and a blocked entrance are both named', () => {
-  const world = {
-    '10,65,10': block('bee_nest', { honey_level: 3, facing: 'north' }),
-    '10,65,9': block('oak_log'),
-    '10,64,10': block('stone'),
-    '10,63,10': block('campfire', { lit: true })
-  }
-  const seen = hiveState({ x: 10, y: 65, z: 10, block: world['10,65,10'], blockAt: apiaryBlock(world) })
-  assert.deepEqual([seen.honey, seen.ripe, seen.entranceClear, seen.smoked], [3, false, false, false])
-})
-
-test('hiveState: an unseen entrance is not assumed safe', () => {
-  const hive = block('beehive', { honey_level: 5, facing: 'south' })
-  const seen = hiveState({ x: 10, y: 65, z: 10, block: hive, blockAt: () => null })
-  assert.equal(seen.entranceClear, false)
-})
-
-const APIARY = { name: 'orchard-apiary', kind: 'apiary', x: 10, y: 64, z: 10 }
-const apiaryWorld = () => ({
-  '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
-  '10,65,11': block('air', {}, false),
-  '10,63,10': block('campfire', { lit: true }),
-  '12,64,10': block('dandelion', {}, false)
-})
-const apiaryAnswers = world => ({
-  find_blocks: ({ block: name }) => ({ positions: name === 'beehive' ? [{ x: 10, y: 65, z: 10 }] : [] }),
-  animals: { found: [{ mob: 'bee', id: 21, grown: true, dist: 3 }, { mob: 'bee', id: 22, grown: true, dist: 4 }] },
-  use: () => { world['10,65,10'].properties.honey_level = 0; return {} },
-  collect: { picked: 3 },
-  feed: { fed: 1, with: 'dandelion' }
-})
-const makeApiary = (items = { shears: 1, dandelion: 4 }) => {
-  const world = apiaryWorld()
-  const made = fakeApi({ places: [APIARY], items, answers: apiaryAnswers(world) })
-  made.api.block = apiaryBlock(world)
-  return { ...made, world }
-}
-
-test('apiary.inspect: reports honey, smoke, flowers and only visible bees', async () => {
-  const { api } = makeApiary()
-  const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
-  assert.deepEqual([out.hives, out.ripe, out.unsafe, out.blocked, out.beesVisible, out.grownVisible, out.flowers], [1, 1, 0, 0, 2, 2, 1])
-})
-
-test('apiary.harvest: uses shears only through verified smoke, checks the level and collects comb', async () => {
-  const { api, calls } = makeApiary()
-  const out = await apiaryHarvest.run(api, { place: 'orchard-apiary', mode: 'comb', range: 4 })
-  assert.deepEqual([out.harvested, calls.filter(c => c.startsWith('use') || c.startsWith('collect'))],
-    [1, ['use x=10 y=65 z=10 item=shears', 'collect']])
-})
-
-test('apiary.harvest: an unsmoked ripe hive is refused before it is touched', async () => {
-  const made = makeApiary()
-  delete made.world['10,63,10']
-  await assert.rejects(apiaryHarvest.run(made.api, { place: 'orchard-apiary', mode: 'comb', range: 4 }), /no lit campfire/)
-  assert.deepEqual(made.calls.filter(c => c.startsWith('use')), [])
-})
-
-test('apiary.breed: feeds two visible grown bees flowers without invoking flock tools', async () => {
-  const { api, calls } = makeApiary()
-  const out = await apiaryBreed.run(api, { place: 'orchard-apiary', range: 4 })
-  assert.deepEqual([out.fed, calls.filter(c => c.startsWith('feed')), calls.some(c => c.startsWith('flock.'))],
-    [2, ['feed mob=bee id=21', 'feed mob=bee id=22'], false])
-})
-
-test('apiary.maintain: inspects, harvests, then breeds a small visible colony', async () => {
-  const { api, calls } = fakeApi({
-    items: { shears: 1, dandelion: 4 }, places: [APIARY],
-    answers: {
-      'apiary.inspect': { hives: 1, ripe: 1, unsafe: 0, blocked: 0, beesVisible: 2, grownVisible: 2, flowers: 8 },
-      'apiary.harvest': { harvested: 1, unsafe: 0, blocked: 0 },
-      'apiary.breed': { fed: 2 }
-    }
-  })
-  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
-  assert.deepEqual([out.harvested, out.bred, calls], [1, 1, [
-    'apiary.inspect place=orchard-apiary',
-    'apiary.harvest place=orchard-apiary',
-    'apiary.breed place=orchard-apiary count=2'
-  ]])
-})
-
-test('apiaryGoods: only honey products are sent to an output chest', () => {
-  assert.deepEqual(apiaryGoods({ honeycomb: 6, honey_bottle: 2, glass_bottle: 4, dandelion: 8 }), { honeycomb: 6, honey_bottle: 2 })
-})
-
-test('the rancher and beekeeper routines are valid role step lists', () => {
-  for (const file of ['roles/rancher/cattle.json', 'roles/rancher/sheep.json', 'roles/rancher/pigs.json', 'roles/rancher/chickens.json', 'roles/beekeeper/apiary.json']) {
-    const steps = JSON.parse(fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'))
-    assert.equal(routineSteps({ steps, place: 'test-place' }).error, undefined, file)
-  }
-})
-
 
 // ---------------------------------------------------------------- the client jar and its block textures
 // textures/ is not checked in: tools/textures.mjs extracts it from a client jar when a body starts without it

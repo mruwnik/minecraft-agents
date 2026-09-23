@@ -539,33 +539,6 @@ export const BEE_FLOWERS = [
 export const CREATURE_FOOD = { ...BREEDING_FOOD, bee: BEE_FLOWERS }
 export const creatureFood = (mob, carried) => (CREATURE_FOOD[mob] ?? []).find(food => carried.includes(food)) ?? null
 
-const HIVE_NAMES = new Set(['beehive', 'bee_nest'])
-const CAMPFIRE_NAMES = new Set(['campfire', 'soul_campfire'])
-const FACING_STEP = { north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0] }
-
-// The facts that make one hive safe to work. Smoke travels up at most five cells; a full solid block before the
-// campfire stops it. A carpet is deliberately not `solid`, which matches the usual safe cover over a fire.
-export function hiveState ({ x, y, z, block, blockAt }) {
-  if (!HIVE_NAMES.has(block?.name)) return null
-  const honey = Number(block.properties?.honey_level ?? 0)
-  const facing = block.properties?.facing
-  const [dx, dy, dz] = FACING_STEP[facing] ?? [0, 0, 0]
-  const front = blockAt(x + dx, y + dy, z + dz)
-  // Unknown is not clear: harvesting is safety-sensitive, so require the entrance cell to be loaded and observed.
-  const entranceClear = Boolean(facing) && Boolean(front) && !front.solid
-  let campfire = null
-  for (let down = 1; down <= 5; down++) {
-    const seen = blockAt(x, y - down, z)
-    if (CAMPFIRE_NAMES.has(seen?.name)) {
-      const lit = seen.properties?.lit
-      if (lit !== false && String(lit) !== 'false') campfire = { x, y: y - down, z }
-      break
-    }
-    if (seen?.solid) break
-  }
-  return { x, y, z, name: block.name, honey, ripe: honey >= 5, facing, entranceClear, smoked: Boolean(campfire), campfire }
-}
-
 export const apiaryGoods = items => Object.fromEntries(Object.entries(items)
   .filter(([name, count]) => count > 0 && ['honeycomb', 'honey_bottle'].includes(name)))
 
@@ -1160,7 +1133,10 @@ export const PLAN_LEGEND = {
   m: { kind: 'crop', crop: 'melon_stem', seed: 'melon_seeds', ground: 'farmland' },
   k: { kind: 'crop', crop: 'pumpkin_stem', seed: 'pumpkin_seeds', ground: 'farmland' },
   B: { kind: 'crop', crop: 'bamboo', seed: 'bamboo', ground: 'dirt' },
-  '~': { kind: 'water', ground: 'water' },
+  // a channel is built COVERED: a slab laid in the source keeps the water (and the farmland wet) but leaves a floor to
+  // walk on. Open water in a field is a trap - the body wades in, `dig` refuses every block beside it, and the
+  // pathfinder will not cross it, which is how Chani ended up walled into her own plan
+  '~': { kind: 'water', ground: 'water', cover: 'oak_slab' },
   '.': { kind: 'path', ground: 'dirt' },
   '#': { kind: 'fence', item: 'oak_fence', ground: 'dirt' },
   G: { kind: 'gate', item: 'oak_fence_gate', ground: 'dirt' },
@@ -1224,6 +1200,7 @@ export function planBill (parsed) {
     const cell = PLAN_LEGEND[ch]
     if (!cell) continue
     if (cell.kind === 'crop') add(cell.seed)
+    if (cell.cover) add(cell.cover)
     if (cell.kind === 'torch') add('torch')
     if (cell.item) add(cell.item)
   }
@@ -1253,7 +1230,12 @@ export function fieldCensus (cells, worldAt) {
     if (!spec) continue
     const ground = worldAt(cell.x, cell.y, cell.z)
     const here = worldAt(cell.x, cell.y + 1, cell.z)
-    if (spec.kind === 'water') { if (ground && ground.name !== 'water') out.dry++; continue }
+    if (spec.kind === 'water') {
+      if (ground && !holdsWater(ground)) out.dry++
+      // open water in a field is a hole: the body wades in, `dig` refuses the blocks beside it and no walk will cross it
+      else if (ground?.name === 'water') out.open = (out.open ?? 0) + 1
+      continue
+    }
     if (spec.kind !== 'crop') continue
     if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') out.untilled++
     if (here?.name !== spec.crop) { out.empty++; continue }
@@ -1280,6 +1262,9 @@ const anchorHit = (spec, here) => {
 }
 const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
 export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
+// water still stands in a cell whose block was waterlogged (a slab or stairs laid into the source): the farmland beside
+// it stays wet, so a covered channel is a full channel
+export const holdsWater = block => Boolean(block) && (block.name === 'water' || String(block.properties?.waterlogged) === 'true')
 // what you can stand in: air, or the grass and flowers that grow on open ground
 const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
 // what you can stand on
@@ -1315,7 +1300,7 @@ export function planAnchor (cells, worldAt) {
 const WEEDS = new Set(['short_grass', 'tall_grass', 'fern', 'large_fern', 'dead_bush', 'snow', 'dandelion', 'poppy', 'cornflower',
   'oxeye_daisy', 'azure_bluet', 'blue_orchid', 'allium', 'lily_of_the_valley', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip',
   'bush', 'firefly_bush', 'leaf_litter', 'wildflowers', 'short_dry_grass', 'tall_dry_grass'])
-const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'plant', 'place']
+const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'cover', 'plant', 'place']
 // A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
 // A field tilled in one pass and sown in the next loses the beds the body walked back over (15 of 28, round 2 item 3),
 // so every till is followed at once by the planting of its own cell, and the walk does each bed once.
@@ -1356,12 +1341,17 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     const here = worldAt(cell.x, cell.y + 1, cell.z)
     const standing = here && here.name !== 'air' ? here.name : null
     if (spec.kind === 'water') {
-      if (!ground || ground.name === 'water') continue
-      // a channel somebody walked over and filled in: dig the cell out before pouring, or the water lands on the ground beside it
-      // (and pouring onto a bed that could not be dug out would only put the water one block too high)
-      if (ground.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where the channel should be` })) continue
-      // `pour` names the solid block to pour ONTO and the water lands one above it: the source belongs at y, so pour onto y-1
-      push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry` }, 'water_bucket')
+      // a cell nobody can see is nobody's job; a slab already laid in the source is a finished channel, water and floor both
+      if (!ground || (holdsWater(ground) && ground.name !== 'water')) continue
+      if (!holdsWater(ground)) {
+        // a channel somebody walked over and filled in: dig the cell out before pouring, or the water lands on the ground beside it
+        // (and pouring onto a bed that could not be dug out would only put the water one block too high)
+        if (ground.name !== 'air' && clear({ do: 'clear', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where the channel should be` })) continue
+        // `pour` names the solid block to pour ONTO and the water lands one above it: the source belongs at y, so pour onto y-1
+        push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry` }, 'water_bucket')
+      }
+      // and cover it: open water in a field is a hole to fall into and a wall to the pathfinder
+      push({ do: 'cover', x: cell.x, y: cell.y, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is open water` }, spec.cover)
       continue
     }
     if (spec.kind === 'path') continue
@@ -1385,12 +1375,13 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
 
 // each job a plan asks for, as the primitive that does it. Shared by farm.maintain and farm.build: the same list of
 // jobs builds a farm from bare ground and puts a tired one back the way its plan says.
-const JOB_ACTION = { clear: 'dig', till: 'till', pour: 'pour', plant: 'place', place: 'place', fill: 'place' }
+const JOB_ACTION = { clear: 'dig', till: 'till', pour: 'pour', plant: 'place', place: 'place', fill: 'place', cover: 'place' }
 export const jobCall = job => {
   const action = JOB_ACTION[job.do]
   if (!action) return null
   const at = { x: job.x, y: job.y, z: job.z }
-  return [action, action === 'place' ? { item: job.item, ...at } : at]
+  // a cover is a BOTTOM slab laid into the water: any other half would sit above the source and leave the hole open
+  return [action, action === 'place' ? { item: job.item, ...at, ...(job.do === 'cover' ? { half: 'bottom' } : {}) } : at]
 }
 
 // what a list of jobs will use up. Counted from the jobs, not from the plan, so what already stands is not asked for

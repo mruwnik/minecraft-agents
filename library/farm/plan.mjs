@@ -2,7 +2,8 @@
 // SHOULD be there; the world is the truth of what is, and farm.maintain closes the gap between them.
 // Legend: crops w c p b s m k B, ~ water, . path, # fence, G gate, T torch, C chest, K composter, F flower, t sapling,
 // A crafting table, space = outside the plan. Rows run south (z), columns east (x) from x,y,z, the NORTH-WEST corner at GROUND level: the
-// farmland, floor or path itself, with crops, fences and chests standing at y+1 and a water source at y.
+// farmland, floor or path itself, with crops, fences and chests standing at y+1 and a water source at y. A ~ cell is built
+// COVERED: a bottom oak slab is laid into the source cell, waterlogged, so it still hydrates its four neighbours and is walkable.
 // It only reads the map and writes it back, so it never takes the body over.
 import { parsePlan, planAnchor, planCells, planErrors, planBill, planSummary, compact } from '../../src/lib.mjs'
 
