@@ -1,10 +1,11 @@
-// An open fire burns the bees that fly through it. This puts a carpet on every lit campfire near the apiary that has
-// none, so the standard column stands: fire, carpet on it, air, hive.
+// An open fire burns the bees that land in it. This puts a carpet on every lit campfire near the apiary that has
+// nothing on it, so the standard column stands: fire, carpet on it, air, hive. A fire with a hive or a full block
+// straight on it is already covered and is left alone.
 import { apiaryFires, carpetCarried } from './shared/common.mjs'
 
 export default {
-  doc: 'apiary.guard place=|x= y= z= [range=16]: put a carpet on every open lit campfire near an apiary (bees burn in open fire)',
-  stops: 'every lit fire in range has a carpet on it, or one is open and no carpet is carried',
+  doc: 'apiary.guard place=|x= y= z= [range=16]: put a carpet on every lit campfire near an apiary that has nothing on it (bees burn in open fire); a hive straight on its fire needs none',
+  stops: 'every lit fire in range has something on it, or one is open and no carpet is carried',
   args: { place: 'string', x: 'number', y: 'number', z: 'number', range: 'number' },
 
   async run (api, a) {

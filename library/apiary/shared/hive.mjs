@@ -10,11 +10,14 @@ const isLit = block => isCampfire(block) && block.properties?.lit !== false && S
 const isCarpet = name => /^[a-z_]+_carpet$/.test(String(name)) && name !== 'moss_carpet'
 
 // The standard column (Dan, 2026-09-23): campfire at y, a carpet ON it at y+1, one air block, the hive at y+3. An open
-// fire burns the bees that fly through it, so a lit fire with no carpet is `open`, and inspect, harvest and maintain
-// all say so before anything is touched.
+// fire burns the bees that land in it, so a lit fire with nothing on it is `open`, and inspect, harvest and maintain
+// all say so before anything is touched. A carpet covers it; so does anything with a collision box sitting straight on
+// it, a wild nest on its fire above all: there is no cell to carpet, and nothing can land in the flame. A moss carpet
+// is a plant, burns, and covers nothing.
 export function fireState ({ x, y, z, block, blockAt }) {
   const lit = isLit(block)
-  const guarded = isCarpet(blockAt(x, y + 1, z)?.name)
+  const above = blockAt(x, y + 1, z)
+  const guarded = isCarpet(above?.name) || (Boolean(above?.solid) && above.name !== 'moss_carpet')
   return { x, y, z, lit, guarded, open: lit && !guarded }
 }
 

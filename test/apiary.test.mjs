@@ -41,9 +41,10 @@ test('hiveState: the standard column is smoked, guarded and safe', () => {
 // the game lets smoke through any block that sits DIRECTLY on the fire, and stops it at one with a gap beneath.
 // guarded and open describe the fire that smokes the hive; a hive with no smoke has neither
 for (const [name, world, smoked, guarded] of [
-  ['a bare fire under the hive smokes it but is open', column({ '10,63,10': air(), '10,62,10': air(), '10,64,10': block('campfire', { lit: true }) }), true, false],
+  ['a fire straight under the hive smokes it and the hive itself covers it (a wild nest on its fire)', column({ '10,63,10': air(), '10,62,10': air(), '10,64,10': block('campfire', { lit: true }) }), true, true],
+  ['a fire with a gap under the hive and nothing on it is open', column({ '10,63,10': air() }), true, false],
   ['a carpet with a gap beneath it stops the smoke, and the fire under the gap is bare', column({ '10,63,10': air(), '10,64,10': block('white_carpet') }), false, false],
-  ['a full block directly on the fire lets the smoke through', column({ '10,63,10': block('stone') }), true, false],
+  ['a full block directly on the fire lets the smoke through and covers the fire', column({ '10,63,10': block('stone') }), true, true],
   ['a full block with a gap beneath it stops the smoke', column({ '10,64,10': block('stone') }), false, false],
   ['a soul campfire is a fire', column({ '10,62,10': block('soul_campfire', { lit: true }) }), true, true],
   ['an unlit campfire is no smoke at all', column({ '10,62,10': block('campfire', { lit: false }) }), false, false],
@@ -73,6 +74,8 @@ for (const [name, world, expected] of [
   ['a lit fire with a carpet on it is guarded', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('red_carpet') }, { lit: true, guarded: true, open: false }],
   ['a lit fire with nothing on it is open', { '5,60,5': block('campfire', { lit: true }), '5,61,5': air() }, { lit: true, guarded: false, open: true }],
   ['an unseen cell over the fire is not a guard', { '5,60,5': block('campfire', { lit: true }) }, { lit: true, guarded: false, open: true }],
+  ['a hive sitting straight on the fire covers it: no cell to carpet, nothing to land in', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('bee_nest', { honey_level: 0, facing: 'north' }) }, { lit: true, guarded: true, open: false }],
+  ['a moss carpet is a plant and no guard', { '5,60,5': block('campfire', { lit: true }), '5,61,5': block('moss_carpet') }, { lit: true, guarded: false, open: true }],
   ['an unlit fire harms nobody', { '5,60,5': block('campfire', { lit: false }), '5,61,5': air() }, { lit: false, guarded: false, open: false }]
 ]) {
   test(`fireState: ${name}`, () => assert.deepEqual(fireState({ x: 5, y: 60, z: 5, block: world['5,60,5'], blockAt: blockAt(world) }), { x: 5, y: 60, z: 5, ...expected }))

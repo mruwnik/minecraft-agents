@@ -157,13 +157,14 @@ An apiary is a marked place (`kind=apiary`), not a pen: bees fly, live inside hi
 fence floor. A safe hive has an open entrance and a lit campfire no more than five blocks below it with a clear smoke
 path. **Every fire wears a carpet**: an open campfire burns the bees that fly through it, so the standard column is
 campfire at y, a carpet on it at y+1, air at y+2, the hive at y+3 (smoke passes a carpet that sits on the fire, not
-one with a gap under it). Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
+one with a gap under it). A hive sitting straight on its fire, as a wild nest often does, covers it itself and needs
+no carpet. Bees stay inside at night and in rain, so `beesVisible=0` never proves a hive is empty.
 
 | action | what it does | what stops it |
 |---|---|---|
 | `apiary.inspect place=\|x= y= z= [range=16]` | walks to an apiary and reports every hive or nest nearby: honey level, ripe count, smoke, blocked entrances, flowers and bees currently visible. It says visible rather than pretending to know how many are inside hive blocks | the census is complete or the place cannot be reached |
 | `apiary.harvest place=\|x= y= z= [mode=comb]` | harvests honey-level-5 hives with shears (`comb`) or glass bottles (`bottle`), but only after positively verifying smoke, a carpeted fire and a clear entrance. It checks the honey level fell and collects comb drops | all safe ripe hives are done, equipment is missing, or no ripe hive is safe |
-| `apiary.guard place=\|x= y= z= [range=16]` | puts a carpet (any colour you carry; 2 wool make 3) on every open lit campfire in range and says how many are left | every fire has a carpet, or one is open and you carry none |
+| `apiary.guard place=\|x= y= z= [range=16]` | puts a carpet (any colour you carry; 2 wool make 3) on every lit campfire in range that has nothing on it and says how many are left; a fire with a hive or full block straight on it is already covered | every fire has something on it, or one is open and you carry none |
 | `apiary.breed place=\|x= y= z= [count=2]` | feeds flowers to visible grown bees in dry daylight. Bees use the ordinary low-level `feed`, but never the ground-animal `flock.*` tools | `count=` bees ate, too few are visible, rain/night, or no flower is carried |
 | `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, carpet any open fire (it stops if you carry no carpet), safely harvest, then breed when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest, so use it only where that chest is unambiguous | one round is done, a ripe hive is unsafe, or a step fails twice |
 
