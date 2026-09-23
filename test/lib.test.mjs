@@ -17,7 +17,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -196,6 +196,46 @@ test('describePlaces filters by kind and limits', () => {
   assert.equal(describePlaces(places, { x: 0, y: 64, z: 0 }, { limit: 2 }).length, 2)
   assert.deepEqual(describePlaces(places, { x: 116, y: 69, z: -137 }, { maxDist: 30, notes: false }), ['claude-hut base 4m @116,69,-141', 'east-hill mine 25m @140,75,-140'])
 })
+
+// 7c (Dan): places.json passed 60 entries, and a nearest-12 list is no way to find the one you want. Nobody should
+// ever cat the file: the filters are the search, and a name asked for by name comes back whole.
+const searchPlaces = [
+  ...places,
+  { name: 'trial-chest', kind: 'chest', x: 120, y: 69, z: -140, by: 'Chani', note: 'spare seed and a hoe' },
+  { name: 'chani-wheat-field', kind: 'farm', x: 118, y: 68, z: -139, by: 'Chani', note: 'irrigated', plan: 'w~w\nwww' }
+]
+for (const [title, opts, expected] of [
+  ['q matches a name', { q: 'hut' }, ['claude-hut']],
+  ['q matches a note too, and ignores case', { q: 'HOE' }, ['trial-chest']],
+  ['q is a substring, not a whole word', { q: 'wheat' }, ['chani-wheat-field', 'dan-farm']],
+  ['q that matches nothing gives nothing', { q: 'diamond' }, []],
+  ['by names the agent who marked it', { by: 'Chani' }, ['chani-wheat-field', 'trial-chest']],
+  ['by ignores case as well', { by: 'chani' }, ['chani-wheat-field', 'trial-chest']],
+  ['within cuts by distance in blocks', { within: 6 }, ['chani-wheat-field', 'claude-hut', 'trial-chest']],
+  ['filters combine', { q: 'a', by: 'Chani', kind: 'farm' }, ['chani-wheat-field']],
+  ['kind still works beside the rest', { kind: 'chest' }, ['trial-chest']]
+]) {
+  test(`describePlaces search: ${title}`, () =>
+    assert.deepEqual(describePlaces(searchPlaces, { x: 116, y: 69, z: -137 }, opts).map(l => l.split(' ')[0]), expected))
+}
+
+test('matchPlaces counts every hit, so places can say how many it did not show', () => {
+  assert.equal(matchPlaces(searchPlaces, { x: 116, y: 69, z: -137 }, { by: 'Claude' }).length, 2)
+  assert.equal(describePlaces(searchPlaces, { x: 116, y: 69, z: -137 }, { by: 'Claude', limit: 1 }).length, 1)
+})
+
+for (const [title, name, expected] of [
+  ['a plain place comes back whole', 'claude-hut',
+    { name: 'claude-hut', kind: 'base', at: '116,69,-141', away: '4m', by: 'Claude' }],
+  ['a note is kept', 'east-hill',
+    { name: 'east-hill', kind: 'mine', at: '140,75,-140', away: '25m', by: 'Claude', note: 'exposed stone' }],
+  ['a plan is reported by its size, not printed', 'chani-wheat-field',
+    { name: 'chani-wheat-field', kind: 'farm', at: '118,68,-139', away: '3m', by: 'Chani', note: 'irrigated', plan: '3x2' }],
+  ['a name nobody marked is null', 'no-such-place', null]
+]) {
+  test(`describePlace: ${title}`, () =>
+    assert.deepEqual(describePlace(searchPlaces, name, { x: 116, y: 69, z: -137 }), expected))
+}
 
 const fuelCases = [
   ['coal covers 8 items each, rounded up', [{ name: 'coal', count: 22 }], 18, { name: 'coal', count: 3 }],

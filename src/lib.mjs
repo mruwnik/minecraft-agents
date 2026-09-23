@@ -112,14 +112,42 @@ export function newAgentArgs (argv, harnessesAvailable) {
   return { name, harness }
 }
 
-// Shared points of interest, nearest first: "name kind 12m @x,y,z (who: note)".
-export function describePlaces (places, from, { kind, limit = 12, maxDist = Infinity, notes = true } = {}) {
-  const dist = p => Math.round(Math.hypot(p.x - from.x, p.y - from.y, p.z - from.z))
+const awayFrom = from => p => Math.round(Math.hypot(p.x - from.x, p.y - from.y, p.z - from.z))
+const holds = (text, want) => String(text ?? '').toLowerCase().includes(String(want).toLowerCase())
+
+// The search behind `places`: every marked point that matches, nearest first. places.json is shared by every body and
+// passed 60 entries in a fortnight, so nobody should ever read it whole - q= (name or note), by=, kind= and within= are
+// how you find one. Separate from describePlaces so the caller can say how many it did not show.
+export const matchPlaces = (places, from, { q, by, kind, within = Infinity, maxDist = within } = {}) => {
+  const dist = awayFrom(from)
   return places
-    .filter(p => (!kind || p.kind === kind) && dist(p) <= maxDist)
+    .filter(p => (!kind || p.kind === kind) && (!by || holds(p.by, by)) && (!q || holds(p.name, q) || holds(p.note, q)) && dist(p) <= maxDist)
     .sort((a, b) => dist(a) - dist(b))
+}
+
+// Shared points of interest, nearest first: "name kind 12m @x,y,z (who: note)".
+export function describePlaces (places, from, options = {}) {
+  const { limit = 12, notes = true } = options
+  const dist = awayFrom(from)
+  return matchPlaces(places, from, options)
     .slice(0, limit)
     .map(p => `${p.name} ${p.kind} ${dist(p)}m @${p.x},${p.y},${p.z}${notes ? ` (${p.by}${p.note ? `: ${p.note}` : ''})` : ''}`)
+}
+
+// One marked place, whole: what `places name=` answers. A plan is reported by its size, never printed - farm.plan name= prints it.
+export const describePlace = (places, name, from) => {
+  const place = places.find(p => p.name === name)
+  if (!place) return null
+  const rows = place.plan ? place.plan.split('\n') : []
+  return {
+    name: place.name,
+    kind: place.kind,
+    at: `${place.x},${place.y},${place.z}`,
+    away: `${awayFrom(from)(place)}m`,
+    by: place.by,
+    ...(place.note ? { note: place.note } : {}),
+    ...(rows.length ? { plan: `${Math.max(...rows.map(r => r.length))}x${rows.length}` } : {})
+  }
 }
 
 // items smelted per unit of fuel, best first
@@ -1720,7 +1748,7 @@ export const PRIMITIVES = {
   chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest' },
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
   // ---- map
-  places: { section: 'map', args: '[kind=] [limit=]', doc: 'the shared map: bases, farms, mines, villages, dangers' },
+  places: { section: 'map', args: '[name=] [q=] [by=] [kind=] [within=] [limit=]', doc: 'search the shared map: bases, farms, mines, villages, dangers. name= gives one place whole; never read places.json yourself' },
   mark: { section: 'map', args: 'name= [kind=] [note=] [x= y= z=]', doc: 'put a place on the shared map, here or at a point' },
   unmark: { section: 'map', args: 'name=', doc: 'take a place off the shared map' },
   zones: { section: 'map', args: '', doc: 'the protected areas: what nobody may dig through' },

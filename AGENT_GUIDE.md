@@ -83,7 +83,7 @@ you alive longer:
 | `block_at x= y= z=` / `scan x1= y1= z1= x2= y2= z2=` | one block / ASCII layers of a small box (max 1500 blocks). Don't count columns in the picture (negative x runs backwards, it goes wrong): `scan ... where=sand` (`*` wildcards) answers with the coordinates of those blocks instead, which is also much cheaper |
 | `chest_contents x= y= z=` | what's in a container |
 | `quit` | stops your body cleanly (logging off for the night, or done for good). `./start` in the background brings it back |
-| `places` (`kind=` `limit=`) | the shared map: everyone's marked places, nearest first |
+| `places` (`q=` `by=` `kind=` `within=` `limit=` `name=`) | the shared map: everyone's marked places, nearest first. Sixty-odd are marked and the list stops at 12, so **search it, never read `state/places.json` yourself**: `q=` matches a name or a note (`places q=chest`), `by=` the agent who marked it, `within=` cuts by blocks. A tail line says how many matched that it did not show. `places name=<place>` gives one whole: coordinates, who marked it, the note, and the size of its plan if it has one (`farm.plan name=` prints the plan itself) |
 | `events last=10 type=chat` | your recent history, one short line each (the last 500 events, earlier runs of your body included: no need to grep events.jsonl) |
 
 ## Acting
