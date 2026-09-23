@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -140,7 +140,9 @@ const eatTick = async () => {
   // which of the things I DO carry were passed over and why (backlog #134)
   const refusal = eatRefusal({ food: bot.food, carried: carriedFood() })
   if (refusal) { eatFailedAt = Date.now(); return sayError(refusal, { food: bot.food, health: Math.round(bot.health) }, 'eat_failed') }
-  await eatOnce({}).catch(error => { eatFailedAt = Date.now(); eatFailed(error) })
+  // a meal that worked clears the cooldown: a body at food 4 eats its carrots one after another, it does not wait 5 s
+  // between them because the attempt before the first one failed
+  await eatOnce({}).then(() => { eatFailedAt = null }, error => { eatFailedAt = Date.now(); eatFailed(error) })
 }
 // ROOT CAUSE of "the body starves with bread in its pockets". The plugin calls a meal finished when the server sends
 // entity_status 9 for my own entity, and this server never does: ClaudeProbe ate its way from food 15 to food 20 while
@@ -2008,10 +2010,20 @@ const quick = {
     if (blind) throw new Error(`pen.check: ${blind}`)
     const found = penAround(feet, a.radius)
     if (!found) throw new Error(`${feet.x},${feet.y},${feet.z} is not a spot to stand on: give the x y z of a free floor cell INSIDE the pen (y = where feet would be), or stand in it`)
-    if (!found.enclosed) return { pen: 'LEAKS', via: found.via, advice: 'an animal can walk out: via= is where (x,height,z): one spot = a gap or open gate on level ground; three = the step it climbs, the barrier top it crosses, where it lands. A fence or wall must stand 2 above EVERY block next to it, inside and out, corner to corner included. Fix it and check again' }
+    // every verdict here is a verdict about ONE cell, and until now the reply never said which (backlog #125)
+    const from = `${feet.x},${feet.y},${feet.z}`
+    if (!found.enclosed) {
+      return {
+        pen: 'LEAKS',
+        from,
+        side: stanceNote(from, penStance({ start: [feet.x, feet.y, feet.z], topsAt: found.topsAt, radius: a.radius ?? 24 })),
+        via: found.via,
+        advice: 'an animal can walk out: via= is where (x,height,z): one spot = a gap or open gate on level ground; three = the step it climbs, the barrier top it crosses, where it lands. A fence or wall must stand 2 above EVERY block next to it, inside and out, corner to corner included. Fix it and check again'
+      }
+    }
     const census = { ...censusOf(found.floor), ...blindGateAdvice(found.floor) }
-    if (found.cells >= 16) return { pen: 'holds', cells: found.cells, ...census }
-    return { pen: 'holds', cells: found.cells, ...census, advice: 'but it is small: an animal led in stops 2.5 blocks from you, so under 16 cells it stops in the gateway' }
+    if (found.cells >= 16) return { pen: 'holds', from, cells: found.cells, ...census }
+    return { pen: 'holds', from, cells: found.cells, ...census, advice: 'but it is small: an animal led in stops 2.5 blocks from you, so under 16 cells it stops in the gateway' }
   },
 
   block_at (a) {
@@ -2231,7 +2243,8 @@ function penAround (feet, radius) {
   if (!topsAt(feet.x, feet.z).includes(feet.y)) return null
   const found = penLeak({ start: [feet.x, feet.y, feet.z], topsAt, rimsAt, radius, withFloor: true })
   // rock all round is no pen (Kettricken's cave pocket): `fenced` says a fence or wall stands beside the floor
-  return found.enclosed ? { ...found, fenced: fencedIn(found.floor, topsAt) } : found
+  // topsAt goes back with it so a caller can ask penStance which side of the fence the walk started on (backlog #125)
+  return found.enclosed ? { ...found, topsAt, fenced: fencedIn(found.floor, topsAt) } : { ...found, topsAt }
 }
 // after walking through a pen gate: farm animals standing outside it, within 6 blocks. The pen is whichever side of the gate is enclosed
 function straysAt (gateKey) {
