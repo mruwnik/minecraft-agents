@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -101,6 +101,11 @@ let waitingForServer = false
 let walkMoves = null
 let digMoves = null
 let digging = false
+// every cell the pathfinder aimed a scaffolding placement at during this task. Chani's cobblestone went that way twice with
+// nothing in the reply to say so (#111), so a task now reports what it built beside its drops and takes back what it can reach
+let scaffolded = []
+// >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
+let handPlacing = 0
 function makeMoves (dig) {
   const moves = new Movements(bot)
   moves.allowParkour = true
@@ -157,6 +162,28 @@ function connect () {
     eyes = makeEyes(bot, { textureDir: path.join(ROOT, 'textures'), snapshotDir: path.join(HOME, 'snapshots') })
     walkMoves = makeMoves(false)
     digMoves = makeMoves(true)
+    // The pathfinder towers and bridges with the blocks I carry and says nothing about it (Chani's cobblestone, twice).
+    // It aims at one cell several times a tick and its own place call rejects over blocks the server did put down, so the
+    // clicks are only candidates: what it actually built is read off the world when the task ends (scaffoldBuilt).
+    // Anything the `place` primitive puts down on purpose is not scaffolding: handPlacing tells the two apart.
+    const placeBlock = bot.placeBlock.bind(bot)
+    bot.placeBlock = (ref, face) => {
+      const held = bot.heldItem?.name
+      const cell = !handPlacing && ref?.position ? new Vec3(ref.position.x + face.x, ref.position.y + face.y, ref.position.z + face.z) : null
+      // an aim at a cell that already holds that block is a click that changed nothing: only air the walk filled counts
+      const wasOpen = cell ? isAir(bot.blockAt(cell)?.name ?? 'air') : false
+      const done = placeBlock(ref, face)
+      // the click says nothing: it rejects over blocks the server did put down, and the cell is still air when it settles.
+      // Look a moment later instead, and count a cell once however many times the walk aimed at it
+      if (cell && held && wasOpen) {
+        done.catch(() => {}).finally(() => setTimeout(() => {
+          if (bot.blockAt(cell)?.name !== held) return
+          if (scaffolded.some(c => c.x === cell.x && c.y === cell.y && c.z === cell.z)) return
+          scaffolded.push({ x: cell.x, y: cell.y, z: cell.z, name: held })
+        }, 250))
+      }
+      return done
+    }
     // `mine` runs through collectBlock, which otherwise installs stock movements of its own (no zones, doors are walls) and leaves them on
     bot.collectBlock.movements = digMoves
     // mineflayer-pvp also brings its own default Movements (digging, towers, no zones) and installs them on every attack: a fight then
@@ -1075,12 +1102,14 @@ const long = {
         if (b.facing && YAWS[b.facing] === undefined) throw new Error('facing must be north, south, east or west')
         if (b.facing) await bot.look(YAWS[b.facing] * Math.PI / 180, 0, true)
         await bot.waitForTicks(3) // the new rotation only reaches the server with the next position packet
-        await bot._genericPlace(bot.blockAt(p.plus(face)), face.scaled(-1), { forceLook: 'ignore', half: b.half ?? 'bottom' })
+        handPlacing++
+        await bot._genericPlace(bot.blockAt(p.plus(face)), face.scaled(-1), { forceLook: 'ignore', half: b.half ?? 'bottom' }).finally(() => { handPlacing-- })
         await bot.waitForTicks(4)
         if (bot.blockAt(p)?.boundingBox !== 'block') throw new Error(`placing ${b.item ?? a.item} at ${p} did not take`)
       } else {
         // "the block is still air": out of the server's reach, or our own body is in the cell
-        const refused = await bot.placeBlock(bot.blockAt(p.plus(face)), face.scaled(-1)).then(() => null, e => e)
+        handPlacing++
+        const refused = await bot.placeBlock(bot.blockAt(p.plus(face)), face.scaled(-1)).then(() => null, e => e).finally(() => { handPlacing-- })
         // believe the world, not the click, both ways round: a fence that joins its neighbours comes back as another state than the one asked for and
         // reads as refused though it stands (Ganesha: placed=0 for three fences); and a click the server quietly drops resolves as if it had worked,
         // which is how a sweep once reported a bed planted and left it bare (09-22). So always look at the cell afterwards.
@@ -2009,6 +2038,7 @@ async function runLong (name, args, given = args) {
   gatesPassed.clear()
   useMoves(mayDig(name, args))
   await leaveFenceCell().catch(() => {})
+  scaffolded = []
   const before = inventoryCounts()
   const finish = (extra) => {
     const seconds = Math.round((Date.now() - mine.started) / 1000)
@@ -2038,9 +2068,25 @@ async function runLong (name, args, given = args) {
     const { placed = 0 } = await long.place({ blocks: owed }).catch(() => ({}))
     return { bambooReplanted: `${placed} of ${owed.length} bases I dug to free myself${placed < owed.length ? `: plant the rest (place item=bamboo at ${owed.map(o => `${o.x},${o.y},${o.z}`).join(' ')})` : ''}` }
   }
+  // what the walk climbed on: dig back the pillars still standing within reach, and say where the rest are
+  const reclaimScaffold = async () => {
+    if (!scaffolded.length) return {}
+    const tally = cells => cells.reduce((n, c) => ({ ...n, [c.name]: (n[c.name] ?? 0) + 1 }), {})
+    // what it built and what is still there differ: a later leg of the same walk digs its own steps away again
+    const standing = scaffoldBuilt(scaffolded, c => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name ?? null)
+    const taken = []
+    // a walk that failed leaves its pillars too, and must still say so; only one that still has the body may dig them back
+    for (const c of task === mine ? scaffoldTakeBack(standing, bot.entity.position) : []) {
+      const dug = await long.dig({ x: c.x, y: c.y, z: c.z }).then(() => true, () => false)
+      if (dug) taken.push(c)
+    }
+    const left = standing.filter(c => !taken.includes(c))
+    const note = scaffoldNote(tally(scaffolded), tally(taken), left)
+    return note ? { scaffold: note } : {}
+  }
   const tidy = async r => {
-    if (task !== mine || name === 'toggle') return { ...r, ...await replantBases() }
-    r = { ...r, ...await replantBases() }
+    if (task !== mine || name === 'toggle') return { ...r, ...await replantBases(), ...await reclaimScaffold().catch(() => ({})) }
+    r = { ...r, ...await replantBases(), ...await reclaimScaffold().catch(() => ({})) }
     const { shut: gatesShut, far: gatesLeftOpen } = await shutGatesBehind().catch(() => ({ shut: 0 }))
     // an animal that left the pen at my heels: say so now, not at nightfall when the pen is empty (Kettricken built an airlock over this)
     const out = [...gatesPassed].map(straysAt).filter(Boolean).join(' ')
@@ -2050,7 +2096,7 @@ async function runLong (name, args, given = args) {
   const work = long[name](args).then(tidy).then(
     r => settle().then(() => finish({ ok: true, ...r })),
     // a cancelled task fails with the pathfinder's vague "goal was changed": say why it was cancelled instead
-    e => settle().then(replantBases).then(b => finish({ ...b, ok: false, error: lastCancel?.id === mine.id ? `cancelled: ${lastCancel.why}` : explainFailure(e.message) }))
+    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => finish({ ...b, ok: false, error: lastCancel?.id === mine.id ? `cancelled: ${lastCancel.why}` : explainFailure(e.message) }))
   )
   const timeout = (args.timeout ?? 60) * 1000
   const timedOut = Symbol('timeout')

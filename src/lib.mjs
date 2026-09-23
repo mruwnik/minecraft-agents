@@ -944,6 +944,37 @@ export const digRefusal = (target, above, allowWet) => {
     : null
 }
 
+// The pathfinder climbs and bridges with any placeable block it carries, and spent Chani's cobblestone twice without a word.
+// cells: what a walk built, {x,y,z,name}. feet: where the body stands now. Which of them it can take back without dropping itself
+export const scaffoldTakeBack = (cells, feet) => cells.filter(c =>
+  !(c.x === Math.floor(feet.x) && c.z === Math.floor(feet.z)) &&
+  Math.abs(c.y - Math.floor(feet.y)) <= 3 &&
+  Math.hypot(c.x + 0.5 - feet.x, c.z + 0.5 - feet.z) <= 4.5)
+
+// tried: every cell the pathfinder aimed a placement at (it retries one cell several times a tick, and its own place call
+// rejects over blocks the server did put down). What it really built is whatever now stands in those cells
+export const scaffoldBuilt = (tried, nameAt) => {
+  const seen = new Set()
+  return tried.filter(c => {
+    const key = `${c.x},${c.y},${c.z}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).map(c => ({ ...c, name: nameAt(c) })).filter(c => c.name && !isAir(c.name))
+}
+
+const countLine = counts => Object.entries(counts).map(([name, n]) => `${name}:${n}`).join(' ')
+
+// spent/taken: {cobblestone: 4}. left: the cells still standing. Reported beside the drops, so vanishing stone has a reason
+export const scaffoldNote = (spent, taken, left) => {
+  if (!Object.keys(spent).length) return null
+  const back = Object.keys(taken).length ? `dug back ${countLine(taken)} (a drop that falls off a height is left below)` : 'dug none back'
+  const where = left.length
+    ? `; ${left.length} still ${left.length > 1 ? 'stand' : 'stands'} at ${left.slice(0, 6).map(c => `${c.x},${c.y},${c.z}`).join(' ')}${left.length > 6 ? ' ...' : ''}: dig ${left.length > 1 ? 'them' : 'it'} when you pass`
+    : ''
+  return `${countLine(spent)} went into the towers and bridges the walk built (the pathfinder climbs with whatever placeable block you carry); ${back}${where}`
+}
+
 // clear sweeps a box: one fluid cell in it would hang the whole sweep, so they are skipped and named. counts: {water: 3}
 export const fluidsLeft = counts => {
   const named = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} x${n}`)
@@ -1234,7 +1265,7 @@ const anchorHit = (spec, here) => {
   return Boolean(spec.item) && here.name === spec.item
 }
 const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
-const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
+export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
 // what you can stand in: air, or the grass and flowers that grow on open ground
 const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
 // what you can stand on

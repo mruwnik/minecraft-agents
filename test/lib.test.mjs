@@ -20,7 +20,7 @@ import apiaryInspect from '../library/apiary/inspect.mjs'
 import apiaryBreed from '../library/apiary/breed.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, hiveState, apiaryGoods } from '../src/lib.mjs'
 
 const terseCases = [
@@ -1165,6 +1165,43 @@ for (const [name, target, above, allowWet, expected] of [
 ]) {
   test(`digRefusal: ${name}`, () => {
     const got = digRefusal(target, above, allowWet)
+    assert.equal(expected ? expected.test(got) : got, expected ? true : null)
+  })
+}
+
+// Chani watched cobblestone vanish twice over a mine.get (-4, then -5): the pathfinder towers and bridges with whatever
+// placeable block it carries, and said nothing about it. Now it is reported like a drop, and taken back where it can be.
+const SCAFFOLD = [{ x: 10, y: 70, z: 20, name: 'cobblestone' }, { x: 10, y: 71, z: 20, name: 'cobblestone' }, { x: 13, y: 70, z: 20, name: 'dirt' }]
+for (const [name, feet, expected] of [
+  ['the column I stand on is never dug out from under me', { x: 10.5, y: 72, z: 20.5 }, [{ x: 13, y: 70, z: 20, name: 'dirt' }]],
+  ['standing beside it: both cells of the tower come back', { x: 12.5, y: 70, z: 20.5 }, SCAFFOLD.filter(c => c.x === 10).concat([{ x: 13, y: 70, z: 20, name: 'dirt' }])],
+  ['too far below to reach', { x: 12.5, y: 40, z: 20.5 }, []],
+  ['too far away to reach', { x: 40.5, y: 70, z: 20.5 }, []]
+]) {
+  test(`scaffoldTakeBack: ${name}`, () => assert.deepEqual(scaffoldTakeBack(SCAFFOLD, feet), expected))
+}
+
+// the pathfinder aims at the same cell several times a tick and its own place call rejects over blocks the server did put
+// down, so what it built is read off the world afterwards, not off the clicks
+const PLACED = { '10,70,20': 'cobblestone', '10,71,20': 'cobblestone', '11,70,20': 'air' }
+for (const [name, tried, expected] of [
+  ['nothing aimed at', [], []],
+  ['a cell that now holds a block was built', [{ x: 10, y: 70, z: 20 }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
+  ['the same cell tried four times counts once', [{ x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
+  ['a cell still air was never built', [{ x: 11, y: 70, z: 20 }], []],
+  ['a cell outside the loaded world is not guessed at', [{ x: 99, y: 70, z: 20 }], []]
+]) {
+  test(`scaffoldBuilt: ${name}`, () => assert.deepEqual(scaffoldBuilt(tried, c => PLACED[`${c.x},${c.y},${c.z}`] ?? null), expected))
+}
+
+for (const [name, spent, taken, left, expected] of [
+  ['nothing was built', {}, {}, [], null],
+  ['all of it taken back', { cobblestone: 4 }, { cobblestone: 4 }, [], /cobblestone:4 went into the towers and bridges.*dug back cobblestone:4/],
+  ['none taken back', { cobblestone: 4 }, {}, [{ x: 10, y: 70, z: 20 }], /cobblestone:4 .*dug none back.*1 still stands at 10,70,20: dig it when you pass/],
+  ['two kinds, some left standing', { cobblestone: 4, dirt: 1 }, { cobblestone: 3 }, [{ x: 10, y: 70, z: 20 }, { x: 13, y: 70, z: 20 }], /cobblestone:4 dirt:1 .*dug back cobblestone:3.*2 still stand at 10,70,20 13,70,20/]
+]) {
+  test(`scaffoldNote: ${name}`, () => {
+    const got = scaffoldNote(spent, taken, left)
     assert.equal(expected ? expected.test(got) : got, expected ? true : null)
   })
 }
