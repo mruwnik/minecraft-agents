@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatRetryDue, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, eatRetryDue, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -116,6 +116,7 @@ let waitingForServer = false
 // for days was invisible, and across every body's bot.log there are 140 jam lines and not one word of why. This is the
 // same rule -- eat below minHunger, or below minHealth however full I am -- with the failure said out loud as eat_failed.
 // Rate-limited like any other error (errorRepeat), so a reflex that fires every physics tick cannot wall the events file.
+const carriedFood = () => foodSort(bot.inventory.items().map(i => i.name), name => Boolean(bot.registry.foodsByName?.[name]), BANNED_FOOD)
 const eatFailed = error => sayError(eatFailure(error), { food: bot?.food, health: Math.round(bot?.health ?? 0) }, 'eat_failed')
 let eatFailedAt = null
 // eat() marks itself eating BEFORE it equips the food, and only clears that inside its own try/finally: an equip that
@@ -135,6 +136,10 @@ const eatTick = async () => {
   // is 20 meals a second that can only time out -- most of the 140 jam lines in the logs are this.
   if (bot.food >= 20) return
   if (!eatRetryDue(eatFailedAt, Date.now())) return
+  // an empty-handed body asked the plugin 20 times a second and got its own wording back. Ask ourselves first, and say
+  // which of the things I DO carry were passed over and why (backlog #134)
+  const refusal = eatRefusal({ food: bot.food, carried: carriedFood() })
+  if (refusal) { eatFailedAt = Date.now(); return sayError(refusal, { food: bot.food, health: Math.round(bot.health) }, 'eat_failed') }
   await eatOnce({}).catch(error => { eatFailedAt = Date.now(); eatFailed(error) })
 }
 // ROOT CAUSE of "the body starves with bread in its pockets". The plugin calls a meal finished when the server sends
@@ -2085,9 +2090,10 @@ const quick = {
   // The reflex should beat you to this (see eat_failed when it cannot), and a body that will not eat has to be drivable
   // by hand. It is also the only way to read what mineflayer-auto-eat really answers: its own reflex swallowed every word.
   async eat (a) {
-    const edible = bot.inventory.items().filter(i => bot.registry.foodsByName?.[i.name] && !BANNED_FOOD.includes(i.name))
-    const refusal = eatRefusal({ food: bot.food, item: a.item, edible: [...new Set(edible.map(i => i.name))] })
+    const carried = carriedFood()
+    const refusal = eatRefusal({ food: bot.food, item: a.item, carried })
     if (refusal) throw new Error(refusal)
+    const edible = bot.inventory.items().filter(i => carried.edible.includes(i.name))
     const before = bot.food
     // sanitizeOpts writes its choice back into this object, so an eat with no item= still says what it ate
     const opts = a.item ? { food: edible.find(i => i.name === a.item) } : {}

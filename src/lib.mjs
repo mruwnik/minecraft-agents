@@ -1231,12 +1231,29 @@ const EAT_ADVICE = [
 // of window clicks at the server: after a failure it waits. A meal that works needs no cooldown, a fed body stops asking.
 export const eatRetryDue = (failedAt, now, wait = 5000) => failedAt === null || now - failedAt >= wait
 
-// ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. edible is what
-// I carry that the reflex would touch (food, minus the banned list), so naming what IS there saves a second call.
-export function eatRefusal ({ food, item, edible }) {
-  const carried = edible.length ? `what I carry is ${edible.join(', ')}` : 'I carry nothing edible'
-  if (item && !edible.includes(item)) return `no ${item} I would eat: ${carried}`
-  if (!item && !edible.length) return 'nothing I carry is food'
+// What I carry, sorted the way the eat reflex sorts it. "nothing edible carried" told an agent nothing: a body holding
+// rotten flesh and a body holding cobblestone got the same line, and neither knew whether to cook, to hunt, or to walk to
+// a chest (backlog #134). isFood: does the game call it food at all. banned: what this body will never eat.
+export function foodSort (carried, isFood, banned) {
+  const seen = [...new Set(carried)]
+  return {
+    edible: seen.filter(name => isFood(name) && !banned.includes(name)),
+    banned: seen.filter(name => isFood(name) && banned.includes(name)),
+    notFood: seen.filter(name => !isFood(name))
+  }
+}
+
+// ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. It names what
+// it passed over, so the answer says what to do next: cook the flesh away, or go and find real food.
+const whyNot = ({ banned, notFood }, item) => banned.includes(item) ? 'it is on the never-eat list' : notFood.includes(item) ? 'it is not food' : 'I do not carry it'
+export function eatRefusal ({ food, item, carried }) {
+  const { edible, banned, notFood } = carried
+  const have = edible.length ? `what I carry is ${edible.join(', ')}` : 'I carry nothing edible'
+  if (item && !edible.includes(item)) return `no ${item} I would eat: ${whyNot(carried, item)}; ${have}`
+  if (!item && !edible.length) {
+    const skipped = [...(banned.length ? [`never eaten: ${banned.join(', ')}`] : []), ...(notFood.length ? [`not food: ${notFood.join(', ')}`] : [])]
+    return skipped.length ? `nothing I carry is food (${skipped.join('; ')})` : 'nothing I carry is food: my pockets are empty'
+  }
   return food >= 20 ? 'food is already 20: the game refuses a meal at a full belly' : null
 }
 
