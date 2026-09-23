@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -2061,6 +2061,21 @@ for (const [name, items, expected] of [
   test(`deathKit: ${name}`, () => assert.equal(deathKit(items), expected))
 }
 
+// Item 14 (Perrin, BUGS.md 09-23). `pen.check` on a pen 200 blocks away answered "not a spot to stand on", which blamed
+// his coordinates for a chunk his body had never been sent: a block that comes back null is not air and not stone, it
+// is nothing at all, and nothing at all may be guessed from. The role's own case, fetching from the shared stock to
+// your own pen, starts with the body somewhere else entirely, so this is the ordinary case and not an odd one.
+for (const [name, block, at, from, expected] of [
+  ['a cell that is there to be read', { name: 'air' }, { x: 1, y: 2, z: 3 }, null, null],
+  ['air is an answer, not an absence', { name: 'air', solid: false }, { x: 1, y: 2, z: 3 }, null, null],
+  ['a chunk that was never sent', null, { x: 10, y: 64, z: 20 }, null,
+    '10,64,20 is too far to see: that chunk is not loaded, so nothing there can be read. goto it first, then ask again'],
+  ['and how far away it is, when that is known', null, { x: 110, y: 64, z: 20 }, { x: 10, y: 64, z: 20 },
+    '110,64,20 is too far to see: it is 100 blocks off and that chunk is not loaded, so nothing there can be read. goto it first, then ask again']
+]) {
+  test(`outOfSight: ${name}`, () => assert.equal(outOfSight(block, at, from), expected))
+}
+
 // Aviendha, 09-19: goto dig=true tunnelled 50 blocks down into an underground lake and lost 9 hp drowning in its own shaft. To the pathfinder
 // a water cell costs 1, the same as a step: a digging walk now pays dearly for each and never drops into water from a height
 for (const [name, dig, expected] of [
@@ -3674,13 +3689,33 @@ for (const [name, places, args, expected] of [
 }
 
 const penAt = { x: 10, y: 64, z: 20 }
-const bringApi = (checks, found, led = {}) => fakeApi({
-  items: { wheat: 8 }, places: [{ name: 'paddock', ...penAt }], world: { '12,64,22': 'oak_fence_gate#open' },
+const bringApi = (checks, found, led = {}, world = { '10,64,20': 'air' }) => fakeApi({
+  items: { wheat: 8 }, places: [{ name: 'paddock', ...penAt }], world: { '12,64,22': 'oak_fence_gate#open', ...world },
   answers: {
     'pen.check': () => checks.shift(),
     animals: { found },
     'flock.lead': { arrived: true, with: 2, inside: 'cow:2', ...led }
   }
+})
+
+test('flock.bring_pair: a pen it cannot see is walked to before anything is counted', async () => {
+  const { api, calls } = bringApi(
+    [{ pen: 'holds', cells: 20 }, { pen: 'holds', cells: 20, inside: 'cow:2' }],
+    [{ mob: 'cow', id: 1, grown: true, inMyPen: false }, { mob: 'cow', id: 2, grown: true, inMyPen: false }],
+    {}, {})
+  const summary = await bringPair.run(api, { mob: 'cow', place: 'paddock' })
+  assert.equal(calls[0], 'goto x=10 y=64 z=20 range=3', 'the walk comes first')
+  assert.equal(calls[1], 'pen.check 10,64,20', 'and only then is the pen read')
+  assert.equal(summary.walked, '10,64,20: the pen was not in sight from where I stood')
+})
+
+test('flock.bring_pair: a pen already in sight is not walked to', async () => {
+  const { api, calls } = bringApi(
+    [{ pen: 'holds', cells: 20 }, { pen: 'holds', cells: 20, inside: 'cow:2' }],
+    [{ mob: 'cow', id: 1, grown: true, inMyPen: false }, { mob: 'cow', id: 2, grown: true, inMyPen: false }])
+  const summary = await bringPair.run(api, { mob: 'cow', place: 'paddock' })
+  assert.equal(calls[0], 'pen.check 10,64,20')
+  assert.equal(summary.walked, undefined)
 })
 
 test('flock.bring_pair: fetches the pair and says the pen holds them', async () => {

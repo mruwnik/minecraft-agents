@@ -1101,6 +1101,14 @@ export function hurtCause ({ lost, nearby, sinceCreeperMs, fell, food, oxygen, f
   return fledFrom && sinceFledMs < 30000 ? `hit while the body fled from a ${fledFrom} by itself: that run is why you have moved` : null
 }
 
+// Item 14 (Perrin, BUGS.md 09-23). A block that comes back null is not air and not stone: it is a chunk this body has
+// never been sent, which is every chunk more than a view away. `pen.check` on a pen 200 blocks off answered "not a spot
+// to stand on", blaming his coordinates for a world his client had never seen, and the role's own case (fetch from the
+// shared stock to your own pen) starts exactly there. Nothing may be guessed from an unloaded chunk: say so, or go.
+export const outOfSight = (block, at, from) => block
+  ? null
+  : `${at.x},${at.y},${at.z} is too far to see: ${from ? `it is ${Math.round(Math.hypot(at.x - from.x, at.y - from.y, at.z - from.z))} blocks off and ` : ''}that chunk is not loaded, so nothing there can be read. goto it first, then ask again`
+
 // Item 13 (#109). A death has to leave a line that says where the body fell and what did it: Claude's body died
 // unattended on 09-22 and all the file holds is the jump to the world spawn, so nobody could go and fetch the iron kit.
 //
