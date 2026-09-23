@@ -1,3 +1,4 @@
 [
+  { "action": "apiary.guard", "place": "$place" },
   { "action": "apiary.maintain", "place": "$place", "size": 6, "mode": "comb", "breed": true, "deposit": false }
 ]

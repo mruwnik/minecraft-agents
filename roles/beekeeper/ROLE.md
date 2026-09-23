@@ -8,8 +8,11 @@ they are indoors. Apiaries use `apiary.*`, never `flock.*`.
 
 - An unobstructed entrance in the direction the hive faces.
 - Flowers nearby. Bees leave in dry daylight, collect pollen, pollinate crops they cross and return honey to the hive.
-- A lit campfire no more than five blocks below it, with no full solid block interrupting the smoke. A carpet is a
-  useful fire guard. `apiary.inspect` is the authority: no smoke means no harvest.
+- A lit campfire no more than five blocks below it, with a carpet ON the fire: campfire at y, carpet at y+1, air at
+  y+2, hive at y+3. Smoke passes a carpet that sits on the fire (not one with a gap beneath it), and the carpet keeps
+  bees and beekeepers out of the flame: an open fire burns every bee that flies through it. `apiary.guard` carpets
+  what is bare; carry a carpet (2 wool make 3). `apiary.inspect` is the authority: no smoke means no harvest, and
+  `openFires=` above 0 means no harvest either.
 - Honey level 5 before harvesting. `watch name=honey block=beehive where='{"honey_level":5}' repeat=true` can wake you;
   natural nests need a second `bee_nest` watch.
 
@@ -27,6 +30,7 @@ night/rain and move an occupied nest with a verified Silk Touch tool. Inspect th
 | I want to | I run |
 |---|---|
 | census the site | `apiary.inspect place=<name>` |
+| carpet every bare fire | `apiary.guard place=<name>` carrying a carpet |
 | safely take comb | `apiary.harvest place=<name> mode=comb` with shears |
 | safely bottle honey | `apiary.harvest place=<name> mode=bottle` with glass bottles |
 | grow the colony | `apiary.breed place=<name>` while carrying flowers in dry daylight |

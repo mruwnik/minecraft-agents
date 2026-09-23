@@ -1,4 +1,4 @@
-// Honey is only taken through verified smoke. Raw `use` can anger a colony; this wrapper refuses that state, checks the
+// Honey is only taken through verified smoke, and never over an open fire. Raw `use` can anger a colony; this wrapper refuses that state, checks the
 // honey level fell after every click, and collects the comb that shears drop.
 import { apiarySnapshot } from './shared/common.mjs'
 
@@ -14,12 +14,16 @@ export default {
     if (!(api.inv()[item] > 0)) throw new Error(`${mode} harvest needs ${item}`)
     const seen = await apiarySnapshot(api, a, 'apiary.harvest')
     const ripe = seen.hives.filter(h => h.ripe)
-    const safe = ripe.filter(h => h.smoked && h.entranceClear)
+    const safe = ripe.filter(h => h.smoked && !h.open && h.entranceClear)
     const unsafe = ripe.filter(h => !h.smoked)
+    const open = ripe.filter(h => h.open)
     const blocked = ripe.filter(h => !h.entranceClear)
-    if (!safe.length && (unsafe.length || blocked.length)) {
-      const first = unsafe[0] ?? blocked[0]
-      throw new Error(`no ripe hive is safe to harvest: ${first.x},${first.y},${first.z} ${!first.smoked ? 'has no lit campfire with a clear smoke path' : 'has a blocked entrance'}`)
+    if (!safe.length && (unsafe.length || open.length || blocked.length)) {
+      const first = unsafe[0] ?? open[0] ?? blocked[0]
+      const why = !first.smoked ? 'has no lit campfire with a clear smoke path'
+        : first.open ? `stands over an open fire at ${first.campfire.x},${first.campfire.y},${first.campfire.z}: put a carpet on it (apiary.guard), bees burn in open fire`
+        : 'has a blocked entrance'
+      throw new Error(`no ripe hive is safe to harvest: ${first.x},${first.y},${first.z} ${why}`)
     }
     let harvested = 0
     for (const hive of safe) {
@@ -32,6 +36,6 @@ export default {
       await api.checkpoint()
     }
     if (mode === 'comb' && harvested) await api.act('collect', {})
-    return { harvested, mode, ripe: ripe.length, unsafe: unsafe.length, blocked: blocked.length }
+    return { harvested, mode, ripe: ripe.length, unsafe: unsafe.length, openFires: open.length, blocked: blocked.length }
   }
 }
