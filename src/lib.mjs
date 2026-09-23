@@ -1231,6 +1231,17 @@ const EAT_ADVICE = [
 // of window clicks at the server: after a failure it waits. A meal that works needs no cooldown, a fed body stops asking.
 export const eatRetryDue = (failedAt, now, wait = 5000) => failedAt === null || now - failedAt >= wait
 
+// A meal is 1.6 s of holding the food still, and anything that swaps my hand or right-clicks a block inside that window
+// cancels it where the server counts: on ClaudeProbe an `equip wheat` 0.9 s into a meal left the bread uneaten and the
+// food number where it was. The pathfinder does both whenever it is stuck -- a tool in hand before every dig, a gate
+// worked by hand on every retry -- which is why Chani stood at health 7 with five carrots in her pockets until she dug
+// the gate out, and ate five in a row the moment the stall ended. So the meal goes first: these calls wait for it. A
+// meal always settles, it has a timeout of its own, so nothing here waits for ever.
+export const afterTheMeal = (mealInFlight, fn) => async (...args) => {
+  await (mealInFlight() ?? Promise.resolve()).catch(() => {})
+  return fn(...args)
+}
+
 // What I carry, sorted the way the eat reflex sorts it. "nothing edible carried" told an agent nothing: a body holding
 // rotten flesh and a body holding cobblestone got the same line, and neither knew whether to cook, to hunt, or to walk to
 // a chest (backlog #134). isFood: does the game call it food at all. banned: what this body will never eat.

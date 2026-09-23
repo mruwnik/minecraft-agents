@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, eatRetryDue, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -148,20 +148,27 @@ const eatTick = async () => {
 // "failed" -- the error vanished into statusCheck's `catch {}`, the hand was held for 3 s a time and handed back to
 // whatever it held before, and the reflex started again on the next tick, for ever. So watch what DOES arrive: the food
 // number going up, or the food leaving my pockets. It reads the module-level `bot`, so a reconnect needs no new one.
-const watchTheMeal = (food, timeoutMs) => new Promise((resolve, reject) => {
-  const carried = () => bot.inventory.items().filter(i => i.name === food.name).reduce((n, i) => n + i.count, 0)
-  const before = { food: bot.food, carried: carried() }
-  const stop = () => { clearTimeout(timer); bot.off('health', fed); bot.off('physicsTick', gone) }
-  const fed = () => { if (bot.food > before.food) { stop(); resolve() } }
-  const gone = () => { if (carried() < before.carried) { stop(); resolve() } }
-  const timer = setTimeout(() => {
-    stop()
-    reject(new Error(`the meal never showed: food is still ${bot.food} and I still carry ${carried()} ${food.name} ${timeoutMs} ms on`))
-  }, timeoutMs)
-  bot.on('health', fed)
-  bot.on('physicsTick', gone)
-  bot.autoEat._rejectionBinding = error => { stop(); reject(error) } // cancelEat() still works
-})
+let mealInFlight = null
+const watchTheMeal = (food, timeoutMs) => {
+  const meal = new Promise((resolve, reject) => {
+    const carried = () => bot.inventory.items().filter(i => i.name === food.name).reduce((n, i) => n + i.count, 0)
+    const before = { food: bot.food, carried: carried() }
+    const stop = () => { clearTimeout(timer); mealInFlight = null; bot.off('health', fed); bot.off('physicsTick', gone) }
+    const fed = () => { if (bot.food > before.food) { stop(); resolve() } }
+    const gone = () => { if (carried() < before.carried) { stop(); resolve() } }
+    const timer = setTimeout(() => {
+      stop()
+      reject(new Error(`the meal never showed: food is still ${bot.food} and I still carry ${carried()} ${food.name} ${timeoutMs} ms on`))
+    }, timeoutMs)
+    bot.on('health', fed)
+    bot.on('physicsTick', gone)
+    bot.autoEat._rejectionBinding = error => { stop(); reject(error) } // cancelEat() still works
+  })
+  // the plugin has already put the food in my hand by the time it calls this (customEquip runs first), so from here to
+  // the last bite is the window afterTheMeal holds the pathfinder out of
+  mealInFlight = meal
+  return meal
+}
 
 // Two ways of getting about: walking only (the default: digging walks tunnelled through hills and left pillars), and
 // digging + scaffolding for `mine` and for walks that ask with dig=true.
@@ -361,6 +368,15 @@ function connect () {
     bot.autoEat.setOpts({ priority: 'foodPoints', minHunger: 15, bannedFood: BANNED_FOOD, strictErrors: false })
     bot.autoEat.statusCheck = eatTick // the plugin's own reflex swallows every error; ours says them. Set BEFORE enableAuto: that registers it
     bot.autoEat.buildEatingListener = watchTheMeal // the signal it waits for never comes on this server: see watchTheMeal
+    // and a meal that is interrupted is no meal: the pathfinder puts a tool in my hand before every dig and works every
+    // gate by hand, once per tick while it is stuck, which is how Chani's body stood at health 7 with five carrots in
+    // its pockets. Wrapping the bot's own two calls catches the plugin's as well, and the plugin's own equip runs
+    // before any of this is armed. See afterTheMeal.
+    if (!bot.mealComesFirst) {
+      bot.mealComesFirst = true
+      bot.equip = afterTheMeal(() => mealInFlight, bot.equip.bind(bot))
+      bot.activateBlock = afterTheMeal(() => mealInFlight, bot.activateBlock.bind(bot))
+    }
     bot.autoEat.enableAuto()
     bot.autoEat.on('eatFail', error => eatFailed(error))
     // see eatJammed: the plugin can stay "eating" for ever. ONE timer for the process: started at every spawn and never
