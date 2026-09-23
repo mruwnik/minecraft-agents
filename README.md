@@ -83,6 +83,26 @@ To fill `textures/` by hand, or from a jar kept somewhere else:
 
 Blocks without a texture (newer than the jar, or entity-rendered like signs) get a colour hashed from their name.
 
+## Watching from outside: the dashboard
+
+    node tools/dashboard.mjs          # http://127.0.0.1:3700 (PORT= to move it)
+
+A browser page that shows where every body is and what it is doing, for whoever is watching rather than playing.
+It reads `state/agents/*/config.json`, polls each body's `state` every 2 seconds and draws a top-down map (x east,
+z south): a dot per body with its name, health, food and current task, Dan as a diamond wherever a body can see him,
+protected zones as boxes and marked places as crosses. Click a body and its view appears beside the map, rendered
+through its own eyes. Drag to pan, wheel to zoom; the map fits itself around the bodies, and "fit everything" widens
+it to the whole map.
+
+It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
+slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
+that agent's driver nothing - no tokens are spent by looking. A port that does not answer is simply a body that is
+down. Its own API, for scripts: `/api/state` (every body, plus places and zones) and `/api/look/<Name>` (a PNG, with
+`?pano=1`; what the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers).
+
+The map arithmetic is in `tools/dashboard/map.mjs`, which has no node imports so the page and `npm test` use the
+same code; `tools/dashboard/lib.mjs` reads the folders and routes.
+
 ## Agents: one folder each
 
     node tools/new-agent.mjs             # draws a name from ~/.claude/hooks/choose_name.py (redraws until it is a valid, unused
