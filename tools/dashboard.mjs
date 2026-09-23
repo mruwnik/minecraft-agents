@@ -9,11 +9,13 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, mergeBodies, danSighting, snapshotFile, route } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route } from './dashboard/lib.mjs'
+import { mergeBodies, danSighting } from './dashboard/map.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
+const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
 const PORT = Number(process.env.PORT ?? 3700)
 const DAN = process.env.DAN_NAME ?? 'mruwnik'
 const POLL_MS = 2000
@@ -113,6 +115,7 @@ const serveLook = async (res, name, query) => {
 const handlers = {
   page: (res) => send(res, 200, 'text/html; charset=utf-8', fs.readFileSync(PAGE)),
   state: (res) => sendJson(res, 200, snapshot()),
+  script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state or /api/look/<Name>' })
 }
 

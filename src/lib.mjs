@@ -1445,7 +1445,11 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
       // on bare ground. One bucket does the whole field, so this asks only whether any water is carried at all
       const dry = !holdsWater(ground)
       if (dry && !((items.water_bucket ?? 0) > 0)) {
-        jobs.push({ do: 'skip', x: cell.x, y: cell.y, z: cell.z, item: 'water_bucket', have: false, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry and I carry no water: fill a bucket first` })
+        // and a cell already dug out (the bucket emptied between the dig and the pour) is filled back in rather than
+        // left as the pit Chani could not path past. What is missing is still the water, so that is what is reported
+        const hole = isAir(ground.name)
+        if (hole) push({ do: 'fill', x: cell.x, y: cell.y, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is an open hole I carry no water to fill` }, 'dirt')
+        jobs.push({ do: 'skip', x: cell.x, y: cell.y, z: cell.z, item: 'water_bucket', have: false, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry and I carry no water: ${hole ? 'filled back in rather than left as a hole' : 'fill a bucket first'}` })
         continue
       }
       if (dry) {

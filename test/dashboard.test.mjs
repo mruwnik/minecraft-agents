@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { parseAgents, mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, snapshotFile, route } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route } from '../tools/dashboard/lib.mjs'
+import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas } from '../tools/dashboard/map.mjs'
 
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
@@ -130,6 +131,39 @@ test('zoneRect: a zone given back to front still has a positive width', () => {
   assert.deepEqual(zoneRect(view, { x1: 40, z1: 60, x2: 20, z2: 10 }), { px: 20, py: 10, w: 20, h: 50 })
 })
 
+// ---------------------------------------------------------------- labels that would sit on top of each other
+const box = (text, px, py, w = 10, h = 10) => ({ text, px, py, w, h })
+
+test('fitLabels: labels that clear each other are all kept', () => {
+  assert.deepEqual(fitLabels([box('a', 0, 0), box('b', 20, 0), box('c', 0, 20)]).map(l => l.text), ['a', 'b', 'c'])
+})
+
+test('fitLabels: the label offered first wins the space', () => {
+  assert.deepEqual(fitLabels([box('body', 0, 0), box('place', 5, 5), box('far', 40, 40)]).map(l => l.text), ['body', 'far'])
+})
+
+test('fitLabels: touching edges do not count as overlapping', () => {
+  assert.deepEqual(fitLabels([box('a', 0, 0), box('b', 10, 0)]).map(l => l.text), ['a', 'b'])
+})
+
+test('fitLabels: nothing to place is nothing kept', () => {
+  assert.deepEqual(fitLabels([]), [])
+})
+
+const offCanvas = [
+  ['left of it', { px: -40, py: 50 }],
+  ['right of it', { px: 340, py: 50 }],
+  ['above it', { px: 50, py: -40 }],
+  ['below it', { px: 50, py: 240 }]
+]
+offCanvas.forEach(([where, at]) => test(`onCanvas: a mark ${where} is not drawn`, () => {
+  assert.equal(onCanvas(at, 300, 200, 20), false)
+}))
+
+test('onCanvas: a mark just inside the margin is drawn', () => {
+  assert.equal(onCanvas({ px: -19, py: 219 }, 300, 200, 20), true)
+})
+
 // ---------------------------------------------------------------- serving files and routes
 const home = '/home/dan/minecraft/claude/bot/state/agents/Claude'
 
@@ -152,6 +186,7 @@ const routes = [
   ['/index.html', { kind: 'page' }],
   ['/api/state', { kind: 'state' }],
   ['/api/state?since=3', { kind: 'state' }],
+  ['/map.mjs', { kind: 'script' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],

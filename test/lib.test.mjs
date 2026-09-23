@@ -3316,6 +3316,24 @@ test('farm.build: a channel is never dug out by a body that carries no water', a
   assert.equal(summary.missing, 'water_bucket:1')
 })
 
+// the other half of Chani's hole: one that is ALREADY dug, because the bucket emptied between the dig and the pour.
+// Running the build again finds an open cell it cannot fill with water, and fills it back in with ground instead of
+// walking past a pit. What is missing is still the water, not the dirt, so that is what missing= names.
+test('farm.build: a channel cell already dug out and still unwaterable is filled back in', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'dirt' }
+  const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { dirt: 8 } })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('place')), ['place item=dirt x=0 y=63 z=0'])
+  assert.equal(summary.missing, 'water_bucket:1')
+})
+
+test('farm.build: a dry channel on solid ground is left alone, not filled', async () => {
+  const world = { '0,63,0': 'grass_block', '0,62,0': 'dirt' }
+  const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { dirt: 8 } })
+  await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('place') || c.startsWith('dig')), [])
+})
+
 test('farm.build: a plan with a dry channel and no bucket is refused before anything is touched', async () => {
   const world = { '0,63,0': 'grass_block', '1,63,0': 'grass_block' }
   const { api, calls } = fakeApi({ place: fakePlace('~~'), world, items: { oak_slab: 4 } })

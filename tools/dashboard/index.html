@@ -1,12 +1,390 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent bodies</title>
+<style>
+  :root {
+    --bg: #14171c; --panel: #1c2027; --line: #2c333d; --ink: #dfe4ec; --dim: #8b95a5;
+    --up: #6ee7a8; --down: #55606f; --dan: #f08ad0; --place: #d9b25f; --zone: #5b8fd6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .04em; }
+  header .muted { color: var(--dim); }
+  header .spacer { flex: 1; }
+  button { font: inherit; color: var(--ink); background: #252b34; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+  button:hover { background: #2f3742; }
+  main { display: flex; height: calc(100vh - 38px); }
+  #mapwrap { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
+  aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
+  section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
+  section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  .body { padding: 5px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
+  .body:hover { background: #232932; }
+  .body.sel { border-color: var(--up); background: #232932; }
+  .body .name { color: var(--up); }
+  .body.off .name { color: var(--down); }
+  .body .meta { color: var(--dim); }
+  .body .doing { color: var(--place); }
+  #down { margin-top: 8px; line-height: 1.6; }
+  #lookimg { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
+  #lookmeta { color: var(--dim); margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
+  #places { white-space: pre-wrap; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .row .spacer { flex: 1; }
+  .err { color: #f0907e; }
+</style>
+</head>
 <body>
-<h1>agent bodies</h1>
-<pre id="out">loading /api/state ...</pre>
-<script>
-const refresh = () => fetch('/api/state').then(r => r.json())
-  .then(s => { document.getElementById('out').textContent = JSON.stringify(s, null, 1) })
+<header>
+  <h1>agent bodies</h1>
+  <span class="muted" id="clock">—</span>
+  <span class="muted" id="counts">—</span>
+  <span class="spacer"></span>
+  <span class="muted" id="status">connecting…</span>
+  <button id="fitbodies">fit bodies</button>
+  <button id="fitall">fit everything</button>
+</header>
+<main>
+  <div id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
+  </div>
+  <aside>
+    <section>
+      <h2>through their eyes</h2>
+      <div class="row">
+        <span id="lookname">pick a body</span>
+        <span class="spacer"></span>
+        <label class="muted"><input type="checkbox" id="pano"> pano</label>
+        <button id="relook">look</button>
+      </div>
+      <img id="lookimg" alt="" hidden>
+      <div id="lookmeta"></div>
+    </section>
+    <section>
+      <h2>bodies</h2>
+      <div id="list"></div>
+      <div id="down" class="muted"></div>
+    </section>
+    <section>
+      <h2>places</h2>
+      <div id="places" class="muted"></div>
+    </section>
+  </aside>
+</main>
+<script type="module">
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas } from './map.mjs'
+
+const canvas = document.getElementById('map')
+const ctx = canvas.getContext('2d')
+const el = id => document.getElementById(id)
+
+let snap = { bodies: [], places: [], zones: [], danAt: null, dan: 'mruwnik' }
+let view = null          // {scale, originX, originZ} in CSS pixels
+let follow = true        // until Dan pans or zooms, a resize refits the map instead of cropping it
+let scope = 'bodies'     // what the fit is around: the bodies (and Dan), or every place and zone as well
+let selected = null
+let hover = null
+const size = { w: 0, h: 0 }
+
+// ---------------------------------------------------------------- canvas sizing
+const resize = () => {
+  const r = canvas.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  size.w = Math.max(1, Math.round(r.width))
+  size.h = Math.max(1, Math.round(r.height))
+  canvas.width = Math.round(size.w * dpr)
+  canvas.height = Math.round(size.h * dpr)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  if (follow) view = null
+  draw()
+}
+window.addEventListener('resize', resize)
+
+// The far corners of this world are 2000 blocks apart, and fitting all of them squeezes the huts into one blob:
+// the default fit is around the bodies themselves, with 96 blocks of ground round them.
+const refit = () => {
+  const wide = scope === 'all'
+  const points = mapPoints(snap.bodies, wide ? snap.places : [], wide ? snap.zones : [], snap.danAt)
+  view = fitView(worldBounds(points, wide ? 24 : 96), size.w - 80, size.h - 80)
+  if (!view) return
+  view.originX -= 40 / view.scale
+  view.originZ -= 40 / view.scale
+}
+
+// ---------------------------------------------------------------- drawing
+const GRID_STEPS = [16, 32, 64, 128, 256, 512, 1024, 2048]
+const gridStep = scale => GRID_STEPS.find(s => s * scale >= 70) ?? GRID_STEPS[GRID_STEPS.length - 1]
+
+const drawGrid = () => {
+  const step = gridStep(view.scale)
+  const x0 = Math.ceil(view.originX / step) * step
+  const z0 = Math.ceil(view.originZ / step) * step
+  ctx.strokeStyle = '#20252d'
+  ctx.fillStyle = '#4b5462'
+  ctx.lineWidth = 1
+  ctx.font = '10px ui-monospace, monospace'
+  for (let x = x0; project(view, x, 0).px <= size.w; x += step) {
+    const { px } = project(view, x, 0)
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, size.h); ctx.stroke()
+    ctx.fillText(`x${x}`, px + 3, 11)
+  }
+  for (let z = z0; project(view, 0, z).py <= size.h; z += step) {
+    const { py } = project(view, 0, z)
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(size.w, py); ctx.stroke()
+    ctx.fillText(`z${z}`, 3, py - 3)
+  }
+}
+
+// a label box in canvas pixels, so fitLabels can drop the ones that would be drawn on top of each other
+const labelBox = (text, px, py, extra = {}) => ({ text, px, py: py - 9, w: ctx.measureText(text).width + 5, h: 12, ...extra })
+
+const drawZones = () => {
+  ctx.font = '10px ui-monospace, monospace'
+  return snap.zones.map(zone => {
+    const r = zoneRect(view, zone)
+    ctx.fillStyle = 'rgba(91,143,214,0.10)'
+    ctx.strokeStyle = 'rgba(91,143,214,0.65)'
+    ctx.lineWidth = 1
+    ctx.fillRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
+    ctx.strokeRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
+    return labelBox(zone.name, r.px + 2, r.py - 2, { colour: 'rgba(140,180,230,0.85)' })
+  }).filter(b => onCanvas(b, size.w, size.h))
+}
+
+const drawPlaces = () => {
+  ctx.font = '10px ui-monospace, monospace'
+  return snap.places.map(place => {
+    const at = project(view, place.x, place.z)
+    if (!onCanvas(at, size.w, size.h)) return null
+    ctx.strokeStyle = '#d9b25f'
+    ctx.lineWidth = 1.2
+    ctx.beginPath()
+    ctx.moveTo(at.px - 3, at.py); ctx.lineTo(at.px + 3, at.py)
+    ctx.moveTo(at.px, at.py - 3); ctx.lineTo(at.px, at.py + 3)
+    ctx.stroke()
+    return labelBox(place.name, at.px + 5, at.py + 3, { colour: 'rgba(217,178,95,0.9)' })
+  }).filter(Boolean)
+}
+
+const drawLabels = boxes => {
+  ctx.font = '10px ui-monospace, monospace'
+  fitLabels(boxes).filter(b => b.colour).forEach(b => {
+    ctx.fillStyle = b.colour
+    ctx.fillText(b.text, b.px, b.py + 9)
+  })
+}
+
+const bodyDots = () => snap.bodies
+  .filter(b => b.up && b.state?.pos)
+  .map(b => ({ body: b, ...project(view, b.state.pos.x, b.state.pos.z) }))
+
+// the bodies are why this page exists: they are drawn over everything and their labels are never dropped
+const drawBodies = () => bodyDots().map(({ body, px, py }) => {
+  const on = body.name === selected || body.name === hover
+  ctx.fillStyle = '#6ee7a8'
+  ctx.beginPath(); ctx.arc(px, py, on ? 7 : 5, 0, Math.PI * 2); ctx.fill()
+  ctx.strokeStyle = on ? '#ffffff' : '#14171c'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.font = '11px ui-monospace, monospace'
+  ctx.fillStyle = '#dfe4ec'
+  ctx.fillText(body.name, px + 10, py - 2)
+  const under = `${body.state.hp}hp ${body.state.food}f${body.state.doing ? ' · ' + body.state.doing : ''}`
+  ctx.fillStyle = '#8b95a5'
+  ctx.fillText(under, px + 10, py + 10)
+  const w = Math.max(ctx.measureText(body.name).width, ctx.measureText(under).width) + 12
+  return { text: body.name, px: px - 8, py: py - 12, w: w + 8, h: 26 }
+})
+
+const drawDan = () => {
+  if (!snap.danAt) return []
+  const { px, py } = project(view, snap.danAt.x, snap.danAt.z)
+  ctx.fillStyle = '#f08ad0'
+  ctx.beginPath()
+  ctx.moveTo(px, py - 7); ctx.lineTo(px + 7, py); ctx.lineTo(px, py + 7); ctx.lineTo(px - 7, py)
+  ctx.closePath(); ctx.fill()
+  ctx.strokeStyle = '#14171c'; ctx.lineWidth = 2; ctx.stroke()
+  ctx.fillStyle = '#f08ad0'
+  ctx.font = '11px ui-monospace, monospace'
+  ctx.fillText(snap.dan, px + 10, py + 4)
+  return [{ text: snap.dan, px: px - 8, py: py - 10, w: ctx.measureText(snap.dan).width + 22, h: 20 }]
+}
+
+const draw = () => {
+  ctx.fillStyle = '#14171c'
+  ctx.fillRect(0, 0, size.w, size.h)
+  if (!view) refit()
+  if (!view) {
+    ctx.fillStyle = '#8b95a5'
+    ctx.font = '12px ui-monospace, monospace'
+    ctx.fillText('no body is up and nothing is marked on the map yet', 20, 30)
+    return
+  }
+  drawGrid()
+  const zones = drawZones()
+  const places = drawPlaces()
+  const dan = drawDan()
+  const bodies = drawBodies()
+  // offered in the order that decides who keeps their name when two would overlap
+  drawLabels([...bodies, ...dan, ...places, ...zones])
+}
+
+// ---------------------------------------------------------------- panning, zooming, picking
+let drag = null
+canvas.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, moved: false } })
+window.addEventListener('mouseup', () => { drag = null })
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect()
+  const at = { px: e.clientX - r.left, py: e.clientY - r.top }
+  if (drag && view) {
+    const dx = e.clientX - drag.x
+    const dy = e.clientY - drag.y
+    if (Math.abs(dx) + Math.abs(dy) > 2) { drag.moved = true; follow = false }
+    view.originX -= dx / view.scale
+    view.originZ -= dy / view.scale
+    drag.x = e.clientX
+    drag.y = e.clientY
+    draw()
+    return
+  }
+  const near = pick(at)
+  const name = near?.body.name ?? null
+  if (name === hover) return
+  hover = name
+  canvas.style.cursor = name ? 'pointer' : 'crosshair'
+  draw()
+})
+
+const pick = at => bodyDots()
+  .map(d => ({ ...d, dist: Math.hypot(d.px - at.px, d.py - at.py) }))
+  .filter(d => d.dist <= 14)
+  .sort((a, b) => a.dist - b.dist)[0] ?? null
+
+canvas.addEventListener('click', e => {
+  if (drag?.moved) return
+  const r = canvas.getBoundingClientRect()
+  const hit = pick({ px: e.clientX - r.left, py: e.clientY - r.top })
+  if (!hit) return
+  select(hit.body.name)
+})
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault()
+  if (!view) return
+  follow = false
+  const r = canvas.getBoundingClientRect()
+  const px = e.clientX - r.left
+  const py = e.clientY - r.top
+  const worldX = px / view.scale + view.originX
+  const worldZ = py / view.scale + view.originZ
+  const factor = Math.exp(-e.deltaY * 0.0015)
+  view.scale = Math.min(8, Math.max(0.01, view.scale * factor))
+  view.originX = worldX - px / view.scale
+  view.originZ = worldZ - py / view.scale
+  draw()
+}, { passive: false })
+
+const fitTo = what => () => { scope = what; follow = true; view = null; draw() }
+el('fitbodies').addEventListener('click', fitTo('bodies'))
+el('fitall').addEventListener('click', fitTo('all'))
+
+// ---------------------------------------------------------------- the side panel
+const tag = (name, cls, text) => {
+  const node = document.createElement(name)
+  node.className = cls
+  node.textContent = text
+  return node
+}
+const line = (cls, text) => tag('div', cls, text)
+
+const bodyCard = body => {
+  const card = document.createElement('div')
+  card.className = `body${body.name === selected ? ' sel' : ''}`
+  const head = line('', '')
+  head.append(tag('span', 'name', body.name), ' ', tag('span', 'meta', `${body.state.hp}hp ${body.state.food}f`))
+  card.append(head, line('meta', `${Math.round(body.state.pos.x)},${Math.round(body.state.pos.y)},${Math.round(body.state.pos.z)}`))
+  if (body.state.doing) card.append(line('doing', `doing ${body.state.doing}`))
+  card.addEventListener('click', () => select(body.name))
+  return card
+}
+
+// a body that is down is the ordinary case (eleven folders, three bodies): one quiet line, with the reason on hover
+const renderList = () => {
+  const up = snap.bodies.filter(b => b.up)
+  const off = snap.bodies.filter(b => !b.up)
+  const list = el('list')
+  list.textContent = ''
+  up.forEach(b => list.append(bodyCard(b)))
+  const down = el('down')
+  down.textContent = off.length ? `down: ${off.map(b => b.name).join(', ')}` : ''
+  down.title = off.map(b => `${b.name}: ${b.error}`).join('\n')
+}
+
+const renderPlaces = () => {
+  el('places').textContent = snap.places.map(p => `${p.name} @${p.x},${p.y},${p.z}`).join('\n')
+}
+
+const select = name => {
+  selected = name
+  el('lookname').textContent = name
+  renderList()
+  draw()
+  fetchLook()
+}
+
+const fetchLook = () => {
+  if (!selected) return
+  const img = el('lookimg')
+  const meta = el('lookmeta')
+  meta.className = ''
+  meta.textContent = 'rendering…'
+  // t= so a second look of the same body is fetched again rather than taken from the browser cache
+  const params = new URLSearchParams({ t: String(Date.now()), ...(el('pano').checked ? { pano: '1' } : {}) })
+  const url = `/api/look/${encodeURIComponent(selected)}?${params}`
+  fetch(url).then(async res => {
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+      img.hidden = true
+      meta.className = 'err'
+      meta.textContent = `${selected}: ${why.error}`
+      return
+    }
+    const seen = JSON.parse(decodeURIComponent(res.headers.get('x-look-seen') || '[]'))
+    const vw = decodeURIComponent(res.headers.get('x-look-view') || '')
+    const blocked = decodeURIComponent(res.headers.get('x-look-blocked') || '')
+    URL.revokeObjectURL(img.src)
+    img.src = URL.createObjectURL(await res.blob())
+    img.hidden = false
+    meta.textContent = [`${selected} · ${vw}`, blocked, seen.length ? `sees: ${seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
+  }).catch(e => { meta.className = 'err'; meta.textContent = String(e) })
+}
+el('relook').addEventListener('click', fetchLook)
+
+// ---------------------------------------------------------------- polling
+const refresh = () => fetch('/api/state')
+  .then(r => r.json())
+  .then(s => {
+    snap = s
+    const up = s.bodies.filter(b => b.up)
+    el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
+    el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones`
+    el('clock').textContent = up[0]?.state?.time ?? 'no body online'
+    renderList()
+    renderPlaces()
+    draw()
+  })
+  .catch(e => { el('status').textContent = `no answer from the dashboard: ${e.message}` })
+
+resize()
 refresh()
 setInterval(refresh, 2000)
 </script>
+</body>
+</html>
