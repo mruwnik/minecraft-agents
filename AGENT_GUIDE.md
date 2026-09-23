@@ -84,7 +84,7 @@ you alive longer:
 | `chest_contents x= y= z=` | what's in a container |
 | `quit` | stops your body cleanly (logging off for the night, or done for good). `./start` in the background brings it back |
 | `places` (`q=` `by=` `kind=` `within=` `limit=` `name=`) | the shared map: everyone's marked places, nearest first. Sixty-odd are marked and the list stops at 12, so **search it, never read `state/places.json` yourself**: `q=` matches a name or a note (`places q=chest`), `by=` the agent who marked it, `within=` cuts by blocks. A tail line says how many matched that it did not show. `places name=<place>` gives one whole: coordinates, who marked it, the note, and the size of its plan if it has one (`farm.plan name=` prints the plan itself) |
-| `events last=10 type=chat` | your recent history, one short line each (the last 500 events, earlier runs of your body included: no need to grep events.jsonl) |
+| `events last=10 type=chat` | your recent history, one short line each (the last 500 events, earlier runs of your body included: no need to grep events.jsonl). An error that keeps happening is written ONCE and then counted: a later line reads `... (12 more in the last 60s)`. So an error line is one fault, not one occurrence, and a fault that is still going says so in its count |
 
 ## Acting
 

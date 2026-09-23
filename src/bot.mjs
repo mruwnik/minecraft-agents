@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -81,9 +81,18 @@ function emit (type, data = {}) {
   fs.appendFileSync(EVENTS_FILE, JSON.stringify(ev) + '\n')
   console.log(`[${type}]`, JSON.stringify(data))
 }
+// Errors go through here rather than straight to emit: a fault that repeats (a timer left running over a reconnect,
+// above all) writes the same line every few seconds until the events file is a wall. See errorRepeat.
+let errorSeen = null
+function sayError (message, extra = {}) {
+  const { say, seen } = errorRepeat(errorSeen, message, Date.now())
+  errorSeen = seen
+  if (say) emit('error', { ...extra, message: say })
+}
 
 // ---------------------------------------------------------------- bot lifecycle
 let bot = null
+let eatTimer = null
 let mcData = null
 let ready = false
 let reflexes = true
@@ -292,9 +301,14 @@ function connect () {
     bot.autoEat.setOpts({ priority: 'foodPoints', minHunger: 15, bannedFood: BANNED_FOOD })
     bot.autoEat.enableAuto()
     bot.autoEat.on('eatFail', e => console.log(`[auto-eat] failed: ${e?.message}`))
-    // see eatJammed: the plugin can stay "eating" for ever
+    // see eatJammed: the plugin can stay "eating" for ever. ONE timer for the process: started at every spawn and never
+    // stopped, the old ones outlive their connection and read the module-level `bot`, which by then is a new one whose
+    // plugins are not loaded yet -- that is the `uncaught: ... (reading 'isEating')` every few seconds that filled
+    // Perrin's and Mariel's events files after the 09-22 20:53 restart. Cleared here, and guarded for the same reason.
+    clearInterval(eatTimer)
     let eatingSince = null
-    setInterval(() => {
+    eatTimer = setInterval(() => {
+      if (!bot?.autoEat || !ready) { eatingSince = null; return }
       if (!bot.autoEat.isEating) { eatingSince = null; return }
       eatingSince ??= Date.now()
       if (!eatJammed(Date.now() - eatingSince)) return
@@ -360,6 +374,7 @@ function connect () {
   let lastFall = { blocks: 0, at: 0 }
   let creeperSeenAt = 0
   bot.on('physicsTick', () => {
+    if (!bot.entity) { peakY = null; return }
     const y = bot.entity.position.y
     if (!bot.entity.onGround) { peakY = Math.max(peakY ?? y, y); return }
     if (peakY !== null && peakY - y >= 1) lastFall = { blocks: Math.round(peakY - y), at: Date.now() }
@@ -413,7 +428,7 @@ function connect () {
 
   bot.on('kicked', reason => emit('kicked', { reason: typeof reason === 'string' ? reason : JSON.stringify(reason) }))
   // while the server is down we retry quietly: only the first failure is worth an event
-  bot.on('error', err => { if (ready || !waitingForServer) emit('error', { message: err.message || err.code || String(err) }) })
+  bot.on('error', err => { if (ready || !waitingForServer) sayError(err.message || err.code || String(err)) })
   bot.on('end', reason => {
     if (ready || !waitingForServer) emit('disconnected', { reason })
     waitingForServer = !ready
@@ -2394,7 +2409,7 @@ http.createServer((req, res) => {
   })
 }).listen(cfg.apiPort, '127.0.0.1', () => console.log(`control API on http://127.0.0.1:${cfg.apiPort}`))
 
-process.on('uncaughtException', e => emit('error', { message: `uncaught: ${e.message}`, at: stackTop(e.stack) }))
-process.on('unhandledRejection', e => emit('error', { message: `unhandled: ${e?.message ?? e}` }))
+process.on('uncaughtException', e => sayError(`uncaught: ${e.message}`, { at: stackTop(e.stack) }))
+process.on('unhandledRejection', e => sayError(`unhandled: ${e?.message ?? e}`))
 
 connect()

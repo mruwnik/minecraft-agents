@@ -1156,6 +1156,17 @@ export const patchItemEnchants = source => source.includes(ENCHANTS_LIST)
 // mineflayer-auto-eat marks itself eating BEFORE it equips the food and only unmarks after the meal: an equip that throws leaves it "eating" for
 // ever and the body starves with bread in its pockets (Jizo). A meal takes 1.6 s
 export const eatJammed = eatingForMs => eatingForMs >= 15000
+
+// One fact, said once. After the 09-22 20:53 server restart Perrin's and Mariel's bodies wrote the same uncaught error
+// into their events files every few seconds until the file was unreadable, and the one line that mattered (the restart)
+// was buried under thousands of copies of itself. So the first of a message is said, the repeats are counted silently,
+// and the count is said when the message changes or the window runs out. `seen` is opaque state: keep it, pass it back.
+export function errorRepeat (seen, message, now, window = 60000) {
+  if (seen?.message !== message) return { say: message, seen: { message, said: now, suppressed: 0 } }
+  const suppressed = seen.suppressed + 1
+  if (now - seen.said < window) return { say: null, seen: { ...seen, suppressed } }
+  return { say: `${message} (${suppressed} more in the last ${Math.round((now - seen.said) / 1000)}s)`, seen: { message, said: now, suppressed: 0 } }
+}
 // what water costs a walk: a digging one tunnelled into an underground lake and half drowned in its own shaft (Aviendha)
 export const waterWary = dig => dig ? { liquidCost: 40, infiniteLiquidDropdownDistance: false } : { liquidCost: 1, infiniteLiquidDropdownDistance: true }
 
