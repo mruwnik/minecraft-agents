@@ -39,6 +39,11 @@ breeding again. Cull only grown surplus and never the last pair. Shared starter 
 Before a routine, carry the animal's food, real food for yourself, and shears for sheep. A rancher fixes a leaking pen
 before fetching animals and never says a flock is safe until `pen.check` says `holds`.
 
+`pen.build` will not build over a pen with animals in it: levelling the ground opens the floor and the wall while the
+job list runs, and that is how four sheep left Chani's pen. Lead them out (`flock.lead`) first, build, lead them back.
+It also refuses when the ring it describes already stands a few cells to one side of where the place is marked, and
+tells you where to re-mark it: a plan is anchored at its NORTH-WEST corner cell, at GROUND level.
+
 ## Marks a rancher keeps
 
 - `kind=pen`, placed on a free inside floor cell, with a plan when `pen.build` should maintain the structure.
