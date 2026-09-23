@@ -3574,6 +3574,39 @@ for (const [name, plan, expected] of [
   test(`penInside: ${name}`, () => assert.deepEqual(penInside(cellsOf(plan)), expected))
 }
 
+// item 16 (Perrin): `pen.build place= partial=true` on a pen that is finished and holding failed with "no walkable
+// path" instead of the guide's promised already=. The build walks to the MIDDLE of its plan first, to get the ground in
+// sight before judging it - and the middle of a finished pen is inside the fence, with a shut gate between it and the
+// body. Standing next to the pen is enough to read it, so the walk settles for that rather than failing the build.
+const standingPen = () => ({
+  '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'dirt', '12,63,21': 'dirt',
+  '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt',
+  '10,64,20': 'oak_fence', '11,64,20': 'oak_fence', '12,64,20': 'oak_fence', '10,64,21': 'oak_fence',
+  '11,64,21': 'air', '12,64,21': 'oak_fence', '10,64,22': 'oak_fence', '11,64,22': 'oak_fence_gate', '12,64,22': 'oak_fence'
+})
+
+test('pen.build: a finished pen with no way in says already=, it does not fail on the walk', async () => {
+  const { api, calls } = fakeApi({
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), kind: 'pen' }, world: standingPen(), items: { oak_fence: 20 },
+    answers: {
+      goto: ({ range }) => range > 2 ? {} : new Error('no walkable path (walks don\'t dig or bridge): look for a way round'),
+      'pen.check': { pen: 'holds', cells: 1, inside: 'sheep:2' }
+    }
+  })
+  const summary = await buildPen.run(api, { place: 'test-pen', partial: true })
+  assert.deepEqual([summary.already, summary.pen, summary.inside],
+    ['everything the plan asks for is already there', 'holds', 'sheep:2'])
+  assert.deepEqual(calls.slice(0, 2), ['goto x=11 y=64 z=21 range=2', 'goto x=11 y=64 z=21 range=8'])
+})
+
+test('pen.build: a plan it cannot get near at all is still refused', async () => {
+  const { api } = fakeApi({
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), kind: 'pen' }, world: {}, items: { oak_fence: 20 },
+    answers: { goto: () => new Error('no walkable path (walks don\'t dig or bridge): look for a way round') }
+  })
+  await assert.rejects(buildPen.run(api, { place: 'test-pen', partial: true }), /too far to see/)
+})
+
 test('pen.build: builds the plan, then says it holds', async () => {
   const world = { '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'dirt', '12,63,21': 'dirt', '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt' }
   const { api, calls } = fakeApi({

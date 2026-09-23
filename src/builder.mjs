@@ -1,6 +1,6 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
+import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 
@@ -46,8 +46,17 @@ export async function buildFromPlan (api, a) {
     counts[COUNT_OF[job.do]] = (counts[COUNT_OF[job.do]] ?? 0) + 1
   }
 
-  // the ground has to be in sight before any of this can be judged, so the walk comes before the preflight
-  await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: 2 })
+  // The ground has to be in sight before any of this can be judged, so the walk comes before the preflight. But the
+  // middle of a FINISHED pen is inside its fence with a shut gate in the way, and the walk there answers "no walkable
+  // path": that is how a complete pen came to fail instead of saying already= (Perrin, item 16). Standing beside it is
+  // enough to read it, so a walk that cannot get in settles for near, and only a plan that cannot be READ is refused.
+  const reach = async range => api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range }).then(() => true, () => false)
+  if (!await reach(2)) await reach(8)
+  // and a plan whose middle reads as nothing at all, floor and ground and the cell above it, is a plan in chunks this
+  // body was never sent: judging that would be guessing (item 14). The whole column, because a plan anchored one level
+  // off still has a loaded world around it and is a different fault, with its own answer a few lines down
+  const seen = [-1, 0, 1].some(dy => api.block(middle.x, middle.y + dy, middle.z))
+  if (!seen) throw new Error(`${plan.name}: ${outOfSight(null, middle, api.pos())}`)
   // what the plan describes already stands a block away from where the plan puts it: building would lay a second copy
   // of it over or under the first one. Say which y to re-save with and touch nothing
   const anchor = planAnchor(plan.cells, api.block)
