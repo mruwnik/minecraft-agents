@@ -1,9 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
+import hunt from '../library/hunt.mjs'
+import farmFindSpot from '../library/farm/find_spot.mjs'
 import buildPen from '../library/pen/build.mjs'
 import bringPair from '../library/flock/bring_pair.mjs'
 import flockMaintain from '../library/flock/maintain.mjs'
@@ -17,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -354,7 +357,9 @@ const interruptCases = [
   ['an old reflex explains nothing', 'The goal was changed before it could be completed!', { kind: 'fleeing', mob: 'zombie', agoMs: 60000 }, /^The goal was changed/],
   ['no reflex, error kept', 'The goal was changed before it could be completed!', null, /^The goal was changed/],
   ['everyone flees creepers, so no sword advice', 'The goal was changed before it could be completed!', { kind: 'fleeing', mob: 'creeper', agoMs: 500 }, /^interrupted: fleeing from creeper\. Wait until it is over, then retry$/],
-  ['other errors are kept', 'no place called x', { kind: 'fleeing', mob: 'zombie', agoMs: 100 }, /^no place called x$/]
+  ['other errors are kept', 'no place called x', { kind: 'fleeing', mob: 'zombie', agoMs: 100 }, /^no place called x$/],
+  // the leash walks the body back to where the fight began, which changes the goal under whatever task was running
+  ['a capped chase says it is walking back', 'The goal was changed before it could be completed!', { kind: 'leashed', mob: 'spider', agoMs: 300 }, /^interrupted: breaking off a fight with spider that pulled me too far: walking back to where it started\. Wait until it is over, then retry$/]
 ]
 for (const [title, error, reflex, expected] of interruptCases) {
   test(`explainInterrupt: ${title}`, () => assert.match(explainInterrupt(error, reflex), expected))
@@ -702,6 +707,276 @@ for (const [name, chase, expected] of [
   ['still fighting nearby', { targetValid: true, hunting: true, strayed: 23, leash: 24 }, null],
   ['chased too far', { targetValid: true, hunting: true, strayed: 25, leash: 24 }, { killed: false, gaveUp: 'it led me 25 blocks away (leash=24): let it go, or attack again from here' }]
 ]) test(`chaseVerdict: ${name}`, () => assert.deepEqual(chaseVerdict(chase), expected))
+
+// #105: the fight REFLEX has no leash of its own. pvp walks the body after the mob and the mob stays beside the body,
+// so a distance measured mob-to-body never grows: a spider walked Claude into a cave and the body died there. The
+// reflex's leash is measured from where the fight started, and a drop counts before a walk does.
+for (const [name, start, here, expected] of [
+  ['standing where it began', { x: 10, y: 70, z: -5 }, { x: 10, y: 70, z: -5 }, null],
+  ['a few steps after it is still the same fight', { x: 10, y: 70, z: -5 }, { x: 16, y: 70, z: -5 }, null],
+  ['exactly at the leash is still allowed', { x: 10, y: 70, z: -5 }, { x: 18, y: 70, z: -5 }, null],
+  ['walked off the leash', { x: 10, y: 70, z: -5 }, { x: 20, y: 70, z: -5 },
+    'the fight pulled me 10 blocks from where it started (leash=8): broken off, and I am walking back'],
+  ['height is not distance: a tower is not a chase', { x: 10, y: 70, z: -5 }, { x: 14, y: 82, z: -5 }, null],
+  ['three blocks down is still the surface', { x: 10, y: 70, z: -5 }, { x: 11, y: 67, z: -5 }, null],
+  ['pulled down a hole', { x: 10, y: 70, z: -5 }, { x: 11, y: 66, z: -5 },
+    'the fight pulled me 4 blocks down (from y=70): broken off before it becomes a cave, and I am walking back'],
+  ['down AND away: the drop is what killed me, so it is what is said', { x: 10, y: 70, z: -5 }, { x: 30, y: 50, z: -5 },
+    'the fight pulled me 20 blocks down (from y=70): broken off before it becomes a cave, and I am walking back'],
+  ['no fight, no leash', null, { x: 30, y: 50, z: -5 }, null]
+]) test(`chaseBroken: ${name}`, () => assert.equal(chaseBroken(start, here), expected))
+
+// the leash nearly broke the reflex it shares a body with: rangedThreat 'charge' answers a skeleton shooting from 20
+// blocks by running at it, and fightStart is where the body stood when it was shot. A flat leash of 8 aborts that
+// charge a third of the way there and walks the body back into the arrows. A fight that begins by crossing ground
+// gets that ground added to its leash, so the charge can land and anything past the target still breaks off.
+for (const [name, start, mob, expected] of [
+  ['a melee mob within reach changes nothing much', { x: 0, y: 70, z: 0 }, { x: 2, y: 70, z: 0 }, 10],
+  ['a mob underfoot is the plain leash', { x: 0, y: 70, z: 0 }, { x: 0, y: 70, z: 0 }, 8],
+  ['a skeleton 20 blocks off buys the charge its 20 blocks', { x: 0, y: 70, z: 0 }, { x: 20, y: 70, z: 0 }, 28],
+  ['height is not ground to cross', { x: 0, y: 70, z: 0 }, { x: 0, y: 90, z: 0 }, 8],
+  ['diagonal counts once', { x: 0, y: 70, z: 0 }, { x: 3, y: 70, z: 4 }, 13]
+]) test(`chargeLeash: ${name}`, () => assert.equal(chargeLeash(start, mob), expected))
+
+test('chargeLeash: a charge that lands still breaks off once it is dragged a leash past the target', () => {
+  const start = { x: 0, y: 70, z: 0 }
+  const mob = { x: 20, y: 70, z: 0 }
+  const leash = chargeLeash(start, mob)
+  assert.equal(chaseBroken(start, { x: 20, y: 70, z: 0 }, { leash }), null, 'reaching the skeleton is not a chase')
+  assert.match(chaseBroken(start, { x: 30, y: 70, z: 0 }, { leash }), /30 blocks from where it started \(leash=28\)/)
+})
+
+// verified the hard way (2026-09-23 02:26Z): the leash fired correctly 4 blocks down a shaft, the body stopped
+// swinging, and then it could not climb the 4 blocks back because the walk-back goal walks and does not dig. It stood
+// in the hole and a zombie beat it from 18 to 0 in nine seconds. A break-off that was a DROP has to be allowed to dig
+// and bridge its way back up: the body dug its way down, and the same ground is in the way going up. A flat break-off
+// walked there on its feet, so it can walk back on them, and is not given a licence to tunnel.
+for (const [name, start, here, expected] of [
+  ['pulled down a hole: dig back out', { x: 0, y: 62, z: 0 }, { x: 0, y: 58, z: 0 }, true],
+  ['one block down still counts as up to climb', { x: 0, y: 62, z: 0 }, { x: 3, y: 61, z: 0 }, true],
+  ['walked off on the flat: walk back', { x: 0, y: 62, z: 0 }, { x: 10, y: 62, z: 0 }, false],
+  ['chased uphill: the way back is down', { x: 0, y: 62, z: 0 }, { x: 10, y: 70, z: 0 }, false]
+]) test(`breakOffDigs: ${name}`, () => assert.equal(breakOffDigs(start, here), expected))
+
+test('chaseBroken: the leash and the drop can be tightened or loosened together', () => {
+  assert.equal(chaseBroken({ x: 0, y: 70, z: 0 }, { x: 10, y: 70, z: 0 }, { leash: 24 }), null)
+  assert.match(chaseBroken({ x: 0, y: 70, z: 0 }, { x: 0, y: 69, z: 0 }, { drop: 0 }), /^the fight pulled me 1 blocks down/)
+})
+
+// `node --check` is the gate before every body restart and it only parses: a name imported from lib.mjs but never
+// exported there passes the check and kills the body on its first line at startup (chaseLeash/CHASE_LEASH did, and
+// the body was down until the log was read). Every named import of lib.mjs has to name something lib.mjs exports.
+test('every module imports only names lib.mjs actually exports', async () => {
+  const roots = ['src', 'library']
+  const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.mjs') ? [path.join(dir, e.name)] : [])
+  const exported = new Set(Object.keys(await import('../src/lib.mjs')))
+  const missing = roots.flatMap(walk).flatMap(file => {
+    const src = fs.readFileSync(file, 'utf8')
+    const imports = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']*lib\.mjs)'/g)]
+    return imports.flatMap(([, names]) => names.split(',')
+      .map(n => n.trim().split(/\s+as\s+/)[0].trim())
+      .filter(n => n && !exported.has(n))
+      .map(n => `${file}: ${n}`))
+  })
+  assert.deepEqual(missing, [])
+})
+
+// the other half of the same crash: a lib helper USED but never imported. `node --check` parses it happily and the
+// body dies with `ReferenceError: CHASE_LEASH is not defined` on its first line, which is only visible in bot.log.
+test('every module that uses a lib.mjs helper imports it', async () => {
+  const lib = await import('../src/lib.mjs')
+  const exported = Object.keys(lib)
+  const files = ['src', 'library'].flatMap(function walk (dir) {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.mjs') ? [path.join(dir, e.name)] : [])
+  })
+  const unimported = files.filter(f => !f.endsWith('lib.mjs')).flatMap(file => {
+    const src = fs.readFileSync(file, 'utf8')
+    const importBlocks = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'[^']*'/g)]
+    const imported = new Set(importBlocks.flatMap(([, names]) => names.split(',').map(n => n.trim().split(/\s+as\s+/).pop().trim())))
+    // comments and string bodies are prose: a helper NAMED in one is not a helper USED
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
+      .replace(/`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''")
+    const body = importBlocks.reduce((rest, [whole]) => rest.replace(whole, ''), code)
+    return exported
+      .filter(name => !imported.has(name))
+      .filter(name => new RegExp(`(^|[^\\w.$])${name}(?![\\w$])`).test(body))
+      .filter(name => !new RegExp(`(const|let|var|function|class)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*=>|${name}\\s*:`).test(body))
+      .map(name => `${file}: uses ${name} without importing it`)
+  })
+  assert.deepEqual(unimported, [])
+})
+
+// #97: an enderman killed Ganesha's body at its own cabin in five seconds, because the fight reflex treated it as one
+// more mob to beat. Aiming at its head is what starts that fight, so this body never attacks one and never chases it.
+for (const [name, expected] of [
+  ['enderman', /not a fight this body can win/],
+  ['warden', /not a fight this body can win/],
+  ['zombie', null],
+  ['spider', null],
+  ['creeper', null],
+  [undefined, null]
+]) {
+  test(`attackRefusal: ${name}`, () => {
+    const got = attackRefusal(name)
+    assert.equal(expected === null, got === null)
+    assert.match(got ?? '', expected ?? /^$/)
+  })
+}
+
+for (const [title, mobs, expected] of [
+  ['an enderman at arm\'s length is run from', [{ name: 'enderman', dist: 3 }], 'enderman'],
+  ['one keeping its distance is left alone', [{ name: 'enderman', dist: 9 }], null],
+  ['exactly at the range still counts', [{ name: 'enderman', dist: 5 }], 'enderman'],
+  ['a zombie is a fight, not a flight', [{ name: 'zombie', dist: 1 }], null],
+  ['the nearest of the unwinnable ones', [{ name: 'enderman', dist: 4 }, { name: 'warden', dist: 2 }], 'warden'],
+  ['nothing about', [], null]
+]) {
+  test(`fleeUnwinnable: ${title}`, () => assert.equal(fleeUnwinnable(mobs)?.name ?? null, expected))
+}
+
+// `hunt` picks its own targets, and the house rule that keeps the starter pen alive (always leave a pair) is worth as
+// much in the wild: a hunt that empties a valley has nothing to come back to. Monsters get no such mercy.
+for (const [title, mob, found, expected] of [
+  ['the nearest grown one', 'cow', [{ id: 1, dist: 9, grown: true }, { id: 2, dist: 3, grown: true }, { id: 3, dist: 5, grown: true }], 2],
+  ['a calf is next year\'s herd', 'cow', [{ id: 1, dist: 1, grown: false }, { id: 2, dist: 8, grown: true }, { id: 3, dist: 9, grown: true }, { id: 4, dist: 12, grown: true }], 2],
+  ['nothing in sight', 'cow', [], null],
+  ['the last pair is left standing', 'cow', [{ id: 1, dist: 1, grown: true }, { id: 2, dist: 2, grown: true }], null],
+  ['a pair plus a calf is still a pair', 'cow', [{ id: 1, dist: 1, grown: true }, { id: 2, dist: 2, grown: true }, { id: 3, dist: 1, grown: false }], null],
+  ['three is one to spare', 'cow', [{ id: 1, dist: 5, grown: true }, { id: 2, dist: 2, grown: true }, { id: 3, dist: 9, grown: true }], 2],
+  ['monsters are not a herd: the last one goes too', 'zombie', [{ id: 7, dist: 4, grown: true }], 7],
+  ['goats breed, so goats are kept', 'goat', [{ id: 1, dist: 1, grown: true }, { id: 2, dist: 2, grown: true }], null]
+]) {
+  test(`huntPick: ${title}`, () => assert.equal(huntPick(mob, found).target?.id ?? null, expected))
+}
+
+for (const [title, mob, found, expected] of [
+  ['nothing found says so', 'cow', [], /^no cow in sight/],
+  ['the last pair says why it is spared', 'cow', [{ id: 1, dist: 1, grown: true }, { id: 2, dist: 2, grown: true }], /only 2 grown cow in sight and a breeding pair stays/],
+  ['only calves', 'cow', [{ id: 1, dist: 1, grown: false }], /only 0 grown cow in sight/]
+]) {
+  test(`huntPick stop: ${title}`, () => assert.match(huntPick(mob, found).stop, expected))
+}
+
+test('huntPick: keep can be overridden for a cull', () =>
+  assert.equal(huntPick('cow', [{ id: 1, dist: 1, grown: true }, { id: 2, dist: 2, grown: true }], { keep: 0 }).target.id, 1))
+
+test('hunt: walks to the nearest grown one, kills it by id, and picks up after itself', async () => {
+  const { api, calls } = fakeApi({
+    answers: {
+      animals: { found: [{ mob: 'cow', id: 5, at: '10,64,3', dist: 4, grown: true }, { mob: 'cow', id: 6, at: '2,64,2', dist: 9, grown: true }, { mob: 'cow', id: 7, at: '1,64,1', dist: 12, grown: true }] },
+      attack: { killed: true }
+    }
+  })
+  const out = await hunt.run(api, { mob: 'cow' })
+  assert.deepEqual([out.mob, out.killed, out.at, out.stopped], ['cow', 1, '10,64,3', undefined])
+  assert.deepEqual(calls, ['animals mob=cow within=48', 'goto x=10 y=64 z=3 range=3', 'attack mob=cow id=5 leash=24', 'collect range=12'])
+})
+
+test('hunt: a kind the body does not know as an animal is found by name and attacked by name', async () => {
+  const { api, calls } = fakeApi({
+    answers: { animals: { found: [] }, look_around: { each: '4,63,-2 20,63,-9' }, attack: { killed: true } }
+  })
+  const out = await hunt.run(api, { mob: 'zombie', range: 24 })
+  assert.equal(out.killed, 1)
+  assert.deepEqual(calls, ['animals mob=zombie within=24', 'look_around mob=zombie range=24', 'goto x=4 y=63 z=-2 range=3', 'attack mob=zombie leash=24', 'collect range=12'])
+})
+
+test('hunt: nothing in sight is looked for twice before it is an answer', async () => {
+  const { api, calls } = fakeApi({ answers: { animals: { found: [] }, look_around: { each: 'none in range' } } })
+  const out = await hunt.run(api, { mob: 'goat' })
+  assert.deepEqual([out.killed, out.stopped], [0, 'no goat in sight'])
+  assert.equal(calls.filter(c => c.startsWith('animals')).length, 2)
+})
+
+test('hunt: the last breeding pair stops it, and says so', async () => {
+  const { api } = fakeApi({
+    answers: { animals: { found: [{ mob: 'cow', id: 1, at: '1,64,1', dist: 2, grown: true }, { mob: 'cow', id: 2, at: '2,64,2', dist: 3, grown: true }] } }
+  })
+  const out = await hunt.run(api, { mob: 'cow', count: 4 })
+  assert.equal(out.killed, 0)
+  assert.match(out.stopped, /a breeding pair stays/)
+})
+
+test('hunt: home= is walked to when the hunting is over', async () => {
+  const { api, calls } = fakeApi({
+    answers: { animals: { found: [{ mob: 'cow', id: 5, at: '9,64,0', dist: 9, grown: true }, { mob: 'cow', id: 6, at: '2,64,2', dist: 3, grown: true }, { mob: 'cow', id: 7, at: '1,64,1', dist: 2, grown: true }] }, attack: { killed: true } }
+  })
+  await hunt.run(api, { mob: 'cow', home: 'claude-hut' })
+  assert.equal(calls.at(-1), 'goto place=claude-hut')
+})
+
+// farm.find_spot: score a patch of ground the way someone choosing where to farm would. Flat first (every cell off the
+// common level is a block to dig or fill), then water (farmland dries without it), then sky, then how far you walked.
+const flat = Array(9).fill(70)
+for (const [title, patch, expected] of [
+  ['flat, watered and open is the best there is', { tops: flat, water: true, sky: true }, 140],
+  ['the same ground without water', { tops: flat, water: false, sky: true }, 115],
+  ['under a roof, crops do not grow', { tops: flat, water: true, sky: false }, 125],
+  ['one cell a block high costs a dig and some flatness', { tops: [71, ...Array(8).fill(70)], water: true, sky: true }, 128],
+  ['a slope is most of a day\'s work', { tops: [70, 71, 72, 70, 71, 72, 70, 71, 72], water: true, sky: true }, 64],
+  ['far away is worth less', { tops: flat, water: true, sky: true, away: 80 }, 120]
+]) {
+  test(`spotScore: ${title}`, () => assert.equal(spotScore(patch).score, expected))
+}
+
+for (const [title, patch] of [
+  ['ground inside a zone or a saved plan is somebody\'s', { tops: flat, taken: true, water: true, sky: true }],
+  ['a lake is not a field', { tops: [70, 70, null, 70, 70, 70, 70, 70, 70], water: true, sky: true }]
+]) {
+  test(`spotScore: ${title}`, () => assert.equal(spotScore(patch), null))
+}
+
+test('spotScore reports the level it would build at, and the work to get there', () => {
+  assert.deepEqual(spotScore({ tops: [70, 70, 70, 70, 70, 70, 70, 71, 68], water: true, sky: true, away: 12 }),
+    { y: 70, level: 78, work: 3, water: true, sky: true, away: 12, score: 112 })
+})
+
+test('bestSpots takes the best few, nearest first when they tie', () => {
+  const spots = [{ score: 80, away: 40 }, { score: 120, away: 5 }, { score: 120, away: 2 }, null, { score: 99, away: 1 }]
+  assert.deepEqual(bestSpots(spots, 3), [{ score: 120, away: 2 }, { score: 120, away: 5 }, { score: 99, away: 1 }])
+})
+
+// farm.find_spot reads the world rather than walking it, so the test gives it a world: a flat shelf with a pond beside
+// it, a bumpy field, and a patch of the flat shelf already claimed by a saved plan.
+const groundWorld = () => {
+  const world = {}
+  for (let x = -6; x <= 6; x++) {
+    for (let z = -6; z <= 6; z++) {
+      const y = x >= 0 ? 64 : 64 + (Math.abs(z) % 3)
+      world[`${x},${y},${z}`] = 'grass_block'
+    }
+  }
+  world['3,64,3'] = 'water'
+  return world
+}
+
+test('farm.find_spot names the flat watered corner, and stands on it', async () => {
+  const { api, calls } = fakeApi({ world: groundWorld(), answers: { zones: { zones: [] } } })
+  const out = await farmFindSpot.run(api, { w: 2, h: 2, range: 6 })
+  assert.equal(out.size, '2x2')
+  assert.match(out.best, /^[0-4],64,[-0-9]+$/)
+  assert.match(out.spots, /score=\d+ level=100% work=0 water/)
+  assert.equal(calls.filter(c => c.startsWith('goto')).length, 1)
+})
+
+test('farm.find_spot never offers ground a saved plan already claims', async () => {
+  const open = await farmFindSpot.run(fakeApi({ world: groundWorld(), answers: { zones: { zones: [] } } }).api, { w: 2, h: 2, range: 6 })
+  const [cx, , cz] = open.best.split(',').map(Number)
+  // somebody saves a plan over exactly the patch it just picked: the same search must now offer somewhere else
+  const theirs = { name: 'someones-field', kind: 'farm', x: cx, y: 64, z: cz, by: 'Chani', plan: 'ww\nww' }
+  const { api } = fakeApi({ world: groundWorld(), places: [theirs], answers: { zones: { zones: [] } } })
+  const out = await farmFindSpot.run(api, { w: 2, h: 2, range: 6 })
+  const overlaps = ([x, , z]) => x <= cx + 1 && x + 1 >= cx && z <= cz + 1 && z + 1 >= cz
+  assert.notEqual(out.best, open.best)
+  assert.equal(out.spots.split('; ').map(line => line.split(' ')[0].split(',').map(Number)).some(overlaps), false)
+})
+
+test('farm.find_spot says so rather than guessing when there is no open ground', async () => {
+  const { api } = fakeApi({ world: {}, answers: { zones: { zones: [] } } })
+  await assert.rejects(farmFindSpot.run(api, { w: 3, h: 3, range: 4 }), /no 3x3 patch of open ground/)
+})
 
 // the tool picker takes whatever digs fastest, and a sword digs melons, pumpkins, leaves and cobwebs fastest: Jizo's sword wore out
 // on melons and left the body unarmed. A weapon digs only when nothing else can harvest the block

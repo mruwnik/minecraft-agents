@@ -221,7 +221,9 @@ export const ignorableMob = (name, { day, skyLight }) => name === 'enderman' || 
 // the pathfinder's "goal was changed"/"path was stopped" usually means a reflex took over the legs: say which one
 export function explainInterrupt (error, reflex) {
   if (!reflex || reflex.agoMs > 10000 || !/goal was changed|path was stopped/i.test(error)) return error
-  const what = reflex.kind === 'fleeing' ? `fleeing from ${reflex.mob}` : `fighting ${reflex.mob}`
+  const what = reflex.kind === 'leashed'
+    ? `breaking off a fight with ${reflex.mob} that pulled me too far: walking back to where it started`
+    : reflex.kind === 'fleeing' ? `fleeing from ${reflex.mob}` : `fighting ${reflex.mob}`
   const advice = reflex.kind === 'fleeing' && reflex.mob !== 'creeper' ? ' (unarmed or badly hurt bodies flee: carry a sword, keep your health up)' : ''
   return `interrupted: ${what}. Wait until it is over, then retry${advice}`
 }
@@ -474,6 +476,44 @@ export function chaseVerdict (c) {
   return { killed: false, gaveUp: `it led me ${Math.round(c.strayed)} blocks away (leash=${c.leash}): let it go, or attack again from here` }
 }
 
+// #105: the fight REFLEX had no leash of its own. mineflayer-pvp walks the body after its target, and the target stays
+// beside the body, so any distance measured mob-to-body stays small however far the pair travels: a spider walked the
+// body into a cave and it died down there. This leash is measured from where the fight STARTED, and the drop is checked
+// before the walk, because falling out of the daylight is what kills, not the distance.
+export const CHASE_LEASH = 8
+export const CHASE_DROP = 3
+// a fight that starts by crossing ground (rangedThreat 'charge' runs at a skeleton that shot from 20 blocks) is owed
+// that ground on top of its leash: measured from where the body stood, a flat 8 aborts the charge and walks it back
+// into the arrows.
+export const chargeLeash = (start, mob, { leash = CHASE_LEASH } = {}) =>
+  leash + Math.round(Math.hypot(mob.x - start.x, mob.z - start.z))
+
+// a break-off that was a DROP has to dig and bridge its way back: the body dug its way down and the same ground is in
+// the way going up. Walking it instead left the body standing in the hole while a zombie killed it (2026-09-23).
+export const breakOffDigs = (start, here) => start.y - here.y > 0
+
+export const chaseBroken = (start, here, { leash = CHASE_LEASH, drop = CHASE_DROP } = {}) => {
+  if (!start) return null
+  const fell = start.y - here.y
+  if (fell > drop) return `the fight pulled me ${Math.round(fell)} blocks down (from y=${Math.round(start.y)}): broken off before it becomes a cave, and I am walking back`
+  const away = Math.hypot(here.x - start.x, here.z - start.z)
+  if (away > leash) return `the fight pulled me ${Math.round(away)} blocks from where it started (leash=${leash}): broken off, and I am walking back`
+  return null
+}
+
+// #97: an enderman killed Ganesha's body at its own cabin in five seconds, because the fight reflex treated it as one
+// more mob to beat. Nothing this body carries wins that fight, and aiming at its head is what starts it: these are never
+// attacked, never chased, and one that comes within arm's reach is backed away from the way a creeper is.
+export const NEVER_FIGHT = new Set(['enderman', 'warden'])
+export const ENDERMAN_RANGE = 5
+export const attackRefusal = name => NEVER_FIGHT.has(name)
+  ? `${name}: not a fight this body can win (one killed Ganesha's body in five seconds at its own door, #97). Aiming at its head is what provokes it, so I will not aim at one either. Break the line of sight - a block, a door, deep water - and walk away`
+  : null
+// a neutral enderman keeps its distance and teleports about; one standing next to the body has almost always been
+// provoked already, and by then the body has about five seconds
+export const fleeUnwinnable = (mobs, range = ENDERMAN_RANGE) =>
+  mobs.filter(m => NEVER_FIGHT.has(m.name) && m.dist <= range).sort((a, b) => a.dist - b.dist)[0] ?? null
+
 // tools: [{name (null = bare hand), time, harvests}]. The fastest that is not a weapon; undefined when only a weapon can harvest the block
 const isWeapon = name => /_sword$|^trident$|^mace$/.test(name ?? '')
 export const peacefulTool = tools => tools.filter(t => !isWeapon(t.name) && t.harvests).sort((a, b) => a.time - b.time)[0]
@@ -566,6 +606,36 @@ export const BEE_FLOWERS = [
 ]
 export const CREATURE_FOOD = { ...BREEDING_FOOD, bee: BEE_FLOWERS }
 export const creatureFood = (mob, carried) => (CREATURE_FOOD[mob] ?? []).find(food => carried.includes(food)) ?? null
+
+// `hunt` picks its next target: the nearest GROWN one. A calf is next year's herd, and a kind that breeds is left alone
+// once only a pair of grown ones is in sight - the starter pen's house rule, applied to the wild so that a hunt cannot
+// empty a valley and leave nothing to come back to. A monster is not a herd, so nothing is kept back from one.
+export const HUNT_KEEP = 2
+export const huntPick = (mob, found, { keep = BREEDING_FOOD[mob] ? HUNT_KEEP : 0 } = {}) => {
+  if (!found.length) return { stop: `no ${mob} in sight` }
+  const grown = found.filter(f => f.grown !== false)
+  if (grown.length <= keep) return { stop: `only ${grown.length} grown ${mob} in sight and a breeding pair stays: move on, or breed them up first` }
+  return { target: [...grown].sort((a, b) => a.dist - b.dist)[0] }
+}
+
+// farm.find_spot scores a patch of ground the way someone choosing where to farm would: flat first, because every cell
+// off the common level is a block to dig or fill, then water (farmland dries without a source within 4), then open sky
+// (crops need light), then how far you had to walk. Ground a zone or a saved plan already claims is never a candidate,
+// and neither is a patch with a hole in it: tops are the surface of every column, and a null is a lake or a drop.
+const commonest = xs => Number(Object.entries(xs.reduce((n, x) => ({ ...n, [x]: (n[x] ?? 0) + 1 }), {}))
+  .sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]))[0][0])
+
+export const spotScore = ({ tops, taken, water, sky, away = 0 }) => {
+  if (taken || tops.some(t => t === null || t === undefined)) return null
+  const y = commonest(tops)
+  const work = tops.reduce((n, t) => n + Math.abs(t - y), 0)
+  const level = Math.round(100 * tops.filter(t => t === y).length / tops.length)
+  const score = level + (water ? 25 : 0) + (sky ? 15 : 0) - Math.min(40, work) - Math.min(30, Math.round(away / 4))
+  return { y, level, work, water: Boolean(water), sky: Boolean(sky), away: Math.round(away), score }
+}
+
+export const bestSpots = (scored, limit = 3) => scored.filter(Boolean)
+  .sort((a, b) => b.score - a.score || a.away - b.away).slice(0, limit)
 
 export const apiaryGoods = items => Object.fromEntries(Object.entries(items)
   .filter(([name, count]) => count > 0 && ['honeycomb', 'honey_bottle'].includes(name)))

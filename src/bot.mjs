@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -493,6 +493,10 @@ async function doorTick () {
 }
 
 let fighting = null
+// where the body stood when the current fight began, and the leash that measures from it (#105)
+let fightStart = null
+let chaseHeldUntil = 0
+let chaseLeash = CHASE_LEASH
 let surfacing = false
 let swimmingUp = false
 let surfaceStart = { at: 0, y: 0 }
@@ -703,6 +707,20 @@ function reflexTick () {
     }
     return
   }
+  // #97: an enderman killed Ganesha's body at its own door in five seconds. Nothing here wins that fight, so one that
+  // comes within arm's reach is backed away from exactly as a creeper is, before the reflex below can think of fighting it
+  const unwinnable = fleeUnwinnable(nearbyHostiles(ENDERMAN_RANGE).map(e => ({ name: e.name, dist: e.position.distanceTo(me), entity: e })))
+  if (unwinnable && Date.now() > fleeingUntil) {
+    fleeingUntil = Date.now() + 4000
+    fighting = null
+    fightStart = null
+    bot.pvp.stop()
+    bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(unwinnable.entity, 16)), true)
+    lastReflex = { kind: 'fleeing', mob: unwinnable.name, at: Date.now() }
+    emit('fleeing', { from: unwinnable.name, note: 'not a fight this body can win: breaking line of sight' })
+    setTimeout(() => { if (!task && !followTarget) bot.pathfinder.setGoal(null); else resumeFollow() }, 4000)
+    return
+  }
   const creeper = nearbyHostiles(6).find(e => e.name === 'creeper')
   if (creeper && Date.now() > fleeingUntil) {
     fleeingUntil = Date.now() + 4000
@@ -723,6 +741,9 @@ function reflexTick () {
   const ranged = rangedThreat({ hurtMsAgo: Date.now() - lastHurt, fighting: Boolean(fighting), armed, health: bot.health, archerNear: Boolean(archer), inWater: bot.entity.isInWater, meleeNear: nearbyHostiles(5).some(e => !ARCHERS.has(e.name)) })
   if (ranged === 'charge') {
     fighting = archer
+    fightStart = me.clone()
+    // the charge is the point: the ground it crosses to reach the archer is owed to it on top of the leash
+    chaseLeash = chargeLeash(fightStart, archer.position)
     equipBestWeapon().finally(() => bot.pvp.attack(archer))
     lastReflex = { kind: 'fighting', mob: archer.name, at: Date.now() }
     emit('fighting', { mob: archer.name, health: Math.round(bot.health), note: 'it shot me from afar: charging' })
@@ -735,6 +756,7 @@ function reflexTick () {
     const from = chaser ?? archer
     fleeingUntil = Date.now() + 3000
     fighting = null
+    fightStart = null
     bot.pvp.stop()
     bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(from, ARCHERS.has(from.name) ? 28 : 16)), true)
     lastReflex = { kind: 'fleeing', mob: from.name, at: Date.now() }
@@ -743,14 +765,42 @@ function reflexTick () {
   }
   if (fighting && (!fighting.isValid || fighting.position.distanceTo(me) > (ARCHERS.has(fighting.name) ? 28 : 12))) {
     fighting = null
+    fightStart = null
     bot.pvp.stop()
     resumeFollow()
   }
-  if (!fighting) {
-    const threat = nearbyHostiles(4.5).filter(e => e.name !== 'creeper' && e.name !== 'enderman')
+  // pvp walks the body after the mob, so the mob never gets far from it: the leash is measured from where the fight
+  // began instead, and a fight that pulls the body down a hole is broken off before it becomes the cave it died in
+  const overLeash = fighting && chaseBroken(fightStart, me, { leash: chaseLeash })
+  if (overLeash) {
+    const mob = fighting.name
+    const back = fightStart
+    // the body dug its way down into this: walking back up a shaft it cannot climb left it standing there while a
+    // zombie killed it (02:26Z), so a break-off that was a drop digs and bridges its way out, and gets longer to do it
+    const climbing = breakOffDigs(back, me)
+    const wasDigging = digging
+    fighting = null
+    fightStart = null
+    chaseHeldUntil = Date.now() + (climbing ? 15000 : 10000)
+    bot.pvp.stop()
+    lastReflex = { kind: 'leashed', mob, at: Date.now() }
+    emit('leashed', { mob, note: overLeash, back: `${Math.round(back.x)},${Math.round(back.y)},${Math.round(back.z)}` })
+    if (climbing) useMoves(true)
+    bot.pathfinder.setGoal(new goals.GoalNear(back.x, back.y, back.z, 2), false)
+    setTimeout(() => {
+      if (climbing) useMoves(wasDigging)
+      if (!task && !followTarget) bot.pathfinder.setGoal(null); else resumeFollow()
+    }, climbing ? 15000 : 6000)
+    return
+  }
+  // and it does not simply pick the same fight up again the moment it stops: the walk back has to happen first
+  if (!fighting && Date.now() >= chaseHeldUntil) {
+    const threat = nearbyHostiles(4.5).filter(e => e.name !== 'creeper' && !NEVER_FIGHT.has(e.name))
       .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0]
     if (threat) {
       fighting = threat
+      fightStart = me.clone()
+      chaseLeash = CHASE_LEASH
       equipBestWeapon().finally(() => bot.pvp.attack(threat))
       lastReflex = { kind: 'fighting', mob: threat.name, at: Date.now() }
       emit('fighting', { mob: threat.name, health: Math.round(bot.health) })
@@ -1569,6 +1619,9 @@ const long = {
       .filter(e => e !== bot.entity && e.type !== 'player' && m(e.name ?? ''))
       .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position))[0]
     if (!target) throw new Error(`no ${a.mob} in sight`)
+    // #97: pvp aims at the target's head to swing, and an enderman's head is exactly what must not be aimed at
+    const refused = attackRefusal(target.name)
+    if (refused) throw new Error(refused)
     await equipBestWeapon()
     const start = bot.entity.position.clone()
     bot.pvp.attack(target)
@@ -1755,7 +1808,9 @@ const quick = {
       on: below?.name,
       entities: Object.fromEntries(Object.entries(groups).map(([n, g]) => [n, line(g.count, g.nearest, g.at)])),
       blocks: Object.fromEntries(nearestBlocks.map(([n, b]) => [n, line(b.count, b.dist, b.nearest)])),
-      places: describePlaces(readPlaces(), me, { limit: 5, maxDist: 64, notes: false })
+      places: describePlaces(readPlaces(), me, { limit: 5, maxDist: 64, notes: false }),
+      // #97: the one entity in this list you must not aim at. It is named here because the count alone reads like any other mob
+      ...(Object.keys(groups).some(n => NEVER_FIGHT.has(n)) ? { careful: `${Object.keys(groups).filter(n => NEVER_FIGHT.has(n)).join(' and ')} in sight: do not attack or aim at one, my body loses that fight in seconds. Keep a block between you and walk away` } : {})
     }
   },
 
@@ -1925,7 +1980,7 @@ const quick = {
   reflexes (a) {
     if (a.on === undefined) return { reflexes, note: 'unchanged: reflexes on=true|false switches them' }
     reflexes = !!a.on
-    if (!reflexes) { bot.pvp.stop(); fighting = null }
+    if (!reflexes) { bot.pvp.stop(); fighting = null; fightStart = null }
     return { reflexes }
   },
   // recent history without reading the log: events [type=chat] [last=10] (the last 500, earlier runs included)
@@ -1942,6 +1997,7 @@ function cancelTask (why) {
   if (task) lastCancel = { id: task.id, why }
   task = null
   fighting = null
+  fightStart = null
   bot.pathfinder.setGoal(null)
   bot.pvp.stop()
   try { bot.collectBlock.cancelTask() } catch {}
