@@ -1215,6 +1215,25 @@ export const patchItemEnchants = source => source.includes(ENCHANTS_LIST)
 // ever and the body starves with bread in its pockets (Jizo). A meal takes 1.6 s
 export const eatJammed = eatingForMs => eatingForMs >= 15000
 
+// SAFETY. The plugin's reflex ends in `catch {}`: across every body's log there are 140 jam lines and not one word of why
+// a meal never finished, while Chani's body walked 20 minutes at health 7 / food 4 with five carrots in its pockets. Its
+// errors name its own internals and append the whole item object after a newline, so the advice comes first and the real
+// first line after it: whoever reads eat_failed has to know what to DO.
+const EAT_ADVICE = [
+  [/couldn't find a choice/i, 'nothing I carry is food I am willing to eat'],
+  [/^Failed to equip/i, 'the food would not go into my hand'],
+  [/^Already eating/i, 'a meal was already running'],
+  [/timed out/i, 'the server never said the meal finished'],
+  [/switched early/i, 'my hand was emptied mid-meal (a reflex that re-equips?)'],
+  [/manually canceled/i, 'the meal was called off']
+]
+export function eatFailure (error) {
+  const first = String(error?.message ?? error ?? '').split('\n')[0].trim()
+  if (!first) return 'the eat failed and said nothing'
+  const advice = EAT_ADVICE.find(([pattern]) => pattern.test(first))
+  return advice ? `${advice[1]}: ${first}` : first
+}
+
 // One fact, said once. After the 09-22 20:53 server restart Perrin's and Mariel's bodies wrote the same uncaught error
 // into their events files every few seconds until the file was unreadable, and the one line that mattered (the restart)
 // was buried under thousands of copies of itself. So the first of a message is said, the repeats are counted silently,
