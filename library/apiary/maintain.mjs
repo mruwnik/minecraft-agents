@@ -2,7 +2,7 @@
 // It never treats "no visible bees" as an empty hive: occupants are commonly indoors at dawn, dusk or in rain.
 import { apiaryGoods } from '../../src/lib.mjs'
 import { carpetCarried } from './shared/common.mjs'
-import { campfireCarried } from './shared/hive.mjs'
+import { campfireCarried, replaceCensus } from './shared/hive.mjs'
 
 export default {
   doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary',
@@ -39,8 +39,10 @@ export default {
     if (inspect.ripe) {
       const cut = await api.act('apiary.harvest', { place: a.place, mode: a.mode, range: a.range })
       summary.harvested += cut.harvested ?? 0
-      summary.unsafe = cut.unsafe
-      summary.blocked = cut.blocked
+      // the harvest read the hives again after its last click, so ITS census is the fresher one and replaces the
+      // inspect's whole - coordinate lists included, or the round would still point at the hive it just emptied
+      const { harvested: taken, mode: cutMode, ...fresh } = cut
+      replaceCensus(summary, fresh)
       api.report(summary)
       await api.checkpoint()
     }

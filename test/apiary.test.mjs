@@ -7,7 +7,7 @@ import apiaryBreed from '../library/apiary/breed.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
 import apiaryGuard from '../library/apiary/guard.mjs'
-import { hiveState, fireState, carpetCarried, apiaryCensus } from '../library/apiary/shared/hive.mjs'
+import { hiveState, fireState, carpetCarried, apiaryCensus, replaceCensus } from '../library/apiary/shared/hive.mjs'
 import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, apiaryGoods, routineSteps } from '../src/lib.mjs'
 
 // ---------------------------------------------------------------- bees are livestock, but never a ground flock
@@ -176,6 +176,29 @@ test('apiary.harvest: uses shears only through verified smoke, checks the level 
     [1, ['use x=10 y=65 z=10 item=shears', 'collect']])
 })
 
+// item 19 (Mariel, BUGS.md 09-23 01:12Z): the harvest's reply carried the census taken BEFORE it worked, so a run
+// that successfully emptied the only ripe hive still answered `ripe=1` and read twice as work left over. Believe the
+// world, not the click: the hives are read again from their own cells after the last click, and the counts describe
+// what is LEFT. What the harvest found keeps its own name, because that is worth knowing too.
+for (const [name, summary, census, expected] of [
+  ['a coordinate list the new census does not have is dropped, not left pointing at finished work',
+    { harvested: 1, ripe: 1, ripeAt: '10,65,10' }, { ripe: 0 }, { harvested: 1, ripe: 0 }],
+  ['a coordinate list the new census DOES have is replaced',
+    { ripe: 1, ripeAt: '10,65,10' }, { ripe: 1, ripeAt: '12,65,10' }, { ripe: 1, ripeAt: '12,65,10' }],
+  ['what is not part of a census is left alone', { harvested: 2, bred: 1, carpeted: 1 }, { ripe: 0 },
+    { harvested: 2, bred: 1, carpeted: 1, ripe: 0 }],
+  ['an empty census still clears the stale coordinates', { ripe: 1, ripeAt: '10,65,10' }, {}, { ripe: 1 }]
+]) {
+  test(`replaceCensus: ${name}`, () => assert.deepEqual(replaceCensus({ ...summary }, census), expected))
+}
+
+test('apiary.harvest: the counts in the reply are what is LEFT, and what it found keeps its own name', async () => {
+  const { api } = makeApiary()
+  const out = await apiaryHarvest.run(api, { place: 'orchard-apiary', mode: 'comb', range: 4 })
+  assert.deepEqual([out.harvested, out.wasRipe, out.ripe, out.ripeAt, out.hives, out.noSmoke, out.blocked],
+    [1, 1, 0, undefined, 1, 0, 0])
+})
+
 test('apiary.harvest: an unsmoked ripe hive is refused before it is touched', async () => {
   const made = makeApiary(undefined, { ...apiaryWorld(), '10,62,10': air() })
   await assert.rejects(apiaryHarvest.run(made.api, { place: 'orchard-apiary', mode: 'comb', range: 4 }), /no lit campfire/)
@@ -246,21 +269,29 @@ const maintainApi = (inspect, items = { shears: 1, dandelion: 4 }) => fakeApi({
   answers: {
     'apiary.inspect': { hives: 1, ripe: 1, ripeAt: '10,65,10', noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 0, beesVisible: 2, grownVisible: 2, flowers: 8, details: 'beehive@10,65,10:honey=5', ...inspect },
     'apiary.guard': { fires: 1, raised: 1, sunk: 1, open: 1, carpeted: 1, left: 0 },
-    'apiary.harvest': { harvested: 1, unsafe: 0, blocked: 0 },
+    'apiary.harvest': { harvested: 1, mode: 'comb', wasRipe: 1, hives: 1, ripe: 0, noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 0 },
     'apiary.breed': { fed: 2 }
   }
 })
 
 test('apiary.maintain: the round says what the inspect said, coordinates and all, and never the details line', async () => {
-  const { api } = maintainApi({})
+  // nothing ripe, so no harvest runs and the inspect's own census is what the round ends with
+  const { api } = maintainApi({ ripe: 0, ripeAt: undefined, noSmoke: 1, noSmokeAt: '12,65,10' })
   const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
-  assert.deepEqual([out.ripe, out.ripeAt, out.noSmoke, out.details, out.grownVisible], [1, '10,65,10', 0, undefined, undefined])
+  assert.deepEqual([out.noSmoke, out.noSmokeAt, out.ripe, out.ripeAt, out.details, out.grownVisible],
+    [1, '12,65,10', 0, undefined, undefined, undefined])
 })
 
 test('apiary.maintain: fires the guard moved take the guard\'s counts, and drop the census coordinates for them', async () => {
   const { api } = maintainApi({ openFires: 1, openFiresAt: '10,62,10', raisedFires: 1, raisedFiresAt: '10,62,10' }, { shears: 1, dandelion: 4, campfire: 1, white_carpet: 3 })
   const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
   assert.deepEqual([out.openFires, out.openFiresAt, out.raisedFires, out.raisedFiresAt], [0, undefined, 0, undefined])
+})
+
+test('apiary.maintain: after the harvest the round says what is left, not what was found', async () => {
+  const { api } = maintainApi({})
+  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
+  assert.deepEqual([out.harvested, out.wasRipe, out.ripe, out.ripeAt], [1, 1, 0, undefined])
 })
 
 test('apiary.maintain: inspects, harvests, then breeds a small visible colony', async () => {

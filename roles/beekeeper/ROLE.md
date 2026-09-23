@@ -44,7 +44,8 @@ night/rain and move an occupied nest with a verified Silk Touch tool. Inspect th
 | repeat it each day | `routine name=beekeeper/apiary place=<name> days=3` |
 
 `apiary.harvest` refuses a ripe hive whose smoke path or entrance is unsafe, verifies its honey level fell, and
-collects comb drops. `apiary.maintain deposit=true` uses the nearest chest, so only enable it at an apiary with one
+collects comb drops. Its counts describe what is LEFT afterwards, so `ripe=0` in the reply of a harvest means
+the round is finished; what it found on arrival is `wasRipe=`. `apiary.maintain deposit=true` uses the nearest chest, so only enable it at an apiary with one
 unambiguous nearby output chest; otherwise deposit explicitly by coordinates afterward.
 
 ## Marks a beekeeper keeps

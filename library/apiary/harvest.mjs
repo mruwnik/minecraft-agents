@@ -1,6 +1,7 @@
 // Honey is only taken through verified smoke, and never over an open fire. Raw `use` can anger a colony; this wrapper refuses that state, checks the
 // honey level fell after every click, and collects the comb that shears drop.
 import { apiarySnapshot } from './shared/common.mjs'
+import { apiaryCensus, hiveState } from './shared/hive.mjs'
 
 export default {
   doc: 'apiary.harvest place=|x= y= z= [mode=comb] [range=16]: safely harvest ripe, smoked hives with shears or bottles',
@@ -36,6 +37,14 @@ export default {
       await api.checkpoint()
     }
     if (mode === 'comb' && harvested) await api.act('collect', {})
-    return { harvested, mode, ripe: ripe.length, unsafe: unsafe.length, openFires: open.length, blocked: blocked.length }
+    // Believe the world, not the click: the reply used to carry the census taken BEFORE the harvest, so a run that
+    // emptied the only ripe hive still said `ripe=1` and read as work left over (Mariel, BUGS.md 09-23 01:12Z). The
+    // hives are read again from their own cells - no second walk and no second find_blocks, those blocks are loaded
+    // already - and the counts say what is LEFT, in the same words apiary.inspect uses. What the harvest FOUND is
+    // worth knowing too, so it keeps a name of its own. The fires are not re-read because nothing here touches one.
+    const after = seen.hives
+      .map(h => hiveState({ x: h.x, y: h.y, z: h.z, block: api.block(h.x, h.y, h.z), blockAt: api.block }))
+      .filter(Boolean)
+    return { harvested, mode, wasRipe: ripe.length, ...apiaryCensus(after, seen.fires) }
   }
 }

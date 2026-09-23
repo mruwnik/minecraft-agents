@@ -74,6 +74,14 @@ export function apiaryCensus (hives, fires) {
   }
 }
 
+// A census replaces a census WHOLE. Assigning a fresh one over an old one leaves the old one's coordinate lists
+// standing, and a coordinate list left over from before the work points at work already done - which is the fault
+// item 19 is about, one level up. Mutates, because the round's summary is reported by identity as it goes.
+export const replaceCensus = (summary, census) => {
+  for (const key of Object.keys(summary)) if (key.endsWith('At') && !(key in census)) delete summary[key]
+  return Object.assign(summary, census)
+}
+
 export const carpetCarried = items => Object.keys(items).find(name => items[name] > 0 && isCarpet(name)) ?? null
 export const campfireCarried = items => CAMPFIRES.find(name => items[name] > 0) ?? null
 export const CAMPFIRES = [...CAMPFIRE_NAMES]
