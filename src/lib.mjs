@@ -724,7 +724,7 @@ export const renamedList = () => `renamed: ${Object.entries(RENAMED).map(([was, 
 
 // an action name nobody knows: the real ones that share a word with it
 // words drivers reach for that share nothing with the real name
-const OTHER_WORDS = { cancel: 'stop', abort: 'stop', halt: 'stop', nearby: 'look_around', entities: 'look_around', mobs: 'look_around', say: 'chat', walk: 'goto', move: 'goto', eat: 'consume', attack: 'attack', kill: 'attack', bed: 'sleep', open: 'toggle', close: 'toggle', store: 'deposit', take: 'withdraw', drop: 'toss', throw: 'toss' }
+const OTHER_WORDS = { cancel: 'stop', abort: 'stop', halt: 'stop', nearby: 'look_around', entities: 'look_around', mobs: 'look_around', say: 'chat', walk: 'goto', move: 'goto', eat: 'eat', attack: 'attack', kill: 'attack', bed: 'sleep', open: 'toggle', close: 'toggle', store: 'deposit', take: 'withdraw', drop: 'toss', throw: 'toss' }
 export function didYouMean (typed, actions) {
   if (RENAMED[typed]) return `unknown action ${typed}: ${renamedTo(typed)}`
   const words = typed.toLowerCase().split(/[^a-z]+/).filter(w => w.length >= 3)
@@ -1227,6 +1227,15 @@ const EAT_ADVICE = [
   [/switched early/i, 'my hand was emptied mid-meal (a reflex that re-equips?)'],
   [/manually canceled/i, 'the meal was called off']
 ]
+// ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. edible is what
+// I carry that the reflex would touch (food, minus the banned list), so naming what IS there saves a second call.
+export function eatRefusal ({ food, item, edible }) {
+  const carried = edible.length ? `what I carry is ${edible.join(', ')}` : 'I carry nothing edible'
+  if (item && !edible.includes(item)) return `no ${item} I would eat: ${carried}`
+  if (!item && !edible.length) return 'nothing I carry is food'
+  return food >= 20 ? 'food is already 20: the game refuses a meal at a full belly' : null
+}
+
 export function eatFailure (error) {
   const first = String(error?.message ?? error ?? '').split('\n')[0].trim()
   if (!first) return 'the eat failed and said nothing'
@@ -2042,6 +2051,7 @@ export const PRIMITIVES = {
   escort: { section: 'creature', args: 'mob= x= y= z= [count=] [within=32] [penned=] [range=]', doc: 'the walk itself: fetch the animals and bring them to a spot, stopping for stragglers (flock.lead is the whole job)' },
   'pen.check': { section: 'pen', args: '[x= y= z=] [radius=]', doc: 'walk a fence and find where a pen leaks: gaps, corner gates, rims an animal can hop' },
   // ---- self
+  eat: { section: 'self', args: '[item=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong' },
   sleep: { section: 'self', args: '[any=]', doc: 'sleep in the nearest free bed within 32 blocks' },
   wake: { section: 'self', args: '', doc: 'get out of bed' },
   quit: { section: 'self', args: '', doc: 'stop my body; ./start in the background brings it back' },
