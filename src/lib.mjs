@@ -1565,16 +1565,35 @@ export function placeTarget (places, a, who) {
   return { at: { x: Math.floor(to.x), y: Math.floor(to.y), z: Math.floor(to.z) } }
 }
 
+// Where to ask pen.check whether a pen already stands around a plan: over the floor cells the plan marks inside its
+// walls, nearest the middle first, and one level lower as well - a pen whose floor is sunk below its plan is the case
+// this guards, and its feet stand at the plan's own y. A wall cell is never a spot to stand on, so only `.` cells count.
+export function penProbes (cells, limit = 2) {
+  const floor = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path')
+  if (!floor.length) return []
+  const mid = { x: (Math.min(...floor.map(c => c.x)) + Math.max(...floor.map(c => c.x))) / 2, z: (Math.min(...floor.map(c => c.z)) + Math.max(...floor.map(c => c.z))) / 2 }
+  const near = (a, b) => (Math.abs(a.x - mid.x) + Math.abs(a.z - mid.z)) - (Math.abs(b.x - mid.x) + Math.abs(b.z - mid.z))
+  return [...floor].sort(near).slice(0, limit).flatMap(({ x, y, z }) => [{ x, y: y + 1, z }, { x, y, z }])
+}
+
 // Where to stand to ask whether a pen holds: over the floor cell the plan marks inside its walls, nearest the middle,
 // because penAround starts from where my feet are and a wall cell is not a spot to stand on. The plan's y is the floor
 // block itself, so feet go one above it.
-export function penInside (cells) {
-  const floor = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path')
-  if (!floor.length) return null
-  const mid = { x: (Math.min(...floor.map(c => c.x)) + Math.max(...floor.map(c => c.x))) / 2, z: (Math.min(...floor.map(c => c.z)) + Math.max(...floor.map(c => c.z))) / 2 }
-  const near = (a, b) => (Math.abs(a.x - mid.x) + Math.abs(a.z - mid.z)) - (Math.abs(b.x - mid.x) + Math.abs(b.z - mid.z))
-  const { x, y, z } = [...floor].sort(near)[0]
-  return { x, y: y + 1, z }
+export const penInside = cells => penProbes(cells, 1)[0] ?? null
+
+// A build fills and digs before it places anything, and every one of those jobs takes a floor or a wall apart for as
+// long as the list runs: a floor raised beside a standing fence leaves half a block, and an animal steps over half a
+// block. Chani ran pen.build over a pen holding 4 sheep and all four were 20 blocks away by the time it failed
+// (BUGS.md 2026-09-23 02:55Z). Placing only ever adds, so a plan with nothing to fill or clear may be built over a
+// pen that is full. `census` is what pen.check answered for the pen the plan's cells lie in (null: no pen there).
+const OPENS = new Set(['fill', 'clear'])
+export const openingJobs = jobs => jobs.filter(j => OPENS.has(j.do))
+export function penOpenRefusal (name, jobs, census) {
+  const opens = openingJobs(jobs)
+  if (!opens.length || !census?.inside) return null
+  const counts = ['fill', 'clear'].map(verb => [verb, opens.filter(j => j.do === verb).length]).filter(([, n]) => n > 0)
+  const what = counts.map(([verb, n], i) => i === 0 ? `${n} ${n === 1 ? 'cell' : 'cells'} to ${verb}` : `${n} to ${verb}`).join(' and ')
+  return `${name} holds ${census.inside} and the build would open it (${what}): a floor raised or a block dug out beside a standing fence leaves half a block, and an animal steps over half a block. Lead them out first (flock.lead), or mark a plan that matches the pen as it stands - then build`
 }
 
 // Where the block a plan marks with one character really stands: the plan's y is the ground it sits on, so a chest,

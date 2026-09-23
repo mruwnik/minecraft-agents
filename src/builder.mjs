@@ -1,8 +1,21 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, planAnchor, shortLine } from './lib.mjs'
+import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, penOpenRefusal, penProbes, planAnchor, shortLine } from './lib.mjs'
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
+
+// The pen the plan's cells lie in, if one stands there with animals in it: pen.check from over the plan's own floor
+// cells and from one level down (see penProbes). A cell that is no spot to stand on is no pen, and pen.check says so
+// by failing, so that answer is taken as "no pen here" rather than passed on.
+// Every probe asks about a different cell, so the runner's "failed twice in a row" rule never fires on these: it counts
+// repeats of the SAME message, and each refusal names its own cell.
+const penUnderPlan = async (api, cells) => {
+  for (const at of penProbes(cells)) {
+    const found = await api.act('pen.check', at).then(r => r, () => null)
+    if (found?.inside) return found
+  }
+  return null
+}
 
 export async function buildFromPlan (api, a) {
   const plan = api.plan(a.place)
@@ -41,6 +54,12 @@ export async function buildFromPlan (api, a) {
   if (anchor.off) throw new Error(`${plan.name} is not where its plan says: ${anchor.note}`)
   await api.checkpoint()
   const todo = [...ground(), ...field()]
+  // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while
+  // nothing has been touched and say how to get out of it (Chani's 4 sheep). A build that only places is safe
+  if (openingJobs(todo).length) {
+    const refusal = penOpenRefusal(plan.name, todo, await penUnderPlan(api, plan.cells))
+    if (refusal) throw new Error(refusal)
+  }
   // counted before a single block is moved: half a build is worse than none. What is asked for is what is still missing
   // from the GROUND, not the whole plan, so a half-built one is picked up where it stopped. The skipped jobs are counted
   // in too, and the count comes before the "nothing to do" answer: a dry channel the body carries no water for never

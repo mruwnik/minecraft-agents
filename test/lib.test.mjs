@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
+import { tillWarning, planAnchor, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -3434,6 +3434,89 @@ test('pen.build: it refuses to call a leaking pen finished', async () => {
     }
   })
   await assert.rejects(buildPen.run(api, { place: 'test-pen' }), /leaks via 11,64,22/)
+})
+
+// A build fills and digs before it places anything, and every one of those jobs takes a floor or a wall apart while the
+// list runs. Chani ran pen.build over a pen with 4 sheep in it (BUGS.md 2026-09-23 02:55Z) and all four walked out
+// through the gap. Placing only adds, so a plan with nothing to fill or clear may still be built over a full pen.
+for (const [name, jobs, census, expected] of [
+  ['a floor to lay inside a pen that holds sheep', [{ do: 'fill' }], { inside: 'sheep:4' }, /holds sheep:4/],
+  ['a block to dig out of one', [{ do: 'clear' }], { inside: 'cow:2' }, /holds cow:2/],
+  ['what the build would do is named', [{ do: 'fill' }, { do: 'fill' }, { do: 'clear' }], { inside: 'sheep:4' }, /2 cells to fill and 1 to clear/],
+  ['the way out is named', [{ do: 'fill' }], { inside: 'sheep:4' }, /flock\.lead/],
+  ['nothing to fill or clear: the build only adds', [{ do: 'place' }, { do: 'plant' }], { inside: 'sheep:4' }, null],
+  ['an empty pen', [{ do: 'fill' }], { cells: 16 }, null],
+  ['no pen there at all', [{ do: 'fill' }], null, null]
+]) {
+  test(`penOpenRefusal: ${name}`, () => {
+    const refusal = penOpenRefusal('chani-sheep-pen', jobs, census)
+    assert.equal(expected === null, refusal === null)
+    if (expected) assert.match(refusal, expected)
+  })
+}
+
+// where pen.check is asked whether a pen stands around the plan: over the plan's floor cells, and one level lower too,
+// because a pen whose floor is sunk one below its plan is exactly the case this guards
+for (const [name, plan, expected] of [
+  ['over the middle floor cell, and one down', '###\n#.#\n#G#', [{ x: 11, y: 64, z: 21 }, { x: 11, y: 63, z: 21 }]],
+  ['a pen with no floor marked has nowhere to probe', '###\n###\n###', []],
+  ['nothing at all', '', []]
+]) {
+  test(`penProbes: ${name}`, () => assert.deepEqual(penProbes(cellsOf(plan), 1), expected))
+}
+
+test('pen.build: a pen with animals in it is not opened up', async () => {
+  const world = {
+    '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'air', '12,63,21': 'dirt',
+    '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt'
+  }
+  const { api, calls } = fakeApi({
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), name: 'test-pen', kind: 'pen' },
+    world,
+    items: { oak_fence: 20, oak_fence_gate: 2, dirt: 8 },
+    answers: { 'pen.check': { pen: 'holds', cells: 4, inside: 'sheep:4' } }
+  })
+  await assert.rejects(buildPen.run(api, { place: 'test-pen' }), /test-pen holds sheep:4 and the build would open it/)
+  assert.deepEqual(calls.filter(c => c.startsWith('place') || c.startsWith('dig')), [], 'not a block is moved')
+})
+
+// the probe is a question, not a step: a cell that is no spot to stand on simply is not a pen, and the build goes on.
+// Each probe names its own cell, so the runner's "failed twice in a row" rule never sees a repeat and hands back
+test('pen.build: a pen.check that finds nowhere to stand does not stop the build', async () => {
+  const world = {
+    '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'air', '12,63,21': 'dirt',
+    '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt'
+  }
+  const { api, calls } = fakeApi({
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), name: 'test-pen', kind: 'pen' },
+    world,
+    items: { oak_fence: 20, oak_fence_gate: 2, dirt: 8 },
+    answers: {
+      place: ({ item, x, y, z }) => { world[`${x},${y},${z}`] = item; return {} },
+      'pen.check': at => at.y === 64 && at.x === 11 && at.z === 21 && world['11,63,21'] === 'dirt'
+        ? { pen: 'holds', cells: 1 }
+        : new Error(`${at.x},${at.y},${at.z} is not a spot to stand on`)
+    }
+  })
+  const summary = await buildPen.run(api, { place: 'test-pen' })
+  assert.deepEqual([summary.levelled, summary.built, summary.pen], [1, 8, 'holds'])
+  assert.deepEqual(calls.filter(c => c.startsWith('pen.check')).slice(0, 2), ['pen.check 11,64,21', 'pen.check 11,63,21'])
+})
+
+test('pen.build: a pen that holds animals and needs nothing levelled is still built', async () => {
+  const world = { '10,63,20': 'dirt', '11,63,20': 'dirt', '12,63,20': 'dirt', '10,63,21': 'dirt', '11,63,21': 'dirt', '12,63,21': 'dirt', '10,63,22': 'dirt', '11,63,22': 'dirt', '12,63,22': 'dirt' }
+  const { api, calls } = fakeApi({
+    place: { ...fakePlace('###\n#.#\n#G#', 10, 63, 20), name: 'test-pen', kind: 'pen' },
+    world,
+    items: { oak_fence: 20, oak_fence_gate: 2 },
+    answers: {
+      place: ({ item, x, y, z }) => { world[`${x},${y},${z}`] = item; return {} },
+      'pen.check': { pen: 'holds', cells: 4, inside: 'sheep:4' }
+    }
+  })
+  const summary = await buildPen.run(api, { place: 'test-pen' })
+  assert.deepEqual([summary.built, summary.pen], [8, 'holds'])
+  assert.equal(calls.filter(c => c.startsWith('place')).length, 8)
 })
 
 // ---------------------------------------------------------------- flock.bring_pair
