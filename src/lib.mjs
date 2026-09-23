@@ -834,6 +834,44 @@ export function transferFix (plan, before, after) {
 // rimsAt(x, z): the tops of blocks that carry a fence or wall: a post leaves a ledge beside it. An animal gets onto one only by walking (at most half a step up), and
 // from a rim it goes on along the wall only: up onto a fence or wall top (a lower fence next along is half a step) or level to the next rim, never through its own
 // fence onto plain ground, be that lower, level or a hillside higher
+// `pen.check` walks from ONE cell and never said which. From 112,68,-126, outside claude-test-pen's fence, it answers
+// `LEAKS via=116,68,-126`; from 114,68,-124, two blocks away and inside it, the same pen answers `holds cells=4`. Both
+// are true of where they started, and neither said where that was, so a reading taken from outside got read as a hole
+// in one's own fence - by Chani, then by Perrin, then by me (backlog #125). The cell goes in the reply now, and with it
+// an answer to the question that matters: was that cell inside a fence ring at all?
+// Counted the way you count whether a point is inside any closed outline. Cast out in the four directions and count how
+// many times the way crosses a fence - a run of fence columns, so a wall two thick is one crossing, and a fence top is
+// what ends on a half (topsAt gives 1.5 for a fence, whole numbers for ground). A cell inside a ring crosses it an ODD
+// number of times whichever way it goes out; a cell outside crosses an even number, nought included. Four directions
+// rather than one because a gate is a hole in the ring and a ray through the gateway miscounts, and because other
+// people's fences lie across the long rays near a base.
+// I tried a cheaper rule first - how many ways out run clear to the edge of the search - and it answered 0 at
+// 112,68,-126, which reads as "inside a wall" at the very cell that had fooled three of us. Hilly, built-up ground
+// stops every ray. A number that is true and says the opposite of what it means is worse than no number.
+export function penStance ({ start, topsAt, radius = 24 }) {
+  const [sx, , sz] = start
+  const fence = (x, z) => topsAt(x, z).some(top => top % 1 !== 0)
+  const crossings = ([dx, dz]) => {
+    let runs = 0
+    let was = false
+    for (let n = 1; n <= radius; n++) {
+      const now = fence(sx + dx * n, sz + dz * n)
+      if (now && !was) runs++
+      was = now
+    }
+    return runs
+  }
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(d => crossings(d) % 2 === 1).length
+}
+
+// Said as evidence, with the count in it, because the count is checkable and the verdict is not: a gate in every wall,
+// or a pen wider than the search, can still fool it.
+export const stanceNote = (from, votes) => {
+  if (votes >= 3) return `I walked from ${from}, and the fences around it count that cell INSIDE a ring on ${votes} of the four sides`
+  if (votes <= 1) return `I walked from ${from}, and the fences around it count that cell OUTSIDE any ring on ${4 - votes} of the four sides: this is a reading of the ground outside the pen, so a leak found here says nothing about your fence. Check again from a cell inside it`
+  return `I walked from ${from}, and the fences around it split two against two: I cannot tell whether that cell is inside the pen or outside it. Check again from a cell you know is inside`
+}
+
 export function penLeak ({ start, topsAt, rimsAt = () => [], radius = 24, withFloor = false }) {
   const key = c => c.join(',')
   const from = new Map([[key(start), null]])

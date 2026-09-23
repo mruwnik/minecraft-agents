@@ -28,7 +28,7 @@ breeding again. Cull only grown surplus and never the last pair. Shared starter 
 
 | I want to | I run |
 |---|---|
-| prove the pen holds | `pen.check x= y= z=` on a free floor cell inside |
+| prove the pen holds | `pen.check x= y= z=` on a free floor cell inside — give the cell, do not trust where you happen to stand: the same pen reads `LEAKS` from outside its fence and `holds` from inside. `from=` in the reply names the cell it walked, and `side=` on a `LEAKS` says whether that cell was inside a fence ring at all |
 | build a saved pen plan | `pen.build place=<name>` |
 | bring in the first pair | `flock.bring_pair mob=cow place=<pen> penned=true` |
 | bring back a stray | `flock.lead mob=cow place=<pen> within=60` |
