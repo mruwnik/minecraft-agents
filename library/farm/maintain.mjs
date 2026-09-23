@@ -1,6 +1,7 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { farmJobs, farmSurplus, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
 // enough seed to sow the whole plan twice over stays in my pockets; the rest goes in the chest
@@ -38,6 +39,9 @@ export default {
       // one block low would have me till the dirt UNDER somebody's farm and plant seed inside their farmland
       const anchor = planAnchor(plan.cells, api.block)
       if (anchor.off) throw new Error(`${plan.name} is not where its plan says: ${anchor.note}`)
+      // rubble over the beds is nobody's job here (maintain only puts back what the plan asks for), but the driver should be told
+      const rubble = clutterBlocks(plan.cells, api.block)
+      if (rubble.length) summary.clutter = `${clutterLine(rubble)} standing over the plan: ./mc farm.tidy place=${a.place}`
       await api.checkpoint({ canDeposit: Boolean(chest) })
       const cut = await api.act('farm.harvest', { within }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
       add(summary.harvested, cut.harvested)

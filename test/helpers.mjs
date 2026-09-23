@@ -16,6 +16,7 @@ export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = []
     checkpoint: async (extra = {}) => { checkpoints.push(extra) },
     clock: () => ({ time: 1000, day: true, night: false, elapsedDays: 0 }),
     inv: () => items,
+    me: () => 'Tester',
     pos: () => ({ x: 0, y: 64, z: 0 }),
     block: (x, y, z) => {
       const name = world[`${x},${y},${z}`]

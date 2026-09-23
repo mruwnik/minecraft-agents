@@ -2310,6 +2310,8 @@ function makeApi (composite, a, alive) {
       block: blockAt,
       clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), raining: bot.isRaining, elapsedDays: worldDay() - startedDay }),
       inv: () => inventoryCounts(),
+      // who this body is, for a composite that has to tell its own protected zones from somebody else's
+      me: () => cfg.username,
       // is this block something you can stand on, and does a pen with animals in it surround me? (mine.get mends its own shaft)
       solid: name => bot.registry.blocksByName[name]?.boundingBox === 'block',
       // a floor to count over exists only once the walk came back enclosed: an open field has no census

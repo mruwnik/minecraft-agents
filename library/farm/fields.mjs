@@ -1,11 +1,12 @@
 // A cheap census of every saved plan in range, read from the map in memory without walking anywhere: is it worth a sweep?
 // counts=false in the rendering, so a census reads as ripe=0 dry=1 rather than a bare `dry` for every count of one.
 import { fieldCensus, planAnchor, planCells, compact } from '../../src/lib.mjs'
+import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const RANGE = 48
 
 export default {
-  doc: 'farm.fields [place=] [range=48]: what every saved plan near me looks like right now: crops, ripe, growing, empty, untilled, dry',
+  doc: 'farm.fields [place=] [range=48]: what every saved plan near me looks like right now: crops, ripe, growing, empty, untilled, dry, clutter',
   stops: 'nothing: it only looks, and never moves',
   instant: true,
   args: { place: 'string', range: 'number' },
@@ -25,7 +26,8 @@ export default {
       const cells = planCells(p)
       const { off, note } = planAnchor(cells, api.block)
       const real = off ? cells.map(c => ({ ...c, y: c.y + off })) : cells
-      const census = compact(fieldCensus(real, api.block), false)
+      // clutter is what stands over the plan that the plan never asked for: the rubble a walk or a tree left behind
+      const census = compact({ ...fieldCensus(real, api.block), clutter: clutterLine(clutterBlocks(real, api.block)) }, false)
       return `${p.name} ${Math.round(Math.hypot(p.x - here.x, p.z - here.z))}m ${census}${note ? `\n  anchor: ${note}` : ''}`
     }
     return { text: plans.map(line).join('\n') }

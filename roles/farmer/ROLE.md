@@ -61,6 +61,7 @@ Dan's world expects a field to look built, not scratched into the ground:
 | design a field | `farm.plan name=<name> map='<rows>' x= y= z=` — it refuses dry cells and corner gates before I place a single block |
 | know if it is worth walking over | `farm.fields` — a census of every plan near me, with no walking |
 | work a field for a day | `farm.maintain place=<name>` — harvest, replant, re-till, refill channels, store the surplus |
+| clear the rubble off a field | `farm.tidy place=<name>` — digs the stray dirt, cobblestone, logs and saplings standing over the plan and picks the drops up. `farm.fields` and `farm.maintain` say `clutter=` when there is any |
 | turn trimmings into bone meal | `farm.compost place=<name>` |
 | get more seed | `farm.get_seeds crop=wheat count=64` (roots come out of a farm chest: `farm.get_seeds crop=carrot place=<name>`) |
 | do the whole day, every day | `routine name=farmer/homestead place=<name> days=3` |
