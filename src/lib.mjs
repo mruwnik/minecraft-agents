@@ -1299,6 +1299,24 @@ export const ledReport = (mob, came) => {
     : `${mob}:${came.length}`
 }
 
+// A lead is walked with the food in my hand, and food in the hand is visible to every animal of its kind that can see
+// me, not only to the ones that were picked. So a lead for two out of a big herd walks a queue in, and `with=2` was
+// true and said nothing about the four others now standing in the pen (Perrin, item 17). Shedding them is not on
+// offer: the food is what the walk is MADE of, and an animal that follows food cannot be told to stop. They are
+// counted instead - by id, because one sheep is not told from another by looks or by where it stands. The ones that
+// were in the pen before I arrived are not followers, and neither are the ones I asked for.
+export function tagalongs (invited, before, now) {
+  const known = new Set([...invited, ...before])
+  return now.filter(id => !known.has(id)).length
+}
+
+export const ledExtra = (mob, extra) => extra
+  ? {
+      extra,
+      extraNote: `${extra} more ${mob} followed the food in uninvited: ${extra === 1 ? 'it is' : 'they are'} in there too. Lead ${extra === 1 ? 'it' : 'them'} out, or feed the pen for ${extra === 1 ? 'one' : extra} more`
+    }
+  : {}
+
 // after cutting stalks: the bases that are gone all the same, and which of them I can plant again from my pockets (the cut itself never takes a base: isStalkCut)
 export function stalkReplant (cut, carried) {
   const gone = cut.filter(c => c.baseNow !== c.stalk)

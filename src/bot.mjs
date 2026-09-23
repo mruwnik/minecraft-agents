@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -1571,6 +1571,15 @@ const long = {
     // leading INTO a pen: the ones already in it stay where they are (the nearest cow was the one in the pen, 09-19)
     const pen = penAround(new Vec3(to.x, to.y, to.z).floored())
     const floor = pen?.enclosed ? pen.floor : null
+    // The food in my hand is visible to every animal of its kind that can see me, not only to the ones I pick, so a
+    // lead for two can walk a queue of six in and `with=2` says nothing about the other four (Perrin, item 17). Who
+    // was standing at the goal BEFORE the walk has to be read before the walk - and only counts when the goal was in
+    // sight then: from far enough off the pen's own animals are not loaded yet, and counting those as followers would
+    // be a lie told confidently
+    const toVec = new Vec3(to.x, to.y, to.z)
+    const atGoal = e => floor ? unpenned(floor, [e], x => x.position).length === 0 : e.position.distanceTo(toVec) <= 4
+    const standingThere = () => Object.values(bot.entities).filter(e => e.name === a.mob && e.isValid && atGoal(e)).map(e => e.id)
+    const alreadyThere = bot.blockAt(toVec) ? standingThere() : null
     const free = () => unpenned(floor, Object.values(bot.entities).filter(e => e.name === a.mob), e => e.position)
     const inRange = free().filter(e => near(e) <= (a.within ?? 32)).sort((x, y) => near(x) - near(y))
     if (!inRange.length) throw new Error(`no ${a.mob} within ${a.within ?? 32} blocks${floor ? ' (not counting those already in the pen)' : ''}`)
@@ -1665,7 +1674,9 @@ const long = {
         .map(feet => pitAdvice(a.mob, `${feet.x},${feet.y},${feet.z}`, [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => riseAt(feet, dx, dz)))).find(Boolean)
       // `with=3` was true and useless: nothing in it said that two of the three were calves and the pen now holds
       // nothing that can breed. brought= says which, and the note says when a calf came for want of anything else
-      return { arrived: true, with: came, brought: ledReport(a.mob, arrivals), animals, stuck, ...(picked.note ? { note: picked.note } : {}), ...census, pos: pos() }
+      // and the ones that came uninvited, which no count of the ones I asked for could show
+      const extra = alreadyThere ? ledExtra(a.mob, tagalongs(herd.map(e => e.id), alreadyThere, standingThere())) : {}
+      return { arrived: true, with: came, brought: ledReport(a.mob, arrivals), animals, stuck, ...(picked.note ? { note: picked.note } : {}), ...extra, ...census, pos: pos() }
     } finally {
       leading = false
       luring = false
