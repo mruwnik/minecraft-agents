@@ -260,3 +260,8 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
   retry, and copy the event's `evidence` into `../../BUGS.md`: it says what the legs were doing.
 - Caves render fully lit in `look` pictures; real light levels still matter for mob spawns, so place torches.
 - A server newer than the body's protocol works through a bridge; brand-new blocks may then show as flat colours in pictures.
+
+A `died` line is written for every death and says where to go and what to fetch: `died pos=128,61,-124 cause=slain by
+Zombie carried=bucket, stone_pickaxe and 50 other blocks`. The position is where the body FELL, not where it woke up,
+and the drops lie there for five minutes: read it with `events type=died last=1` and go, armed. The cause is the
+server's own words when it gave any, otherwise the last wound or the mobs that were on you.

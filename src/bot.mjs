@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -93,6 +93,13 @@ function sayError (message, extra = {}) {
 // ---------------------------------------------------------------- bot lifecycle
 let bot = null
 let eatTimer = null
+// item 13 (#109): what a death line needs and cannot work out after the fact. The server's own words, the last wound,
+// and the last place the body stood: the respawn point is the world spawn, which tells nobody where the kit fell.
+let saidDeath = null
+let lastWound = null
+let lastStood = null
+let lastCarried = null
+let diedAt = 0
 let mcData = null
 let ready = false
 let reflexes = true
@@ -334,7 +341,26 @@ function connect () {
   })
   bot.on('playerJoined', p => { if (ready && p.username !== bot.username) emit('player_joined', { player: p.username }) })
   bot.on('playerLeft', p => { if (p.username !== bot.username) emit('player_left', { player: p.username }) })
-  bot.on('death', () => { followTarget = null; emit('died', { pos: pos() }) })
+  // The server announces the death in a system message ("Claude was slain by Zombie"), which beats every guess at the
+  // cause. Nothing else here reads system messages, so this only looks for my own death line.
+  bot.on('message', msg => {
+    const said = deathBy(String(msg), bot.username)
+    if (said) saidDeath = { said, at: Date.now() }
+  })
+  const died = pos => {
+    diedAt = Date.now()
+    followTarget = null
+    const said = saidDeath && Date.now() - saidDeath.at < 5000 ? saidDeath.said : null
+    // from the snapshot, not from the world: by the time a death is handled the server has already emptied the
+    // inventory, so a live read says the body died carrying nothing (03:14Z, the first died line with a cause on it)
+    const kit = deathKit(lastCarried ?? {})
+    emit('died', { ...deathReport({ pos, said, wound: lastWound, now: Date.now() }), ...(kit ? { carried: kit } : {}) })
+    saidDeath = null
+  }
+  // a beat, so the death message and the health packet can land in either order: they arrive in the same read, and
+  // setImmediate runs after both handlers have had it. Long enough to catch the server's words, short enough that
+  // nothing else can happen first
+  bot.on('death', () => { const where = pos(); setImmediate(() => died(where)) })
   // a dug bamboo base never regrows. Whatever dug it on the way (the wedge reflex, a dig=true walk out of a thicket), it is planted again when the task ends;
   // not when the driver asked for the dig itself
   // who opened that gate? Every body that sees a fence gate change state adds a line to the shared gates.log (an open gate empties a pen, and no log could say whose it was)
@@ -349,7 +375,13 @@ function connect () {
     if (['dig', 'mine'].includes(task?.name)) return
     basesOwed.push(...wedgeReplant([{ name: block.name, below: bot.blockAt(block.position.offset(0, -1, 0))?.name, at: [block.position.x, block.position.y, block.position.z] }]))
   })
-  bot.on('respawn', () => emit('respawned'))
+  // A death mineflayer did not announce is still a death, and the respawn always arrives: that is what the 09-22 file
+  // looks like (a jump to the world spawn and nothing else). The body is at the spawn point by now, so the line is
+  // written from where it last stood.
+  bot.on('respawn', () => {
+    if (deathUnannounced({ diedAt, now: Date.now() })) died(lastStood)
+    emit('respawned')
+  })
   bot.on('sleep', () => emit('sleeping'))
   bot.on('wake', () => emit('woke_up'))
   bot.on('rain', () => emit('weather', { raining: bot.isRaining }))
@@ -380,13 +412,20 @@ function connect () {
     if (peakY !== null && peakY - y >= 1) lastFall = { blocks: Math.round(peakY - y), at: Date.now() }
     peakY = null
   })
-  setInterval(() => { if (ready && nearbyHostiles(8).some(e => e.name === 'creeper')) creeperSeenAt = Date.now() }, 500)
+  setInterval(() => {
+    if (!ready) return
+    if (nearbyHostiles(8).some(e => e.name === 'creeper')) creeperSeenAt = Date.now()
+    // where the kit would fall: read here rather than at the respawn, which has already moved the body to the world spawn
+    if (bot.entity?.onGround) lastStood = pos()
+    lastCarried = carried()
+  }, 500)
   bot.on('health', () => {
     bot.autoEat.setOpts({ minHunger: eatBelow(bot.health) })
     if (bot.health < lastHealth - 0.5) {
       lastHurt = Date.now()
       const nearby = nearbyHostiles(8).map(e => e.name)
       const cause = hurtCause({ lost: lastHealth - bot.health, nearby, sinceCreeperMs: Date.now() - creeperSeenAt, fell: Date.now() - lastFall.at < 1500 ? lastFall.blocks : 0, fledFrom: lastReflex?.kind === 'fleeing' ? lastReflex.mob : null, sinceFledMs: Date.now() - (lastReflex?.at ?? 0), food: bot.food, oxygen: bot.oxygenLevel ?? 20 })
+      lastWound = { cause, nearby, at: Date.now() }
       emit('hurt', { health: Math.round(bot.health), food: bot.food, nearby, ...(cause ? { cause } : {}) })
     }
     lastHealth = bot.health
@@ -879,6 +918,14 @@ async function chestTransfer (a, way, planFor) {
   if (!settled) throw new Error(`the ${way} keeps going wrong (off by ${corrections.join(' ')}): compare chest_contents and inventory before you go on`)
   return { plan, corrected: corrections.length ? `the first try was off by ${corrections.join(' ')}: put right` : undefined }
 }
+
+// everything that drops: what inventoryCounts sees plus the armour being worn and the off hand, which live in window
+// slots of their own. A died line that leaves out the helmet you were wearing is the line that loses it.
+const WORN = [5, 6, 7, 8, 45]
+const carried = () => WORN.reduce((out, slot) => {
+  const item = bot.inventory?.slots?.[slot]
+  return item ? { ...out, [item.name]: (out[item.name] || 0) + item.count } : out
+}, bot.inventory ? inventoryCounts() : {})
 
 function inventoryCounts () {
   const out = {}
