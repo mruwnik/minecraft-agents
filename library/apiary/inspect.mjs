@@ -1,6 +1,7 @@
 // One apiary census: honey, smoke, entrances, visible bees and forage. Hive occupants are server-side and are not
 // sent reliably to this client, so this deliberately says visible= rather than pretending it counted the colony.
 import { apiarySnapshot, hiveLine } from './shared/common.mjs'
+import { apiaryCensus } from './shared/hive.mjs'
 
 export default {
   doc: 'apiary.inspect place=|x= y= z= [range=16]: inspect nearby hives, smoke, open or raised fires, entrances, flowers and visible bees',
@@ -9,18 +10,10 @@ export default {
 
   async run (api, a) {
     const seen = await apiarySnapshot(api, a, 'apiary.inspect')
-    const ripe = seen.hives.filter(h => h.ripe).length
-    const unsafe = seen.hives.filter(h => !h.smoked).length
-    const blocked = seen.hives.filter(h => !h.entranceClear).length
-    const openFires = seen.fires.filter(f => f.open).length
-    const raisedFires = seen.fires.filter(f => f.lit && !f.sunk).length
+    // the counts and the details are two readings of ONE list, and every count that is not zero names its hives, so
+    // that a reader can check the top line against the line below it instead of trusting it (Mariel, item 18)
     return {
-      hives: seen.hives.length,
-      ripe,
-      unsafe,
-      blocked,
-      openFires,
-      raisedFires,
+      ...apiaryCensus(seen.hives, seen.fires),
       beesVisible: seen.bees.length,
       grownVisible: seen.bees.filter(b => b.grown).length,
       flowers: seen.flowers,

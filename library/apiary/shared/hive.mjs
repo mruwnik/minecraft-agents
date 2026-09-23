@@ -53,6 +53,27 @@ export function hiveState ({ x, y, z, block, blockAt }) {
   return { x, y, z, name: block.name, honey, ripe: honey >= 5, facing, entranceClear, smoked: Boolean(campfire), guarded: Boolean(fire?.guarded), open: Boolean(fire?.open), raised: Boolean(fire?.lit && !fire.sunk), campfire }
 }
 
+// One census, read off the same per-hive facts `hiveLine` prints. Mariel read `unsafe=1` over four hives, checked the
+// ripe one, found no NO-SMOKE tag on it and took the count for a lie (BUGS.md 09-23 01:12Z); the unsmoked hive was one
+// of the other three and nothing in the line said which. A count you cannot check against the line below it is a count
+// you cannot act on. So every count names its hives when it is not zero, and the one that means "no campfire under it"
+// is called what the tag is called, not `unsafe`, which read as a verdict on the work about to be done. The fire
+// counts stay counts of FIRES, because a fire no hive sits over still burns the bees that land in it and `details=`
+// says nothing about it - but they name their fires too, so nobody mistakes one for a hive flag again.
+export function apiaryCensus (hives, fires) {
+  const count = (name, list) => list.length
+    ? { [name]: list.length, [`${name}At`]: list.map(h => `${h.x},${h.y},${h.z}`).join(' ') }
+    : { [name]: 0 }
+  return {
+    hives: hives.length,
+    ...count('ripe', hives.filter(h => h.ripe)),
+    ...count('noSmoke', hives.filter(h => !h.smoked)),
+    ...count('blocked', hives.filter(h => !h.entranceClear)),
+    ...count('openFires', fires.filter(f => f.open)),
+    ...count('raisedFires', fires.filter(f => f.lit && !f.sunk))
+  }
+}
+
 export const carpetCarried = items => Object.keys(items).find(name => items[name] > 0 && isCarpet(name)) ?? null
 export const campfireCarried = items => CAMPFIRES.find(name => items[name] > 0) ?? null
 export const CAMPFIRES = [...CAMPFIRE_NAMES]

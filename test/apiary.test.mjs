@@ -7,7 +7,7 @@ import apiaryBreed from '../library/apiary/breed.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
 import apiaryGuard from '../library/apiary/guard.mjs'
-import { hiveState, fireState, carpetCarried } from '../library/apiary/shared/hive.mjs'
+import { hiveState, fireState, carpetCarried, apiaryCensus } from '../library/apiary/shared/hive.mjs'
 import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, apiaryGoods, routineSteps } from '../src/lib.mjs'
 
 // ---------------------------------------------------------------- bees are livestock, but never a ground flock
@@ -126,7 +126,7 @@ test('apiary.inspect: a fire with a side in the open is counted as raised and na
 test('apiary.inspect: reports honey, smoke, open fires, flowers and only visible bees', async () => {
   const { api } = makeApiary()
   const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
-  assert.deepEqual([out.hives, out.ripe, out.unsafe, out.blocked, out.openFires, out.beesVisible, out.grownVisible, out.flowers], [1, 1, 0, 0, 0, 2, 2, 1])
+  assert.deepEqual([out.hives, out.ripe, out.noSmoke, out.blocked, out.openFires, out.beesVisible, out.grownVisible, out.flowers], [1, 1, 0, 0, 0, 2, 2, 1])
 })
 
 test('apiary.inspect: an open fire is counted and named in the details', async () => {
@@ -134,6 +134,39 @@ test('apiary.inspect: an open fire is counted and named in the details', async (
   // fires that smoke nothing count too: bees fly through them all the same
   const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
   assert.deepEqual([out.openFires, out.details], [1, 'beehive@10,65,10:honey=5,OPEN-FIRE'])
+})
+
+// item 18 (Mariel, BUGS.md 09-23 01:12Z): inspect answered `hives=4 ripe=1 unsafe=1 blocked=0`, Mariel looked at the
+// ripe hive, found no NO-SMOKE tag on it and concluded the count was wrong. It was not: the unsmoked hive was one of
+// the other three, and nothing in the line said so. A count you cannot check against the line below it is a count you
+// cannot act on. So every count is made from the same per-hive facts `hiveLine` prints, every one that is not zero
+// says WHERE in the same coordinates, and the one that means "no campfire under it" is called what the tag is called.
+const hiveFacts = (x, over) => ({ x, y: 65, z: 10, ripe: over.ripe ?? false, smoked: over.smoked ?? true, entranceClear: over.entranceClear ?? true })
+for (const [name, hives, fires, expected] of [
+  ['nothing at all', [], [], { hives: 0, ripe: 0, noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 0 }],
+  ['one good hive says nothing but zeroes', [hiveFacts(10, {})], [],
+    { hives: 1, ripe: 0, noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 0 }],
+  ['the unsmoked hive is named, and it is not the ripe one (Mariel\'s four)',
+    [hiveFacts(10, { ripe: true }), hiveFacts(12, { smoked: false }), hiveFacts(14, {}), hiveFacts(16, {})], [],
+    { hives: 4, ripe: 1, ripeAt: '10,65,10', noSmoke: 1, noSmokeAt: '12,65,10', blocked: 0, openFires: 0, raisedFires: 0 }],
+  ['two of a kind are both named, in the order the hives came',
+    [hiveFacts(10, { blocked: true, entranceClear: false }), hiveFacts(12, { entranceClear: false })], [],
+    { hives: 2, ripe: 0, noSmoke: 0, blocked: 2, blockedAt: '10,65,10 12,65,10', openFires: 0, raisedFires: 0 }],
+  ['a fire no hive sits over is counted and named, so it cannot be mistaken for a hive flag',
+    [hiveFacts(10, {})], [{ x: 30, y: 62, z: 10, lit: true, open: true, sunk: true }],
+    { hives: 1, ripe: 0, noSmoke: 0, blocked: 0, openFires: 1, openFiresAt: '30,62,10', raisedFires: 0 }],
+  ['a lit fire with a side in the open is raised whether or not it is covered',
+    [], [{ x: 30, y: 62, z: 10, lit: true, open: false, sunk: false }],
+    { hives: 0, ripe: 0, noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 1, raisedFiresAt: '30,62,10' }]
+]) {
+  test(`apiaryCensus: ${name}`, () => assert.deepEqual(apiaryCensus(hives, fires), expected))
+}
+
+test('apiary.inspect: the count and the details name the same hive', async () => {
+  const { api } = makeApiary(undefined, { ...apiaryWorld(), '10,62,10': air() })
+  const out = await apiaryInspect.run(api, { place: 'orchard-apiary', range: 4 })
+  assert.deepEqual([out.noSmoke, out.noSmokeAt, out.unsafe, out.details],
+    [1, '10,65,10', undefined, 'beehive@10,65,10:honey=5,NO-SMOKE'])
 })
 
 test('apiary.harvest: uses shears only through verified smoke, checks the level and collects comb', async () => {
@@ -211,11 +244,23 @@ test('apiary.breed: feeds two visible grown bees flowers without invoking flock 
 const maintainApi = (inspect, items = { shears: 1, dandelion: 4 }) => fakeApi({
   items, places: [APIARY],
   answers: {
-    'apiary.inspect': { hives: 1, ripe: 1, unsafe: 0, blocked: 0, openFires: 0, raisedFires: 0, beesVisible: 2, grownVisible: 2, flowers: 8, ...inspect },
+    'apiary.inspect': { hives: 1, ripe: 1, ripeAt: '10,65,10', noSmoke: 0, blocked: 0, openFires: 0, raisedFires: 0, beesVisible: 2, grownVisible: 2, flowers: 8, details: 'beehive@10,65,10:honey=5', ...inspect },
     'apiary.guard': { fires: 1, raised: 1, sunk: 1, open: 1, carpeted: 1, left: 0 },
     'apiary.harvest': { harvested: 1, unsafe: 0, blocked: 0 },
     'apiary.breed': { fed: 2 }
   }
+})
+
+test('apiary.maintain: the round says what the inspect said, coordinates and all, and never the details line', async () => {
+  const { api } = maintainApi({})
+  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
+  assert.deepEqual([out.ripe, out.ripeAt, out.noSmoke, out.details, out.grownVisible], [1, '10,65,10', 0, undefined, undefined])
+})
+
+test('apiary.maintain: fires the guard moved take the guard\'s counts, and drop the census coordinates for them', async () => {
+  const { api } = maintainApi({ openFires: 1, openFiresAt: '10,62,10', raisedFires: 1, raisedFiresAt: '10,62,10' }, { shears: 1, dandelion: 4, campfire: 1, white_carpet: 3 })
+  const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 })
+  assert.deepEqual([out.openFires, out.openFiresAt, out.raisedFires, out.raisedFiresAt], [0, undefined, 0, undefined])
 })
 
 test('apiary.maintain: inspects, harvests, then breeds a small visible colony', async () => {

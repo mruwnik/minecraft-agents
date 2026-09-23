@@ -12,7 +12,10 @@ export default {
   async run (api, a) {
     const summary = { harvested: 0, bred: 0 }
     const inspect = await api.act('apiary.inspect', { place: a.place, range: a.range })
-    Object.assign(summary, { hives: inspect.hives, ripe: inspect.ripe, unsafe: inspect.unsafe, blocked: inspect.blocked, openFires: inspect.openFires, raisedFires: inspect.raisedFires, beesVisible: inspect.beesVisible, flowers: inspect.flowers })
+    // forwarded whole rather than picked apart, so the round's line says exactly what the inspect said - including the
+    // coordinates behind each count, which are what a reader checks a count against (item 18)
+    const { details, grownVisible, ...census } = inspect
+    Object.assign(summary, census)
     api.report(summary)
     await api.checkpoint()
 
@@ -25,6 +28,10 @@ export default {
       summary.sunk = guard.sunk ?? 0
       summary.openFires = guard.left ?? 0
       summary.raisedFires = (guard.raised ?? 0) - (guard.sunk ?? 0)
+      // the fires moved, so the coordinates the inspect gave for them are no longer where they are: a stale answer is
+      // worse than none, and these two counts are the guard's now, not the census's
+      delete summary.openFiresAt
+      delete summary.raisedFiresAt
       api.report(summary)
       await api.checkpoint()
     }

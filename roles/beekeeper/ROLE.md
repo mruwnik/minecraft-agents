@@ -15,8 +15,10 @@ they are indoors. Apiaries use `apiary.*`, never `flock.*`.
   that lands in it, a raised one every bee that flies into it. `apiary.guard` sinks a raised fire when you carry a
   spare campfire (3 sticks, 1 coal or charcoal, 3 logs; mining a campfire gives charcoal, not the fire back) and
   carpets what has nothing on it (2 wool make 3 carpets). A wild nest sitting straight on its fire is covered by the
-  nest and needs no carpet, but its fire still goes underground. `apiary.inspect` is the authority: no smoke means
-  no harvest, `openFires=` above 0 means no harvest either, and `raisedFires=` above 0 means bring a campfire.
+  nest and needs no carpet, but its fire still goes underground. `apiary.inspect` is the authority: `noSmoke=` above 0 means
+  no harvest for the hives it names, `openFires=` above 0 means no harvest either, and `raisedFires=` above 0
+  means bring a campfire. Each of those counts names its hives or fires (`noSmokeAt=`), so you can tell WHICH
+  hive the number meant instead of guessing from the details line.
 - Honey level 5 before harvesting. `watch name=honey block=beehive where='{"honey_level":5}' repeat=true` can wake you;
   natural nests need a second `bee_nest` watch.
 
