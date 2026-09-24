@@ -5,6 +5,10 @@
 // reads the column, the openings and the ceiling off the world and hands them in.
 import { openAbove } from './lib.mjs'
 
+// water plants and a bubble column are still water: a body swims through them
+const WATERY = new Set(['water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])
+const BREATHABLE = new Set(['air', 'cave_air', 'void_air'])
+
 // how far round the body the reflex looks for water with air over it: a longer swim than this on 8 air is a gamble
 export const SURFACE_SCAN = 6
 // no nearer than this for two seconds and the swim is pressing into a wall: that opening is given up
@@ -20,6 +24,9 @@ const NO_WAY = `no open water within ${SURFACE_SCAN} and nothing over my head I 
 
 // ticks before a body with this much air and health is dead: 15 ticks an air point, then two hearts a second
 export const airBudgetTicks = ({ oxygen, health }) => oxygen * TICKS_PER_AIR + Math.ceil(health / DROWN_HIT) * DROWN_HIT_TICKS
+
+// the index in the column (from just over the head) of the first block that is neither water nor air: the ceiling, or -1 under the sky
+export const roofAt = names => names.findIndex(name => !WATERY.has(name) && !BREATHABLE.has(name))
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const flat = (me, to) => Math.round(Math.hypot(to.x + 0.5 - me.x, to.z + 0.5 - me.z) * 10) / 10

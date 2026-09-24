@@ -4,7 +4,7 @@
 // head, what open water lies near, and how long the ceiling would take to dig with the air that is left.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { surfaceWay, airBudgetTicks, swimProgress, SURFACE_SCAN } from '../src/surface.mjs'
+import { surfaceWay, airBudgetTicks, swimProgress, roofAt, SURFACE_SCAN } from '../src/surface.mjs'
 
 const me = { x: -130.3, y: 33.2, z: -138.3 }
 const cell = (x, y, z) => ({ x, y, z })
@@ -62,3 +62,12 @@ for (const [name, track, dist, now, expected] of [
   ['no nearer for 1.5 s: keep trying', { best: 2.8, at: 1000 }, 2.8, 2400, { best: 2.8, at: 1000, stalled: false }],
   ['no nearer for 2 s: stalled', { best: 2.8, at: 1000 }, 3.1, 3000, { best: 2.8, at: 1000, stalled: true }]
 ]) test(`swimProgress: ${name}`, () => assert.deepEqual(swimProgress(track, dist, now), expected))
+
+// the ceiling the pocket is dug in: the first block over the head that is not water, by its index in the column
+for (const [name, names, expected] of [
+  ['stone right over the head', ['stone', 'stone'], 0],
+  ['one water then dirt', ['water', 'dirt', 'stone'], 1],
+  ['open to the sky: no ceiling', ['water', 'water', 'air'], -1],
+  ['kelp is water', ['kelp', 'water', 'stone'], 2],
+  ['nothing read', [], -1]
+]) test(`roofAt: ${name}`, () => assert.equal(roofAt(names), expected))
