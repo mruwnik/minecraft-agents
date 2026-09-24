@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -126,7 +126,7 @@ let eatingSince = null
 // same rule -- eat below minHunger, or below minHealth however full I am -- with the failure said out loud as eat_failed.
 // Rate-limited like any other error (errorRepeat), so a reflex that fires every physics tick cannot wall the events file.
 const carriedFood = () => foodSort(bot.inventory.items().map(i => i.name), name => Boolean(bot.registry.foodsByName?.[name]), BANNED_FOOD)
-const eatFailed = error => sayError(eatFailure(error), { food: bot?.food, health: Math.round(bot?.health ?? 0) }, 'eat_failed')
+const eatFailed = error => sayError(eatFailure(error, carriedFood().edible), { food: bot?.food, health: Math.round(bot?.health ?? 0) }, 'eat_failed')
 let eatFailedAt = null
 // eat() marks itself eating BEFORE it equips the food, and only clears that inside its own try/finally: an equip that
 // throws never reaches the finally, so the plugin stays "eating" for ever and the reflex never fires again. Whatever
@@ -695,7 +695,7 @@ async function doorTick () {
   // gate Dan had just opened, 16 ms after, again and again (Perrin's idle body, 13:30Z)
   const gateIds = mcData.blocksArray.filter(b => b.name.endsWith('_fence_gate')).map(b => b.id)
   const doors = bot.findBlocks({ matching: [...doorIds, ...gateIds], maxDistance: 5, count: 8 }).map(p => bot.blockAt(p)).filter(b => (b.getProperties().half ?? 'lower') === 'lower')
-  if (foodAway({ held: bot.heldItem?.name, luring, feeding, gateNear: doors.some(d => d.name.endsWith('_fence_gate')) })) {
+  if (foodAway({ held: bot.heldItem?.name, luring, feeding, gateNear: doors.some(d => d.name.endsWith('_fence_gate')), eating: Boolean(bot.autoEat?.isEating) })) {
     console.log('[food away] tempting food in hand at a gate: put away, or the animals follow me out')
     doorBusy = true
     await bot.unequip('hand').catch(() => {})
@@ -2460,6 +2460,7 @@ const quick = {
     const { allowed } = eatAllowed({ food: bot.food, carried, anyway: a.anyway })
     const edible = bot.inventory.items().filter(i => allowed.includes(i.name))
     const before = bot.food
+    const countsBefore = inventoryCounts()
     // sanitizeOpts writes its choice back into this object, so an eat with no item= still says what it ate. With
     // nothing on the ordinary list the choice is made here instead: the plugin would refuse what the floor allowed.
     const pick = a.item ? edible.find(i => i.name === a.item) : (carried.edible.length ? null : edible[0])
@@ -2475,8 +2476,11 @@ const quick = {
     } finally {
       bot.autoEat.off('eatFail', onFail)
     }
-    if (failure) throw new Error(eatFailure(failure))
+    if (failure) throw new Error(eatFailure(failure, carriedFood().edible))
     await bot.waitForTicks(5) // the food number comes in the update_health after the meal, not with it
+    const eaten = opts.food?.name ?? null
+    const uneaten = uneatenMeal({ item: eaten, before: countsBefore[eaten] ?? 0, after: inventoryCounts()[eaten] ?? 0 })
+    if (uneaten) throw new Error(uneaten)
     return { ate: opts.food?.name ?? null, gained: bot.food - before, food: bot.food, health: Math.round(bot.health) }
   },
 

@@ -1018,7 +1018,8 @@ export const withDefaultItem = (blocks, item) => blocks.map(b => b.item || item 
 
 // food in my hand draws every animal that sees it after me, and out through any gate I open: put it away at a gate unless that is the plan
 // luring: a lead is on, from its first step TOWARDS the animal (not only once it follows: started beside a gate, lead lost its wheat and gave up with=0)
-export const foodAway = ({ held, luring, feeding, gateNear }) => gateNear && !luring && !feeding && Object.values(BREEDING_FOOD).some(foods => foods.includes(held))
+// eating: a meal is running. The food in my hand is going into my mouth: taking it out cancelled every meal by a gate (Chani, food 7, 1743 [food away] lines)
+export const foodAway = ({ held, luring, feeding, gateNear, eating = false }) => gateNear && !luring && !feeding && !eating && Object.values(BREEDING_FOOD).some(foods => foods.includes(held))
 
 // clock.json as read from disk; null when it was caught mid-write (the next look, a few seconds on, finds it whole)
 export function parseClock (text) {
@@ -1729,9 +1730,15 @@ export function eatRefusal ({ food, item, carried, anyway = false, floor = HUNGE
   return food >= 20 ? 'food is already 20: the game refuses a meal at a full belly' : null
 }
 
-export function eatFailure (error) {
+// ./mc eat said ok with nothing eaten: a meal counts only if the item left my pockets
+export const uneatenMeal = ({ item, before, after }) => !item || after < before ? null
+  : `the meal did not happen: I still carry ${after} ${item}, as many as before. Something took the food out of my hand mid-meal (the gate reflex puts tempting food away; see [food away] in bot.log) or the server never finished it. Step 5 blocks clear of any fence gate and eat again`
+
+// edible: what I carry that I would eat. With food in my pockets the plugin's "couldn't find a choice" is about my hand, not my pockets
+export function eatFailure (error, edible = []) {
   const first = String(error?.message ?? error ?? '').split('\n')[0].trim()
   if (!first) return 'the eat failed and said nothing'
+  if (edible.length && /couldn't find a choice/i.test(first)) return `I carry ${edible.join(', ')}, but the eat reflex found no meal to take (it looked while the food was being moved and in no slot: near a fence gate the gate reflex puts tempting food away): ${first}`
   const advice = EAT_ADVICE.find(([pattern]) => pattern.test(first))
   return advice ? `${advice[1]}: ${first}` : first
 }
