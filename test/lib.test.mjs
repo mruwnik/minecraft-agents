@@ -4138,6 +4138,20 @@ test(`mine.get: someone else's build is left standing, even when it is the only 
     [[], 0, `the only stone within 48 blocks is inside protected zones (someone's build): go further away and retry`])
 })
 
+// the nearest few are not all there is: at home the 21 nearest logs were all the base and the hut, and mine.get gave up with
+// trees 40 blocks off (Claude, 09-24 dawn). find_blocks answers only the nearest count=, so it must ask past the builds
+test('mine.get: a build full of the block does not hide the wild ones behind it', async () => {
+  const built = Array.from({ length: 25 }, (_, i) => ({ x: i + 1, y: 64, z: 0 }))
+  const wild = Array.from({ length: 5 }, (_, i) => ({ x: i + 40, y: 64, z: 0 }))
+  const world = Object.fromEntries([...built, ...wild].map(p => [`${p.x},${p.y},${p.z}`, 'stone']))
+  const { api, calls } = stoneApi(world, {
+    find_blocks: args => ({ positions: [...built, ...wild].filter(p => world[`${p.x},${p.y},${p.z}`]).slice(0, args.count) }),
+    zones: { zones: [{ name: 'someones-hut', x1: 0, y1: 60, z1: -2, x2: 30, y2: 70, z2: 2 }] }
+  })
+  const out = await mineGet.run(api, { block: 'stone', count: 2 })
+  assert.deepEqual([calls.filter(c => c.startsWith('dig')), out.got], [['dig x=40 y=64 z=0 dig', 'dig x=41 y=64 z=0 dig'], 2])
+})
+
 test('mine.get: a pit it cannot climb out of is named, not hidden', async () => {
   const world = stoneWorld()
   const { api } = stoneApi(world, { path_to: { status: 'noPath' }, goto: new Error('goto: no walkable path') })
