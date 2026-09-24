@@ -20,6 +20,7 @@ import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands,
 import { makeEyes, YAWS } from './eyes.mjs'
 import { addressedTo, whisperHint, offlineWhisper } from './talk.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
+import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -609,6 +610,7 @@ function connect () {
   bot.on('forcedMove', () => {
     resets++
     if (Date.now() - lastResetLogged < 1000) return
+    lastServerPos = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z, at: Date.now() }
     lastResetLogged = Date.now()
     console.log('  claimed before the reset:', claimed.join(' | '))
     console.log('forcedMove (server reset position) ->', JSON.stringify(pos()), 'exact', bot.entity.position.x, bot.entity.position.y, bot.entity.position.z, 'onGround', bot.entity.onGround)
@@ -834,6 +836,8 @@ let kickedFor = null // the stand-still (a stillFrom) whose walk I already resta
 // bot.controlState has no enumerable keys (getters): Object.entries on it is always empty, which made every stall report say keys=[] until 09-19
 const keysDown = () => ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak'].filter(k => bot.getControlState(k))
 let lastPath = null
+let lastServerPos = null // where the server last PUT the body (it only speaks up when it disagrees with the client)
+let frozenFor = null // the stillFrom a frozen walk was already reported for
 let livePath = [] // the pathfinder's own array: [0] is always the node it is heading for
 let idleTicks = 0
 let nudging = false
@@ -852,13 +856,27 @@ const stallEvidence = () => ({
   exact: bot.entity.position.toArray().map(n => Math.round(n * 100) / 100),
   path: lastPath && { ...lastPath, agoMs: Date.now() - lastPath.at, at: undefined },
   resets: Object.entries(pathResets.filter(r => Date.now() - r.at < 12000).reduce((n, r) => ({ ...n, [r.reason]: (n[r.reason] ?? 0) + 1 }), {})).map(([reason, n]) => `${reason}:${n}`).join(' '),
-  doorBusy
+  doorBusy,
+  // card 962beec2: a walk that presses forward with the position frozen has a valid path and nothing to see at the
+  // feet. What the legs push into, where the head faces against the path, who is pressed against the body and where
+  // the server last put it is what tells the cases apart
+  server: serverSide(lastServerPos, Date.now()),
+  facing: facingOff({ yaw: bot.entity.yaw, from: bot.entity.position, nodes: lastPath?.nodes ?? [] }),
+  ahead: aheadCells(bot.entity.position, bot.entity.yaw).map(c => `${blockName(bot.blockAt(new Vec3(c.x, c.y, c.z)))}@${c.x},${c.y},${c.z}`),
+  near: nearBy(Object.values(bot.entities), bot.entity)
 })
 setInterval(() => {
   if (!ready) return
   const here = bot.entity.position.clone()
   if (!task || !stillFrom || progressed(stillFrom.pos, here) || stillFrom.task !== task.id) stillFrom = { pos: here, at: Date.now(), task: task?.id }
   const sample = { hasGoal: Boolean(task && bot.pathfinder.goal), moved: Math.hypot(here.x - stillFrom.pos.x, here.z - stillFrom.pos.z), digging: Boolean(bot.targetDigBlock), seconds: (Date.now() - stillFrom.at) / 1000, path: lastPath && lastPath.at >= goalSetAt ? lastPath : null }
+  // forward held and the body not moving for 2 s: said once per standstill, with the evidence that names the cause, long
+  // before the 12 s alarm cancels the task (the alarm still does)
+  if (frozenWalk({ keys: keysDown(), moved: sample.moved, seconds: sample.seconds }) && frozenFor !== stillFrom) {
+    frozenFor = stillFrom
+    const evidence = stallEvidence()
+    emit('frozen_walk', { pos: pos(), evidence, advice: frozenAdvice(evidence) })
+  }
   // a goto that keeps moving and gets nowhere (Perrin's cow pen gate: 290 s, ended 20 blocks further off)
   const goal = bot.pathfinder.goal
   if (task?.name === 'goto' && goal?.x !== undefined && goal?.z !== undefined) {
@@ -2515,7 +2533,7 @@ const quick = {
 
   block_at (a) {
     const b = bot.blockAt(vecOf(a))
-    return b ? { name: b.name, properties: b.getProperties?.() } : { name: null }
+    return b ? { name: blockName(b), properties: b.getProperties?.() } : { name: null }
   },
 
   // render what the bot sees to a PNG (see eyes.mjs): look | look pano=true | look dir=north | look x= y= z=
@@ -2591,7 +2609,7 @@ const quick = {
   scan (a) {
     const volume = ['x', 'y', 'z'].reduce((n, k) => n * (Math.abs(a[k + '2'] - a[k + '1']) + 1), 1)
     if (!(volume <= scanCap(a.where))) throw new Error(`scan needs x1,y1,z1,x2,y2,z2 spanning at most ${scanCap(a.where)} blocks (got ${volume})${a.where ? '' : '; to find one kind of block in a bigger box add where=<name>, for a wider view use look'}`)
-    const nameAt = (x, y, z) => bot.blockAt(new Vec3(x, y, z))?.name ?? 'unloaded'
+    const nameAt = (x, y, z) => blockName(bot.blockAt(new Vec3(x, y, z)))
     // where= answers with coordinates only: the picture is the dear part, and whoever asks where wants to act, not to look
     return a.where ? { where: scanWhere(nameAt, a, a.where) } : { map: renderScan(nameAt, a) }
   },
