@@ -18,9 +18,35 @@
   button { font: inherit; color: var(--ink); background: #252b34; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
   button:hover { background: #2f3742; }
   main { display: flex; height: calc(100vh - 38px); }
-  #mapwrap { flex: 1; position: relative; min-width: 0; }
+  #mapwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #mapview { flex: 1; position: relative; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
+  /* the chat drawer sits under the map, never beside it: closed it is one 30px bar, open it takes at most 30% of
+     the height, so the map keeps the room it has and the side panel is untouched either way */
+  #chat { flex: none; border-top: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; max-height: 30vh; }
+  #chat.closed { max-height: none; }
+  #chat.closed #chatlog, #chat.closed .chatTools { display: none; }
+  #chatbar { display: flex; align-items: center; gap: 10px; padding: 5px 12px; flex: none; }
+  #chatbar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0; font-weight: 600; }
+  #chatbar .muted { color: var(--dim); }
+  #chatbar .spacer { flex: 1; }
+  #chatfilter { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; width: 220px; }
+  #chatfilter:focus { outline: none; border-color: var(--zone); }
+  #chatbar label { color: var(--dim); cursor: pointer; white-space: nowrap; }
+  #chatlog { overflow-y: auto; padding: 4px 12px 8px; scrollbar-color: var(--dim) transparent; }
+  #chatlog::-webkit-scrollbar { width: 10px; }
+  #chatlog::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 6px; }
+  .msg { display: flex; gap: 8px; padding: 1px 4px; border-radius: 3px; align-items: baseline; }
+  .msg .when { color: var(--down); flex: none; }
+  .msg .who { flex: none; font-weight: 600; }
+  .msg .text { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .msg.whisper { color: var(--dim); font-style: italic; }
+  .msg.whisper .who { font-weight: 500; }
+  .msg .muted { color: var(--dim); font-weight: 400; }
+  .msg.dan { background: rgba(240,138,208,0.10); }
+  .msg.dan .text { color: #fff; }
+  #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
   section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
@@ -73,8 +99,21 @@
 </header>
 <main>
   <div id="mapwrap">
-    <canvas id="map"></canvas>
-    <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
+    <div id="mapview">
+      <canvas id="map"></canvas>
+      <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
+    </div>
+    <div id="chat">
+      <div id="chatbar">
+        <h2>chat</h2>
+        <span class="muted" id="chatcount">—</span>
+        <span class="spacer"></span>
+        <input id="chatfilter" class="chatTools" type="search" placeholder="filter by name or text" spellcheck="false">
+        <label class="chatTools"><input type="checkbox" id="chatwhispers"> hide whispers</label>
+        <button id="chattoggle">hide ▾</button>
+      </div>
+      <div id="chatlog"></div>
+    </div>
   </div>
   <aside>
     <section>
@@ -484,6 +523,92 @@ const fetchLook = () => {
 }
 el('relook').addEventListener('click', fetchLook)
 
+// ---------------------------------------------------------------- the chat log
+// One line per thing said, merged by the server from every body's event log. The page keeps the last answer and
+// only rebuilds the list when the log or the filter changed, so the 2 s poll costs nothing while nobody talks.
+const remembered = (key, fallback) => {
+  try {
+    const v = localStorage.getItem(key)
+    return v === null ? fallback : v === '1'
+  } catch {
+    return fallback
+  }
+}
+const remember = (key, on) => {
+  try { localStorage.setItem(key, on ? '1' : '0') } catch {}
+}
+
+// a stable colour per speaker: Dan is the pink the map marks him with, everyone else picks from a palette by name
+const SPEAKER_COLOURS = ['#6ee7a8', '#7fb8ff', '#f5c76a', '#c39bff', '#ff9f7a', '#5fd8d8', '#d9e36e', '#ff85a1', '#9fd3ff', '#b5e07a']
+const hashName = name => [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7)
+const speakerColour = name => name === snap.dan ? '#f08ad0' : SPEAKER_COLOURS[hashName(name) % SPEAKER_COLOURS.length]
+
+const clock = t => t.slice(11, 19)
+
+let chatLast = { messages: [] }
+let chatShown = ''   // what the list currently holds, so a poll that changed nothing does not rebuild it
+
+const msgRow = m => {
+  const row = document.createElement('div')
+  row.className = `msg ${m.kind}${m.from === snap.dan ? ' dan' : ''}`
+  row.title = `${m.t}${m.to ? ` · whispered to ${m.to}` : ''}`
+  const who = tag('span', 'who', m.from)
+  who.style.color = speakerColour(m.from)
+  if (m.to) {
+    const to = tag('span', 'who', m.to)
+    to.style.color = speakerColour(m.to)
+    const arrow = tag('span', 'muted', ' → ')
+    who.append(arrow, to)
+  }
+  row.append(tag('span', 'when', clock(m.t)), who, tag('span', 'text', m.message))
+  return row
+}
+
+const chatFilter = () => {
+  const needle = el('chatfilter').value.trim().toLowerCase()
+  const hideWhispers = el('chatwhispers').checked
+  return m => {
+    if (hideWhispers && m.kind === 'whisper') return false
+    if (!needle) return true
+    return m.from.toLowerCase().includes(needle) || (m.to ?? '').toLowerCase().includes(needle) || m.message.toLowerCase().includes(needle)
+  }
+}
+
+const renderChat = () => {
+  const log = el('chatlog')
+  const shown = chatLast.messages.filter(chatFilter())
+  const signature = `${el('chatfilter').value}|${el('chatwhispers').checked}|${shown.length}|${shown[shown.length - 1]?.t ?? ''}|${shown[shown.length - 1]?.message ?? ''}`
+  if (signature === chatShown) return
+  chatShown = signature
+  // the reader who scrolled up to read something old keeps their place; everyone else follows the newest line
+  const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
+  log.textContent = ''
+  if (!shown.length) log.append(tag('div', '', chatLast.messages.length ? 'nothing matches' : 'nobody has said anything yet')).id = 'chatempty'
+  shown.forEach(m => log.append(msgRow(m)))
+  const whispers = chatLast.messages.filter(m => m.kind === 'whisper').length
+  el('chatcount').textContent = `${shown.length}${shown.length !== chatLast.messages.length ? ` of ${chatLast.messages.length}` : ''} lines · ${whispers} whispers`
+  if (pinned) log.scrollTop = log.scrollHeight
+}
+
+const refreshChat = () => fetch('/api/chat?limit=300')   // the same 300 lines the server inlined on load
+  .then(r => r.json())
+  .then(c => { chatLast = c; renderChat() })
+  .catch(() => {})
+
+const setChatOpen = open => {
+  el('chat').classList.toggle('closed', !open)
+  el('chattoggle').textContent = open ? 'hide ▾' : 'show ▴'
+  remember('dashboard.chat.open', open)
+  resize()
+  if (open) el('chatlog').scrollTop = el('chatlog').scrollHeight
+}
+el('chattoggle').addEventListener('click', () => setChatOpen(el('chat').classList.contains('closed')))
+el('chatfilter').addEventListener('input', renderChat)
+el('chatwhispers').addEventListener('change', () => { remember('dashboard.chat.hideWhispers', el('chatwhispers').checked); renderChat() })
+el('chatwhispers').checked = remembered('dashboard.chat.hideWhispers', false)
+el('chat').classList.toggle('closed', !remembered('dashboard.chat.open', true))
+el('chattoggle').textContent = el('chat').classList.contains('closed') ? 'show ▴' : 'hide ▾'
+
 // ---------------------------------------------------------------- polling
 // ?farm=<name> opens that place's popup once, as soon as its plan is in hand - the hook a headless screenshot uses
 let farmParam = new URLSearchParams(location.search).get('farm')
@@ -509,10 +634,13 @@ const refresh = () => fetch('/api/state')
 // the server inlines the requested ?farm=<name> place (if any) as JSON in <head>, so the popup opens on the
 // very first paint instead of racing the /api/state fetch below - the property a headless screenshot needs
 if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__)
+if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, dan: chatLast.dan }; renderChat() }
 
 resize()
 refresh()
+refreshChat()
 setInterval(refresh, 2000)
+setInterval(refreshChat, 2000)
 </script>
 </body>
 </html>

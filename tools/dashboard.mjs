@@ -4,12 +4,13 @@
 //   PORT=4000 node tools/dashboard.mjs
 //
 // It polls each body's `state` every 2 s (a quick action: it never takes the task slot, so a body mid-build is not
-// disturbed) and serves the page, /api/state, and /api/look/<Name> which renders one PNG through that body's eyes.
+// disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs)
+// and /api/look/<Name> which renders one PNG through that body's eyes.
 // Nothing here drives a body or spends an agent's tokens.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit } from './dashboard/lib.mjs'
 import { mergeBodies, danSighting } from './dashboard/map.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
@@ -21,6 +22,8 @@ const PORT = Number(process.env.PORT ?? 3700)
 const DAN = process.env.DAN_NAME ?? 'mruwnik'
 const POLL_MS = 2000
 const LOOK_FILE = 'dashboard-look.png'
+const CHAT_TAIL_BYTES = 64 * 1024
+const CHAT_PAGE_LINES = 300   // what the page shows: inlined on load, then polled from /api/chat
 
 const parseJson = text => {
   try {
@@ -89,6 +92,42 @@ const snapshot = () => {
   }
 }
 
+// ---------------------------------------------------------------- the chat log
+// Every body's events.jsonl grows to hundreds of KB, and the page asks every 2 s: only the last 64 KB of each file
+// is read, and only when the file has grown since the last read (the tail is kept per folder, keyed on its size).
+const tails = {}
+
+const readTail = file => {
+  const fd = fs.openSync(file, 'r')
+  try {
+    const size = fs.fstatSync(fd).size
+    const start = Math.max(0, size - CHAT_TAIL_BYTES)
+    const buf = Buffer.alloc(size - start)
+    fs.readSync(fd, buf, 0, buf.length, start)
+    return { size, torn: start > 0, text: buf.toString('utf8') }
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+const eventsTail = agent => {
+  const file = path.join(AGENTS_DIR, agent, 'events.jsonl')
+  const size = fs.existsSync(file) ? fs.statSync(file).size : -1
+  if (size < 0) return []
+  if (tails[agent]?.size === size) return tails[agent].lines
+  const tail = readTail(file)
+  const lines = parseEventLines(tail.text, tail.torn)
+  tails[agent] = { size: tail.size, lines }
+  return lines
+}
+
+// the folders are read afresh (not taken from `agents`): a folder with no config.json still holds the whispers
+// its body received, and the log is about who said what, not about which bodies can be polled
+const chatLog = limit => {
+  const dirs = fs.existsSync(AGENTS_DIR) ? fs.readdirSync(AGENTS_DIR, { withFileTypes: true }).filter(e => e.isDirectory()) : []
+  return mergeChat(dirs.map(e => ({ agent: e.name, lines: eventsTail(e.name) })), limit)
+}
+
 const send = (res, code, type, payload, headers = {}) => {
   res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', ...headers })
   res.end(payload)
@@ -116,19 +155,23 @@ const serveLook = async (res, name, query) => {
 // ?farm=<name> is inlined into the page itself (not left to the /api/state fetch below it) so the popup it opens
 // is there on the very first paint - the property a headless screenshot needs, and a plain page load never pays for.
 // </script and </head can't slip out of the inline script tag, since the page ships this straight into an attribute-free <script> body.
+// The chat log is inlined the same way, for the same reason: the drawer is full on the first paint.
+const inline = value => JSON.stringify(value).replace(/</g, '\\u003c')
 const renderPage = query => {
   const farm = query.get('farm')
   const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
-  const preload = `<script>window.__PRELOAD_PLACE__=${JSON.stringify(place).replace(/</g, '\\u003c')}</script>\n`
+  const chat = { at: Date.now(), dan: DAN, messages: chatLog(CHAT_PAGE_LINES) }
+  const preload = `<script>window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
 }
 
 const handlers = {
   page: (res, query) => send(res, 200, 'text/html; charset=utf-8', renderPage(query)),
   state: (res) => sendJson(res, 200, snapshot()),
+  chat: (res, query) => sendJson(res, 200, { at: Date.now(), dan: DAN, messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state, /api/chat?limit=200 or /api/look/<Name>' })
 }
 
 http.createServer(async (req, res) => {

@@ -45,10 +45,54 @@ export const route = url => {
   const { pathname } = new URL(url, 'http://dashboard')
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/api/state') return { kind: 'state' }
+  if (pathname === '/api/chat') return { kind: 'chat' }
   if (pathname === '/map.mjs') return { kind: 'script' }
   const srclib = SRCLIB.exec(pathname)
   if (srclib) return { kind: 'srclib', name: srclib[1] }
   const look = LOOK.exec(pathname)
   if (look) return { kind: 'look', name: look[1] }
   return { kind: 'unknown' }
+}
+
+// ---------------------------------------------------------------- the chat log
+// events.jsonl is one JSON object per line. The server reads only the tail of each file, so `torn` says the first
+// line may start mid-object: it is dropped rather than parsed (it would fail to parse anyway, but a torn line that
+// happens to be valid JSON - a bare number, say - must not slip in as an event).
+export const parseEventLines = (text, torn = false) => text
+  .split('\n')
+  .slice(torn ? 1 : 0)
+  .map(parseConfig)
+  .filter(e => e && typeof e === 'object')
+
+const TALK = new Set(['chat', 'whisper'])
+const isTalk = e => e && typeof e === 'object' && TALK.has(e.type) && typeof e.t === 'string' && typeof e.from === 'string'
+
+// A body logs what OTHERS say: the same chat sits in every online body's file (one seq each), while a whisper is only
+// in its recipient's file, so the folder that holds a whisper is who it was for. That makes the identity of a line
+// from+message+to: a chat is deduplicated across the files, a whisper to two bodies is two lines. Each body stamps a
+// line with its own clock, so the copies differ by a few ms: two lines with the same identity within SAME_LINE_MS
+// are one line (kept at its earliest stamp), and the same words said again later are another.
+const SAME_LINE_MS = 2000
+const identity = m => `${m.from}\u0000${m.to ?? ''}\u0000${m.message}`
+const talkLine = (e, agent) => ({ t: e.t, from: e.from, to: e.type === 'whisper' ? agent : null, kind: e.type, message: String(e.message ?? '') })
+const byTime = (a, b) => a.t.localeCompare(b.t) || (a.to ?? '').localeCompare(b.to ?? '')
+
+export const mergeChat = (perAgent, limit) => {
+  const lastSeen = new Map()
+  const lines = perAgent.flatMap(({ agent, lines }) => lines.filter(isTalk).map(e => talkLine(e, agent))).sort(byTime)
+  return lines.filter(m => {
+    const key = identity(m)
+    const at = Date.parse(m.t)
+    const before = lastSeen.get(key)
+    lastSeen.set(key, at)
+    return !(before !== undefined && at - before <= SAME_LINE_MS)
+  }).slice(-limit)
+}
+
+export const CHAT_LIMIT = 200
+export const CHAT_CAP = 1000
+export const chatLimit = raw => {
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return CHAT_LIMIT
+  return Math.min(n, CHAT_CAP)
 }
