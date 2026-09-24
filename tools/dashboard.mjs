@@ -16,7 +16,7 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
-const LIB_MODULE = path.join(ROOT, 'src', 'lib.mjs')
+const SRC_DIR = path.join(ROOT, 'src')
 const PORT = Number(process.env.PORT ?? 3700)
 const DAN = process.env.DAN_NAME ?? 'mruwnik'
 const POLL_MS = 2000
@@ -127,7 +127,7 @@ const handlers = {
   page: (res, query) => send(res, 200, 'text/html; charset=utf-8', renderPage(query)),
   state: (res) => sendJson(res, 200, snapshot()),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
-  srclib: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(LIB_MODULE)),
+  srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
   unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state or /api/look/<Name>' })
 }
 
@@ -135,7 +135,7 @@ http.createServer(async (req, res) => {
   const r = route(req.url)
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
-  return handlers[r.kind](res, query)
+  return handlers[r.kind](res, query, r)
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()
   setInterval(() => pollOnce().catch(e => console.error('[poll]', e.message)), POLL_MS)

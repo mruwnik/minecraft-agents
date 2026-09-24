@@ -187,7 +187,15 @@ const routes = [
   ['/api/state', { kind: 'state' }],
   ['/api/state?since=3', { kind: 'state' }],
   ['/map.mjs', { kind: 'script' }],
-  ['/src/lib.mjs', { kind: 'srclib' }],
+  ['/src/lib.mjs', { kind: 'srclib', name: 'lib.mjs' }],
+  // lib.mjs is not the only browser-safe file under src/ that the map module graph can end up importing (it
+  // currently re-exports everything from cli.mjs) - any plain .mjs filename directly under src/ is servable,
+  // so a new transitive import never again leaves the page silently failing to load its module script.
+  ['/src/cli.mjs', { kind: 'srclib', name: 'cli.mjs' }],
+  ['/src/bot.mjs', { kind: 'srclib', name: 'bot.mjs' }],
+  ['/src/../lib.mjs', { kind: 'unknown' }],
+  ['/src/sub/lib.mjs', { kind: 'unknown' }],
+  ['/src/lib.txt', { kind: 'unknown' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],

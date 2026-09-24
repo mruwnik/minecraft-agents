@@ -35,13 +35,19 @@ export const snapshotFile = (home, file) => {
 }
 
 const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
+// map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
+// same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
+// lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
+// agent gives lib.mjs a new sibling import (an import a static route list would miss with no visible error at all).
+const SRCLIB = /^\/src\/([A-Za-z0-9_.-]+\.mjs)$/
 
 export const route = url => {
   const { pathname } = new URL(url, 'http://dashboard')
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/api/state') return { kind: 'state' }
   if (pathname === '/map.mjs') return { kind: 'script' }
-  if (pathname === '/src/lib.mjs') return { kind: 'srclib' }
+  const srclib = SRCLIB.exec(pathname)
+  if (srclib) return { kind: 'srclib', name: srclib[1] }
   const look = LOOK.exec(pathname)
   if (look) return { kind: 'look', name: look[1] }
   return { kind: 'unknown' }
