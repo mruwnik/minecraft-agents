@@ -768,22 +768,24 @@ el('chattoggle').textContent = el('chat').classList.contains('closed') ? 'show �
 // ?farm=<name> opens that place's popup once, as soon as its plan is in hand - the hook a headless screenshot uses
 let farmParam = new URLSearchParams(location.search).get('farm')
 
+const applyState = s => {
+  snap = s
+  const up = s.bodies.filter(b => b.up)
+  el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
+  el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones · ${s.humans.length} ${s.humans.length === 1 ? 'human' : 'humans'} in sight`
+  el('clock').textContent = up[0]?.state?.time ?? 'no body online'
+  renderList()
+  renderPlaces()
+  draw()
+  if (farmParam && s.places.some(p => p.name === farmParam)) {
+    openPlan(farmParam)
+    farmParam = null
+  }
+}
+
 const refresh = () => fetch('/api/state')
   .then(r => r.json())
-  .then(s => {
-    snap = s
-    const up = s.bodies.filter(b => b.up)
-    el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
-    el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones`
-    el('clock').textContent = up[0]?.state?.time ?? 'no body online'
-    renderList()
-    renderPlaces()
-    draw()
-    if (farmParam && s.places.some(p => p.name === farmParam)) {
-      openPlan(farmParam)
-      farmParam = null
-    }
-  })
+  .then(applyState)
   .catch(e => { el('status').textContent = `no answer from the dashboard: ${e.message}` })
 
 // the server inlines the requested ?farm=<name> place (if any) as JSON in <head>, so the popup opens on the
@@ -793,6 +795,7 @@ if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__, window.__PRELOA
 if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, agents: chatLast.agents }; renderChat() }
 
 resize()
+if (window.__PRELOAD_STATE__) applyState(window.__PRELOAD_STATE__)
 refresh()
 refreshChat()
 setInterval(refresh, 2000)

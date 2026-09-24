@@ -201,14 +201,15 @@ const serveLook = async (res, name, query) => {
 // </script and </head can't slip out of the inline script tag, since the page ships this straight into an attribute-free <script> body.
 // The chat log is inlined the same way, for the same reason: the drawer is full on the first paint.
 const inline = value => JSON.stringify(value).replace(/</g, '\\u003c')
-// ?view=world|diff with ?farm= inlines the world answer as well, so the popup opens already comparing.
+// The bodies' state is inlined too, so the map is drawn on the first paint; ?view=world|diff with ?farm= inlines
+// the world answer as well, so the popup opens already comparing.
 const renderPage = async query => {
   const farm = query.get('farm')
   const view = query.get('view')
   const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
   const chat = { at: Date.now(), agents: agentNames(), messages: chatLog(CHAT_PAGE_LINES) }
   const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm) : null
-  const preload = `<script>window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
+  const preload = `<script>window.__PRELOAD_STATE__=${inline(snapshot())};window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
 }
 
