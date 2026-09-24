@@ -1409,6 +1409,11 @@ export const craftRoom = ({ freeSlots, stacks, stackSize, batch, item, made = 0,
 // back too, and what the message says about them is what the inventory actually shows.
 // fell: ingredients found lying within reach after the failure (and swept up); lying: those still on the ground after
 // the sweep, as name@x,y,z. Chani's "real" loss of 16 planks was a stack on the ground that farm.maintain picked up later
+// What a 2x2 craft left behind where the pockets count never looks: the four grid cells and the cursor. A put-back click
+// the server rejected leaves the ingredient stack there (my stick craft: "-bamboo:26" for one stick, the 24 back later)
+export const gridLeftovers = ({ grid, cursor }) => [...grid, cursor].filter(Boolean)
+  .reduce((acc, { name, count }) => ({ ...acc, [name]: (acc[name] ?? 0) + count }), {})
+
 export function craftReport ({ item, count, made, spent = {}, why, fell = [], lying = [] }) {
   if (made >= count) return { crafted: item, made }
   const used = Object.entries(spent).filter(([, n]) => n > 0).map(([name, n]) => `${name}:${n}`).join(' ')

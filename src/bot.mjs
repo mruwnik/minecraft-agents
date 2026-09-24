@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -1312,7 +1312,7 @@ const bedsNear = () => findBlockByName('*_bed', 32, 16).sort((p, q) => p.distanc
 // after a walk in the click's own look could still be turning while the recipe ran against no window at all and the
 // server rejected every batch (bug #91, and #74's "12/15 made"). Open the window here, wait for it, then craft into it.
 async function craftBatch (recipe, table) {
-  if (!table) return within(15000, bot.craft(recipe, 1, null), 'crafting').catch(() => {})
+  if (!table) return craftInPockets(recipe)
   await goNear(table.position, 2)
   bot.pathfinder.setGoal(null)
   await bot.lookAt(table.position.offset(0.5, 0.5, 0.5), true)
@@ -1334,6 +1334,21 @@ async function craftBatch (recipe, table) {
     bot.activateBlock = activate
     if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
   }
+}
+
+// The 2x2 grid is the inventory window itself, and mineflayer neither syncs nor closes it after a craft (it does both
+// for a table). A put-back click the server rejected left my 26 bamboo on the cursor for one stick, and the tally called
+// them lost. Read the grid back from the server; if anything is stuck there, closing the inventory makes the server
+// return the grid and the cursor to the pockets
+async function craftInPockets (recipe) {
+  await within(15000, bot.craft(recipe, 1, null), 'crafting').catch(() => {})
+  const readBack = () => within(3000, bot._syncWindow(bot.inventory), 'reading the crafting grid back').catch(() => {})
+  await readBack()
+  const stuck = gridLeftovers({ grid: bot.inventory.slots.slice(1, 5), cursor: bot.inventory.selectedItem })
+  if (!Object.keys(stuck).length) return
+  console.log(`[craft] handed back from the 2x2 grid and the cursor: ${JSON.stringify(stuck)}`)
+  bot.closeWindow(bot.inventory)
+  await readBack()
 }
 
 async function containerAt (a, names = ['chest', 'barrel', 'trapped_chest']) {
