@@ -22,7 +22,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, replantBatch, digFromHere, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -3986,19 +3986,61 @@ test('collect: a full inventory stops it where it stands, having picked up nothi
 })
 
 // ---------------------------------------------------------------- farm.harvest
-test('farm.harvest: digs what is ripe, puts the seed straight back, and leaves the rest growing', async () => {
-  const world = { '0,64,0': 'wheat#7', '1,64,0': 'wheat#3' }
-  const { api, calls } = fakeApi({
-    world,
-    answers: {
-      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 0, y: 64, z: 0 }, { x: 1, y: 64, z: 0 }] : [] }),
-      dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} }
-    }
-  })
-  const out = await farmHarvest.run(api, { within: 8 })
-  assert.deepEqual([out.harvested, out.replanted, out.stillGrowing, calls.filter(c => c.startsWith('dig') || c.startsWith('place'))],
-    [{ wheat: 1 }, 1, 1, ['dig 0,64,0', 'place item=wheat_seeds x=0 y=64 z=0']])
+// Dan, 14:26Z: "run and cut everything, then collect everything, then replant everything". Cutting, chasing the drop and
+// replanting cell by cell cost 3 s a cell (23 wheat in 71 s). Three sweeps: cut in row order with batch digs (no wait, no
+// drop chase), ONE collect over the field, then ONE place batch of what the pockets hold, a checkpoint per row
+const sweepWorld = () => ({ '0,64,0': 'wheat#7', '1,64,0': 'wheat#7', '2,64,0': 'wheat#3', '0,64,1': 'wheat#7', '1,64,1': 'wheat#7' })
+const sweepApi = (world, items) => fakeApi({
+  world,
+  items,
+  answers: {
+    find_blocks: args => ({ positions: String(args.block).includes('wheat') ? Object.keys(world).map(k => k.split(',').map(Number)).map(([x, y, z]) => ({ x, y, z })) : [] }),
+    dig: args => { world[`${args.x},${args.y},${args.z}`] = 'air'; return {} },
+    place: args => { (args.blocks ?? [args]).forEach(b => { world[`${b.x},${b.y},${b.z}`] = 'wheat#0' }); return {} }
+  }
 })
+test('farm.harvest: cut sweep in row order, one collect, one replant batch', async () => {
+  const { api, calls } = sweepApi(sweepWorld(), { wheat_seeds: 9 })
+  await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual(calls.filter(c => /^(dig|collect|place)/.test(c)), [
+    'dig x=0 y=64 z=0 batch', 'dig x=1 y=64 z=0 batch', 'dig x=1 y=64 z=1 batch', 'dig x=0 y=64 z=1 batch',
+    'collect range=8',
+    'place blocks=(item=wheat_seeds x=0 y=64 z=0) (item=wheat_seeds x=1 y=64 z=0) (item=wheat_seeds x=1 y=64 z=1) (item=wheat_seeds x=0 y=64 z=1)'])
+})
+test('farm.harvest: counts what was cut, what went back in, and what is still growing', async () => {
+  const { api } = sweepApi(sweepWorld(), { wheat_seeds: 9 })
+  const out = await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual([out.harvested, out.replanted, out.notReplanted, out.stillGrowing], [{ wheat: 4 }, 4, null, 1])
+})
+test('farm.harvest: a checkpoint per row, not per cell', async () => {
+  const { api, checkpoints } = sweepApi(sweepWorld(), { wheat_seeds: 9 })
+  await farmHarvest.run(api, { within: 8 })
+  assert.equal(checkpoints.length, 2)
+})
+test('farm.harvest: seeds for only part of the field: the batch plants what the pockets hold, the rest is said', async () => {
+  const { api, calls } = sweepApi(sweepWorld(), { wheat_seeds: 2 })
+  const out = await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual([calls.filter(c => c.startsWith('place')), out.replanted, out.notReplanted],
+    [['place blocks=(item=wheat_seeds x=0 y=64 z=0) (item=wheat_seeds x=1 y=64 z=0)'], 2, 2])
+})
+
+// which cut cells the replant batch can plant from what I carry, in the order they were cut
+for (const [name, cut, carried, expected] of [
+  ['enough of everything', [{ x: 0, y: 64, z: 0, seed: 'wheat_seeds' }, { x: 1, y: 64, z: 0, seed: 'carrot' }], { wheat_seeds: 3, carrot: 1 },
+    [{ item: 'wheat_seeds', x: 0, y: 64, z: 0 }, { item: 'carrot', x: 1, y: 64, z: 0 }]],
+  ['one carrot for two cells: the first cut gets it', [{ x: 0, y: 64, z: 0, seed: 'carrot' }, { x: 1, y: 64, z: 0, seed: 'carrot' }], { carrot: 1 },
+    [{ item: 'carrot', x: 0, y: 64, z: 0 }]],
+  ['no seed carried at all', [{ x: 0, y: 64, z: 0, seed: 'beetroot_seeds' }], {}, []]
+]) test(`replantBatch: ${name}`, () => assert.deepEqual(replantBatch(cut, carried), expected))
+
+// dig walked to within 3 of every cell (goNear) though the arm reaches 4.5 from the eyes: a path search every few crops
+for (const [name, feet, cell, expected] of [
+  ['the crop at my feet', { x: 0.5, y: 64, z: 0.5 }, { x: 0, y: 64, z: 0 }, true],
+  ['four cells along the row', { x: 0.5, y: 64, z: 0.5 }, { x: 4, y: 64, z: 0 }, true],
+  ['five along and two across: walk', { x: 0.5, y: 64, z: 0.5 }, { x: 5, y: 64, z: 2 }, false],
+  ['two down a slope and three along', { x: 0.5, y: 67, z: 0.5 }, { x: 3, y: 65, z: 0 }, true],
+  ['three down and three along is out of reach', { x: 0.5, y: 67, z: 0.5 }, { x: 3, y: 64, z: 0 }, false]
+]) test(`digFromHere: ${name}`, () => assert.equal(digFromHere(feet, cell), expected))
 
 test('farm.harvest: a crop it dug but could not pick up is lost, not harvested (#142)', async () => {
   const world = { '0,64,0': 'wheat#7' }
@@ -4039,7 +4081,7 @@ test('farm.harvest: a stalk is cut at the second segment, never at its base', as
   })
   const out = await farmHarvest.run(api, {})
   assert.deepEqual([out.harvested, calls.filter(c => c.startsWith('dig')), out.stalkBases],
-    [{ sugar_cane: 1 }, ['dig 5,66,5'], 'all 1 still stand and will regrow'])
+    [{ sugar_cane: 1 }, ['dig x=5 y=66 z=5 batch'], 'all 1 still stand and will regrow'])
 })
 
 test('farm.harvest: a ripe crop it cannot walk to is named, and the rest is still harvested', async () => {
