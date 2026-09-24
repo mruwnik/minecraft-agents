@@ -2402,7 +2402,7 @@ for (const [name, error, expected] of [
 // eat_failed said "nothing I carry is food" to Chani with five carrots in her pockets: with food carried, the plugin's no-choice is about its hand, not my pockets
 for (const [name, edible, expected] of [
   ['carrots carried: say so, and say what else it can be',
-    ['carrot'], "I carry carrot, but the eat reflex found no meal to take (the food left my hand before it could choose: near a fence gate the gate reflex puts tempting food away): No food specified and couldn't find a choice in inventory!"],
+    ['carrot'], "I carry carrot, but the eat reflex found no meal to take (it looked while the food was being moved and in no slot: near a fence gate the gate reflex puts tempting food away): No food specified and couldn't find a choice in inventory!"],
   ['nothing carried: the old wording stands', [], "nothing I carry is food I am willing to eat: No food specified and couldn't find a choice in inventory!"]
 ]) {
   test(`eatFailure with food carried: ${name}`, () => assert.equal(eatFailure(new Error("No food specified and couldn't find a choice in inventory!"), edible), expected))
