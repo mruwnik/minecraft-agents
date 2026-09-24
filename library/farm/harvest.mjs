@@ -2,6 +2,8 @@
 // at the second segment so the base regrows, then pick the drops up. It works where I STAND: goto the field first.
 // A crop behind a fence or across water must not cost the whole harvest, so what it cannot reach is reported, not thrown.
 import { cropNames, ripeCrop, harvestOrder, isStalkCut, stalkReplant, STALKS, workRefusal, planCells, replantBatch } from '../../src/lib.mjs'
+import { WORK_RANGE } from '../../src/walk.mjs'
+import { cellOf, fieldEdge, standingLine, plantOrder, fieldCrops, bareReason, notReplantedLine } from '../../src/field.mjs'
 
 const WITHIN = 24
 const GIVE_UP = 4
@@ -9,19 +11,23 @@ const GIVE_UP = 4
 const key = c => `${c.x},${c.y},${c.z}`
 const add = (into, name) => { into[name] = (into[name] ?? 0) + 1 }
 
-// where to stand in a named field, and how far to reach from there. A `within` measured from whichever corner the walk
-// happened to arrive at misses the far rows of anything bigger than a few cells, so the body goes to the middle of the
-// plan and reaches just far enough to cover it - which also keeps the harvest inside the field it was sent to.
-const middleOf = place => {
-  const cells = planCells(place)
-  if (!cells.length) return { centre: { x: place.x, y: place.y, z: place.z }, span: WITHIN }
-  const mid = k => Math.round((Math.min(...cells.map(c => c[k])) + Math.max(...cells.map(c => c[k]))) / 2)
-  const centre = { x: mid('x'), y: place.y, z: mid('z') }
-  return { centre, span: Math.ceil(Math.max(...cells.map(c => Math.hypot(c.x - centre.x, c.z - centre.z)))) + 2 }
+// where to stand at a named field: the nearest cell on its edge (or a lane through it) the body can stand in, and how far
+// to reach from there to cover the plan. Never its centre: a walk steps round crops, so a dense field's centre has no cell a
+// walk can end in, and the search timed out (card f30fd998). A plan with no cells is walked to as marked
+const walkToField = async (api, field) => {
+  const cells = planCells(field)
+  if (!cells.length) { await api.act('goto', { x: field.x, y: field.y, z: field.z, range: 2 }); return { cells: null, edge: null, span: WITHIN } }
+  const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
+  const chosen = () => fieldEdge(cellAt, cells, api.pos())
+  // nothing seen from here: the anchor is a rim cell of the plan, and its chunks are loaded once the body stands near it
+  const edge = chosen() ?? await api.act('goto', { x: field.x, y: field.y + 1, z: field.z, range: 4 }).then(chosen)
+  if (!edge) throw new Error(`${field.name}: nowhere to stand within ${WORK_RANGE} of any cell of its plan: leave a . path or a covered channel through the field, or walk to its edge and call farm.harvest within=`)
+  await api.act('goto', { x: edge.x, y: edge.y, z: edge.z, range: 1 })
+  return { cells, edge, span: edge.span }
 }
 
 export default {
-  doc: 'farm.harvest [place=] [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops. place= walks to a saved farm first and reaches just far enough to cover it. harvested= counts what I cut, lost= what never reached my pockets',
+  doc: 'farm.harvest [place=] [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops. place= walks to the edge of a saved farm first and cuts only the crops of that plan. harvested= counts what I cut, lost= what never reached my pockets',
   stops: 'nothing ripe left within reach, or four crops in a row it cannot walk to',
   args: { within: 'number', place: 'string' },
 
@@ -32,16 +38,19 @@ export default {
     // one place for every tool that works marked ground (#144)
     const refusal = field && workRefusal(field, api.me?.())
     if (refusal) throw new Error(refusal)
-    const middle = field ? middleOf(field) : null
-    const within = a.within ?? middle?.span ?? WITHIN
-    if (middle) await api.act('goto', { ...middle.centre, range: 2 })
+    const at = field ? await walkToField(api, field) : { cells: null, edge: null }
+    const within = a.within ?? at.span ?? WITHIN
+    const standing = at.edge ? standingLine(at.edge) : undefined
+    if (standing) api.report({ standing })
     const nameAt = c => api.block(c.x, c.y, c.z)?.name
+    const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
     const harvested = {}
     const unreachable = []
     let replanted = 0
 
     // ---- crops
-    const { positions: cells = [] } = await api.act('find_blocks', { block: cropNames, maxDistance: within, count: 2000 })
+    const { positions: found = [] } = await api.act('find_blocks', { block: cropNames, maxDistance: within, count: 2000 })
+    const cells = fieldCrops(at.cells, found)
     const ripeAt = c => {
       const block = api.block(c.x, c.y, c.z)
       const seed = block && ripeCrop(block.name, block.properties?.age)
@@ -91,20 +100,29 @@ export default {
     const bases = stalkReplant(cutDone.map(c => ({ stalk: c.stalk, base: [c.at.x, c.at.y, c.at.z], baseNow: nameAt(c.at) })), Object.keys(api.inv()))
     const stalksReplanted = bases.plant.length ? (await api.act('place', { blocks: bases.plant }).catch(() => ({ placed: 0 }))).placed ?? 0 : 0
 
-    // sweep three: the seeds are in my pockets now, one place batch in the order the cells were cut
-    const batch = replantBatch(cutCells, api.inv())
+    // sweep three: the seeds are in my pockets now, one place batch far end first from the edge, so the cells still bare
+    // are always the ones nearer it and there is one to stand in within reach of the next (cut order walled the body in)
+    const ordered = plantOrder(cutCells, at.edge)
+    const batch = replantBatch(ordered, api.inv())
     if (batch.length) await api.act('place', { blocks: batch }).catch(() => {})
-    // what the batch missed gets one more try each; what I have no seed for stays bare and is counted in notReplanted
-    for (const c of batch) {
-      if (nameAt(c) === 'air' && !await plant(c, c.item)) continue
-      if (nameAt(c) !== 'air') replanted++
+    // what the batch missed gets one more try each, from the edge again: the cell the body stood in is what it stumbled on most
+    const bare = batch.filter(c => nameAt(c) === 'air')
+    if (bare.length && at.edge) await api.act('goto', { x: at.edge.x, y: at.edge.y, z: at.edge.z, range: 1 }).catch(() => {})
+    const failed = []
+    for (const c of bare) {
+      if (await plant(c, c.item) && nameAt(c) !== 'air') continue
+      failed.push({ x: c.x, z: c.z, why: bareReason(cellAt, c) })
     }
+    // what I have no seed for stays bare too, and is said with the rest
+    const sown = new Set(batch.map(key))
+    const noSeed = ordered.filter(c => !sown.has(key(c))).map(c => ({ x: c.x, z: c.z, why: `no ${c.seed} left in my pockets` }))
+    replanted = batch.length - failed.length
 
-    const notReplanted = Object.entries(harvested).filter(([name]) => !STALKS.includes(name)).reduce((n, [, count]) => n + count, 0) - replanted
     return {
       harvested,
       replanted,
-      notReplanted: notReplanted || null,
+      notReplanted: notReplantedLine([...failed, ...noSeed]),
+      standing,
       stillGrowing: cells.length - ripe.length,
       // harvested counts what I CUT. A crop I dug and then could not pick up is not harvested, and saying it was sent
       // a driver away happy from a carrot still lying in the dirt (#142): what stayed on the ground is named here.
