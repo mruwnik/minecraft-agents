@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -2043,17 +2043,17 @@ for (const [name, args, expected] of [
   ['the plain case: hungry, bread in my pockets', { food: 12, carried: sorted(['bread', 'carrot']) }, null],
   ['empty pockets say so', { food: 12, carried: sorted() }, 'nothing I carry is food: my pockets are empty'],
   ['rotten flesh is carried and never eaten', { food: 12, carried: sorted([], ['rotten_flesh']) },
-    'nothing I carry is food (never eaten: rotten_flesh)'],
+    'nothing I carry is food (never eaten: rotten_flesh, which I eat only at food 6 or less or with anyway=true)'],
   ['a pocket of building blocks', { food: 12, carried: sorted([], [], ['cobblestone', 'stick']) },
     'nothing I carry is food (not food: cobblestone, stick)'],
   ['both reasons, both said', { food: 12, carried: sorted([], ['rotten_flesh'], ['cobblestone']) },
-    'nothing I carry is food (never eaten: rotten_flesh; not food: cobblestone)'],
+    'nothing I carry is food (never eaten: rotten_flesh, which I eat only at food 6 or less or with anyway=true; not food: cobblestone)'],
   ['a full belly cannot be fed', { food: 20, carried: sorted(['bread']) }, 'food is already 20: the game refuses a meal at a full belly'],
   ['19 is not 20', { food: 19, carried: sorted(['bread']) }, null],
   ['an item I do not carry', { food: 12, item: 'cake', carried: sorted(['bread']) },
     'no cake I would eat: I do not carry it; what I carry is bread'],
   ['the item I named is on the never-eat list', { food: 12, item: 'rotten_flesh', carried: sorted(['bread'], ['rotten_flesh']) },
-    'no rotten_flesh I would eat: it is on the never-eat list; what I carry is bread'],
+    'no rotten_flesh I would eat: it is on the never-eat list, which I eat only at food 6 or less or with anyway=true; what I carry is bread'],
   ['the item I named is not food', { food: 12, item: 'wheat', carried: sorted(['bread'], [], ['wheat']) },
     'no wheat I would eat: it is not food; what I carry is bread'],
   ['an item named with nothing edible at all', { food: 12, item: 'cake', carried: sorted() },
@@ -2061,10 +2061,40 @@ for (const [name, args, expected] of [
   ['the named item beats the full belly: say the more useful thing first', { food: 20, item: 'cake', carried: sorted(['bread']) },
     'no cake I would eat: I do not carry it; what I carry is bread'],
   ['the item I asked for, and I have it', { food: 12, item: 'bread', carried: sorted(['bread']) }, null],
-  ['the item I asked for, on a full belly', { food: 20, item: 'bread', carried: sorted(['bread']) }, 'food is already 20: the game refuses a meal at a full belly']
+  ['the item I asked for, on a full belly', { food: 20, item: 'bread', carried: sorted(['bread']) }, 'food is already 20: the game refuses a meal at a full belly'],
+  // backlog #139: a body at food 3 carrying 8 rotten flesh was told it carried nothing edible, and starved holding
+  // its own dinner. Hunger damage stops at half health on Normal, so the flesh costs nothing the starving did not.
+  ['at the floor with nothing but flesh, the flesh is dinner', { food: 6, carried: sorted([], ['rotten_flesh']) }, null],
+  ['one above the floor it is still refused', { food: 7, carried: sorted([], ['rotten_flesh']) },
+    'nothing I carry is food (never eaten: rotten_flesh, which I eat only at food 6 or less or with anyway=true)'],
+  ['at the floor with real food, the real food wins and the flesh stays refused', { food: 4, item: 'rotten_flesh', carried: sorted(['bread'], ['rotten_flesh']) },
+    'no rotten_flesh I would eat: it is on the never-eat list, which I eat only at food 6 or less or with anyway=true; what I carry is bread'],
+  ['anyway=true eats the flesh whatever the belly says', { food: 12, item: 'rotten_flesh', anyway: true, carried: sorted(['bread'], ['rotten_flesh']) }, null],
+  ['anyway=true with no item named and nothing else', { food: 12, anyway: true, carried: sorted([], ['rotten_flesh']) }, null],
+  ['anyway=true cannot conjure food out of empty pockets', { food: 12, anyway: true, carried: sorted() },
+    'nothing I carry is food: my pockets are empty'],
+  ['anyway=true does not beat a full belly', { food: 20, anyway: true, carried: sorted([], ['rotten_flesh']) },
+    'food is already 20: the game refuses a meal at a full belly'],
+  ['at the floor the flesh is named as what I carry', { food: 2, item: 'cake', carried: sorted([], ['rotten_flesh']) },
+    'no cake I would eat: I do not carry it; what I carry is rotten_flesh'],
+  ['a different floor can be asked for', { food: 9, floor: 10, carried: sorted([], ['rotten_flesh']) }, null]
 ]) {
   test(`eatRefusal: ${name}`, () => assert.equal(eatRefusal(args), expected))
 }
+
+// The reflex has to know WHAT to put in the hand, not only that it may: mineflayer-auto-eat keeps its own banned list,
+// so a desperate meal is only eaten when the item is handed to it by name.
+for (const [name, args, expected] of [
+  ['well fed, only the ordinary food is on the table', { food: 15, carried: sorted(['bread'], ['rotten_flesh']) }, { desperate: false, allowed: ['bread'] }],
+  ['at the floor with nothing else, the banned food joins it', { food: 6, carried: sorted([], ['rotten_flesh']) }, { desperate: true, allowed: ['rotten_flesh'] }],
+  ['at the floor with bread in hand, nothing changes', { food: 6, carried: sorted(['bread'], ['rotten_flesh']) }, { desperate: false, allowed: ['bread'] }],
+  ['anyway=true puts both on the table', { food: 15, anyway: true, carried: sorted(['bread'], ['rotten_flesh']) }, { desperate: true, allowed: ['bread', 'rotten_flesh'] }],
+  ['empty pockets stay empty', { food: 1, carried: sorted() }, { desperate: true, allowed: [] }]
+]) {
+  test(`eatAllowed: ${name}`, () => assert.deepEqual(eatAllowed(args), expected))
+}
+
+test('eatAllowed: the floor is the one the refusal names', () => assert.equal(HUNGER_FLOOR, 6))
 
 // The reflex is a physicsTick handler: 20 tries a second. While every meal timed out (see the eat_failed root cause) that
 // meant 20 failed eats a second, each one a pair of window clicks at the server and a line in the log. After a failure it

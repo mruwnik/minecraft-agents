@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -138,11 +138,16 @@ const eatTick = async () => {
   if (!eatRetryDue(eatFailedAt, Date.now())) return
   // an empty-handed body asked the plugin 20 times a second and got its own wording back. Ask ourselves first, and say
   // which of the things I DO carry were passed over and why (backlog #134)
-  const refusal = eatRefusal({ food: bot.food, carried: carriedFood() })
+  const carried = carriedFood()
+  const refusal = eatRefusal({ food: bot.food, carried })
   if (refusal) { eatFailedAt = Date.now(); return sayError(refusal, { food: bot.food, health: Math.round(bot.health) }, 'eat_failed') }
+  // the plugin keeps a banned list of its own, so a meal only the hunger floor allows is eaten only when the item is
+  // put in its hand by name. Below the floor with nothing better carried, the flesh IS the food (backlog #139).
+  const { desperate, allowed } = eatAllowed({ food: bot.food, carried })
+  const last = desperate ? bot.inventory.items().find(i => allowed.includes(i.name)) : null
   // a meal that worked clears the cooldown: a body at food 4 eats its carrots one after another, it does not wait 5 s
   // between them because the attempt before the first one failed
-  await eatOnce({}).then(() => { eatFailedAt = null }, error => { eatFailedAt = Date.now(); eatFailed(error) })
+  await eatOnce(last ? { food: last } : {}).then(() => { eatFailedAt = null }, error => { eatFailedAt = Date.now(); eatFailed(error) })
 }
 // ROOT CAUSE of "the body starves with bread in its pockets". The plugin calls a meal finished when the server sends
 // entity_status 9 for my own entity, and this server never does: ClaudeProbe ate its way from food 15 to food 20 while
@@ -2119,12 +2124,15 @@ const quick = {
   // by hand. It is also the only way to read what mineflayer-auto-eat really answers: its own reflex swallowed every word.
   async eat (a) {
     const carried = carriedFood()
-    const refusal = eatRefusal({ food: bot.food, item: a.item, carried })
+    const refusal = eatRefusal({ food: bot.food, item: a.item, carried, anyway: a.anyway })
     if (refusal) throw new Error(refusal)
-    const edible = bot.inventory.items().filter(i => carried.edible.includes(i.name))
+    const { allowed } = eatAllowed({ food: bot.food, carried, anyway: a.anyway })
+    const edible = bot.inventory.items().filter(i => allowed.includes(i.name))
     const before = bot.food
-    // sanitizeOpts writes its choice back into this object, so an eat with no item= still says what it ate
-    const opts = a.item ? { food: edible.find(i => i.name === a.item) } : {}
+    // sanitizeOpts writes its choice back into this object, so an eat with no item= still says what it ate. With
+    // nothing on the ordinary list the choice is made here instead: the plugin would refuse what the floor allowed.
+    const pick = a.item ? edible.find(i => i.name === a.item) : (carried.edible.length ? null : edible[0])
+    const opts = pick ? { food: pick } : {}
     // with strictErrors off a failed meal resolves and emits eatFail instead of throwing: catch both, or `ate` would lie
     let failure = null
     const onFail = error => { failure ??= error }
@@ -2411,7 +2419,9 @@ class HandBack extends Error {
 }
 
 const worldDay = () => Math.floor(Number(bot.time.age ?? 0) / 24000)
-const edibleCarried = () => bot.inventory.items().some(i => bot.registry.foodsByName?.[i.name] && !BANNED_FOOD.includes(i.name))
+// a body below the hunger floor carrying rotten flesh is not a body with nothing edible: it has a meal it is now
+// allowed to eat, and a composite that stopped for "nothing edible carried" was stopping over its own dinner (#139)
+const edibleCarried = () => eatAllowed({ food: bot.food, carried: carriedFood() }).allowed.length > 0
 // a saved plan with its cells in world coordinates and what it would cost to build
 function planOf (name) {
   const place = readPlaces().find(p => p.name === name)

@@ -1292,15 +1292,29 @@ export function foodSort (carried, isFood, banned) {
   }
 }
 
+// The never-eat list is a preference, and a preference that outlives the body holding it is a bug. At food 3 with 8
+// rotten flesh in its pockets this body was told it carried nothing edible, over and over, and walked 95 blocks to a
+// bread chest to answer it (backlog #139). Hunger damage on Normal stops at half health, so the flesh costs nothing
+// the starving was not already costing, and its own hunger cannot take a body below what the empty belly already
+// would. So below the floor, with nothing better in the pockets, the banned food IS the food; and `anyway=true` lets
+// the agent make that call itself at any hunger, because the agent can see reasons this code cannot.
+export const HUNGER_FLOOR = 6
+export const eatAllowed = ({ food, carried, anyway = false, floor = HUNGER_FLOOR }) => {
+  const desperate = Boolean(anyway) || (food <= floor && !carried.edible.length)
+  return { desperate, allowed: desperate ? [...carried.edible, ...carried.banned] : [...carried.edible] }
+}
+
 // ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. It names what
-// it passed over, so the answer says what to do next: cook the flesh away, or go and find real food.
-const whyNot = ({ banned, notFood }, item) => banned.includes(item) ? 'it is on the never-eat list' : notFood.includes(item) ? 'it is not food' : 'I do not carry it'
-export function eatRefusal ({ food, item, carried }) {
-  const { edible, banned, notFood } = carried
-  const have = edible.length ? `what I carry is ${edible.join(', ')}` : 'I carry nothing edible'
-  if (item && !edible.includes(item)) return `no ${item} I would eat: ${whyNot(carried, item)}; ${have}`
-  if (!item && !edible.length) {
-    const skipped = [...(banned.length ? [`never eaten: ${banned.join(', ')}`] : []), ...(notFood.length ? [`not food: ${notFood.join(', ')}`] : [])]
+// it passed over, so the answer says what to do next: cook the flesh away, go and find real food, or say anyway=true.
+const floorNote = floor => `, which I eat only at food ${floor} or less or with anyway=true`
+const whyNot = ({ banned, notFood }, item, floor) => banned.includes(item) ? `it is on the never-eat list${floorNote(floor)}` : notFood.includes(item) ? 'it is not food' : 'I do not carry it'
+export function eatRefusal ({ food, item, carried, anyway = false, floor = HUNGER_FLOOR }) {
+  const { banned, notFood } = carried
+  const { allowed } = eatAllowed({ food, carried, anyway, floor })
+  const have = allowed.length ? `what I carry is ${allowed.join(', ')}` : 'I carry nothing edible'
+  if (item && !allowed.includes(item)) return `no ${item} I would eat: ${whyNot(carried, item, floor)}; ${have}`
+  if (!item && !allowed.length) {
+    const skipped = [...(banned.length ? [`never eaten: ${banned.join(', ')}${floorNote(floor)}`] : []), ...(notFood.length ? [`not food: ${notFood.join(', ')}`] : [])]
     return skipped.length ? `nothing I carry is food (${skipped.join('; ')})` : 'nothing I carry is food: my pockets are empty'
   }
   return food >= 20 ? 'food is already 20: the game refuses a meal at a full belly' : null
@@ -2163,7 +2177,7 @@ export const PRIMITIVES = {
   escort: { section: 'creature', args: 'mob= x= y= z= [count=] [within=32] [penned=] [range=]', doc: 'the walk itself: fetch the animals and bring them to a spot, stopping for stragglers (flock.lead is the whole job)' },
   'pen.check': { section: 'pen', args: '[x= y= z=] [radius=]', doc: 'walk a fence and find where a pen leaks: gaps, corner gates, rims an animal can hop' },
   // ---- self
-  eat: { section: 'self', args: '[item=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong' },
+  eat: { section: 'self', args: '[item=] [anyway=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong. At food 6 or less with nothing else edible I eat the never-eat list too (rotten flesh: its hunger cannot take me below where the empty belly already would); anyway=true does that at any hunger, on your say-so' },
   sleep: { section: 'self', args: '[any=]', doc: 'sleep in the nearest free bed within 32 blocks' },
   wake: { section: 'self', args: '', doc: 'get out of bed' },
   quit: { section: 'self', args: '', doc: 'stop my body; ./start in the background brings it back' },
