@@ -2153,9 +2153,15 @@ for (const [name, where, expected] of [['a map', undefined, 1500], ['where= only
 }
 
 // Miles's cottage: the walk ended one step inside the door, "near" stayed true for ever, the door stood open and a zombie walked in
-const DOOR = { near: false, open: true, mine: true, leading: false, moving: false, inDoorway: false }
+const DOOR = { near: false, open: true, mine: true, leading: false, moving: false, inDoorway: false, reflexes: true, otherNear: false, otherToggledMsAgo: Infinity }
 for (const [name, state, expected] of [
   ['walked on past it', DOOR, true],
+  // Perrin's idle body shut the starter-complex gate 16 ms after Dan opened it, again and again, while he moved animals (13:30Z)
+  ['another player stands within 4 of it', { ...DOOR, otherNear: true }, false],
+  ['another player toggled it 20 s ago', { ...DOOR, otherToggledMsAgo: 20000 }, false],
+  ['another player toggled it over a minute ago', { ...DOOR, otherToggledMsAgo: 61000 }, true],
+  // reflexes on=false did not stop it: shutting gates is a reflex, and the switch says so
+  ['reflexes switched off', { ...DOOR, reflexes: false }, false],
   ['stopped right behind it', { ...DOOR, near: true }, true],
   ['still walking through', { ...DOOR, near: true, moving: true }, false],
   ['standing in the doorway', { ...DOOR, near: true, inDoorway: true }, false],
@@ -2770,15 +2776,36 @@ for (const [name, pressed, inFence, nudge, pos, expected] of [
 // the starter pen's south gate stood open and the herd was gone (21:33Z): no log could say who opened it. Every body near a gate notes each change in gates.log
 const SOUTH_GATE = { x: 21, y: 66, z: -103 }
 for (const [name, before, after, players, expected] of [
-  ['a gate opens: the nearest player did it', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 9.2 }, { name: 'mruwnik', dist: 1.6 }], { gate: '21,66,-103', now: 'open', nearest: 'mruwnik', dist: 2 }],
-  ['a gate shuts', { name: 'oak_fence_gate', open: true }, { name: 'oak_fence_gate', open: false }, [{ name: 'Claude', dist: 1 }], { gate: '21,66,-103', now: 'shut', nearest: 'Claude', dist: 1 }],
-  ['nobody in sight', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [], { gate: '21,66,-103', now: 'open', nearest: null, dist: null }],
-  ['the only player I can see is far off (my body saw Kettricken\'s gate move and blamed Miles, 26 away): nobody named', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 26 }], { gate: '21,66,-103', now: 'open', nearest: null, dist: null }],
+  ['a gate opens: the nearest player did it', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 9.2 }, { name: 'mruwnik', dist: 1.6 }], { gate: '21,66,-103', now: 'open', nearest: 'mruwnik', dist: 2, mine: false, byOther: true }],
+  ['a gate shuts', { name: 'oak_fence_gate', open: true }, { name: 'oak_fence_gate', open: false }, [{ name: 'Claude', dist: 1 }], { gate: '21,66,-103', now: 'shut', nearest: 'Claude', dist: 1, mine: false, byOther: true }],
+  ['nobody in sight', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [], { gate: '21,66,-103', now: 'open', nearest: null, dist: null, mine: false, byOther: true }],
+  ['the only player I can see is far off (my body saw Kettricken\'s gate move and blamed Miles, 26 away): nobody named', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 26 }], { gate: '21,66,-103', now: 'open', nearest: null, dist: null, mine: false, byOther: true }],
   ['a gate is placed: no change of state', { name: 'air' }, { name: 'oak_fence_gate', open: false }, [{ name: 'Claude', dist: 1 }], null],
   ['same state (it only turned)', { name: 'oak_fence_gate', open: true }, { name: 'oak_fence_gate', open: true }, [{ name: 'Claude', dist: 1 }], null],
   ['not a gate', { name: 'oak_door', open: false }, { name: 'oak_door', open: true }, [{ name: 'Claude', dist: 1 }], null]
 ]) {
   test(`gateChange: ${name}`, () => assert.deepEqual(gateChange(SOUTH_GATE, before, after, players), expected))
+}
+
+// who opened it decides whose it is to shut (Dan, 13:30Z: Perrin's body, standing still a block away, claimed his gate).
+// Mine: it opened while my own walk worked it or my own click did, and nobody else stood within 4. Anyone else's
+// change - the body standing still and not clicking - is theirs, and the reflex keeps its hands off it for a minute
+const GATE_SHUT = { name: 'oak_fence_gate', open: false }
+const GATE_OPEN = { name: 'oak_fence_gate', open: true }
+for (const [name, before, after, players, ctx, expected] of [
+  ['my walk opened it, nobody else about: mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.2 }], { me: 'Claude', moving: true, clicking: false }, { mine: true, byOther: false }],
+  ['my own click opened it: mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.2 }], { me: 'Claude', moving: false, clicking: true }, { mine: true, byOther: false }],
+  ['it opened while I stood still: theirs', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2.5 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
+  ['it opened while I stood still and nobody is in sight: still not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
+  ['I was walking but Dan stood within 4: not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.5 }, { name: 'mruwnik', dist: 3 }], { me: 'Claude', moving: true, clicking: false }, { mine: false, byOther: true }],
+  ['I was walking, far from it: not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 5 }], { me: 'Claude', moving: true, clicking: false }, { mine: false, byOther: true }],
+  ['someone shut it while I stood still: theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
+  ['my own click shut it: not theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2 }], { me: 'Claude', moving: false, clicking: true }, { mine: false, byOther: false }]
+]) {
+  test(`gateChange who opened it: ${name}`, () => {
+    const line = gateChange(SOUTH_GATE, before, after, players, ctx)
+    assert.deepEqual({ mine: line.mine, byOther: line.byOther }, expected)
+  })
 }
 
 // Kettricken, 22:00Z: collect_items in a sealed cave pocket at 250,-24,-137 said "drops lie outside this pen". Rock all round is no pen: a pen has a fence or wall top beside its floor
