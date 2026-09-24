@@ -18,6 +18,7 @@ import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
+import { addressedTo, whisperHint, offlineWhisper } from './talk.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -661,6 +662,8 @@ const heldOpen = new Set() // gates opened with `toggle`: they stay open until t
 const myClicks = new Map() // block -> when my own hand last clicked it
 const MY_CLICK_MS = 1500 // a gate that moves this soon after my own click on it moved because of me
 const othersToggled = new Map() // gate -> when a change that was not my doing last moved it: hands off for a minute
+// everyone on the server but this body: bot.players is the tab list, so it holds players out of sight too
+const onlinePlayers = () => Object.keys(bot.players).filter(n => n !== bot.username)
 const otherPlayerNear = at => Object.values(bot.players).some(p => p.entity && p.username !== bot.username && p.entity.position.distanceTo(at) <= GATE_OTHERS_NEAR)
 const doorAt = n => {
   const b = bot.blockAt(new Vec3(Math.floor(n.x), Math.floor(n.y), Math.floor(n.z)))
@@ -2593,15 +2596,20 @@ const quick = {
     return a.where ? { where: scanWhere(nameAt, a, a.where) } : { map: renderScan(nameAt, a) }
   },
 
+  // chat goes to everyone: a message that opens with an online player's name still goes, with a hint to whisper next time (src/talk.mjs)
   chat (a) {
     const said = chatText(a, 250)
     if (said.error) throw new Error(said.error)
     bot.chat(said.text)
-    return {}
+    const to = addressedTo(said.text, onlinePlayers())
+    return to ? { hint: whisperHint(to) } : {}
   },
+  // a whisper to someone offline is /tell into the void: the server's "No player was found" never reaches the driver
   whisper (a) {
     const said = chatText(a, 230)
     if (said.error) throw new Error(said.error)
+    const offline = offlineWhisper(a.player, onlinePlayers())
+    if (offline) throw new Error(offline)
     bot.whisper(a.player, said.text)
     return {}
   },
