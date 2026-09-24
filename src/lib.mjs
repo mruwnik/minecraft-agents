@@ -1472,6 +1472,32 @@ export const patchItemEnchants = source => source.includes(ENCHANTS_LIST)
 // ever and the body starves with bread in its pockets (Jizo). A meal takes 1.6 s
 export const eatJammed = eatingForMs => eatingForMs >= 15000
 
+// #149(a). `eatBelow(health)` raises minHunger as health drops, which sends a HURT body to eat - and a hurt body is
+// usually a body in a fight. Mariel died at food 17 with a sword in her pack: 42 meals in the minute the zombie took
+// to kill her, each one putting bread in the hand the sword needed, and the fight and the run both went unarmed.
+// Food is for after. Nothing here is about hunger: a body clear of all three eats as it always did.
+export const eatHold = ({ hostileNear = false, fighting = false, fleeing = false } = {}) => {
+  if (fighting) return 'a fight of my own is running: the sword stays in my hand until the mob is dead'
+  if (fleeing) return 'a run is on: nothing goes in my hand until it is clear'
+  if (hostileNear) return 'a hostile is within reach: the sword stays in my hand, food is for afterwards'
+  return null
+}
+
+// #149(c): Mariel's "jammed, reset" arrived on the tick she died, and until then the meal held the sword out of her hand:
+// every equip waits for a meal in flight (afterTheMeal). So a meal is dropped the moment eatHold would not have started
+// it. Damage alone is not a reason: a starving body is hurt every 4 s, and the meal is its cure
+export const mealToDrop = ({ eating = false, hostileNear = false, fighting = false, fleeing = false } = {}) =>
+  eating ? eatHold({ hostileNear, fighting, fleeing }) : null
+// strictErrors is off, so a meal that fails RESOLVES and reports only through eatFail. A meal I cancelled myself for a
+// fight is not a failure and must not grow the backoff
+export const mealFailed = error => !/manually cancel/i.test(String(error?.message ?? error ?? ''))
+
+// #149(b): a meal that will not go down is not worth asking for every 3 s. Each consecutive failure waits twice as
+// long, to half a minute; one meal that works clears the count (see eatFailedAt), so a fed body is never held back
+export const EAT_BACKOFF_FIRST = 5000
+export const EAT_BACKOFF_CAP = 30000
+export const eatBackoff = failures => Math.min(EAT_BACKOFF_FIRST * 2 ** Math.max(0, Number(failures) - 1), EAT_BACKOFF_CAP)
+
 // SAFETY. The plugin's reflex ends in `catch {}`: across every body's log there are 140 jam lines and not one word of why
 // a meal never finished, while Chani's body walked 20 minutes at health 7 / food 4 with five carrots in its pockets. Its
 // errors name its own internals and append the whole item object after a newline, so the advice comes first and the real

@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -118,6 +118,8 @@ let gen = 0
 // or superseded it must stop, or it keeps fighting the next command for the body
 const cancelGuard = () => { const mine = gen; return () => { if (gen !== mine) throw new Error('cancelled') } }
 let waitingForServer = false
+// when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
+let eatingSince = null
 
 // SAFETY (bodies never eat). mineflayer-auto-eat's own reflex is `statusCheck`, and it ends in `catch {}`: every failure
 // for days was invisible, and across every body's bot.log there are 140 jam lines and not one word of why. This is the
@@ -136,25 +138,46 @@ const eatOnce = async opts => {
     bot.autoEat._eating = false
   }
 }
+// #149(a): how near a hostile has to be for the hand to belong to the sword rather than to a loaf
+const EAT_SAFE_RANGE = 6
+let eatFails = 0
 const eatTick = async () => {
   if (!ready || !bot?.autoEat || bot.autoEat.isEating) return
   if (bot.food >= bot.autoEat.opts.minHunger && bot.health >= bot.autoEat.opts.minHealth) return
+  // #149: a hurt body is usually a body in a fight, and minHunger rises as health drops, so this reflex used to walk
+  // into the melee with bread in its hand. Mariel died that way at food 17 with a sword in her pack. Silently: 42 eat
+  // lines in the minute it took to kill her were the log's whole account of the fight
+  if (eatHold({ hostileNear: nearbyHostiles(EAT_SAFE_RANGE).length > 0, fighting: Boolean(fighting), fleeing: Boolean(flee) })) return
   // hurt but full: minHealth sends me to eat however full I am, and the game refuses a meal at food 20. Trying anyway
   // is 20 meals a second that can only time out -- most of the 140 jam lines in the logs are this.
   if (bot.food >= 20) return
-  if (!eatRetryDue(eatFailedAt, Date.now())) return
+  // #149(b): each failure in a row waits twice as long, to half a minute; one meal that works clears the count
+  if (!eatRetryDue(eatFailedAt, Date.now(), eatBackoff(eatFails))) return
   // an empty-handed body asked the plugin 20 times a second and got its own wording back. Ask ourselves first, and say
   // which of the things I DO carry were passed over and why (backlog #134)
   const carried = carriedFood()
   const refusal = eatRefusal({ food: bot.food, carried })
-  if (refusal) { eatFailedAt = Date.now(); return sayError(refusal, { food: bot.food, health: Math.round(bot.health) }, 'eat_failed') }
+  if (refusal) { eatFailedAt = Date.now(); eatFails++; return sayError(refusal, { food: bot.food, health: Math.round(bot.health) }, 'eat_failed') }
   // the plugin keeps a banned list of its own, so a meal only the hunger floor allows is eaten only when the item is
   // put in its hand by name. Below the floor with nothing better carried, the flesh IS the food (backlog #139).
   const { desperate, allowed } = eatAllowed({ food: bot.food, carried })
   const last = desperate ? bot.inventory.items().find(i => allowed.includes(i.name)) : null
   // a meal that worked clears the cooldown: a body at food 4 eats its carrots one after another, it does not wait 5 s
   // between them because the attempt before the first one failed
-  await eatOnce(last ? { food: last } : {}).then(() => { eatFailedAt = null }, error => { eatFailedAt = Date.now(); eatFailed(error) })
+  // strictErrors is off, so a meal that fails still resolves: the eatFail listener counts it (mealFailed), and only a
+  // meal that raised no failure on the way clears the backoff
+  const failsBefore = eatFails
+  await eatOnce(last ? { food: last } : {}).then(() => { if (eatFails === failsBefore) { eatFailedAt = null; eatFails = 0 } }, error => { eatFailedAt = Date.now(); eatFails++; eatFailed(error) })
+}
+// #149(c): a meal in flight holds every equip until it ends (afterTheMeal), the sword's included. Cancelling it rejects
+// the listener, so the next equip goes through at once. The plugin's own "Eating manually canceled!" is not a failure
+function dropMeal (why) {
+  if (!bot?.autoEat?.isEating) return false
+  bot.autoEat.cancelEat()
+  bot.autoEat._eating = false
+  eatingSince = null
+  console.log(`[auto-eat] dropped a meal: ${why}`)
+  return true
 }
 // ROOT CAUSE of "the body starves with bread in its pockets". The plugin calls a meal finished when the server sends
 // entity_status 9 for my own entity, and this server never does: ClaudeProbe ate its way from food 15 to food 20 while
@@ -396,13 +419,18 @@ function connect () {
       bot.activateBlock = afterTheMeal(() => mealInFlight, bot.activateBlock.bind(bot))
     }
     bot.autoEat.enableAuto()
-    bot.autoEat.on('eatFail', error => eatFailed(error))
+    bot.autoEat.on('eatFail', error => {
+      if (!mealFailed(error)) return
+      eatFailedAt = Date.now()
+      eatFails++
+      eatFailed(error)
+    })
     // see eatJammed: the plugin can stay "eating" for ever. ONE timer for the process: started at every spawn and never
     // stopped, the old ones outlive their connection and read the module-level `bot`, which by then is a new one whose
     // plugins are not loaded yet -- that is the `uncaught: ... (reading 'isEating')` every few seconds that filled
     // Perrin's and Mariel's events files after the 09-22 20:53 restart. Cleared here, and guarded for the same reason.
     clearInterval(eatTimer)
-    let eatingSince = null
+    eatingSince = null
     eatTimer = setInterval(() => {
       if (!bot?.autoEat || !ready) { eatingSince = null; return }
       if (!bot.autoEat.isEating) { eatingSince = null; return }
@@ -513,6 +541,8 @@ function connect () {
     if (bot.health < lastHealth - 0.5) {
       lastHurt = Date.now()
       const nearby = nearbyHostiles(8).map(e => e.name)
+      // #149(c): hit mid-meal by something with teeth: the meal goes, the sword comes back. Starving damage keeps the meal
+      if (nearby.length) dropMeal(`hit by ${nearby[0]} mid-meal`)
       const cause = hurtCause({ lost: lastHealth - bot.health, nearby, sinceCreeperMs: Date.now() - creeperSeenAt, fell: Date.now() - lastFall.at < 1500 ? lastFall.blocks : 0, fledFrom: lastReflex?.kind === 'fleeing' ? lastReflex.mob : null, sinceFledMs: Date.now() - (lastReflex?.at ?? 0), food: bot.food, oxygen: bot.oxygenLevel ?? 20 })
       lastWound = { cause, nearby, at: Date.now() }
       emit('hurt', { health: Math.round(bot.health), food: bot.food, nearby, ...(cause ? { cause } : {}) })
@@ -872,6 +902,9 @@ const leaveBed = () => {
 
 function reflexTick () {
   const me = bot.entity.position
+  // #149(a,c): the hand belongs to the sword while anything hostile is in reach, a fight or a run is on
+  const drop = mealToDrop({ eating: Boolean(bot.autoEat?.isEating), hostileNear: nearbyHostiles(EAT_SAFE_RANGE).length > 0, fighting: Boolean(fighting), fleeing: Boolean(flee) })
+  if (drop) dropMeal(drop)
   // running out of air: swim up until we can breathe again
   // (oxygenLevel alone misfires on dry land through ViaBackwards, so also require our head to be in water)
   const headInWater = bot.blockAt(me.offset(0, 1.62, 0))?.name === 'water'
@@ -1014,6 +1047,7 @@ function reflexTick () {
 }
 
 async function equipBestWeapon () {
+  dropMeal('a fight is starting: the sword goes in my hand')
   const order = ['netherite_sword', 'diamond_sword', 'iron_sword', 'stone_sword', 'golden_sword', 'wooden_sword',
     'netherite_axe', 'diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe']
   const item = order.map(n => bot.inventory.items().find(i => i.name === n)).find(Boolean)
