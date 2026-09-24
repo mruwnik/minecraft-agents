@@ -22,6 +22,8 @@ import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './
 import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
+import { facesForHalf } from './cover.mjs'
+import { fetchFailure, stalledSince } from './fetch.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -833,6 +835,7 @@ const keysDown = () => ['forward', 'back', 'left', 'right', 'jump', 'sprint', 's
 let lastPath = null
 let lastServerPos = null // where the server last PUT the body (it only speaks up when it disagrees with the client)
 let frozenFor = null // the stillFrom a frozen walk was already reported for
+let lastFrozen = null // the last frozen walk: when, where and what the evidence blamed, for a task to own the failure (escort)
 let livePath = [] // the pathfinder's own array: [0] is always the node it is heading for
 let idleTicks = 0
 let nudging = false
@@ -870,7 +873,8 @@ setInterval(() => {
   if (frozenWalk({ keys: keysDown(), moved: sample.moved, seconds: sample.seconds }) && frozenFor !== stillFrom) {
     frozenFor = stillFrom
     const evidence = stallEvidence()
-    emit('frozen_walk', { pos: pos(), evidence, advice: frozenAdvice(evidence) })
+    lastFrozen = { at: Date.now(), pos: pos(), advice: frozenAdvice(evidence) }
+    emit('frozen_walk', { pos: lastFrozen.pos, evidence, advice: lastFrozen.advice })
   }
   // a goto that keeps moving and gets nowhere (Perrin's cow pen gate: 290 s, ended 20 blocks further off)
   const goal = bot.pathfinder.goal
@@ -1755,7 +1759,9 @@ const long = {
       }
       await bot.equip(findItem(b.item ?? a.item), 'hand')
       const before = bot.blockAt(p)?.name
-      const faces = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]].map(f => new Vec3(...f))
+      // the neighbour to click decides a slab's half before the cursor does: the top of the block below always gives a
+      // bottom slab, so a top slab (a channel cover) is placed against a side or the block above (see cover.mjs)
+      const faces = facesForHalf(b.half).map(f => new Vec3(...f))
       const against = placeAgainst(faces.map(f => bot.blockAt(p.plus(f))))
       if (!against) throw new Skip('nothing to place against')
       const face = faces[against.index]
@@ -2176,6 +2182,9 @@ const long = {
       let walkingSince = 0
       let fetchesSinceProgress = 0
       let bestToGo = Infinity
+      // a frozen walk from here on is one of the fetches: three of them beside a wheat field's fence (card fc47bf28)
+      // ended "the cow will not follow" while the body itself had never moved
+      const fetchingSince = Date.now()
       following = herd
       leading = true
       while (!goal.isEnd(bot.entity.position.floored())) {
@@ -2185,7 +2194,7 @@ const long = {
         const noPath = walking && lastPath?.status === 'noPath' && lastPath.at > walkingSince
         const verdict = leadVerdict({ distances: herd.filter(e => e.isValid).map(near), holding, heldFor: holding ? (Date.now() - heldSince) / 1000 : 0, fetchesSinceProgress, noPath })
         if (verdict === 'noway') { const along = herd.filter(e => e.isValid && near(e) <= 5); bot.pathfinder.setGoal(null); return { arrived: false, with: along.length, brought: ledReport(a.mob, along), toGo: Math.round(toGo), why: `no route on foot from here to ${to.x},${to.y},${to.z}. One of: the spot is not free floor to stand on; the gate is in a corner or something stands outside it (pen.check names such gates: blindGates=); a gap, drop or fence somewhere between here and there. The animals are with you: walk the way yourself (goto), fix what blocks it, then lead again`, pos: pos() } }
-        if (verdict === 'giveup') { bot.pathfinder.setGoal(null); return { arrived: false, with: 0, why: `the ${a.mob} will not follow (fetched it 3 times, got no nearer): is there a fence or water between you? Get them out in the open first, or lead fewer`, pos: pos() } }
+        if (verdict === 'giveup') { bot.pathfinder.setGoal(null); return { arrived: false, with: 0, why: fetchFailure({ mob: a.mob, frozen: stalledSince(lastFrozen, fetchingSince) }), pos: pos() } }
         if (verdict === 'lost') { bot.pathfinder.setGoal(null); return { arrived: false, with: 0, why: `the ${a.mob} are gone (despawned or unloaded)`, pos: pos() } }
         if (verdict === 'fetch') {
           bot.pathfinder.setGoal(null)

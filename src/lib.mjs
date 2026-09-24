@@ -2307,6 +2307,16 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
         // `pour` names the solid block to pour ONTO and the water lands one above it: the source belongs at y, so pour onto y-1
         push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is dry` }, 'water_bucket')
       }
+      // water that is only flowing through the cell (level 1-7) is nobody's source: a slab laid into it is not
+      // waterlogged and cuts the flow off (the human, 09-24), and the cell dries the tick the flow recedes. So a flowing
+      // cell is made a source first, a bucket poured onto the block under it, and without a bucket it is left alone
+      // and said so; see src/cover.mjs
+      const flowing = ground.name === 'water' && !hasWaterSource(ground)
+      if (flowing && !((items.water_bucket ?? 0) > 0)) {
+        jobs.push({ do: 'skip', x: cell.x, y: cell.y, z: cell.z, item: 'water_bucket', have: false, why: `flowing water at ${cell.x},${cell.y},${cell.z}: pour a source first, then cover` })
+        continue
+      }
+      if (flowing) push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is flowing water, not a source` }, 'water_bucket')
       // and cover it: open water in a field is a hole to fall into and a wall to the pathfinder
       push({ do: 'cover', x: cell.x, y: cell.y, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is open water` }, spec.cover)
       continue
@@ -2337,8 +2347,11 @@ export const jobCall = job => {
   const action = JOB_ACTION[job.do]
   if (!action) return null
   const at = { x: job.x, y: job.y, z: job.z }
-  // a cover is a BOTTOM slab laid into the water: any other half would sit above the source and leave the hole open
-  return [action, action === 'place' ? { item: job.item, ...at, ...(job.do === 'cover' ? { half: 'bottom' } : {}) } : at]
+  // a cover is a TOP slab laid into the water: waterlogged, so the source stays and the farmland beside it wet, and
+  // flush with the ground, so the body walks over it level. A bottom slab was a half-step down into every channel
+  // that bodies floated and wedged on (card 1ccb0ea1; the human, 09-24). `place` picks a side face for it: see
+  // src/cover.mjs facesForHalf
+  return [action, action === 'place' ? { item: job.item, ...at, ...(job.do === 'cover' ? { half: 'top' } : {}) } : at]
 }
 
 // what a list of jobs will use up. Counted from the jobs, not from the plan, so what already stands is not asked for

@@ -3429,7 +3429,7 @@ test('farm.build: covering an open channel is counted under its own name', async
   const summary = await buildFarm.run(api, { place: 'test-field' })
   assert.equal(summary.covered, 1)
   assert.equal(summary.undefined, undefined)
-  assert.match(calls.join('\n'), /place item=oak_slab x=0 y=63 z=0 half=bottom/)
+  assert.match(calls.join('\n'), /place item=oak_slab x=0 y=63 z=0 half=top/)
 })
 
 test('maintain_farm: an open channel is covered, and counted under its own name', async () => {
@@ -4519,13 +4519,15 @@ test('farm.build: a channel IS dug out by a body that carries the water for it',
 // exact way the melon patch channel ended up capped with dry slabs (seen in game: z=-84 covered end to end, but
 // only the one cell actually poured into came back waterlogged). A cell only counts as ready for its cover once
 // it is a settled source (level 0), not merely wet in passing.
+// (since the top-slab card, farmJobs itself skips a flowing cell with the reason, or pours a source into it first when a
+// bucket is carried - test/cover.test.mjs; the tryJob gate below it still catches a pour that lands as flow only)
 test('farm.build: a cover is held back for water that is only a neighbour\'s flow, not this cell\'s own source', async () => {
   const world = { '0,63,0': 'water#3', '0,62,0': 'stone' }
   const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { oak_slab: 1 } })
   const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
   assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over water that is only passing through')
   assert.equal(summary.covered, undefined)
-  assert.match(summary.stuck, /not holding water/)
+  assert.match(summary.skipped, /flowing water at 0,63,0: pour a source first, then cover/)
 })
 
 test('maintain_farm: a cover is held back for water that is only a neighbour\'s flow, not this cell\'s own source', async () => {
@@ -4534,7 +4536,51 @@ test('maintain_farm: a cover is held back for water that is only a neighbour\'s 
   const summary = await maintainFarm.run(api, { place: 'test-field' })
   assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over water that is only passing through')
   assert.equal(summary.covered, 0)
-  assert.match(summary.stuck, /not holding water/)
+  assert.match(summary.skipped, /flowing water at 0,63,0: pour a source first, then cover/)
+})
+
+// A dry channel job carries water_bucket; a body with no water_bucket but an empty bucket in hand used to just report
+// missing=water_bucket and stop there, leaving the driver to notice, walk to a lake and fill it by hand. Now the job
+// itself looks for the nearest water and fills from it first (see library/farm/shared/water.mjs).
+test('farm.build: a dry channel job fetches its own water_bucket from the nearest source, not just report it missing', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'stone' }
+  const items = { bucket: 1, oak_slab: 4 }
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world, items,
+    answers: {
+      find_blocks: () => ({ positions: [{ x: 5, y: 62, z: 5 }] }),
+      fill: () => { items.water_bucket = (items.water_bucket ?? 0) + 1; items.bucket -= 1; return {} },
+      pour: () => { world['0,63,0'] = 'water'; return {} }
+    }
+  })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('find_blocks') || c.startsWith('fill')), ['find_blocks block=water maxDistance=32 count=8', 'fill 5,62,5'])
+  assert.equal(summary.poured, 1)
+  assert.equal(summary.missing, undefined)
+})
+
+test('farm.build: a dry channel job with no bucket at all still reports it missing, not a wasted search', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'stone' }
+  const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { oak_slab: 4 } })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('find_blocks') || c.startsWith('fill')), [])
+  assert.match(summary.missing, /water_bucket/)
+})
+
+test('maintain_farm: a dry channel job fetches its own water_bucket from the nearest source, not just report it missing', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'stone' }
+  const items = { bucket: 1, oak_slab: 4 }
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world, items,
+    answers: {
+      find_blocks: () => ({ positions: [{ x: 5, y: 62, z: 5 }] }),
+      fill: () => { items.water_bucket = (items.water_bucket ?? 0) + 1; items.bucket -= 1; return {} }
+    }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual(calls.filter(c => c.startsWith('find_blocks') || c.startsWith('fill')), ['find_blocks block=water maxDistance=32 count=8', 'fill 5,62,5'])
+  assert.equal(summary.poured, 1)
+  assert.equal(summary.missing, undefined)
 })
 
 test('farm.build: partial=true builds what it can and names the rest', async () => {
