@@ -3,7 +3,7 @@
 // and breaking the walk. This digs each of them and picks the drops up. It never touches what the plan DOES ask for,
 // never a crop (that is farm.harvest's work), never a light or somebody's chest, and never a block inside a protected
 // zone that is not this body's: that ground belongs to whoever named the zone.
-import { harvestOrder, planAnchor, planCells } from '../../src/lib.mjs'
+import { harvestOrder, planAnchor, planCells, workRefusal } from '../../src/lib.mjs'
 import { strays, clutterBlocks, clutterKinds, foreignZone } from './shared/clutter.mjs'
 
 const RANGE = 48
@@ -13,7 +13,7 @@ const RANGE = 48
 const sweepOrder = blocks => harvestOrder([...blocks].sort((a, b) => b.y - a.y))
 
 export default {
-  doc: 'farm.tidy [place=] [range=48]: dig every stray block standing over a saved farm plan (dirt, cobblestone, logs, a stray sapling) and pick up the drops. It never digs what the plan asks for, a crop, a light, somebody\'s chest, or anything inside a zone that is not mine',
+  doc: 'farm.tidy [place=] [range=48]: dig every stray block standing over a saved farm plan (dirt, cobblestone, logs, a stray sapling) and pick up the drops. It never digs what the plan asks for, a crop, a light, somebody\'s chest, anything inside a zone that is not mine, or a field somebody else marked whose note does not invite the work',
   stops: 'the plan is clear, a block it cannot reach, stop, hurt, hungry, or a full inventory',
   args: { place: 'string', range: 'number' },
 
@@ -27,8 +27,16 @@ export default {
         : `no farm plan within ${range} blocks: save one with ./mc farm.plan`)
     }
 
+    // somebody else's field is theirs unless the note they wrote says otherwise: the same question farm.harvest asks,
+    // asked once for every tool that works marked ground (#144). A sweep of every plan in range skips theirs quietly
+    // and sweeps the rest; a sweep of one field by name says why it will not touch it
+    const me = api.me?.()
+    const refusals = named.map(p => workRefusal(p, me)).filter(Boolean)
+    const allowed = named.filter(p => !workRefusal(p, me))
+    if (!allowed.length) throw new Error(refusals[0])
+
     // a plan whose y is a block off would have me dig the block over somebody's crops, or the crops themselves
-    const anchors = named.map(p => ({ p, anchor: planAnchor(planCells(p), api.block) }))
+    const anchors = allowed.map(p => ({ p, anchor: planAnchor(planCells(p), api.block) }))
     const off = anchors.filter(({ anchor }) => anchor.off)
     if (off.length && a.place) throw new Error(`${a.place} is not where its plan says: ${off[0].anchor.note}`)
     const plans = anchors.filter(({ anchor }) => !anchor.off).map(({ p }) => p)
@@ -36,7 +44,6 @@ export default {
 
     const found = plans.flatMap(p => strays(planCells(p), api.block))
     const zones = (await api.act('zones')).zones ?? []
-    const me = api.me?.()
     const guarded = []
     const todo = []
     for (const block of found.filter(b => !b.keep)) {

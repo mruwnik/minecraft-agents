@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, INVITE_WORDS,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -4469,4 +4469,119 @@ for (const [name, times, expected] of [
   ['an ordinary dusk and dawn', [6000, 13000, 1000], { days: 2, ran: 2, notes: [] }]
 ]) {
   test(`routine: ${name}`, async () => assert.deepEqual(await routineWithClock(times), expected))
+}
+
+// ---------------------------------------------------------------- #144: working ground somebody else marked
+// A mark is its owner speaking. `anyone welcome, harvest and replant` on Chani's wheat field is permission, written
+// down, and a tool that ignores it makes her write it twice. The words stay few and plain: a long list of near
+// synonyms turns a description of a farm into an invitation to strip it.
+for (const [note, want] of [
+  ["Chani's wheat farm - anyone welcome, harvest and replant", true],
+  ['anyone may take what is ripe', true],
+  ['take a stack, leave a stack', true],
+  ['harvest rounds welcome here', true],
+  ['WELCOME, ANYONE', true],
+  ['wheat field, 11x10, water channel down the middle', false],
+  ['my seed store, ask first', false],
+  ['my seed store, ask me first', false],
+  ['do not take the carrots', false],
+  ["don't harvest this one, it is seed stock", false],
+  ['private plot', false],
+  ['a mistake I made once', false],
+  ['', false],
+  [undefined, false]
+]) {
+  test(`invited: ${JSON.stringify(note)} -> ${want}`, () => assert.equal(invited(note), want))
+}
+
+for (const [name, place, me, allowed] of [
+  ['an inviting note on somebody else’s place', { name: 'chani-wheat-field', by: 'Chani', note: 'anyone welcome, harvest and replant' }, 'Claude', true],
+  ['a silent note on somebody else’s place', { name: 'chani-carrot-patch', by: 'Chani', note: 'carrots, 4x4' }, 'Claude', false],
+  ['a note that plainly withholds it', { name: 'chani-carrot-patch', by: 'Chani', note: 'carrots, harvest only with me, ask first' }, 'Claude', false],
+  ['my own place, whatever the note says', { name: 'claude-test-field', by: 'Claude', note: 'carrots, 4x4' }, 'Claude', true],
+  ['my own place, spelled differently', { name: 'claude-test-field', by: 'claude', note: 'carrots, 4x4' }, 'Claude', true],
+  ['a place nobody put their name on', { name: 'wild-bee-nest', note: 'wild nest, nobody’s' }, 'Claude', true]
+]) {
+  test(`workRefusal: ${name}`, () => assert.equal(workRefusal(place, me) === null, allowed))
+}
+
+test('workRefusal names the place, its owner, the note as written and what would open it', () => {
+  const said = workRefusal({ name: 'chani-carrot-patch', by: 'Chani', note: 'carrots, 4x4' }, 'Claude')
+  assert.match(said, /chani-carrot-patch/)
+  assert.match(said, /Chani/)
+  assert.match(said, /carrots, 4x4/)
+  for (const word of INVITE_WORDS) assert.match(said, new RegExp(word))
+})
+
+test('farm.harvest: place= walks to the plan and harvests it when the note invites it', async () => {
+  const world = { '10,64,10': 'wheat#7' }
+  const { api, calls } = fakeApi({
+    places: [{ name: 'chani-wheat-field', by: 'Chani', kind: 'farm', note: 'anyone welcome, harvest and replant', x: 10, y: 64, z: 10, plan: 'ww\nww' }],
+    world,
+    answers: {
+      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 10, y: 64, z: 10 }] : [] }),
+      dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} }
+    }
+  })
+  const out = await farmHarvest.run(api, { place: 'chani-wheat-field' })
+  assert.deepEqual(out.harvested, { wheat: 1 })
+  // the middle of the 2x2 plan anchored at 10,64,10, not its corner: a within measured from the corner misses the far rows
+  assert.match(calls[0], /^goto x=11 y=64 z=11 range=2$/)
+})
+
+test('farm.harvest: place= on somebody else’s plot with a silent note is refused before a crop is cut', async () => {
+  const { api, calls } = fakeApi({
+    places: [{ name: 'chani-carrot-patch', by: 'Chani', kind: 'farm', note: 'carrots, 4x4', x: 10, y: 64, z: 10, plan: 'cc' }]
+  })
+  await assert.rejects(farmHarvest.run(api, { place: 'chani-carrot-patch' }), /chani-carrot-patch is Chani's ground/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.harvest: place= names the farms there are when there is no such place', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  await assert.rejects(farmHarvest.run(api, { place: 'no-such-field' }), /no place called no-such-field/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.harvest: with no place= it still harvests where it stands, walking nowhere', async () => {
+  const world = { '0,64,0': 'wheat#7' }
+  const { api, calls } = fakeApi({
+    world,
+    answers: {
+      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 0, y: 64, z: 0 }] : [] }),
+      dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} }
+    }
+  })
+  const out = await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual([out.harvested, calls.filter(c => c.startsWith('goto'))], [{ wheat: 1 }, []])
+})
+
+// The other half of #144, and the half no fix can add later: a body that may not LOOK at somebody's farm cannot plan
+// work on it, ask about it, or answer a question about it. Nothing read-only may ever consult the ownership gate, so
+// the day somebody wires one into a reading action, this fails here rather than in the world.
+const READ_ONLY = ['state', 'look', 'look_at', 'look_around', 'entity', 'animals', 'find_blocks', 'block_at', 'scan',
+  'path_to', 'inventory', 'chest_contents', 'events', 'places', 'zones', 'reflexes', 'watches', 'help']
+const GATES = ['foreignZone', 'inAnyZone', 'invited', 'workRefusal']
+const botSource = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'bot.mjs'), 'utf8')
+const actionBody = name => {
+  const header = new RegExp(`^  (?:async )?${name}[ :] *\\(`, 'm').exec(botSource)
+  assert.ok(header, `no action called ${name} in src/bot.mjs: rename it here too`)
+  const from = botSource.indexOf('{', header.index + header[0].length)
+  let depth = 0
+  for (let i = from; i < botSource.length; i++) {
+    depth += botSource[i] === '{' ? 1 : botSource[i] === '}' ? -1 : 0
+    if (depth === 0) return botSource.slice(from, i + 1)
+  }
+  return botSource.slice(from)
+}
+
+for (const name of READ_ONLY) {
+  test(`${name} only reads: no ownership gate in it`, () => assert.deepEqual(GATES.filter(gate => actionBody(name).includes(gate)), []))
+}
+
+for (const file of ['farm/fields.mjs', 'apiary/inspect.mjs']) {
+  test(`${file} only reads: no ownership gate in it`, () => {
+    const source = fs.readFileSync(path.join(import.meta.dirname, '..', 'library', file), 'utf8')
+    assert.deepEqual(GATES.filter(gate => source.includes(gate)), [])
+  })
 }

@@ -138,6 +138,30 @@ export function markFields ({ saved, by, note }) {
   return { by: saved?.by ?? by, note: text }
 }
 
+// A mark is its owner speaking, and `anyone welcome, harvest and replant` is permission written down. Honouring it is
+// the whole point of writing it, so this is the ONE question every composite asks before it digs, plants or carries
+// away on ground somebody else marked - one rule, one wording, one place to change it (#144).
+// The words are few and plain on purpose: a long list of near-synonyms turns a description of a farm ("wheat, harvest
+// rounds weekly") into an invitation to strip it. A note that plainly withholds permission vetoes them all, because
+// "ask first" written beside "harvest" is not an invitation, and the safe way to be wrong here is to refuse.
+export const INVITE_WORDS = ['welcome', 'anyone', 'take', 'harvest']
+const HOLDS_BACK = /\bask (me |us )?first\b|\bdo not\b|\bdon'?t\b|\bprivate\b/i
+export const invited = note => {
+  const said = String(note ?? '')
+  if (HOLDS_BACK.test(said)) return false
+  return INVITE_WORDS.some(word => new RegExp(`\\b${word}`, 'i').test(said))
+}
+
+// null when the work may go ahead, else the refusal - which names the place, its owner, the note exactly as they wrote
+// it, and what would change the answer. An unsigned place is nobody's and my own is mine, whatever the note says.
+// Nothing that only READS may call this: a body that may not look at a farm cannot plan work on it or answer a
+// question about it, and test/lib.test.mjs holds every read-only action to that.
+export function workRefusal (place, me) {
+  if (!place?.by || String(place.by).toLowerCase() === String(me ?? '').toLowerCase()) return null
+  if (invited(place.note)) return null
+  return `${place.name} is ${place.by}'s ground and the note on it does not invite work: "${place.note ?? ''}". Ask ${place.by} in chat and leave it alone until they answer. It opens by itself when the note says one of: ${INVITE_WORDS.join(', ')}`
+}
+
 export function describePlaces (places, from, options = {}) {
   const { limit = 12, notes = true } = options
   const dist = awayFrom(from)

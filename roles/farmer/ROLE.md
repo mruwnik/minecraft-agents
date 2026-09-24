@@ -58,6 +58,7 @@ Dan's world expects a field to look built, not scratched into the ground:
 
 | I want to | I run |
 |---|---|
+| harvest somebody else's field | `farm.harvest place=<their field>` — it runs when their mark invites it (welcome, anyone, take, harvest) and refuses otherwise, naming the owner and the note. A note that says "ask first" or "do not" closes it however it is worded elsewhere. Ask in chat before working ground whose note says nothing |
 | design a field | `farm.plan map='<rows>' x= y= z= check=true` to try a map, then the same call with `name=<name>` and no `check=` to save it — checking writes nothing, so a draft never appears on the shared map. Either way it refuses dry cells and corner gates before I place a single block, and warns when nothing in the plan is walkable between the gate and the far rows: a walk steps ROUND planted cells, so crops with no `.` path, covered `~` channel, gate, flower or sapling beside them can never be worked. `farm.fields` says the same about a field that already stands, on a `lane:` line |
 | know if it is worth walking over | `farm.fields` — a census of every plan near me, with no walking |
 | work a field for a day | `farm.maintain place=<name>` — harvest, replant, re-till, refill channels, store the surplus |

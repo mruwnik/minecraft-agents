@@ -260,6 +260,22 @@ test('farm.tidy: no plan within range is a refusal that says so', async () => {
   await assert.rejects(farmTidy.run(api, { range: 4 }), /no farm plan within 4 blocks/)
 })
 
+// #144: clearing rubble off a field is work on the ground it stands on, so it asks the one ownership question every
+// tool asks, in the same words, instead of inventing a second rule beside the zone one.
+test('farm.tidy: somebody else\u2019s field with a silent note is refused before anything is read', async () => {
+  const { api, calls } = tidyApi()
+  api.places = () => [{ ...PLAN, by: 'Chani', note: 'carrots, 4x4' }]
+  await assert.rejects(farmTidy.run(api, { place: 'test-field' }), /test-field is Chani's ground/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.tidy: somebody else\u2019s field whose note invites work is swept like my own', async () => {
+  const { api } = tidyApi()
+  api.places = () => [{ ...PLAN, by: 'Chani', note: 'anyone welcome, harvest and tidy' }]
+  const out = await farmTidy.run(api, { place: 'test-field' })
+  assert.deepEqual([out.cleared, out.left], [3, 0])
+})
+
 test('farm.tidy: a place with no plan of its own is refused by name', async () => {
   const { api } = tidyApi()
   await assert.rejects(farmTidy.run(api, { place: 'nowhere' }), /no plan called nowhere/)

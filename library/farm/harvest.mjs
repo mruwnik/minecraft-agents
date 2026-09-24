@@ -1,7 +1,7 @@
 // Farming in one call: dig every RIPE crop nearby, put its seed straight back in the ground, cut bamboo and sugar cane
 // at the second segment so the base regrows, then pick the drops up. It works where I STAND: goto the field first.
 // A crop behind a fence or across water must not cost the whole harvest, so what it cannot reach is reported, not thrown.
-import { cropNames, ripeCrop, harvestOrder, isStalkCut, stalkReplant, STALKS } from '../../src/lib.mjs'
+import { cropNames, ripeCrop, harvestOrder, isStalkCut, stalkReplant, STALKS, workRefusal, planCells } from '../../src/lib.mjs'
 
 const WITHIN = 24
 const GIVE_UP = 4
@@ -9,13 +9,32 @@ const GIVE_UP = 4
 const key = c => `${c.x},${c.y},${c.z}`
 const add = (into, name) => { into[name] = (into[name] ?? 0) + 1 }
 
+// where to stand in a named field, and how far to reach from there. A `within` measured from whichever corner the walk
+// happened to arrive at misses the far rows of anything bigger than a few cells, so the body goes to the middle of the
+// plan and reaches just far enough to cover it - which also keeps the harvest inside the field it was sent to.
+const middleOf = place => {
+  const cells = planCells(place)
+  if (!cells.length) return { centre: { x: place.x, y: place.y, z: place.z }, span: WITHIN }
+  const mid = k => Math.round((Math.min(...cells.map(c => c[k])) + Math.max(...cells.map(c => c[k]))) / 2)
+  const centre = { x: mid('x'), y: place.y, z: mid('z') }
+  return { centre, span: Math.ceil(Math.max(...cells.map(c => Math.hypot(c.x - centre.x, c.z - centre.z)))) + 2 }
+}
+
 export default {
-  doc: 'farm.harvest [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops. harvested= counts what I cut, lost= what never reached my pockets',
+  doc: 'farm.harvest [place=] [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops. place= walks to a saved farm first and reaches just far enough to cover it. harvested= counts what I cut, lost= what never reached my pockets',
   stops: 'nothing ripe left within reach, or four crops in a row it cannot walk to',
-  args: { within: 'number' },
+  args: { within: 'number', place: 'string' },
 
   async run (api, a) {
-    const within = a.within ?? WITHIN
+    const field = a.place ? api.places().find(p => p.name === a.place) : null
+    if (a.place && !field) throw new Error(`no place called ${a.place}: ./mc places kind=farm lists the farms there are`)
+    // somebody else's field is theirs unless the note they wrote says otherwise, and that question is asked in exactly
+    // one place for every tool that works marked ground (#144)
+    const refusal = field && workRefusal(field, api.me?.())
+    if (refusal) throw new Error(refusal)
+    const middle = field ? middleOf(field) : null
+    const within = a.within ?? middle?.span ?? WITHIN
+    if (middle) await api.act('goto', { ...middle.centre, range: 2 })
     const nameAt = c => api.block(c.x, c.y, c.z)?.name
     const harvested = {}
     const unreachable = []
