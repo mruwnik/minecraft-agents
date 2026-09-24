@@ -2,7 +2,7 @@
 // `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
 import fs from 'node:fs'
 import path from 'node:path'
-import { routineSteps, placeRefusal } from '../src/lib.mjs'
+import { routinePlan, unmarkedPlaces, placesRefusal } from '../src/routine.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
 const readRole = name => {
@@ -11,17 +11,19 @@ const readRole = name => {
 }
 
 export default {
-  doc: 'routine steps=|name= [place=] [days=1]: run a list of steps in order, once per game day, sleeping through the nights',
+  doc: 'routine steps=|name= [place=a,b,c] [days=1] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights; several places run the routine once per place, in order; dry=true only prints the expanded steps',
   stops: 'days= done (a step that fails is noted, and the next one still runs)',
-  args: { steps: 'any', name: 'string', place: 'string', days: 'number', until: 'number' },
+  args: { steps: 'any', name: 'string', place: 'string', days: 'number', until: 'number', dry: 'boolean' },
 
   async run (api, a) {
-    const { steps, error } = routineSteps(a, readRole)
+    const { steps, places, error } = routinePlan(a, readRole)
     if (error) throw new Error(error)
     // every step would refuse on its own, but a routine is days long: it stops before day one rather than failing the
-    // same way once a round for three days (#144)
-    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    // same way once a round for three days (#144). A dry run reads and changes nothing, so it asks no owner: it only
+    // shows the day's steps (and still names a place nobody marked).
+    const refusal = a.dry ? unmarkedPlaces(api.places(), places) : placesRefusal(api.places(), places, api.me?.())
     if (refusal) throw new Error(refusal)
+    if (a.dry) return { dry: true, places, steps }
     const summary = { days: 0, ran: 0 }
 
     const day = async () => {
