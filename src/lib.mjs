@@ -1802,9 +1802,23 @@ export function planBeside (cells, worldAt, { name = 'the place', reach = 3 } = 
     note: `${best.found} of the ${solidCells.length} blocks it describes stand ${compassOf(best.dx, best.dz)} of where the plan puts them, on ground at y=${at.y}: what the plan describes is already built, just not where the place is marked. A place's x,z is the NORTH-WEST corner cell of its plan (its lowest x and lowest z) and its y is the GROUND block, so mark it where the thing itself stands and build again: ./mc mark name=${name} x=${at.x} y=${at.y} z=${at.z} (marking again keeps the plan). If you meant to build a SECOND one here, move the plan further off: this one would run through the middle of what stands`
   }
 }
+// The GROUND a plan's cells sit on is evidence its own contents cannot spoil. Chani's carrot patch was stored at y=72
+// over farmland built at y=71, and nothing caught it: farm.maintain got stuck twice on ten cells it could not till
+// (BUGS.md 09-24 01:23Z). The crop test could not see it, because somebody had planted wheat in a patch the plan calls
+// carrots, so no cell matched at any level and the whole check fell through to "no evidence". A crop cell is farmland
+// whatever grew in it, and a channel is water whoever covered it. Only those two count: the `dirt` under a path is the
+// same dirt one block down and one block up, and scoring it would invent a shift under every plan laid on soil.
+const hasGround = spec => Boolean(spec) && (spec.kind === 'water' || spec.ground === 'farmland')
+const groundHit = (spec, here) => {
+  if (!here) return false
+  return spec.kind === 'water' ? holdsWater(here) : here.name === 'farmland'
+}
 export function planAnchor (cells, worldAt) {
   const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
-  const score = dy => solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z))).length
+  const groundCells = cells.filter(c => hasGround(PLAN_LEGEND[c.ch]))
+  const score = dy =>
+    solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z))).length +
+    groundCells.filter(c => groundHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + dy, c.z))).length
   const here = score(0)
   const best = [{ dy: 1, n: score(1) }, { dy: -1, n: score(-1) }].sort((a, b) => b.n - a.n)[0]
   const y = cells[0]?.y
@@ -1812,7 +1826,7 @@ export function planAnchor (cells, worldAt) {
   return {
     off: best.dy,
     found: best.n,
-    note: `the plan says y=${y}, but ${best.n} of the blocks it describes stand at y=${y + best.dy + 1}: ${CONVENTION}, so re-save it with y=${y + best.dy}`
+    note: `the plan says y=${y}, but ${best.n} of the cells it describes match the world one block ${best.dy > 0 ? 'UP' : 'DOWN'}: ${CONVENTION}, so re-save it with y=${y + best.dy}`
   }
 }
 

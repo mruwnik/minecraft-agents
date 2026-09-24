@@ -4623,3 +4623,62 @@ test('codeVersion: a clean body has nothing to advise', () => {
 test('codeVersion: a body that cannot read its own HEAD says so rather than claiming a version', () => {
   assert.match(codeVersion({ head: null }).advice, /may be running anything/)
 })
+
+// ---------------------------------------------------------------- a plan stored a block above what was built
+// Chani's carrot patch, 2026-09-24 01:23Z: farm.maintain got stuck twice on ten cells it could not till, because the
+// plan's y is 72 and the farmland is at 71. Nothing caught it. planAnchor only looked at what STANDS on a cell, and
+// somebody had planted wheat in a patch the plan calls carrots, so the crop test matched nothing at any level and the
+// whole check fell through to "no evidence". The ground itself is the evidence the species cannot spoil: a crop cell
+// is farmland whatever is growing in it.
+const anchorWorld = world => (x, y, z) => {
+  const at = world[`${x},${y},${z}`]
+  return at === undefined ? null : { name: String(at).split('#')[0], properties: { age: Number(String(at).split('#')[1]) || 0 }, solid: at !== 'air' }
+}
+const patchCells = (plan, x, y, z) => planCells({ x, y, z, plan })
+
+test('planAnchor: a crop row that is farmland one block down is a plan stored a block high, whatever is growing in it', () => {
+  const world = {}
+  for (const x of [1, 2, 3]) {
+    world[`${x},71,0`] = 'farmland'
+    world[`${x},72,0`] = 'wheat#4' // the plan calls this row carrots: the species proves nothing, the farmland does
+    world[`${x},73,0`] = 'air'
+  }
+  const anchor = planAnchor(patchCells('ccc', 1, 72, 0), anchorWorld(world))
+  assert.equal(anchor.off, -1)
+  assert.match(anchor.note, /the plan says y=72/)
+  assert.match(anchor.note, /re-save it with y=71/)
+})
+
+test('planAnchor: a plan whose farmland is exactly where it says is left alone', () => {
+  const world = {}
+  for (const x of [1, 2, 3]) {
+    world[`${x},72,0`] = 'farmland'
+    world[`${x},73,0`] = 'carrots#3'
+  }
+  assert.equal(planAnchor(patchCells('ccc', 1, 72, 0), anchorWorld(world)).off, 0)
+})
+
+test('planAnchor: one farmland cell is a coincidence, not a shift', () => {
+  const world = { '1,71,0': 'farmland', '1,72,0': 'wheat#2', '2,72,0': 'stone', '3,72,0': 'stone' }
+  assert.equal(planAnchor(patchCells('ccc', 1, 72, 0), anchorWorld(world)).off, 0)
+})
+
+test('planAnchor: a covered channel one block down counts as evidence too', () => {
+  const world = {}
+  for (const x of [1, 2, 3]) {
+    world[`${x},71,0`] = 'water'
+    world[`${x},72,0`] = 'stone'
+  }
+  assert.equal(planAnchor(patchCells('~~~', 1, 72, 0), anchorWorld(world)).off, -1)
+})
+
+test('planAnchor: what stands on a cell still outweighs the ground under it', () => {
+  const world = {}
+  for (const x of [1, 2, 3]) {
+    world[`${x},71,0`] = 'farmland' // ground says one down
+    world[`${x},72,0`] = 'farmland'
+    world[`${x},74,0`] = 'carrots#7' // but the crops themselves stand one UP
+    world[`${x},73,0`] = 'farmland'
+  }
+  assert.equal(planAnchor(patchCells('ccc', 1, 72, 0), anchorWorld(world)).off, 1)
+})
