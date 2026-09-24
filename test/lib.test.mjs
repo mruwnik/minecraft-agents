@@ -1721,13 +1721,15 @@ for (const [name, on, above, expected] of [
 }
 
 // sleep took the nearest bed, whoever's: Claude slept in Aviendha's at nightfall and her own sleep failed
-const BED_ZONES = [{ name: 'aviendha-base', x1: 155, y1: 99, z1: -145, x2: 163, y2: 104, z2: -137 }, { name: 'claude-hut', x1: 113, y1: 66, z1: -146, x2: 121, y2: 76, z2: -136 }, { name: 'starter-stall', x1: 110, y1: 67, z1: -139, x2: 112, y2: 72, z2: -135 }]
-const [HERS, MINE, OPEN, STALL] = [{ x: 160, y: 102, z: -140 }, { x: 116, y: 69, z: -141 }, { x: 140, y: 80, z: -120 }, { x: 111, y: 68, z: -137 }]
+const BED_ZONES = [{ name: 'aviendha-base', x1: 155, y1: 99, z1: -145, x2: 163, y2: 104, z2: -137 }, { name: 'claude-hut', x1: 113, y1: 66, z1: -146, x2: 121, y2: 76, z2: -136 }, { name: 'starter-stall', x1: 110, y1: 67, z1: -139, x2: 112, y2: 72, z2: -135 }, { name: 'cherry-village', x1: 50, y1: 55, z1: -194, x2: 72, y2: 90, z2: -174 }]
+const [HERS, MINE, OPEN, STALL, VILLAGE] = [{ x: 160, y: 102, z: -140 }, { x: 116, y: 69, z: -141 }, { x: 140, y: 80, z: -120 }, { x: 111, y: 68, z: -137 }, { x: 58, y: 65, z: -184 }]
 for (const [name, beds, me, any, expected] of [
   ['no bed', [], 'Claude', false, { error: 'no bed within 32 blocks' }],
   ['my own zone', [MINE], 'Claude', false, { bed: MINE }],
   ['a bed in the open', [OPEN], 'Claude', false, { bed: OPEN }],
   ['the shared stall is for everyone', [STALL], 'Claude', false, { bed: STALL }],
+  // a village is protected from digging, not owned: its beds are for any body caught out at night (the lead, 09-24)
+  ['a village bed is for everyone', [VILLAGE], 'Claude', false, { bed: VILLAGE }],
   ['hers is nearer, mine is further: mine', [HERS, MINE], 'Claude', false, { bed: MINE }],
   ['she sleeps in hers', [HERS], 'Aviendha', false, { bed: HERS }],
   ['invited: any=true takes the nearest', [HERS, MINE], 'Claude', true, { bed: HERS }]
