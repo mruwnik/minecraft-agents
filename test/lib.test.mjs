@@ -22,7 +22,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -611,6 +611,7 @@ for (const [title, change, expected] of fleeCases) {
 // from the same mob within a minute of the last walk back, hands control to the agent instead of trying again.
 const STUCK_NOTE = 'the run has covered no ground in 6 seconds: I am boxed in. Dig straight down and wall the hole behind me, or turn and fight'
 const HELD_NOTE = 'the same threat drove me off again within a minute of the last walk back, so I am not walking back this time. Dig down, fight it, or wait for dawn: your call'
+const CAVE_NOTE = 'the only way clear of it led underground or into the dark, and that is where bodies die: I stopped instead of running into a cave. Dig down and cap the hole, fight it, or wait for dawn: `goto x= y= z= dig=true` brings me back up'
 for (const [name, args, expected] of [
   ['not fleeing stays not fleeing', { phase: null }, { phase: null }],
   ['running, the threat still on me', { phase: 'away', threatDist: 3 }, { phase: 'away' }],
@@ -628,7 +629,10 @@ for (const [name, args, expected] of [
   ['home', { phase: 'back', homeDist: 2 }, { phase: null, event: 'flee_returned' }],
   ['it followed me home: run again', { phase: 'back', homeDist: 5, threatDist: 6 }, { phase: 'away', event: 'flee_started' }],
   ['it followed me all the way to the door: the threat wins over arriving', { phase: 'back', homeDist: 1, threatDist: 4 }, { phase: 'away', event: 'flee_started' }],
-  ['the walk home is the thing that is stuck', { phase: 'back', homeDist: 9, stillMs: 6000 }, { phase: null, event: 'flee_stuck', note: STUCK_NOTE }]
+  ['the walk home is the thing that is stuck', { phase: 'back', homeDist: 9, stillMs: 6000 }, { phase: null, event: 'flee_stuck', note: STUCK_NOTE }],
+  ['#147(d) the way out is leading underground: stop, do not run into the cave', { phase: 'away', threatDist: 3, underground: true }, { phase: null, event: 'flee_stuck', note: CAVE_NOTE }],
+  ['underground but the threat is already clear: just go home', { phase: 'away', underground: true }, { phase: 'back', event: 'flee_clear' }],
+  ['a dark cell on the walk home is not a cave dive', { phase: 'back', homeDist: 5, underground: true }, { phase: 'back' }]
 ]) {
   test(`fleeStep: ${name}`, () => assert.deepEqual(fleeStep(args), expected))
 }
@@ -647,6 +651,82 @@ for (const [name, mob, last, expected] of [
 test('fleeOscillating: a shorter window is the give-up hold', () => assert.deepEqual(
   [14999, 15000].map(ago => fleeOscillating({ mob: 'zombie', last: { mob: 'zombie', at: 0 }, now: ago, within: FLEE_GIVEUP_MS })),
   [true, false]))
+
+// #147: Perrin starved into a skeleton. 16 bread gone in 35 minutes of leading, then "starving: eat" every 4 s from health 20 to 1
+// while the flee reflex worked exactly as designed, handed control back twice, and nobody answered in the 40 s it bought.
+// A body with nothing to eat and nowhere safe now does the reflex memory's own escape by itself instead of waiting for an agent.
+for (const [name, s, expected] of [
+  ['fed and whole: nothing to do', {}, false],
+  ['starving with food in the pack is auto-eat\'s job, not a hole', { food: 0, hasFood: true, night: true }, false],
+  ['starving, nothing to eat, night', { food: 0, hasFood: false, night: true }, true],
+  ['starving, nothing to eat, a mob in reach by day', { food: 0, hasFood: false, mobNear: true }, true],
+  ['starving in broad daylight with nothing near: keep working', { food: 0, hasFood: false }, false],
+  ['(e) six health and nothing to eat: it cannot heal, day or night', { health: 6, hasFood: false }, true],
+  ['seven health with nothing to eat is still a working body', { health: 7, hasFood: false }, false],
+  ['six health with food in the pack heals itself', { health: 6, hasFood: true }, false],
+  ['the run gave up where it stood: hole up there', { stuck: true }, true],
+  ['stuck outranks a full stomach', { stuck: true, food: 20, hasFood: true, health: 20 }, true]
+]) {
+  test(`holeUpVerdict: ${name}`, () => assert.equal(Boolean(holeUpVerdict(s)), expected))
+}
+for (const [name, s, pattern] of [
+  ['starving says what ran out', { food: 0, hasFood: false, night: true }, /nothing.*to eat/i],
+  ['half dead says why waiting will not help', { health: 6, hasFood: false }, /cannot heal|no food to heal/i],
+  ['the boxed-in run says so', { stuck: true }, /boxed in|nowhere to run/i]
+]) {
+  test(`holeUpVerdict wording: ${name}`, () => assert.match(holeUpVerdict(s).why, pattern))
+}
+
+// Reading the three cells below FIRST is the whole point: digging down into lava, water or a cave is the death it is meant to avoid.
+// When the floor cannot be trusted the body walls itself in where it stands instead, and with nothing to place it still says so.
+for (const [name, args, expected] of [
+  ['solid all the way down with a block to cap it', { below: ['dirt', 'dirt', 'stone'], cap: true }, ['dig', false]],
+  ['nothing to cap with: dig anyway, a shaft beats the surface', { below: ['dirt', 'dirt', 'stone'] }, ['dig', true]],
+  ['a cave one block under my feet', { below: ['grass_block', 'cave_air', 'stone'], cap: true }, ['wall', false]],
+  ['lava two down', { below: ['stone', 'lava', 'stone'], cap: true }, ['wall', false]],
+  ['water right under me', { below: ['water', 'stone', 'stone'], cap: true }, ['wall', false]],
+  ['standing over open air', { below: ['air', 'air', 'air'], cap: true }, ['wall', false]],
+  ['the cells below are not loaded: do not dig blind', { below: [null, null, null], cap: true }, ['wall', false]],
+  ['a short read is not a floor', { below: ['dirt'], cap: true }, ['wall', false]],
+  ['walled in with nothing to place is an open hole too', { below: ['air'], cap: false }, ['wall', true]]
+]) {
+  test(`burrowPlan: ${name}`, () => { const p = burrowPlan(args); assert.deepEqual([p.way, p.open], expected) })
+}
+test('burrowPlan: the fallback says what it read', () => assert.match(burrowPlan({ below: ['stone', 'lava', 'stone'] }).why, /lava/))
+
+// the agent's next move has to be one command, not a puzzle: holed_up names the cell to walk back to
+for (const [name, args, pattern] of [
+  ['a capped hole names the way out', { way: 'dig', open: false, surface: { x: 1, y: 70, z: -2 } }, /goto x=1 y=70 z=-2 dig=true/],
+  ['an open hole says it is open', { way: 'dig', open: true, surface: { x: 1, y: 70, z: -2 } }, /OPEN|not capped/],
+  ['walled in says what it did', { way: 'wall', open: false, surface: { x: 1, y: 70, z: -2 } }, /walled/]
+]) {
+  test(`holedUpNote: ${name}`, () => assert.match(holedUpNote(args), pattern))
+}
+
+// (d) my own death this morning: the body fled a creeper at 10 hp, went down into the cave under my test pits and a zombie
+// killed it there. A run that is heading underground or into the dark stops and hands back instead of finding the cave.
+for (const [name, args, expected] of [
+  ['level ground under the open sky', { startY: 70, y: 70, skyLight: 15, light: 15 }, false],
+  ['two down the hillside is not a cave', { startY: 70, y: 68, skyLight: 15, light: 15 }, false],
+  ['four below where the run began', { startY: 70, y: 66, skyLight: 15, light: 15 }, true],
+  ['a lit house is shelter, not a cave', { startY: 70, y: 70, skyLight: 0, light: 14 }, false],
+  ['dark and roofed: that is a cave mouth', { startY: 70, y: 70, skyLight: 0, light: 0 }, true],
+  ['light 5 under a roof is lit enough to pass', { startY: 70, y: 70, skyLight: 0, light: 5 }, false],
+  ['night in the open still reads as sky', { startY: 70, y: 70, skyLight: 15, light: 0 }, false]
+]) {
+  test(`fleeIntoCave: ${name}`, () => assert.equal(fleeIntoCave(args), expected))
+}
+
+// (b) and (c): Perrin's flee_returned walked his respawned body straight back into the skeleton and the zombie that had just killed it
+for (const [name, args, expected] of [
+  ['day, nothing near: back to work', {}, 'free'],
+  ['night with a bed in reach: sleep', { night: true, bedNear: true }, 'sleep'],
+  ['night with no bed: stay where I respawned', { night: true }, 'stay'],
+  ['day, but the killer is still standing there', { killerNear: true }, 'stay'],
+  ['a bed with the killer beside it is no bed', { night: true, bedNear: true, killerNear: true }, 'stay']
+]) {
+  test(`respawnPlan: ${name}`, () => assert.equal(respawnPlan(args).do, expected))
+}
 
 test('fleeRange: an archer has to be further off than a zombie', () => assert.deepEqual(
   ['skeleton', 'pillager', 'zombie', 'creeper'].map(fleeRange), [28, 28, 16, 16]))
@@ -2197,6 +2277,64 @@ for (const [name, ms, expected] of [
 ]) {
   test(`eatJammed: ${name}`, () => assert.equal(eatJammed(ms), expected))
 }
+// #149(c): Mariel's "jammed, reset" line arrived on the tick she died, and the meal it ended had held the sword out of her
+// hand for the whole fight: equip waits for a meal in flight. A meal with a hostile in reach, or a fight or run of my own,
+// is dropped at once. A meal hit by hunger itself (starving, or a fall) is not: that meal is the cure
+for (const [name, s, expected] of [
+  ['eating with a zombie in reach', { eating: true, hostileNear: true }, true],
+  ['eating when a fight starts', { eating: true, fighting: true }, true],
+  ['eating when a run starts', { eating: true, fleeing: true }, true],
+  ['eating in peace', { eating: true }, false],
+  ['starving damage mid-meal is no reason to drop it', { eating: true, hurt: true }, false],
+  ['nothing in flight: nothing to drop', { eating: false, hostileNear: true, fighting: true }, false]
+]) {
+  test(`mealToDrop: ${name}`, () => assert.equal(Boolean(mealToDrop(s)), expected))
+}
+
+// #149(b) as it really ran: strictErrors is off, so a meal that never showed RESOLVES and says so only through eatFail.
+// Counting failures in the promise's reject handler counted none, and the backoff never grew past the first 5 s
+for (const [name, error, expected] of [
+  ['the meal never showed', new Error('the meal never showed: food is still 17 and I still carry 2 bread 3000 ms on'), true],
+  ['the plugin timed out', new Error('Eating timed out with a time of 3000 milliseconds!'), true],
+  ['a meal I dropped for a fight is not a failure', new Error('Eating manually canceled!'), false],
+  ['nothing said at all still counts', undefined, true]
+]) {
+  test(`mealFailed: ${name}`, () => assert.equal(mealFailed(error), expected))
+}
+
+// #149(a). Mariel died at food 17 with a sword in her pack: `eatBelow(health)` raises minHunger as health drops, so a
+// hurt body tries to EAT in the middle of a melee. Each try put bread in the hand the sword needed and each try failed,
+// 42 times in the minute it took a zombie to kill her, and both the fight and the flee ran unarmed.
+for (const [name, s, expected] of [
+  ['nothing about: a meal is fine', {}, false],
+  ['a zombie within reach', { hostileNear: true }, true],
+  ['a fight of my own running', { fighting: true }, true],
+  ['a run of my own running', { fleeing: true }, true],
+  ['clear of all three again: eat', { hostileNear: false, fighting: false, fleeing: false }, false]
+]) {
+  test(`eatHold: ${name}`, () => assert.equal(Boolean(eatHold(s)), expected))
+}
+for (const [name, s, pattern] of [
+  ['a fight says the sword stays', { fighting: true }, /sword/],
+  ['a mob in reach says the sword stays', { hostileNear: true }, /sword/],
+  ['a run says nothing goes in the hand', { fleeing: true }, /hand/]
+]) {
+  test(`eatHold wording: ${name}`, () => assert.match(eatHold(s), pattern))
+}
+
+// #149(b): 42 failed meals in one minute. A meal that will not go down does not get asked again every 3 s
+for (const [name, failures, expected] of [
+  ['before anything has failed', 0, 5000],
+  ['the first failure', 1, 5000],
+  ['the second waits twice as long', 2, 10000],
+  ['the third, twice again', 3, 20000],
+  ['the fourth is capped', 4, 30000],
+  ['and stays capped however many follow', 12, 30000]
+]) {
+  test(`eatBackoff: ${name}`, () => assert.equal(eatBackoff(failures), expected))
+}
+test('eatBackoff: the cooldown it feeds eatRetryDue grows with it', () => assert.deepEqual(
+  [1, 3].map(fails => eatRetryDue(1000, 1000 + 15000, eatBackoff(fails))), [true, false]))
 
 // SAFETY, 09-23. Every body's log carried the jam line and NOTHING else about eating: mineflayer-auto-eat's own reflex ends
 // in `catch {}`, so 140 failures in a row said only that a meal had not finished. eat_failed now says what went wrong, and
