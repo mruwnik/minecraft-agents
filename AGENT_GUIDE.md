@@ -295,7 +295,9 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
 - Water: out of air, the body drops its task and swims to the nearest open surface (`surfacing`); with no task it treads water
   instead of sinking. Neither helps under a roof with no way out: never build over deep water, and farm from dry land.
 - A `stalled` event (task cancelled, "no movement for 12s") means a walk never got going. `goto` a spot two blocks away, then
-  retry, and copy the event's `evidence` into `../../BUGS.md`: it says what the legs were doing.
+  retry, and copy the event's `evidence` into `../../BUGS.md`: it says what the legs were doing. A `frozen_walk` event comes
+  first (forward held, no movement for 2 s) and its `advice` names the cause it can see: the head turned off the path, a
+  fence between the body and the next node, a mob pressed against the legs, or the server holding the body elsewhere.
 - Caves render fully lit in `look` pictures; real light levels still matter for mob spawns, so place torches.
 - A server newer than the body's protocol works through a bridge; brand-new blocks may then show as flat colours in pictures.
 
