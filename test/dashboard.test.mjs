@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan } from '../tools/dashboard/map.mjs'
 
 // ---------------------------------------------------------------- reading the agent folders
@@ -186,6 +186,9 @@ const routes = [
   ['/index.html', { kind: 'page' }],
   ['/api/state', { kind: 'state' }],
   ['/api/state?since=3', { kind: 'state' }],
+  ['/api/chat', { kind: 'chat' }],
+  ['/api/chat?limit=50', { kind: 'chat' }],
+  ['/api/chat/', { kind: 'unknown' }],
   ['/map.mjs', { kind: 'script' }],
   ['/src/lib.mjs', { kind: 'srclib', name: 'lib.mjs' }],
   // lib.mjs is not the only browser-safe file under src/ that the map module graph can end up importing (it
@@ -299,4 +302,85 @@ const hits = [
 ]
 hits.forEach(([why, x, z, expected]) => test(`hitPlan: ${why}`, () => {
   assert.equal(hitPlan(rects, x, z), expected)
+}))
+
+// ---------------------------------------------------------------- the chat log
+const said = (t, from, message, type = 'chat') => ({ seq: 1, t, type, from, message })
+const heard = (agent, ...lines) => ({ agent, lines })
+const hello = said('2026-09-24T16:36:49.053Z', 'Jizo', 'hello all')
+const reply = said('2026-09-24T16:36:52.100Z', 'mruwnik', 'hi Jizo')
+
+test('mergeChat: a chat heard by three bodies is one line', () => {
+  assert.deepEqual(mergeChat([heard('Chani', hello), heard('Perrin', hello), heard('Mariel', hello)], 200), [
+    { t: '2026-09-24T16:36:49.053Z', from: 'Jizo', to: null, kind: 'chat', message: 'hello all' }
+  ])
+})
+
+// each body stamps a chat with its own clock, so one line lands a few ms apart in different files
+test('mergeChat: the same chat stamped 3 ms apart by two bodies is one line, at the earliest stamp', () => {
+  const late = said('2026-09-24T16:36:49.056Z', 'Jizo', 'hello all')
+  assert.deepEqual(mergeChat([heard('Chani', late), heard('Perrin', hello)], 200).map(m => m.t), ['2026-09-24T16:36:49.053Z'])
+})
+
+test('mergeChat: the same words said again a minute later are two lines', () => {
+  const again = said('2026-09-24T16:37:49.053Z', 'Jizo', 'hello all')
+  assert.deepEqual(mergeChat([heard('Chani', hello, again)], 200).map(m => m.t), [hello.t, again.t])
+})
+
+test('mergeChat: a whisper is addressed to the body whose file holds it', () => {
+  const psst = said('2026-09-24T16:12:47.948Z', 'Jizo', 'done', 'whisper')
+  assert.deepEqual(mergeChat([heard('Pacer', psst)], 200), [
+    { t: '2026-09-24T16:12:47.948Z', from: 'Jizo', to: 'Pacer', kind: 'whisper', message: 'done' }
+  ])
+})
+
+test('mergeChat: the same words whispered to two bodies are two lines', () => {
+  const psst = said('2026-09-24T16:12:47.948Z', 'Jizo', 'done', 'whisper')
+  assert.deepEqual(mergeChat([heard('Pacer', psst), heard('Chani', psst)], 200).map(m => m.to), ['Chani', 'Pacer'])
+})
+
+test('mergeChat: lines are ordered by time across files, whatever order the files came in', () => {
+  assert.deepEqual(mergeChat([heard('Chani', reply), heard('Perrin', hello, reply)], 200).map(m => m.from), ['Jizo', 'mruwnik'])
+})
+
+test('mergeChat: only the last `limit` lines survive, and those are the newest', () => {
+  const many = [0, 1, 2, 3, 4].map(i => said(`2026-09-24T16:00:0${i}.000Z`, 'Jizo', `line ${i}`))
+  assert.deepEqual(mergeChat([heard('Chani', ...many)], 2).map(m => m.message), ['line 3', 'line 4'])
+})
+
+const noise = [
+  ['an event that is not talk', { seq: 2, t: '2026-09-24T16:00:00.000Z', type: 'hurt', hp: 3 }],
+  ['a line with no time', { seq: 2, type: 'chat', from: 'Jizo', message: 'when?' }],
+  ['a line with no sender', { seq: 2, t: '2026-09-24T16:00:00.000Z', type: 'chat', message: 'who?' }],
+  ['a line that is not an object', 'garbage'],
+  ['a null line', null]
+]
+noise.forEach(([what, line]) => test(`mergeChat: skips ${what}`, () => {
+  assert.deepEqual(mergeChat([heard('Chani', line, hello)], 200).map(m => m.message), ['hello all'])
+}))
+
+test('mergeChat: nothing heard is an empty log', () => {
+  assert.deepEqual(mergeChat([heard('Chani'), heard('Perrin')], 200), [])
+})
+
+test('parseEventLines: one object per well-formed line, a torn or malformed line skipped', () => {
+  const text = '{"seq":1,"t":"x","type":"chat","from":"Jizo","message":"a"}\n{oops\n\n{"seq":2,"t":"y","type":"chat","from":"Jizo","message":"b"}\n'
+  assert.deepEqual(parseEventLines(text).map(e => e.message), ['a', 'b'])
+})
+
+test('parseEventLines: the first line of a tail is dropped when the tail starts mid-line', () => {
+  const text = 'm":"cut"}\n{"seq":2,"t":"y","type":"chat","from":"Jizo","message":"b"}\n'
+  assert.deepEqual(parseEventLines(text, true).map(e => e.message), ['b'])
+})
+
+const limits = [
+  ['the default when nothing is asked', null, 200],
+  ['what is asked', '50', 50],
+  ['capped at 1000', '5000', 1000],
+  ['the default for nonsense', 'lots', 200],
+  ['the default for zero', '0', 200],
+  ['the default for a negative', '-3', 200]
+]
+limits.forEach(([what, raw, expected]) => test(`chatLimit: ${what}`, () => {
+  assert.equal(chatLimit(raw), expected)
 }))
