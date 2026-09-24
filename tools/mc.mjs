@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { terse, capOutput, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs } from '../src/cli.mjs'
+import { terse, capOutput, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs, mapArgErrors } from '../src/cli.mjs'
 
 // MC_HOME=<a bot's home dir> picks which body to drive (its config.json names the apiPort); default is the first bot.
 const configFile = path.join(process.env.MC_HOME ?? path.join(import.meta.dirname, '..'), 'config.json')
@@ -12,6 +12,7 @@ const [action, ...rest] = process.argv.slice(2)
 if (noHomeError(process.env.MC_HOME, action)) { console.error(`FAIL ${noHomeError(process.env.MC_HOME, action)}`); process.exit(1) }
 const verbose = rest.includes('-v')
 const args = parseCliArgs(rest)
+if (mapArgErrors(args)) { console.error(`FAIL ${mapArgErrors(args)}`); process.exit(1) }
 
 const clockFile = path.join(import.meta.dirname, '..', 'state', 'clock.json')
 const readClock = () => fs.existsSync(clockFile) ? parseClock(fs.readFileSync(clockFile, 'utf8')) : null
