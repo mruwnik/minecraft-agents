@@ -24,6 +24,9 @@ import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from 
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { facesForHalf } from './cover.mjs'
 import { fetchFailure, stalledSince } from './fetch.mjs'
+import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
+import { digLegs } from './diglegs.mjs'
+import { noPathAdvice } from './caveexit.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -330,6 +333,7 @@ function connect () {
     // a near goal that 1.5 s of search has not found is walled in: say so then, not after the plugin's 5 s (card 1ccb0ea1). Every search of
     // this walk, replans included, reads thinkTimeout; reflex walks (setGoal) get the default back once the walk is over
     const walk = goal => {
+      lastWalkGoal = goal
       bot.pathfinder.thinkTimeout = thinkBudget(goalDistance(goal, bot.entity.position))
       return plainWalk(goal).finally(() => { bot.pathfinder.thinkTimeout = THINK_CAP_MS })
     }
@@ -628,6 +632,21 @@ function connect () {
   let tick = 0
   bot.on('physicsTick', () => { if (++tick % 10 === 0 && ready && reflexes) reflexTick() })
   bot.on('physicsTick', () => { if (tick % 2 === 0 && ready) doorTick() })
+  let lastSurfaceTrace = 0
+  // a walk or the idle nudge can reset the controls between reflex ticks: the swim is pressed on every physics tick until the body breathes
+  bot.on('physicsTick', () => {
+    if (!ready) return
+    if (!reflexes || !surfacing || !surfaceWayNow) return
+    if (bot.pathfinder.isMoving()) bot.pathfinder.setGoal(null)
+    bot.setControlState('jump', true)
+    // forward only for a sideways swim, aimed at its opening: in water it moves along the yaw whatever the pitch
+    bot.setControlState('forward', surfaceWayNow.way === 'sideways')
+    if (Date.now() - lastSurfaceTrace >= 2000) {
+      lastSurfaceTrace = Date.now()
+      const p = bot.entity.position
+      emit('surfacing_debug', { way: surfaceWayNow.way, exact: p.toArray().map(n => Math.round(n * 100) / 100).join(','), vy: Math.round(bot.entity.velocity.y * 1000) / 1000, oxygen: bot.oxygenLevel, inWater: bot.entity.isInWater, headInWater: bot.blockAt(p.offset(0, 1.62, 0))?.name === 'water', jump: bot.getControlState('jump'), forward: bot.getControlState('forward') })
+    }
+  })
 
   // a body refused at login is kicked again on every retry, every ten seconds, for ever: a throwaway body of mine that
   // was not on the whitelist would have written one line all night (#119). The first is said, a reason that CHANGES is
@@ -746,12 +765,56 @@ let fightStart = null
 let chaseHeldUntil = 0
 let chaseLeash = CHASE_LEASH
 let surfacing = false
-let swimmingUp = false
-let surfaceStart = { at: 0, y: 0 }
-let surfaceGoal = null
+// what the surfacing reflex is doing now (src/surface.mjs: up, sideways to an opening, or a pocket dug in the ceiling),
+// judged again every reflex tick as the body moves
+let surfaceWayNow = null
+// openings a sideways swim pressed towards for 2 s without getting nearer: walls, not ways
+let surfaceTried = []
+let swimTrack = null
+let pocketDigging = false
 // the blocks straight over the head, as names, so the reflex can tell deep water from a roof it must swim out from under
 const columnAbove = (pos, height = 8) =>
   Array.from({ length: height }, (_, i) => bot.blockAt(new Vec3(Math.floor(pos.x), Math.floor(pos.y) + 2 + i, Math.floor(pos.z)))?.name ?? 'air')
+// the first block over the head that is not water, within reach, with how long the best carried tool takes to break it
+// from here (Infinity: never): the pocket the reflex digs when no open water is near
+const ceilingOver = pos => {
+  const i = roofAt(columnAbove(pos, 3))
+  if (i < 0) return null
+  const block = bot.blockAt(new Vec3(Math.floor(pos.x), Math.floor(pos.y) + 2 + i, Math.floor(pos.z)))
+  if (!block) return null
+  const ms = block.hardness >= 0 ? Math.min(...[null, ...bot.inventory.items()].map(item => block.digTime(item?.type ?? null, false, bot.entity.isInWater, !bot.entity.onGround, [], {}))) : Infinity
+  return { x: block.position.x, y: block.position.y, z: block.position.z, name: block.name, digTicks: Math.ceil(ms / 50), block }
+}
+// water cells with air over them round the body: where a sideways swim can surface
+const openingsNear = pos => bot.findBlocks({ point: pos, matching: bot.registry.blocksByName.water.id, useExtraInfo: b => isAir(bot.blockAt(b.position.offset(0, 1, 0))?.name), maxDistance: SURFACE_SCAN + 2, count: 64 })
+const cellKey = ({ x, y, z }) => `${x},${y},${z}`
+const wayLabel = way => way ? `${way.way}${way.to ? ` to ${cellKey(way.to)}` : ''}${way.at ? ` at ${cellKey(way.at)}` : ''}` : ''
+// one reflex tick of surfacing: judge the way out from where the body is now, say it when it changes, and steer.
+// A body drowned at -129.3,33.2,-138.3 with air two blocks off (card a164bbfd): the way was judged once, at the start
+function steerSurfacing (me) {
+  if (pocketDigging) return
+  const ceiling = ceilingOver(me)
+  const way = surfaceWay({ column: columnAbove(me), openings: openingsNear(me), me, ceiling, oxygen: bot.oxygenLevel, health: bot.health, tried: surfaceTried })
+  if (wayLabel(way) !== wayLabel(surfaceWayNow)) {
+    swimTrack = null
+    emit('surfacing', { oxygen: bot.oxygenLevel, way: way.way, ...(way.to && { to: cellKey(way.to), dist: way.dist }), ...(way.at && { at: cellKey(way.at), ticks: way.ticks }), ...(way.note && { note: way.note }) })
+  }
+  surfaceWayNow = way
+  if (way.way === 'sideways') {
+    bot.lookAt(new Vec3(way.to.x + 0.5, me.y + 1.62, way.to.z + 0.5), true).catch(() => {})
+    swimTrack = swimProgress(swimTrack, way.dist, Date.now())
+    if (swimTrack.stalled) surfaceTried = [...surfaceTried, cellKey(way.to)]
+  }
+  if (way.way === 'pocket') digPocket(ceiling.block)
+}
+// a block dug out of the ceiling stays air (water never flows up): the body rises into it and breathes
+function digPocket (block) {
+  pocketDigging = true
+  bot.tool.equipForBlock(block).catch(() => {})
+    .then(() => bot.dig(block, true))
+    .catch(e => emit('surfacing', { way: 'pocket', error: String(e?.message ?? e) }))
+    .finally(() => { pocketDigging = false })
+}
 let floating = false
 let diggingOut = false
 let resets = 0
@@ -841,6 +904,8 @@ let idleTicks = 0
 let nudging = false
 let fencePressed = null // the idle nudge is walking me out of a fence's cell: plan again once I am out
 let walkEndedAt = 0
+// the goal of the last walk: the no-path advice says how far up it was
+let lastWalkGoal = null
 let walkEndedBy = null
 let goalSetAt = 0 // a path result from before this goal says nothing about this walk
 let nearest = null // { task, goal, best, at }: the nearest a goto has come to its goal, and when
@@ -1101,34 +1166,20 @@ function reflexTick () {
   const air = airReflex({ headInWater, inWater: bot.entity.isInWater, oxygen: bot.oxygenLevel, surfacing })
   if (air === 'start') {
     surfacing = true
-    surfaceStart = { at: Date.now(), y: me.y }
+    surfaceWayNow = null
+    surfaceTried = []
+    swimTrack = null
     // a running task steers the body every tick and wins over one press of jump: Jizo drowned that way, mid-harvest
     if (task) cancelTask('out of air: swimming up to breathe. Work from dry land, then retry')
-    // Straight up is the fastest way out and needs no path at all; it is only useless under a roof (Jizo drowned beneath
-    // their own farmland, built out over the lake). Chani drowned the other way: the walk to open water three blocks off
-    // never arrived, and while the pathfinder called itself moving, jump was never pressed.
-    swimmingUp = openAbove(columnAbove(me))
-    surfaceGoal = swimmingUp ? null : bot.findBlocks({ matching: bot.registry.blocksByName.water.id, useExtraInfo: b => bot.blockAt(b.position.offset(0, 1, 0))?.name === 'air', maxDistance: 16, count: 1 })[0] ?? null
-    if (surfaceGoal) { bot.pathfinder.setMovements(walkMoves); bot.pathfinder.setGoal(new goals.GoalBlock(surfaceGoal.x, surfaceGoal.y, surfaceGoal.z)) }
-    else swimmingUp = true
-    emit('surfacing', { oxygen: bot.oxygenLevel, to: surfaceGoal ? `${surfaceGoal.x},${surfaceGoal.y},${surfaceGoal.z}` : 'straight up' })
-  }
-  // the walk had its chance: drop it and swim there by hand, or we drown watching the pathfinder say it is moving.
-  // Swimming is jump + forward at whatever we are looking at, so it works under an overhang too, where bare jump does not.
-  if (air === 'hold' && surfacingStalled({ startedAt: surfaceStart.at, startY: surfaceStart.y, now: Date.now(), y: me.y, swimming: swimmingUp })) {
-    swimmingUp = true
     bot.pathfinder.setGoal(null)
-    emit('surfacing', { oxygen: bot.oxygenLevel, to: surfaceGoal ? `${surfaceGoal.x},${surfaceGoal.y},${surfaceGoal.z} by hand` : 'straight up', gaveUpOn: 'the walk lifted me nowhere in 2s' })
   }
-  if ((air === 'start' || air === 'hold') && (swimmingUp || !bot.pathfinder.isMoving())) {
-    bot.setControlState('jump', true)
-    // no goal means straight up, and forward would only carry us under the next roof
-    if (swimmingUp && surfaceGoal) { bot.lookAt(surfaceGoal.offset(0.5, 0.5, 0.5), true).catch(() => {}); bot.setControlState('forward', true) }
-  }
+  // the way out is judged again every half second (src/surface.mjs): a sideways swim ends under open water, where up is
+  // the answer, and an opening not reached in 2 s is given up for the next. Forward is never pressed blind: in water it
+  // moves along the yaw whatever the pitch, and that carried a body two blocks under a rock ceiling, where it drowned
+  if (air === 'start' || air === 'hold') steerSurfacing(me)
   if (air === 'stop') {
     surfacing = false
-    swimmingUp = false
-    surfaceGoal = null
+    surfaceWayNow = null
     bot.pathfinder.setGoal(null)
     bot.setControlState('jump', false)
     bot.setControlState('forward', false)
@@ -1616,10 +1667,11 @@ const long = {
     } finally { closeOriginal() }
   },
   async goto (a) {
+    let legs = 1
     if (a.place) {
       const p = readPlaces().find(q => q.name === a.place)
       if (!p) throw new Error(`no place called ${a.place}; see ./mc places`)
-      await bot.pathfinder.goto(new goals.GoalNear(p.x, p.y, p.z, a.range ?? 2))
+      legs = await walkLegs({ x: p.x, y: p.y, z: p.z }, a.range ?? 2)
     } else if (a.player) {
       const e = bot.players[a.player]?.entity
       if (!e) throw new Error(`can't see ${a.player}`)
@@ -1631,9 +1683,9 @@ const long = {
       // an x/z goal is met at any depth, and a walk that may not dig likes caves: say so rather than let the driver assume the surface
       if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
     } else {
-      await bot.pathfinder.goto(new goals.GoalNear(a.x, a.y, a.z, a.range ?? 1))
+      legs = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1)
     }
-    return { pos: pos() }
+    return { pos: pos(), ...(legs > 1 && { legs }) }
   },
 
   async dig (a) {
@@ -2749,7 +2801,32 @@ const amBoxedIn = () => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
   return boxedIn((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block')
 }
-const explainFailure = message => explainNoPath(explainInterrupt(message, recentReflex()), digging, amBoxedIn())
+// what the body can read off itself when a walk finds no path (src/caveexit.mjs): no sky over the head and the goal up
+// on the surface, water in or beside its cell (a dig walk breaks nothing beside a liquid), a protected zone round it
+const noPathEvidence = () => {
+  if (!bot?.entity) return {}
+  const me = bot.entity.position
+  const feet = feetCell(me, bot.entity.onGround)
+  const beside = [[0, 0, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
+  const wet = bot.entity.isInWater || beside.some(([dx, dy, dz]) => FLUIDS.has(bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.name ?? ''))
+  const goalY = typeof lastWalkGoal?.y === 'number' ? lastWalkGoal.y : null
+  return { underground: bot.blockAt(me.offset(0, 1, 0))?.skyLight === 0, goalDy: goalY === null ? null : goalY - feet.y, wet, zoned: inAnyZone(zones, new Vec3(feet.x, feet.y, feet.z)) }
+}
+const explainFailure = message => {
+  const boxed = amBoxedIn()
+  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, ...noPathEvidence() })
+}
+// a dig walk goes in legs of 6 (src/diglegs.mjs): a straight line of 20 through rock is more search than the 5 s budget
+// holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
+async function walkLegs (to, range) {
+  const legs = digging ? digLegs(bot.entity.position, to) : [to]
+  for (const [i, leg] of legs.entries()) {
+    const last = i === legs.length - 1
+    await bot.pathfinder.goto(new goals.GoalNear(leg.x, leg.y, leg.z, last ? range : 1))
+      .catch(e => { throw new Error(last && legs.length === 1 ? e.message : `leg ${i + 1} of ${legs.length}, to ${leg.x},${leg.y},${leg.z}: ${e.message}`) })
+  }
+  return legs.length
+}
 // given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 // the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
 // An open gate empties a pen (Dan's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
