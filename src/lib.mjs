@@ -1430,10 +1430,12 @@ export const bedTrap = (on, above) => /_bed$/.test(on ?? '') && above === 'block
   ? 'you are standing ON a bed under a low ceiling (1.4 blocks of headroom, nobody fits, so no walk can start): dig the bed, walk out, place it back. For good: leave one free floor cell beside the bed, or raise the ceiling over it by one'
   : null
 
-// beds: nearest first. A bed in another agent's zone is theirs (zones are named owner-something; starter-* is shared) and a bed holds one sleeper
+// beds: nearest first. A bed in another agent's zone is theirs (zones are named owner-something; starter-* is shared, and so is
+// a *-village: protected from digging, not owned, its beds are for any body caught out at night) and a bed holds one sleeper
 export function bedChoice (beds, zones, me, any = false, occupied = new Set()) {
   if (!beds.length) return { error: 'no bed within 32 blocks' }
-  const theirs = bed => zones.find(z => inAnyZone([z], bed) && !new RegExp(`^(${me.toLowerCase()}|starter)-`).test(z.name))
+  const shared = name => new RegExp(`^(${me.toLowerCase()}|starter)-|-village$`).test(name)
+  const theirs = bed => zones.find(z => inAnyZone([z], bed) && !shared(z.name))
   const free = beds.filter(b => !occupied.has(`${b.x},${b.y},${b.z}`))
   const bed = any ? free[0] : free.find(b => !theirs(b))
   if (bed) return { bed }
