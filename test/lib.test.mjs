@@ -414,7 +414,10 @@ for (const [title, name, args, expected] of mayDigCases) {
 
 const noPathCases = [
   ['walk-only no path gets the dig hint', 'No path to the goal!', false, /no walkable path.*dig=true/],
-  ['walk-only timeout gets it too', 'Took to long to decide path to goal!', false, /no walkable path.*dig=true/],
+  // Perrin's sheep pen gate: from the fenced alley beside it (the nearest cell to the goal) the search ran its 5 s out on a way that exists
+  ['walk-only timeout says the search ran out of time, not that there is no way', 'Took to long to decide path to goal!', false, /ran out of time.*route=true/],
+  ['a timeout never claims there is no walkable path', 'Took to long to decide path to goal!', false, /^(?!.*no walkable path)/],
+  ['a digging walk keeps the plain timeout', 'Took to long to decide path to goal!', true, /^Took to long to decide path to goal!$/],
   ['a digging walk keeps the plain error', 'No path to the goal!', true, /^No path to the goal!$/],
   ['other errors are kept', 'no place called x', false, /^no place called x$/]
 ]
