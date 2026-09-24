@@ -341,6 +341,18 @@ const CROPS = { wheat: [7, 'wheat_seeds'], carrots: [7, 'carrot'], potatoes: [7,
 export const ripeCrop = (name, age) => CROPS[name] && Number(age) >= CROPS[name][0] ? CROPS[name][1] : null
 export const cropNames = Object.keys(CROPS)
 
+// the replant sweep: the cut cells, in the order they were cut, that the seeds I carry can fill. A place batch that names a seed
+// I do not carry throws for the whole batch, so what the pockets cannot cover is left out here and said by the caller
+export function replantBatch (cut, carried) {
+  const left = { ...carried }
+  return cut.filter(c => (left[c.seed] ?? 0) > 0 && left[c.seed]--).map(c => ({ item: c.seed, x: c.x, y: c.y, z: c.z }))
+}
+
+// can I dig this cell from where I stand: the arm reaches 4.5 from the eyes. dig used to walk to within 3 of every cell
+export const DIG_REACH = 4.5
+export const digFromHere = (feet, cell, reach = DIG_REACH) =>
+  Math.hypot(cell.x + 0.5 - feet.x, cell.y + 0.5 - (feet.y + 1.62), cell.z + 0.5 - feet.z) <= reach
+
 // boustrophedon: row by row (z), alternating direction, so the farmer sweeps a field instead of criss-crossing it
 export function harvestOrder (positions) {
   const rows = [...new Set(positions.map(p => p.z))].sort((a, b) => a - b)
@@ -2736,7 +2748,7 @@ export const PRIMITIVES = {
   goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true' },
   follow: { section: 'move', args: 'player=', doc: 'keep walking after someone until stop' },
   // ---- block
-  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel). Not water or lava: use fill or place' },
+  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=] [batch=]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel; batch=true: one cell of a sweep, no wait for the drop and no chase after it, collect afterwards). Walks only when the cell is out of arm\'s reach. Not water or lava: use fill or place' },
   place: { section: 'block', args: 'item= x= y= z= [facing=] [half=] | blocks=', doc: 'build: one block, or a whole list of them in the order given' },
   clear: { section: 'block', args: 'x1= y1= z1= x2= y2= z2= [keep=]', doc: 'dig out a whole box top-down, up to 400 blocks; beds, containers and fluids are kept' },
   till: { section: 'block', args: 'x= y= z= | blocks=', doc: 'hoe dirt or grass into farmland (give the ground block, not the air above it)' },
