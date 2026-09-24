@@ -593,10 +593,11 @@ export const holedUpNote = ({ way, open, surface }) =>
 // is shelter, so darkness counts only where the sky does not reach: both dark together is a cave mouth
 export const FLEE_DROP = 4
 export const FLEE_DARK = 4
-// A run that STARTED in the dark (a body mining in a cave) is not running into one: only the drop counts then. My body
-// met an enderman in the cave under the test pits and holed up on the first tick of the run, for no reason (13:17Z)
-export const fleeIntoCave = ({ startY = 0, y = 0, skyLight = 15, light = 15, startSkyLight = 15 } = {}) =>
-  startY - y >= FLEE_DROP || (startSkyLight > FLEE_DARK && skyLight <= FLEE_DARK && light <= FLEE_DARK)
+// Darkness alone is no dive: my body met an enderman on a cave floor lit through its own shaft and holed up on the
+// first tick of the run, twice (13:17Z, 13:20Z). Dark counts only on the way DOWN, two below where the run began
+export const FLEE_DARK_DROP = 2
+export const fleeIntoCave = ({ startY = 0, y = 0, skyLight = 15, light = 15 } = {}) =>
+  startY - y >= FLEE_DROP || (startY - y >= FLEE_DARK_DROP && skyLight <= FLEE_DARK && light <= FLEE_DARK)
 // the cells a hole-up fills around the body's feet: the four sides at feet and head height, and the one over the head.
 // A shaft dug in a cave had air on two sides and a cap that kept nothing out (13:17Z); a filled cell that is already
 // solid costs nothing

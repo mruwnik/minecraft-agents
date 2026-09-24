@@ -862,7 +862,7 @@ function startFlee (entity, me, note, extra = {}) {
   fightStart = null
   bot.pvp.stop()
   // home survives a re-trigger: the work is still where the FIRST run left it, not where the second one started
-  flee = { mob: entity.name, entity, home: flee?.home ?? me.clone(), startSky: flee?.startSky ?? bot.blockAt(me.floored())?.skyLight ?? 15, phase: 'away', held, wasDigging: flee?.wasDigging ?? digging, still: { pos: me.clone(), at: Date.now() } }
+  flee = { mob: entity.name, entity, home: flee?.home ?? me.clone(), phase: 'away', held, wasDigging: flee?.wasDigging ?? digging, still: { pos: me.clone(), at: Date.now() } }
   // digging and bridging are the escape, not a detour: a body cornered against a wall has to be able to cut its way out
   useMoves(true)
   bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(entity, fleeRange(entity.name))), true)
@@ -898,7 +898,7 @@ function stepFlee (me) {
     stillMs: Date.now() - flee.still.at,
     held: flee.held,
     bound: fleeRange(flee.mob),
-    underground: fleeIntoCave({ startY: flee.home.y, y: me.y, skyLight: here?.skyLight ?? 15, light: here?.light ?? 15, startSkyLight: flee.startSky ?? 15 })
+    underground: fleeIntoCave({ startY: flee.home.y, y: me.y, skyLight: here?.skyLight ?? 15, light: here?.light ?? 15 })
   })
   if (step.event === 'flee_started') { if (!startFlee(entity, me)) endFlee(); return }
   if (!step.event) return
