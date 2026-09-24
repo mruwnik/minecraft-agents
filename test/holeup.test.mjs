@@ -51,18 +51,21 @@ for (const [name, args, expected] of [
   ['a good floor here: dig where I stand', { here: dry, around: [], blocks: 5 }, { way: 'dig', step: null }],
   ['water under me, dry ground one step east: step there and dig', { here: pond, around: [site(1, 0, dry)], blocks: 5 }, { way: 'dig', step: { dx: 1, dz: 0 } }],
   ['the nearer dry cell wins', { here: pond, around: [site(2, 0, dry), site(0, -1, dry)], blocks: 5 }, { way: 'dig', step: { dx: 0, dz: -1 } }],
-  ['a dry cell I cannot stand in (a wall) is no site', { here: pond, around: [site(1, 0, dry, false)], blocks: 5 }, { way: 'pillar', step: null }],
+  ['a dry cell I cannot stand in (a wall) is no site', { here: channel, around: [site(1, 0, dry, false)], blocks: 5 }, { way: 'pillar', step: null }],
   ['a channel beside every cell, three blocks in the pack: pillar up', { here: channel, around: [site(1, 0, channel), site(-1, 0, pond)], blocks: 3 }, { way: 'pillar', step: null }],
   ['two blocks are not a pillar: wall in where I stand', { here: channel, around: [site(1, 0, channel)], blocks: 2 }, { way: 'wall', step: null }],
   ['nothing readable, nothing carried: wall in (open, and said so)', { here: { below: [null, null, null] }, around: [], blocks: 0 }, { way: 'wall', step: null }],
+  ['water under the feet and a full pack: no pillar, nothing to build it on (18:22Z)', { here: pond, around: [], blocks: 64 }, { way: 'wall', step: null }],
+  ['water two down with a lid to stand on: the pillar goes up from the lid', { here: { below: ['dirt', 'water', 'dirt'], beside: dry.beside }, around: [], blocks: 3 }, { way: 'pillar', step: null }],
   ['a good floor is preferred to a pillar even with a full pack', { here: dry, around: [site(1, 0, pond)], blocks: 64 }, { way: 'dig', step: null }]
 ]) {
   test(`burrowSite: ${name}`, () => { const s = burrowSite(args); assert.deepEqual({ way: s.way, step: s.step }, expected) })
 }
 test('burrowSite: a step says what was under my feet and where it goes', () => assert.match(burrowSite({ here: pond, around: [site(1, 0, dry)], blocks: 1 }).why, /water under my feet.*one step (east|west|north|south)/))
 test('burrowSite: a pillar says why the ground would not do', () => assert.match(burrowSite({ here: channel, around: [], blocks: 3 }).why, /water beside the shaft.*pillar/))
+test('shelterNote: an open shaft says what stayed open, not that nothing was carried', () => assert.match(shelterNote({ way: 'dig', open: true, surface }), /OPEN: a side or the top could not be closed/))
 test('burrowSite: the wall fallback says what it read', () => assert.match(burrowSite({ here: pond, around: [], blocks: 0 }).why, /water under my feet.*walling/))
-test('burrowSite: a pillar needs exactly the hole depth in blocks', () => assert.deepEqual([2, 3].map(blocks => burrowSite({ here: pond, around: [], blocks }).way), ['wall', 'pillar']))
+test('burrowSite: a pillar needs exactly the hole depth in blocks', () => assert.deepEqual([2, 3].map(blocks => burrowSite({ here: channel, around: [], blocks }).way), ['wall', 'pillar']))
 test('HOLE_STEP: sites are read two cells out', () => assert.equal(HOLE_STEP, 2))
 
 // the cap that keeps nothing out: my body (17:27Z) capped its hole with leaf_litter, the first block-shaped item in its pack, and a

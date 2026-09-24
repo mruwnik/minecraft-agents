@@ -39,7 +39,9 @@ export function burrowSite ({ here = {}, around = [], blocks = 0 }) {
   if (!bad) return { way: 'dig', step: null, why: null }
   const site = around.filter(s => s.standable).sort(nearer).find(s => !floorVerdict({ ...s, cap }))
   if (site) return { way: 'dig', step: { dx: site.dx, dz: site.dz }, why: `${bad}: one step ${dirName(site)} the floor is sound, so I am digging there instead` }
-  if (blocks >= HOLE_DEPTH) return { way: 'pillar', step: null, why: `${bad} and no sound floor within ${HOLE_STEP}: going up instead, a pillar of ${HOLE_DEPTH}` }
+  // a pillar needs a solid block under the feet to build from: in water there is nothing to click on (18:22Z, a flooded shaft)
+  const footing = here.below?.[0] && !HOLE_UNSAFE.has(String(here.below[0]))
+  if (blocks >= HOLE_DEPTH && footing) return { way: 'pillar', step: null, why: `${bad} and no sound floor within ${HOLE_STEP}: going up instead, a pillar of ${HOLE_DEPTH}` }
   return { way: 'wall', step: null, why: `${bad}, no sound floor within ${HOLE_STEP} and only ${blocks} blocks to build with: walling myself in where I stand` }
 }
 
@@ -81,5 +83,6 @@ export function shelterNote ({ way, open, surface, wet = false }) {
     return `pillared up ${HOLE_DEPTH} where I stood${open ? ', though it came up short of the full 3, so something may still reach me' : ''}. ` +
       `Nothing walks up here; an archer can still shoot. The way down when you want me back: ${back} (it digs the blocks under my feet)`
   }
+  if (open) return `${way === 'dig' ? `dug ${HOLE_DEPTH} straight down` : 'walled myself in where I stood'} but the hole is OPEN: a side or the top could not be closed (no solid block to place, or nothing to place it against), so something can still reach me. The way out when you want me back: ${back}`
   return holedUpNote({ way, open, surface })
 }
