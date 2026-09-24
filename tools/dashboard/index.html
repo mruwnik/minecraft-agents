@@ -40,7 +40,12 @@
   .err { color: #f0907e; }
   #planOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
   #planOverlay[hidden] { display: none; }
-  #planCard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; width: fit-content(min(92vw, 680px)); max-width: min(92vw, 680px); max-height: 88vh; overflow: auto; }
+  /* 1080px covers a grid up to ~40 columns (22px/cell) plus the legend beside it and the card's own padding -
+     wide enough that the side layout holds for any plan Dan is likely to draw, not just the small ones.
+     scrollbar-gutter reserves the scrollbar's width up front: without it, a tall plan's vertical scrollbar only
+     shows up after the fit-content width is already chosen, stealing back just enough space to wrap the legend
+     below the grid anyway - the exact failure this rule exists to prevent. */
+  #planCard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; width: fit-content(min(90vw, 1080px)); max-width: min(90vw, 1080px); max-height: 88vh; overflow: auto; scrollbar-gutter: stable; }
   #planCard .planHead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
   #planCard h3 { margin: 0; font-size: 13px; letter-spacing: .03em; color: var(--place); }
   #planMeta { color: var(--dim); margin-bottom: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
