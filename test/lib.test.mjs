@@ -22,7 +22,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -421,6 +421,36 @@ const noPathCases = [
 for (const [title, error, dig, expected] of noPathCases) {
   test(`explainNoPath: ${title}`, () => assert.match(explainNoPath(error, dig), expected))
 }
+
+// #128: a goto walked my body into a 1x1 natural shaft at 176,104,-141 and every goto afterwards failed in one second
+// with "no walkable path (walks don't dig or bridge)" - including a goto one block away. The body was not lost, it was
+// BOXED IN: the only 2-high air column for blocks around was the one it stood in. The message was true and useless.
+// `passable(dx, dy, dz)` asks about a cell relative to the feet; the body's own feet are (0,0,0) and its head (0,1,0).
+const walls = (open = []) => (dx, dy, dz) => open.some(c => c[0] === dx && c[1] === dy && c[2] === dz)
+const OPEN_SKY = [[0, 2, 0]]
+const boxedCases = [
+  ['open ground: every neighbour is a step', () => true, false],
+  ['a 1-wide shaft with walls at head height', walls(OPEN_SKY), true],
+  ['a shaft with one neighbour open at foot level is a doorway, not a trap', walls([[1, 0, 0], [1, 1, 0]]), false],
+  ['a step UP out of the shaft counts, when there is headroom to rise into', walls([[1, 1, 0], [1, 2, 0], [0, 2, 0]]), false],
+  ['the same step up with my own ceiling closed does not', walls([[1, 1, 0], [1, 2, 0]]), true],
+  ['a neighbour open at the feet but blocked at the head is no way out', walls([[-1, 0, 0]]), true],
+  ['open only above me is no way out either', walls(OPEN_SKY), true]
+]
+for (const [title, passable, expected] of boxedCases) {
+  test(`boxedIn: ${title}`, () => assert.equal(boxedIn(passable), expected))
+}
+
+test('explainNoPath: boxed in, the answer is about the block I am ON, not the one I asked for', () => {
+  const said = explainNoPath('No path to the goal!', false, true)
+  assert.match(said, /1-wide shaft|boxed in/i)
+  assert.match(said, /nothing at all can be walked to/)
+  assert.match(said, /dig=true/)
+})
+
+test('explainNoPath: a digging walk that is boxed in still keeps its plain error', () => {
+  assert.equal(explainNoPath('No path to the goal!', true, true), 'No path to the goal!')
+})
 
 test('arrivalError: a goal that was met is no error', () => assert.equal(arrivalError(true), null))
 
@@ -1297,6 +1327,40 @@ const transferFixCases = [
 for (const [name, plan, before, after, expected] of transferFixCases) {
   test(`transferFix: ${name}`, () => assert.deepEqual(transferFix(plan, before, after), expected))
 }
+
+// #146: a hungry body ran `withdraw item=bread count=8` and got FAIL "the withdraw keeps going wrong (off by bread:1
+// bread:1 bread:1)" while the withdraw WORKED - the chest went 16 to 5 and the body held 8. The verdict was read off
+// the inventory delta, and auto-eat ate three loaves as they arrived. The chest is the world: judge by what left it.
+const bread = n => [{ name: 'bread', count: n }]
+const transferOutcomeCases = [
+  ['a clean withdraw', { way: 'withdraw', take: bread(8), chestBefore: { bread: 16 }, chestAfter: { bread: 8 }, invBefore: {}, invAfter: { bread: 8 } },
+    { back: [], more: [], settled: true, eaten: undefined }],
+  ['THE BUG: the body ate three as they arrived, and the withdraw is still done', { way: 'withdraw', take: bread(8), chestBefore: { bread: 16 }, chestAfter: { bread: 8 }, invBefore: {}, invAfter: { bread: 5 }, eaten: { bread: 3 } },
+    { back: [], more: [], settled: true, eaten: { bread: 3 } }],
+  ['a whole stack came out of the chest: put the excess back', { way: 'withdraw', take: bread(8), chestBefore: { bread: 30 }, chestAfter: { bread: 6 }, invBefore: {}, invAfter: { bread: 24 } },
+    { back: bread(16), more: [], settled: false, eaten: undefined }],
+  ['the chest gave less than it was asked: ask again', { way: 'withdraw', take: bread(8), chestBefore: { bread: 16 }, chestAfter: { bread: 12 }, invBefore: {}, invAfter: { bread: 4 } },
+    { back: [], more: bread(4), settled: false, eaten: undefined }],
+  ['a meal that explains nothing is not reported', { way: 'withdraw', take: bread(8), chestBefore: { bread: 16 }, chestAfter: { bread: 8 }, invBefore: {}, invAfter: { bread: 8 }, eaten: { apple: 1 } },
+    { back: [], more: [], settled: true, eaten: undefined }],
+  ['a clean deposit is judged by what landed in the chest', { way: 'deposit', take: bread(8), chestBefore: {}, chestAfter: { bread: 8 }, invBefore: { bread: 8 }, invAfter: {} },
+    { back: [], more: [], settled: true, eaten: undefined }],
+  ['a deposit that did not all land is still short', { way: 'deposit', take: bread(8), chestBefore: {}, chestAfter: { bread: 7 }, invBefore: { bread: 8 }, invAfter: { bread: 1 } },
+    { back: [], more: bread(1), settled: false, eaten: undefined }]
+]
+for (const [name, given, expected] of transferOutcomeCases) {
+  test(`transferOutcome: ${name}`, () => assert.deepEqual(transferOutcome(given), expected))
+}
+
+test('transferOutcome: a loaf eaten during a DEPOSIT is named too, and the chest is still short by it', () => {
+  const out = transferOutcome({ way: 'deposit', take: bread(8), chestBefore: {}, chestAfter: { bread: 7 }, invBefore: { bread: 10 }, invAfter: { bread: 1 }, eaten: { bread: 1 } })
+  assert.deepEqual([out.eaten, out.more], [{ bread: 1 }, bread(1)])
+})
+
+test('transferOutcome: it never blames the meal for more than the meal took', () => {
+  const out = transferOutcome({ way: 'withdraw', take: bread(8), chestBefore: { bread: 16 }, chestAfter: { bread: 8 }, invBefore: {}, invAfter: { bread: 7 }, eaten: { bread: 3 } })
+  assert.deepEqual(out.eaten, { bread: 1 })
+})
 
 // a pen on a map: '.' floor at height 0, '#' fence (1.5), 'B' full block (1), 'G' open gate (floor), 'H' fence raised by one (2.5), ' ' floor outside. Start is 'S' (floor)
 const penMap = rows => (x, z) => {
@@ -3976,6 +4040,42 @@ for (const [name, plan, world, expected] of [
 ]) {
   test(`groundJobs: ${name}`, () => assert.deepEqual(groundOf(plan, world), expected))
 }
+
+// The legend names one wood for every wooden thing - oak_fence, oak_fence_gate, oak_slab, oak_sapling - because a
+// plan is a drawing, not a shopping list. A pen actually built of birch or cherry fence is the SAME pen, and until
+// this was folded in, `groundJobs` called every one of its posts a boulder standing in the cell and dug the wall out,
+// while `planAnchor` found no evidence of the plan at all and could not tell a field one block low from bare ground.
+const familyCases = [
+  ['the same block is itself', 'oak_fence', 'oak_fence', true],
+  ['another wood, the same thing', 'oak_fence', 'birch_fence', true],
+  ['a two-word wood', 'oak_fence', 'dark_oak_fence', true],
+  ['bamboo counts as a wood for blocks', 'oak_fence', 'bamboo_fence', true],
+  ['the nether woods too', 'oak_slab', 'warped_slab', true],
+  ['a slab is not a fence', 'oak_slab', 'birch_fence', false],
+  ['a fence is not a gate', 'oak_fence', 'birch_fence_gate', false],
+  ['a sapling is a sapling', 'oak_sapling', 'cherry_sapling', true],
+  ['wood is not stone', 'oak_slab', 'stone_slab', false],
+  ['a plain block is only itself', 'chest', 'trapped_chest', false],
+  ['a plain block matches itself', 'crafting_table', 'crafting_table', true],
+  ['nothing matches nothing named', 'oak_fence', undefined, false]
+]
+for (const [name, want, got, expected] of familyCases) {
+  test(`sameFamily: ${name}`, () => assert.equal(sameFamily(want, got), expected))
+}
+
+test('groundJobs: a wall of another wood is the wall, not a boulder to dig out', () => {
+  assert.deepEqual(groundOf('#', { '0,63,0': 'dirt', '0,64,0': 'birch_fence', '0,65,0': 'air' }), [])
+})
+
+test('planAnchor: a pen built of spruce fence still gives its plan away', () => {
+  const found = planAnchor(planCells({ plan: '##', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'spruce_fence', '1,63,0': 'spruce_fence' }))
+  assert.equal(found.off, -1)
+})
+
+test('farmJobs: a gate of another wood is not torn out and replaced', () => {
+  const jobs = farmJobs({ cells: planCells({ plan: '#', x: 0, y: 63, z: 0 }), worldAt: fakeWorld({ '0,63,0': 'dirt', '0,64,0': 'acacia_fence' }), carried: { oak_fence: 4 } })
+  assert.deepEqual(jobs.filter(j => j.do === 'place'), [])
+})
 
 // clearing comes before filling: dig the boulder out, then floor the hole it stood over
 test('groundJobs: the head is cleared before the floor is laid', () => {

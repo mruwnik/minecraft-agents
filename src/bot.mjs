@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -163,13 +163,17 @@ const eatTick = async () => {
 // whatever it held before, and the reflex started again on the next tick, for ever. So watch what DOES arrive: the food
 // number going up, or the food leaving my pockets. It reads the module-level `bot`, so a reconnect needs no new one.
 let mealInFlight = null
+// every meal this body has finished, by item. A chest transfer reads it before and after: a hungry body eats the bread
+// as it arrives, and without this the withdraw could only say the inventory was short, not WHERE it went (#146)
+const mealsEaten = {}
+const ateOne = name => { mealsEaten[name] = (mealsEaten[name] ?? 0) + 1 }
 const watchTheMeal = (food, timeoutMs) => {
   const meal = new Promise((resolve, reject) => {
     const carried = () => bot.inventory.items().filter(i => i.name === food.name).reduce((n, i) => n + i.count, 0)
     const before = { food: bot.food, carried: carried() }
     const stop = () => { clearTimeout(timer); mealInFlight = null; bot.off('health', fed); bot.off('physicsTick', gone) }
-    const fed = () => { if (bot.food > before.food) { stop(); resolve() } }
-    const gone = () => { if (carried() < before.carried) { stop(); resolve() } }
+    const fed = () => { if (bot.food > before.food) { stop(); ateOne(food.name); resolve() } }
+    const gone = () => { if (carried() < before.carried) { stop(); ateOne(food.name); resolve() } }
     const timer = setTimeout(() => {
       stop()
       reject(new Error(`the meal never showed: food is still ${bot.food} and I still carry ${carried()} ${food.name} ${timeoutMs} ms on`))
@@ -1041,9 +1045,15 @@ async function chestTransfer (a, way, planFor) {
     }
   }
   const first = await bot.openContainer(await containerAt(a))
+  // the chest is the world and the verdict: an inventory delta judged a withdraw that WORKED to be a failure three
+  // rounds running, because auto-eat ate three of the eight loaves as they arrived (#146). The inventory is still
+  // read, but only to say where the difference went
   const before = countsOf(first.items())
+  const chestBefore = countsOf(first.containerItems())
+  const mealsBefore = { ...mealsEaten }
   const corrections = []
   let settled = false
+  let outcome = null
   let plan
   try {
     plan = planFor(first)
@@ -1053,17 +1063,24 @@ async function chestTransfer (a, way, planFor) {
     await bot.waitForTicks(10)
     const chest = await bot.openContainer(await containerAt(a))
     try {
-      const now = countsOf(chest.items())
-      const fix = way === 'withdraw' ? transferFix(plan.take, before, now) : transferFix(plan.take, now, before)
-      settled = !fix.back.length && !fix.more.length
+      outcome = transferOutcome({
+        way,
+        take: plan.take,
+        chestBefore,
+        chestAfter: countsOf(chest.containerItems()),
+        invBefore: before,
+        invAfter: countsOf(chest.items()),
+        eaten: diffCounts(mealsBefore, mealsEaten).gained
+      })
+      settled = outcome.settled
       if (settled) break
-      corrections.push(...[...fix.back, ...fix.more].map(t => `${t.name}:${t.count}`))
-      await run(chest, undo, fix.back)
-      await run(chest, way, fix.more)
+      corrections.push(...[...outcome.back, ...outcome.more].map(t => `${t.name}:${t.count}`))
+      await run(chest, undo, outcome.back)
+      await run(chest, way, outcome.more)
     } finally { chest.close() }
   }
   if (!settled) throw new Error(`the ${way} keeps going wrong (off by ${corrections.join(' ')}): compare chest_contents and inventory before you go on`)
-  return { plan, corrected: corrections.length ? `the first try was off by ${corrections.join(' ')}: put right` : undefined }
+  return { plan, eaten: outcome?.eaten && compact(outcome.eaten), corrected: corrections.length ? `the first try was off by ${corrections.join(' ')}: put right` : undefined }
 }
 
 // everything that drops: what inventoryCounts sees plus the armour being worn and the off hand, which live in window
@@ -1520,15 +1537,15 @@ const long = {
     const wanted = depositWanted(a, bot.inventory.items().map(i => ({ name: i.name, count: i.count })))
     if (wanted.error) throw new Error(wanted.error)
     // same plan as withdraw, the other way round: what I carry is the source
-    const { plan, corrected } = await chestTransfer(a, 'deposit', chest => withdrawPlan(wanted, countsOf(chest.items())))
+    const { plan, corrected, eaten } = await chestTransfer(a, 'deposit', chest => withdrawPlan(wanted, countsOf(chest.items())))
     if (plan.short.length) throw new Error(`you carry less than asked (have/wanted): ${plan.short.join(' ')}; deposited what there was`)
-    return corrected ? { corrected } : {}
+    return { ...(corrected ? { corrected } : {}), ...(eaten ? { eaten } : {}) }
   },
 
   async withdraw (a) {
-    const { plan, corrected } = await chestTransfer(a, 'withdraw', chest => withdrawPlan(itemsArg(a), countsOf(chest.containerItems())))
+    const { plan, corrected, eaten } = await chestTransfer(a, 'withdraw', chest => withdrawPlan(itemsArg(a), countsOf(chest.containerItems())))
     if (plan.short.length) throw new Error(`chest has less than asked (have/wanted): ${plan.short.join(' ')}; took what there was`)
-    return corrected ? { corrected } : {}
+    return { ...(corrected ? { corrected } : {}), ...(eaten ? { eaten } : {}) }
   },
 
   async chest_contents (a) {
@@ -2301,7 +2318,14 @@ let taskId = 0
 let lastCancel = null
 let lastReflex = null
 const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
-const explainFailure = message => explainNoPath(explainInterrupt(message, recentReflex()), digging)
+// #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
+// included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
+const amBoxedIn = () => {
+  if (!bot?.entity) return false
+  const feet = feetCell(bot.entity.position, bot.entity.onGround)
+  return boxedIn((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block')
+}
+const explainFailure = message => explainNoPath(explainInterrupt(message, recentReflex()), digging, amBoxedIn())
 // given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 // the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
 // An open gate empties a pen (Dan's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)

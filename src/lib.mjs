@@ -582,8 +582,22 @@ export function feetCell (position, onGround) {
 // the caller must check the goal itself
 export const arrivalError = reached => reached ? null : 'no path to the goal: the search found nothing to walk from here'
 
-export function explainNoPath (error, dig) {
+// A 1x1 natural shaft: the only 2-high air column for blocks around is the one the body stands in. Every goto then
+// fails in a second with "no walkable path", a goto one block away included - true, and useless, because it reads as
+// "the destination cannot be reached" when what is meant is "you cannot leave the block you are on" (#128).
+// `passable(dx, dy, dz)` answers about a cell relative to the feet: the body's own feet are (0,0,0), its head (0,1,0).
+export const boxedIn = passable => {
+  // level or down (the far column's floor may be lower: the fall is the pathfinder's business, not this question's)
+  const across = ([dx, dz]) => passable(dx, 0, dz) && passable(dx, 1, dz)
+  // up one, which needs my own ceiling open to rise into as well as the ledge being clear
+  const up = ([dx, dz]) => passable(0, 2, 0) && passable(dx, 1, dz) && passable(dx, 2, dz)
+  return !STEPS.some(d => across(d) || up(d))
+}
+
+const SHAFT_NOTE = 'you are standing in a 1-wide shaft with its walls at head height: nothing at all can be walked to from here, however near it is. The answer is about the block you are ON, not the one you asked for. `goto` the same place again with dig=true and the body digs itself out, or place a block at your feet and step up on it'
+export function explainNoPath (error, dig, boxed = false) {
   if (dig || !/no path to the goal|took to long to decide/i.test(error)) return error
+  if (boxed) return SHAFT_NOTE
   return 'no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
 }
 
@@ -979,6 +993,22 @@ export function transferFix (plan, before, after) {
     back: rows.filter(r => r.off > 0).map(r => ({ name: r.name, count: r.off })),
     more: rows.filter(r => r.off < 0).map(r => ({ name: r.name, count: -r.off }))
   }
+}
+
+// What a transfer actually did. The CHEST is the world, and what left it (or landed in it) is the verdict - never the
+// inventory delta. A hungry body ate three of the eight loaves as they arrived, so the inventory was short by three
+// through no fault of the transfer, and `withdraw` reported FAIL three rounds running while the chest had already
+// given up all eight (#146). The meal is worth SAYING, so an agent that reads `eaten=bread:3` knows where its food
+// went and does not withdraw again - but only where it explains the gap, and never for more than the meal took.
+export function transferOutcome ({ way, take, chestBefore, chestAfter, invBefore = {}, invAfter = {}, eaten = {} }) {
+  const fix = way === 'withdraw' ? transferFix(take, chestAfter, chestBefore) : transferFix(take, chestBefore, chestAfter)
+  // what the inventory SHOULD have done: up by what was asked on the way in, down by it on the way out
+  const wanted = way === 'withdraw' ? 1 : -1
+  const missed = take
+    .map(t => ({ name: t.name, short: (wanted * t.count) - ((invAfter[t.name] ?? 0) - (invBefore[t.name] ?? 0)) }))
+    .filter(r => r.short > 0 && (eaten[r.name] ?? 0) > 0)
+    .map(r => [r.name, Math.min(r.short, eaten[r.name])])
+  return { ...fix, settled: !fix.back.length && !fix.more.length, eaten: missed.length ? Object.fromEntries(missed) : undefined }
 }
 
 // Can an animal walk out of this pen? Flood-fill the way a cow moves from `start` [x, y, z]: to a neighbouring column whose surface is at
@@ -1796,11 +1826,27 @@ export function fieldCensus (cells, worldAt) {
 //    (a channel reads as water either way), and one matching block is a coincidence, so it takes two.
 //  - nothing built there yet, but every cell the plan names is open air (or grass) over solid ground: that is the level
 //    you STAND on, one above the ground block a plan wants.
+// The legend names ONE wood for every wooden thing - oak_fence, oak_fence_gate, oak_slab, oak_sapling - because a plan
+// is a drawing, not a shopping list. A pen actually built of birch or cherry fence is the same pen. Until this, the
+// levelling pass called every post of such a wall a boulder standing in the cell and dug the wall out, and the anchor
+// check found no evidence of the plan at all, so a field one block low read as bare ground.
+const WOODS = ['dark_oak', 'pale_oak', 'oak', 'spruce', 'birch', 'jungle', 'acacia', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped']
+const woodless = name => {
+  const wood = WOODS.find(w => String(name).startsWith(`${w}_`))
+  return wood ? String(name).slice(wood.length + 1) : null
+}
+export const sameFamily = (want, got) => {
+  if (!want || !got) return false
+  if (want === got) return true
+  const [a, b] = [woodless(want), woodless(got)]
+  return Boolean(a) && a === b
+}
+
 const anchorHit = (spec, here) => {
   if (!here) return false
   if (spec.kind === 'crop') return here.name === spec.crop
   if (spec.kind === 'gate') return here.name.endsWith('_fence_gate')
-  return Boolean(spec.item) && here.name === spec.item
+  return sameFamily(spec.item, here.name)
 }
 const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
 export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
@@ -1961,7 +2007,7 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
       push({ do: 'plant', x: cell.x, y: cell.y + 1, z: cell.z, why: 'an empty bed' }, spec.seed)
       continue
     }
-    if (!spec.item || standing === spec.item || (spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
+    if (!spec.item || sameFamily(spec.item, standing) || (spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
     // a plant in the way of a wall is weeding, not somebody's block: a bush grew into claude-test-pen's west wall and
     // the build walked past it, leaving a pen that looked finished and leaked
     if (standing && !WEEDS.has(standing)) continue
@@ -2085,7 +2131,7 @@ export const billShortfall = (bill, items = {}) =>
 // what to build a floor out of, by the ground the plan's legend asks for
 const FLOOR_ITEM = { sand: 'sand' }
 // a cell that already holds what the plan wants there is never dug out (a chest full of seed, a crop halfway grown)
-const planHas = (spec, name) => name === spec.item || name === spec.crop || (spec.kind === 'gate' && name.endsWith('_fence_gate'))
+const planHas = (spec, name) => sameFamily(spec.item, name) || name === spec.crop || (spec.kind === 'gate' && name.endsWith('_fence_gate'))
 // The levelling a plan needs before any of its jobs can be done: a floor under every cell and open air in the cell and
 // over it. Read-only judgement; `solid(name)` answers whether a block stands in the way (grass and flowers do not).
 export function groundJobs ({ cells, worldAt, solid }) {
