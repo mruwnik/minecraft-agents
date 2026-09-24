@@ -50,7 +50,7 @@ export default {
     const ripe = cells.filter(ripeAt)
     const plant = async (c, seed) => api.act('place', { item: seed, x: c.x, y: c.y, z: c.z }).then(() => true, () => false)
 
-    // Dan, 14:26Z: "run and cut everything, then collect everything, then replant everything". Cut, chase the drop and
+    // The human, 14:26Z: "run and cut everything, then collect everything, then replant everything". Cut, chase the drop and
     // replant cell by cell was 3 s a cell. Sweep one: cut in row order, a batch dig neither waits nor chases its drop
     const cutCells = []
     let row = null

@@ -89,7 +89,7 @@ Blocks without a texture (newer than the jar, or entity-rendered like signs) get
 
 A browser page that shows where every body is and what it is doing, for whoever is watching rather than playing.
 It reads `state/agents/*/config.json`, polls each body's `state` every 2 seconds and draws a top-down map (x east,
-z south): a dot per body with its name, health, food and current task, Dan as a diamond wherever a body can see him,
+z south): a dot per body with its name, health, food and current task, each human as a diamond wherever a body can see them,
 protected zones as boxes and marked places as crosses. Click a body and its view appears beside the map, rendered
 through its own eyes. Drag to pan, wheel to zoom; the map fits itself around the bodies, and "fit everything" widens
 it to the whole map.
@@ -128,10 +128,10 @@ Each name must be whitelisted once, on the server console: `whitelist add <Name>
 
 - `./play [Name] [claude options]` in a terminal: creates the agent if needed (whitelists it through `tools/rcon.mjs`; if that fails, prints the `whitelist add` line and waits),
   then starts a Claude Code session in the agent's folder with its opening instructions. One long-running session per agent.
-- Inside any Claude Code session under `/home/dan/minecraft/claude`: the `/minecraft-agent [Name]` skill does the same
+- Inside any Claude Code session under the bot/ folder of this repo: the `/minecraft-agent [Name]` skill does the same
   from within (`.claude/skills/minecraft-agent/SKILL.md`).
-- From another agent's session: spawn a named sonnet subagent (see the skill's last paragraph). Dan prefers this over headless,
-  because the subagent shows up in his session.
+- From another agent's session: spawn a named sonnet subagent (see the skill's last paragraph). The humans prefer this over headless,
+  because the subagent shows up in their session.
 - Without a terminal (from a script): `./play Aviendha -p --model sonnet --permission-mode auto --max-budget-usd 3`
   runs the session headless until it stops or the budget is spent. Tried 2026-09-19: works; the agent found its body already
   running, greeted in chat and went on building. Only ever one driver per body.

@@ -46,7 +46,7 @@ again and anything edible unless you name it: `farm.compost items='{"wheat":20}'
 
 ## What "pretty" means here
 
-Dan's world expects a field to look built, not scratched into the ground:
+This world expects a field to look built, not scratched into the ground:
 
 - Symmetric plots: a rectangle, the same crop in each block of a row, the same width top and bottom.
 - A **path** (`.` cells, gravel or dirt path) you can walk the whole field on without stepping on a crop.

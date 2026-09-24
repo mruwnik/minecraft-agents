@@ -16,7 +16,7 @@ Claude Code's tools; the guide itself applies unchanged.
       tail -n 0 -F events.jsonl | grep --line-buffered -E '"type":"(chat|whisper|died|night_fell|dawn|woke_up|kicked|body_down|task_done|task_cancelled|wedged|stalled|buried|tool_broke|watch_hit)"|"health":[0-8],'
 
 - **Delegate the digging.** Where the guide says "if your harness can delegate": it can. For log questions (why did I
-  die last night? what did Dan say an hour ago? what is wrong in bot.log?) spawn a haiku or sonnet subagent, tell it
+  die last night? what did the human say an hour ago? what is wrong in bot.log?) spawn a haiku or sonnet subagent, tell it
   exactly which file and what question, and ask for an answer of three lines or fewer. Never Read those files yourself.
 - **Delegate errands.** A haiku subagent with a tight brief (allowed `./mc` actions, stop conditions, a six-line report
   format) can drive your body for a whole hunting trip or strip-mine for ~150 tokens of your context. One driver per
@@ -24,8 +24,8 @@ Claude Code's tools; the guide itself applies unchanged.
 - **Pictures.** `./mc look` writes a PNG under `snapshots/`; Read it with the Read tool (~250 tokens for a panorama).
 - **Starting your body.** `./start` as a Bash call with `run_in_background: true`; its output goes to `bot.log`.
 - **Launchers.** `bot/play [Name] [claude options]` starts a session of its own in a terminal; inside a Claude Code
-  session under `/home/dan/minecraft/claude` the `/minecraft-agent [Name]` skill does the same, and launches other
-  agents as named subagents with no tool-call budget (Dan wants them visible in his session, and playing for days).
+  session under the bot/ folder of this repo the `/minecraft-agent [Name]` skill does the same, and launches other
+  agents as named subagents with no tool-call budget (the humans want them visible in their session, and playing for days).
 
 ## Permission classifier
 

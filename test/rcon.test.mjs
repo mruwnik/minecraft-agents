@@ -15,7 +15,7 @@ test('decodePacket: incomplete data gives null', () => {
   assert.equal(decodePacket(encodePacket(1, 2, 'list').subarray(0, 9)), null)
 })
 
-const badNames = ['', 'ab', 'x y', 'Avi\nstop', 'Avi;op Claude', 'a'.repeat(17), 'remove mruwnik', '../x']
+const badNames = ['', 'ab', 'x y', 'Avi\nstop', 'Avi;op Claude', 'a'.repeat(17), 'remove Steve', '../x']
 for (const name of badNames) {
   test(`whitelistCommand refuses ${JSON.stringify(name)}`, () => assert.throws(() => whitelistCommand(name)))
 }

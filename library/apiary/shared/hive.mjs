@@ -9,7 +9,7 @@ const isLit = block => isCampfire(block) && block.properties?.lit !== false && S
 // a moss carpet is a plant and burns; every dyed carpet is wool and sits on a fire without catching
 const isCarpet = name => /^[a-z_]+_carpet$/.test(String(name)) && name !== 'moss_carpet'
 
-// The standard column (Dan, 2026-09-23): the campfire at least one block underground at y, ground on all four sides of
+// The standard column (the human, 2026-09-23): the campfire at least one block underground at y, ground on all four sides of
 // it, a carpet ON it at y+1 (flush with the ground), one air block, the hive at y+3. An open fire burns the bees that
 // land in it, so a lit fire with nothing on it is `open`, and inspect, harvest and maintain all say so before anything
 // is touched. A carpet covers it; so does anything with a collision box sitting straight on it, a wild nest on its fire

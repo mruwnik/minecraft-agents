@@ -1,5 +1,5 @@
 // Create a new agent: a folder under state/agents/ with its own name, config, log, journal and tool wrappers.
-//   node tools/new-agent.mjs                      draw a name from Dan's generator (~/.claude/hooks/choose_name.py)
+//   node tools/new-agent.mjs                      draw a name from the name generator (~/.claude/hooks/choose_name.py)
 //   node tools/new-agent.mjs Lightsong            use this name
 //   node tools/new-agent.mjs [Name] --harness codex   the program that will run the agent: one of the notes files in harness/ (default claude-code)
 import fs from 'node:fs'
@@ -72,9 +72,9 @@ Read, in this order:
 `)
 
 console.log(`created state/agents/${character.username}  (${character.source}${character.note ? ', ' + character.note : ''})  api port ${apiPort}  harness ${wanted.harness}`)
-// whitelist through the narrow RCON tool; if that isn't set up or the server is down, fall back to asking Dan
+// whitelist through the narrow RCON tool; if that isn't set up or the server is down, fall back to asking the server admin
 try {
   console.log(execFileSync('node', [path.join(DIR, 'rcon.mjs'), character.username], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim())
 } catch {
-  console.log(`NOT WHITELISTED. Dan: run this on the server console so it can join ->  whitelist add ${character.username}`)
+  console.log(`NOT WHITELISTED. Ask the server admin to run this on the server console so it can join ->  whitelist add ${character.username}`)
 }

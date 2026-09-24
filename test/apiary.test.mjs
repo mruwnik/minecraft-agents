@@ -20,7 +20,7 @@ const blockAt = world => (x, y, z) => world[`${x},${y},${z}`] ?? null
 const block = (name, properties = {}, solid = true) => ({ name, properties, solid })
 const air = () => block('air', {}, false)
 // the standard column: fire one block underground at y, ground on all four sides of it, a carpet on it, one air block,
-// then the hive (Dan, 09-23: open fires burn the bees; the fire goes at least one block underground)
+// then the hive (the human, 09-23: open fires burn the bees; the fire goes at least one block underground)
 const ground = (x, y, z) => Object.fromEntries([[x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]].map(([gx, gz]) => [`${gx},${y},${gz}`, block('dirt')]))
 const column = (extra = {}) => ({
   '10,65,10': block('beehive', { honey_level: 5, facing: 'south' }),

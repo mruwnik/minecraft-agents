@@ -36,7 +36,7 @@ export default {
       api.report(summary)
     }
 
-    // A missing dusk is not a failure of the chores. Twice the machine napped through one and once Dan set the time
+    // A missing dusk is not a failure of the chores. Twice the machine napped through one and once a human set the time
     // to day (09-24), and each time the routine died with "the day never ended" while the apiary sat ripe. So a clock
     // that jumps backwards counts as the day having turned, and a wait that gives up starts the next round and says so.
     const nextDay = async () => {
