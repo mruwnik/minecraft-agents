@@ -126,6 +126,18 @@ export const matchPlaces = (places, from, { q, by, kind, within = Infinity, maxD
 }
 
 // Shared points of interest, nearest first: "name kind 12m @x,y,z (who: note)".
+// A place belongs to whoever made it. `mark` used to stamp the marker's own name on every save, so appending one line
+// to Chani's carrot patch took the patch over, and there is no `by=` to give it back (backlog #141). The same call cut
+// the note to 80 characters in silence, dropping the half that said what was owed, and the only way to find out was to
+// read the place back. Both are one mistake: a write that quietly changes what it was not asked to change. So the
+// owner survives every later mark, and a note that does not fit is refused out loud with nothing saved.
+export const NOTE_MAX = 80
+export function markFields ({ saved, by, note }) {
+  const text = String(note ?? saved?.note ?? '')
+  if (text.length > NOTE_MAX) return { error: `note= is ${text.length} characters and a place note holds ${NOTE_MAX}: shorten it. Nothing was marked` }
+  return { by: saved?.by ?? by, note: text }
+}
+
 export function describePlaces (places, from, options = {}) {
   const { limit = 12, notes = true } = options
   const dist = awayFrom(from)
