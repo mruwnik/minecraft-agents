@@ -2300,6 +2300,12 @@ export function checkArgs (name, spec, given) {
 
 // A composite cannot opt out of these: the runner checks them between steps and hands control back to the driver, ending
 // the task with stopped=<reason>. Night WITH a bed is not here: the runner sleeps and the composite never sees it.
+// what `state` says the body is doing. A composite asleep at its night checkpoint read as a wedge (Chani stopped two):
+// it is paused, and it goes on at dawn by itself
+export const PAUSES = { night: 'asleep for the night, goes on at dawn by itself (./mc stop takes the body back now)' }
+export const doingText = ({ name, seconds, paused } = {}) =>
+  name ? `${name} ${seconds}s${paused ? `, paused: ${PAUSES[paused] ?? paused}` : ''}` : null
+
 export function handBackReason (s) {
   if (s.spoken) return `spoken to (${s.spoken})`
   if (s.health <= 8) return `health ${Math.round(s.health)}`
