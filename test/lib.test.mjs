@@ -1249,7 +1249,9 @@ for (const [name, state, expected] of [
   ['low air under water', { headInWater: true, inWater: true, oxygen: 8, surfacing: false }, 'start'],
   ['low reading on dry land is a bridge misfire', { headInWater: false, inWater: false, oxygen: 3, surfacing: false }, null],
   ['still short of air: keep swimming up', { headInWater: false, inWater: true, oxygen: 10, surfacing: true }, 'hold'],
+  ['ViaBackwards refills oxygen while my head is still underwater', { headInWater: true, inWater: true, oxygen: 20, surfacing: true }, 'hold'],
   ['breathed enough', { headInWater: false, inWater: true, oxygen: 18, surfacing: true }, 'stop'],
+  ['head reaches open air even if the body is still wet', { headInWater: false, inWater: true, oxygen: 20, surfacing: true }, 'stop'],
   ['out of the water', { headInWater: false, inWater: false, oxygen: 5, surfacing: true }, 'stop']
 ]) test(`airReflex: ${name}`, () => assert.equal(airReflex(state), expected))
 
@@ -2745,8 +2747,14 @@ for (const [name, me, gate, animals, expected] of [
   test(`herdPassed: ${name}`, () => assert.equal(herdPassed(me, gate, animals), expected))
 }
 for (const [name, gates, me, expected] of [
-  ['the one behind me is mine to shut, the one a long walk back is reported', [[0, 64, 3], [0, 64, -150]], [0, 64, 0], { near: [[0, 64, 3]], far: '0,64,-150' }],
-  ['none', [], [0, 64, 0], { near: [], far: '' }]
+  ['the one behind me is mine to shut, the one a long walk back is reported', [[0, 64, 3], [0, 64, -150]], [0, 64, 0], { near: [[0, 64, 3]], far: '0,64,-150', inside: [] }],
+  ['none', [], [0, 64, 0], { near: [], far: '', inside: [] }],
+  // collect ended standing in the gate at 101,71,-68 and shut it on itself: the next goto stalled in it (Claude, 09-24 15:35Z).
+  // A gate my hitbox overlaps is left to the door reflex, which shuts it once I have walked off it
+  ['the gate I stand in is not shut on me', [[101, 71, -68]], [101.7, 71, -67.7], { near: [], far: '', inside: [[101, 71, -68]] }],
+  ['half in the next cell still overlaps it', [[101, 71, -68]], [102.25, 71, -67.5], { near: [], far: '', inside: [[101, 71, -68]] }],
+  ['clear of it by a step: shut', [[101, 71, -68]], [102.5, 71, -67.5], { near: [[101, 71, -68]], far: '', inside: [] }],
+  ['standing on the gate below is not in it', [[101, 71, -68]], [101.5, 73, -67.5], { near: [[101, 71, -68]], far: '', inside: [] }]
 ]) {
   test(`gatesByReach: ${name}`, () => assert.deepEqual(gatesByReach(gates, me), expected))
 }
