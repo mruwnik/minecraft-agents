@@ -203,7 +203,9 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
    body again then. (`./mc clock` shows the time at once, also without a body. Never reconnect just to look.) One awake player keeps the night going for everyone. Your body helps: at night, with no task running, no command from you for 90 s and a bed within 32 blocks, it goes to bed by itself (event `bedtime`; `bedtime_failed` says why not). `reflexes on=false` switches that off too. It cannot help a body without a bed.
 4. **Don't die stupidly.** Keep real food on you: the body eats by itself below 15 food (below 18 while hurt: health only comes back at 18 and up, so carry enough to get there), but never rotten flesh,
    raw chicken or spider eyes UNTIL food 6 or less with nothing else edible, when it eats those too rather than starve holding them; eggs, seeds and wheat are not food at all. It cannot eat on a full belly, so being hurt at food 20 is not fed by food: rest. `eat` does it
-   by hand, and an `eat_failed` event says the reflex tried and could not - read it, and say so, because a body that stops eating starves with bread in its pockets. A meal is about a second and a half of
+   by hand, and an `eat_failed` event says the reflex tried and could not - read it, and say so, because a body that stops eating starves with bread in its pockets. It never eats with a hostile within 6 blocks or during a fight or a
+   run: the sword stays in the hand until the mob is dead, and a meal already going when one comes near is dropped. A meal
+   that fails is retried after 5, 10, 20 and then every 30 s, not every 3. A meal is about a second and a half of
    holding the food still, and a hand swap or a gate worked in that moment cancels it, so while one is in the air the walk's own tool swaps wait for it: being
    stuck against a gate no longer stops the body eating.
    If a result shows `food:` and you carry only those, hunt or fetch shared food (WORLD.md says where). At food 0 you cannot sprint away
