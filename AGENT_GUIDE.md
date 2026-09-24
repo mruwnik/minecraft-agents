@@ -226,6 +226,15 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
 
 - A fight or a flee interrupts the running action (`interrupted: fleeing from zombie`): wait a few seconds, then retry.
   An unarmed body flees every hostile within 7 blocks and gets nothing done near mobs: carry a sword or an axe.
+- **The flee reflex is on a leash too, and it comes back.** A run goes away from the threat until it is 16 blocks off
+  (28 for an archer), then walks back to the cell the run started from, so a body chased once no longer drifts away
+  from its work. It digs and bridges while fleeing, because that is the escape. Every change of state is an event with
+  the threat, the position and the home cell: `flee_started`, `flee_clear` (far enough, turning back), `flee_returned`
+  (home). Two events mean the body has run out of ideas and is handing you the legs: `flee_stuck`, when the run has
+  covered no ground for six seconds (it is boxed in: dig straight down and wall the hole behind you, or fight), and
+  `flee_held`, when the same mob drove it off again within a minute of the last walk back (the walk back was feeding a
+  loop, so this run does not come home). After either, that mob starts no new run for fifteen seconds and the body
+  will FIGHT it instead if it can, because standing still is worse. `stop` always clears a flee.
 - **The fight reflex is on a leash.** A mob that walks the body more than 8 blocks from where the fight started, or more
   than 3 blocks below it, has the fight broken off: the body stops swinging, walks back to where it began and says
   `interrupted: breaking off a fight with spider that pulled me too far` (event `leashed`). This is what stands between

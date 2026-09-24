@@ -14,7 +14,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferFix, gatesLeftOpen, oversleeping, staleCode, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -762,7 +762,72 @@ setInterval(() => {
   emit('stalled', { pos: pos(), evidence: stallEvidence(), advice: onBed ?? 'the walk never got going: step a couple of blocks away (goto), then retry' })
   cancelTask('stalled: no movement for 12s; step a couple of blocks away, then retry')
 }, 1000)
-let fleeingUntil = 0
+// #138: one flee run at a time, with a phase and a way home. `fleeingUntil` was a timer that every tick re-armed
+// while a threat stood near, which is how a body chased once kept running until something else stopped it.
+let flee = null // { mob, entity, home, phase, held, wasDigging, still: { pos, at } }
+let lastFleeReturn = null // the mob and time of the last walk back, for the oscillation guard
+let fleeGaveUp = null // the mob and time of the last run that handed control back, so it does not restart itself
+
+// One run of the flee reflex, start to finish (#138). Everything that moves the body is here; what to do next is
+// decided by fleeStep in lib.mjs, which knows nothing about bodies.
+const fleeAt = () => flee ? { from: flee.mob, pos: pos(), home: `${Math.round(flee.home.x)},${Math.round(flee.home.y)},${Math.round(flee.home.z)}` } : {}
+function startFlee (entity, me, note, extra = {}) {
+  // a run this body already gave up on does not start itself again the moment the legs are free: that is the loop
+  if (fleeOscillating({ mob: entity.name, last: fleeGaveUp, now: Date.now(), within: FLEE_GIVEUP_MS })) return false
+  const held = fleeOscillating({ mob: entity.name, last: lastFleeReturn, now: Date.now() })
+  fighting = null
+  fightStart = null
+  bot.pvp.stop()
+  // home survives a re-trigger: the work is still where the FIRST run left it, not where the second one started
+  flee = { mob: entity.name, entity, home: flee?.home ?? me.clone(), phase: 'away', held, wasDigging: flee?.wasDigging ?? digging, still: { pos: me.clone(), at: Date.now() } }
+  // digging and bridging are the escape, not a detour: a body cornered against a wall has to be able to cut its way out
+  useMoves(true)
+  bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(entity, fleeRange(entity.name))), true)
+  lastReflex = { kind: 'fleeing', mob: entity.name, at: Date.now() }
+  emit('fleeing', { from: entity.name, ...(note ? { note } : {}), ...extra })
+  emit('flee_started', { ...fleeAt(), ...(held ? { held: 'it came back within a minute of the last walk back: this run does not come home' } : {}) })
+  return true
+}
+
+function endFlee () {
+  if (!flee) return
+  const wasDigging = flee.wasDigging
+  flee = null
+  useMoves(wasDigging)
+  if (!task && !followTarget) bot.pathfinder.setGoal(null)
+  else resumeFollow()
+}
+
+function stepFlee (me) {
+  const entity = flee.entity
+  const alive = entity && entity.isValid !== false && entity.position
+  // a creeper that turns up mid-run is a different problem: it does not chase, it arrives and goes off
+  const creeper = nearbyHostiles(6).find(e => e.name === 'creeper')
+  if (creeper && flee.mob !== 'creeper') return startFlee(creeper, me)
+  if (me.distanceTo(flee.still.pos) >= 1.5) flee.still = { pos: me.clone(), at: Date.now() }
+  const step = fleeStep({
+    phase: flee.phase,
+    threatDist: alive ? entity.position.distanceTo(me) : Infinity,
+    homeDist: me.distanceTo(flee.home),
+    stillMs: Date.now() - flee.still.at,
+    held: flee.held,
+    bound: fleeRange(flee.mob)
+  })
+  if (step.event === 'flee_started') { if (!startFlee(entity, me)) endFlee(); return }
+  if (!step.event) return
+  emit(step.event, { ...fleeAt(), ...(step.note ? { advice: step.note } : {}) })
+  if (step.phase === 'back') {
+    // the walk back is what the oscillation guard counts from: a threat that follows me home gets one run, not forever
+    lastFleeReturn = { mob: flee.mob, at: Date.now() }
+    flee.phase = 'back'
+    flee.still = { pos: me.clone(), at: Date.now() }
+    useMoves(flee.wasDigging)
+    bot.pathfinder.setGoal(new goals.GoalNear(flee.home.x, flee.home.y, flee.home.z, FLEE_HOME), false)
+    return
+  }
+  if (step.event === 'flee_stuck' || step.event === 'flee_held') fleeGaveUp = { mob: flee.mob, at: Date.now() }
+  endFlee()
+}
 let lastHurt = 0
 // mineflayer's bot.wake() sends action id 2, which since 1.21.6 means stop_sprinting: the server never hears it
 let lastLeftBed = 0
@@ -839,31 +904,16 @@ function reflexTick () {
     }
     return
   }
+  // a run already going owns the legs until it ends: one run at a time, and it ends itself (#138)
+  if (flee) { stepFlee(me); return }
   // #97: an enderman killed Ganesha's body at its own door in five seconds. Nothing here wins that fight, so one that
   // comes within arm's reach is backed away from exactly as a creeper is, before the reflex below can think of fighting it
   const unwinnable = fleeUnwinnable(nearbyHostiles(ENDERMAN_RANGE).map(e => ({ name: e.name, dist: e.position.distanceTo(me), entity: e })))
-  if (unwinnable && Date.now() > fleeingUntil) {
-    fleeingUntil = Date.now() + 4000
-    fighting = null
-    fightStart = null
-    bot.pvp.stop()
-    bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(unwinnable.entity, 16)), true)
-    lastReflex = { kind: 'fleeing', mob: unwinnable.name, at: Date.now() }
-    emit('fleeing', { from: unwinnable.name, note: 'not a fight this body can win: breaking line of sight' })
-    setTimeout(() => { if (!task && !followTarget) bot.pathfinder.setGoal(null); else resumeFollow() }, 4000)
-    return
-  }
+  // a run refused because this body already gave up on that mob falls THROUGH to the fight reflex: a body that cannot
+  // run and will not fight is a body standing still while something kills it
+  if (unwinnable && startFlee(unwinnable.entity, me, 'not a fight this body can win: breaking line of sight')) return
   const creeper = nearbyHostiles(6).find(e => e.name === 'creeper')
-  if (creeper && Date.now() > fleeingUntil) {
-    fleeingUntil = Date.now() + 4000
-    bot.pvp.stop()
-    bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(creeper, 10)), true)
-    lastReflex = { kind: 'fleeing', mob: 'creeper', at: Date.now() }
-    emit('fleeing', { from: 'creeper' })
-    setTimeout(() => { if (!task && !followTarget) bot.pathfinder.setGoal(null); else resumeFollow() }, 4000)
-    return
-  }
-  if (Date.now() < fleeingUntil) return
+  if (creeper && startFlee(creeper, me)) return
   // unarmed or badly hurt: don't brawl, run. (Two deaths on night one taught me this.)
   const armed = bot.inventory.items().some(i => /_sword$|_axe$/.test(i.name))
   const where = { day: !isNight(bot.time.timeOfDay), skyLight: bot.blockAt(me)?.skyLight ?? 0 }
@@ -885,15 +935,7 @@ function reflexTick () {
   const outmatched = shouldFlee({ armed, health: bot.health, attackers: Math.max(crowd, 1), armorPieces: [5, 6, 7, 8].filter(slot => bot.inventory.slots[slot]).length })
   // an archer that just hit me counts like a chaser: mid-charge rangedThreat is silent, and a patrol shot Jizo from 20 to 0 that way
   if (((chaser || (archer && Date.now() - lastHurt < 5000)) && outmatched) || ranged === 'flee') {
-    const from = chaser ?? archer
-    fleeingUntil = Date.now() + 3000
-    fighting = null
-    fightStart = null
-    bot.pvp.stop()
-    bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(from, ARCHERS.has(from.name) ? 28 : 16)), true)
-    lastReflex = { kind: 'fleeing', mob: from.name, at: Date.now() }
-    emit('fleeing', { from: from.name, health: Math.round(bot.health), armed })
-    return
+    if (startFlee(chaser ?? archer, me, undefined, { health: Math.round(bot.health), armed })) return
   }
   if (fighting && (!fighting.isValid || fighting.position.distanceTo(me) > (ARCHERS.has(fighting.name) ? 28 : 12))) {
     fighting = null
@@ -2186,7 +2228,7 @@ const quick = {
     return { from, to: pos(), onGround: bot.entity.onGround, velocity: roundVec(bot.entity.velocity) }
   },
 
-  stop () { cancelTask('stop'); followTarget = null; return {} },
+  stop () { cancelTask('stop'); followTarget = null; endFlee(); return {} },
   // without on= it only tells: a bare `reflexes` "to look" used to switch them all off, silently
   reflexes (a) {
     if (a.on === undefined) return { reflexes, note: 'unchanged: reflexes on=true|false switches them' }

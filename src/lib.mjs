@@ -355,7 +355,9 @@ export const mayDig = (name, args) => args.dig === true
 // ./mc wait: an idle subagent is not woken by its monitor (the events only reach it with the next message), so drivers wait inside a
 // blocking command instead. These are the events worth ending the wait for
 const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_down', 'error', 'task_done', 'task_cancelled', 'wedged', 'stalled', 'buried',
-  'watch_hit', 'night_fell', 'dawn', 'woke_up', 'bedtime_failed', 'code_updated'])
+  'watch_hit', 'night_fell', 'dawn', 'woke_up', 'bedtime_failed', 'code_updated',
+  // a run the body gave up on is the agent's problem now, and an agent asleep in ./mc wait cannot take it (#138)
+  'flee_stuck', 'flee_held'])
 export const wakeWorthy = (event, me) => WAKE_TYPES.has(event.type) ||
   (event.type === 'chat' && event.from !== me) || (event.type === 'hurt' && event.health <= 8)
 
@@ -434,6 +436,47 @@ export function shouldFlee (s) {
 // archers shoot from beyond the 7 blocks the other reflexes watch: a body that stood still was shot dead without ever reacting.
 // Just hurt, not in a fight, an archer in sight: charge it (it cannot be outwaited), or run when unarmed or badly hurt
 export const ARCHERS = new Set(['skeleton', 'stray', 'bogged', 'pillager'])
+// #138. The flee reflex had no end and no way home. `GoalInvert(GoalFollow(mob, 16))` runs for as long as the mob is
+// followed, `fleeingUntil` was re-armed every tick a threat sat within 7 blocks, and `stop` cleared neither, so a body
+// chased once drifted until something else stopped it: hundreds of blocks from its work, and one of them starved on
+// the way. A run has a phase now. It goes AWAY until the threat is `bound` blocks off, then BACK to the cell the run
+// started from, and both halves can end badly: a run that covers no ground is boxed in and says so, and a second run
+// from the same mob within a minute of the last walk back does not walk back at all, because the walk back is what
+// was feeding the loop. Either way the agent is told and gets the legs, because the body has run out of ideas and the
+// agent has not: it can dig down, wall the hole behind it, fight, or wait for dawn.
+export const FLEE_AWAY = 16
+export const FLEE_ARCHER_AWAY = 28
+export const FLEE_NEAR = 6
+export const FLEE_STUCK_MS = 6000
+export const FLEE_HOME = 2
+export const FLEE_HOLD_MS = 60000
+export const FLEE_GIVEUP_MS = 15000
+export const FLEE_STUCK_NOTE = 'the run has covered no ground in 6 seconds: I am boxed in. Dig straight down and wall the hole behind me, or turn and fight'
+export const FLEE_HELD_NOTE = 'the same threat drove me off again within a minute of the last walk back, so I am not walking back this time. Dig down, fight it, or wait for dawn: your call'
+export const fleeRange = name => ARCHERS.has(name) ? FLEE_ARCHER_AWAY : FLEE_AWAY
+// the same mob, too soon: used for the oscillation guard (a minute after a walk back) and, with FLEE_GIVEUP_MS, to
+// keep a run the body already gave up on from starting itself again the moment the legs come back
+export const fleeOscillating = ({ mob, last, now, within = FLEE_HOLD_MS }) => Boolean(last && last.mob === mob && now - last.at < within)
+
+// One tick of the run. `stillMs` is how long since the body last covered ground, `homeDist` how far it is from where
+// the run began, `bound` how far off this threat has to be to count as left behind. Nothing here moves anything.
+export function fleeStep ({ phase = null, threatDist = Infinity, homeDist = 0, stillMs = 0, held = false, bound = FLEE_AWAY }) {
+  if (phase === 'away') {
+    // clear before stuck: a body walled in whose threat has wandered off did not fail, it finished
+    if (threatDist >= bound) return held ? { phase: null, event: 'flee_held', note: FLEE_HELD_NOTE } : { phase: 'back', event: 'flee_clear' }
+    if (stillMs >= FLEE_STUCK_MS) return { phase: null, event: 'flee_stuck', note: FLEE_STUCK_NOTE }
+    return { phase: 'away' }
+  }
+  if (phase === 'back') {
+    // the threat beats arriving: being home with it on my heels is not being safe
+    if (threatDist <= FLEE_NEAR) return { phase: 'away', event: 'flee_started' }
+    if (homeDist <= FLEE_HOME) return { phase: null, event: 'flee_returned' }
+    if (stillMs >= FLEE_STUCK_MS) return { phase: null, event: 'flee_stuck', note: FLEE_STUCK_NOTE }
+    return { phase: 'back' }
+  }
+  return { phase: null }
+}
+
 export const crowdSize = hostiles => hostiles.filter(h => h.dist <= 5 || (ARCHERS.has(h.name) && h.dist <= 24)).length
 export function rangedThreat (s) {
   if (s.hurtMsAgo > 5000 || s.fighting || s.meleeNear || !s.archerNear) return null
