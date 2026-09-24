@@ -58,7 +58,7 @@ Dan's world expects a field to look built, not scratched into the ground:
 
 | I want to | I run |
 |---|---|
-| design a field | `farm.plan name=<name> map='<rows>' x= y= z=` — it refuses dry cells and corner gates before I place a single block, and warns when nothing in the plan is walkable between the gate and the far rows: a walk steps ROUND planted cells, so crops with no `.` path, covered `~` channel, gate, flower or sapling beside them can never be worked. `farm.fields` says the same about a field that already stands, on a `lane:` line |
+| design a field | `farm.plan map='<rows>' x= y= z= check=true` to try a map, then the same call with `name=<name>` and no `check=` to save it — checking writes nothing, so a draft never appears on the shared map. Either way it refuses dry cells and corner gates before I place a single block, and warns when nothing in the plan is walkable between the gate and the far rows: a walk steps ROUND planted cells, so crops with no `.` path, covered `~` channel, gate, flower or sapling beside them can never be worked. `farm.fields` says the same about a field that already stands, on a `lane:` line |
 | know if it is worth walking over | `farm.fields` — a census of every plan near me, with no walking |
 | work a field for a day | `farm.maintain place=<name>` — harvest, replant, re-till, refill channels, store the surplus |
 | clear the rubble off a field | `farm.tidy place=<name>` — digs the stray dirt, cobblestone, logs and saplings standing over the plan and picks the drops up. `farm.fields` and `farm.maintain` say `clutter=` when there is any |

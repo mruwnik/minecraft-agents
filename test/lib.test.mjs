@@ -3491,6 +3491,51 @@ test('farm.plan: a plan with a path from the gate down the rows warns about noth
   assert.equal(out.warn, undefined)
 })
 
+// #137: there was no way to try a map without publishing it. Checking one meant marking a throwaway plan under my own
+// test paddock's name on the shared map, where every agent saw it until I unmarked it again. check=true runs every
+// check a save runs and writes nothing, so a map can be argued with before it lands on the map everyone reads.
+test('farm.plan: check=true runs every check and marks nothing', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  const out = await farmPlan.run(api, { map: 'w~w', x: 10, y: 64, z: -20, check: true })
+  assert.deepEqual([calls, out.checked, out.is, out.needs], [[], true, '3x1 wheat:2 water', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
+  assert.match(out.save, /name=/)
+})
+
+test('farm.plan: a checked map answers exactly what saving it would answer', async () => {
+  const good = { map: '#G##\n#.c#\n#~c#\n#.c#\n####', x: 0, y: 63, z: 0 }
+  const { api: saving } = fakeApi({ places: [] })
+  const { api: checking, calls } = fakeApi({ places: [] })
+  const saved = await farmPlan.run(saving, { ...good, name: 'north-field' })
+  const checked = await farmPlan.run(checking, { ...good, check: true })
+  assert.deepEqual([checked.at, checked.is, checked.needs, checked.warn], [saved.at, saved.is, saved.needs, saved.warn])
+  assert.deepEqual(calls, [])
+})
+
+test('farm.plan: check=true refuses a broken map without touching the shared map', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  await assert.rejects(farmPlan.run(api, { map: 'w~wwwwww', x: 0, y: 64, z: 0, check: true }), /no water within 4 blocks/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.plan: check=true still names the faults a save would only warn about', async () => {
+  const { api, calls } = fakeApi({ places: [], world: { '0,65,0': 'wheat#3', '1,65,0': 'wheat#3' } })
+  const out = await farmPlan.run(api, { map: 'ww~', x: 0, y: 63, z: 0, check: true })
+  assert.match(out.warn, /re-save it with y=64/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.plan: a map with neither a name nor check= says which of the two it wants', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  await assert.rejects(farmPlan.run(api, { map: 'w~w', x: 0, y: 64, z: 0 }), /name=.*check=true/)
+  assert.deepEqual(calls, [])
+})
+
+test('farm.plan: check=true on a named plan checks the new map where that plan already sits', async () => {
+  const { api, calls } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 7, y: 64, z: 9, plan: 'w~w' }] })
+  const out = await farmPlan.run(api, { name: 'north-field', map: 'ww~ww', check: true })
+  assert.deepEqual([out.at, calls], [{ x: 7, y: 64, z: 9 }, []])
+})
+
 test('farm.fields: a field with no lane through it says so on a line of its own', async () => {
   const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#~~#\n#cc#\n####' }] })
   const out = await farmFields.run(api, {})
