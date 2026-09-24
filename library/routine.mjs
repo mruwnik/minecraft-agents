@@ -32,10 +32,17 @@ export default {
       api.report(summary)
     }
 
+    // A missing dusk is not a failure of the chores. Twice the machine napped through one and once Dan set the time
+    // to day (09-24), and each time the routine died with "the day never ended" while the apiary sat ripe. So a clock
+    // that jumps backwards counts as the day having turned, and a wait that gives up starts the next round and says so.
     const nextDay = async () => {
-      await api.until(() => api.clock().night, { timeout: 1200, every: 10, what: 'the day never ended' })
+      const start = api.clock().time
+      const dusk = () => api.clock().night || api.clock().time < start
+      const came = await api.until(dusk, { timeout: 1200, every: 10, what: 'the day never ended' }).then(() => true, () => false)
+      if (!came) return api.note('no dusk came in 1200s of waiting (the time was set?): starting the next round')
       await api.checkpoint()
       await api.until(() => api.clock().day, { timeout: 1200, every: 10, what: 'the night never ended' })
+        .catch(() => api.note('no dawn came in 1200s of waiting: starting the next round'))
     }
 
     for (;;) {

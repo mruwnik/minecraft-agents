@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -571,6 +571,53 @@ const fleeCases = [
 for (const [title, change, expected] of fleeCases) {
   test(`shouldFlee: ${title}`, () => assert.equal(shouldFlee({ ...brawl, ...change }), expected))
 }
+
+// #138. The flee reflex had no end and no way home: GoalInvert(GoalFollow(mob, 16)) runs for as long as the mob is
+// followed, `fleeingUntil` was re-armed every tick a threat sat within 7 blocks, and `stop` cleared neither. Bodies
+// drifted hundreds of blocks from their work and one starved doing it. So a run has a phase now: away until the
+// threat is `bound` blocks off, then back to where the run started - and a run that covers no ground, or a second run
+// from the same mob within a minute of the last walk back, hands control to the agent instead of trying again.
+const STUCK_NOTE = 'the run has covered no ground in 6 seconds: I am boxed in. Dig straight down and wall the hole behind me, or turn and fight'
+const HELD_NOTE = 'the same threat drove me off again within a minute of the last walk back, so I am not walking back this time. Dig down, fight it, or wait for dawn: your call'
+for (const [name, args, expected] of [
+  ['not fleeing stays not fleeing', { phase: null }, { phase: null }],
+  ['running, the threat still on me', { phase: 'away', threatDist: 3 }, { phase: 'away' }],
+  ['far enough off: turn for home', { phase: 'away', threatDist: 16 }, { phase: 'back', event: 'flee_clear' }],
+  ['one block short of far enough', { phase: 'away', threatDist: 15.9 }, { phase: 'away' }],
+  ['the threat is gone entirely: turn for home', { phase: 'away' }, { phase: 'back', event: 'flee_clear' }],
+  ['an archer is only clear at its own range', { phase: 'away', threatDist: 20, bound: 28 }, { phase: 'away' }],
+  ['the same archer at its own range is clear', { phase: 'away', threatDist: 28, bound: 28 }, { phase: 'back', event: 'flee_clear' }],
+  ['covering no ground hands control back', { phase: 'away', threatDist: 3, stillMs: 6000 }, { phase: null, event: 'flee_stuck', note: STUCK_NOTE }],
+  ['a moment short of stuck keeps running', { phase: 'away', threatDist: 3, stillMs: 5999 }, { phase: 'away' }],
+  ['boxed in but the threat left: go home, not a complaint', { phase: 'away', stillMs: 9000 }, { phase: 'back', event: 'flee_clear' }],
+  ['held: clear of it, and this one does not come home', { phase: 'away', threatDist: 16, held: true }, { phase: null, event: 'flee_held', note: HELD_NOTE }],
+  ['held while still running is still just running', { phase: 'away', threatDist: 3, held: true }, { phase: 'away' }],
+  ['walking home', { phase: 'back', homeDist: 5 }, { phase: 'back' }],
+  ['home', { phase: 'back', homeDist: 2 }, { phase: null, event: 'flee_returned' }],
+  ['it followed me home: run again', { phase: 'back', homeDist: 5, threatDist: 6 }, { phase: 'away', event: 'flee_started' }],
+  ['it followed me all the way to the door: the threat wins over arriving', { phase: 'back', homeDist: 1, threatDist: 4 }, { phase: 'away', event: 'flee_started' }],
+  ['the walk home is the thing that is stuck', { phase: 'back', homeDist: 9, stillMs: 6000 }, { phase: null, event: 'flee_stuck', note: STUCK_NOTE }]
+]) {
+  test(`fleeStep: ${name}`, () => assert.deepEqual(fleeStep(args), expected))
+}
+
+for (const [name, mob, last, expected] of [
+  ['nothing to repeat', 'zombie', null, false],
+  ['the same mob, seconds after the last walk back', 'zombie', { mob: 'zombie', at: 1000 }, true],
+  ['the same mob, but that was two minutes ago', 'zombie', { mob: 'zombie', at: -60000 }, false],
+  ['a different mob is a fresh problem', 'skeleton', { mob: 'zombie', at: 1000 }, false],
+  ['exactly a minute is no longer a repeat', 'zombie', { mob: 'zombie', at: -1 }, false]
+]) {
+  test(`fleeOscillating: ${name}`, () => assert.equal(fleeOscillating({ mob, last, now: 59999 }), expected))
+}
+
+// the same guard, with the shorter window: a run the body gave up on does not restart itself the moment the legs are free
+test('fleeOscillating: a shorter window is the give-up hold', () => assert.deepEqual(
+  [14999, 15000].map(ago => fleeOscillating({ mob: 'zombie', last: { mob: 'zombie', at: 0 }, now: ago, within: FLEE_GIVEUP_MS })),
+  [true, false]))
+
+test('fleeRange: an archer has to be further off than a zombie', () => assert.deepEqual(
+  ['skeleton', 'pillager', 'zombie', 'creeper'].map(fleeRange), [28, 28, 16, 16]))
 
 const miss = (x, why) => ({ at: `${x},65,-135`, why })
 const outcomeCases = [
@@ -4357,4 +4404,24 @@ for (const [name, answers, opts, expected] of [
   ['a sub-second every still waits a tick', [false, true], { timeout: 1, every: 0.01 }, { outcome: true, waits: [1] }]
 ]) {
   test(`makeUntil: ${name}`, async () => assert.deepEqual(await untilRun(answers, opts), expected))
+}
+
+// A chore loop must not fail because a dusk went missing. Mariel's routine died three times with "the day never
+// ended": twice the machine napped, once Dan set the time to day (09-24 01:45Z). A wait that gives up simply starts
+// the next round and says so; a clock that jumps backwards counts as the day having turned.
+const routineWithClock = async (times) => {
+  const { api, calls } = fakeApi({ answers: { compost: {} } })
+  let looks = 0
+  api.clock = () => { const time = times[Math.min(looks++, times.length - 1)]; return { time, night: time > 12542 && time < 23460, day: !(time > 12542 && time < 23460) } }
+  api.until = async (pred, opts) => { if (await pred()) return true; throw new Error(`routine: waited ${opts.timeout}s and ${opts.what}`) }
+  const summary = await routine.run(api, { steps: [{ action: 'compost' }], days: 2 })
+  return { days: summary.days, ran: summary.ran, notes: calls.filter(c => c.startsWith('note') && !c.endsWith(' ok')) }
+}
+
+for (const [name, times, expected] of [
+  ['a dusk that never comes starts the next round with a note', [6000, 6000, 6000, 6000], { days: 2, ran: 2, notes: ['note no dusk came in 1200s of waiting (the time was set?): starting the next round'] }],
+  ['a clock set back to morning counts as the day having turned', [6000, 1000, 1000, 1000], { days: 2, ran: 2, notes: [] }],
+  ['an ordinary dusk and dawn', [6000, 13000, 1000], { days: 2, ran: 2, notes: [] }]
+]) {
+  test(`routine: ${name}`, async () => assert.deepEqual(await routineWithClock(times), expected))
 }
