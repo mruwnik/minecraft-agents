@@ -5,6 +5,7 @@ import { mineTargets, inAnyZone, holesLeft, penShaftRefusal, isTreeLog } from '.
 
 const MAX = 48
 const ROUNDS = 6
+const SCAN_EXTRA = 256
 const AROUND = [-2, -1, 0, 1, 2]
 
 export default {
@@ -44,8 +45,9 @@ export default {
     let gaveUp = null
     while (got < want && rounds < (a.rounds ?? ROUNDS)) {
       rounds++
-      // ask for extra: some of what comes back is in a zone, or wet, or simply out of reach
-      const { positions = [] } = await api.act('find_blocks', { block: a.block, maxDistance, count: want - got + 16 })
+      // ask for plenty extra: find_blocks answers only the nearest count=, and near home those are all builds (the 21 nearest
+      // logs were the base and the hut, with trees 40 blocks off), or wet, or out of reach
+      const { positions = [] } = await api.act('find_blocks', { block: a.block, maxDistance, count: want - got + SCAN_EXTRA })
       if (!positions.length && !rounds - 1) throw new Error(`no ${what}`)
       const { zones = [] } = await api.act('zones')
       const choice = mineTargets({ nearby: positions, wanted: want - got, inZone: p => inAnyZone(zones, p), wet, allowWet: a.wet === true, what, placed: notTree })
