@@ -923,8 +923,12 @@ for (const [name, here, mobDist, expected] of [
     'the fight pulled me 10 blocks from where it started (leash=8): broken off, and I am walking back'],
   ['twice the leash is too far even with it in reach', { x: 27, y: 70, z: -5 }, 2,
     'the fight pulled me 17 blocks from where it started (leash=8): broken off, and I am walking back'],
-  ['a drop still breaks it off at once, in reach or not', { x: 11, y: 66, z: -5 }, 2,
-    'the fight pulled me 4 blocks down (from y=70): broken off before it becomes a cave, and I am walking back']
+  // my own body, 14:51Z: pulled 4 down after a zombie from the pit under my test pen, broke off with it in reach and took three hits climbing out
+  ['a drop with the mob in reach: keep fighting, the walk back is where the hits land', { x: 11, y: 66, z: -5 }, 2, null],
+  ['a drop with the mob backing off: break off as before', { x: 11, y: 66, z: -5 }, 6,
+    'the fight pulled me 4 blocks down (from y=70): broken off before it becomes a cave, and I am walking back'],
+  ['twice the drop is a cave even with the mob in reach', { x: 11, y: 63, z: -5 }, 2,
+    'the fight pulled me 7 blocks down (from y=70): broken off before it becomes a cave, and I am walking back']
 ]) test(`chaseBroken with the mob near: ${name}`, () => assert.equal(chaseBroken({ x: 10, y: 70, z: -5 }, here, { mobDist }), expected))
 
 // and the flee: GoalInvert(GoalFollow) moves with the mob, so every step of the zombie reset the path and the run never sprinted
