@@ -1152,6 +1152,25 @@ export const craftRoom = ({ freeSlots, stacks, stackSize, batch, item, made = 0,
   ? null
   : `${made ? `${made}/${count} made, then ` : ''}your inventory is full and ${item} has nowhere to go (the craft would eat the ingredients and drop or lose the result): toss or deposit something first`
 
+// A craft counts its result from the LOCAL inventory, and the server's answer to the click can land long after the
+// loop has decided the batch failed. So "0/1 made" was said twice over things that had gone very differently: a
+// stone_axe craft that consumed nothing, where a plain retry made the axe; and a shears craft that ate two iron
+// ingots and never gave them back (backlog #133). One is free to retry and one is a real loss, and a message that
+// cannot tell them apart leaves the driver to find out by counting their own pockets. So the ingredients are read
+// back too, and what the message says about them is what the inventory actually shows.
+export function craftReport ({ item, count, made, spent = {}, why }) {
+  if (made >= count) return { crafted: item, made }
+  const used = Object.entries(spent).filter(([, n]) => n > 0).map(([name, n]) => `${name}:${n}`).join(' ')
+  // ingredients consumed alongside a result are not lost, they ARE the result: only a craft that made nothing at all
+  // can claim its ingredients went for nothing, and saying otherwise sends the driver hunting a loss that never was
+  if (made > 0) return { error: `${why}: only ${made} of ${count} ${item} made${used ? `, and ${used} went into them` : ''}` }
+  return {
+    error: `${why}: no ${item} made at all and ${used
+      ? `the ingredients are gone (${used}): the server took them and gave nothing back, so this loss is real. Check your inventory before retrying`
+      : 'nothing was consumed, so nothing is lost: retry once, the second call usually works'}`
+  }
+}
+
 // scan where=<name, * wildcards>: the cells themselves, x then z then y ascending, so nobody has to count columns in the picture
 export function scanWhere (nameAt, { x1, y1, z1, x2, y2, z2 }, where, limit = 20) {
   const wanted = new RegExp('^' + String(where).replace(/\*/g, '.*') + '$')
@@ -2193,7 +2212,7 @@ export const PRIMITIVES = {
   toggle: { section: 'block', args: 'x= y= z= [open=]', doc: 'work a gate, door, trapdoor, lever or button by hand' },
   use: { section: 'block', args: 'x= y= z= [item=] [ticks=]', doc: 'right-click a block with what I hold: a composter, a lectern, anything toggle refuses' },
   // ---- item
-  craft: { section: 'item', args: 'item= [count=1]', doc: 'craft, using a crafting table within 32 blocks when the recipe needs one' },
+  craft: { section: 'item', args: 'item= [count=1]', doc: 'craft, using a crafting table within 32 blocks when the recipe needs one. Answers made= (a batch can overshoot what you asked for). A failure says whether the ingredients were consumed: if they were not, retry, the second call usually works' },
   smelt: { section: 'item', args: 'item= [count=] [fuel=] [fuelCount=] [wait=] [x= y= z=]', doc: 'cook or melt in the nearest furnace and wait for it, by day' },
   furnace_take: { section: 'item', args: '[x= y= z=]', doc: 'take what is done out of a furnace' },
   deposit: { section: 'item', args: 'items= | item= [count=] | all=true [x= y= z=]', doc: 'put things into a chest, then open it again to check they really went in' },
