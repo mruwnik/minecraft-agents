@@ -5,7 +5,7 @@
 // farmland, floor or path itself, with crops, fences and chests standing at y+1 and a water source at y. A ~ cell is built
 // COVERED: a bottom oak slab is laid into the source cell, waterlogged, so it still hydrates its four neighbours and is walkable.
 // It only reads the map and writes it back, so it never takes the body over.
-import { parsePlan, planAnchor, planCells, planErrors, planLane, planBill, planSummary, compact } from '../../src/lib.mjs'
+import { parsePlan, planAnchor, planCells, planErrors, planLane, planBill, planSummary, compact, mapRefusal } from '../../src/lib.mjs'
 
 export default {
   doc: "farm.plan [name=] [map=] [check=true] [kind=] [x= y= z=] [note=]: check a plan and save it on the shared map, or print the one saved under that name. check=true runs every check and saves nothing, so a map can be argued with before every agent sees it",
@@ -24,6 +24,11 @@ export default {
     // a map without a name has nowhere to be saved, and guessing a name would put it on the shared map under a word
     // nobody chose. Checking one is the other thing the caller might have meant, so the refusal offers it (#137)
     if (!a.name && !a.check) throw new Error('a plan is saved under a name: pass name=, or check=true to check this map without writing it to the map every agent reads')
+    // whose record this is, first: an agent told what is wrong with its map fixes that and comes back to find the
+    // name was never theirs to save under. `mark` refuses this too, but the answer is worth more before the work
+    // than after it (#144 folded in). A check writes nothing, so it is open on anybody's plan
+    const mine = a.check ? null : mapRefusal(saved, api.me?.())
+    if (mine) throw new Error(mine)
     const parsed = parsePlan(a.map)
     const errors = planErrors(parsed)
     if (errors.length) throw new Error(errors.join('; '))

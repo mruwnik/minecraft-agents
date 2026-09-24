@@ -147,6 +147,18 @@ export const matchPlaces = (places, from, { q, by, kind, within = Infinity, maxD
 // read the place back. Both are one mistake: a write that quietly changes what it was not asked to change. So the
 // owner survives every later mark, and a note that does not fit is refused out loud with nothing saved.
 export const NOTE_MAX = 80
+// The shared map is a RECORD, and `mark` REPLACES what is saved under a name while `unmark` deletes the entry
+// outright: one agent could move somebody else's field, overwrite their plan or wipe the entry, and neither asked
+// anything at all. Adding to the NOTE stays open - that is how agents leave each other word about a place, and
+// markFields has kept the owner through it since #141 - so only the substance is gated: the plan, where it is, what
+// it is. An invitation on the ground does not open even that: "anyone welcome, harvest and replant" is permission to
+// work the crop and says nothing about rewriting the entry that describes it. So ownership alone decides here, where
+// workRefusal opens on the note.
+export const mapRefusal = (saved, me) => {
+  if (!saved?.by || String(saved.by).toLowerCase() === String(me ?? '').toLowerCase()) return null
+  return `${saved.name} is on the shared map as ${saved.by}'s, and this is their own record of it: the plan, where it is and what it is are theirs to change or take off the map. Save yours under a name of your own, or ask ${saved.by} in chat to change theirs. Adding to its note= is still open to you, and working the ground is a different question (the note on it answers that one)`
+}
+
 export function markFields ({ saved, by, note }) {
   const text = String(note ?? saved?.note ?? '')
   if (text.length > NOTE_MAX) return { error: `note= is ${text.length} characters and a place note holds ${NOTE_MAX}: shorten it. Nothing was marked` }
