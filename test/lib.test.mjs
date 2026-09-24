@@ -723,7 +723,8 @@ for (const [name, args, expected] of [
   ['night with a bed in reach: sleep', { night: true, bedNear: true }, 'sleep'],
   ['night with no bed: stay where I respawned', { night: true }, 'stay'],
   ['day, but the killer is still standing there', { killerNear: true }, 'stay'],
-  ['a bed with the killer beside it is no bed', { night: true, bedNear: true, killerNear: true }, 'stay']
+  ['a bed with the killer beside it is no bed: dig down and cap', { night: true, bedNear: true, killerNear: true }, 'burrow'],
+  ['#147 addendum: Mariel respawned on her bed beside two zombies, three times', { night: true, killerNear: true }, 'burrow']
 ]) {
   test(`respawnPlan: ${name}`, () => assert.equal(respawnPlan(args).do, expected))
 }
