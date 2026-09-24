@@ -315,6 +315,19 @@ export const DIG_REACH = 4.5
 export const digFromHere = (feet, cell, reach = DIG_REACH) =>
   Math.hypot(cell.x + 0.5 - feet.x, cell.y + 0.5 - (feet.y + 1.62), cell.z + 0.5 - feet.z) <= reach
 
+// what a dig does before it moves (card 150b3ee1): a dig at a cell that was already air walked for 148 s before it looked.
+// name: the cell as read from here (undefined: its chunk is not loaded). needed: a tool the body lacks for it. near: digFromHere
+export const digPlan = ({ name, needed, near }) => {
+  if (name === undefined) return near ? 'air' : 'walk'
+  if (isAir(name)) return 'air'
+  if (needed) return 'tool'
+  return near ? 'dig' : 'walk'
+}
+// a dig's walk that has not arrived by then gives up, and says so
+export const DIG_WALK_MS = 30000
+export const digUnreached = p =>
+  `could not reach ${p.x},${p.y},${p.z} to dig it in ${DIG_WALK_MS / 1000}s (no standing spot within reach, or a drop or mob in the way): goto a spot beside it, then dig again`
+
 // boustrophedon: row by row (z), alternating direction, so the farmer sweeps a field instead of criss-crossing it
 export function harvestOrder (positions) {
   const rows = [...new Set(positions.map(p => p.z))].sort((a, b) => a - b)
