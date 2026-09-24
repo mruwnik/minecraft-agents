@@ -528,7 +528,12 @@ export const HOLE_UNSAFE = new Set(['air', 'cave_air', 'void_air', 'water', 'flo
 // killed (my body, 13:40Z: dug under two zombies and a skeleton and died at the bottom). An armed body fights instead;
 // an unarmed one has nothing better than the ground
 export const HOLE_MELEE = 4
-export const holeUpRefusal = ({ armed, hostileDist }) => armed && hostileDist <= HOLE_MELEE ? 'fight' : null
+// and where the mob stands at that instant is not the measure: my body (17:26Z) fled a zombie 3 blocks, stopped in the dark with it
+// 4-8 blocks behind, dug, and it was back on it 1.5 s later; dead at the bottom with a stone sword. A hit within these last seconds
+// is a hostile in reach whether or not it is seen
+export const HOLE_HURT_MS = 3000
+export const holeUpRefusal = ({ armed, hostileDist, hurtMsAgo = Infinity }) =>
+  armed && (hostileDist <= HOLE_MELEE || hurtMsAgo <= HOLE_HURT_MS) ? 'fight' : null
 
 export function holeUpVerdict ({ food = 20, hasFood = true, health = 20, night = false, mobNear = false, stuck = false } = {}) {
   if (stuck) return { why: 'the run is boxed in and there is nowhere to run to' }
