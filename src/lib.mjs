@@ -926,8 +926,15 @@ export const openNow = ({ near, open, door, moving, inDoorway }) => near && !ope
 // within the minute (Perrin's body shut Dan's gate 16 ms after he opened it, 13:30Z), and never with reflexes off
 export const GATE_OTHERS_NEAR = 4
 export const GATE_HANDS_OFF_MS = 60000
-export const shutNow = ({ near, open, mine, leading, moving, inDoorway, reflexes = true, otherNear = false, otherToggledMsAgo = Infinity }) =>
-  reflexes && open && mine && !leading && !otherNear && otherToggledMsAgo >= GATE_HANDS_OFF_MS && (!near || (!moving && !inDoorway))
+// A gate `held` open by toggle is never shut either: the gates.log listener takes the toggle's own click for a walk's (mine), and the
+// reflex shut it behind the body three times over, "still closed after 3 tries" (Kettricken 22:00Z, my test gate 17:01Z)
+export const shutNow = ({ near, open, mine, leading, moving, inDoorway, reflexes = true, otherNear = false, otherToggledMsAgo = Infinity, held = false }) =>
+  reflexes && open && mine && !held && !leading && !otherNear && otherToggledMsAgo >= GATE_HANDS_OFF_MS && (!near || (!moving && !inDoorway))
+// prismarine-block gives an OPEN fence gate boundingBox 'block' with no shapes, so to the pathfinder it is a wall: it routes through a
+// gate only while the gate is shut (it opens it itself, useOne), and once the gate stands open, held by toggle or opened by the walk
+// itself before a replan, every path through it is gone. Chani's goto to the cell beyond her open gate answered "no walkable path"
+// (13:19Z), and walks replanned in the gate cell stalled there 12 s (14:19Z-16:03Z). What movements.getBlock adds to an open gate: air
+export const openGateWalk = block => block?.name?.endsWith('_fence_gate') && block.open === true ? { safe: true, physical: false } : null
 
 // The actions that changed name when the library was namespaced. Journals, habits and old notes still say the left-hand
 // side, so every "unknown action" names its successor rather than leaving the driver to guess. No aliases: the old name stays dead.
@@ -1674,6 +1681,20 @@ export const patchPathfinder = source => source.includes(GATE_GUARD)
 // "no walkable path" while the pathfinder, its goal still set, searched on and walked the body away after the task had ended
 const GOTO_EMPTY = "      if (results.path.length === 0) {\n        cleanup()\n"
 const GOTO_FIXED = "      if (results.path.length === 0 && results.status !== 'partial') { // patched by bot/patch-deps.mjs\n        cleanup()\n"
+// mineflayer-pathfinder 2.4.5 lib/movements.js getMoveParkourForward: a fence is `physical: false` (nothing stands on it), so from a
+// start node one above a fence row (a body mid-jump in a gate cell) three fence posts in a row look like a gap to jump: Chani's stalled
+// walks all had "113.5,73,-70.5" as their first node, four cells along her fence line from the gate, and the body bounced against the
+// first post at y 72.8-73.2 until the 12 s alarm. Nothing parkours over a fence, a wall or a gate: the scan stops at the first one
+const PARKOUR_START = "    if ((block1.physical && block1.height >= block0.height) ||\n"
+const PARKOUR_START_FIXED = "    if (this.fences.has(block1.type) || // patched by bot/patch-deps.mjs: no parkour over a fence, wall or gate\n      (block1.physical && block1.height >= block0.height) ||\n"
+const PARKOUR_SCAN = "      const blockD = this.getBlock(node, dx, -1, dz)\n"
+const PARKOUR_SCAN_FIXED = "      const blockD = this.getBlock(node, dx, -1, dz)\n      if (this.fences.has(blockD.type)) break // patched by bot/patch-deps.mjs: no parkour over a fence, wall or gate\n"
+export const patchParkourFences = source => source.includes(PARKOUR_START_FIXED) && source.includes(PARKOUR_SCAN_FIXED)
+  ? { status: 'already', source }
+  : source.includes(PARKOUR_START) && source.includes(PARKOUR_SCAN)
+    ? { status: 'patched', source: source.replace(PARKOUR_START, PARKOUR_START_FIXED).replace(PARKOUR_SCAN, PARKOUR_SCAN_FIXED) }
+    : { status: 'anchor missing', source }
+
 export const patchGotoPartial = source => source.includes(GOTO_FIXED)
   ? { status: 'already', source }
   : source.includes(GOTO_EMPTY) ? { status: 'patched', source: source.replace(GOTO_EMPTY, GOTO_FIXED) } : { status: 'anchor missing', source }
