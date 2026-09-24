@@ -81,31 +81,33 @@ export const planRects = places => places.flatMap(place => {
   return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
 })
 
-// crops get their own colour so two fields are told apart at a glance; everything else is by kind. A character
-// the legend does not know (a stray space, a typo) is drawn grey rather than guessed at.
-const CELL_COLOURS = {
-  w: '#d9b25f', // wheat
-  c: '#e08b3d', // carrots
-  p: '#c9a15f', // potatoes
-  b: '#b3435f', // beetroots
-  s: '#c9c96a', // sugar cane
-  m: '#7fae3a', // melon
-  k: '#d67f2e', // pumpkin
-  B: '#5c8f4a', // bamboo
-  '~': '#4a90d9', // water
-  '.': '#6b6558', // path
-  '#': '#8b7355', // fence
-  G: '#a8895f', // gate
-  T: '#e0a030', // torch
-  C: '#a0754a', // chest
-  K: '#7a5c3a', // composter
-  F: '#e0e060', // flower
-  t: '#5c8f4a', // sapling
-  A: '#a0754a' // crafting table
+// crops get their own colour so two fields are told apart at a glance; everything else is by kind. One table for
+// both colour and label keeps them from drifting apart - a plan's legend (below the grid) is read straight off it.
+const CELL_LEGEND = {
+  w: { colour: '#d9b25f', label: 'wheat' },
+  c: { colour: '#e08b3d', label: 'carrots' },
+  p: { colour: '#c9a15f', label: 'potatoes' },
+  b: { colour: '#b3435f', label: 'beetroots' },
+  s: { colour: '#c9c96a', label: 'sugar cane' },
+  m: { colour: '#7fae3a', label: 'melon' },
+  k: { colour: '#d67f2e', label: 'pumpkin' },
+  B: { colour: '#5c8f4a', label: 'bamboo' },
+  '~': { colour: '#4a90d9', label: 'water' },
+  '.': { colour: '#6b6558', label: 'path' },
+  '#': { colour: '#8b7355', label: 'fence' },
+  G: { colour: '#a8895f', label: 'gate' },
+  T: { colour: '#e0a030', label: 'torch' },
+  C: { colour: '#a0754a', label: 'chest' },
+  K: { colour: '#7a5c3a', label: 'composter' },
+  F: { colour: '#e0e060', label: 'flower' },
+  t: { colour: '#5c8f4a', label: 'sapling' },
+  A: { colour: '#a0754a', label: 'crafting table' }
 }
-const UNKNOWN_CELL = '#555f6e'
+const UNKNOWN_CELL = { colour: '#555f6e', label: 'unknown' }
 
-export const cellColour = ch => CELL_COLOURS[ch] ?? UNKNOWN_CELL
+// a character the legend does not know (a stray space, a typo) is drawn grey and labelled as such, not guessed at
+export const cellColour = ch => (CELL_LEGEND[ch] ?? UNKNOWN_CELL).colour
+export const cellLabel = ch => (CELL_LEGEND[ch] ?? UNKNOWN_CELL).label
 
 // which footprint, if any, a world x,z lands in - the north-west corner is inside, the far edge (x+w, z+h) is not
 export const hitPlan = (rects, x, z) =>

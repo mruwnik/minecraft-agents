@@ -40,11 +40,14 @@
   .err { color: #f0907e; }
   #planOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
   #planOverlay[hidden] { display: none; }
-  #planCard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; max-width: min(92vw, 680px); max-height: 88vh; overflow: auto; }
+  #planCard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; width: fit-content(min(92vw, 680px)); max-width: min(92vw, 680px); max-height: 88vh; overflow: auto; }
   #planCard .planHead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
   #planCard h3 { margin: 0; font-size: 13px; letter-spacing: .03em; color: var(--place); }
-  #planMeta { color: var(--dim); margin-bottom: 10px; white-space: pre-wrap; }
+  #planMeta { color: var(--dim); margin-bottom: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   #planCanvas { display: block; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; }
+  #planLegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; color: var(--ink); font-size: 11px; }
+  .legendItem { display: inline-flex; align-items: center; gap: 5px; }
+  .legendSwatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.18); flex: none; }
 </style>
 </head>
 <body>
@@ -94,10 +97,11 @@
     </div>
     <div id="planMeta"></div>
     <canvas id="planCanvas"></canvas>
+    <div id="planLegend"></div>
   </div>
 </div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, hitPlan, parsePlan } from './map.mjs'
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlan } from './map.mjs'
 
 const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
@@ -392,6 +396,21 @@ const drawPlanGrid = parsed => {
   })
 }
 
+// one swatch per cell kind actually in this plan (in the order it is first met), not every kind the legend knows -
+// a 7x7 carrot patch has no business listing bamboo
+const drawPlanLegend = parsed => {
+  const legend = el('planLegend')
+  legend.textContent = ''
+  const seen = [...new Set(parsed.cells.map(({ ch }) => ch))]
+  seen.forEach(ch => {
+    const item = tag('span', 'legendItem', '')
+    const swatch = tag('span', 'legendSwatch', '')
+    swatch.style.background = cellColour(ch)
+    item.append(swatch, ` ${cellLabel(ch)}`)
+    legend.append(item)
+  })
+}
+
 // a place opens only if it has a plan that actually parses; a bare point (a hut, a marker) has nothing to show
 const showPlan = place => {
   if (!place?.plan) return
@@ -403,6 +422,7 @@ const showPlan = place => {
     place.note || null,
     `${parsed.width}x${parsed.height} blocks, anchored at ${place.x},${place.y},${place.z} (north-west corner)`
   ].filter(Boolean).join('\n')
+  drawPlanLegend(parsed)
   drawPlanGrid(parsed)
   el('planOverlay').hidden = false
 }

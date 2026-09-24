@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { parseAgents, snapshotFile, route } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, hitPlan } from '../tools/dashboard/map.mjs'
+import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan } from '../tools/dashboard/map.mjs'
 
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
@@ -244,6 +244,40 @@ test('cellColour: an unknown character is grey', () => {
 
 test('cellColour: two different crops get different colours', () => {
   assert.notEqual(cellColour('w'), cellColour('c'))
+})
+
+const labels = [
+  ['w', 'wheat'],
+  ['c', 'carrots'],
+  ['p', 'potatoes'],
+  ['b', 'beetroots'],
+  ['s', 'sugar cane'],
+  ['m', 'melon'],
+  ['k', 'pumpkin'],
+  ['B', 'bamboo'],
+  ['~', 'water'],
+  ['.', 'path'],
+  ['#', 'fence'],
+  ['G', 'gate'],
+  ['T', 'torch'],
+  ['C', 'chest'],
+  ['K', 'composter'],
+  ['F', 'flower'],
+  ['t', 'sapling'],
+  ['A', 'crafting table']
+]
+labels.forEach(([ch, name]) => test(`cellLabel: ${ch} is ${name}`, () => {
+  assert.equal(cellLabel(ch), name)
+}))
+
+test('cellLabel: an unknown character is labelled unknown', () => {
+  assert.equal(cellLabel('?'), 'unknown')
+})
+
+test('cellLabel: every colour key has a matching label, and vice versa', () => {
+  const withLabel = labels.map(([ch]) => ch).sort()
+  const withColour = ['w', 'c', 'p', 'b', 's', 'm', 'k', 'B', '~', '.', '#', 'G', 'T', 'C', 'K', 'F', 't', 'A'].sort()
+  assert.deepEqual(withLabel, withColour)
 })
 
 const rects = planRects([wheatField, carrotPatch])
