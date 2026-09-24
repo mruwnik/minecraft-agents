@@ -2153,6 +2153,12 @@ export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
 // water still stands in a cell whose block was waterlogged (a slab or stairs laid into the source): the farmland beside
 // it stays wet, so a covered channel is a full channel
 export const holdsWater = block => Boolean(block) && (block.name === 'water' || String(block.properties?.waterlogged) === 'true')
+// stricter than holdsWater, for the one place wetness alone is not enough: capping a cell with a slab. holdsWater is
+// right for census - the farmland beside a cell does not care whether its water is a source or a neighbour's flow
+// passing through. But flow (properties.level 1-7) has no source of its own in that cell; it can recede a tick after
+// this is read, before the cover lands, leaving a slab capping ground that is not really wet. Only a settled source
+// (level 0, or already waterlogged) is safe to cap
+export const hasWaterSource = block => Boolean(block) && (block.name === 'water' ? Number(block.properties?.level ?? 0) === 0 : String(block.properties?.waterlogged) === 'true')
 // what you can stand in: air, or the grass and flowers that grow on open ground
 const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
 // what you can stand on

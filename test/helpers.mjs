@@ -21,7 +21,9 @@ export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = []
     block: (x, y, z) => {
       const name = world[`${x},${y},${z}`]
       const tag = String(name).split('#')[1]
-      return name === undefined ? null : { name: String(name).split('#')[0], properties: { age: Number(tag) || 0, open: tag === 'open' }, solid: name !== 'air' && name !== 'water' }
+      // a #tag reused for whichever property the block actually has: age for a crop, open for a gate, level for
+      // water (0 is a settled source; 1-7 is flow still spreading, and can recede a tick after this is read)
+      return name === undefined ? null : { name: String(name).split('#')[0], properties: { age: Number(tag) || 0, open: tag === 'open', level: Number(tag) || 0 }, solid: name !== 'air' && name !== 'water' }
     },
     plan: () => place,
     places: () => places,

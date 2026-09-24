@@ -4514,6 +4514,29 @@ test('farm.build: a channel IS dug out by a body that carries the water for it',
   assert.deepEqual(calls.filter(c => c.startsWith('dig')), ['dig 0,63,0'])
 })
 
+// water a neighbour's pour merely spread into is not the same as this cell's own source: flow (properties.level
+// 1-7) has no source block of its own here and can recede a tick after this read, before the place lands - the
+// exact way the melon patch channel ended up capped with dry slabs (seen in game: z=-84 covered end to end, but
+// only the one cell actually poured into came back waterlogged). A cell only counts as ready for its cover once
+// it is a settled source (level 0), not merely wet in passing.
+test('farm.build: a cover is held back for water that is only a neighbour\'s flow, not this cell\'s own source', async () => {
+  const world = { '0,63,0': 'water#3', '0,62,0': 'stone' }
+  const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { oak_slab: 1 } })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over water that is only passing through')
+  assert.equal(summary.covered, undefined)
+  assert.match(summary.stuck, /not holding water/)
+})
+
+test('maintain_farm: a cover is held back for water that is only a neighbour\'s flow, not this cell\'s own source', async () => {
+  const world = { '0,63,0': 'water#3', '0,62,0': 'stone' }
+  const { api, calls } = fakeApi({ place: fakePlace('~'), world, items: { oak_slab: 1 } })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over water that is only passing through')
+  assert.equal(summary.covered, 0)
+  assert.match(summary.stuck, /not holding water/)
+})
+
 test('farm.build: partial=true builds what it can and names the rest', async () => {
   const world = { '0,63,0': 'dirt', '1,63,0': 'dirt' }
 // farmJobs queues a cover right after a dry cell's pour, on the assumption the pour lands (see the farmJobs test
