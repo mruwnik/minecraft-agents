@@ -3,6 +3,9 @@
 // lib.mjs re-exports all of it: one copy of each helper for bodies, tests and mc alike
 
 const LONG_FIELDS = ['task', 'action', 'seconds', 'gained', 'lost', 'ate', 'pos', 'ok', 'error']
+// a short result (no action) renders only these itself: the rest of LONG_FIELDS are ordinary fields there. `eat` answers
+// ate= and gained= (numbers, not the long result's count maps), and the long list swallowed both: "ok food=10 health=10"
+const SHORT_FIELDS = ['pos', 'ok', 'error']
 const isPos = v => Object.keys(v).length === 3 && ['x', 'y', 'z'].every(k => typeof v[k] === 'number')
 const isEmpty = v => v == null || v === false || v === '' || (typeof v === 'object' && Object.keys(v).length === 0)
 const bracket = v => typeof v === 'object' && !Array.isArray(v) && !isPos(v) ? `(${compact(v)})` : compact(v)
@@ -29,7 +32,8 @@ export function terse (r) {
   const head = r.ok ? 'ok' : 'FAIL'
   const error = r.error ? [`error: ${r.error}`] : []
   if (r.status === 'running') return `ok running task=${r.task} (still going: block on ./mc wait for its task_done, do not end your turn)`
-  const extras = compact(Object.fromEntries(Object.entries(r).filter(([k]) => !LONG_FIELDS.includes(k))), false)
+  const hidden = r.action ? LONG_FIELDS : SHORT_FIELDS
+  const extras = compact(Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))), false)
   if (!r.action) return [head, ...(extras ? [extras] : []), ...(r.pos ? [`pos=${compact(r.pos)}`] : []), ...error].join(' ')
   const at = r.pos ? [`@${compact(r.pos)}`] : []
   const ate = r.ate ? [`ate=${signed('', r.ate).join(',')}`] : []
