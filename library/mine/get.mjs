@@ -1,7 +1,7 @@
 // Get that many of a block: find them, dig them one at a time (dig picks up its own drop), and leave the place tidy.
 // What it will not touch: anything inside a protected zone (someone's build, mine included), anything in or beside
 // water (bodies drown fetching sand off a lake bed), and the ground it stands on when animals are penned around it.
-import { mineTargets, inAnyZone, holesLeft, penShaftRefusal } from '../../src/lib.mjs'
+import { mineTargets, inAnyZone, holesLeft, penShaftRefusal, isTreeLog } from '../../src/lib.mjs'
 
 const MAX = 48
 const ROUNDS = 6
@@ -38,6 +38,9 @@ export default {
     let got = 0
     let rounds = 0
     let skippedWet = 0
+    let skippedPlaced = 0
+    // logs come off trees only: a post or a beam in somebody's house is not a tree (a *_log run cut a cherry village post)
+    const notTree = /_log$/.test(a.block) ? p => !isTreeLog(p, nameAt) : undefined
     let gaveUp = null
     while (got < want && rounds < (a.rounds ?? ROUNDS)) {
       rounds++
@@ -45,9 +48,10 @@ export default {
       const { positions = [] } = await api.act('find_blocks', { block: a.block, maxDistance, count: want - got + 16 })
       if (!positions.length && !rounds - 1) throw new Error(`no ${what}`)
       const { zones = [] } = await api.act('zones')
-      const choice = mineTargets({ nearby: positions, wanted: want - got, inZone: p => inAnyZone(zones, p), wet, allowWet: a.wet === true, what })
+      const choice = mineTargets({ nearby: positions, wanted: want - got, inZone: p => inAnyZone(zones, p), wet, allowWet: a.wet === true, what, placed: notTree })
       if (choice.error) { gaveUp = choice.error; break }
       skippedWet = Math.max(skippedWet, choice.skippedWet ?? 0)
+      skippedPlaced = Math.max(skippedPlaced, choice.skippedPlaced ?? 0)
       let dug = 0
       for (const p of choice.found) {
         const failed = await api.act('dig', { x: p.x, y: p.y, z: p.z, dig: true, ...(a.wet === true ? { wet: true } : {}) }).then(() => null, e => e.message)
@@ -65,7 +69,8 @@ export default {
       got,
       rounds,
       gaveUp: got >= want ? undefined : gaveUp ?? `nothing more within ${maxDistance} blocks`,
-      skippedWet: skippedWet ? `${skippedWet} lay in or by water and were left alone (wet=true takes them; safer: dig x= y= z= from the shore)` : undefined
+      skippedWet: skippedWet ? `${skippedWet} lay in or by water and were left alone (wet=true takes them; safer: dig x= y= z= from the shore)` : undefined,
+      skippedPlaced: skippedPlaced ? `${skippedPlaced} were placed wood (posts and beams in somebody's build), not trees, and were left alone` : undefined
     }
 
     // mining ends in the pit it dug, and a walk (which may not dig) cannot leave one: get back to where I started

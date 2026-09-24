@@ -1310,14 +1310,34 @@ export function craftShortfall (recipes, have) {
 
 // which of the blocks found `mine` goes for. Never inside a protected zone; and not in or beside water unless asked: the walk to a
 // submerged block ends in a pocket under water, the air reflex cancels the task, and three bodies drowned on 09-19 fetching sand
-export function mineTargets ({ nearby, wanted, inZone, wet, allowWet, what }) {
+export function mineTargets ({ nearby, wanted, inZone, wet, allowWet, what, placed = () => false }) {
   if (!nearby.length) return { error: `no more ${what}` }
   const free = nearby.filter(p => !inZone(p))
   if (!free.length) return { error: `the only ${what} is inside protected zones (someone's build): go further away and retry` }
-  const dry = free.filter(p => allowWet || !wet(p))
+  const grown = free.filter(p => !placed(p))
+  if (!grown.length) return { error: `the only ${what} is placed wood (someone's build: posts, beams), not trees: go where trees grow and retry` }
+  const dry = grown.filter(p => allowWet || !wet(p))
   if (!dry.length) return { error: `the only ${what} lies in or next to water, where mining bodies drown: dig it block by block from the shore (dig x= y= z=), or pass wet=true if you take the risk` }
-  const skippedWet = free.length - dry.length
-  return skippedWet ? { found: dry.slice(0, wanted), skippedWet } : { found: dry.slice(0, wanted) }
+  const skippedWet = grown.length - dry.length
+  const skippedPlaced = free.length - grown.length
+  return { found: dry.slice(0, wanted), ...(skippedWet ? { skippedWet } : {}), ...(skippedPlaced ? { skippedPlaced } : {}) }
+}
+
+// A log is a tree's when leaves grow within 2 of it or of the top of its log column, and nothing built touches the
+// column. A house post (stairs on top, planks against it) is not: mine.get *_log cut a cherry village corner post at
+// 61,68,-184 and put it back on the wrong axis. `nameAt` takes {x,y,z} and gives a block name
+const cube = r => [...Array(2 * r + 1).keys()].map(i => i - r).flatMap(dx => [...Array(2 * r + 1).keys()].map(i => i - r).flatMap(dy => [...Array(2 * r + 1).keys()].map(i => i - r).map(dz => [dx, dy, dz])))
+export function isTreeLog (p, nameAt) {
+  const isLog = at => /_log$/.test(nameAt(at) ?? '')
+  const up = (c, dy) => ({ x: c.x, y: c.y + dy, z: c.z })
+  const reach = dir => { const out = []; for (let c = up(p, dir); out.length < 16 && isLog(c); c = up(c, dir)) out.push(c); return out }
+  const above = reach(1)
+  const column = [...reach(-1), p, ...above]
+  const top = above.at(-1) ?? p
+  const around = (c, r) => cube(r).map(([dx, dy, dz]) => nameAt({ x: c.x + dx, y: c.y + dy, z: c.z + dz }) ?? 'air')
+  const built = column.some(c => around(c, 1).some(looksBuilt))
+  const leaves = [p, top].some(c => around(c, 2).some(n => /_leaves$/.test(n)))
+  return leaves && !built
 }
 
 // blocks that somebody put there: a walk with dig=true must go round them, zone or no zone (Aviendha's goto dig=true tunnelled through
