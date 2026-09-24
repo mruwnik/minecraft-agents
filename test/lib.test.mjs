@@ -5058,19 +5058,20 @@ test('workRefusal names the place, its owner, the note as written and what would
 })
 
 test('farm.harvest: place= walks to the plan and harvests it when the note invites it', async () => {
-  const world = { '10,64,10': 'wheat#7' }
+  // a 2x2 plan on ground y=64 with one ripe wheat at y=65, and one cell of dirt east of it to stand on (12,65,10)
+  const world = { '10,65,10': 'wheat#7', '12,64,10': 'dirt', '12,65,10': 'air', '12,66,10': 'air' }
   const { api, calls } = fakeApi({
     places: [{ name: 'chani-wheat-field', by: 'Chani', kind: 'farm', note: 'anyone welcome, harvest and replant', x: 10, y: 64, z: 10, plan: 'ww\nww' }],
     world,
     answers: {
-      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 10, y: 64, z: 10 }] : [] }),
+      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 10, y: 65, z: 10 }] : [] }),
       dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} }
     }
   })
   const out = await farmHarvest.run(api, { place: 'chani-wheat-field' })
   assert.deepEqual(out.harvested, { wheat: 1 })
-  // the middle of the 2x2 plan anchored at 10,64,10, not its corner: a within measured from the corner misses the far rows
-  assert.match(calls[0], /^goto x=11 y=64 z=11 range=2$/)
+  // the one cell at the plan's edge the body can stand in, not the middle of the plan (test/farm-harvest.test.mjs has the dense case)
+  assert.match(calls[0], /^goto x=12 y=65 z=10 range=1$/)
 })
 
 test('farm.harvest: place= on somebody else’s plot with a silent note is refused before a crop is cut', async () => {
