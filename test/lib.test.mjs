@@ -2,6 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
+import { spawnSync } from 'node:child_process'
+import * as cli from '../src/cli.mjs'
+import * as lib from '../src/lib.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
@@ -2143,15 +2147,17 @@ for (const [name, meal, expected] of [
 }
 
 // a helper wired into bot.mjs without its import only blows up when that line runs: 214 "foodAway is not defined" in 20 s on a live body
-const unimported = (source, lib) => {
-  const imported = new Set(source.match(/import \{([^}]*)\} from '[^']*lib\.mjs'/)[1].split(',').map(n => n.trim()))
-  const body = source.replace(/import \{[^}]*\} from '[^']*lib\.mjs'/, '')
+const unimported = (source, lib, module = 'lib') => {
+  const from = new RegExp(`import \\{([^}]*)\\} from '[^']*${module}\\.mjs'`)
+  const imported = new Set(source.match(from)[1].split(',').map(n => n.trim()))
+  const body = source.replace(from, '')
   return [...lib.matchAll(/export (?:const|function|async function) (\w+)/g)].map(m => m[1]).filter(n => !imported.has(n) && new RegExp(`\\b${n}\\(`).test(body))
 }
-const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8')
+const CLI_SOURCE = fs.readFileSync(new URL('../src/cli.mjs', import.meta.url), 'utf8')
+const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8') + CLI_SOURCE
 test('unimported: spots a lib helper that is called but not imported', () => assert.deepEqual(unimported("import { terse } from './lib.mjs'\nfoodAway({})", LIB_SOURCE), ['foodAway']))
-for (const file of ['../src/bot.mjs', '../tools/mc.mjs']) {
-  test(`${file} imports every lib helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), LIB_SOURCE), []))
+for (const [file, module, source] of [['../src/bot.mjs', 'lib', LIB_SOURCE], ['../tools/mc.mjs', 'cli', CLI_SOURCE], ['../tools/check-code.mjs', 'cli', CLI_SOURCE]]) {
+  test(`${file} imports every ${module} helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), source, module), []))
 }
 
 // the body ate below food 15, but health only comes back at food 18+: Ganesha sat at hp=8 food=15 for 35 minutes, unable to heal
@@ -5439,4 +5445,49 @@ for (const [name, args, expected] of [
   ['standing at the goal is arriving, not circling', { dist: 1, best: 1, bestAgeMs: 60000 }, false]
 ]) {
   test(`circling: ${name}`, () => assert.equal(circling(args), expected))
+}
+
+// #148: ./mc must keep working while a half-saved lib.mjs breaks the body. It imports only src/cli.mjs, which imports
+// nothing of ours, and lib.mjs re-exports every cli helper so bodies and tests see one function, not two copies
+const ROOT = path.resolve(import.meta.dirname, '..')
+const relativeImports = file => [...fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/^import .* from '(\.[^']+)'/gm)].map(m => m[1])
+for (const [file, expected] of [
+  ['tools/mc.mjs', ['../src/cli.mjs']],
+  ['tools/check-code.mjs', ['../src/cli.mjs']],
+  ['src/cli.mjs', []]
+]) {
+  test(`#148 import graph: ${file} imports ${expected.join(', ') || 'none of our files'}`, () => assert.deepEqual(relativeImports(file), expected))
+}
+test('#148: lib.mjs re-exports every cli helper as the same object', () =>
+  assert.deepEqual(Object.keys(cli).filter(name => lib[name] !== cli[name]), []))
+for (const [name, file, stderr, expected] of [
+  ['a declaration error names its line and the error', 'src/lib.mjs',
+    "/home/x/bot/src/lib.mjs:3\nconst a = 2\n      ^\n\nSyntaxError: Identifier 'a' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v24.21.0\n",
+    "src/lib.mjs:3: SyntaxError: Identifier 'a' has already been declared"],
+  ['a half-saved file ends early', 'library/farm/harvest.mjs',
+    '/home/x/bot/library/farm/harvest.mjs:40\n\n\n\nSyntaxError: Unexpected end of input\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n',
+    'library/farm/harvest.mjs:40: SyntaxError: Unexpected end of input'],
+  ['output with no error line still names the file', 'src/bot.mjs', '', 'src/bot.mjs: node --check failed']
+]) {
+  test(`checkFailure: ${name}`, () => assert.equal(cli.checkFailure(file, stderr), expected))
+}
+// the start gate (#148 C): a body must not start on code that does not parse, and must say which file and line
+const codeTree = files => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'check-code-'))
+  for (const [file, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+    fs.writeFileSync(path.join(root, file), text)
+  }
+  return root
+}
+for (const [name, files, status, stdout] of [
+  ['good code passes', { 'src/a.mjs': 'export const a = 1\n', 'library/farm/b.mjs': 'export default 2\n' }, 0, ''],
+  ['a broken library file is named', { 'src/a.mjs': 'export const a = 1\n', 'library/farm/b.mjs': 'foo(\n' }, 1, 'library/farm/b.mjs:2: SyntaxError: Unexpected end of input\n'],
+  ['a broken src file is named', { 'src/a.mjs': 'const a = 1\nconst a = 2\n' }, 1, "src/a.mjs:2: SyntaxError: Identifier 'a' has already been declared\n"],
+  ['files outside src/ and library/ are not ours to check', { 'src/a.mjs': 'export const a = 1\n', 'node_modules/x/c.mjs': 'foo(\n' }, 0, '']
+]) {
+  test(`check-code: ${name}`, () => {
+    const run = spawnSync('node', [path.join(ROOT, 'tools/check-code.mjs'), codeTree(files), '0'], { encoding: 'utf8' })
+    assert.deepEqual({ status: run.status, stdout: run.stdout }, { status, stdout })
+  })
 }
