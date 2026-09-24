@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { terse, capOutput, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs } from '../src/lib.mjs'
+import { terse, capOutput, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs } from '../src/cli.mjs'
 
 // MC_HOME=<a bot's home dir> picks which body to drive (its config.json names the apiPort); default is the first bot.
 const configFile = path.join(process.env.MC_HOME ?? path.join(import.meta.dirname, '..'), 'config.json')

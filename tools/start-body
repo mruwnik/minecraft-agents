@@ -12,6 +12,14 @@ node ../../../tools/body-lock.mjs check .
 # keep the last five runs' logs: a restart used to wipe the evidence of a crash, and on a day of fixes bodies restart every few minutes
 for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done
 [ -f bot.log ] && mv bot.log bot.log.1
+# #148: refuse to start on code that does not parse (a half-saved file), and say which file and line. The body used to die at its
+# first import with a stack at the end of bot.log; check-code tries again every 5 s for 60 s, since an editor mid-save is back in seconds
+if ! broken=$(node ../../../tools/check-code.mjs ../../.. 60 2>&1); then
+  echo "$broken" > bot.log
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 4, broken: process.argv[1].trim().split("\n"),
+    advice: "your body did not start: this code does not parse (someone is mid-edit, or saved a broken file). Tell whoever edits the bot, and ./start again in the background once it is fixed" }) + "\n")' "$broken" >> events.jsonl
+  exit 4
+fi
 node ../../../tools/patch-deps.mjs > bot.log 2>&1
 node ../../../tools/textures.mjs >> bot.log 2>&1
 node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../src/bot.mjs . >> bot.log 2>&1 &
