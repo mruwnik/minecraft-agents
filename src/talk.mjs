@@ -25,3 +25,36 @@ export const offlineWhisper = (name, players) => {
   const others = players.length ? `Online now: ${players.join(', ')}` : 'Nobody else is online'
   return `${name} is not online, so a whisper would go nowhere. ${others}`
 }
+
+// The server takes 256 characters per chat line, and a whisper spends some of them on its "/tell <name> " header.
+// mineflayer cuts a longer text into 256-character lines mid-word; before that our own primitives cut it off silently
+// at a fixed length (the human, 17:50Z: "whisper seems to have a length limit"). A long text now goes out in numbered
+// pieces, each cut at the last sentence end that fits, else the last word end, else hard.
+export const CHAT_MAX = 256
+export const sayLimit = player => CHAT_MAX - (player ? `/tell ${player} `.length : 0)
+
+const SENTENCE_ENDS = ['. ', '! ', '? ', '; ']
+// how many characters of `text` make the next piece under `budget`
+const cutAt = (text, budget) => {
+  if (text.length <= budget) return text.length
+  const head = text.slice(0, budget + 1)
+  const sentence = Math.max(...SENTENCE_ENDS.map(m => head.lastIndexOf(m)))
+  if (sentence > 0) return sentence + 1
+  const space = head.lastIndexOf(' ')
+  return space > 0 ? space : budget
+}
+const pieces = (text, budget) => {
+  const out = []
+  for (let rest = text; rest.length; rest = rest.slice(cutAt(rest, budget)).trim()) out.push(rest.slice(0, cutAt(rest, budget)).trim())
+  return out
+}
+const numbered = parts => parts.map((p, i) => `(${i + 1}/${parts.length}) ${p}`)
+
+// the pieces to send for `text`, each within `max` characters including its "(i/n) " number; one untouched piece when it fits
+export const splitSay = (text, max) => {
+  const whole = String(text ?? '').trim()
+  if (!whole) return []
+  if (whole.length <= max) return [whole]
+  const few = pieces(whole, max - '(9/9) '.length)
+  return numbered(few.length < 10 ? few : pieces(whole, max - '(99/99) '.length))
+}
