@@ -19,11 +19,22 @@ export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = []
     me: () => 'Tester',
     pos: () => ({ x: 0, y: 64, z: 0 }),
     block: (x, y, z) => {
-      const name = world[`${x},${y},${z}`]
-      const tag = String(name).split('#')[1]
+      const raw = world[`${x},${y},${z}`]
+      if (raw === undefined) return null
+      // a trailing '~' is a waterlogged block: a slab laid in a channel still holds its water
+      const name = String(raw).replace('~', '').split('#')[0]
+      const tag = String(raw).replace('~', '').split('#')[1]
       // a #tag reused for whichever property the block actually has: age for a crop, open for a gate, level for
-      // water (0 is a settled source; 1-7 is flow still spreading, and can recede a tick after this is read)
-      return name === undefined ? null : { name: String(name).split('#')[0], properties: { age: Number(tag) || 0, open: tag === 'open', level: Number(tag) || 0 }, solid: name !== 'air' && name !== 'water' }
+      // water (0 is a settled source; 1-7 is flow still spreading, and can recede a tick after this is read), the
+      // half for a slab (top, else bottom: the half a slab is unless placed the other way up)
+      const properties = {
+        age: Number(tag) || 0,
+        open: tag === 'open',
+        level: Number(tag) || 0,
+        ...(String(raw).includes('~') ? { waterlogged: 'true' } : {}),
+        ...(/_slab$/.test(name) ? { type: tag === 'top' ? 'top' : 'bottom' } : {})
+      }
+      return { name, properties, solid: name !== 'air' && name !== 'water' }
     },
     plan: () => place,
     places: () => places,
