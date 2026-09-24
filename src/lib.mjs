@@ -949,7 +949,12 @@ export const oversleeping = s => s.asleep && !s.thundering && s.timeOfDay > 300 
 // shut a door or gate I opened: once I am past it, or as soon as I have stopped beside it (but never on myself in the doorway)
 // doors are mine to open on a walk; gates are the pathfinder's, except the one whose cell I already stand in: pressed against its closed panel the body floors into the gate's cell, the path starts there and never includes opening it
 export const openNow = ({ near, open, door, moving, inDoorway }) => near && !open && moving && (door || inDoorway)
-export const shutNow = ({ near, open, mine, leading, moving, inDoorway }) => open && mine && !leading && (!near || (!moving && !inDoorway))
+// a gate is only ever the body's to shut when its own walk opened it, never one another player stands by or touched
+// within the minute (Perrin's body shut Dan's gate 16 ms after he opened it, 13:30Z), and never with reflexes off
+export const GATE_OTHERS_NEAR = 4
+export const GATE_HANDS_OFF_MS = 60000
+export const shutNow = ({ near, open, mine, leading, moving, inDoorway, reflexes = true, otherNear = false, otherToggledMsAgo = Infinity }) =>
+  reflexes && open && mine && !leading && !otherNear && otherToggledMsAgo >= GATE_HANDS_OFF_MS && (!near || (!moving && !inDoorway))
 
 // The actions that changed name when the library was namespaced. Journals, habits and old notes still say the left-hand
 // side, so every "unknown action" names its successor rather than leaving the driver to guess. No aliases: the old name stays dead.
@@ -1031,12 +1036,18 @@ export const wedgeReplant = dug => dug.filter(d => d.name === 'bamboo' && d.belo
 // bamboo's hitbox sits elsewhere on the server than in the client, so a walk brushing past a stalk gets position resets: a cell beside one costs extra
 // my centre lies inside a fence's (wall's, shut gate's) cell: the free neighbour cell whose edge I am nearest to is where I really stand. free(x, y, z)
 // One line for gates.log when a fence gate at `at` changes between open and shut: who stood nearest (players: [{name, dist}], myself included)
-export function gateChange (at, before, after, players) {
+// `me`, `moving` (my walk has a goal) and `clicking` (my own hand is on a door) say who did it. mine: it opened under my
+// own walk or click, within my reach, with nobody else within 4. byOther: anything that was not my own doing
+export function gateChange (at, before, after, players, { me = null, moving = false, clicking = false } = {}) {
   const isGate = b => b?.name?.endsWith('_fence_gate')
   if (!isGate(before) || !isGate(after) || before.open === after.open) return null
   // a hand reaches about 5 blocks: anyone further off did not do it (the one who did is out of my sight; their own body logs it)
   const nearest = players.filter(p => p.dist <= 6).sort((a, b) => a.dist - b.dist)[0]
-  return { gate: `${at.x},${at.y},${at.z}`, now: after.open ? 'open' : 'shut', nearest: nearest?.name ?? null, dist: nearest ? Math.round(nearest.dist) : null }
+  const myDist = players.find(p => p.name === me)?.dist ?? Infinity
+  const otherNear = players.some(p => p.name !== me && p.dist <= GATE_OTHERS_NEAR)
+  const mine = after.open && (moving || clicking) && myDist <= 3 && !otherNear
+  const byOther = !mine && !clicking
+  return { gate: `${at.x},${at.y},${at.z}`, now: after.open ? 'open' : 'shut', nearest: nearest?.name ?? null, dist: nearest ? Math.round(nearest.dist) : null, mine, byOther }
 }
 
 // Walking me out of a fence's cell (see realCell): `pressed` is the cell I am being walked into, or null. Start when the idle nudge finds me in a fence's cell; from then
