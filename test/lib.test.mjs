@@ -5202,3 +5202,17 @@ for (const [name, args, expected] of [
 ]) {
   test(`doingText: ${name}`, () => assert.equal(doingText(args), expected))
 }
+
+// Chani's craft item=stick said her 16 oak_planks were a real loss; a farm.maintain later picked the same 16 planks up
+// off the ground. A failed craft now looks for its ingredients lying within reach, picks them up, and only then counts
+const RAN_OUT = 'the ingredients ran out'
+for (const [name, args, expected] of [
+  ['they fell out of the grid and came back: nothing lost', { item: 'stick', count: 8, made: 0, spent: { oak_planks: 0 }, fell: ['oak_planks'], why: RAN_OUT },
+    'the ingredients ran out: no stick made at all; the oak_planks fell out of the crafting grid onto the ground and I picked them back up, so nothing is lost: retry once'],
+  ['they fell and still lie there', { item: 'stick', count: 8, made: 0, spent: { oak_planks: 16 }, fell: ['oak_planks'], lying: ['oak_planks@117,73,-62'], why: RAN_OUT },
+    'the ingredients ran out: no stick made at all; the ingredients (oak_planks:16) are not in my pockets but on the ground: oak_planks@117,73,-62. Collect them (./mc collect) before retrying'],
+  ['some fell and came back, the rest is really gone', { item: 'stick', count: 8, made: 0, spent: { oak_planks: 4 }, fell: ['oak_planks'], why: RAN_OUT },
+    'the ingredients ran out: no stick made at all; the oak_planks fell out of the crafting grid and I picked up what lay within reach, but oak_planks:4 is still missing: that part of the loss is real. Check your inventory before retrying']
+]) {
+  test(`craftReport on the ground: ${name}`, () => assert.equal(craftReport(args).error, expected))
+}
