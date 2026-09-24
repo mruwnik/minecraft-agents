@@ -1,10 +1,11 @@
 // fixes to node_modules that cannot be made from outside: run at every body start (start-body), so an npm install cannot quietly undo them
 import fs from 'node:fs'
 import path from 'node:path'
-import { patchPathfinder, patchItemEnchants } from '../src/lib.mjs'
+import { patchPathfinder, patchGotoPartial, patchItemEnchants } from '../src/lib.mjs'
 
 const PATCHES = [
   ['node_modules/mineflayer-pathfinder/index.js', patchPathfinder, 'mineflayer-pathfinder gate fix', 'read patchPathfinder in src/lib.mjs: walks through gates may crash every tick'],
+  ['node_modules/mineflayer-pathfinder/lib/goto.js', patchGotoPartial, 'mineflayer-pathfinder goto waits out a partial search', 'read patchGotoPartial in src/lib.mjs: a goto from a dead end may fail at once and the body walk on after'],
   ['node_modules/prismarine-item/index.js', patchItemEnchants, 'prismarine-item enchants list', 'read patchItemEnchants in src/lib.mjs: an enchanted tool in hand may break harvest and slow every dig']
 ]
 for (const [relative, patch, title, warning] of PATCHES) {

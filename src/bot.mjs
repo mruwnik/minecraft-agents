@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -350,7 +350,7 @@ function connect () {
     bot.pathfinder.goto = async goal => {
       // standing on a chest or a bed the first search may also THROW noPath, not just come back empty: the step off is tried for both
       // the watchdog ended a walk that had no path (see deadWalk): "goal was changed" would send the driver looking for a reflex
-      const failure = await walk(goal).then(() => null, e => Date.now() - walkEndedAt < 2000 ? new Error(arrivalError(false)) : e)
+      const failure = await walk(goal).then(() => null, e => Date.now() - walkEndedAt < 2000 ? new Error(walkEndedBy) : e)
       if (!failure && arrived(goal)) return
       // up to 3 steps: along a bed in a 1-wide room the first one only reaches the bed's other half
       let stepped = false
@@ -392,7 +392,7 @@ function connect () {
       bot.setControlState('forward', true)
       bot.setControlState('jump', push.jump)
     })
-    bot.on('path_update', r => { lastPath = { status: r.status, at: Date.now(), nodes: r.path.slice(0, 4).map(n => `${n.x},${n.y},${n.z}`) } })
+    bot.on('path_update', r => { lastPath = { status: r.status, at: Date.now(), nodes: r.path.slice(0, 4).map(n => `${n.x},${n.y},${n.z}`), visited: r.visitedNodes, searchMs: Math.round(r.time) } })
     // The server silently resets us every tick if our hitbox touches a block exactly, so keep a hair's gap.
     bot.physics.playerHalfWidth = cfg.halfWidth ?? 0.3001
     // remember my last few outgoing positions: printed with each server reset, they show what the server refused
@@ -822,7 +822,9 @@ let idleTicks = 0
 let nudging = false
 let fencePressed = null // the idle nudge is walking me out of a fence's cell: plan again once I am out
 let walkEndedAt = 0
+let walkEndedBy = null
 let goalSetAt = 0 // a path result from before this goal says nothing about this walk
+let nearest = null // { task, goal, best, at }: the nearest a goto has come to its goal, and when
 // why the pathfinder threw its path away, lately: a stall with a found path and idle keys looks like a storm of these
 const pathResets = []
 // what the legs were up to when a walk hung: evidence for the doorstep stall nobody has explained yet
@@ -840,8 +842,23 @@ setInterval(() => {
   const here = bot.entity.position.clone()
   if (!task || !stillFrom || progressed(stillFrom.pos, here) || stillFrom.task !== task.id) stillFrom = { pos: here, at: Date.now(), task: task?.id }
   const sample = { hasGoal: Boolean(task && bot.pathfinder.goal), moved: Math.hypot(here.x - stillFrom.pos.x, here.z - stillFrom.pos.z), digging: Boolean(bot.targetDigBlock), seconds: (Date.now() - stillFrom.at) / 1000, path: lastPath && lastPath.at >= goalSetAt ? lastPath : null }
+  // a goto that keeps moving and gets nowhere (Perrin's cow pen gate: 290 s, ended 20 blocks further off)
+  const goal = bot.pathfinder.goal
+  if (task?.name === 'goto' && goal?.x !== undefined && goal?.z !== undefined) {
+    const dist = Math.hypot(here.x - goal.x, (goal.y ?? here.y) - here.y, here.z - goal.z)
+    if (!nearest || nearest.task !== task.id || nearest.goal !== goal || dist < nearest.best - 1) nearest = { task: task.id, goal, best: dist, at: Date.now() }
+    if (circling({ dist, best: nearest.best, bestAgeMs: Date.now() - nearest.at })) {
+      const best = Math.round(nearest.best)
+      nearest = null
+      emit('circling', { pos: pos(), best })
+      cancelTask(`circling: ${CIRCLING_MS / 1000} s of walking and never nearer than ${best} blocks to the goal. See the route it wants with path_to x= y= z= route=true: the usual cause is a gate whose outside cell is blocked (pen.check names it in blindGates=), which leaves only a detour over fences it cannot really walk`)
+      return
+    }
+  }
   if (deadWalk(sample) && Date.now() - walkEndedAt > 4000) {
     walkEndedAt = Date.now()
+    // its search was still going (partial, no step yet): out of time, not out of ways (the alley by Perrin's sheep pen gate)
+    walkEndedBy = 'Took to long to decide path to goal!'
     console.log('[dead walk ended]', JSON.stringify(stallEvidence()))
     stillFrom = null // the task was told at once and may go on to its next target: the 12 s stall clock starts again
     bot.pathfinder.setGoal(null)
@@ -854,6 +871,7 @@ setInterval(() => {
     console.log(again ? '[walk kicked]' : '[dropped walk ended]', JSON.stringify(stallEvidence()))
     if (again) { kickedFor = stillFrom; bot.pathfinder.setGoal(bot.pathfinder.goal, bot.pathfinder.goal.entity !== undefined); return }
     walkEndedAt = Date.now()
+    walkEndedBy = arrivalError(false)
     stillFrom = null
     bot.pathfinder.setGoal(null)
     return
@@ -2175,14 +2193,17 @@ const quick = {
   },
   // debugging aid: what the pathfinder makes of a walk from here, without walking it. stroll=true: with lead's movements (no sprint, no parkour)
   path_to: (a) => {
-    const moves = makeMoves(a.dig === true)
+    const fresh = makeMoves(a.dig === true)
+    // live=true: plan with the movements the walks really use, and name every setting where they differ from a fresh set
+    const moves = a.live ? bot.pathfinder.movements : fresh
+    const differs = a.live ? Object.keys(fresh).filter(k => ['number', 'boolean', 'string'].includes(typeof fresh[k]) && fresh[k] !== moves[k]).map(k => `${k}:${moves[k]}`).join(' ') : ''
     if (a.stroll) { moves.allowSprinting = false; moves.allowParkour = false }
     const began = Date.now()
     let r = bot.pathfinder.getPathTo(moves, new goals.GoalNear(a.x, a.y, a.z, a.range ?? 0), 5000)
     // one call searches for a single 40 ms slice: go on the way a walk does, until it is done or the 5 s a walk gets are over
     while (r.status === 'partial' && r.context && Date.now() - began < 5000) r = Object.assign(r.context.compute(), { context: r.context })
     const last = r.path[r.path.length - 1]
-    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length }
+    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
   },
   // debugging aid: the raw metadata of the nearest entities with this name (how does the server mark a shorn sheep?)
   entity: (a) => ({

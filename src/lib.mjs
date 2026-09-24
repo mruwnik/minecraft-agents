@@ -690,9 +690,12 @@ export const boxedIn = passable => {
 }
 
 const SHAFT_NOTE = 'you are standing in a 1-wide shaft with its walls at head height: nothing at all can be walked to from here, however near it is. The answer is about the block you are ON, not the one you asked for. `goto` the same place again with dig=true and the body digs itself out, or place a block at your feet and step up on it'
+const SEARCH_TIMEOUT = 'the search ran out of time (5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
 export function explainNoPath (error, dig, boxed = false) {
   if (dig || !/no path to the goal|took to long to decide/i.test(error)) return error
   if (boxed) return SHAFT_NOTE
+  // the search gave up on time, not for want of a way: a dead end near the goal (the fenced alley by Perrin's sheep pen gate) draws it in
+  if (/took to long to decide/i.test(error)) return SEARCH_TIMEOUT
   return 'no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
 }
 
@@ -710,6 +713,10 @@ export const isBaby = metadata => metadata?.[16] === true
 export const noHomeError = (home, action) => home || ['clock', 'dawn'].includes(action) ? null : 'no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: /home/dan/minecraft/claude/bot/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)'
 export const progressed = (from, here) => Math.hypot(here.x - from.x, here.z - from.z) >= 0.2 || Math.abs(here.y - from.y) >= 1.5
 export const isStalled = ({ hasGoal, moved, digging, seconds }) => hasGoal && !digging && moved < 0.2 && seconds >= 12
+// a walk that never stands still can still go nowhere: 40 s without getting nearer than its best is going round in
+// circles (Perrin's cow pen gate, 170-290 s; mine round a birch pen every 11 s). `best` is the nearest it has been
+export const CIRCLING_MS = 40000
+export const circling = ({ dist, best, bestAgeMs }) => dist > 2 && bestAgeMs >= CIRCLING_MS
 
 // how a hunt (attack mob=) stands: null = keep fighting. A target that runs or falls away is let go past the leash
 export function chaseVerdict (c) {
@@ -1345,6 +1352,15 @@ export function isTreeLog (p, nameAt) {
 const BUILT = /(^|_)(cobblestone|planks|fence|gate|wall|door|trapdoor|bed|stairs|slab|glass|pane|wool|carpet|torch|lantern|chest|barrel|furnace|smoker|table|farmland|bricks|ladder|sign|banner|rail|hopper|composter|campfire|anvil|bookshelf|concrete|terracotta)$|^(wheat|carrots|potatoes|beetroots|melon_stem|pumpkin_stem|cocoa|sugar_cane|bamboo|hay_block)$/
 export const looksBuilt = name => BUILT.test(name)
 
+// Which gates a planned route opens and where it goes, a waypoint every six steps and the last: path_to said gates=3 and
+// nothing else while the walk circled a birch pen 15 blocks off Perrin's cow pen (13:58Z)
+export function routeSummary (path) {
+  const cell = n => `${n.x},${n.y},${n.z}`
+  const gatesAt = path.flatMap(n => (n.toPlace ?? []).filter(t => t.useOne)).map(cell)
+  const through = path.filter((_, i) => i % 6 === 5 || i === path.length - 1).map(cell)
+  return { gatesAt: [...new Set(gatesAt)].join(' '), through: [...new Set(through)].join(' ') }
+}
+
 // weeds on top of a block keep a hoe or shovel from working it: till and path clear these by themselves (not flowers or crops: someone may want those)
 export const isGroundCover = name => /^(short_grass|tall_grass|fern|large_fern|dead_bush|snow|leaf_litter)$/.test(name)
 
@@ -1598,6 +1614,15 @@ const GATE_GUARD = "          placingBlock = nextPoint.toPlace.shift()\n        
 export const patchPathfinder = source => source.includes(GATE_GUARD)
   ? { status: 'already', source }
   : source.includes(GATE_SHIFT) ? { status: 'patched', source: source.replace(GATE_SHIFT, GATE_GUARD) } : { status: 'anchor missing', source }
+
+// mineflayer-pathfinder 2.4.5 lib/goto.js resolves on the first path_update with an empty path, a partial one included. At a dead end that is
+// the nearest cell to the goal (the alley by Perrin's sheep pen gate) the first 40 ms slice has no step yet: goto failed in a second with
+// "no walkable path" while the pathfinder, its goal still set, searched on and walked the body away after the task had ended
+const GOTO_EMPTY = "      if (results.path.length === 0) {\n        cleanup()\n"
+const GOTO_FIXED = "      if (results.path.length === 0 && results.status !== 'partial') { // patched by bot/patch-deps.mjs\n        cleanup()\n"
+export const patchGotoPartial = source => source.includes(GOTO_FIXED)
+  ? { status: 'already', source }
+  : source.includes(GOTO_EMPTY) ? { status: 'patched', source: source.replace(GOTO_EMPTY, GOTO_FIXED) } : { status: 'anchor missing', source }
 
 // prismarine-item, `get enchants`: with item components it returns the raw data ({enchantments: [{id, level}]}) instead of the [{name, lvl}] list that mineflayer's
 // digTime (`enchantments.concat`) and everyone else expect: an enchanted tool in hand broke harvest and made digs crawl (Kettricken, right after the first ./mc enchant)
@@ -2574,7 +2599,7 @@ export const PRIMITIVES = {
   find_blocks: { section: 'sense', args: 'block= [maxDistance=64] [count=10]', doc: 'where the nearest blocks of a kind are; * wildcards work (*_log)' },
   block_at: { section: 'sense', args: 'x= y= z=', doc: 'the name and properties of one block' },
   scan: { section: 'sense', args: 'x1= y1= z1= x2= y2= z2= [where=]', doc: 'an ASCII map of a box of the world, or with where= just the coordinates of one kind of block' },
-  path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=]', doc: 'what the pathfinder makes of a walk from here, without walking it' },
+  path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=] [route=] [live=]', doc: 'what the pathfinder makes of a walk from here, without walking it; route=true names the gates it opens and a waypoint every six steps; live=true plans with the movements walks use right now and names what differs from a fresh set' },
   inventory: { section: 'sense', args: '', doc: 'what I carry, what I wear and how many slots are free' },
   chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest' },
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
