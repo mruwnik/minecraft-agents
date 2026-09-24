@@ -519,10 +519,12 @@ export const fleeOscillating = ({ mob, last, now, within = FLEE_HOLD_MS }) => Bo
 
 // One tick of the run. `stillMs` is how long since the body last covered ground, `homeDist` how far it is from where
 // the run began, `bound` how far off this threat has to be to count as left behind. Nothing here moves anything.
-export function fleeStep ({ phase = null, threatDist = Infinity, homeDist = 0, stillMs = 0, held = false, bound = FLEE_AWAY }) {
+export function fleeStep ({ phase = null, threatDist = Infinity, homeDist = 0, stillMs = 0, held = false, bound = FLEE_AWAY, underground = false }) {
   if (phase === 'away') {
     // clear before stuck: a body walled in whose threat has wandered off did not fail, it finished
     if (threatDist >= bound) return held ? { phase: null, event: 'flee_held', note: FLEE_HELD_NOTE } : { phase: 'back', event: 'flee_clear' }
+    // #147(d): running downhill into the dark is running into the cave, not away from the mob
+    if (underground) return { phase: null, event: 'flee_stuck', note: FLEE_CAVE_NOTE }
     if (stillMs >= FLEE_STUCK_MS) return { phase: null, event: 'flee_stuck', note: FLEE_STUCK_NOTE }
     return { phase: 'away' }
   }
@@ -534,6 +536,59 @@ export function fleeStep ({ phase = null, threatDist = Infinity, homeDist = 0, s
     return { phase: 'back' }
   }
   return { phase: null }
+}
+
+// #147. Perrin starved into a skeleton: 16 bread gone in 35 minutes of leading, then "starving: eat" every 4 s from health 20
+// to 1 while the flee reflex worked exactly as designed, handed control back twice, and no agent answered in the 40 s it bought.
+// A body that cannot eat and cannot win has one move left, the one the reflex memory already knew: go under the ground and
+// close the hole. It does that itself now. These verdicts decide WHETHER and WHAT; nothing here touches a block.
+export const HOLE_DEPTH = 3
+export const HOLE_HEALTH = 6
+// what must not be under the feet before digging down: the cave, the lava and the water this is meant to avoid
+export const HOLE_UNSAFE = new Set(['air', 'cave_air', 'void_air', 'water', 'flowing_water', 'lava', 'flowing_lava', 'bubble_column'])
+export function holeUpVerdict ({ food = 20, hasFood = true, health = 20, night = false, mobNear = false, stuck = false } = {}) {
+  if (stuck) return { why: 'the run is boxed in and there is nowhere to run to' }
+  // a full pack is auto-eat's business, however low the food bar is
+  if (hasFood) return null
+  if (food <= 0 && (night || mobNear)) return { why: `food 0 and nothing at all to eat${night ? ' at night' : ' with a mob in reach'}: standing here is starving to death` }
+  // (e) a body with no food cannot heal: at 6 health waiting does not get better, day or night
+  if (health <= HOLE_HEALTH) return { why: `health ${health} and nothing to eat: it cannot heal, so waiting in the open only ends one way` }
+  return null
+}
+// Read the three cells under the feet BEFORE digging: down into lava, water or a cave is the death this is meant to avoid.
+// When the floor cannot be trusted, wall in where the body stands instead; with nothing to place, say the shelter is open
+export function burrowPlan ({ below = [], cap = false } = {}) {
+  const floor = below.slice(0, HOLE_DEPTH)
+  // an unloaded cell reads as null, which is not "safe": it is "I cannot see the floor", and blind is how a body digs into lava
+  const found = floor.findIndex(name => !name || HOLE_UNSAFE.has(String(name)))
+  const bad = floor.length < HOLE_DEPTH ? 'a floor I could not read' : (found < 0 ? null : (floor[found] ?? 'a cell I cannot read'))
+  if (!bad) return { way: 'dig', open: !cap }
+  return { way: 'wall', open: !cap, why: `${bad} under my feet: digging down from here would drop me into it, so I am walling myself in where I stand` }
+}
+export const holedUpNote = ({ way, open, surface }) =>
+  `${way === 'dig' ? `dug ${HOLE_DEPTH} straight down` : 'walled myself in where I stood'} and ${open ? 'had nothing to close it with: the hole is OPEN, so something can still reach me' : 'closed it over'}. ` +
+  `The way out when you want me back: goto x=${surface.x} y=${surface.y} z=${surface.z} dig=true`
+
+// (d) my own body, 2026-09-24 11:26Z: it fled a creeper at 10 hp, went down into the cave under my test pits and a zombie
+// killed it there. A run heading underground or into an unlit cell is running INTO the thing it is running from. A lit room
+// is shelter, so darkness counts only where the sky does not reach: both dark together is a cave mouth
+export const FLEE_DROP = 4
+export const FLEE_DARK = 4
+export const fleeIntoCave = ({ startY = 0, y = 0, skyLight = 15, light = 15 } = {}) =>
+  startY - y >= FLEE_DROP || (skyLight <= FLEE_DARK && light <= FLEE_DARK)
+export const FLEE_CAVE_NOTE = 'the only way clear of it led underground or into the dark, and that is where bodies die: I stopped instead of running into a cave. Dig down and cap the hole, fight it, or wait for dawn: `goto x= y= z= dig=true` brings me back up'
+
+// (b) and (c). Perrin's flee_returned walked his respawned body straight back into the skeleton and the zombie that had just
+// killed it. A body that has just died does not walk anywhere while it is night or the killer is still standing there
+// The #147 addendum: Mariel respawned on her bed beside the two zombies that had just killed her, fled unarmed, was boxed
+// in and died, three times in five minutes. At night a respawn beside a hostile goes under the ground (zombies burn at
+// sunrise: wait them out, do not outrun them); by day it only stays put
+export function respawnPlan ({ night = false, bedNear = false, killerNear = false } = {}) {
+  if (night && killerNear) return { do: 'burrow', why: 'respawned at night beside a hostile: digging down three and capping the hole until it is gone or the sun burns it' }
+  if (killerNear) return { do: 'stay', why: 'whatever killed me is still here: staying put, not walking back to it' }
+  if (night && bedNear) return { do: 'sleep', why: 'respawned at night with a bed in reach: sleeping it off rather than walking home in the dark' }
+  if (night) return { do: 'stay', why: 'respawned at night with no bed: staying where I am until dawn rather than walking back through it' }
+  return { do: 'free' }
 }
 
 export const crowdSize = hostiles => hostiles.filter(h => h.dist <= 5 || (ARCHERS.has(h.name) && h.dist <= 24)).length

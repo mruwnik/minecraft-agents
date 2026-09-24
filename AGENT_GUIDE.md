@@ -240,6 +240,13 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
   `flee_held`, when the same mob drove it off again within a minute of the last walk back (the walk back was feeding a
   loop, so this run does not come home). After either, that mob starts no new run for fifteen seconds and the body
   will FIGHT it instead if it can, because standing still is worse. `stop` always clears a flee.
+- **With nothing left to eat, the body goes to ground by itself.** At food 0 with no food carried, at night or with a mob
+  in reach, or at health 6 or less with nothing to eat (it cannot heal), or when a run is boxed in (`flee_stuck`), it
+  reads the three cells under its feet, digs down three and caps the shaft over its head (`holing_up`, then `holed_up`
+  with `at=` and the command that brings it back up). A floor over a cave, water or lava is not dug: it walls itself in
+  where it stands instead. A run that is heading four blocks down or into an unlit cave stops rather than go in. A body
+  that respawns at night beside a hostile does the same at once instead of fleeing across open ground, and one that
+  respawns at night with nothing near sleeps in the nearest bed. It stays down (no bedtime walk) until morning.
 - **The fight reflex is on a leash.** A mob that walks the body more than 8 blocks from where the fight started, or more
   than 3 blocks below it, has the fight broken off: the body stops swinging, walks back to where it began and says
   `interrupted: breaking off a fight with spider that pulled me too far` (event `leashed`). This is what stands between

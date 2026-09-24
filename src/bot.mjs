@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -467,6 +467,13 @@ function connect () {
   const died = pos => {
     diedAt = Date.now()
     followTarget = null
+    // #147(b): a death ends the run. The phase survived it, and the walk back took Perrin's respawned body straight
+    // into the skeleton and the zombie that had just killed him (03:01:10Z)
+    if (flee) { const wasDigging = flee.wasDigging; flee = null; useMoves(wasDigging) }
+    lastFleeReturn = null
+    fleeGaveUp = null
+    holedUp = null
+    bot.pathfinder.setGoal(null)
     const said = saidDeath && Date.now() - saidDeath.at < 5000 ? saidDeath.said : null
     // from the snapshot, not from the world: by the time a death is handled the server has already emptied the
     // inventory, so a live read says the body died carrying nothing (03:14Z, the first died line with a cause on it)
@@ -497,7 +504,20 @@ function connect () {
   // written from where it last stood.
   bot.on('respawn', () => {
     if (deathUnannounced({ diedAt, now: Date.now() })) died(lastStood)
-    emit('respawned')
+    // #147(c): a body that has just died does not walk anywhere while it is night or its killer is still standing there.
+    // The respawn event comes before the new position and its chunks: read the world a second later, not the grave
+    bot.pathfinder.setGoal(null)
+    bot.waitForTicks(20).then(() => {
+      if (!bot.entity) return
+      const plan = respawnPlan({
+        night: isNight(bot.time.timeOfDay),
+        bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
+        killerNear: nearbyHostiles(8).length > 0
+      })
+      emit('respawned', { ...(plan.why ? { doing: plan.do, note: plan.why } : {}) })
+      if (plan.do === 'burrow') holeUp(plan.why)
+      if (plan.do === 'sleep') runLong('sleep', { timeout: 60 }).catch(() => {})
+    }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
   bot.on('wake', () => emit('woke_up'))
@@ -748,8 +768,10 @@ let bedFailures = 0
 setInterval(() => {
   if (!ready) return
   const now = Date.now()
+  // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
+  if (!isNight(bot.time.timeOfDay)) holedUp = null
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task, asleep: bot.isSleeping, bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
+    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp), asleep: bot.isSleeping, bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
   if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
@@ -866,13 +888,17 @@ function stepFlee (me) {
   const creeper = nearbyHostiles(6).find(e => e.name === 'creeper')
   if (creeper && flee.mob !== 'creeper') return startFlee(creeper, me)
   if (me.distanceTo(flee.still.pos) >= 1.5) flee.still = { pos: me.clone(), at: Date.now() }
+  // #147(d): my own body fled a creeper into the cave under my test pits and died there. A run heading down or into the
+  // dark is running INTO what it is running from, so it stops and hands back instead of finding the cave
+  const here = bot.blockAt(me.floored())
   const step = fleeStep({
     phase: flee.phase,
     threatDist: alive ? entity.position.distanceTo(me) : Infinity,
     homeDist: me.distanceTo(flee.home),
     stillMs: Date.now() - flee.still.at,
     held: flee.held,
-    bound: fleeRange(flee.mob)
+    bound: fleeRange(flee.mob),
+    underground: fleeIntoCave({ startY: flee.home.y, y: me.y, skyLight: here?.skyLight ?? 15, light: here?.light ?? 15 })
   })
   if (step.event === 'flee_started') { if (!startFlee(entity, me)) endFlee(); return }
   if (!step.event) return
@@ -888,6 +914,78 @@ function stepFlee (me) {
   }
   if (step.event === 'flee_stuck' || step.event === 'flee_held') fleeGaveUp = { mob: flee.mob, at: Date.now() }
   endFlee()
+  // #147: a run that gave up where it stood is the body out of ideas, and 40 s of waiting for an agent is what killed Perrin
+  if (step.event === 'flee_stuck') holeUp(step.note)
+}
+
+// #147. The body's own last resort, the escape the reflex memory already knew: go under the ground and close the hole.
+// Nothing here decides WHETHER (holeUpVerdict) or WHAT (burrowPlan); this digs, places and says where the body went.
+const HOLE_AGAIN_MS = 300000
+let holedUp = null // { at, why }: one hole per emergency, or the reflex digs a fresh one every tick it is still hungry
+let holingUp = false
+// a cell closed by placing a block against any solid neighbour of it: inside a 1-wide shaft there is nowhere to walk to
+async function fillCell (p, item) {
+  const there = bot.blockAt(p)
+  if (there && there.boundingBox === 'block') return true
+  if (!item) return false
+  for (const [dx, dy, dz] of [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]) {
+    const ref = bot.blockAt(p.offset(dx, dy, dz))
+    if (!ref || ref.boundingBox !== 'block') continue
+    const held = findItem(item)
+    if (!held) return false
+    const done = await bot.equip(held, 'hand').then(() => bot.placeBlock(ref, new Vec3(-dx, -dy, -dz))).then(() => true, () => false)
+    if (done) return true
+  }
+  return false
+}
+async function holeUp (why) {
+  if (holingUp || bot.isSleeping || !bot.entity) return
+  if (holedUp && Date.now() - holedUp.at < HOLE_AGAIN_MS) return
+  holingUp = true
+  holedUp = { at: Date.now(), why }
+  try {
+    if (task) cancelTask(`holing up by myself: ${why}`)
+    bot.pathfinder.setGoal(null)
+    const start = bot.entity.position.floored()
+    const surface = { x: start.x, y: start.y, z: start.z }
+    // the floor is read BEFORE anything is dug: down into lava, water or a cave is the death this is here to avoid
+    const below = [1, 2, 3].map(dy => bot.blockAt(start.offset(0, -dy, 0))?.name ?? null)
+    const capBlock = () => bot.inventory.items().find(i => bot.registry.blocksByName?.[i.name] && !/_bed$|_gate$|_door$|torch|sapling|sand$|gravel/.test(i.name))
+    const plan = burrowPlan({ below, cap: Boolean(capBlock()) })
+    emit('holing_up', { why, way: plan.way, ...(plan.why ? { floor: plan.why } : {}) })
+    if (plan.way === 'dig') {
+      for (const _ of [1, 2, 3]) {
+        const under = bot.blockAt(bot.entity.position.floored().offset(0, -1, 0))
+        if (!under || under.boundingBox !== 'block') break
+        await bot.tool.equipForBlock(under).catch(() => {})
+        await bot.dig(under).catch(() => {})
+        await bot.waitForTicks(8)
+      }
+    }
+    // the body is still falling down its own shaft for a tick or two, and the cap goes over the head it ends up with.
+    // A respawned body carries nothing, but it lands on what it dug: the cap is chosen now, not before the first swing
+    await bot.waitForTicks(10)
+    const block = capBlock()
+    const feet = bot.entity.position.floored()
+    // a dug shaft needs one block over the head; walled in where it stands needs the ring and the roof
+    const cells = plan.way === 'dig'
+      ? [[0, 2, 0]]
+      : [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]].flatMap(([dx, , dz]) => [[dx, 0, dz], [dx, 1, dz]]).concat([[0, 2, 0]])
+    const closed = []
+    for (const [dx, dy, dz] of cells) closed.push(await fillCell(feet.offset(dx, dy, dz), block?.name))
+    const open = closed.some(done => !done)
+    emit('holed_up', {
+      why,
+      way: plan.way,
+      open,
+      at: `${feet.x},${feet.y},${feet.z}`,
+      note: holedUpNote({ way: plan.way, open, surface })
+    })
+  } catch (e) {
+    emit('holed_up', { why, error: String(e?.message ?? e), note: 'the hole-up itself failed: dig me out or tell me what to do' })
+  } finally {
+    holingUp = false
+  }
 }
 let lastHurt = 0
 // mineflayer's bot.wake() sends action id 2, which since 1.21.6 means stop_sprinting: the server never hears it
@@ -968,8 +1066,19 @@ function reflexTick () {
     }
     return
   }
+  // #147: a body digging itself in owns the legs and the hand until the hole is capped: no fight, no run pulls it out
+  if (holingUp) return
   // a run already going owns the legs until it ends: one run at a time, and it ends itself (#138)
   if (flee) { stepFlee(me); return }
+  // #147: nothing to eat and nowhere safe. Running costs food this body has not got, so the answer is the ground, not the legs
+  const holeWhy = holeUpVerdict({
+    food: bot.food,
+    hasFood: edibleCarried(),
+    health: bot.health,
+    night: isNight(bot.time.timeOfDay),
+    mobNear: nearbyHostiles(7).length > 0
+  })
+  if (holeWhy) { holeUp(holeWhy.why); return }
   // #97: an enderman killed Ganesha's body at its own door in five seconds. Nothing here wins that fight, so one that
   // comes within arm's reach is backed away from exactly as a creeper is, before the reflex below can think of fighting it
   const unwinnable = fleeUnwinnable(nearbyHostiles(ENDERMAN_RANGE).map(e => ({ name: e.name, dist: e.position.distanceTo(me), entity: e })))

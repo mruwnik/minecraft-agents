@@ -36,7 +36,10 @@ breeding again. Cull only grown surplus and never the last pair. Shared starter 
 | tend a flock | `flock.maintain mob=cow place=<pen> size=6 deposit=true` |
 | run the ordinary daily round | `routine name=rancher/cattle place=<pen> days=3` (or `sheep`, `pigs`, `chickens`) |
 
-Before a routine, carry the animal's food, real food for yourself, and shears for sheep. A rancher fixes a leaking pen
+Before a routine, carry the animal's food, real food for yourself, and shears for sheep. Leading is walking and sprinting
+all day, and it eats: Perrin went through 16 bread in 35 minutes of `flock.lead`, about a loaf every two minutes, then
+starved at night with a skeleton on him. Carry a stack of bread (or its worth) for a day of leading, and go for more when
+it drops below eight. A rancher fixes a leaking pen
 before fetching animals and never says a flock is safe until `pen.check` says `holds`.
 
 `pen.build` will not build over a pen with animals in it: levelling the ground opens the floor and the wall while the
