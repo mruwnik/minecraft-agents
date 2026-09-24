@@ -9,7 +9,7 @@ import { terse } from '../src/cli.mjs'
 for (const [name, result, expected] of [
   ['eat says what it ate and what it gained', { ok: true, ate: 'carrot', gained: 3, food: 20, health: 20 }, 'ok ate=carrot gained=3 food=20 health=20'],
   ['a meal the plugin chose still names the food', { ok: true, ate: 'bread', gained: 5, food: 12, health: 9 }, 'ok ate=bread gained=5 food=12 health=9'],
-  ['nothing gained is left out like any zero', { ok: true, ate: 'carrot', gained: 0, food: 20, health: 20 }, 'ok ate=carrot food=20 health=20']
+  ['a meal that gained nothing says so (the food number can lag the meal)', { ok: true, ate: 'carrot', gained: 0, food: 20, health: 20 }, 'ok ate=carrot gained=0 food=20 health=20']
 ]) {
   test(`terse (short result): ${name}`, () => assert.equal(terse(result), expected))
 }
