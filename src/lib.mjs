@@ -540,6 +540,14 @@ export const FLEE_GIVEUP_MS = 15000
 export const FLEE_STUCK_NOTE = 'the run has covered no ground in 6 seconds: I am boxed in. Dig straight down and wall the hole behind me, or turn and fight'
 export const FLEE_HELD_NOTE = 'the same threat drove me off again within a minute of the last walk back, so I am not walking back this time. Dig down, fight it, or wait for dawn: your call'
 export const fleeRange = name => ARCHERS.has(name) ? FLEE_ARCHER_AWAY : FLEE_AWAY
+// where a run heads: a fixed point `dist` straight away from the mob. A goal that moves with the mob reset the path at every one of its
+// steps and the body never sprinted (Perrin: 10.6 blocks in 7.7 s, slower than the zombie that killed him)
+export const fleeGoal = (me, mob, dist) => {
+  const [dx, dz] = [me.x - mob.x, me.z - mob.z]
+  const len = Math.hypot(dx, dz)
+  const [ux, uz] = len > 0.01 ? [dx / len, dz / len] : [1, 0]
+  return { x: Math.round(me.x + ux * dist), z: Math.round(me.z + uz * dist) }
+}
 // the same mob, too soon: used for the oscillation guard (a minute after a walk back) and, with FLEE_GIVEUP_MS, to
 // keep a run the body already gave up on from starting itself again the moment the legs come back
 export const fleeOscillating = ({ mob, last, now, within = FLEE_HOLD_MS }) => Boolean(last && last.mob === mob && now - last.at < within)
@@ -742,12 +750,15 @@ export const chargeLeash = (start, mob, { leash = CHASE_LEASH } = {}) =>
 // the way going up. Walking it instead left the body standing in the hole while a zombie killed it (2026-09-23).
 export const breakOffDigs = (start, here) => start.y - here.y > 0
 
-export const chaseBroken = (start, here, { leash = CHASE_LEASH, drop = CHASE_DROP } = {}) => {
+// mobDist: a mob within CHASE_REACH is a fight that came to me. Breaking off then turns my back on it (Perrin, 14:41Z: four hits on the
+// walk back, dead in daylight), so the leash waits until it backs off, up to twice its length. A drop breaks off at once all the same
+export const CHASE_REACH = 4
+export const chaseBroken = (start, here, { leash = CHASE_LEASH, drop = CHASE_DROP, mobDist = Infinity } = {}) => {
   if (!start) return null
   const fell = start.y - here.y
   if (fell > drop) return `the fight pulled me ${Math.round(fell)} blocks down (from y=${Math.round(start.y)}): broken off before it becomes a cave, and I am walking back`
   const away = Math.hypot(here.x - start.x, here.z - start.z)
-  if (away > leash) return `the fight pulled me ${Math.round(away)} blocks from where it started (leash=${leash}): broken off, and I am walking back`
+  if (away > leash && (mobDist > CHASE_REACH || away > 2 * leash)) return `the fight pulled me ${Math.round(away)} blocks from where it started (leash=${leash}): broken off, and I am walking back`
   return null
 }
 
