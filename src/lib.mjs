@@ -2199,3 +2199,18 @@ export const clientVersions = dirs => dirs.filter(d => RELEASE.test(d)).sort(ver
 // else's business: items, entities, the gui, the animation metadata beside a png, and other namespaces.
 export const BLOCK_TEXTURES = 'assets/minecraft/textures/block/'
 export const blockTextures = names => names.filter(n => n.startsWith(BLOCK_TEXTURES) && n.endsWith('.png'))
+
+// A composite's `until`: look, wait `every` seconds of ticks, look again, give up after `timeout` seconds OF WAITING.
+// Counted in the rounds waited and never on the wall clock: darkstar suspends when idle, and a 46-minute freeze (09-24,
+// 00:13Z) made a Date.now() deadline fail every routine with "the day never ended" over a night in which nothing
+// happened. Ticks stop when the machine does, so a wait counted in ticks simply resumes with it.
+export const makeUntil = ({ waitTicks, alive, composite }) => async (pred, opts = {}) => {
+  const timeout = opts.timeout ?? 60
+  const every = opts.every ?? 1
+  for (let waited = 0; ; waited += every) {
+    alive()
+    if (await pred()) return true
+    if (waited >= timeout) throw new Error(`${composite}: waited ${timeout}s and ${opts.what ?? 'it never happened'}`)
+    await waitTicks(Math.max(1, Math.round(every * 20)))
+  }
+}
