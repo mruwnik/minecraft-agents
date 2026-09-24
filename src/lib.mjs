@@ -751,12 +751,12 @@ export const chargeLeash = (start, mob, { leash = CHASE_LEASH } = {}) =>
 export const breakOffDigs = (start, here) => start.y - here.y > 0
 
 // mobDist: a mob within CHASE_REACH is a fight that came to me. Breaking off then turns my back on it (Perrin, 14:41Z: four hits on the
-// walk back, dead in daylight), so the leash waits until it backs off, up to twice its length. A drop breaks off at once all the same
+// walk back, dead in daylight), so the leash waits until it backs off, up to twice its length, and so does a drop (my body, 14:51Z: three hits climbing out)
 export const CHASE_REACH = 4
 export const chaseBroken = (start, here, { leash = CHASE_LEASH, drop = CHASE_DROP, mobDist = Infinity } = {}) => {
   if (!start) return null
   const fell = start.y - here.y
-  if (fell > drop) return `the fight pulled me ${Math.round(fell)} blocks down (from y=${Math.round(start.y)}): broken off before it becomes a cave, and I am walking back`
+  if (fell > drop && (mobDist > CHASE_REACH || fell > 2 * drop)) return `the fight pulled me ${Math.round(fell)} blocks down (from y=${Math.round(start.y)}): broken off before it becomes a cave, and I am walking back`
   const away = Math.hypot(here.x - start.x, here.z - start.z)
   if (away > leash && (mobDist > CHASE_REACH || away > 2 * leash)) return `the fight pulled me ${Math.round(away)} blocks from where it started (leash=${leash}): broken off, and I am walking back`
   return null
