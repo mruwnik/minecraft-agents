@@ -44,11 +44,11 @@ export const serverSide = (last, now) => last ? { x: last.x, y: last.y, z: last.
 
 // everything within two blocks of the body, nearest first: a mob pressed against the legs pushes back as fast as the
 // body walks, and the client cannot see that push
-export function nearBy (entities, me, within = 2) {
+export function nearBy (entities, me, reach = 2) {
   return entities
     .filter(e => e !== me && e.id !== me.id && e.position)
     .map(e => ({ name: e.username ?? e.name ?? e.type, dist: Math.hypot(e.position.x - me.position.x, e.position.y - me.position.y, e.position.z - me.position.z) }))
-    .filter(e => e.dist <= within)
+    .filter(e => e.dist <= reach)
     .sort((a, b) => a.dist - b.dist)
     .map(e => `${e.name} ${Math.round(e.dist * 10) / 10}m`)
 }
