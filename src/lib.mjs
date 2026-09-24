@@ -1,6 +1,6 @@
 // Pure helpers, kept apart from bot.mjs so they can be tested without a server.
 
-const LONG_FIELDS = ['task', 'action', 'seconds', 'gained', 'lost', 'pos', 'ok', 'error']
+const LONG_FIELDS = ['task', 'action', 'seconds', 'gained', 'lost', 'ate', 'pos', 'ok', 'error']
 const isPos = v => Object.keys(v).length === 3 && ['x', 'y', 'z'].every(k => typeof v[k] === 'number')
 const isEmpty = v => v == null || v === false || v === '' || (typeof v === 'object' && Object.keys(v).length === 0)
 const bracket = v => typeof v === 'object' && !Array.isArray(v) && !isPos(v) ? `(${compact(v)})` : compact(v)
@@ -30,7 +30,15 @@ export function terse (r) {
   const extras = compact(Object.fromEntries(Object.entries(r).filter(([k]) => !LONG_FIELDS.includes(k))), false)
   if (!r.action) return [head, ...(extras ? [extras] : []), ...(r.pos ? [`pos=${compact(r.pos)}`] : []), ...error].join(' ')
   const at = r.pos ? [`@${compact(r.pos)}`] : []
-  return [head, r.action, `${r.seconds}s`, ...signed('+', r.gained), ...signed('-', r.lost), ...at, ...(extras ? [extras] : []), ...error].join(' ')
+  const ate = r.ate ? [`ate=${signed('', r.ate).join(',')}`] : []
+  return [head, r.action, `${r.seconds}s`, ...signed('+', r.gained), ...signed('-', r.lost), ...ate, ...at, ...(extras ? [extras] : []), ...error].join(' ')
+}
+
+// A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
+export function mealTally ({ gained, lost, ate }) {
+  if (!Object.keys(ate).length) return { gained, lost }
+  const left = Object.fromEntries(Object.entries(lost).map(([k, n]) => [k, n - (ate[k] ?? 0)]).filter(([, n]) => n > 0))
+  return { gained, lost: left, ate }
 }
 
 export const capOutput = (text, limit = 1500) => text.length <= limit
