@@ -8,6 +8,14 @@ cd "$1" || exit 1
 # body, so only its refusal stops us.
 node ../../../tools/body-lock.mjs check .
 [ $? -eq 3 ] && exit 3
+# a body started outside at night dies before its driver can act (a7cd6038): refuse while the shared clock says night,
+# before the log rotation below touches anything. `./start --now` (or START_NOW=1) is the driver's word that the body
+# spawns into a bed or under a roof, which the clock cannot know
+if ! refusal=$(node ../../../tools/start-gate.mjs ../../../state/clock.json "${@:2}" 2>&1); then
+  echo "$refusal" >&2
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 5, advice: `your body was not started: ${process.argv[1].trim()}` }) + "\n")' "$refusal" >> events.jsonl
+  exit 5
+fi
 # a healthy body uses about 200 MB. A runaway should die early, not at 4 GB, and leave report.*.json with the JavaScript stack that did it
 # keep the last five runs' logs: a restart used to wipe the evidence of a crash, and on a day of fixes bodies restart every few minutes
 for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done

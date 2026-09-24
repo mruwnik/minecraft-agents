@@ -45,7 +45,7 @@ const script = (name, body) => fs.writeFileSync(path.join(home, name), `#!/bin/b
 fs.mkdirSync(path.join(home, 'snapshots'), { recursive: true })
 fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, character: { name: character.name, source: character.source, note: character.note } }, null, 1) + '\n')
 script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../../tools/mc.mjs" "$@"')
-script('start', '# start this agent\'s body (run it in the background); output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")"')
+script('start', '# start this agent\'s body (run it in the background); output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
 fs.writeFileSync(path.join(home, 'journal.md'), `# ${character.username}'s journal\n\nNewest entry last. Keep entries short: what you did, what you learned, what you promised, where things are.\n`)
 fs.writeFileSync(path.join(home, 'BRIEFING.md'), `# You are ${character.username}
 
