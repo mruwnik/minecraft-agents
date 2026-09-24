@@ -1864,7 +1864,14 @@ export function holesLeft (before, after, carried, solid) {
 const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 export const herdPassed = (me, gate, animals) => animals.every(a => gap(a, me) < gap(gate, me) - 1)
 // gates still open when a task ends: the ones within reach get shut, the far ones are only named (no silent cross-country walk)
-export const gatesByReach = (gates, me, reach = 32) => ({ near: gates.filter(g => gap(g, me) <= reach), far: gates.filter(g => gap(g, me) > reach).map(g => g.join(',')).join(' ') })
+// inside: gates my hitbox (0.3 each side, 1.8 tall) overlaps, as a shut gate stands 1.5 tall. Shutting one of those shut it on me:
+// collect ended in the gate at 101,71,-68 and the next goto stalled there. The door reflex shuts it once I have walked off
+const inGate = ([x, y, z], [mx, my, mz]) => Math.abs(mx - (x + 0.5)) < 0.8 && Math.abs(mz - (z + 0.5)) < 0.8 && my < y + 1.5 && my + 1.8 > y
+export const gatesByReach = (gates, me, reach = 32) => ({
+  near: gates.filter(g => gap(g, me) <= reach && !inGate(g, me)),
+  far: gates.filter(g => gap(g, me) > reach).map(g => g.join(',')).join(' '),
+  inside: gates.filter(g => inGate(g, me))
+})
 
 // which animal a lead goes for: nearest first, but one standing in a pen belongs to somebody (my lead went for Aviendha's cow, 60 blocks off)
 // and a calf is next year's herd, not this year's breeding pair. Perrin's `flock.lead count=2` out of a 24-cow herd
