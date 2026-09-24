@@ -2125,7 +2125,7 @@ const quick = {
         advice: 'an animal can walk out: via= is where (x,height,z): one spot = a gap or open gate on level ground; three = the step it climbs, the barrier top it crosses, where it lands. A fence or wall must stand 2 above EVERY block next to it, inside and out, corner to corner included. Fix it and check again'
       }
     }
-    const census = { ...censusOf(found.floor), ...blindGateAdvice(found.floor) }
+    const census = { ...censusOf(found.floor), ...blindGateAdvice(found.floor, found.topsAt) }
     if (found.cells >= 16) return { pen: 'holds', from, cells: found.cells, ...census }
     return { pen: 'holds', from, cells: found.cells, ...census, advice: 'but it is small: an animal led in stops 2.5 blocks from you, so under 16 cells it stops in the gateway' }
   },
@@ -2329,15 +2329,16 @@ const explainFailure = message => explainNoPath(explainInterrupt(message, recent
 // given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 // the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
 // An open gate empties a pen (Dan's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
-// gates on the ring of this pen (floor: "x,y,z" keys) that nothing can walk through: see blindGates
-function blindGateAdvice (floor) {
+// gates on the ring of this pen (floor: "x,y,z" keys) that nothing can walk through: see blindGates. topsAt is penAround's own column
+// reader, the one penLeak walks by: heights an animal can stand at, so a step up outside a gate reads as the step it is (Chani's report, 2026-09-24)
+function blindGateAdvice (floor, topsAt) {
   const cells = floor.map(k => k.split(',').map(Number))
-  const inFloor = (x, z) => cells.some(c => c[0] === x && c[2] === z)
+  const floorAt = (x, z) => cells.filter(c => c[0] === x && c[2] === z).map(c => c[1])
   const around = [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => [dx, dz]))
   const gates = [...new Map(cells.flatMap(([x, y, z]) => around.map(([dx, dz]) => new Vec3(x + dx, Math.floor(y), z + dz)))
     .filter(p => bot.blockAt(p)?.name.endsWith('_fence_gate')).map(p => [String(p), p])).values()]
-  const blind = gates.flatMap(g => blindGates([g], inFloor, (x, z) => bot.blockAt(new Vec3(x, g.y, z))?.boundingBox === 'block'))
-  return blind.length ? { blindGates: `${blind.join(' ')}: nothing can walk through (a gate in a CORNER of the fence, or something stands right outside it). Put the gate in the middle of a wall, open ground straight across` } : {}
+  const blind = blindGates(gates, floorAt, topsAt)
+  return blind.length ? { blindGates: `${blind.map(b => `${b.at} (${b.why})`).join('; ')}. Nothing can walk through such a gate: put it in the middle of a wall with ground straight across at the pen floor's own level (one step up or down is fine)` } : {}
 }
 
 // the pen around a floor cell, walked the way an animal can (see penLeak); null when that cell is no spot to stand on

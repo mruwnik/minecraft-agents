@@ -1132,11 +1132,28 @@ export const mineFailure = message => /no defined chest locations/i.test(message
 // a lead must end on a spot to stand on: a marker set on the fence line ends the walk OUTSIDE the pen
 export const leadTargetError = (to, block) => block?.solid ? `flock.lead: ${to.x},${to.y},${to.z} is inside a ${block.name}, not a spot to stand on: give a free floor cell INSIDE the pen (or mark the place again there)` : null
 
-// Gates of a pen that nothing can walk through ("x,y,z"): a way in has pen floor on one side and, straight across, ground that is neither floor nor fence.
-// A gate set in the corner of the ring has fence on both far sides (Ganesha's pen: a day of leads that ended outside)
-export const blindGates = (gates, inFloor, barrier) => gates
-  .filter(g => ![[1, 0], [0, 1]].some(([dx, dz]) => [1, -1].some(s => inFloor(g.x + s * dx, g.z + s * dz) && !inFloor(g.x - s * dx, g.z - s * dz) && !barrier(g.x - s * dx, g.z - s * dz))))
-  .map(g => `${g.x},${g.y},${g.z}`)
+// Gates of a pen that nothing can walk through. A way through has pen floor on one side of the gate, level with it, and straight across a
+// spot an animal can stand on: a column top within one step up or down, and not a fence or wall top (those end on .5). A gate set in the
+// corner of the ring has pen floor on no side at all (Ganesha's pen: a day of leads that ended outside it).
+// Chani's gate at 101,71,-68 was flagged by every pen.check although flock.lead walked sheep through it twice (2026-09-24): outside it the
+// flat grass stands one block higher than the pen floor, and the old test read the single block at the GATE's own level and called that
+// step a wall. Heights now, and each blind gate says what it found rather than guessing corner-or-obstruction
+const oneStep = (top, gateY) => top % 1 === 0 && Math.abs(top - gateY) <= 1
+const gateWhy = (far, gateY, tops) => {
+  const where = `${far[0]},${far[1]}`
+  if (tops.some(top => top % 1 !== 0)) return `a fence or wall stands straight across from it at ${where}`
+  if (!tops.length) return `nothing an animal can stand on straight across from it at ${where}: a solid block with no room over it, or a sheer drop`
+  const step = tops.map(top => top - gateY).reduce((a, b) => Math.abs(a) <= Math.abs(b) ? a : b)
+  return `the ground straight across from it at ${where} is ${Math.abs(step)} blocks ${step > 0 ? 'up' : 'down'}: more than the one step an animal climbs`
+}
+export const blindGates = (gates, floorAt, topsAt) => gates.flatMap(g => {
+  const at = `${g.x},${g.y},${g.z}`
+  const ways = [[1, 0], [0, 1]].flatMap(([dx, dz]) => [1, -1].map(s => [[g.x + s * dx, g.z + s * dz], [g.x - s * dx, g.z - s * dz]]))
+    .filter(([near]) => floorAt(...near).some(y => Math.abs(y - g.y) <= 1))
+  if (!ways.length) return [{ at, why: "no pen floor on any side of it, level with the gate: it stands in a CORNER of the fence ring, or on no wall of this pen at all" }]
+  if (ways.some(([, far]) => topsAt(...far).some(top => oneStep(top, g.y)))) return []
+  return [{ at, why: ways.map(([, far]) => gateWhy(far, g.y, topsAt(...far))).join('; ') }]
+})
 
 // Is this enclosure (penLeak's floor: "x,y,z" keys) a PEN, or just a sealed pocket of rock? A pen has a fence or wall beside its floor: a top ending on .5, more than a step up
 export const fencedIn = (floor, topsAt) => floor.some(k => {

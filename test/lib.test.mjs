@@ -2714,17 +2714,41 @@ for (const [name, raw, expected] of [
 
 // Ganesha's pen had its gate in the north-west CORNER for a day: every lead ended outside it, and pen.check said "holds" without a word. A gate is a way in only when
 // floor lies on one side of it and open ground straight across on the other
-const gateRows = rows => ({
-  gates: rows.flatMap((r, z) => [...r].flatMap((c, x) => c === 'G' ? [{ x, z }] : [])),
-  inFloor: (x, z) => '.S'.includes(rows[z]?.[x] ?? '#') && rows[z]?.[x] !== ' ',
-  barrier: (x, z) => '#G'.includes(rows[z]?.[x] ?? ' ')
-})
+// Chani's sheep pen (2026-09-24): pen.check flagged the gate at 101,71,-68 every time, before and after, while flock.lead walked sheep
+// through that very gate twice. The ground outside it is flat open grass ONE BLOCK higher than the pen floor - a step every animal takes,
+// which the old test read at the gate's own level and called a wall. Columns and heights, not one block, and say what stands in the way.
+// A column's tops are what penAround hands penLeak: a height an animal can stand at, a fence or wall top ending on .5
+const TOPS = { ' ': [0], '.': [0], S: [0], G: [0], '#': [1.5], '^': [1], '+': [2], _: [-1], v: [-3], X: [] }
+const gateRows = rows => {
+  const charAt = (x, z) => rows[z]?.[x] ?? ' '
+  return {
+    gates: rows.flatMap((r, z) => [...r].flatMap((c, x) => c === 'G' ? [{ x, y: 0, z }] : [])),
+    floorAt: (x, z) => '.S'.includes(charAt(x, z)) ? [0] : [],
+    topsAt: (x, z) => TOPS[charAt(x, z)] ?? []
+  }
+}
 for (const [name, rows, expected] of [
   ['a gate in the middle of a wall', ['      ', ' #G## ', ' #..# ', ' #### '], []],
-  ['a gate in the corner: fence on both far sides', ['      ', ' G### ', ' #..# ', ' #### '], ['1,0,1']],
-  ['a mid-wall gate with a block right outside it', ['  #   ', ' #G## ', ' #..# ', ' #### '], ['2,0,1']]
+  ['a gate in the corner: no pen floor on any side of it', ['      ', ' G### ', ' #..# ', ' #### '], ['1,0,1']],
+  ['a mid-wall gate with a fence right outside it', ['  #   ', ' #G## ', ' #..# ', ' #### '], ['2,0,1']],
+  ["Chani's gate: flat ground one step UP outside it, which sheep walk", [' #### ', ' #..# ', ' #G## ', ' ^^^^ '], []],
+  ['one step down outside it', [' #### ', ' #..# ', ' #G## ', ' ____ '], []],
+  ['two blocks up outside it: more than a step', [' #### ', ' #..# ', ' #G## ', ' ++++ '], ['2,0,2']],
+  ['a sheer drop outside it', [' #### ', ' #..# ', ' #G## ', ' vvvv '], ['2,0,2']],
+  ['a solid block with no room over it outside', [' #### ', ' #..# ', ' #G## ', ' XXXX '], ['2,0,2']],
+  ['a gate between two pens: floor on both sides', ['      ', ' #..# ', ' #G## ', ' #..# '], []]
 ]) {
-  test(`blindGates: ${name}`, () => { const g = gateRows(rows); assert.deepEqual(blindGates(g.gates.map(p => ({ ...p, y: 0 })), g.inFloor, g.barrier), expected) })
+  test(`blindGates: ${name}`, () => { const g = gateRows(rows); assert.deepEqual(blindGates(g.gates, g.floorAt, g.topsAt).map(b => b.at), expected) })
+}
+// Chani asked for the reason, not a guess: "say what it thinks is blocking rather than a generic corner/obstruction guess that doesn't match reality here"
+for (const [name, rows, pattern] of [
+  ['the corner gate says it is in a corner', ['      ', ' G### ', ' #..# ', ' #### '], /CORNER of the fence ring/],
+  ['a fence across says so, and where', ['  #   ', ' #G## ', ' #..# ', ' #### '], /fence or wall stands straight across from it at 2,0/],
+  ['too big a step says how big, which way and where', [' #### ', ' #..# ', ' #G## ', ' ++++ '], /at 2,3 is 2 blocks up: more than the one step/],
+  ['a drop says how far down', [' #### ', ' #..# ', ' #G## ', ' vvvv '], /at 2,3 is 3 blocks down/],
+  ['nothing to stand on says that', [' #### ', ' #..# ', ' #G## ', ' XXXX '], /nothing an animal can stand on straight across from it at 2,3/]
+]) {
+  test(`blindGates wording: ${name}`, () => { const g = gateRows(rows); assert.match(blindGates(g.gates, g.floorAt, g.topsAt)[0].why, pattern) })
 }
 
 // the starter-pen marker sat ON the fence (21,67,-119): lead place=starter-pen walked the sheep to the fence and "arrived" outside it (21:37Z)
