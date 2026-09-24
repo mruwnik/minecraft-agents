@@ -1,6 +1,7 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { farmJobs, farmSurplus, hasWaterSource, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
@@ -64,6 +65,11 @@ export default {
       const jobs = all.filter(j => j.do !== 'skip')
       const skipped = all.filter(j => j.do === 'skip')
       if (skipped.length) summary.skipped = skipped.map(j => `${j.x},${j.y},${j.z} (${j.why})`).join('; ')
+      // channels capped the old way, with a bottom slab, still hold their water and are left alone: no churn on a
+      // working field. But they walk worse than a top slab would (a half-step down into every one), so they are
+      // counted, once per sweep, with how to raise them
+      const low = lowSlabs(plan.cells, api.block)
+      if (low.length) summary.lowSlabs = lowSlabLine(low.length)
       const short = {}
       for (const job of jobs) {
         if (job.item && !job.have) { short[job.item] = (short[job.item] ?? 0) + 1; continue }

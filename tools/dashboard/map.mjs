@@ -121,7 +121,8 @@ export const hitPlan = (rects, x, z) =>
 
 // ---------------------------------------------------------------- the plan against the world
 // A plan's y is the GROUND block; what it puts there (crop, fence, chest, water cover) stands at y+1, and a water
-// source lies AT y - as a source block, or as a waterlogged slab laid into it. The world arrives as scan cells
+// source lies AT y - as a source block, or as a waterlogged slab laid into it (a TOP slab on new channels, flush with
+// the ground; older ones carry a bottom slab, which counts the same here). The world arrives as scan cells
 // {x,y,z,name} (plus `waterlogged` where the server asked block_at), and a cell no body had loaded is 'unloaded'.
 const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
 const isFlower = name => /^(dandelion|poppy|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|torchflower|wither_rose|[a-z]+_tulip|pink_petals|wildflowers)$/.test(String(name))

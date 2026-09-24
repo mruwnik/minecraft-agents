@@ -139,10 +139,15 @@ A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which 
 Its `x y z` is the NORTH-WEST corner at **ground level**: `y` is the block the farmland, pen floor or path IS - the
 level `till` asks for, the one you point at, not the one you stand on. Everything the plan puts on it stands at `y+1`:
 crops, fences, gates, torches, chests, composters. A water source `~` is the exception: it lies AT `y`, in place of
-the farmland, and is built **covered** - a bottom oak slab laid into the source cell, which keeps the water (waterlogged)
-while giving you a floor to walk on. So a channel hydrates its four neighbours as ever, and nothing falls in or scuffs
-the crops stepping round it; `farm.build` and `farm.maintain` ask for one `oak_slab` per `~` cell and cover any that is
-still open water.
+the farmland, and is built **covered** - a TOP oak slab laid into the source cell, which keeps the water (waterlogged)
+while giving you a floor flush with the ground. So a channel hydrates its four neighbours as ever, and nothing falls in
+or scuffs the crops stepping round it; `farm.build` and `farm.maintain` ask for one `oak_slab` per `~` cell and cover
+any that is still open water. Only a settled SOURCE gets the slab: water merely flowing through a cell is not
+waterlogged by a slab, it is cut off by it, so a flowing `~` cell is poured into first (a bucket onto the block under
+it) and covered after, or, with no bucket carried, left alone as `skipped=` with `flowing water at x,y,z: pour a source
+first, then cover`. A channel capped the old way (a bottom slab, a half-step down that bodies float and wedge on) still
+holds its water and is left alone by `farm.maintain`, which only counts them: `lowSlabs=3 (bottom slabs: top slabs walk
+better; dig and cover again to raise)`.
 A dry `~` cell is never opened by a body that carries no water: the dig and the pour are one job in two halves, and
 digging the first half left a pit nobody could path past. Without a `water_bucket` the cell is left alone and reported
 as `skipped=` with `missing=water_bucket:1`, and a build you did not pass `partial=true` refuses up front. One bucket
