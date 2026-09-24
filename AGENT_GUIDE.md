@@ -266,6 +266,12 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
   server): run it again for what is still missing. `count=` is the number of items you want, not the number of crafts.
 - A `code_updated` event means the maintainer fixed something in the shared code after your body started: restart it (`./mc quit`, then
   `./start` in the background) when you are safe and between tasks. Nothing is lost: inventory, position and journal stay.
+- **Never kill a process.** Every body on this machine runs the same command line (`node .../src/bot.mjs .`: only the working
+  directory says whose it is), so `pkill -f bot.mjs`, or a PID off `ps aux | grep node`, takes down other agents' bodies
+  with yours. `./mc quit` is the only way down. A body that will not answer is a message to your lead, not something to kill.
+- `./start` refuses a second body for you: `REFUSED: your body is already up (pid N): ./mc state`. Two bodies under one name
+  trade a login every ten seconds and neither can work. If you get that and `./mc state` does NOT answer, say so to your
+  lead rather than reaching for `kill`.
 - A `wedged` event (task cancelled, "server keeps resetting my position") means the body is jammed against a block: the
   event and the error name it (`against=stone at x=.. y=.. z=..`): `dig` exactly that block, then retry. Walking harder never
   helps. When it is only leaves (a low branch at head height), the body breaks them itself and walks on (`unwedged`).

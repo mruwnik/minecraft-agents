@@ -22,7 +22,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -4790,4 +4790,36 @@ test('repeatByType: a kick loop says its count far more rarely than an ordinary 
 test('repeatByType: an ordinary error still says its count after a minute', () => {
   const first = repeatByType(null, 'error', 'a fault', 0)
   assert.match(repeatByType(first.seen, 'error', 'a fault', 61000).say, /a fault \(1 more in the last 61s\)/)
+})
+
+// #145: a second ./start for the same agent. Chani's resumed agent found its body down, ran ./start more than once,
+// hit EADDRINUSE and "logged in from another location" as two of her bodies traded one login every 10 s, then killed
+// PIDs from `ps aux | grep node.*bot.mjs` - every body has the identical command line - and took Perrin's, Mariel's
+// and my body down with it. The launcher has to refuse the second start itself.
+const LIVE = 'node --max-old-space-size=1536 /home/dan/minecraft/claude/bot/src/bot.mjs .'
+;[
+  ['a live body of mine refuses the start', { pid: 4242, cmdline: LIVE, listening: false, port: 3777 }, /already up \(pid 4242\)/],
+  ['no pid file and a silent port starts', { pid: null, cmdline: null, listening: false, port: 3777 }, null],
+  ['a pid file left by a dead body starts', { pid: 4242, cmdline: null, listening: false, port: 3777 }, null],
+  ['a pid reused by something else is not a body', { pid: 4242, cmdline: '/usr/bin/firefox', listening: false, port: 3777 }, null],
+  ['a port that answers refuses even with no pid file', { pid: null, cmdline: null, listening: true, port: 3777 }, /3777/],
+  ['a stale pid file with a live port still refuses', { pid: 4242, cmdline: null, listening: true, port: 3777 }, /3777/]
+].forEach(([name, given, want]) => test(`bodyRefusal: ${name}`, () => {
+  const said = bodyRefusal(given)
+  assert.equal(said === null, want === null, `wanted ${want} for ${name}, got ${said}`)
+  if (want) assert.match(said, want)
+}))
+
+test('bodyRefusal: the refusal says what to run instead, and never to kill anything', () => {
+  const said = bodyRefusal({ pid: 900, cmdline: LIVE, listening: true, port: 3777 })
+  assert.match(said, /\.\/mc state/)
+  assert.match(said, /\.\/mc quit/)
+  assert.match(said, /kill/i)
+})
+
+test('bodyRefusal: a port answering under a dead pid file names the port and tells me to look, not to kill', () => {
+  const said = bodyRefusal({ pid: null, cmdline: null, listening: true, port: 3799 })
+  assert.match(said, /3799/)
+  assert.match(said, /\.\/mc state/)
+  assert.doesNotMatch(said, /pid null|pid undefined/)
 })

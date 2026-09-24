@@ -2,6 +2,12 @@
 # runs one agent's body (called by state/agents/<Name>/start). A dead body is silent, and its driver would wait for ever: when the body
 # ends badly, leave a body_down line in its events.jsonl, which the driver's event monitor picks up.
 cd "$1" || exit 1
+# before ANYTHING else, the log rotation below included: refuse a second body for this agent (#145). A second ./start
+# used to rotate the running body's bot.log away - the evidence of whatever sent the agent looking - and then the two
+# bodies traded one login every ten seconds. A broken lock tool (any exit but 3) must not keep an agent out of its own
+# body, so only its refusal stops us.
+node ../../../tools/body-lock.mjs check .
+[ $? -eq 3 ] && exit 3
 # a healthy body uses about 200 MB. A runaway should die early, not at 4 GB, and leave report.*.json with the JavaScript stack that did it
 # keep the last five runs' logs: a restart used to wipe the evidence of a crash, and on a day of fixes bodies restart every few minutes
 for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done
@@ -10,8 +16,10 @@ node ../../../tools/patch-deps.mjs > bot.log 2>&1
 node ../../../tools/textures.mjs >> bot.log 2>&1
 node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../src/bot.mjs . >> bot.log 2>&1 &
 body=$!
-trap 'kill $body 2>/dev/null' TERM INT
+node ../../../tools/body-lock.mjs write . $body
+trap 'kill $body 2>/dev/null; rm -f body.pid' TERM INT
 wait $body
 code=$?
+rm -f body.pid
 [ $code -eq 0 ] || echo "{\"seq\":0,\"t\":\"$(date -u +%FT%TZ)\",\"type\":\"body_down\",\"exit\":$code,\"advice\":\"your body stopped (crash or kill): ./start it again in the background; a crash leaves its cause at the end of bot.log\"}" >> events.jsonl
 exit $code

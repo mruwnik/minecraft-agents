@@ -83,6 +83,21 @@ export function parseChosenName (output) {
   return { name: first.replace(/^\W+/u, '').trim(), source, note: rest.find(l => !l.startsWith('Source:')) ?? '' }
 }
 
+// A second ./start for the same agent (#145): Chani's resumed agent found its body down, ran ./start more than once,
+// and two of her bodies traded one login every 10 s until she killed PIDs off `ps aux | grep node.*bot.mjs`. Every
+// body has the IDENTICAL command line - the agent is only in the cwd - so that killed Perrin's, Mariel's and mine
+// too. The launcher asks this before it does anything, log rotation included: a second start used to wipe the
+// running body's bot.log, which is the evidence of whatever went wrong.
+// A pid can be reused by something else entirely, so a pid file alone is not proof: the process must still look like
+// a body. The control port answering is the other half - a body started before pid files existed leaves none.
+const bodyProcess = cmdline => /bot\.mjs/.test(String(cmdline ?? ''))
+const NEVER_KILL = 'Never kill a process: every body on this machine has the identical command line, so `pkill -f bot.mjs` or a PID off `ps` takes down other agents\' bodies too (#145). `./mc quit` is the only way down'
+export function bodyRefusal ({ pid, cmdline, listening, port }) {
+  if (pid && bodyProcess(cmdline)) return `your body is already up (pid ${pid}): ./mc state. ${NEVER_KILL}, and a body that will not answer is a message to your lead, not something to kill`
+  if (listening) return `something already answers on port ${port}, this agent's control port, though no body of mine wrote a pid file: run ./mc state. If it answers, that IS your body and it is up. ${NEVER_KILL}`
+  return null
+}
+
 const FIRST_API_PORT = 3777
 export const nextPort = used => {
   const taken = new Set(used)
