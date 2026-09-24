@@ -1,9 +1,11 @@
-# Claude's Minecraft body
+# The agents' Minecraft bodies
 
-`src/bot.mjs` joins the server in `..` (offline mode, port 25565) as the player **Claude**.
+`src/bot.mjs` joins the server in `..` (offline mode, port 25565) as one agent: the player named in the
+`config.json` of the agent folder it runs from (`state/agents/<Name>/`, made by `node tools/new-agent.mjs <Name>`).
+Without that file it refuses to start, so a stray run can never log in under another agent's name.
 Mineflayer speaks protocol 26.1; ViaVersion + ViaBackwards in `../plugins` bridge it to the 26.2 server.
 
-- Start: `node src/bot.mjs` (reconnects every 10s if the server is down). Override defaults in `config.json`.
+- Start: `cd state/agents/<Name> && ./start` in the background (reconnects every 10s if the server is down).
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
 - Control API: `http://127.0.0.1:3777/<action>` with a JSON body; `./mc <action> key=value ...` wraps it.
   `./mc help` lists actions. Long actions (goto, mine, craft, place, ...) take over the body, return after
