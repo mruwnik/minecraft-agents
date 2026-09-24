@@ -593,8 +593,14 @@ export const holedUpNote = ({ way, open, surface }) =>
 // is shelter, so darkness counts only where the sky does not reach: both dark together is a cave mouth
 export const FLEE_DROP = 4
 export const FLEE_DARK = 4
-export const fleeIntoCave = ({ startY = 0, y = 0, skyLight = 15, light = 15 } = {}) =>
-  startY - y >= FLEE_DROP || (skyLight <= FLEE_DARK && light <= FLEE_DARK)
+// A run that STARTED in the dark (a body mining in a cave) is not running into one: only the drop counts then. My body
+// met an enderman in the cave under the test pits and holed up on the first tick of the run, for no reason (13:17Z)
+export const fleeIntoCave = ({ startY = 0, y = 0, skyLight = 15, light = 15, startSkyLight = 15 } = {}) =>
+  startY - y >= FLEE_DROP || (startSkyLight > FLEE_DARK && skyLight <= FLEE_DARK && light <= FLEE_DARK)
+// the cells a hole-up fills around the body's feet: the four sides at feet and head height, and the one over the head.
+// A shaft dug in a cave had air on two sides and a cap that kept nothing out (13:17Z); a filled cell that is already
+// solid costs nothing
+export const holeCells = () => [[1, 0], [-1, 0], [0, 1], [0, -1]].flatMap(([dx, dz]) => [[dx, 0, dz], [dx, 1, dz]]).concat([[0, 2, 0]])
 export const FLEE_CAVE_NOTE = 'the only way clear of it led underground or into the dark, and that is where bodies die: I stopped instead of running into a cave. Dig down and cap the hole, fight it, or wait for dawn: `goto x= y= z= dig=true` brings me back up'
 
 // (b) and (c). Perrin's flee_returned walked his respawned body straight back into the skeleton and the zombie that had just
