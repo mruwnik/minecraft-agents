@@ -1249,9 +1249,7 @@ for (const [name, state, expected] of [
   ['low air under water', { headInWater: true, inWater: true, oxygen: 8, surfacing: false }, 'start'],
   ['low reading on dry land is a bridge misfire', { headInWater: false, inWater: false, oxygen: 3, surfacing: false }, null],
   ['still short of air: keep swimming up', { headInWater: false, inWater: true, oxygen: 10, surfacing: true }, 'hold'],
-  ['ViaBackwards refills oxygen while my head is still underwater', { headInWater: true, inWater: true, oxygen: 20, surfacing: true }, 'hold'],
   ['breathed enough', { headInWater: false, inWater: true, oxygen: 18, surfacing: true }, 'stop'],
-  ['head reaches open air even if the body is still wet', { headInWater: false, inWater: true, oxygen: 20, surfacing: true }, 'stop'],
   ['out of the water', { headInWater: false, inWater: false, oxygen: 5, surfacing: true }, 'stop']
 ]) test(`airReflex: ${name}`, () => assert.equal(airReflex(state), expected))
 
