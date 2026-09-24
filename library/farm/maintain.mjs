@@ -1,5 +1,6 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
+import { fetchWaterBucket } from '../../src/builder.mjs'
 import { farmJobs, farmSurplus, hasWaterSource, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
@@ -61,6 +62,10 @@ export default {
       // instead, so a job that says it worked did work, and the field is only looked at once more to say what is still off.
       // a cell the plan's own water stands over is not work, it is a warning: dig refuses it and the sweep would give
       // up on "twice in a row". It is handed back as skipped= for the driver to drain
+      // farmJobs decides pour vs. skip from whether water_bucket is ALREADY carried right here: a dry cell with none
+      // becomes 'skip', not 'pour', and fetching water further down never reaches a job list that never named the
+      // cell. Tried once up front so a fetchable bucket turns skip back into pour before the list is even read
+      await fetchWaterBucket(api)
       const all = farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
       const jobs = all.filter(j => j.do !== 'skip')
       const skipped = all.filter(j => j.do === 'skip')
@@ -72,7 +77,9 @@ export default {
       if (low.length) summary.lowSlabs = lowSlabLine(low.length)
       const short = {}
       for (const job of jobs) {
-        if (job.item && !job.have) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
+        // a missing water_bucket is fetched, not just reported: see fetchWaterBucket in src/builder.mjs
+        if (job.item === 'water_bucket' && !job.have && !(await fetchWaterBucket(api))) { short.water_bucket = (short.water_bucket ?? 0) + 1; continue }
+        if (job.item && job.item !== 'water_bucket' && !job.have) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
         await tryJob(job)
         await api.checkpoint({ canDeposit: Boolean(chest) })
       }

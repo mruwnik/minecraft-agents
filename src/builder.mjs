@@ -2,6 +2,26 @@
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 
+const WATER_RANGE = 32
+const WATER_CANDIDATES = 8
+
+// A dry channel cell's job carries water_bucket, and until now a body that reached one empty-handed just reported
+// missing=water_bucket and gave up - the driver had to notice, walk to a lake, fill a bucket by hand and run the
+// build again. `fill` already walks to its target itself (see bot.mjs), so all this adds is finding one: the nearest
+// water within reach, tried in order until one is a settled source (fill refuses flowing water on its own, so a miss
+// here just moves on to the next candidate) rather than something this body has to work out first. Shared with
+// maintain_farm, which imports it from here rather than duplicate it.
+export async function fetchWaterBucket (api, range = WATER_RANGE) {
+  if ((api.inv().water_bucket ?? 0) > 0) return true
+  if ((api.inv().bucket ?? 0) < 1) return false
+  const { positions = [] } = await api.act('find_blocks', { block: 'water', maxDistance: range, count: WATER_CANDIDATES }).then(r => r, () => ({}))
+  for (const p of positions) {
+    const filled = await api.act('fill', { x: p.x, y: p.y, z: p.z }).then(() => true, () => false)
+    if (filled) return true
+  }
+  return false
+}
+
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 
 // The pen the plan's cells lie in, if one stands there with animals in it: pen.check from over the plan's own floor
@@ -38,8 +58,10 @@ export async function buildFromPlan (api, a) {
   }
 
   const tryJob = async job => {
+    // a missing water_bucket is fetched, not just reported: see fetchWaterBucket above
+    if (job.item === 'water_bucket' && (api.inv().water_bucket ?? 0) < 1 && !(await fetchWaterBucket(api))) { missing.water_bucket = 1; return }
     // counted the way jobsBill counts: one bucket does a whole field, so a dry channel is short one bucket, not one per cell
-    if (job.item && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = job.item === 'water_bucket' ? 1 : (missing[job.item] ?? 0) + 1; return }
+    if (job.item && job.item !== 'water_bucket' && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = (missing[job.item] ?? 0) + 1; return }
     // a cover is only real once the cell it caps is actually holding its own water. farmJobs queues pour and cover
     // together for a dry cell on the assumption the pour just before it lands, but a pour that misses (a neighbour's
     // flow crept in first, the wrong y, out of reach) used to be covered anyway: `place` only checks that its own
@@ -79,6 +101,11 @@ export async function buildFromPlan (api, a) {
   const beside = planBeside(plan.cells, api.block, { name: plan.name })
   if (beside) throw new Error(`${plan.name} is not where its plan says: ${beside.note}`)
   await api.checkpoint()
+  // farmJobs decides pour vs. skip from whether water_bucket is ALREADY carried at the moment it is called: a dry
+  // cell with none becomes a 'skip' job, not a 'pour' one, and no amount of fetching water inside tryJob later
+  // reaches a job list that never named the cell. So this is tried once up front, before that list is built, not
+  // down in tryJob - the one there is only a fallback for a bucket a pour used up earlier in the same run
+  await fetchWaterBucket(api)
   const todo = [...ground(), ...field()]
   // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while
   // nothing has been touched and say how to get out of it (Chani's 4 sheep). A build that only places is safe

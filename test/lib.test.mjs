@@ -4050,7 +4050,7 @@ test('farm.harvest: seeds for only part of the field: the batch plants what the 
   const { api, calls } = sweepApi(sweepWorld(), { wheat_seeds: 2 })
   const out = await farmHarvest.run(api, { within: 8 })
   assert.deepEqual([calls.filter(c => c.startsWith('place')), out.replanted, out.notReplanted],
-    [['place blocks=(item=wheat_seeds x=0 y=64 z=0) (item=wheat_seeds x=1 y=64 z=0)'], 2, 2])
+    [['place blocks=(item=wheat_seeds x=0 y=64 z=0) (item=wheat_seeds x=1 y=64 z=0)'], 2, '2: no wheat_seeds left in my pockets at 1,1 0,1'])
 })
 
 // which cut cells the replant batch can plant from what I carry, in the order they were cut
