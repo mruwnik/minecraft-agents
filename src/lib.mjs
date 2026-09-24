@@ -165,6 +165,25 @@ export function markFields ({ saved, by, note }) {
   return { by: saved?.by ?? by, note: text }
 }
 
+// Where a mark puts a place. A note-only mark moved Chani's carrot patch to the feet of whoever left word on it, twice
+// (BUGS.md 09-24 12:42Z): an existing place keeps its saved anchor unless x= says otherwise or a fresh map= is laid
+// where I stand. A move is said out loud (`moved=`), and a move off a plan that still stands where it was (`stands`,
+// from planStands) is refused unless move=true says it is meant.
+export function markMove ({ saved, args = {}, here, stands = false }) {
+  const cell = p => ({ x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) })
+  const given = args.x !== undefined
+  if (!saved || saved.x === undefined) return { at: cell(given ? args : here) }
+  const old = cell(saved)
+  const at = given ? cell(args) : args.map !== undefined ? cell(here) : old
+  const key = p => `${p.x},${p.y},${p.z}`
+  if (key(at) === key(old)) return { at }
+  const moved = `${key(old)} -> ${key(at)}`
+  if (stands && !args.move) {
+    return { error: `${saved.name} still stands where it is marked, at ${key(old)}: marking it at ${key(at)} would move the place off what is built. Pass move=true if that is what you mean, or mark a new name. Nothing was marked` }
+  }
+  return { at, moved }
+}
+
 // A mark is its owner speaking, and `anyone welcome, harvest and replant` is permission written down. Honouring it is
 // the whole point of writing it, so this is the ONE question every composite asks before it digs, plants or carries
 // away on ground somebody else marked - one rule, one wording, one place to change it (#144).
@@ -1993,6 +2012,13 @@ export function planBeside (cells, worldAt, { name = 'the place', reach = 3 } = 
     note: `${best.found} of the ${solidCells.length} blocks it describes stand ${compassOf(best.dx, best.dz)} of where the plan puts them, on ground at y=${at.y}: what the plan describes is already built, just not where the place is marked. A place's x,z is the NORTH-WEST corner cell of its plan (its lowest x and lowest z) and its y is the GROUND block, so mark it where the thing itself stands and build again: ./mc mark name=${name} x=${at.x} y=${at.y} z=${at.z} (marking again keeps the plan). If you meant to build a SECOND one here, move the plan further off: this one would run through the middle of what stands`
   }
 }
+// Does what a plan describes stand at its own anchor? Half its solid cells (fences, gates, crops, chests...) at least,
+// and two: the evidence a mark needs before it moves a place off something built (see markMove)
+export function planStands (cells, worldAt) {
+  const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
+  const found = solidCells.filter(c => [0, -1, 1].some(dy => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z)))).length
+  return found >= 2 && found >= solidCells.length / 2
+}
 // The GROUND a plan's cells sit on is evidence its own contents cannot spoil. Chani's carrot patch was stored at y=72
 // over farmland built at y=71, and nothing caught it: farm.maintain got stuck twice on ten cells it could not till
 // (BUGS.md 09-24 01:23Z). The crop test could not see it, because somebody had planted wheat in a patch the plan calls
@@ -2483,7 +2509,7 @@ export const PRIMITIVES = {
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
   // ---- map
   places: { section: 'map', args: '[name=] [q=] [by=] [kind=] [within=] [limit=]', doc: 'search the shared map: bases, farms, mines, villages, dangers. name= gives one place whole; never read places.json yourself' },
-  mark: { section: 'map', args: 'name= [kind=] [note=] [x= y= z=]', doc: 'put a place on the shared map, here or at a point' },
+  mark: { section: 'map', args: 'name= [kind=] [note=] [x= y= z=] [move=]', doc: 'put a place on the shared map, here or at a point. Marking an existing place again keeps where it is unless x= y= z= is given; moving one off what still stands there needs move=true' },
   unmark: { section: 'map', args: 'name=', doc: 'take a place off the shared map' },
   zones: { section: 'map', args: '', doc: 'the protected areas: what nobody may dig through' },
   protect: { section: 'map', args: 'name= x1= y1= z1= x2= y2= z2=', doc: 'protect a box of the world, mine or shared' },
