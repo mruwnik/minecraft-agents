@@ -38,6 +38,13 @@
   .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .row .spacer { flex: 1; }
   .err { color: #f0907e; }
+  #planOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  #planOverlay[hidden] { display: none; }
+  #planCard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; max-width: min(92vw, 680px); max-height: 88vh; overflow: auto; }
+  #planCard .planHead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  #planCard h3 { margin: 0; font-size: 13px; letter-spacing: .03em; color: var(--place); }
+  #planMeta { color: var(--dim); margin-bottom: 10px; white-space: pre-wrap; }
+  #planCanvas { display: block; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; }
 </style>
 </head>
 <body>
@@ -78,8 +85,19 @@
     </section>
   </aside>
 </main>
+<div id="planOverlay" hidden>
+  <div id="planCard">
+    <div class="planHead">
+      <h3 id="planTitle"></h3>
+      <span class="spacer"></span>
+      <button id="planClose">close ×</button>
+    </div>
+    <div id="planMeta"></div>
+    <canvas id="planCanvas"></canvas>
+  </div>
+</div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas } from './map.mjs'
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, hitPlan, parsePlan } from './map.mjs'
 
 const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
@@ -158,6 +176,21 @@ const drawZones = () => {
   }).filter(b => onCanvas(b, size.w, size.h))
 }
 
+// a place with a plan is a footprint, not a point: drawn under its point marker and label, and the thing
+// the click handler tests hits against so a farm or pen can be opened
+const drawFootprints = () => {
+  planRects(snap.places).forEach(rect => {
+    const a = project(view, rect.x, rect.z)
+    const b = project(view, rect.x + rect.w, rect.z + rect.h)
+    if (!onCanvas(a, size.w, size.h, 60) && !onCanvas(b, size.w, size.h, 60)) return
+    ctx.fillStyle = 'rgba(217,178,95,0.10)'
+    ctx.strokeStyle = 'rgba(217,178,95,0.65)'
+    ctx.lineWidth = 1
+    ctx.fillRect(a.px, a.py, b.px - a.px, b.py - a.py)
+    ctx.strokeRect(a.px, a.py, b.px - a.px, b.py - a.py)
+  })
+}
+
 const drawPlaces = () => {
   ctx.font = '10px ui-monospace, monospace'
   return snap.places.map(place => {
@@ -228,6 +261,7 @@ const draw = () => {
     return
   }
   drawGrid()
+  drawFootprints()
   const zones = drawZones()
   const places = drawPlaces()
   const dan = drawDan()
@@ -270,9 +304,14 @@ const pick = at => bodyDots()
 canvas.addEventListener('click', e => {
   if (drag?.moved) return
   const r = canvas.getBoundingClientRect()
-  const hit = pick({ px: e.clientX - r.left, py: e.clientY - r.top })
-  if (!hit) return
-  select(hit.body.name)
+  const at = { px: e.clientX - r.left, py: e.clientY - r.top }
+  const hit = pick(at)
+  if (hit) { select(hit.body.name); return }
+  if (!view) return
+  const worldX = at.px / view.scale + view.originX
+  const worldZ = at.py / view.scale + view.originZ
+  const farm = hitPlan(planRects(snap.places), worldX, worldZ)
+  if (farm) openPlan(farm)
 })
 
 canvas.addEventListener('wheel', e => {
@@ -331,6 +370,51 @@ const renderPlaces = () => {
   el('places').textContent = snap.places.map(p => `${p.name} @${p.x},${p.y},${p.z}`).join('\n')
 }
 
+// ---------------------------------------------------------------- the plan popup
+const CELL_PX = 22
+
+const drawPlanGrid = parsed => {
+  const dpr = window.devicePixelRatio || 1
+  const w = parsed.width * CELL_PX
+  const h = parsed.height * CELL_PX
+  const pc = el('planCanvas')
+  pc.style.width = `${w}px`
+  pc.style.height = `${h}px`
+  pc.width = Math.round(w * dpr)
+  pc.height = Math.round(h * dpr)
+  const c = pc.getContext('2d')
+  c.setTransform(dpr, 0, 0, dpr, 0, 0)
+  c.fillStyle = '#0e1015'
+  c.fillRect(0, 0, w, h)
+  parsed.cells.forEach(({ dx, dz, ch }) => {
+    c.fillStyle = cellColour(ch)
+    c.fillRect(dx * CELL_PX, dz * CELL_PX, CELL_PX - 1, CELL_PX - 1)
+  })
+}
+
+// a place opens only if it has a plan that actually parses; a bare point (a hut, a marker) has nothing to show
+const showPlan = place => {
+  if (!place?.plan) return
+  const parsed = parsePlan(place.plan)
+  if (parsed.error) return
+  el('planTitle').textContent = place.name
+  el('planMeta').textContent = [
+    `by ${place.by ?? 'unclaimed'}`,
+    place.note || null,
+    `${parsed.width}x${parsed.height} blocks, anchored at ${place.x},${place.y},${place.z} (north-west corner)`
+  ].filter(Boolean).join('\n')
+  drawPlanGrid(parsed)
+  el('planOverlay').hidden = false
+}
+
+const openPlan = name => showPlan(snap.places.find(p => p.name === name))
+
+const closePlan = () => { el('planOverlay').hidden = true }
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('planOverlay').hidden) closePlan() })
+el('planOverlay').addEventListener('click', e => { if (e.target === el('planOverlay')) closePlan() })
+el('planClose').addEventListener('click', closePlan)
+
 const select = name => {
   selected = name
   el('lookname').textContent = name
@@ -368,6 +452,9 @@ const fetchLook = () => {
 el('relook').addEventListener('click', fetchLook)
 
 // ---------------------------------------------------------------- polling
+// ?farm=<name> opens that place's popup once, as soon as its plan is in hand - the hook a headless screenshot uses
+let farmParam = new URLSearchParams(location.search).get('farm')
+
 const refresh = () => fetch('/api/state')
   .then(r => r.json())
   .then(s => {
@@ -379,8 +466,16 @@ const refresh = () => fetch('/api/state')
     renderList()
     renderPlaces()
     draw()
+    if (farmParam && s.places.some(p => p.name === farmParam)) {
+      openPlan(farmParam)
+      farmParam = null
+    }
   })
   .catch(e => { el('status').textContent = `no answer from the dashboard: ${e.message}` })
+
+// the server inlines the requested ?farm=<name> place (if any) as JSON in <head>, so the popup opens on the
+// very first paint instead of racing the /api/state fetch below - the property a headless screenshot needs
+if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__)
 
 resize()
 refresh()

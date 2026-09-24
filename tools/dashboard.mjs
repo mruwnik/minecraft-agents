@@ -16,6 +16,7 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
+const LIB_MODULE = path.join(ROOT, 'src', 'lib.mjs')
 const PORT = Number(process.env.PORT ?? 3700)
 const DAN = process.env.DAN_NAME ?? 'mruwnik'
 const POLL_MS = 2000
@@ -112,10 +113,21 @@ const serveLook = async (res, name, query) => {
   })
 }
 
+// ?farm=<name> is inlined into the page itself (not left to the /api/state fetch below it) so the popup it opens
+// is there on the very first paint - the property a headless screenshot needs, and a plain page load never pays for.
+// </script and </head can't slip out of the inline script tag, since the page ships this straight into an attribute-free <script> body.
+const renderPage = query => {
+  const farm = query.get('farm')
+  const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
+  const preload = `<script>window.__PRELOAD_PLACE__=${JSON.stringify(place).replace(/</g, '\\u003c')}</script>\n`
+  return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
+}
+
 const handlers = {
-  page: (res) => send(res, 200, 'text/html; charset=utf-8', fs.readFileSync(PAGE)),
+  page: (res, query) => send(res, 200, 'text/html; charset=utf-8', renderPage(query)),
   state: (res) => sendJson(res, 200, snapshot()),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
+  srclib: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(LIB_MODULE)),
   unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state or /api/look/<Name>' })
 }
 
@@ -123,7 +135,7 @@ http.createServer(async (req, res) => {
   const r = route(req.url)
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
-  return handlers[r.kind](res)
+  return handlers[r.kind](res, query)
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()
   setInterval(() => pollOnce().catch(e => console.error('[poll]', e.message)), POLL_MS)

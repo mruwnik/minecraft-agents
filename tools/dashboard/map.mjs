@@ -1,5 +1,9 @@
-// The map and the merge, shared by tools/dashboard.mjs and the page it serves: no node imports, so the browser
-// loads this module as-is and draws with the same code test/dashboard.test.mjs checks.
+// The map and the merge, shared by tools/dashboard.mjs and the page it serves: the only import is src/lib.mjs, which
+// is pure too (no node builtins), so the dashboard server serves it at /src/lib.mjs and this module loads exactly the
+// same way for node (test/dashboard.test.mjs, tools/dashboard.mjs) and for the browser (relative import resolves to
+// that same route from either location - see the route table in tools/dashboard/lib.mjs).
+import { parsePlan } from '../../src/lib.mjs'
+export { parsePlan }
 
 // polls: { <agent name>: { ok, state, error, at } }. A port that does not answer is a body that is down, which is
 // the ordinary state of most folders here, not a failure of the dashboard.
@@ -66,3 +70,43 @@ export const fitLabels = boxes => boxes.reduce((kept, box) => kept.some(k => ove
 // a mark well outside the canvas is neither drawn nor allowed to reserve label space
 export const onCanvas = ({ px, py }, width, height, margin = 0) =>
   px >= -margin && px <= width + margin && py >= -margin && py <= height + margin
+
+// ---------------------------------------------------------------- farm and pen footprints
+// A place with a plan is not a point, it is a rectangle: the plan is anchored at its own north-west corner
+// (x,z), rows run south, columns east - exactly what parsePlan already knows how to size.
+export const planRects = places => places.flatMap(place => {
+  if (!place.plan) return []
+  const parsed = parsePlan(place.plan)
+  if (parsed.error) return []
+  return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
+})
+
+// crops get their own colour so two fields are told apart at a glance; everything else is by kind. A character
+// the legend does not know (a stray space, a typo) is drawn grey rather than guessed at.
+const CELL_COLOURS = {
+  w: '#d9b25f', // wheat
+  c: '#e08b3d', // carrots
+  p: '#c9a15f', // potatoes
+  b: '#b3435f', // beetroots
+  s: '#c9c96a', // sugar cane
+  m: '#7fae3a', // melon
+  k: '#d67f2e', // pumpkin
+  B: '#5c8f4a', // bamboo
+  '~': '#4a90d9', // water
+  '.': '#6b6558', // path
+  '#': '#8b7355', // fence
+  G: '#a8895f', // gate
+  T: '#e0a030', // torch
+  C: '#a0754a', // chest
+  K: '#7a5c3a', // composter
+  F: '#e0e060', // flower
+  t: '#5c8f4a', // sapling
+  A: '#a0754a' // crafting table
+}
+const UNKNOWN_CELL = '#555f6e'
+
+export const cellColour = ch => CELL_COLOURS[ch] ?? UNKNOWN_CELL
+
+// which footprint, if any, a world x,z lands in - the north-west corner is inside, the far edge (x+w, z+h) is not
+export const hitPlan = (rects, x, z) =>
+  rects.find(r => x >= r.x && x < r.x + r.w && z >= r.z && z < r.z + r.h)?.name ?? null

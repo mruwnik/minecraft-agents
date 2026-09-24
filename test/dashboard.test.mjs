@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { parseAgents, snapshotFile, route } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas } from '../tools/dashboard/map.mjs'
+import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, hitPlan } from '../tools/dashboard/map.mjs'
 
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
@@ -187,6 +187,7 @@ const routes = [
   ['/api/state', { kind: 'state' }],
   ['/api/state?since=3', { kind: 'state' }],
   ['/map.mjs', { kind: 'script' }],
+  ['/src/lib.mjs', { kind: 'srclib' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],
@@ -195,4 +196,65 @@ const routes = [
 ]
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
   assert.deepEqual(route(url), expected)
+}))
+
+// ---------------------------------------------------------------- farm footprints and the plan popup
+const wheatField = { name: 'chani-wheat-field', kind: 'farm', x: 110, y: 71, z: -70, by: 'Chani', note: 'anyone welcome',
+  plan: '###########\n#.........#\n#.wwwwwww.#\n#.wwwwwww.#\n#.~~~~~~~.#\n#.wwwwwww.#\n#.wwwwwww.#\n#.........#\n#.C.K.T.t.#\n#####G#####' }
+const carrotPatch = { name: 'chani-carrot-patch', kind: 'farm', x: 114, y: 71, z: -77, by: 'Chani', note: '',
+  plan: '#######\n#.....#\n#ccccc#\n#~~~~~#\n#ccccc#\n#.....#\n###G###' }
+const noPlan = { name: 'jizo-hut', kind: 'hut', x: 40, y: 65, z: 12 }
+const brokenPlan = { name: 'too-big', kind: 'farm', x: 0, y: 65, z: 0, plan: '' }
+
+test('planRects: a footprint per place with a plan, sized from its rows', () => {
+  assert.deepEqual(planRects([wheatField, carrotPatch, noPlan]), [
+    { name: 'chani-wheat-field', x: 110, z: -70, w: 11, h: 10 },
+    { name: 'chani-carrot-patch', x: 114, z: -77, w: 7, h: 7 }
+  ])
+})
+
+test('planRects: a place with no plan contributes no rect', () => {
+  assert.deepEqual(planRects([noPlan]), [])
+})
+
+test('planRects: a plan that fails to parse contributes no rect', () => {
+  assert.deepEqual(planRects([brokenPlan]), [])
+})
+
+const cells = [
+  ['w', 'wheat', '#d9b25f'],
+  ['c', 'carrots', '#e08b3d'],
+  ['p', 'potatoes', '#c9a15f'],
+  ['b', 'beetroots', '#b3435f'],
+  ['~', 'water', '#4a90d9'],
+  ['.', 'path', '#6b6558'],
+  ['#', 'fence', '#8b7355'],
+  ['G', 'gate', '#a8895f'],
+  ['T', 'torch', '#e0a030'],
+  ['C', 'chest', '#a0754a'],
+  ['K', 'composter', '#7a5c3a']
+]
+cells.forEach(([ch, what, colour]) => test(`cellColour: ${what} (${ch})`, () => {
+  assert.equal(cellColour(ch), colour)
+}))
+
+test('cellColour: an unknown character is grey', () => {
+  assert.equal(cellColour('?'), '#555f6e')
+})
+
+test('cellColour: two different crops get different colours', () => {
+  assert.notEqual(cellColour('w'), cellColour('c'))
+})
+
+const rects = planRects([wheatField, carrotPatch])
+
+const hits = [
+  ['inside the wheat field', 112, -68, 'chani-wheat-field'],
+  ['inside the carrot patch', 116, -73, 'chani-carrot-patch'],
+  ['on the north-west anchor cell', 114, -77, 'chani-carrot-patch'],
+  ['one block outside the south-east edge', 121, -70, null],
+  ['nowhere near either footprint', 0, 0, null]
+]
+hits.forEach(([why, x, z, expected]) => test(`hitPlan: ${why}`, () => {
+  assert.equal(hitPlan(rects, x, z), expected)
 }))

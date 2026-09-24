@@ -41,6 +41,7 @@ export const route = url => {
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/api/state') return { kind: 'state' }
   if (pathname === '/map.mjs') return { kind: 'script' }
+  if (pathname === '/src/lib.mjs') return { kind: 'srclib' }
   const look = LOOK.exec(pathname)
   if (look) return { kind: 'look', name: look[1] }
   return { kind: 'unknown' }
