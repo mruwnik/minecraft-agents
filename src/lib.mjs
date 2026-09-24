@@ -1400,9 +1400,17 @@ export const craftRoom = ({ freeSlots, stacks, stackSize, batch, item, made = 0,
 // ingots and never gave them back (backlog #133). One is free to retry and one is a real loss, and a message that
 // cannot tell them apart leaves the driver to find out by counting their own pockets. So the ingredients are read
 // back too, and what the message says about them is what the inventory actually shows.
-export function craftReport ({ item, count, made, spent = {}, why }) {
+// fell: ingredients found lying within reach after the failure (and swept up); lying: those still on the ground after
+// the sweep, as name@x,y,z. Chani's "real" loss of 16 planks was a stack on the ground that farm.maintain picked up later
+export function craftReport ({ item, count, made, spent = {}, why, fell = [], lying = [] }) {
   if (made >= count) return { crafted: item, made }
   const used = Object.entries(spent).filter(([, n]) => n > 0).map(([name, n]) => `${name}:${n}`).join(' ')
+  if (made <= 0 && fell.length) {
+    const names = [...new Set(fell)].join(', ')
+    if (lying.length && used) return { error: `${why}: no ${item} made at all; the ingredients (${used}) are not in my pockets but on the ground: ${lying.join(' ')}. Collect them (./mc collect) before retrying` }
+    if (!used) return { error: `${why}: no ${item} made at all; the ${names} fell out of the crafting grid onto the ground and I picked them back up, so nothing is lost: retry once` }
+    return { error: `${why}: no ${item} made at all; the ${names} fell out of the crafting grid and I picked up what lay within reach, but ${used} is still missing: that part of the loss is real. Check your inventory before retrying` }
+  }
   // ingredients consumed alongside a result are not lost, they ARE the result: only a craft that made nothing at all
   // can claim its ingredients went for nothing, and saying otherwise sends the driver hunting a loss that never was
   if (made > 0) return { error: `${why}: only ${made} of ${count} ${item} made${used ? `, and ${used} went into them` : ''}` }

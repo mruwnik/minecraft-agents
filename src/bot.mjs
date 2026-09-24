@@ -1597,13 +1597,20 @@ const long = {
     const settleTo = async target => { for (let i = 0; i < 25 && have() < target; i++) await bot.waitForTicks(4) }
     // what the ingredients really cost, read back at the end: the difference between a free retry and a real loss
     const spent = () => Object.fromEntries(ingredients.map(name => [name, Math.max(0, (before[name] ?? 0) - (inventoryCounts()[name] ?? 0))]))
-    const giveUp = why => { throw new Error(craftReport({ item: a.item, count, made: have() - start, spent: spent(), why }).error) }
+    // before calling ingredients lost, look on the ground: Chani's 16 planks were lying by the table the whole time
+    const giveUp = async why => {
+      const onGround = () => dropsNear(6).filter(d => ingredients.includes(d.item))
+      const fell = onGround().map(d => d.item)
+      if (fell.length) await sweepDrops(6)
+      const lying = onGround().map(d => `${d.item}@${d.x},${d.y},${d.z}`)
+      throw new Error(craftReport({ item: a.item, count, made: have() - start, spent: spent(), why, fell, lying }).error)
+    }
     for (let attempt = 1; have() < start + count; attempt++) {
       const full = craftRoom({ freeSlots: bot.inventory.emptySlotCount(), stacks: bot.inventory.items().filter(i => i.name === a.item).map(i => i.count), stackSize: item.stackSize, batch: recipe.result.count, item: a.item, made: have() - start, count })
       if (full) throw new Error(full)
-      if (attempt > Math.ceil(count / recipe.result.count) + 5) giveUp('the server kept rejecting the craft')
+      if (attempt > Math.ceil(count / recipe.result.count) + 5) await giveUp('the server kept rejecting the craft')
       const r = bot.recipesFor(item.id, null, 1, table)[0]
-      if (!r) giveUp('the ingredients ran out')
+      if (!r) await giveUp('the ingredients ran out')
       const target = have() + r.result.count
       await craftBatch(r, table)
       await settleTo(target)
