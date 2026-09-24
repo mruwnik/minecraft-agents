@@ -20,7 +20,7 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -1601,6 +1601,39 @@ for (const [name, tried, allowWet, expected] of [
   test(`nextDrop: ${name}`, () => assert.equal(nextDrop(DROPS, new Set(tried), allowWet)?.id, expected))
 }
 test('leftLying: drops in deep water are named', () => assert.deepEqual(leftLying(3, [], ['sand', 'sand']), { inWater: 'left in deep water: sand. Fetch it from a boat or the shore, or collect wet=true and watch your air' }))
+
+// #142: `picked` counted the drops the body WALKED TO, and walking to a drop is not picking it up. At a carrot no cell
+// could stand beside, collect answered picked=1 twice running while the carrot lay in the dirt the whole time.
+const TRIED = [
+  { id: 1, item: 'wheat', x: 10, y: 70, z: -5, reached: true },
+  { id: 2, item: 'carrot', x: 115, y: 72, z: -75, reached: false },
+  { id: 3, item: 'wheat_seeds', x: 11, y: 70, z: -5, reached: true }
+]
+const MANY = Array.from({ length: 5 }, (_, i) => ({ id: i, item: 'bamboo', x: i, y: 70, z: i, reached: false }))
+for (const [name, tried, lying, expected] of [
+  ['all three came: picked is three', TRIED, [], { picked: 3 }],
+  ['nothing tried: nothing picked and nothing to complain about', [], [{ id: 9 }], { picked: 0 }],
+  ['a drop I never tried is not mine to claim or to mourn', TRIED, [{ id: 9 }], { picked: 3 }],
+  ['the carrot nothing can stand beside: picked 2, and it is named where it lies', TRIED, [{ id: 2 }], {
+    picked: 2,
+    couldNotReach: '1 still lying (carrot at 115,72,-75): I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down'
+  }],
+  ['stood on it and it stayed put: a different reason, said differently', TRIED, [{ id: 1 }], {
+    picked: 2,
+    stillLying: '1 still lying (wheat at 10,70,-5): I stood on it and it did not come. Deposit or toss something, or it is stuck inside a block'
+  }],
+  ['both kinds at once are counted apart', TRIED, [{ id: 1 }, { id: 2 }], {
+    picked: 1,
+    couldNotReach: '1 still lying (carrot at 115,72,-75): I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down',
+    stillLying: '1 still lying (wheat at 10,70,-5): I stood on it and it did not come. Deposit or toss something, or it is stuck inside a block'
+  }],
+  ['a whole field left behind names the first three and counts the rest', MANY, MANY, {
+    picked: 0,
+    couldNotReach: '5 still lying (bamboo at 0,70,0, bamboo at 1,70,1, bamboo at 2,70,2, and 2 more): I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down'
+  }]
+]) {
+  test(`collectTally: ${name}`, () => assert.deepEqual(collectTally(tried, lying), expected))
+}
 
 // a NaN goal never ends the pathfinder's search: place with a typo in a coordinate ran until cancelled
 for (const [name, a, expected] of [
@@ -3410,13 +3443,31 @@ const LYING = [
   { id: 2, item: 'bone', x: 1, y: 64, z: 0, dist: 1, deep: false, outsidePen: false },
   { id: 3, item: 'wheat_seeds', x: 9, y: 64, z: 0, dist: 9, deep: false, outsidePen: true }
 ]
+// arriving on a drop is what picks it up, so the fake body's ground has to empty as it walks: picked= counts drops that
+// left the ground, and a fake whose drops never move would let a walk count pass for a pickup all over again (#142)
+const pickedUpOnArrival = lying => ({ goto: args => { lying.splice(0, lying.length, ...lying.filter(d => d.x !== args.x || d.z !== args.z)); return {} } })
 test('collect: walks to each drop in turn, nearest first, and leaves what is outside the pen', async () => {
-  const { api, calls } = fakeApi({ drops: LYING })
+  const lying = LYING.map(d => ({ ...d }))
+  const { api, calls } = fakeApi({ drops: lying, answers: pickedUpOnArrival(lying) })
   const out = await collect.run(api, { range: 16 })
   assert.deepEqual([calls, out.picked, out.outsidePen], [
     ['goto x=1 y=64 z=0 range=0', 'goto x=3 y=64 z=0 range=0'],
     2,
     '1 drops lie outside this pen and were left: walk out yourself (goto), then collect again'])
+})
+
+test('collect: a drop still lying after its own turn was not picked, whatever the walk did (#142)', async () => {
+  const lying = [{ id: 1, item: 'carrot', x: 115, y: 72, z: -75, dist: 2, deep: false, outsidePen: false }]
+  const { api } = fakeApi({ drops: lying, answers: { goto: new Error('no path there') } })
+  const out = await collect.run(api, {})
+  assert.deepEqual([out.picked, out.couldNotReach], [0, '1 still lying (carrot at 115,72,-75): I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down'])
+})
+
+test('collect: standing on a drop that will not come is a different complaint from not getting there (#142)', async () => {
+  const lying = [{ id: 1, item: 'carrot', x: 115, y: 72, z: -75, dist: 2, deep: false, outsidePen: false }]
+  const { api } = fakeApi({ drops: lying })
+  const out = await collect.run(api, {})
+  assert.deepEqual([out.picked, out.couldNotReach, out.stillLying], [0, undefined, '1 still lying (carrot at 115,72,-75): I stood on it and it did not come. Deposit or toss something, or it is stuck inside a block'])
 })
 
 test('collect: a drop deep in water is left where it is, and named', async () => {
@@ -3425,10 +3476,10 @@ test('collect: a drop deep in water is left where it is, and named', async () =>
   assert.deepEqual([calls, out.inWater.startsWith('left in deep water: sand')], [[], true])
 })
 
-test('collect: a full inventory stops it where it stands', async () => {
+test('collect: a full inventory stops it where it stands, having picked up nothing', async () => {
   const { api, calls } = fakeApi({ drops: LYING.slice(0, 2), freeSlots: 0 })
   const out = await collect.run(api, {})
-  assert.deepEqual([calls.length, out.picked, out.inventoryFull.startsWith('left lying:')], [1, 1, true])
+  assert.deepEqual([calls.length, out.picked, out.inventoryFull.startsWith('left lying:')], [1, 0, true])
 })
 
 // ---------------------------------------------------------------- farm.harvest
@@ -3444,6 +3495,34 @@ test('farm.harvest: digs what is ripe, puts the seed straight back, and leaves t
   const out = await farmHarvest.run(api, { within: 8 })
   assert.deepEqual([out.harvested, out.replanted, out.stillGrowing, calls.filter(c => c.startsWith('dig') || c.startsWith('place'))],
     [{ wheat: 1 }, 1, 1, ['dig 0,64,0', 'place item=wheat_seeds x=0 y=64 z=0']])
+})
+
+test('farm.harvest: a crop it dug but could not pick up is lost, not harvested (#142)', async () => {
+  const world = { '0,64,0': 'wheat#7' }
+  const stuck = '1 still lying (wheat at 0,64,0): I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down'
+  const { api } = fakeApi({
+    world,
+    answers: {
+      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 0, y: 64, z: 0 }] : [] }),
+      dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} },
+      collect: { couldNotReach: stuck }
+    }
+  })
+  const out = await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual([out.harvested, out.lost], [{ wheat: 1 }, stuck])
+})
+
+test('farm.harvest: a harvest whose drops all came home says nothing about losses', async () => {
+  const world = { '0,64,0': 'wheat#7' }
+  const { api } = fakeApi({
+    world,
+    answers: {
+      find_blocks: args => ({ positions: String(args.block).includes('wheat') ? [{ x: 0, y: 64, z: 0 }] : [] }),
+      dig: args => { delete world[`${args.x},${args.y},${args.z}`]; return {} }
+    }
+  })
+  const out = await farmHarvest.run(api, { within: 8 })
+  assert.deepEqual([out.harvested, out.lost], [{ wheat: 1 }, undefined])
 })
 
 test('farm.harvest: a stalk is cut at the second segment, never at its base', async () => {

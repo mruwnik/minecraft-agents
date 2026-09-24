@@ -10,7 +10,7 @@ const key = c => `${c.x},${c.y},${c.z}`
 const add = (into, name) => { into[name] = (into[name] ?? 0) + 1 }
 
 export default {
-  doc: 'farm.harvest [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops',
+  doc: 'farm.harvest [within=24]: dig every ripe crop around me, replant it, cut stalks above the base and pick up the drops. harvested= counts what I cut, lost= what never reached my pockets',
   stops: 'nothing ripe left within reach, or four crops in a row it cannot walk to',
   args: { within: 'number' },
 
@@ -63,7 +63,7 @@ export default {
     }
 
     // inventoryFull / inWater: a harvest that cut 23 bamboo with no free slot used to say nothing about the 23 on the ground
-    const { inventoryFull, inWater } = await api.act('collect', { range: 10 })
+    const { inventoryFull, inWater, couldNotReach, stillLying } = await api.act('collect', { range: 10 })
 
     // every base must still stand: one that went all the same is planted again from what was just cut
     const bases = stalkReplant(cutDone.map(c => ({ stalk: c.stalk, base: [c.at.x, c.at.y, c.at.z], baseNow: nameAt(c.at) })), Object.keys(api.inv()))
@@ -81,6 +81,9 @@ export default {
       replanted,
       notReplanted: notReplanted || null,
       stillGrowing: cells.length - ripe.length,
+      // harvested counts what I CUT. A crop I dug and then could not pick up is not harvested, and saying it was sent
+      // a driver away happy from a carrot still lying in the dirt (#142): what stayed on the ground is named here.
+      lost: [couldNotReach, stillLying].filter(Boolean).join(' ') || undefined,
       unreachable: unreachable.length
         ? `${unreachable.length >= GIVE_UP ? 'gave up after 4' : unreachable.length} ripe crops I could not get to (first ${unreachable[0]}): stand nearer, or look for a fence or water in the way`
         : undefined,

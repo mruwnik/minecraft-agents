@@ -286,6 +286,26 @@ export const overMemory = heapMb => heapMb >= 800
 // items= comes as [{name, count}] or, shorter, as {name: count}
 const itemList = wanted => Array.isArray(wanted) ? wanted : Object.entries(wanted).map(([name, count]) => ({ name, count }))
 
+// `picked` used to count the drops the body WALKED TO, and walking to a drop is not picking it up: at a carrot no cell
+// could stand beside, collect answered picked=1 twice over while the carrot lay in the dirt the whole time, and
+// farm.harvest counted the same carrot as harvested because it had dug it (backlog #142). A drop is picked when it is
+// no longer on the ground; nothing else counts. The ones still lying are the half of the answer worth having, so they
+// are named where they lie, and split by which of the two things went wrong: the walk never arrived, or it arrived and
+// the drop stayed put. Those need different fixes from the driver, so they must not share one sentence.
+const SHOW = 3
+const stillLyingList = drops => `${drops.length} still lying (${[...drops.slice(0, SHOW).map(d => `${d.item} at ${d.x},${d.y},${d.z}`), ...(drops.length > SHOW ? [`and ${drops.length - SHOW} more`] : [])].join(', ')})`
+export function collectTally (tried, lying) {
+  const left = new Set(lying.map(drop => drop.id))
+  const stuck = tried.filter(drop => left.has(drop.id))
+  const noWalk = stuck.filter(drop => !drop.reached)
+  const noLift = stuck.filter(drop => drop.reached)
+  return {
+    picked: tried.length - stuck.length,
+    ...(noWalk.length ? { couldNotReach: `${stillLyingList(noWalk)}: I could not walk there. Nothing can stand beside that cell: clear a way in, or stand above it and dig down` } : {}),
+    ...(noLift.length ? { stillLying: `${stillLyingList(noLift)}: I stood on it and it did not come. Deposit or toss something, or it is stuck inside a block` } : {})
+  }
+}
+
 // collect with a full inventory walks to drops it cannot pick up: tell the driver why they stayed
 export const leftLying = (freeSlots, left, inDeepWater = []) => ({
   ...(freeSlots > 0 || !left.length ? {} : { inventoryFull: `left lying: ${[...new Set(left)].join(' ')}. Deposit or toss something first` }),
