@@ -4,7 +4,7 @@
 // fc47bf28). A frozen walk during the fetches is the body's own failure, and the answer says so, with what froze it.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { fetchFailure, stalledSince } from '../src/fetch.mjs'
+import { fetchFailure, stalledSince, fencedRefusal } from '../src/fetch.mjs'
 
 const FROZEN = { at: 1000, pos: { x: 119, y: 72, z: -66 }, advice: 'the head faces 90 degrees off the next node (119.5,72,-66.5) and the legs push into birch_fence at 119,72,-67: something else is turning the head (a lookAt in the task, or the fence nudge)' }
 
@@ -30,4 +30,18 @@ for (const [name, frozen, since, expected] of [
   ['seen the moment they began', { ...FROZEN, at: 100 }, 100, { ...FROZEN, at: 100 }]
 ]) {
   test(`stalledSince: ${name}`, () => assert.deepEqual(stalledSince(frozen, since), expected))
+}
+
+// ---------------------------------------------------------------- an animal fenced in: said before the fetches, not after three
+// Perrin's cows stood inside a small decorative fence cell inside a wheat field (card fc47bf28): the walk into the
+// pen failed quietly, the fetch loop then walked to the nearest reachable cell three times and blamed the cow
+const PEN = { enclosed: true, cells: 2 }
+for (const [name, input, expected] of [
+  ['the walk into the pen failed: fenced in, with the pen check to run', { mob: 'cow', at: '114,72,-70', pen: PEN, entered: false },
+    'the cow at 114,72,-70 stands fenced in (a 2-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=114 y=72 z=-70 names its gates), or lead from inside'],
+  ['the walk into the pen arrived: nothing to say', { mob: 'cow', at: '114,72,-70', pen: PEN, entered: true }, null],
+  ['no pen round the animal: the walk failing is the fetch loop’s business', { mob: 'cow', at: '114,72,-70', pen: null, entered: false }, null],
+  ['a leaking enclosure is no pen', { mob: 'sheep', at: '1,2,3', pen: { enclosed: false, via: '1,2,4' }, entered: false }, null]
+]) {
+  test(`fencedRefusal: ${name}`, () => assert.equal(fencedRefusal(input), expected))
 }

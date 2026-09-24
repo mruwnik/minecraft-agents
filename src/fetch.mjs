@@ -12,3 +12,13 @@ export const fetchFailure = ({ mob, frozen }) => {
   const where = `${frozen.pos.x},${frozen.pos.y},${frozen.pos.z}`
   return `I could not walk to the ${mob} (stalled at ${where} pressing forward)${frozen.advice ? `: ${frozen.advice}` : ''}`
 }
+
+// An animal that stands fenced in is not fetched at all. The walk into its pen used to fail quietly and the fetch loop
+// then walked three times to the nearest reachable cell outside the fence and blamed the animal. `entered` is whether
+// the walk to its cell arrived; `pen` is penAround's answer for that cell (enclosed pens only; a leaking one is open
+// country to a walk). The pen check names the gates, so the answer points at it rather than repeat its work.
+export const fencedRefusal = ({ mob, at, pen, entered }) => {
+  if (entered || !pen?.enclosed) return null
+  const [x, y, z] = String(at).split(',')
+  return `the ${mob} at ${at} stands fenced in (a ${pen.cells}-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=${x} y=${y} z=${z} names its gates), or lead from inside`
+}
