@@ -1,4 +1,4 @@
-// Where a walk can end. farm.build on jizo-melon-patch crept at 5 s a job (Dan, 16:52Z): every till and plant deep in the
+// Where a walk can end. farm.build on jizo-melon-patch crept at 5 s a job (reported 16:52Z): every till and plant deep in the
 // wheat asked the pathfinder for a cell within 3 of a farmland block whose every neighbour was planted, and a walk steps
 // round crops, so no node could ever satisfy the goal. A* then searched the whole 160-block radius (15-19k nodes) and gave
 // up at mineflayer-pathfinder's 5 s thinkTimeout, for every cell in turn. The goal is judged BEFORE the search: no cell to
