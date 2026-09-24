@@ -22,7 +22,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -5155,3 +5155,38 @@ test('bodyRefusal: a port answering under a dead pid file names the port and tel
   assert.match(said, /\.\/mc state/)
   assert.doesNotMatch(said, /pid null|pid undefined/)
 })
+
+// mark: a note-only mark moved an existing plan. `at = a.x === undefined ? bot.entity.position : a` sent Chani's carrot
+// patch to the feet of whoever left word on it, twice (BUGS.md 09-24 12:42Z). A mark with no x= and no map= keeps the
+// saved anchor; a mark that does move one says so, and refuses when what the plan describes still stands where it was
+const SAVED_PATCH = { name: 'chani-carrot-patch', by: 'Chani', x: 114, y: 71, z: -77, plan: '#####\n#ccc#\n##G##' }
+const HERE = { x: 111.6, y: 72, z: -69.2 }
+for (const [name, args, saved, stands, expected] of [
+  ['a new place is marked at my feet', { name: 'new' }, undefined, false, { at: { x: 111, y: 72, z: -70 } }],
+  ['a new place at the point given', { name: 'new', x: 5, y: 6, z: 7 }, undefined, false, { at: { x: 5, y: 6, z: 7 } }],
+  ['leaving word keeps the anchor wherever I stand', { name: 'p', note: 'Claude: 2 owed' }, SAVED_PATCH, true, { at: { x: 114, y: 71, z: -77 } }],
+  ['a new kind keeps the anchor too', { name: 'p', kind: 'farm' }, SAVED_PATCH, true, { at: { x: 114, y: 71, z: -77 } }],
+  ['x= at the saved spot is no move', { name: 'p', x: 114, y: 71, z: -77 }, SAVED_PATCH, true, { at: { x: 114, y: 71, z: -77 } }],
+  ['x= elsewhere, nothing built at the old spot: moved and says so', { name: 'p', x: 111, y: 71, z: -69 }, SAVED_PATCH, false,
+    { at: { x: 111, y: 71, z: -69 }, moved: '114,71,-77 -> 111,71,-69' }],
+  ['x= elsewhere with move=true over a standing build', { name: 'p', x: 111, y: 71, z: -69, move: true }, SAVED_PATCH, true,
+    { at: { x: 111, y: 71, z: -69 }, moved: '114,71,-77 -> 111,71,-69' }],
+  ['a fresh map= standing elsewhere moves it to my feet', { name: 'p', map: '###' }, SAVED_PATCH, false,
+    { at: { x: 111, y: 72, z: -70 }, moved: '114,71,-77 -> 111,72,-70' }]
+]) {
+  test(`markMove: ${name}`, () => assert.deepEqual(markMove({ saved, args, here: HERE, stands }), expected))
+}
+test('markMove: moving a plan off what still stands is refused, and says how to mean it', () => {
+  const { error } = markMove({ saved: SAVED_PATCH, args: { name: 'p', x: 111, y: 71, z: -69 }, here: HERE, stands: true })
+  assert.match(error, /114,71,-77/)
+  assert.match(error, /move=true/)
+})
+
+// the evidence: how much of what a plan describes stands at its saved anchor
+for (const [name, place, world, expected] of [
+  ['the ring stands where the plan says', RING, ringWorld(), true],
+  ['bare ground: nothing of it stands', RING, {}, false],
+  ['a plan marked 2 east of its ring does not stand there', { ...RING, x: 101 }, ringWorld(), false]
+]) {
+  test(`planStands: ${name}`, () => assert.equal(planStands(planCells(place), fakeWorld(world)), expected))
+}
