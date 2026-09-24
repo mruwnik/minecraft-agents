@@ -20,7 +20,9 @@ import farmHarvest from '../library/farm/harvest.mjs'
 import mineGet from '../library/mine/get.mjs'
 import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, INVITE_WORDS, codeVersion,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import apiaryHarvest from '../library/apiary/harvest.mjs'
+import apiaryMaintain from '../library/apiary/maintain.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion,  terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -4682,3 +4684,70 @@ test('planAnchor: what stands on a cell still outweighs the ground under it', ()
   }
   assert.equal(planAnchor(patchCells('ccc', 1, 72, 0), anchorWorld(world)).off, 1)
 })
+
+// ---------------------------------------------------------------- ownership at the choke point
+// One rule is only one rule if every writer asks it. api.plan() is the choke point for the plan-driven composites, and
+// the apiary and flock ones resolve through placeTarget, which apiary.inspect shares - so a gate THERE would zone-deny
+// a reading action, which is the other half of #144. They ask for themselves, and this table is what keeps a new
+// place= writer from quietly skipping it.
+for (const [name, places, asked, me, allowed] of [
+  ['a place nobody marked', [], 'chani-wheat-field', 'Claude', true],
+  ['no place asked for at all', [{ name: 'x', by: 'Chani', note: 'mine' }], undefined, 'Claude', true],
+  ['somebody else, note silent', [{ name: 'x', by: 'Chani', note: 'carrots' }], 'x', 'Claude', false],
+  ['somebody else, note invites', [{ name: 'x', by: 'Chani', note: 'anyone welcome' }], 'x', 'Claude', true],
+  ['my own', [{ name: 'x', by: 'Claude', note: 'carrots' }], 'x', 'Claude', true]
+]) {
+  test(`placeRefusal: ${name}`, () => assert.equal(placeRefusal(places, asked, me) === null, allowed))
+}
+
+test('flock.lead: somebody else’s pen with a silent note is refused before a step is taken', async () => {
+  const { api, calls } = fakeApi({ places: [{ name: 'chani-sheep-pen', by: 'Chani', kind: 'pen', note: 'sheep, 9x9', x: 10, y: 64, z: 10 }] })
+  await assert.rejects(flockLead.run(api, { mob: 'sheep', place: 'chani-sheep-pen' }), /chani-sheep-pen is Chani's ground/)
+  assert.deepEqual(calls, [])
+})
+
+test('apiary.harvest: somebody else’s apiary with a silent note is refused before a hive is read', async () => {
+  const { api, calls } = fakeApi({ places: [{ name: 'mariel-apiary', by: 'Mariel', kind: 'apiary', note: 'natural colony, 3 hives', x: 10, y: 64, z: 10 }] })
+  await assert.rejects(apiaryHarvest.run(api, { place: 'mariel-apiary' }), /mariel-apiary is Mariel's ground/)
+  assert.deepEqual(calls, [])
+})
+
+test('routine: a days-long round on somebody else\u2019s ground stops before day one', async () => {
+  const { api, calls } = fakeApi({ places: [{ name: 'chani-carrot-patch', by: 'Chani', kind: 'farm', note: 'carrots, 7x7', x: 10, y: 64, z: 10 }] })
+  await assert.rejects(routine.run(api, { steps: [{ action: 'farm.tidy' }], place: 'chani-carrot-patch', days: 3 }), /chani-carrot-patch is Chani's ground/)
+  assert.deepEqual(calls, [])
+})
+
+test('apiary.maintain: somebody else\u2019s apiary is refused before its hives are even read', async () => {
+  const { api, calls } = fakeApi({ places: [{ name: 'mariel-apiary', by: 'Mariel', kind: 'apiary', note: 'natural colony, 3 hives', x: 10, y: 64, z: 10 }] })
+  await assert.rejects(apiaryMaintain.run(api, { place: 'mariel-apiary' }), /mariel-apiary is Mariel's ground/)
+  assert.deepEqual(calls, [])
+})
+
+// Every composite that takes place= and CHANGES the world asks the one question, in its own source or in something it
+// imports (farm.build asks through src/builder.mjs, which resolves the plan for it). The read-only two must ask
+// nothing at all: a body that may not look at a farm cannot plan work on it. A new place= writer lands here first.
+const READ_ONLY_COMPOSITES = ['apiary/inspect.mjs', 'farm/fields.mjs']
+const ASKS_OWNERSHIP = /workRefusal|placeRefusal|api\.plan\(/
+const libraryDir = path.join(import.meta.dirname, '..', 'library')
+const everyComposite = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+  entry.isDirectory()
+    ? (entry.name === 'shared' ? [] : everyComposite(path.join(dir, entry.name)))
+    : (entry.name.endsWith('.mjs') ? [path.join(dir, entry.name)] : []))
+// one level of its own imports, but never src/lib.mjs: the helper is DEFINED there, so following it would let every
+// composite pass by importing anything at all
+const withItsImports = file => {
+  const source = fs.readFileSync(file, 'utf8')
+  const local = [...source.matchAll(/^import .*? from '(\.[^']+)'/gm)].map(m => path.resolve(path.dirname(file), m[1]))
+  return [source, ...local.filter(at => !at.endsWith('src/lib.mjs') && fs.existsSync(at)).map(at => fs.readFileSync(at, 'utf8'))].join('\n')
+}
+
+for (const file of everyComposite(libraryDir)) {
+  const mod = await import(file)
+  if (!('place' in (mod.default?.args ?? {}))) continue
+  const named = path.relative(libraryDir, file)
+  const readOnly = READ_ONLY_COMPOSITES.includes(named)
+  test(`${named} takes place= and ${readOnly ? 'only reads: it asks no owner' : 'writes: it asks the owner'}`, () => {
+    assert.equal(ASKS_OWNERSHIP.test(withItsImports(file)), !readOnly)
+  })
+}

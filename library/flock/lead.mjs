@@ -1,6 +1,6 @@
 // Walk animals to a spot with their food in my hand. The walk itself is `escort`; what this decides is where the spot is,
 // whether it is a spot at all, whether a gate stands open that would let the pen empty while I am away, and who is inside at the end.
-import { BREEDING_FOOD, breedingFood, leadTargetError, gateLeak, placeTarget } from '../../src/lib.mjs'
+import { BREEDING_FOOD, breedingFood, leadTargetError, gateLeak, placeTarget, placeRefusal } from '../../src/lib.mjs'
 
 const given = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
 
@@ -10,6 +10,10 @@ export default {
   args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number' },
 
   async run (api, a) {
+    // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
+    // never theirs to walk into. The decisive answer goes first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot lead ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
     const food = breedingFood(a.mob, Object.keys(api.inv()))
     if (!food) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)

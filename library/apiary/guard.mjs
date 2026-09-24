@@ -5,6 +5,7 @@
 // is already covered.
 import { apiaryFires, carpetCarried } from './shared/common.mjs'
 import { campfireCarried, CAMPFIRE_RECIPE } from './shared/hive.mjs'
+import { placeRefusal } from '../../src/lib.mjs'
 
 const at = f => `${f.x},${f.y},${f.z}`
 const isCarpet = name => /_carpet$/.test(String(name))
@@ -26,6 +27,10 @@ export default {
   args: { place: 'string', x: 'number', y: 'number', z: 'number', range: 'number' },
 
   async run (api, a) {
+    // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
+    // never theirs to walk into. The decisive answer goes first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     const first = await apiaryFires(api, a, 'apiary.guard')
     const raised = first.filter(f => f.lit && !f.sunk)
     const campfire = campfireCarried(api.inv())

@@ -2,6 +2,7 @@
 // honey level fell after every click, and collects the comb that shears drop.
 import { apiarySnapshot } from './shared/common.mjs'
 import { apiaryCensus, hiveState } from './shared/hive.mjs'
+import { placeRefusal } from '../../src/lib.mjs'
 
 export default {
   doc: 'apiary.harvest place=|x= y= z= [mode=comb] [range=16]: safely harvest ripe, smoked hives with shears or bottles',
@@ -9,6 +10,10 @@ export default {
   args: { place: 'string', x: 'number', y: 'number', z: 'number', mode: 'string', range: 'number' },
 
   async run (api, a) {
+    // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
+    // never theirs to walk into. The decisive answer goes first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     const mode = a.mode ?? 'comb'
     if (!['comb', 'bottle'].includes(mode)) throw new Error('mode= is comb or bottle')
     const item = mode === 'comb' ? 'shears' : 'glass_bottle'

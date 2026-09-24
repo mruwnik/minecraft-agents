@@ -1,5 +1,5 @@
 // Bees take flowers, but are not a flock: no gate, pen floor or ground escort is involved.
-import { BEE_FLOWERS, creatureFood } from '../../src/lib.mjs'
+import { BEE_FLOWERS, creatureFood, placeRefusal } from '../../src/lib.mjs'
 import { apiarySnapshot } from './shared/common.mjs'
 
 export default {
@@ -8,6 +8,10 @@ export default {
   args: { place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', range: 'number' },
 
   async run (api, a) {
+    // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
+    // never theirs to walk into. The decisive answer goes first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     const flower = creatureFood('bee', Object.keys(api.inv()))
     if (!flower) throw new Error(`a bee eats a flower: carry one of ${BEE_FLOWERS.join(', ')}`)
     const seen = await apiarySnapshot(api, a, 'apiary.breed')

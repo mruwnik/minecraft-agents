@@ -1,6 +1,6 @@
 // Put a breeding pair in a pen: count who is in it already, fetch only what is still needed, shut the gate behind them
 // and say who is in at the end. Leading is `flock.lead`'s job; what this decides is how many to fetch and whether it worked.
-import { BREEDING_FOOD, breedingFood, insideCount, outOfSight, pairPlan, placeTarget } from '../../src/lib.mjs'
+import { BREEDING_FOOD, breedingFood, insideCount, outOfSight, pairPlan, placeTarget, placeRefusal } from '../../src/lib.mjs'
 import { penHolds } from '../../src/pens.mjs'
 
 const given = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
@@ -11,6 +11,10 @@ export default {
   args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number', until: 'number' },
 
   async run (api, a) {
+    // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
+    // never theirs to walk into. The decisive answer goes first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     // empty-handed is worth knowing before the walk, not after it: nothing follows a bare hand
     if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot lead ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
     if (!breedingFood(a.mob, Object.keys(api.inv()))) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)

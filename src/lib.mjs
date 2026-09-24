@@ -162,6 +162,14 @@ export function workRefusal (place, me) {
   return `${place.name} is ${place.by}'s ground and the note on it does not invite work: "${place.note ?? ''}". Ask ${place.by} in chat and leave it alone until they answer. It opens by itself when the note says one of: ${INVITE_WORDS.join(', ')}`
 }
 
+// the same question asked by name, for the composites that resolve a place through placeTarget rather than api.plan:
+// apiary.inspect shares that resolver and only READS, so the gate cannot live in it (#144) and its writing siblings
+// ask here instead. No place asked for, or a name nobody has marked, is nobody's ground and nobody's business.
+export const placeRefusal = (places, name, me) => {
+  const place = name ? (places ?? []).find(p => p.name === name) : null
+  return place ? workRefusal(place, me) : null
+}
+
 export function describePlaces (places, from, options = {}) {
   const { limit = 12, notes = true } = options
   const dist = awayFrom(from)

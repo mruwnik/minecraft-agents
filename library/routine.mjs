@@ -2,7 +2,7 @@
 // `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
 import fs from 'node:fs'
 import path from 'node:path'
-import { routineSteps } from '../src/lib.mjs'
+import { routineSteps, placeRefusal } from '../src/lib.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
 const readRole = name => {
@@ -18,6 +18,10 @@ export default {
   async run (api, a) {
     const { steps, error } = routineSteps(a, readRole)
     if (error) throw new Error(error)
+    // every step would refuse on its own, but a routine is days long: it stops before day one rather than failing the
+    // same way once a round for three days (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     const summary = { days: 0, ran: 0 }
 
     const day = async () => {

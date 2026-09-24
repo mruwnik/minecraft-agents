@@ -3,6 +3,7 @@
 import { apiaryGoods } from '../../src/lib.mjs'
 import { carpetCarried } from './shared/common.mjs'
 import { campfireCarried, replaceCensus } from './shared/hive.mjs'
+import { placeRefusal } from '../../src/lib.mjs'
 
 export default {
   doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary',
@@ -10,6 +11,10 @@ export default {
   args: { place: 'string!', size: 'number', mode: 'string', breed: 'boolean', deposit: 'boolean', range: 'number', until: 'number' },
 
   async run (api, a) {
+    // its own steps would each refuse, but a round that stops after reading somebody's hives has already walked there:
+    // ask once, first (#144)
+    const refusal = placeRefusal(api.places(), a.place, api.me?.())
+    if (refusal) throw new Error(refusal)
     const summary = { harvested: 0, bred: 0 }
     const inspect = await api.act('apiary.inspect', { place: a.place, range: a.range })
     // forwarded whole rather than picked apart, so the round's line says exactly what the inspect said - including the
