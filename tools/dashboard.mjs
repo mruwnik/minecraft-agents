@@ -11,7 +11,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from './dashboard/lib.mjs'
-import { mergeBodies, danSighting, parsePlan } from './dashboard/map.mjs'
+import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
@@ -20,7 +20,6 @@ const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
 const SRC_DIR = path.join(ROOT, 'src')
 const PORT = Number(process.env.PORT ?? 3700)
-const DAN = process.env.DAN_NAME ?? 'mruwnik'
 const POLL_MS = 2000
 const LOOK_FILE = 'dashboard-look.png'
 const CHAT_TAIL_BYTES = 64 * 1024
@@ -71,6 +70,8 @@ const ask = (port, action, args, timeoutMs) => new Promise(resolve => {
 
 const polls = {}
 let agents = []
+// the names the agents play under: any other player some body sees, or any other speaker in chat, is a human
+const agentNames = () => [...new Set(agents.flatMap(a => [a.name, a.username]))]
 
 const pollOnce = async () => {
   agents = readAgents()
@@ -87,9 +88,9 @@ const snapshot = () => {
   const bodies = mergeBodies(agents, polls)
   return {
     at: Date.now(),
-    dan: DAN,
+    agents: agentNames(),
     bodies,
-    danAt: danSighting(bodies, DAN),
+    humans: humanSightings(bodies, agentNames()),
     places: readJson(path.join(ROOT, 'state', 'places.json'), []),
     zones: readJson(path.join(ROOT, 'state', 'zones.json'), [])
   }
@@ -205,7 +206,7 @@ const renderPage = async query => {
   const farm = query.get('farm')
   const view = query.get('view')
   const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
-  const chat = { at: Date.now(), dan: DAN, messages: chatLog(CHAT_PAGE_LINES) }
+  const chat = { at: Date.now(), agents: agentNames(), messages: chatLog(CHAT_PAGE_LINES) }
   const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm) : null
   const preload = `<script>window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
@@ -220,7 +221,7 @@ const handlers = {
     return sendJson(res, answer.error ? 404 : 200, answer)
   },
   state: (res) => sendJson(res, 200, snapshot()),
-  chat: (res, query) => sendJson(res, 200, { at: Date.now(), dan: DAN, messages: chatLog(chatLimit(query.get('limit'))) }),
+  chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
   unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state, /api/chat?limit=200, /api/world?place=<name> or /api/look/<Name>' })

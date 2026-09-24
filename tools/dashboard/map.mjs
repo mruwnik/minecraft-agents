@@ -14,23 +14,29 @@ export const mergeBodies = (agents, polls) => agents.map(agent => {
   return { ...agent, up: true, error: null, state: poll.state, at: poll.at ?? null }
 })
 
-const seenAt = (body, who) => {
-  const p = body.up ? body.state?.players?.[who] : null
-  if (!p || typeof p !== 'object') return null
-  return { x: p.x, y: p.y, z: p.z, seenBy: body.name, at: body.at ?? 0 }
+// every player a body can see, with the body's own name so the freshest sighting can be told; `state` says
+// 'out of sight' for a player it knows of but cannot see, and such a player is not a sighting
+const sightings = body => Object.entries(body.up ? body.state?.players ?? {} : {})
+  .filter(([, p]) => p && typeof p === 'object')
+  .map(([name, p]) => ({ name, x: p.x, y: p.y, z: p.z, seenBy: body.name, at: body.at ?? 0 }))
+
+// The humans in the world: every player some body can see whose name is not an agent's (the bodies list each other
+// too). One entry per human, at the freshest sighting, sorted by name.
+export const humanSightings = (bodies, agentNames) => {
+  const agents = new Set(agentNames)
+  const freshest = new Map()
+  bodies.flatMap(sightings)
+    .filter(s => !agents.has(s.name))
+    .sort((a, b) => b.at - a.at)
+    .forEach(s => { if (!freshest.has(s.name)) freshest.set(s.name, s) })
+  return [...freshest.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Dan shows on the map only while some body can see him; `state` says 'out of sight' for a player it cannot.
-export const danSighting = (bodies, who) => bodies
-  .map(b => seenAt(b, who))
-  .filter(Boolean)
-  .sort((a, b) => b.at - a.at)[0] ?? null
-
-export const mapPoints = (bodies, places, zones, dan) => [
+export const mapPoints = (bodies, places, zones, humans) => [
   ...bodies.filter(b => b.up && b.state?.pos).map(b => ({ x: b.state.pos.x, z: b.state.pos.z })),
   ...places.map(p => ({ x: p.x, z: p.z })),
   ...zones.flatMap(z => [{ x: z.x1, z: z.z1 }, { x: z.x2, z: z.z2 }]),
-  ...(dan ? [{ x: dan.x, z: dan.z }] : [])
+  ...humans.map(h => ({ x: h.x, z: h.z }))
 ]
 
 export const worldBounds = (points, pad = 16) => {

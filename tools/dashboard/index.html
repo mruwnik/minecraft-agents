@@ -7,7 +7,7 @@
 <style>
   :root {
     --bg: #14171c; --panel: #1c2027; --line: #2c333d; --ink: #dfe4ec; --dim: #8b95a5;
-    --up: #6ee7a8; --down: #55606f; --dan: #f08ad0; --place: #d9b25f; --zone: #5b8fd6;
+    --up: #6ee7a8; --down: #55606f; --human: #f08ad0; --place: #d9b25f; --zone: #5b8fd6;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -44,8 +44,8 @@
   .msg.whisper { color: var(--dim); font-style: italic; }
   .msg.whisper .who { font-weight: 500; }
   .msg .muted { color: var(--dim); font-weight: 400; }
-  .msg.dan { background: rgba(240,138,208,0.10); }
-  .msg.dan .text { color: #fff; }
+  .msg.human { background: rgba(240,138,208,0.10); }
+  .msg.human .text { color: #fff; }
   #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
@@ -67,7 +67,7 @@
   #planOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
   #planOverlay[hidden] { display: none; }
   /* 1080px covers a grid up to ~40 columns (22px/cell) plus the legend beside it and the card's own padding -
-     wide enough that the side layout holds for any plan Dan is likely to draw, not just the small ones.
+     wide enough that the side layout holds for any plan anyone is likely to draw, not just the small ones.
      scrollbar-gutter reserves the scrollbar's width up front: without it, a tall plan's vertical scrollbar only
      shows up after the fit-content width is already chosen, stealing back just enough space to wrap the legend
      below the grid anyway - the exact failure this rule exists to prevent. */
@@ -178,10 +178,10 @@ const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
 const el = id => document.getElementById(id)
 
-let snap = { bodies: [], places: [], zones: [], danAt: null, dan: 'mruwnik' }
+let snap = { bodies: [], places: [], zones: [], humans: [], agents: [] }
 let view = null          // {scale, originX, originZ} in CSS pixels
-let follow = true        // until Dan pans or zooms, a resize refits the map instead of cropping it
-let scope = 'bodies'     // what the fit is around: the bodies (and Dan), or every place and zone as well
+let follow = true        // until the viewer pans or zooms, a resize refits the map instead of cropping it
+let scope = 'bodies'     // what the fit is around: the bodies (and the humans), or every place and zone as well
 let selected = null
 let hover = null
 const size = { w: 0, h: 0 }
@@ -204,7 +204,7 @@ window.addEventListener('resize', resize)
 // the default fit is around the bodies themselves, with 96 blocks of ground round them.
 const refit = () => {
   const wide = scope === 'all'
-  const points = mapPoints(snap.bodies, wide ? snap.places : [], wide ? snap.zones : [], snap.danAt)
+  const points = mapPoints(snap.bodies, wide ? snap.places : [], wide ? snap.zones : [], snap.humans)
   view = fitView(worldBounds(points, wide ? 24 : 96), size.w - 80, size.h - 80)
   if (!view) return
   view.originX -= 40 / view.scale
@@ -311,9 +311,9 @@ const drawBodies = () => bodyDots().map(({ body, px, py }) => {
   return { text: body.name, px: px - 8, py: py - 12, w: w + 8, h: 26 }
 })
 
-const drawDan = () => {
-  if (!snap.danAt) return []
-  const { px, py } = project(view, snap.danAt.x, snap.danAt.z)
+// the humans (every player in sight who is not an agent) are pink diamonds, one each, named
+const drawHumans = () => snap.humans.map(human => {
+  const { px, py } = project(view, human.x, human.z)
   ctx.fillStyle = '#f08ad0'
   ctx.beginPath()
   ctx.moveTo(px, py - 7); ctx.lineTo(px + 7, py); ctx.lineTo(px, py + 7); ctx.lineTo(px - 7, py)
@@ -321,9 +321,9 @@ const drawDan = () => {
   ctx.strokeStyle = '#14171c'; ctx.lineWidth = 2; ctx.stroke()
   ctx.fillStyle = '#f08ad0'
   ctx.font = '11px ui-monospace, monospace'
-  ctx.fillText(snap.dan, px + 10, py + 4)
-  return [{ text: snap.dan, px: px - 8, py: py - 10, w: ctx.measureText(snap.dan).width + 22, h: 20 }]
-}
+  ctx.fillText(human.name, px + 10, py + 4)
+  return { text: human.name, px: px - 8, py: py - 10, w: ctx.measureText(human.name).width + 22, h: 20 }
+})
 
 const draw = () => {
   ctx.fillStyle = '#14171c'
@@ -339,10 +339,10 @@ const draw = () => {
   drawFootprints()
   const zones = drawZones()
   const places = drawPlaces()
-  const dan = drawDan()
+  const humans = drawHumans()
   const bodies = drawBodies()
   // offered in the order that decides who keeps their name when two would overlap
-  drawLabels([...bodies, ...dan, ...places, ...zones])
+  drawLabels([...bodies, ...humans, ...places, ...zones])
 }
 
 // ---------------------------------------------------------------- panning, zooming, picking
@@ -692,10 +692,11 @@ const remember = (key, on) => {
   try { localStorage.setItem(key, on ? '1' : '0') } catch {}
 }
 
-// a stable colour per speaker: Dan is the pink the map marks him with, everyone else picks from a palette by name
+// a stable colour per speaker: a human is the pink the map marks them with, an agent picks from a palette by name
 const SPEAKER_COLOURS = ['#6ee7a8', '#7fb8ff', '#f5c76a', '#c39bff', '#ff9f7a', '#5fd8d8', '#d9e36e', '#ff85a1', '#9fd3ff', '#b5e07a']
 const hashName = name => [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7)
-const speakerColour = name => name === snap.dan ? '#f08ad0' : SPEAKER_COLOURS[hashName(name) % SPEAKER_COLOURS.length]
+const isHuman = name => !snap.agents.includes(name)
+const speakerColour = name => isHuman(name) ? '#f08ad0' : SPEAKER_COLOURS[hashName(name) % SPEAKER_COLOURS.length]
 
 const clock = t => t.slice(11, 19)
 
@@ -704,7 +705,7 @@ let chatShown = ''   // what the list currently holds, so a poll that changed no
 
 const msgRow = m => {
   const row = document.createElement('div')
-  row.className = `msg ${m.kind}${m.from === snap.dan ? ' dan' : ''}`
+  row.className = `msg ${m.kind}${isHuman(m.from) ? ' human' : ''}`
   row.title = `${m.t}${m.to ? ` · whispered to ${m.to}` : ''}`
   const who = tag('span', 'who', m.from)
   who.style.color = speakerColour(m.from)
@@ -789,7 +790,7 @@ const refresh = () => fetch('/api/state')
 // very first paint instead of racing the /api/state fetch below - the property a headless screenshot needs
 if (VIEWS.includes(window.__PRELOAD_VIEW__)) planView = window.__PRELOAD_VIEW__
 if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__, window.__PRELOAD_WORLD__)
-if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, dan: chatLast.dan }; renderChat() }
+if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, agents: chatLast.agents }; renderChat() }
 
 resize()
 refresh()

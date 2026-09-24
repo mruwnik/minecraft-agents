@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, danSighting, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
@@ -62,38 +62,47 @@ test('mergeBodies: every agent gets a row, in the order given', () => {
   assert.deepEqual(mergeBodies(agents, {}).map(b => b.name), ['Claude', 'Perrin'])
 })
 
-// ---------------------------------------------------------------- where Dan is
+// ---------------------------------------------------------------- where the humans are
+// a body's `state` lists every player it knows of, agents included: a human is any of them whose name is no agent's
 const seer = (name, players, at) => ({ name, up: true, at, state: { ...claudeState, players } })
+const agentNames = ['Claude', 'Chani']
 
-test('danSighting: the freshest body that can see him wins', () => {
-  assert.deepEqual(danSighting([
-    seer('Claude', { mruwnik: { x: 1, y: 65, z: 2 } }, 1000),
-    seer('Chani', { mruwnik: { x: 3, y: 66, z: 4 } }, 2000)
-  ], 'mruwnik'), { x: 3, y: 66, z: 4, seenBy: 'Chani', at: 2000 })
+test('humanSightings: one entry per human, at the freshest sighting', () => {
+  assert.deepEqual(humanSightings([
+    seer('Claude', { Steve: { x: 1, y: 65, z: 2 }, Chani: { x: 9, y: 65, z: 9 } }, 1000),
+    seer('Chani', { Steve: { x: 3, y: 66, z: 4 }, Alex: { x: 5, y: 66, z: 6 } }, 2000)
+  ], agentNames), [
+    { name: 'Alex', x: 5, y: 66, z: 6, seenBy: 'Chani', at: 2000 },
+    { name: 'Steve', x: 3, y: 66, z: 4, seenBy: 'Chani', at: 2000 }
+  ])
+})
+
+test('humanSightings: an agent seen by another agent is not a human', () => {
+  assert.deepEqual(humanSightings([seer('Claude', { Chani: { x: 1, y: 65, z: 2 } }, 1000)], agentNames), [])
 })
 
 const blind = [
-  ['nobody lists him', [seer('Claude', { Chani: { x: 1, y: 65, z: 2 } }, 1000)]],
-  ['he is out of sight', [seer('Claude', { mruwnik: 'out of sight' }, 1000)]],
-  ['the only body that sees him is down', [{ name: 'Claude', up: false, at: 1, state: null }]],
+  ['nobody lists anyone', [seer('Claude', {}, 1000)]],
+  ['the only human is out of sight', [seer('Claude', { Steve: 'out of sight' }, 1000)]],
+  ['the only body that sees one is down', [{ name: 'Claude', up: false, at: 1, state: null }]],
   ['there are no bodies', []]
 ]
-blind.forEach(([why, bodies]) => test(`danSighting: null when ${why}`, () => {
-  assert.equal(danSighting(bodies, 'mruwnik'), null)
+blind.forEach(([why, bodies]) => test(`humanSightings: nobody when ${why}`, () => {
+  assert.deepEqual(humanSightings(bodies, agentNames), [])
 }))
 
 // ---------------------------------------------------------------- the map
 const places = [{ name: 'hut', x: 116, y: 69, z: -141 }]
 const zones = [{ name: 'pen', x1: 100, y1: 60, z1: -150, x2: 110, y2: 70, z2: -140 }]
 
-test('mapPoints: every body, place and zone corner is a point to fit', () => {
-  assert.deepEqual(mapPoints([seer('Claude', {}, 1)], places, zones, { x: 0, y: 64, z: 0 }), [
+test('mapPoints: every body, place, zone corner and human is a point to fit', () => {
+  assert.deepEqual(mapPoints([seer('Claude', {}, 1)], places, zones, [{ name: 'Steve', x: 0, y: 64, z: 0 }]), [
     { x: 60.5, z: -151.6 }, { x: 116, z: -141 }, { x: 100, z: -150 }, { x: 110, z: -140 }, { x: 0, z: 0 }
   ])
 })
 
-test('mapPoints: a body that is down contributes nothing, and Dan may be missing', () => {
-  assert.deepEqual(mapPoints([{ name: 'Perrin', up: false, state: null }], [], [], null), [])
+test('mapPoints: a body that is down contributes nothing, and there may be no humans', () => {
+  assert.deepEqual(mapPoints([{ name: 'Perrin', up: false, state: null }], [], [], []), [])
 })
 
 test('worldBounds: the box around the points, padded', () => {
@@ -165,7 +174,7 @@ test('onCanvas: a mark just inside the margin is drawn', () => {
 })
 
 // ---------------------------------------------------------------- serving files and routes
-const home = '/home/dan/minecraft/claude/bot/state/agents/Claude'
+const home = '/srv/bots/state/agents/Claude'
 
 test('snapshotFile: a look answer resolves under the body home', () => {
   assert.equal(snapshotFile(home, 'snapshots/look-009.png'), path.join(home, 'snapshots/look-009.png'))
@@ -310,7 +319,7 @@ hits.forEach(([why, x, z, expected]) => test(`hitPlan: ${why}`, () => {
 const said = (t, from, message, type = 'chat') => ({ seq: 1, t, type, from, message })
 const heard = (agent, ...lines) => ({ agent, lines })
 const hello = said('2026-09-24T16:36:49.053Z', 'Jizo', 'hello all')
-const reply = said('2026-09-24T16:36:52.100Z', 'mruwnik', 'hi Jizo')
+const reply = said('2026-09-24T16:36:52.100Z', 'Steve', 'hi Jizo')
 
 test('mergeChat: a chat heard by three bodies is one line', () => {
   assert.deepEqual(mergeChat([heard('Chani', hello), heard('Perrin', hello), heard('Mariel', hello)], 200), [
@@ -342,7 +351,7 @@ test('mergeChat: the same words whispered to two bodies are two lines', () => {
 })
 
 test('mergeChat: lines are ordered by time across files, whatever order the files came in', () => {
-  assert.deepEqual(mergeChat([heard('Chani', reply), heard('Perrin', hello, reply)], 200).map(m => m.from), ['Jizo', 'mruwnik'])
+  assert.deepEqual(mergeChat([heard('Chani', reply), heard('Perrin', hello, reply)], 200).map(m => m.from), ['Jizo', 'Steve'])
 })
 
 test('mergeChat: only the last `limit` lines survive, and those are the newest', () => {
