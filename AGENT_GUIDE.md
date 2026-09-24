@@ -250,11 +250,24 @@ and `roles/<role>/*.json` are the routines it ships. The current roles are `farm
   `flee_held`, when the same mob drove it off again within a minute of the last walk back (the walk back was feeding a
   loop, so this run does not come home). After either, that mob starts no new run for fifteen seconds and the body
   will FIGHT it instead if it can, because standing still is worse. `stop` always clears a flee.
+  At night the run is different: it heads for a bed or a placed torch that lies away from the mob rather than straight
+  into the dark, and it stops (`flee_stuck`) 20 blocks from where it began instead of running on. Mid-run the threat is
+  whatever last hit the body (`fleeing note=hit by a spider mid-run`), and an armed body turns and fights what it cannot
+  outrun (a spider, a phantom) instead of running from it.
+- **Under a roof at night, the body stays in.** Roofed, or walled in with at most a doorway open, after dark it chases
+  nothing out of the door and charges no archer: a mob in reach is swung at from where it stands, a skeleton shooting
+  through a gap gets the gap plugged with a block from the pack (event `holding`, with `plugged=` when it did, else
+  the note says to step out of its line of sight). It does not run out either, unless the mob is in the room with it.
 - **With nothing left to eat, the body goes to ground by itself.** At food 0 with no food carried, at night or with a mob
   in reach, or at health 6 or less with nothing to eat (it cannot heal), or when a run is boxed in (`flee_stuck`), it
-  reads the three cells under its feet, digs down three and caps the shaft over its head (`holing_up`, then `holed_up`
-  with `at=` and the command that brings it back up). A floor over a cave, water or lava is not dug: it walls itself in
-  where it stands instead. A run that is heading four blocks down or into an unlit cave stops rather than go in. A body
+  reads the three cells under its feet and the four beside each of them, digs down three and caps the shaft over its
+  head with a full solid block (`holing_up`, then `holed_up` with `at=` and the command that brings it back up). A
+  column over a cave, water or lava, or with water or lava beside it (a farm channel pours into the shaft), is not dug:
+  it steps to the nearest sound cell within two and digs there (`holing_up step=`), or with three blocks in the pack
+  pillars up three instead (`way=pillar`), and only with neither walls itself in where it stands. A shaft that fills
+  with water anyway is left uncapped and reported `holed_up wet=true`. A body armed with a creeper within four steps
+  away from it rather than dig or stand (`holing_up way=step`); with any other hostile in reach it fights instead.
+  A run that is heading four blocks down or into an unlit cave stops rather than go in. A body
   that respawns at night beside a hostile does the same at once instead of fleeing across open ground, and one that
   respawns at night with nothing near sleeps in the nearest bed. It stays down (no bedtime walk) until morning.
 - **The fight reflex is on a leash.** A mob that walks the body more than 8 blocks from where the fight started, or more
