@@ -565,6 +565,12 @@ export const HOLE_DEPTH = 3
 export const HOLE_HEALTH = 6
 // what must not be under the feet before digging down: the cave, the lava and the water this is meant to avoid
 export const HOLE_UNSAFE = new Set(['air', 'cave_air', 'void_air', 'water', 'flowing_water', 'lava', 'flowing_lava', 'bubble_column'])
+// A hole takes seconds to dig and the hands are busy the whole time: with a hostile in reach that is standing still to be
+// killed (my body, 13:40Z: dug under two zombies and a skeleton and died at the bottom). An armed body fights instead;
+// an unarmed one has nothing better than the ground
+export const HOLE_MELEE = 4
+export const holeUpRefusal = ({ armed, hostileDist }) => armed && hostileDist <= HOLE_MELEE ? 'fight' : null
+
 export function holeUpVerdict ({ food = 20, hasFood = true, health = 20, night = false, mobNear = false, stuck = false } = {}) {
   if (stuck) return { why: 'the run is boxed in and there is nowhere to run to' }
   // a full pack is auto-eat's business, however low the food bar is
