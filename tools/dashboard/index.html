@@ -44,9 +44,12 @@
   #planCard .planHead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
   #planCard h3 { margin: 0; font-size: 13px; letter-spacing: .03em; color: var(--place); }
   #planMeta { color: var(--dim); margin-bottom: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  #planCanvas { display: block; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; }
-  #planLegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; color: var(--ink); font-size: 11px; }
-  .legendItem { display: inline-flex; align-items: center; gap: 5px; }
+  #planCanvas { display: block; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; flex: none; }
+  /* the legend is a column beside the grid, not a row under it - it only drops below when the card is too
+     narrow to fit both side by side (a small window, or a very wide plan) */
+  #planGridRow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+  #planLegend { display: flex; flex-direction: column; gap: 6px; color: var(--ink); font-size: 11px; padding-top: 2px; }
+  .legendItem { display: flex; align-items: center; gap: 5px; }
   .legendSwatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.18); flex: none; }
 </style>
 </head>
@@ -96,8 +99,10 @@
       <button id="planClose">close ×</button>
     </div>
     <div id="planMeta"></div>
-    <canvas id="planCanvas"></canvas>
-    <div id="planLegend"></div>
+    <div id="planGridRow">
+      <canvas id="planCanvas"></canvas>
+      <div id="planLegend"></div>
+    </div>
   </div>
 </div>
 <script type="module">
