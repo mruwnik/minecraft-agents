@@ -1,6 +1,7 @@
 // The node-side pure helpers behind tools/dashboard.mjs: reading the agent folders, deciding which file a look may
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
+import { parsePlan } from '../../src/lib.mjs'
 
 const parseConfig = text => {
   try {
@@ -46,6 +47,7 @@ export const route = url => {
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/api/state') return { kind: 'state' }
   if (pathname === '/api/chat') return { kind: 'chat' }
+  if (pathname === '/api/world') return { kind: 'world' }
   if (pathname === '/map.mjs') return { kind: 'script' }
   const srclib = SRCLIB.exec(pathname)
   if (srclib) return { kind: 'srclib', name: srclib[1] }
@@ -95,4 +97,60 @@ export const chatLimit = raw => {
   const n = Number(raw)
   if (!Number.isInteger(n) || n <= 0) return CHAT_LIMIT
   return Math.min(n, CHAT_CAP)
+}
+
+// ---------------------------------------------------------------- what stands on a plan's footprint
+// A body's `scan` answers ASCII (renderScan in src/lib.mjs): a header naming the x range, a ruler, then per level
+// "y=N" and one row per z ("<z> <one symbol per x>"), or "y=N all air", and last a legend "s=name g=name". Air is
+// '.', every other block gets a symbol of its own per answer, so the legend is read off the answer, not a table.
+// The z range is taken from the rows, or from `box` when every level came back all air and there are no rows.
+const SCAN_HEAD = /^x (-?\d+)\.\.(-?\d+) across/
+const SCAN_LEVEL = /^y=(-?\d+)( all air)?$/
+const SCAN_ROW = /^\s*(-?\d+) (\S+)$/
+const range = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => Math.min(a, b) + i)
+
+export const parseScan = (text, box = null) => {
+  const lines = String(text ?? '').split('\n')
+  const head = SCAN_HEAD.exec(lines[0] ?? '')
+  if (!head || lines.length < 3) return []
+  const xs = range(Number(head[1]), Number(head[2]))
+  const legend = new Map([['.', 'air'], ...[...lines.at(-1).matchAll(/(\S)=(\S+)/g)].map(m => [m[1], m[2]])])
+  const levels = []
+  lines.slice(2, -1).forEach(line => {
+    const level = SCAN_LEVEL.exec(line)
+    if (level) { levels.push({ y: Number(level[1]), allAir: Boolean(level[2]), rows: [] }); return }
+    const row = SCAN_ROW.exec(line)
+    if (row && levels.length) levels.at(-1).rows.push({ z: Number(row[1]), symbols: row[2] })
+  })
+  const zsSeen = levels.flatMap(l => l.rows.map(r => r.z))
+  const zs = box ? range(box.z1, box.z2) : zsSeen.length ? range(Math.min(...zsSeen), Math.max(...zsSeen)) : []
+  return levels.flatMap(({ y, allAir, rows }) => allAir
+    ? zs.flatMap(z => xs.map(x => ({ x, y, z, name: 'air' })))
+    : rows.flatMap(({ z, symbols }) => xs.map((x, i) => ({ x, y, z, name: legend.get(symbols[i]) ?? symbols[i] }))))
+}
+
+// the footprint, two levels deep (the ground at y and what stands on it at y+1), in bands of rows a scan accepts
+export const scanBoxes = ({ x, y, z, w, h }, cap) => {
+  const rows = Math.max(1, Math.floor(cap / (w * 2)))
+  return range(0, Math.ceil(h / rows) - 1).map(i => ({
+    x1: x, y1: y, z1: z + i * rows, x2: x + w - 1, y2: y + 1, z2: z + Math.min(h, (i + 1) * rows) - 1
+  }))
+}
+
+// a body only knows the chunks around itself, so the one standing closest is the one to ask
+export const nearestBody = (bodies, x, z) => bodies
+  .filter(b => b.up && b.state?.pos)
+  .map(b => ({ body: b, dist: Math.hypot(b.state.pos.x - x, b.state.pos.z - z) }))
+  .sort((a, b) => a.dist - b.dist)[0]?.body ?? null
+
+// scan names a waterlogged slab as a plain slab: the ~ cells whose ground is neither water, air nor unloaded need block_at
+export const unsureWater = (place, worldCells) => {
+  const ground = new Map(worldCells.filter(c => c.y === place.y).map(c => [`${c.x},${c.z}`, c]))
+  return (parsePlan(place.plan).cells ?? [])
+    .filter(c => c.ch === '~')
+    .map(c => ({ x: place.x + c.dx, y: place.y, z: place.z + c.dz }))
+    .filter(c => {
+      const g = ground.get(`${c.x},${c.z}`)
+      return g && g.waterlogged === undefined && !/^(water|air|cave_air|void_air|unloaded)$/.test(g.name)
+    })
 }

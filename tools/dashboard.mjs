@@ -10,8 +10,9 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit } from './dashboard/lib.mjs'
-import { mergeBodies, danSighting } from './dashboard/map.mjs'
+import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from './dashboard/lib.mjs'
+import { mergeBodies, danSighting, parsePlan } from './dashboard/map.mjs'
+import { scanCap } from '../src/lib.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
@@ -24,6 +25,8 @@ const POLL_MS = 2000
 const LOOK_FILE = 'dashboard-look.png'
 const CHAT_TAIL_BYTES = 64 * 1024
 const CHAT_PAGE_LINES = 300   // what the page shows: inlined on load, then polled from /api/chat
+const WORLD_TTL_MS = 10000    // how long one look at a place's footprint is handed out again
+const WORLD_BLOCK_AT_CAP = 400 // how many slab cells one look may settle with block_at, one call each
 
 const parseJson = text => {
   try {
@@ -128,6 +131,46 @@ const chatLog = limit => {
   return mergeChat(dirs.map(e => ({ agent: e.name, lines: eventsTail(e.name) })), limit)
 }
 
+// ---------------------------------------------------------------- what stands on a plan's footprint
+// The dashboard has no world of its own: a running body has, for the chunks around itself. The nearest body that is
+// up scans the footprint two levels deep (read-only, a quick action that never moves it), and the ~ cells that came
+// back as a slab are asked one by one with block_at, since scan cannot say whether a slab is waterlogged.
+const worlds = {}
+
+const lookAtPlace = async name => {
+  const place = readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === name)
+  if (!place) return { error: `no place called ${name}` }
+  const parsed = parsePlan(place.plan)
+  if (parsed.error) return { error: `${name} has no plan to compare the world against` }
+  const body = nearestBody(mergeBodies(agents, polls), place.x, place.z)
+  if (!body) return { error: 'no body is up to look' }
+  const boxes = scanBoxes({ x: place.x, y: place.y, z: place.z, w: parsed.width, h: parsed.height }, scanCap())
+  const scans = await Promise.all(boxes.map(box => ask(body.apiPort, 'scan', box, 10000)))
+  const failed = scans.find(r => !r.ok)
+  if (failed) return { error: `${body.name} could not scan: ${failed.error ?? failed.answer?.error ?? 'no answer'}`, body: body.name }
+  const cells = scans.flatMap((r, i) => parseScan(r.answer.map, boxes[i]))
+  const unsure = unsureWater(place, cells)
+  const checks = await Promise.all(unsure.slice(0, WORLD_BLOCK_AT_CAP).map(c => ask(body.apiPort, 'block_at', c, 5000)))
+  const settled = new Map(checks.flatMap((r, i) => r.ok && r.answer.name ? [[`${unsure[i].x},${unsure[i].z}`, r.answer]] : []))
+  const known = cells.map(c => {
+    const b = c.y === place.y ? settled.get(`${c.x},${c.z}`) : null
+    return b ? { ...c, name: b.name, waterlogged: String(b.properties?.waterlogged) === 'true' } : c
+  })
+  const seen = known.filter(c => c.name !== 'unloaded').length
+  const dist = Math.round(Math.hypot(body.state.pos.x - place.x, body.state.pos.z - place.z))
+  if (!seen) return { error: `no body near enough to see it (${body.name} is the nearest, ${dist} blocks away)`, body: body.name }
+  return { place: name, body: body.name, distance: dist, at: Date.now(), cells: known, unloaded: known.length - seen, unsettled: Math.max(0, unsure.length - WORLD_BLOCK_AT_CAP) }
+}
+
+// one look per place per 10 s, shared by every open popup: the page polls while its popup shows the world
+const worldFor = name => {
+  const cached = worlds[name]
+  if (cached && Date.now() - cached.at < WORLD_TTL_MS) return cached.promise
+  const promise = lookAtPlace(name).catch(e => ({ error: e.message }))
+  worlds[name] = { at: Date.now(), promise }
+  return promise
+}
+
 const send = (res, code, type, payload, headers = {}) => {
   res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', ...headers })
   res.end(payload)
@@ -157,28 +200,37 @@ const serveLook = async (res, name, query) => {
 // </script and </head can't slip out of the inline script tag, since the page ships this straight into an attribute-free <script> body.
 // The chat log is inlined the same way, for the same reason: the drawer is full on the first paint.
 const inline = value => JSON.stringify(value).replace(/</g, '\\u003c')
-const renderPage = query => {
+// ?view=world|diff with ?farm= inlines the world answer as well, so the popup opens already comparing.
+const renderPage = async query => {
   const farm = query.get('farm')
+  const view = query.get('view')
   const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
   const chat = { at: Date.now(), dan: DAN, messages: chatLog(CHAT_PAGE_LINES) }
-  const preload = `<script>window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)}</script>\n`
+  const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm) : null
+  const preload = `<script>window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
 }
 
 const handlers = {
-  page: (res, query) => send(res, 200, 'text/html; charset=utf-8', renderPage(query)),
+  page: async (res, query) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query)),
+  world: async (res, query) => {
+    const name = query.get('place')
+    if (!name) return sendJson(res, 400, { error: 'say which place: /api/world?place=<name>' })
+    const answer = await worldFor(name)
+    return sendJson(res, answer.error ? 404 : 200, answer)
+  },
   state: (res) => sendJson(res, 200, snapshot()),
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), dan: DAN, messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state, /api/chat?limit=200 or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state, /api/chat?limit=200, /api/world?place=<name> or /api/look/<Name>' })
 }
 
 http.createServer(async (req, res) => {
   const r = route(req.url)
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
-  return handlers[r.kind](res, query, r)
+  return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()
   setInterval(() => pollOnce().catch(e => console.error('[poll]', e.message)), POLL_MS)

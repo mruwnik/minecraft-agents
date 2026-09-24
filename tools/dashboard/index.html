@@ -85,6 +85,18 @@
   #planLegend { display: flex; flex-direction: column; gap: 6px; color: var(--ink); font-size: 11px; padding-top: 2px; }
   .legendItem { display: flex; align-items: center; gap: 5px; }
   .legendSwatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.18); flex: none; }
+  .legendSwatch.differ { border-color: #f0907e; background: repeating-linear-gradient(-45deg, rgba(240,144,126,0.85) 0 2px, transparent 2px 5px); }
+  .legendSwatch.unseen { border-color: #4b5462; background: repeating-linear-gradient(-45deg, rgba(139,149,165,0.6) 0 2px, transparent 2px 5px); }
+  .legendSwatch.unsure { border-color: #e0a030; background: repeating-linear-gradient(-45deg, rgba(224,160,48,0.75) 0 2px, transparent 2px 5px); }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 4px 4px 0; }
+  .seg button.on { background: #34404e; border-color: var(--zone); color: #fff; }
+  #planWorld { color: var(--dim); margin: -4px 0 10px; }
+  #planWorld:empty { display: none; }
+  #planHover { color: var(--ink); margin-top: 8px; min-height: 1.45em; overflow-wrap: anywhere; }
+  #planHover .muted { color: var(--dim); }
 </style>
 </head>
 <body>
@@ -142,18 +154,25 @@
   <div id="planCard">
     <div class="planHead">
       <h3 id="planTitle"></h3>
+      <span class="seg" id="planView">
+        <button data-view="plan" title="what the plan says should stand here">plan</button>
+        <button data-view="world" title="what really stands here, as the nearest body sees it">world</button>
+        <button data-view="diff" title="the plan, with the cells the world disagrees with marked">diff</button>
+      </span>
       <span class="spacer"></span>
       <button id="planClose">close ×</button>
     </div>
     <div id="planMeta"></div>
+    <div id="planWorld"></div>
     <div id="planGridRow">
       <canvas id="planCanvas"></canvas>
       <div id="planLegend"></div>
     </div>
+    <div id="planHover"></div>
   </div>
 </div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlan } from './map.mjs'
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlan, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
 const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
@@ -427,9 +446,41 @@ const renderPlaces = () => {
 }
 
 // ---------------------------------------------------------------- the plan popup
+// Three views of one footprint: the plan (what should stand there), the world (what the nearest body sees standing
+// there, two levels deep) and the diff (the plan, with every cell the world disagrees with marked). The world comes
+// from /api/world, which one running body scans for us: the popup asks again every 5 s while it shows it.
 const CELL_PX = 22
+const VIEWS = ['plan', 'world', 'diff']
+const WORLD_POLL_MS = 5000
+const stored = (key, fallback) => {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+const store = (key, value) => {
+  try { localStorage.setItem(key, value) } catch {}
+}
+let planView = VIEWS.includes(stored('dashboard.plan.view', 'plan')) ? stored('dashboard.plan.view', 'plan') : 'plan'
+let planPlace = null      // the place the popup shows
+let planWorld = null      // the last /api/world answer for it (or {error}), null while none has come
+let planTimer = null
 
-const drawPlanGrid = parsed => {
+const hatch = (c, px, py, w, h, colour) => {
+  c.save()
+  c.beginPath(); c.rect(px, py, w, h); c.clip()
+  c.strokeStyle = colour
+  c.lineWidth = 1.5
+  for (let d = -h; d < w; d += 5) { c.beginPath(); c.moveTo(px + d, py + h); c.lineTo(px + d + h, py); c.stroke() }
+  c.restore()
+}
+
+// what the diff knows about every plan cell; without a world answer, every cell is unseen
+const diffOf = parsed => planWorld?.cells ? planDiff(planPlace, planWorld.cells) : planDiff(planPlace, [])
+
+const cellFill = (cell, view) => {
+  if (view === 'world') return cell.seen ? worldColour(cell.top === 'air' ? cell.ground : cell.top) : worldColour('unloaded')
+  return cellColour(cell.ch)
+}
+
+const drawPlanGrid = (parsed, view) => {
   const dpr = window.devicePixelRatio || 1
   const w = parsed.width * CELL_PX
   const h = parsed.height * CELL_PX
@@ -442,46 +493,149 @@ const drawPlanGrid = parsed => {
   c.setTransform(dpr, 0, 0, dpr, 0, 0)
   c.fillStyle = '#0e1015'
   c.fillRect(0, 0, w, h)
-  parsed.cells.forEach(({ dx, dz, ch }) => {
-    c.fillStyle = cellColour(ch)
-    c.fillRect(dx * CELL_PX, dz * CELL_PX, CELL_PX - 1, CELL_PX - 1)
+  const diff = diffOf(parsed)
+  diff.cells.forEach(cell => {
+    const px = cell.dx * CELL_PX
+    const py = cell.dz * CELL_PX
+    c.fillStyle = cellFill(cell, view)
+    c.fillRect(px, py, CELL_PX - 1, CELL_PX - 1)
+    if (view === 'plan') return
+    if (!cell.seen) { hatch(c, px, py, CELL_PX - 1, CELL_PX - 1, 'rgba(139,149,165,0.55)'); return }
+    if (view !== 'diff') return
+    if (cell.ok === null) { hatch(c, px, py, CELL_PX - 1, CELL_PX - 1, 'rgba(224,160,48,0.8)'); return }
+    if (cell.ok) return
+    hatch(c, px, py, CELL_PX - 1, CELL_PX - 1, 'rgba(240,144,126,0.9)')
+    c.strokeStyle = '#f0907e'
+    c.lineWidth = 2
+    c.strokeRect(px + 1, py + 1, CELL_PX - 3, CELL_PX - 3)
   })
 }
 
-// one swatch per cell kind actually in this plan (in the order it is first met), not every kind the legend knows -
-// a 7x7 carrot patch has no business listing bamboo
-const drawPlanLegend = parsed => {
+const legendItem = (label, colour, cls = '') => {
+  const item = tag('span', 'legendItem', '')
+  const swatch = tag('span', `legendSwatch${cls ? ' ' + cls : ''}`, '')
+  if (colour) swatch.style.background = colour
+  item.append(swatch, ` ${label}`)
+  return item
+}
+
+// the plan's legend lists one swatch per cell kind actually in this plan (in the order it is first met), not every
+// kind the legend knows - a 7x7 carrot patch has no business listing bamboo. The world's lists the blocks seen.
+const drawPlanLegend = (parsed, view) => {
   const legend = el('planLegend')
   legend.textContent = ''
-  const seen = [...new Set(parsed.cells.map(({ ch }) => ch))]
-  seen.forEach(ch => {
-    const item = tag('span', 'legendItem', '')
-    const swatch = tag('span', 'legendSwatch', '')
-    swatch.style.background = cellColour(ch)
-    item.append(swatch, ` ${cellLabel(ch)}`)
-    legend.append(item)
-  })
+  if (view === 'world') {
+    const diff = diffOf(parsed)
+    const seen = [...new Set(diff.cells.filter(c => c.seen).map(c => c.top === 'air' ? c.ground : c.top))]
+    seen.forEach(name => legend.append(legendItem(name.replaceAll('_', ' '), worldColour(name))))
+    if (diff.unseen) legend.append(legendItem('not loaded', null, 'unseen'))
+    return
+  }
+  const kinds = [...new Set(parsed.cells.map(({ ch }) => ch))]
+  kinds.forEach(ch => legend.append(legendItem(cellLabel(ch), cellColour(ch))))
+  if (view !== 'diff') return
+  legend.append(legendItem('differs', null, 'differ'), legendItem('unsure', null, 'unsure'), legendItem('not loaded', null, 'unseen'))
 }
 
+const ago = at => `${Math.max(0, Math.round((Date.now() - at) / 1000))}s ago`
+
+const worldStatus = parsed => {
+  if (planView === 'plan') return { text: '', error: false }
+  if (!planWorld) return { text: 'asking the nearest body…', error: false }
+  if (planWorld.error) return { text: planWorld.error, error: true }
+  const diff = diffOf(parsed)
+  const seenBy = `seen by ${planWorld.body}, ${planWorld.distance} blocks off, ${ago(planWorld.at)}`
+  const counts = planView === 'diff' ? [`${diff.differ} of ${diff.total} cells differ`] : []
+  if (diff.unseen) counts.push(`${diff.unseen} not loaded`)
+  if (diff.unsure) counts.push(`${diff.unsure} unsure (slabs nobody checked for water)`)
+  return { text: [seenBy, ...counts].join(' · '), error: false }
+}
+
+const renderPlanCard = () => {
+  if (!planPlace) return
+  const parsed = parsePlan(planPlace.plan)
+  if (parsed.error) return
+  VIEWS.forEach(v => el('planView').querySelector(`[data-view="${v}"]`).classList.toggle('on', v === planView))
+  const status = worldStatus(parsed)
+  el('planWorld').textContent = status.text
+  el('planWorld').className = status.error ? 'err' : ''
+  drawPlanLegend(parsed, planView)
+  drawPlanGrid(parsed, planView)
+}
+
+const fetchWorld = () => {
+  if (!planPlace || planView === 'plan') return
+  const asked = planPlace.name
+  fetch(`/api/world?place=${encodeURIComponent(asked)}`)
+    .then(r => r.json())
+    .then(w => { if (planPlace?.name === asked) { planWorld = w; renderPlanCard() } })
+    .catch(e => { if (planPlace?.name === asked) { planWorld = { error: `no answer from the dashboard: ${e.message}` }; renderPlanCard() } })
+}
+
+const stopWorldPoll = () => { clearInterval(planTimer); planTimer = null }
+const startWorldPoll = () => {
+  stopWorldPoll()
+  if (planView === 'plan') return
+  fetchWorld()
+  planTimer = setInterval(fetchWorld, WORLD_POLL_MS)
+}
+
+const setPlanView = view => {
+  planView = view
+  store('dashboard.plan.view', view)
+  renderPlanCard()
+  startWorldPoll()
+}
+el('planView').addEventListener('click', e => {
+  const view = e.target.closest('button')?.dataset.view
+  if (view) setPlanView(view)
+})
+
 // a place opens only if it has a plan that actually parses; a bare point (a hut, a marker) has nothing to show
-const showPlan = place => {
+const showPlan = (place, world = null) => {
   if (!place?.plan) return
   const parsed = parsePlan(place.plan)
   if (parsed.error) return
+  planPlace = place
+  planWorld = world?.place === place.name || world?.error ? world : null
   el('planTitle').textContent = place.name
   el('planMeta').textContent = [
     `by ${place.by ?? 'unclaimed'}`,
     place.note || null,
     `${parsed.width}x${parsed.height} blocks, anchored at ${place.x},${place.y},${place.z} (north-west corner)`
   ].filter(Boolean).join('\n')
-  drawPlanLegend(parsed)
-  drawPlanGrid(parsed)
+  el('planHover').textContent = ''
+  renderPlanCard()
   el('planOverlay').hidden = false
+  if (planWorld && !planWorld.error) { stopWorldPoll(); planTimer = setInterval(fetchWorld, WORLD_POLL_MS); return }
+  startWorldPoll()
 }
 
 const openPlan = name => showPlan(snap.places.find(p => p.name === name))
 
-const closePlan = () => { el('planOverlay').hidden = true }
+const closePlan = () => { el('planOverlay').hidden = true; stopWorldPoll(); planPlace = null; planWorld = null }
+
+// hovering a cell says what the plan wants there, what stands there, and whether the two agree
+const hoverText = cell => {
+  const where = `${cell.ch} at ${cell.x},${cell.z}`
+  const plan = `plan: ${cellLabel(cell.ch)} (${cell.expected})`
+  if (planView === 'plan' || !planWorld?.cells) return [where, plan]
+  const verdict = !cell.seen ? 'not loaded' : cell.ok === null ? 'unsure' : cell.ok ? 'matches' : 'differs'
+  return [where, plan, `world: ${worldLabel(cell)}`, verdict]
+}
+el('planCanvas').addEventListener('mousemove', e => {
+  if (!planPlace) return
+  const r = el('planCanvas').getBoundingClientRect()
+  const dx = Math.floor((e.clientX - r.left) / CELL_PX)
+  const dz = Math.floor((e.clientY - r.top) / CELL_PX)
+  const cell = diffOf(parsePlan(planPlace.plan)).cells.find(c => c.dx === dx && c.dz === dz)
+  const hover = el('planHover')
+  hover.textContent = ''
+  if (!cell) return
+  const parts = hoverText(cell)
+  parts.forEach((part, i) => hover.append(i ? tag('span', 'muted', ' · ') : '', part))
+})
+el('planCanvas').addEventListener('mouseleave', () => { el('planHover').textContent = '' })
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('planOverlay').hidden) closePlan() })
 el('planOverlay').addEventListener('click', e => { if (e.target === el('planOverlay')) closePlan() })
@@ -633,7 +787,8 @@ const refresh = () => fetch('/api/state')
 
 // the server inlines the requested ?farm=<name> place (if any) as JSON in <head>, so the popup opens on the
 // very first paint instead of racing the /api/state fetch below - the property a headless screenshot needs
-if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__)
+if (VIEWS.includes(window.__PRELOAD_VIEW__)) planView = window.__PRELOAD_VIEW__
+if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__, window.__PRELOAD_WORLD__)
 if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, dan: chatLast.dan }; renderChat() }
 
 resize()
