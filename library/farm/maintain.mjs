@@ -1,6 +1,6 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
-import { farmJobs, farmSurplus, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { farmJobs, farmSurplus, holdsWater, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
@@ -23,6 +23,12 @@ export default {
     const keep = seedReserve(plan)
 
     const tryJob = async job => {
+      // a cover is only real once the cell it caps is actually holding water - see src/builder.mjs's tryJob for the
+      // full story of the slab that kept getting broken, reflooded by a neighbour's flow and blindly recapped
+      if (job.do === 'cover' && !holdsWater(api.block(job.x, job.y, job.z))) {
+        summary.stuck = summary.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
+        return
+      }
       const [action, args] = jobCall(job)
       const failed = await api.act(action, args).then(() => null, e => e.message)
       if (failed) { summary.stuck = summary.stuck ?? failed; return }

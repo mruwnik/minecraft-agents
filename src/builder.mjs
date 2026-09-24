@@ -1,6 +1,6 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
+import { billShortfall, farmJobs, groundJobs, holdsWater, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 
@@ -40,6 +40,17 @@ export async function buildFromPlan (api, a) {
   const tryJob = async job => {
     // counted the way jobsBill counts: one bucket does a whole field, so a dry channel is short one bucket, not one per cell
     if (job.item && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = job.item === 'water_bucket' ? 1 : (missing[job.item] ?? 0) + 1; return }
+    // a cover is only real once the cell it caps is actually holding water. farmJobs queues pour and cover together
+    // for a dry cell on the assumption the pour just before it lands, but a pour that misses (a neighbour's flow crept
+    // in first, the wrong y, out of reach) used to be covered anyway: `place` only checks that its own block ended up
+    // there, not that it sits on real water. That capped dry or merely-flowing ground with a slab, and the next pass
+    // read the slab as an obstruction sitting where the channel belongs and dug it straight back out - a slab broken,
+    // reflooded by the neighbour and recapped forever. Re-reading the cell here, right before the place, holds the
+    // cover back instead: it is retried next time, once the water is really there.
+    if (job.do === 'cover' && !holdsWater(api.block(job.x, job.y, job.z))) {
+      counts.stuck = counts.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
+      return
+    }
     const [action, args] = jobCall(job)
     const failed = await api.act(action, args).then(() => null, e => e.message)
     if (failed) { counts.stuck = counts.stuck ?? failed; return }

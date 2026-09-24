@@ -3442,6 +3442,21 @@ test('maintain_farm: an open channel is covered, and counted under its own name'
 
 test('maintain_farm: says what it had no seed for, and does not try it', async () => {
   const { api, calls } = fakeApi({ place: fakePlace('c'), world: { '0,63,0': 'farmland' }, items: {} })
+// same fix as farm.build's (see its "a cover is held back until the pour before it actually lands" test): a pour
+// that reports success without truly wetting the cell must not be capped with a slab anyway.
+test('maintain_farm: a cover is held back until the pour before it actually lands', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'stone' }
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world, items: { water_bucket: 1, oak_slab: 4 },
+    answers: { pour: () => ({}) }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over ground that never got wet')
+  assert.equal(summary.poured, 1)
+  assert.equal(summary.covered, 0)
+  assert.match(summary.stuck, /not holding water/)
+})
+
   const summary = await maintainFarm.run(api, { place: 'test-field' })
   assert.deepEqual([summary.missing, calls.filter(c => c.startsWith('place'))], ['carrot:1', []])
 })
@@ -4501,6 +4516,25 @@ test('farm.build: a channel IS dug out by a body that carries the water for it',
 
 test('farm.build: partial=true builds what it can and names the rest', async () => {
   const world = { '0,63,0': 'dirt', '1,63,0': 'dirt' }
+// farmJobs queues a cover right after a dry cell's pour, on the assumption the pour lands (see the farmJobs test
+// above, "a dry channel is poured first and covered after"). A pour that succeeds by the fake's own account but
+// never actually lands water (a neighbour's flow beat it there, the wrong y, out of reach - `pour` cannot always
+// tell) used to be covered anyway: `place` only checks that its own block ended up there, not that it sits on real
+// water. That capped dry ground with a slab, and the next build read the slab as an obstruction sitting where the
+// channel belongs and dug it straight back out - a slab broken, reflooded by the neighbour and recapped forever.
+test('farm.build: a cover is held back until the pour before it actually lands', async () => {
+  const world = { '0,63,0': 'air', '0,62,0': 'stone' }
+  const { api, calls } = fakeApi({
+    place: fakePlace('~'), world, items: { water_bucket: 1, oak_slab: 4 },
+    answers: { pour: () => ({}) } // "succeeds" without ever wetting the cell - the miss this guards against
+  })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('place')), [], 'no slab was placed over ground that never got wet')
+  assert.equal(summary.poured, 1)
+  assert.equal(summary.covered, undefined)
+  assert.match(summary.stuck, /not holding water/)
+})
+
   const { api, calls } = fakeApi({
     place: fakePlace('ww'), world, items: {},
     answers: { till: ({ x, y, z }) => { world[`${x},${y},${z}`] = 'farmland'; return {} } }
