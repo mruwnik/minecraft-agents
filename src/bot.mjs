@@ -15,7 +15,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -117,6 +117,8 @@ let gen = 0
 // a long action calls `const alive = cancelGuard()` when it starts and `alive()` in every loop: once it has been cancelled
 // or superseded it must stop, or it keeps fighting the next command for the body
 const cancelGuard = () => { const mine = gen; return () => { if (gen !== mine) throw new Error('cancelled') } }
+// A composite may finish restoring one job block after cancellation. This private token cannot be supplied by a CLI caller.
+const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
 // when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
 let eatingSince = null
@@ -1410,6 +1412,46 @@ async function containerAt (a, names = ['chest', 'barrel', 'trapped_chest']) {
 }
 
 // ---------------------------------------------------------------- actions
+const PROFESSIONS = 'unemployed armorer butcher cartographer cleric farmer fisherman fletcher leatherworker librarian mason nitwit shepherd toolsmith weaponsmith'.split(' ')
+function villagerData (entity) {
+  const raw = entity.metadata?.[19] ?? entity.metadata?.[18]
+  const profession = typeof raw?.profession === 'string' ? raw.profession.replace(/^minecraft:/, '') : PROFESSIONS[raw?.villagerProfession ?? raw?.profession ?? raw?.[1] ?? 0] ?? 'unknown'
+  return { profession, level: raw?.level ?? raw?.[2] ?? 1, adult: !isBaby(entity.metadata), nitwit: profession === 'nitwit' }
+}
+function targetVillager (a) {
+  const target = a.x === undefined ? bot.entity.position : new Vec3(a.x + 0.5, a.y, a.z + 0.5)
+  const nearby = Object.values(bot.entities).filter(e => e.name === 'villager' && e.position.distanceTo(target) <= (a.id === undefined ? 6 : 8))
+  const entity = a.id !== undefined ? nearby.find(e => e.id === a.id) : nearby.sort((x, y) => x.position.distanceTo(target) - y.position.distanceTo(target))[0]
+  if (!entity) throw new Error(`no villager within 6 blocks${a.id === undefined ? '' : ` with id ${a.id}`}`)
+  return entity
+}
+function villagerEnchants (item) {
+  const list = item?.enchants
+  if (Array.isArray(list) && list.length) return list
+  const raw = item?.componentMap?.get('stored_enchantments')?.data
+  const values = Array.isArray(raw) ? raw : raw?.enchantments ?? raw?.levels ?? []
+  return values.map(e => ({ name: e.name ?? bot.registry.enchantments?.[e.id]?.name ?? String(e.id), lvl: e.lvl ?? e.level }))
+}
+let lastVillagerOffers = null
+let villagerWindowUncertain = false
+let tradeOutcomeUncertain = false
+let tradeInFlight = null
+async function openVillagerWindow (entity, timeoutMessage) {
+  if (villagerWindowUncertain) throw new Error('a villager window timed out; restart the body before opening another')
+  const opening = bot.openVillager(entity)
+  try { return await within(5000, opening, timeoutMessage) } catch (error) {
+    if (error.message === `${timeoutMessage} took longer than 5s`) {
+      villagerWindowUncertain = true
+      // Mineflayer removes its trade-list listener when this window closes. A late result is also closed.
+      const closed = new Set()
+      const closeOnce = window => { if (window && !closed.has(window)) { closed.add(window); window.close() } }
+      opening.then(window => { try { closeOnce(window) } catch (e) { console.log(`[villager window cleanup] ${e.message}`) } }, () => {})
+      const window = bot.currentWindow
+      if (window && /villager|merchant/.test(window.type)) closeOnce(window)
+    }
+    throw error
+  }
+}
 // "long" actions take over the body; starting a new one cancels the previous.
 // using a tool on the ground: hoe -> farmland, shovel -> dirt_path. One block (x y z) or many (blocks=[{x,y,z},...])
 const GROUND_WORK = {
@@ -1454,6 +1496,66 @@ async function workGround (a, work) {
 }
 
 const long = {
+  async trades (a) {
+    const entity = targetVillager(a)
+    const data = villagerData(entity)
+    if (data.profession === 'unemployed' || data.profession === 'nitwit' || !data.adult) return { ...data, id: entity.id, offers: [], text: data.adult ? data.profession : 'baby' }
+    await goNear(entity.position, 2.5)
+    if (!bot.entities[entity.id] || bot.entity.position.distanceTo(entity.position) > 6) throw new Error('the villager walked off before the window opened')
+    const window = await openVillagerWindow(entity, 'villager window did not open in 5 s')
+    try {
+      const offers = window.trades.map((o, n) => ({ index: n + 1, inputItem1: o.inputItem1 && { name: o.inputItem1.name, count: o.realPrice ?? o.inputItem1.count }, inputItem2: o.inputItem2 && { name: o.inputItem2.name, count: o.inputItem2.count }, outputItem: o.outputItem && { name: o.outputItem.name, count: o.outputItem.count, enchants: villagerEnchants(o.outputItem) }, nbTradeUses: o.nbTradeUses, maximumNbTradeUses: o.maximumNbTradeUses, tradeDisabled: o.tradeDisabled }))
+      lastVillagerOffers = { id: entity.id, offers, at: Date.now() }
+      return { ...villagerData(entity), id: entity.id, offers, text: [`profession=${data.profession} level=${data.level} offers=${offers.length}`, ...offers.map((o, n) => tradeLine(o, n + 1))].join('\n') }
+    } finally { window.close() }
+  },
+
+  async trade (a) {
+    if (!(a.offer >= 1 && Number.isInteger(a.offer)) || !(a.times === undefined || (Number.isInteger(a.times) && a.times >= 1))) throw new Error('trade needs offer=1,2,... and positive times=')
+    if (tradeOutcomeUncertain || tradeInFlight) throw new Error('a prior trade outcome is uncertain; inspect inventory and offers, then restart this body before another purchase')
+    const entity = targetVillager(a)
+    const cached = lastVillagerOffers?.id === entity.id && Date.now() - lastVillagerOffers.at < 5000 ? lastVillagerOffers.offers[a.offer - 1] : null
+    if (cached) {
+      const needs = Object.fromEntries(Object.entries(offerCost(cached)).map(([name, n]) => [name, n * (a.times ?? 1)]))
+      const held = inventoryCounts()
+      if (Object.entries(needs).some(([name, n]) => (held[name] ?? 0) < n)) throw new Error(`trade needs ${Object.entries(needs).map(([name, n]) => `${n} ${name}`).join(' and ')}: carrying ${Object.entries(needs).map(([name]) => `${held[name] ?? 0} ${name}`).join(', ')}`)
+    }
+    await goNear(entity.position, 2.5)
+    const window = await openVillagerWindow(entity, 'villager window did not open in 5 s')
+    let originalOpen = true
+    const closeOriginal = () => { if (originalOpen) { originalOpen = false; window.close() } }
+    try {
+      const offer = window.trades[a.offer - 1]
+      if (!offer) throw new Error(`villager has ${window.trades.length} offers, no offer ${a.offer}`)
+      if (offer.tradeDisabled) throw new Error(`offer ${a.offer} is disabled`)
+      const times = a.times ?? 1
+      const needs = Object.fromEntries(Object.entries(offerCost(offer)).map(([name, n]) => [name, n * times]))
+      const before = inventoryCounts()
+      const short = Object.entries(needs).filter(([name, n]) => (before[name] ?? 0) < n)
+      if (short.length) throw new Error(`trade needs ${Object.entries(needs).map(([name, n]) => `${n} ${name}`).join(' and ')}: carrying ${short.map(([name]) => `${before[name] ?? 0} ${name}`).join(', ')}`)
+      if (offer.maximumNbTradeUses - offer.nbTradeUses < times) throw new Error(`offer ${a.offer} has only ${offer.maximumNbTradeUses - offer.nbTradeUses} uses left`)
+      const output = offer.outputItem
+      const usedBefore = offer.nbTradeUses
+      tradeOutcomeUncertain = true
+      const purchase = bot.trade(window, a.offer - 1, times)
+      tradeInFlight = purchase
+      purchase.then(() => { if (tradeInFlight === purchase) tradeInFlight = null }, () => { if (tradeInFlight === purchase) tradeInFlight = null })
+      await within(10000, purchase, 'trade outcome uncertain after 10 s; inspect inventory and offer uses before retrying')
+      // Mineflayer keeps the changed slots in the merchant window until close copies
+      // them back to bot.inventory. Reading inventory before close reports a false miss.
+      closeOriginal()
+      await bot.waitForTicks(5)
+      const after = inventoryCounts()
+      const bought = (after[output.name] ?? 0) - (before[output.name] ?? 0)
+      const paid = Object.fromEntries(Object.keys(needs).map(name => [name, (before[name] ?? 0) - (after[name] ?? 0)]))
+      if (bought < output.count * times || Object.entries(needs).some(([name, n]) => paid[name] < n)) throw new Error(`trade click was not confirmed by inventory: bought=${bought} paid=${JSON.stringify(paid)}`)
+      // Offer uses may reset on a workstation restock immediately after purchase.
+      // The exact item exchange confirms this purchase; the caller may reopen
+      // once to verify the villager's profession and wanted book.
+      tradeOutcomeUncertain = false
+      return { bought: `${output.name}:${bought}`, paid, uses: null, usedBefore }
+    } finally { closeOriginal() }
+  },
   async goto (a) {
     if (a.place) {
       const p = readPlaces().find(q => q.name === a.place)
@@ -1486,6 +1588,7 @@ const long = {
     if (needed) throw new Error(`${block.name} needs a ${needed} or better: you carry none, craft one first`)
     await bot.tool.equipForBlock(block)
     await bot.dig(block)
+    if (block.name === 'lectern') lastVillagerOffers = null
     // the drop of a gate or fence stays where it fell (Ganesha dug a gate and crafted a new one; my three fences lay behind the wall): fetch it, or say where it lies
     await bot.waitForTicks(8)
     const lying = () => Object.values(bot.entities).filter(e => e.name === 'item' && e.position.distanceTo(p.offset(0.5, 0.5, 0.5)) <= 2.5)
@@ -1559,7 +1662,7 @@ const long = {
     // what really stands in each cell afterwards: the reply's @x,y,z is where the BODY is, and a driver read it as the
     // block he had just placed (AhuraMazda dug someone else's pressure plate that way)
     const done = []
-    const alive = cancelGuard()
+    const alive = a[ROLLBACK_PLACE] ? () => {} : cancelGuard()
     // a cell that cannot be reached or has nothing to attach to yet is skipped and tried once more at the end (its neighbours may exist by then)
     class Skip extends Error {}
     const already = new Set()
@@ -1613,6 +1716,7 @@ const long = {
       placed++
       const stands = bot.blockAt(p)?.name
       if (stands && !isAir(stands)) done.push({ x: p.x, y: p.y, z: p.z, name: stands })
+      if (stands === 'lectern') lastVillagerOffers = null
     }
     const attempt = async list => {
       const skipped = []
@@ -2538,7 +2642,9 @@ function cancelTask (why) {
 }
 
 // drowned once while mining at 4 hp; don't start risky work half dead unless told to
-const refusalFor = (name, args) => refuseReason({ name, health: bot.health, force: args.force, sleeping: bot.isSleeping })
+const refusalFor = (name, args) => (['trades', 'trade'].includes(name) && bot.health <= 5 && !args.force
+  ? `health is ${Math.round(bot.health)}: eat/rest first, or pass force=true`
+  : refuseReason({ name, health: bot.health, force: args.force, sleeping: bot.isSleeping }))
 
 let taskId = 0
 let lastCancel = null
@@ -2654,7 +2760,14 @@ async function runLong (name, args, given = args) {
   if (bot.isSleeping && name !== 'wake' && oversleeping({ asleep: true, timeOfDay: bot.time.timeOfDay, thundering: bot.thunderState > 0 })) await long.wake().catch(() => {})
   const refusal = refusalFor(name, args)
   if (refusal) return { ok: false, error: refusal }
+  const previous = task
   cancelTask(`superseded by ${name}`)
+  // A cancelled villager roll may have a lectern in hand. Give its finally block time to put that exact block back
+  // before another long action starts using the same legs and hand.
+  if (previous?.name === 'villager.roll' && previous.work) {
+    try { await within(20000, previous.work, 'the previous villager roll is still restoring its lectern') }
+    catch (e) { return { ok: false, error: e.message } }
+  }
   followTarget = null
   const mine = { id: ++taskId, name, gen, started: Date.now() }
   task = mine
@@ -2721,8 +2834,9 @@ async function runLong (name, args, given = args) {
   const work = long[name](args).then(tidy).then(
     r => settle().then(() => finish({ ok: true, ...r })),
     // a cancelled task fails with the pathfinder's vague "goal was changed": say why it was cancelled instead
-    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => finish({ ...b, ok: false, error: lastCancel?.id === mine.id ? `cancelled: ${lastCancel.why}` : explainFailure(e.message) }))
+    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => finish({ ...b, ...e.report, ok: false, error: lastCancel?.id === mine.id && !e.report?.restorationPending ? `cancelled: ${lastCancel.why}` : explainFailure(e.message) }))
   )
+  mine.work = work
   const timeout = (args.timeout ?? 60) * 1000
   const timedOut = Symbol('timeout')
   const first = await Promise.race([work, new Promise(r => setTimeout(() => r(timedOut), timeout))])
@@ -2783,6 +2897,8 @@ function planOf (name) {
 
 // everything a composite may do to the world, and the only way it may do it
 function makeApi (composite, a, alive) {
+  const ownerTask = task
+  let cleanupServiceDirection = null
   const notes = []
   const report = {}
   const failures = new Map()
@@ -2813,6 +2929,28 @@ function makeApi (composite, a, alive) {
         noteFailure(name, why)
         throw new Error(`${composite}/${why}`)
       })
+  }
+  const cleanupAct = async (name, args = {}) => {
+    const lectern = name === 'place' && args.blocks === undefined && args.item === (a.block ?? 'lectern') && ['x', 'y', 'z'].every(k => args[k] === a[k])
+    const dx = args.x - a.x, dz = args.z - a.z
+    const serviceStand = name === 'goto' && args.y === a.y && args.range === 0 &&
+      ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0))
+    const serviceSill = name === 'place' && args.blocks === undefined && args.item === (a.penBlock ?? 'cobblestone') &&
+      args.y === a.y && cleanupServiceDirection && [1, 2].some(n =>
+        dx === cleanupServiceDirection.x * n && dz === cleanupServiceDirection.z * n)
+    if (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill)) throw new Error(`${composite}: cleanup may only restore its own job block and service route`)
+    const cell = `${a.x},${a.y},${a.z}`
+    if (!ready || !bot.entity || bot.health <= 0 || bot.isSleeping) throw new Error(`${composite}: restoration pending at ${cell}: body is offline, dead, or sleeping`)
+    if (flee || holingUp || fighting) throw new Error(`${composite}: restoration pending at ${cell}: emergency reflex owns the body`)
+    if (task && task !== ownerTask) throw new Error(`${composite}: restoration pending at ${cell}: another task owns the body`)
+    const refusal = refusalFor(name, args)
+    if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
+    if (serviceStand) {
+      cleanupServiceDirection = { x: dx / 3, z: dz / 3 }
+      useMoves(false)
+      return long.goto(args)
+    }
+    return long.place({ ...args, [ROLLBACK_PLACE]: true })
   }
   const until = makeUntil({ waitTicks: n => bot.waitForTicks(n), alive, composite })
   // between steps: night with a bed is slept through and the composite never sees it; anything else that needs a person stops the task
@@ -2859,6 +2997,7 @@ function makeApi (composite, a, alive) {
     report,
     api: {
       act,
+      cleanupAct,
       until,
       checkpoint,
       block: blockAt,
@@ -2878,6 +3017,7 @@ function makeApi (composite, a, alive) {
       plan: planOf,
       // the shared map itself, for a composite that works over several places at once
       places: () => readPlaces(),
+      zones: () => zones,
       // what lies on the ground, how full I am, and a pause between steps: the body's own senses, not actions
       drops: range => dropsNear(range),
       freeSlots: () => bot.inventory.emptySlotCount(),
@@ -2896,7 +3036,7 @@ async function runComposite (name, mod, a) {
   const { api, notes, report } = makeApi(name, a, alive)
   const outcome = await mod.run(api, a).then(
     r => ({ stopped: 'done', ...r }),
-    e => { if (e instanceof HandBack) return { stopped: e.reason }; throw e })
+    e => { if (e instanceof HandBack) return { stopped: e.reason }; if (name === 'villager.roll') e.report = { ...report }; throw e })
   return { ...report, ...outcome, notes: notes.length ? notes.join('; ') : undefined }
 }
 
