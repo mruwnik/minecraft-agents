@@ -1482,6 +1482,18 @@ export function errorRepeat (seen, message, now, window = 60000) {
   if (now - seen.said < window) return { say: null, seen: { ...seen, suppressed } }
   return { say: `${message} (${suppressed} more in the last ${Math.round((now - seen.said) / 1000)}s)`, seen: { message, said: now, suppressed: 0 } }
 }
+// One repeat window per KIND of message, not one for the whole process. A body refused at login is kicked again on
+// every retry, every ten seconds, for ever (#119), and the single shared slot made it worse than it looks: two faults
+// taking turns each reset the other's window, so neither was ever suppressed. A kick loop gets a long window because
+// it will never stop on its own and the first line already said everything; a changed reason is still said at once,
+// which a plain gate would have thrown away.
+export const REPEAT_DEFAULT = 60000
+export const REPEAT_WINDOW = { kicked: 600000 }
+export function repeatByType (seen, type, message, now) {
+  const { say, seen: next } = errorRepeat(seen?.[type] ?? null, message, now, REPEAT_WINDOW[type] ?? REPEAT_DEFAULT)
+  return { say, seen: { ...seen, [type]: next } }
+}
+
 // what water costs a walk: a digging one tunnelled into an underground lake and half drowned in its own shaft (Aviendha)
 export const waterWary = dig => dig ? { liquidCost: 40, infiniteLiquidDropdownDistance: false } : { liquidCost: 1, infiniteLiquidDropdownDistance: true }
 
