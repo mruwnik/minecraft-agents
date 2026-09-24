@@ -74,7 +74,7 @@ you alive longer:
 
 | action | what you get |
 |---|---|
-| `state` | health, food, time of day, position, other players (rarely needed: results flag low health/food themselves) |
+| `state` | health, food, time of day, position, other players (rarely needed: results flag low health/food themselves). `code=` is the commit this body loaded; `code=<commit>+<n>` with `dirty=` means it started while somebody was mid-edit and is running none of the committed versions, so a tool misbehaving here is worth a `git status` and a restart before it is worth debugging. The same pair is in the `spawned` event, with the advice spelled out |
 | `look_around` | nearby mobs/players with coordinates, notable blocks (ores, chests, beds, ...) |
 | `look` | a picture (see above); the reply also lists visible entities with pixel position and distance |
 | `inventory` | what you carry, free slots, armour |

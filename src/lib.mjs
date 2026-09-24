@@ -779,6 +779,25 @@ export function staleCode (started, mtimes, now) {
   return newer.length ? newer.map(([file]) => file) : null
 }
 
+// Which code this body is ACTUALLY running, for the line it says when it joins. Two implementers share this tree, so a
+// body started between two saves loads the new helper with the old caller and throws something that is in nobody's
+// diff: mine threw `Cannot destructure property 'edible'` against a tree that was mid-commit, not broken, and the
+// twenty minutes I spent on it were spent on a ghost (#140). Only files a body LOADS count as dirty - an edited guide
+// or a note in state/ changes nothing it runs, and a join line that cried wolf would stop being read.
+export const CODE_PATH = /^(src|library|tools)\/.*\.mjs$/
+const SHOWN = 4
+export function codeVersion ({ head, changed = [] }) {
+  if (!head) return { code: 'unknown', advice: 'this body could not read its own git HEAD, so it cannot tell you which code it is running: it may be running anything' }
+  const code = changed.filter(file => CODE_PATH.test(file)).sort()
+  if (!code.length) return { code: head }
+  const shown = [...code.slice(0, SHOWN), ...(code.length > SHOWN ? [`and ${code.length - SHOWN} more`] : [])].join(' ')
+  return {
+    code: `${head}+${code.length}`,
+    dirty: shown,
+    advice: `this body is NOT running ${head} as committed: ${code.length} code file${code.length > 1 ? 's were' : ' was'} edited and uncommitted when it started, so it may hold half of somebody's change. A tool that misbehaves here is worth a \`git status\` and a restart before it is worth debugging`
+  }
+}
+
 // where a harvested crop is planted again, relative to the crop: the block to place against and the face of it. Field crops stand on the
 // farmland below; a cocoa pod hangs on the side of a jungle log, and its `facing` points at that log
 const FACING = { north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] }
