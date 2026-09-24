@@ -18,6 +18,8 @@ import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
+import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
+import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
@@ -593,6 +595,8 @@ function connect () {
       if (nearby.length) dropMeal(`hit by ${nearby[0]} mid-meal`)
       const cause = hurtCause({ lost: lastHealth - bot.health, nearby, sinceCreeperMs: Date.now() - creeperSeenAt, fell: Date.now() - lastFall.at < 1500 ? lastFall.blocks : 0, fledFrom: lastReflex?.kind === 'fleeing' ? lastReflex.mob : null, sinceFledMs: Date.now() - (lastReflex?.at ?? 0), food: bot.food, oxygen: bot.oxygenLevel ?? 20 })
       lastWound = { cause, nearby, at: Date.now() }
+      // a hit the water or a fall gave is no mob in reach (17:46Z: drowning at health 5, the hole-up refusal said a hostile hit me)
+      if (mobHit(cause)) lastMobHurt = Date.now()
       emit('hurt', { health: Math.round(bot.health), food: bot.food, nearby, ...(cause ? { cause } : {}) })
     }
     lastHealth = bot.health
@@ -815,6 +819,10 @@ function digPocket (block) {
     .catch(e => emit('surfacing', { way: 'pocket', error: String(e?.message ?? e) }))
     .finally(() => { pocketDigging = false })
 }
+// the eight cells around the body (four sides, feet and head), as names: a room is one with at most a doorway open
+const sidesAround = pos => [[1, 0], [-1, 0], [0, 1], [0, -1]].flatMap(([dx, dz]) => [0, 1].map(dy => bot.blockAt(pos.floored().offset(dx, dy, dz))?.name ?? 'air'))
+// card 0f110bb5 (1): under a roof or in a walled room at night the body chases and charges nothing; it holds where it is
+const inShelter = me => nightShelter({ night: isNight(bot.time.timeOfDay), roofed: underRoof(columnAbove(me)), walled: walledIn(sidesAround(me)) })
 let floating = false
 let diggingOut = false
 let resets = 0
@@ -1009,10 +1017,15 @@ function startFlee (entity, me, note, extra = {}) {
 }
 
 // a fixed point straight away from the mob (see fleeGoal): a goal that moved with the mob never let the run sprint
+// at night the point is a bed or a placed torch that lies away from the mob, within twenty blocks of where the run began;
+// with none, the straight point is cut at that bound (card 0f110bb5 (2): a 52-block run into dark hills is where the zombie came back)
 function fleeTowards (me, entity) {
-  flee.goal = fleeGoal(me, entity.position, fleeRange(entity.name) + 4)
+  const night = isNight(bot.time.timeOfDay)
+  const refuges = night ? [...bedsNear().map(p => ({ x: p.x, y: p.y, z: p.z, kind: 'bed' })), ...torchesNear().map(p => ({ x: p.x, y: p.y, z: p.z, kind: 'torch' }))] : []
+  flee.goal = nightFleeGoal({ night, me, home: flee.home, mob: entity.position, dist: fleeRange(entity.name) + 4, refuges })
   bot.pathfinder.setGoal(new goals.GoalNearXZ(flee.goal.x, flee.goal.z, 2), false)
 }
+const torchesNear = () => bot.findBlocks({ matching: ['torch', 'wall_torch', 'soul_torch', 'soul_wall_torch', 'lantern'].map(n => bot.registry.blocksByName[n]?.id).filter(Boolean), maxDistance: 24, count: 8 })
 
 function endFlee () {
   if (!flee) return
@@ -1033,7 +1046,17 @@ function stepFlee (me) {
   // #147(d): my own body fled a creeper into the cave under my test pits and died there. A run heading down or into the
   // dark is running INTO what it is running from, so it stops and hands back instead of finding the cave
   const here = bot.blockAt(me.floored())
-  const step = fleeStep({
+  // (3) the threat is whatever last hurt me: both runs said "from: zombie" while a spider took the body from 14 to 2 (15:15Z).
+  // Armed and hit by something that cannot be outrun, the body turns and fights it instead
+  const other = retarget({ fleeing: flee.mob, hurtBy: lastWound?.nearby ?? [], hurtMsAgo: Date.now() - (lastWound?.at ?? 0) })
+  const otherEntity = other ? nearbyHostiles(8).find(e => e.name === other) : null
+  if (otherEntity) {
+    const armed = bot.inventory.items().some(i => /_sword$|_axe$/.test(i.name))
+    if (fightNotFlee({ armed, mob: other })) { endFlee(); startFight(otherEntity, `hit by a ${other} mid-run: it cannot be outrun, so I fight it`); return }
+    return startFlee(otherEntity, me, `hit by a ${other} mid-run: it is the threat now`)
+  }
+  const step = nightFleeStep({
+    night: isNight(bot.time.timeOfDay),
     phase: flee.phase,
     threatDist: alive ? entity.position.distanceTo(me) : Infinity,
     homeDist: me.distanceTo(flee.home),
@@ -1063,12 +1086,16 @@ function stepFlee (me) {
 }
 
 // #147. The body's own last resort, the escape the reflex memory already knew: go under the ground and close the hole.
-// Nothing here decides WHETHER (holeUpVerdict) or WHAT (burrowPlan); this digs, places and says where the body went.
+// Nothing here decides WHETHER (holeUpVerdict, holeUpBlock) or WHERE (burrowSite); this digs, places and says where the body went.
 const HOLE_AGAIN_MS = 300000
+const HOLE_STEP_MS = 3000 // a creeper refusal moves the body once per this
+const HOLE_WALK_MS = 4000 // the step to a sounder cell gets this long, not a search
 let holedUp = null // { at, why }: one hole per emergency, or the reflex digs a fresh one every tick it is still hungry
 let holingUp = false
 let lives = 0 // deaths so far: a hole-up dug by a body that has since died must stop, not cap a hole at the respawn point
 let holeRefusedAt = 0
+let holeSteppedAt = 0
+let lastHoleAt = 0 // holedUp is cleared by day (it gates the bedtime walk), so the once-per-emergency guard keeps its own clock
 // a cell closed by placing a block against any solid neighbour of it: inside a 1-wide shaft there is nowhere to walk to
 async function fillCell (p, item) {
   const there = bot.blockAt(p)
@@ -1084,66 +1111,147 @@ async function fillCell (p, item) {
   }
   return false
 }
-async function holeUp (why) {
-  if (holingUp || bot.isSleeping || !bot.entity) return
-  if (holedUp && Date.now() - holedUp.at < HOLE_AGAIN_MS) return
-  const me = bot.entity.position
-  const hostileDist = Math.min(Infinity, ...nearbyHostiles(16).map(e => e.position.distanceTo(me)))
-  const armed = bot.inventory.items().some(i => /_sword$|_axe$/.test(i.name))
-  const hurtMsAgo = Date.now() - lastHurt
-  if (holeUpRefusal({ armed, hostileDist, hurtMsAgo })) {
-    if (Date.now() - holeRefusedAt > 10000) emit('holing_up', { why, way: 'fight', note: `a hostile ${Math.round(hostileDist)} blocks off${hurtMsAgo <= HOLE_HURT_MS ? `, and it hit me ${(hurtMsAgo / 1000).toFixed(1)} s ago` : ''}: a hole takes seconds to dig with it hitting me, so I fight instead` })
-    holeRefusedAt = Date.now()
-    return
+// the cap and the pillar: full solid blocks only (one hole was capped with leaf_litter, the first block-shaped item in the pack)
+const capItems = () => bot.inventory.items().filter(i => capChoice([{ name: i.name, boundingBox: bot.registry.blocksByName?.[i.name]?.boundingBox }]))
+const capBlock = () => capItems()[0] ?? null
+const capCount = () => capItems().reduce((n, i) => n + i.count, 0)
+// what the site probe reads for one cell: the column below it and the four cells beside each depth (a channel one cell to the
+// side poured into the shaft as it was dug, 15:02Z)
+const siteReading = cell => ({
+  below: [1, 2, 3].map(dy => bot.blockAt(cell.offset(0, -dy, 0))?.name ?? null),
+  beside: [1, 2, 3].map(dy => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => bot.blockAt(cell.offset(dx, -dy, dz))?.name ?? null))
+})
+const passable = b => Boolean(b) && b.boundingBox !== 'block'
+const standable = cell => passable(bot.blockAt(cell)) && passable(bot.blockAt(cell.offset(0, 1, 0))) && bot.blockAt(cell.offset(0, -1, 0))?.boundingBox === 'block'
+const sitesAround = start => {
+  const out = []
+  for (let dx = -HOLE_STEP; dx <= HOLE_STEP; dx++) {
+    for (let dz = -HOLE_STEP; dz <= HOLE_STEP; dz++) {
+      if (dx === 0 && dz === 0) continue
+      const cell = start.offset(dx, 0, dz)
+      out.push({ dx, dz, standable: standable(cell), ...siteReading(cell) })
+    }
   }
+  return out
+}
+// WHETHER now. Returns true when a hole-up is under way (or the body is already down), false when it was refused, so the
+// reflex tick that asked falls through to the fight it should have instead: the verdict returned early every tick and the
+// fight reflex never ran while an armed body stood refused (17:46Z)
+function holeUp (why) {
+  if (holingUp || bot.isSleeping || !bot.entity) return true
+  if (Date.now() - lastHoleAt < HOLE_AGAIN_MS) return true
+  const me = bot.entity.position
+  const nearest = nearbyHostiles(16).map(e => ({ entity: e, dist: e.position.distanceTo(me) })).sort((a, b) => a.dist - b.dist)[0]
+  const armed = bot.inventory.items().some(i => /_sword$|_axe$/.test(i.name))
+  const hurtMsAgo = Date.now() - lastMobHurt
+  const way = holeUpBlock({ armed, hostile: nearest?.entity.name ?? null, hostileDist: nearest?.dist ?? Infinity, hurtMsAgo })
+  if (!way) { digIn(why); return true }
+  if (Date.now() - holeRefusedAt > 10000) emit('holing_up', { why, way, note: refusalNote({ way, hostile: nearest?.entity.name, hostileDist: nearest?.dist ?? Infinity, hurtMsAgo }) })
+  holeRefusedAt = Date.now()
+  // a creeper in reach is never fought and the run it came from has just given up: refused and standing still was the gap
+  if (way === 'step') stepAway(nearest.entity, me)
+  return false
+}
+function stepAway (entity, me) {
+  if (Date.now() - holeSteppedAt < HOLE_STEP_MS) return
+  holeSteppedAt = Date.now()
+  const goal = fleeGoal(me, entity.position, HOLE_MELEE + 2)
+  bot.pathfinder.setGoal(new goals.GoalNearXZ(goal.x, goal.z, 1), false)
+  setTimeout(() => { if (!task && !followTarget && !flee) bot.pathfinder.setGoal(null) }, HOLE_STEP_MS)
+}
+// the step to a sounder cell: a short walk with a deadline, never a search
+async function stepTo (cell) {
+  await within(HOLE_WALK_MS, bot.pathfinder.goto(new goals.GoalBlock(cell.x, cell.y, cell.z)), 'stepping to sounder ground').catch(() => {})
+  bot.pathfinder.setGoal(null)
+}
+// the column under the START cell, not under wherever the body is: one that landed on a rim slid about as it dug and dug a
+// cell under each place it slid to, none of them a shaft (18:15Z). After each cell the body steps down into it
+async function digDown (start, stopped) {
+  for (const k of [1, 2, 3]) {
+    const under = bot.blockAt(start.offset(0, -k, 0))
+    if (!under || under.boundingBox !== 'block') return
+    await bot.tool.equipForBlock(under).catch(() => {})
+    await bot.dig(under).catch(() => {})
+    await bot.waitForTicks(8)
+    if (stopped()) return
+    if (bot.entity.position.y > start.y - k + 0.5) await within(1500, bot.pathfinder.goto(new goals.GoalBlock(start.x, start.y - k, start.z)), 'stepping into the shaft').catch(() => {})
+    bot.pathfinder.setGoal(null)
+    if (stopped()) return
+  }
+}
+// up instead of down: jump, and click the block under the feet while the body is in the air above it
+async function pillarUp (stopped) {
+  for (const _ of [1, 2, 3]) {
+    const item = capBlock()
+    const feet = bot.entity.position.floored()
+    const under = bot.blockAt(feet.offset(0, -1, 0))
+    if (!item || !under || under.boundingBox !== 'block') return
+    await bot.equip(item, 'hand').catch(() => {})
+    await bot.lookAt(feet.offset(0.5, -1, 0.5), true).catch(() => {})
+    bot.setControlState('jump', true)
+    for (let t = 0; t < 8 && bot.entity.position.y - feet.y < 0.9; t++) await bot.waitForTicks(1)
+    const placed = await bot.placeBlock(under, new Vec3(0, 1, 0)).then(() => true, () => false)
+    bot.setControlState('jump', false)
+    await bot.waitForTicks(6)
+    if (!placed || stopped()) return
+  }
+}
+async function digIn (why) {
   holingUp = true
   const life = lives
   holedUp = { at: Date.now(), why }
+  lastHoleAt = Date.now()
+  // died while digging (13:40Z): the respawned body stood in a village bed and said it had holed up there; and one that
+  // respawned INTO its bed went on capping from there (17:27Z)
+  const stopped = () => holeUpAborted({ life, lives, asleep: bot.isSleeping })
   try {
     if (task) cancelTask(`holing up by myself: ${why}`)
     bot.pathfinder.setGoal(null)
-    const start = bot.entity.position.floored()
-    const surface = { x: start.x, y: start.y, z: start.z }
-    // the floor is read BEFORE anything is dug: down into lava, water or a cave is the death this is here to avoid
-    const below = [1, 2, 3].map(dy => bot.blockAt(start.offset(0, -dy, 0))?.name ?? null)
-    const capBlock = () => bot.inventory.items().find(i => bot.registry.blocksByName?.[i.name] && !/_bed$|_gate$|_door$|torch|sapling|sand$|gravel/.test(i.name))
-    const plan = burrowPlan({ below, cap: Boolean(capBlock()) })
-    emit('holing_up', { why, way: plan.way, ...(plan.why ? { floor: plan.why } : {}) })
-    if (plan.way === 'dig') {
-      for (const _ of [1, 2, 3]) {
-        const under = bot.blockAt(bot.entity.position.floored().offset(0, -1, 0))
-        if (!under || under.boundingBox !== 'block') break
-        await bot.tool.equipForBlock(under).catch(() => {})
-        await bot.dig(under).catch(() => {})
-        await bot.waitForTicks(8)
-        if (lives !== life) return
-      }
+    let start = bot.entity.position.floored()
+    // the site is read BEFORE anything is dug: the column, and what stands beside it, which pours in. A bad site is a step
+    // to a sounder cell or a pillar up before it is a wall around the spot
+    const plan = burrowSite({ here: siteReading(start), around: sitesAround(start), blocks: capCount() })
+    emit('holing_up', { why, way: plan.way, ...(plan.step ? { step: `${start.x + plan.step.dx},${start.y},${start.z + plan.step.dz}` } : {}), ...(plan.why ? { floor: plan.why } : {}) })
+    if (plan.step) {
+      await stepTo(start.offset(plan.step.dx, 0, plan.step.dz))
+      if (stopped()) return
+      start = bot.entity.position.floored()
     }
+    const surface = { x: start.x, y: start.y, z: start.z }
+    if (plan.way === 'dig') await digDown(start, stopped)
+    if (plan.way === 'pillar') await pillarUp(stopped)
     // the body is still falling down its own shaft for a tick or two, and the cap goes over the head it ends up with.
     // A respawned body carries nothing, but it lands on what it dug: the cap is chosen now, not before the first swing
     await bot.waitForTicks(10)
-    // died while digging (13:40Z): the respawned body stood in a village bed and said it had holed up there
-    if (lives !== life) return
+    if (stopped()) return
     const block = capBlock()
     const feet = bot.entity.position.floored()
+    // a shaft that filled with water is not capped: under a cap in water the body drowns. It is reported as wet instead
+    const wet = bot.entity.isInWater || FLUIDS.has(bot.blockAt(feet)?.name ?? '')
     // the ring and the roof, however the hole was made: a shaft dug in a cave stands open to it on the sides
-    const cells = holeCells()
+    const cells = plan.way === 'pillar' || wet ? [] : holeCells()
     const closed = []
-    for (const [dx, dy, dz] of cells) closed.push(await fillCell(feet.offset(dx, dy, dz), block?.name))
-    const open = closed.some(done => !done)
+    for (const [dx, dy, dz] of cells) {
+      if (stopped()) return
+      closed.push(await fillCell(feet.offset(dx, dy, dz), block?.name))
+    }
+    const open = plan.way === 'pillar' ? feet.y - surface.y < HOLE_DEPTH : wet || closed.some(done => !done)
     emit('holed_up', {
       why,
       way: plan.way,
       open,
+      ...(wet ? { wet } : {}),
       at: `${feet.x},${feet.y},${feet.z}`,
-      note: holedUpNote({ way: plan.way, open, surface })
+      note: shelterNote({ way: plan.way, open, surface, wet })
     })
   } catch (e) {
+    if (stopped()) return
     emit('holed_up', { why, error: String(e?.message ?? e), note: 'the hole-up itself failed: dig me out or tell me what to do' })
   } finally {
     holingUp = false
   }
 }
+let lastMobHurt = 0 // the last hit a mob could have given: what the hole-up refusal counts, not a fall or the water
 let lastHurt = 0
 // mineflayer's bot.wake() sends action id 2, which since 1.21.6 means stop_sprinting: the server never hears it
 let lastLeftBed = 0
@@ -1221,7 +1329,10 @@ function reflexTick () {
     night: isNight(bot.time.timeOfDay),
     mobNear: nearbyHostiles(7).length > 0
   })
-  if (holeWhy) { holeUp(holeWhy.why); return }
+  // in the water the problem is air, not shelter (17:46Z: a body drowning at health 5 was told to hole up); and a refused
+  // hole-up falls through to the fight or the run below instead of ending the tick
+  const drowning = surfacing || bot.entity.isInWater
+  if (holeWhy && !drowning && holeUp(holeWhy.why)) return
   // #97: an enderman killed Ganesha's body at its own door in five seconds. Nothing here wins that fight, so one that
   // comes within arm's reach is backed away from exactly as a creeper is, before the reflex below can think of fighting it
   const unwinnable = fleeUnwinnable(nearbyHostiles(ENDERMAN_RANGE).map(e => ({ name: e.name, dist: e.position.distanceTo(me), entity: e })))
@@ -1237,6 +1348,8 @@ function reflexTick () {
     .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0]
   const archer = nearbyHostiles(24).filter(e => ARCHERS.has(e.name)).sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0]
   const ranged = rangedThreat({ hurtMsAgo: Date.now() - lastHurt, fighting: Boolean(fighting), armed, health: bot.health, archerNear: Boolean(archer), inWater: bot.entity.isInWater, meleeNear: nearbyHostiles(5).some(e => !ARCHERS.has(e.name)) })
+  const sheltered = inShelter(me)
+  if (ranged === 'charge' && sheltered) { holdAgainst(archer, me); return }
   if (ranged === 'charge') {
     fighting = archer
     fightStart = me.clone()
@@ -1248,9 +1361,16 @@ function reflexTick () {
     return
   }
   const crowd = crowdSize(nearbyHostiles(24).filter(e => !ignorableMob(e.name, where)).map(e => ({ name: e.name, dist: e.position.distanceTo(me) })))
-  const outmatched = shouldFlee({ armed, health: bot.health, attackers: Math.max(crowd, 1), armorPieces: [5, 6, 7, 8].filter(slot => bot.inventory.slots[slot]).length })
+  const hurtBy = Date.now() - (lastWound?.at ?? 0) <= 3000 ? lastWound?.nearby ?? [] : []
+  const attackers = attackerCount({ crowd, seen: nearbyHostiles(5).map(e => e.name), hurtBy, hurtMsAgo: Date.now() - (lastWound?.at ?? 0) })
+  const outmatched = shouldFlee({ armed, health: bot.health, attackers: Math.max(attackers, 1), armorPieces: [5, 6, 7, 8].filter(slot => bot.inventory.slots[slot]).length })
+  // (3) what an armed body cannot outrun it fights: the run from a spider is what killed the body at health 2
+  if (chaser && !fighting && fightNotFlee({ armed, mob: chaser.name })) { startFight(chaser, `a ${chaser.name} cannot be outrun: fighting it, not running`); return }
+  // (1) at night under cover the body does not run out into the dark either, unless the mob is in the room with it
+  const inTheRoom = chaser && chaser.position.distanceTo(me) <= 2.5
   // an archer that just hit me counts like a chaser: mid-charge rangedThreat is silent, and a patrol shot Jizo from 20 to 0 that way
   if (((chaser || (archer && Date.now() - lastHurt < 5000)) && outmatched) || ranged === 'flee') {
+    if (sheltered && !inTheRoom) { holdAgainst(chaser ?? archer, me); return }
     if (startFlee(chaser ?? archer, me, undefined, { health: Math.round(bot.health), armed })) return
   }
   if (fighting && (!fighting.isValid || fighting.position.distanceTo(me) > (ARCHERS.has(fighting.name) ? 28 : 12))) {
@@ -1287,15 +1407,37 @@ function reflexTick () {
   if (!fighting && Date.now() >= chaseHeldUntil) {
     const threat = nearbyHostiles(4.5).filter(e => e.name !== 'creeper' && !NEVER_FIGHT.has(e.name))
       .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0]
-    if (threat) {
-      fighting = threat
-      fightStart = me.clone()
-      chaseLeash = CHASE_LEASH
-      equipBestWeapon().finally(() => bot.pvp.attack(threat))
-      lastReflex = { kind: 'fighting', mob: threat.name, at: Date.now() }
-      emit('fighting', { mob: threat.name, health: Math.round(bot.health) })
-    }
+    if (threat && sheltered) { swingAt(threat, me); return }
+    if (threat) startFight(threat)
   }
+}
+// a fight the reflex starts: pvp walks the body after the mob from here on, on the leash measured from this spot
+function startFight (threat, note) {
+  fighting = threat
+  fightStart = bot.entity.position.clone()
+  chaseLeash = CHASE_LEASH
+  equipBestWeapon().finally(() => bot.pvp.attack(threat))
+  lastReflex = { kind: 'fighting', mob: threat.name, at: Date.now() }
+  emit('fighting', { mob: threat.name, health: Math.round(bot.health), ...(note ? { note } : {}) })
+}
+// card 0f110bb5 (1). From shelter at night nothing is followed: a mob in reach is swung at from where the body stands, and an
+// archer is not charged; the gap it shoots through gets a block if the pack has one, and the driver is told either way
+let heldAt = 0
+let lastSwing = 0
+function swingAt (entity, me) {
+  if (Date.now() - heldAt > 10000) { heldAt = Date.now(); emit('holding', { mob: entity.name, health: Math.round(bot.health), note: holdNote({ mob: entity.name, melee: true }) }) }
+  if (Date.now() - lastSwing < 600 || entity.position.distanceTo(me) > 3.5) return
+  lastSwing = Date.now()
+  const swing = () => bot.lookAt(entity.position.offset(0, (entity.height ?? 1.8) * 0.8, 0), true).catch(() => {}).then(() => bot.attack(entity))
+  if (/_sword$|_axe$/.test(bot.heldItem?.name ?? '')) swing(); else equipBestWeapon().finally(swing)
+}
+async function holdAgainst (entity, me) {
+  if (!entity || Date.now() - heldAt < 10000) return
+  heldAt = Date.now()
+  bot.pathfinder.setGoal(null)
+  const cell = plugCells(me, entity.position).map(({ dx, dy, dz }) => me.floored().offset(dx, dy, dz)).find(p => bot.blockAt(p)?.boundingBox !== 'block')
+  const plugged = cell ? await fillCell(cell, capBlock()?.name) : false
+  emit('holding', { mob: entity.name, health: Math.round(bot.health), ...(plugged ? { plugged: `${cell.x},${cell.y},${cell.z}` } : {}), note: holdNote({ mob: entity.name, plugged }) })
 }
 
 async function equipBestWeapon () {
