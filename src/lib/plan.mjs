@@ -103,18 +103,22 @@ const clearBetween = (kindAt, from, to) => {
     .filter(([dx, dz]) => !(dx === from.dx && dz === from.dz) && !(dx === to.dx && dz === to.dz))
     .every(([dx, dz]) => !tallKind(kindAt(dx, dz)))
 }
+const key = (dx, dz) => `${dx},${dz}`
+const planMap = cells => new Map(cells.map(c => [key(c.dx, c.dz), c]))
+// a cell of the plan a body stands on (LANE_KINDS), or ground outside the plan, which the plan says nothing about
+const standableIn = map => (dx, dz) => {
+  const cell = map.get(key(dx, dz))
+  return !cell || LANE_KINDS.has(PLAN_LEGEND[cell.ch]?.kind)
+}
+const named = cells => `${cells.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')}${cells.length > 4 ? ` and ${cells.length - 4} more` : ''}`
 export function planLane (cells) {
   const crops = (cells ?? []).filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop')
   if (!crops.length) return {}
-  const key = (dx, dz) => `${dx},${dz}`
-  const map = new Map(cells.map(c => [key(c.dx, c.dz), c]))
+  const map = planMap(cells)
   const kindAt = (dx, dz) => PLAN_LEGEND[map.get(key(dx, dz))?.ch]?.kind ?? null
   const bounds = ['dx', 'dz'].map(k => [Math.min(...cells.map(c => c[k])) - 1, Math.max(...cells.map(c => c[k])) + 1])
   const inside = (dx, dz) => dx >= bounds[0][0] && dx <= bounds[0][1] && dz >= bounds[1][0] && dz <= bounds[1][1]
-  const standable = (dx, dz) => {
-    const cell = map.get(key(dx, dz))
-    return !cell || LANE_KINDS.has(PLAN_LEGEND[cell.ch]?.kind)
-  }
+  const standable = standableIn(map)
   // flood in from the ring around the plan, which is all ground the plan never claimed
   const reached = new Set()
   const queue = []
@@ -131,12 +135,25 @@ export function planLane (cells) {
     (lane.dx - crop.dx) ** 2 + (lane.dz - crop.dz) ** 2 <= LANE_REACH2 && clearBetween(kindAt, lane, crop))
   const stranded = crops.filter(c => !served(c))
   if (!stranded.length) return {}
-  const named = stranded.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')
-  const more = stranded.length > 4 ? ` and ${stranded.length - 4} more` : ''
   const subject = stranded.length === 1
     ? `1 crop cell has nothing to stand on within ${LANE_REACH} of it`
     : `${stranded.length} crop cells have nothing to stand on within ${LANE_REACH} of them`
-  return { noLane: `${subject} (${named}${more}): lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand` }
+  return { noLane: `${subject} (${named(stranded)}): lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand` }
+}
+
+// A crop pocket in a plan: a crop cell with no walkable cell on any of its four sides. A sweep works from the lanes,
+// but a harvest walks in over the cut beds and the replant fills them behind the body, so a job can end deep in the
+// rows, and from there a walk (which steps round crops) finds nothing: jizo-melon-patch, 09-26, a body at 5,63,-86
+// with wheat on every side, freed by harvesting one plant (card 68f4e331). Said before the plan is built, with the
+// fix. A warning, not a refusal: the shape is legal, and a driver who works from the lanes never enters a pocket
+export function planPockets (cells) {
+  const crops = (cells ?? []).filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop')
+  if (!crops.length) return {}
+  const standable = standableIn(planMap(cells))
+  const pockets = crops.filter(c => !STEPS.some(([dx, dz]) => standable(c.dx + dx, c.dz + dz)))
+  if (!pockets.length) return {}
+  const subject = pockets.length === 1 ? '1 crop cell has no walkable cell beside it' : `${pockets.length} crop cells have no walkable cell beside them`
+  return { pockets: `${subject} (${named(pockets)}): a job that ends on one is walled in by crops (harvest a neighbour, or trample=true); a . lane every third row leaves every bed a step from one` }
 }
 
 // what it takes to build this plan from nothing: one water bucket does the whole field, a torch cell needs its post too

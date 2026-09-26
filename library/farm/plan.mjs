@@ -7,7 +7,7 @@
 // with the ground (a bottom slab is a half-step down that bodies float and wedge on). Only a settled source is capped: a slab
 // laid into flowing water is not waterlogged and cuts the flow, so a flowing cell is poured into first, or left with the reason.
 // It only reads the map and writes it back, so it never takes the body over.
-import { parsePlan, planAnchor, planCells, planErrors, planLane, planBill, planSummary, compact, mapRefusal } from '../../src/lib.mjs'
+import { parsePlan, planAnchor, planCells, planErrors, planLane, planPockets, planBill, planSummary, compact, mapRefusal } from '../../src/lib.mjs'
 
 export default {
   doc: "farm.plan [name=] [map=] [check=true] [kind=] [x= y= z=] [note=]: check a plan and save it on the shared map, or print the one saved under that name. check=true runs every check and saves nothing, so a map can be argued with before every agent sees it",
@@ -51,8 +51,9 @@ export default {
     // and whether there is anything to walk on between the gate and the rows. A field with none cannot be worked at
     // all - every `goto` into it answers "no walkable path", because a walk steps AROUND planted cells rather than
     // trample them - but the shape is not a contradiction, so it is saved with the fault named rather than refused
-    // (Chani took her own carrot patch's missing lane for a tool bug, BUGS.md 09-23)
-    const warn = [planLane(parsed.cells).noLane, note].filter(Boolean).join('; ')
+    // (Chani took her own carrot patch's missing lane for a tool bug, BUGS.md 09-23). And which beds have no walkable
+    // cell beside them at all: a job that ends on one is walled in by its own crops (card 68f4e331)
+    const warn = [planLane(parsed.cells).noLane, planPockets(parsed.cells).pockets, note].filter(Boolean).join('; ')
     // a check answers everything a save answers, in the same words: an answer that differed from the real one would be
     // worth less than no check at all. It only says `checked` where a save says `saved`, and how to save it
     const said = { at: where, is: planSummary(parsed), needs: planBill(parsed), ...(warn ? { warn } : {}) }

@@ -76,3 +76,41 @@ for (const [name, action, args, expected] of [
   test(`mayTrample: ${name}`, () => assert.equal(mayTrample(action, args), expected))
 }
 test('mayDig and mayTrample read different keys', () => assert.deepEqual([mayDig('goto', { trample: true }), mayTrample('goto', { dig: true })], [false, false]))
+
+// The plan check (item 3 of the card): a crop cell with no walkable cell on any side is a pocket, and a job that ends on
+// one is walled in. Said when the plan is checked or saved, before it is built, with the fix. A warning, not a refusal:
+// the shape is legal, and a driver who works from the lanes never enters a pocket
+import { planPockets, parsePlan } from '../src/lib.mjs'
+import { fakeApi } from './helpers.mjs'
+import farmPlan from '../library/farm/plan.mjs'
+
+const pocketsOf = (...rows) => planPockets(parsePlan(rows.join('\n')).cells)
+const band = (rows, width) => Array.from({ length: rows }, () => 'w'.repeat(width))
+const jizo = ['C' + 'w'.repeat(15), ...band(3, 16), '~'.repeat(16), ...band(8, 16), '~'.repeat(16), ...band(4, 16)]
+const FIX = 'a job that ends on one is walled in by crops (harvest a neighbour, or trample=true); a . lane every third row leaves every bed a step from one'
+for (const [name, got, expected] of [
+  ['the middle of a three by three bed', pocketsOf('www', 'www', 'www'), { pockets: `1 crop cell has no walkable cell beside it (1,1): ${FIX}` }],
+  ['the melon patch: 140 cells between its channels, the count its census gave', pocketsOf(...jizo),
+    { pockets: `140 crop cells have no walkable cell beside them (1,1 2,1 3,1 4,1 and 136 more): ${FIX}` }],
+  ['a lane every third row: every bed is a step from one', pocketsOf('wwww', '....', 'wwww', 'wwww', '~~~~', 'wwww'), {}],
+  ['two rows between lanes are fine, three are not', pocketsOf('wwww', 'wwww', 'wwww', '....'), { pockets: `2 crop cells have no walkable cell beside them (1,1 2,1): ${FIX}` }],
+  ['a crop fenced in on every side', pocketsOf('###', '#w#', '###'), { pockets: `1 crop cell has no walkable cell beside it (1,1): ${FIX}` }],
+  ['a gate beside it is a way out', pocketsOf('#G#', '#w#', '###'), {}],
+  ['the ground round the plan is walkable', pocketsOf('ww', 'ww'), {}],
+  ['a plan with no crops has no pockets', pocketsOf('###', '#.#', '#G#'), {}],
+  ['an empty plan is not a complaint', planPockets([]), {}]
+]) {
+  test(`planPockets: ${name}`, () => assert.deepEqual(got, expected))
+}
+
+test('farm.plan: a checked map names its pockets beside its other warnings', async () => {
+  const { api, calls } = fakeApi({ places: [] })
+  const out = await farmPlan.run(api, { map: '~wwww\n~wwww\n~wwww', x: 0, y: 63, z: 0, check: true })
+  assert.deepEqual([calls, out.warn], [[], `2 crop cells have no walkable cell beside them (2,1 3,1): ${FIX}`])
+})
+
+test('farm.plan: a map with a lane beside every bed warns about nothing', async () => {
+  const { api } = fakeApi({ places: [] })
+  const out = await farmPlan.run(api, { map: '~ww\n~ww\n...', x: 0, y: 63, z: 0, check: true })
+  assert.equal(out.warn, undefined)
+})
