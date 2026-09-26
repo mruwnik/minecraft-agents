@@ -6,7 +6,7 @@ import { campfireCarried, replaceCensus } from './shared/hive.mjs'
 import { placeRefusal } from '../../src/lib.mjs'
 
 export default {
-  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary',
+  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary; without shears (or bottles) the harvest alone is skipped and missing= says which',
   stops: 'one round is complete, a ripe hive is unsafe, or a step fails twice',
   args: { place: 'string!', size: 'number', mode: 'string', breed: 'boolean', deposit: 'boolean', range: 'number', until: 'number' },
 
@@ -41,7 +41,14 @@ export default {
       await api.checkpoint()
     }
 
-    if (inspect.ripe) {
+    // the tool-free steps have run by now, so a bag without the harvest tool skips the harvest alone and says so,
+    // rather than refusing the whole round (a shears-less colony used to get no guard and no breeding either)
+    const tool = (a.mode ?? 'comb') === 'bottle' ? 'glass_bottle' : 'shears'
+    if (inspect.ripe && !(api.inv()[tool] > 0)) {
+      summary.missing = tool
+      api.note(`${inspect.ripe} ripe hive${inspect.ripe > 1 ? 's' : ''} left alone: no ${tool} carried`)
+    }
+    if (inspect.ripe && !summary.missing) {
       const cut = await api.act('apiary.harvest', { place: a.place, mode: a.mode, range: a.range })
       summary.harvested += cut.harvested ?? 0
       // the harvest read the hives again after its last click, so ITS census is the fresher one and replaces the

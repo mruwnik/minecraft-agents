@@ -4,7 +4,7 @@ import { apiarySnapshot, hiveLine } from './shared/common.mjs'
 import { apiaryCensus } from './shared/hive.mjs'
 
 export default {
-  doc: 'apiary.inspect place=|x= y= z= [range=16]: inspect nearby hives, smoke, open or raised fires, entrances, flowers and visible bees',
+  doc: 'apiary.inspect place=|x= y= z= [range=16]: inspect the hives, smoke, lit fires (open or raised), entrances, flowers and visible bees within range= of the place',
   stops: 'the census is complete, or the apiary cannot be reached',
   args: { place: 'string', x: 'number', y: 'number', z: 'number', range: 'number' },
 
@@ -14,6 +14,8 @@ export default {
     // that a reader can check the top line against the line below it instead of trusting it (Mariel, item 18)
     return {
       ...apiaryCensus(seen.hives, seen.fires),
+      // the same count apiary.guard answers with, so the two can be checked against each other
+      fires: seen.fires.filter(f => f.lit).length,
       beesVisible: seen.bees.length,
       grownVisible: seen.bees.filter(b => b.grown).length,
       flowers: seen.flowers,

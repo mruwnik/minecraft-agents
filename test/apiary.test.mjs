@@ -2,12 +2,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { fakeApi } from './helpers.mjs'
+import { compact } from '../src/lib.mjs'
 import apiaryInspect from '../library/apiary/inspect.mjs'
 import apiaryBreed from '../library/apiary/breed.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
 import apiaryGuard from '../library/apiary/guard.mjs'
 import { hiveState, fireState, carpetCarried, apiaryCensus, replaceCensus } from '../library/apiary/shared/hive.mjs'
+import { apiaryCells, SCAN_HEIGHT } from '../library/apiary/shared/common.mjs'
 import { BEE_FLOWERS, BREEDING_FOOD, CREATURE_FOOD, creatureFood, apiaryGoods, routineSteps } from '../src/lib.mjs'
 
 // ---------------------------------------------------------------- bees are livestock, but never a ground flock
@@ -321,6 +323,112 @@ test('apiary.maintain: an open fire with no carpet to hand stops the round with 
   await assert.rejects(apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6 }), /open fire.*carpet/)
   assert.deepEqual(calls.filter(c => c.startsWith('apiary.harvest')), [])
 })
+
+// ---------------------------------------------------------------- one scan, anchored on the place
+// Mariel, 2026-09-26 21:00Z: from -1.4,64,49.6 (a creeper had just moved her) apiary.guard counted 1 fire where
+// apiary.inspect read all four hives as smoked; a walk to the marked centre and guard counted 4. The scan asked
+// find_blocks, which searches from the BODY and walks chunk sections in an octahedron that skips a diagonal section
+// (mineflayer blocks.js: apothem ceil((range+8)/16) = 2 for range 16, a section one over, one down and one across is 3
+// away). Inspect only saw the fires because hiveState reads the cells under each hive itself. So the cells are read
+// around the PLACE, one radius sideways and one band up and down, and where the body stands does not enter into it.
+const columnAt = (x, z, extra = {}) => ({
+  [`${x},65,${z}`]: block('beehive', { honey_level: 0, facing: 'south' }),
+  [`${x},65,${z + 1}`]: air(),
+  [`${x},64,${z}`]: air(),
+  [`${x},63,${z}`]: block('white_carpet'),
+  [`${x},62,${z}`]: block('campfire', { lit: true }),
+  ...ground(x, 62, z),
+  ...ground(x, 61, z),
+  ...extra
+})
+// four hives spread over the apiary, one of them ripe, one fire open (its carpet gone) and one raised (a side dug out)
+const wideWorld = () => ({
+  ...columnAt(4, 10), ...columnAt(16, 10), ...columnAt(10, 4), ...columnAt(10, 17),
+  '4,65,10': block('beehive', { honey_level: 5, facing: 'south' }),
+  '16,63,10': air(),
+  '9,62,4': air(),
+  '12,64,10': block('dandelion', {}, false),
+  '30,64,10': block('dandelion', {}, false),
+  '10,71,10': block('poppy', {}, false)
+})
+const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z)
+// a body-anchored find_blocks, as the real one is: only what lies within maxDistance of where the body stands
+const bodyAnchored = (world, pos) => ({
+  find_blocks: ({ block: name, maxDistance }) => ({ positions: Object.entries(world).filter(([, b]) => b.name === name).map(([k]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }).filter(p => dist(p, pos) <= maxDistance) }),
+  animals: { found: [] }
+})
+const offsetApiary = (pos, items = {}) => {
+  const world = wideWorld()
+  const made = fakeApi({ places: [APIARY], items, answers: bodyAnchored(world, pos) })
+  made.api.block = blockAt(world)
+  made.api.pos = () => pos
+  return made
+}
+
+for (const [name, pos] of [
+  ['on the mark', { x: 10, y: 64, z: 10 }],
+  ['two blocks off, where goto range=2 leaves a body', { x: 12, y: 64, z: 11 }],
+  ['six blocks off along x', { x: 16, y: 64, z: 10 }],
+  ['seven blocks off along z, and one down', { x: 10, y: 63, z: 3 }],
+  ['well outside the apiary', { x: 30, y: 64, z: 30 }]
+]) {
+  test(`apiary.guard sees exactly what apiary.inspect sees ${name}`, async () => {
+    const seen = await apiaryInspect.run(offsetApiary(pos).api, { place: 'orchard-apiary', range: 8 })
+    const guarded = await apiaryGuard.run(offsetApiary(pos, { red_carpet: 1 }).api, { place: 'orchard-apiary', range: 8 })
+    assert.deepEqual(
+      [seen.hives, seen.fires, seen.openFires, seen.raisedFires, seen.ripeAt, guarded.fires, guarded.open, guarded.raised],
+      [4, 4, 1, 1, '4,65,10', 4, 1, 1])
+  })
+}
+
+const PLACE = { x: 10, y: 64, z: 10 }
+for (const [name, world, expected] of [
+  ['a hive, a fire and a flower at the edge of the range are in', { '18,64,10': block('bee_nest'), '2,64,10': block('soul_campfire'), '10,64,18': block('poppy', {}, false) }, { hives: [{ x: 18, y: 64, z: 10 }], fires: [{ x: 2, y: 64, z: 10 }], flowers: 1 }],
+  ['one block past it and they are out', { '19,64,10': block('bee_nest'), '1,64,10': block('campfire'), '10,64,19': block('poppy', {}, false) }, { hives: [], fires: [], flowers: 0 }],
+  ['the band reaches SCAN_HEIGHT up and down, not one more', { [`10,${64 + SCAN_HEIGHT},10`]: block('beehive'), [`10,${63 - SCAN_HEIGHT},10`]: block('campfire'), [`10,${65 + SCAN_HEIGHT},10`]: block('beehive'), [`10,${64 - SCAN_HEIGHT},10`]: block('dandelion', {}, false) }, { hives: [{ x: 10, y: 64 + SCAN_HEIGHT, z: 10 }], fires: [], flowers: 1 }],
+  ['cells never sent to this body read as nothing', {}, { hives: [], fires: [], flowers: 0 }]
+]) {
+  test(`apiaryCells: ${name}`, () => assert.deepEqual(apiaryCells(PLACE, 8, blockAt(world)), expected))
+}
+
+test('apiary.inspect: the scan is one radius sideways from the place and six blocks up or down, whatever find_blocks would say', async () => {
+  const made = offsetApiary({ x: 10, y: 64, z: 10 })
+  const out = await apiaryInspect.run(made.api, { place: 'orchard-apiary', range: 8 })
+  // the dandelion at 30,64,10 is 20 blocks off and the poppy at 10,71,10 is seven up: neither is forage here
+  assert.deepEqual([out.flowers, made.calls.filter(c => c.startsWith('find_blocks'))], [1, []])
+})
+
+test('apiary.inspect: bees are counted around the place, not around the body', async () => {
+  const pos = { x: 16, y: 64, z: 10 }
+  const made = offsetApiary(pos)
+  made.api.act = async (name, args = {}) => {
+    made.calls.push(`${name} ${compact(args, false)}`.trim())
+    // one bee at the far hive, 12 from the body; one bee beside the body, 12 from the place
+    return name === 'animals' ? { found: [{ mob: 'bee', id: 1, at: '4,65,11', dist: 12, grown: true }, { mob: 'bee', id: 2, at: '22,64,10', dist: 6, grown: true }] } : {}
+  }
+  const out = await apiaryInspect.run(made.api, { place: 'orchard-apiary', range: 8 })
+  assert.deepEqual([out.beesVisible, made.calls.filter(c => c.startsWith('animals'))], [1, ['animals mob=bee within=14']])
+})
+
+// ---------------------------------------------------------------- maintain without the harvest tool
+// Mariel (journal, 09-26): with no shears in the bag apiary.maintain refused outright and never guarded or bred, so a
+// shears-less colony got no upkeep at all. The tool-free steps run; the harvest alone is skipped, and the line says so.
+for (const [name, mode, items, inspect, expectedCalls, missing] of [
+  ['comb needs shears: the round inspects and breeds, and says what the harvest waited for', undefined, { dandelion: 4 }, {},
+    ['apiary.inspect place=orchard-apiary', 'apiary.breed place=orchard-apiary count=2'], 'shears'],
+  ['bottle needs glass bottles', 'bottle', { dandelion: 4 }, {},
+    ['apiary.inspect place=orchard-apiary', 'apiary.breed place=orchard-apiary count=2'], 'glass_bottle'],
+  ['an open fire is still carpeted first', undefined, { dandelion: 4, white_carpet: 3 }, { openFires: 1 },
+    ['apiary.inspect place=orchard-apiary', 'apiary.guard place=orchard-apiary', 'apiary.breed place=orchard-apiary count=2'], 'shears'],
+  ['nothing ripe and no shears is not missing anything', undefined, { dandelion: 4 }, { ripe: 0, ripeAt: undefined },
+    ['apiary.inspect place=orchard-apiary', 'apiary.breed place=orchard-apiary count=2'], undefined]
+]) {
+  test(`apiary.maintain: ${name}`, async () => {
+    const { api, calls } = maintainApi(inspect, items)
+    const out = await apiaryMaintain.run(api, { place: 'orchard-apiary', size: 6, mode })
+    assert.deepEqual([out.missing, out.harvested, out.ripe, calls.filter(c => c.startsWith('apiary.'))], [missing, 0, inspect.ripe ?? 1, expectedCalls])
+  })
+}
 
 test('apiaryGoods: only honey products are sent to an output chest', () => {
   assert.deepEqual(apiaryGoods({ honeycomb: 6, honey_bottle: 2, glass_bottle: 4, dandelion: 8 }), { honeycomb: 6, honey_bottle: 2 })
