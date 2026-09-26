@@ -44,6 +44,8 @@ const GRAVITY = /^(sand|red_sand|gravel|suspicious_sand|suspicious_gravel|.*_con
 const CROP = /^(wheat|carrots|potatoes|beetroots|melon_stem|pumpkin_stem|attached_melon_stem|attached_pumpkin_stem|torchflower_crop|pitcher_crop)$/
 const WALL_HUNG = /^(wall_torch|soul_wall_torch|redstone_wall_torch|ladder|tripwire_hook|.*_wall_sign|.*_wall_hanging_sign|.*_wall_banner|.*_wall_fan|.*_wall_skull|.*_wall_head|vine|glow_lichen|sculk_vein)$/
 const FRONT_FACING = /^(chest|trapped_chest|ender_chest|furnace|blast_furnace|smoker|barrel|dispenser|dropper|observer|lectern|loom|stonecutter|grindstone|beehive|bee_nest|jack_o_lantern|carved_pumpkin|end_portal_frame|hopper|crafter|vault|trial_spawner|chiseled_bookshelf|decorated_pot|bell|campfire|soul_campfire|anvil|chipped_anvil|damaged_anvil)$/
+// what stands on the block under it and turns into its wall form when clicked onto a side
+const FLOOR_STANDING = /^(torch|soul_torch|redstone_torch|copper_torch|lantern|soul_lantern|copper_lantern)$|^(?!.*_wall_).*_sign$/
 const LOOK_TOWARD = /(_stairs|_door|_bed|_fence_gate|_trapdoor)$/
 // a right-click on these uses them instead of placing against them, so `place` clicks a plainer neighbour when there is
 // one (src/lib/place.mjs placeAgainst): a torch over a crafting table with a wall beside it comes out as a wall torch
@@ -138,12 +140,15 @@ export const matchesCell = (block, alts, registry = REGISTRY) => {
 
 // ---------------------------------------------------------------- what place has to be told for a state
 
-// the argument place takes for this block's state: the way to look, the half, or (not yet possible) the face to click
+// the argument place takes for this block's state: the way to look, the half, or the face to click (against=). A floor
+// light or a standing sign clicked onto a wall beside it comes out as a wall block (Pacer's hut, 09-26), so it is
+// clicked onto the block under it, a sneak-click when that is a crafting table
 export const placement = alt => {
   const { name, states } = alt
   if (WALL_HUNG.test(name) && STEP[states.facing]) return { against: { ...STEP[OPPOSITE[states.facing]], dy: 0 } }
   if (states.face === 'wall' && STEP[states.facing]) return { against: { ...STEP[OPPOSITE[states.facing]], dy: 0 } }
-  if (states.hanging === 'true') return { against: { dx: 0, dy: 1, dz: 0 } }
+  if (states.hanging === 'true' || states.face === 'ceiling' || /_hanging_sign$/.test(name)) return { against: { dx: 0, dy: 1, dz: 0 } }
+  if (states.face === 'floor' || FLOOR_STANDING.test(name)) return { against: { dx: 0, dy: -1, dz: 0 } }
   if (states.axis === 'x') return { against: { dx: 1, dy: 0, dz: 0 } }
   if (states.axis === 'z') return { against: { dx: 0, dy: 0, dz: 1 } }
   const out = {}
@@ -160,9 +165,10 @@ export const placeGap = alt => placement(alt).against && alt.states.axis ? `${al
 // place's against= word for a neighbour's offset
 const FACE_WORD = { '0,0,-1': 'north', '0,0,1': 'south', '1,0,0': 'east', '-1,0,0': 'west', '0,1,0': 'up', '0,-1,0': 'down' }
 export const faceWord = ({ dx, dy, dz }) => FACE_WORD[`${dx},${dy},${dz}`]
-export const gapWarning = (token, alt) => `${token}: ${placeGap(alt)} needs place against=, not available yet: build refuses this blueprint until it is`
+export const gapWarning = (token, alt) => `${token}: ${placeGap(alt)} is clicked onto its neighbour along the axis, and build cannot yet put that one first: build refuses this blueprint until it can`
 // the tokens lint flagged as gaps, with their sentences: what build refuses a blueprint over
-export const gapTokens = ({ warnings }) => warnings.filter(w => /needs place against=/.test(w)).map(w => ({ token: w.split(':')[0], warning: w }))
+export const GAP = /build refuses this blueprint until/
+export const gapTokens = ({ warnings }) => warnings.filter(w => GAP.test(w)).map(w => ({ token: w.split(':')[0], warning: w }))
 
 // ---------------------------------------------------------------- parsing
 
@@ -576,9 +582,9 @@ export function lint (bp, registry = REGISTRY) {
       if (there === undefined && !(s.dy === -1 && dy === minY && dy <= 0)) warnings.push(`the ${name} at ${at(dy, dx, dz)} stands on ${where}, which is outside the blueprint: whatever is there must hold it`)
       else if (there === '_') warnings.push(`the ${name} at ${at(dy, dx, dz)} stands on ${where}, which is _: whatever is there must hold it`)
       else if (there !== undefined && isAir(primary(bp.legend[there]).name)) errors.push(`the ${name} at ${at(dy, dx, dz)} needs a block at ${where}; that cell is . (air)`)
-      else if (there !== undefined && CLICKABLE.test(primary(bp.legend[there]).name) && !clickableSaid.has(token)) {
+      else if (there !== undefined && CLICKABLE.test(primary(bp.legend[there]).name) && !placement(alt).against && !clickableSaid.has(token)) {
         clickableSaid.add(token)
-        warnings.push(`${token}: ${name} over a ${primary(bp.legend[there]).name} is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is`)
+        warnings.push(`${token}: ${name} over a ${primary(bp.legend[there]).name} is clicked onto a plainer block beside it: check that it stands as written`)
       }
     }
     if (isCropName(alt.name)) {

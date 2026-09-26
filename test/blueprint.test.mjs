@@ -307,14 +307,21 @@ test('lint: warnings', () => {
   const rows = [
     ['a torch whose support is _', parse({ legend: 'i  torch\nS  cobblestone', layers: [[0, '_S'], [1, 'iS']] }), 'the torch at y1 0,0 stands on 0,0 below it, which is _: whatever is there must hold it'],
     ['unlit room without the shelter tag', parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S').replace('tags: shelter, storage', 'tags: storage')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source'],
-    ['a torch over a crafting table', parse({ legend: 'i  torch\nT  crafting_table\nS  cobblestone', layers: [[0, 'TS'], [1, 'iS']] }), 'i: torch over a crafting_table is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is'],
-    ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] needs place against=, not available yet: build refuses this blueprint until it is'],
+    ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] is clicked onto its neighbour along the axis, and build cannot yet put that one first: build refuses this blueprint until it can'],
     ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)']
   ]
   for (const [label, bp, want] of rows) {
     const out = lint(resolve(bp))
     assert.ok(out.warnings.includes(want), `${label}: ${JSON.stringify(out)}`)
   }
+})
+
+// a torch clicked onto the side of a wall beside it comes out as a wall torch (Pacer's hut, 09-26): a floor light, a
+// standing sign and a floor lever are clicked onto the block under them (against=down), a sneak-click when that is a
+// crafting table, so a torch over one is no warning and no refusal
+test('lint: a torch over a crafting table is no gap', () => {
+  const out = lint(resolve(parse({ legend: 'i  torch\nT  crafting_table\nS  cobblestone', layers: [[0, 'TS'], [1, 'iS']] })))
+  assert.deepEqual(out.warnings.filter(w => /torch/.test(w)), [])
 })
 
 // place against= clicks the one neighbour a wall-hung, wall-faced or hanging block hangs on, and orderJobs puts that
@@ -353,7 +360,13 @@ test('placement: what to hand place for a state', () => {
     [{ name: 'cobblestone', states: {} }, {}],
     [{ name: 'wall_torch', states: { facing: 'south' } }, { against: { dx: 0, dy: 0, dz: -1 } }],
     [{ name: 'ladder', states: { facing: 'east' } }, { against: { dx: -1, dy: 0, dz: 0 } }],
-    [{ name: 'oak_log', states: { axis: 'x' } }, { against: { dx: 1, dy: 0, dz: 0 } }]
+    [{ name: 'oak_log', states: { axis: 'x' } }, { against: { dx: 1, dy: 0, dz: 0 } }],
+    [{ name: 'torch', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],
+    [{ name: 'soul_torch', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],
+    [{ name: 'lantern', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],
+    [{ name: 'oak_sign', states: { rotation: '8' } }, { against: { dx: 0, dy: -1, dz: 0 } }],
+    [{ name: 'lever', states: { face: 'floor', facing: 'north' } }, { against: { dx: 0, dy: -1, dz: 0 } }],
+    [{ name: 'lever', states: { face: 'ceiling', facing: 'north' } }, { against: { dx: 0, dy: 1, dz: 0 } }]
   ]
   for (const [alt, want] of rows) assert.deepEqual(placement(alt), want, `${alt.name} ${JSON.stringify(alt.states)}`)
 })

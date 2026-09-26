@@ -295,6 +295,13 @@ test("somebody else's plain place is not renamed into a build", async () => {
   assert.deepEqual(calls, [])
 })
 
+test("the hut's floor torch is clicked onto the floor under it, never a wall beside it", async () => {
+  const world = worldOf()
+  const { api, calls } = body({ world, items: hutKit() })
+  await buildBlueprint(api, { name: 'starter-hut', place: 'hut', ...AT }, io)
+  assert.deepEqual(calls.filter(c => c.startsWith('place item=torch ')), [`place item=torch x=${AT.x + 3} y=${AT.y} z=${AT.z + 3} against=down`])
+})
+
 // the shaft's ladder hangs on the wall north of it: place is told which neighbour to click (against=), and the ladder
 // takes its facing from that face (Hollis, 09-26: the watchtower was refused on every facing)
 test('the watchtower builds, its ladder placed against the wall behind it', async () => {

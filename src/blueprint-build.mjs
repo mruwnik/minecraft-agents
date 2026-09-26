@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, faceWord, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, GAP, faceWord, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
@@ -195,7 +195,7 @@ export async function checkBlueprint (api, a, io = {}) {
     siteLine(site),
     ...(unreachable.length ? [`unreachable=${unreachable.length} (${unreachable.slice(0, 3).map(cellText).join('; ')})`] : []),
     ...found.lint.errors.map(e => `error: ${e}`),
-    ...found.lint.warnings.filter(w => !/needs place against=/.test(w)).map(w => `warning: ${w}`),
+    ...found.lint.warnings.filter(w => !GAP.test(w)).map(w => `warning: ${w}`),
     verdict
   ]
   return { text: lines.join('\n') }

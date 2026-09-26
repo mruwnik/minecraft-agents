@@ -234,14 +234,13 @@ one to the other:
 | logs and pillars | click a face on `axis` |
 | slabs, stairs, trapdoors | `half`/`type` top: click the upper half of a side |
 
-Three gaps in `place` block the attachables and axes, and all of them wait for the module split:
-- It cannot be told which face to click. Wall attachables, log axes and door hinges need an `against=` argument.
-- Its check after a directional place wants a full block. A wall torch placed with `facing=` would be reported as a
-  failure.
-- It compares the block to the item. `torch` becomes `wall_torch`, and that comparison fails.
-
-Until those land, lint warns on each such token: `needs place against=, not available yet`. The builder then places
-those tokens without a direction and reports any wrong state as `wrong=`. It never retries such a block. The rows in the
+`place` takes `against=north|south|east|west|up|down`, the one neighbour to click (09-27). A wall-hung or wall-faced
+block is clicked onto the block behind it, a hanging one onto the block above, and a floor light, standing sign or floor
+lever onto the block under it (a sneak-click when that is a crafting table). A block placed without `facing=` is judged
+by the cell changing, not by a full block or the item's name, so `torch` becoming `wall_torch` is not a failure. One gap
+is left: a log on its side is clicked onto its neighbour along the axis, and build cannot yet put that one first. Lint
+says so on each such token (`build refuses this blueprint until it can`), and build refuses the blueprint. A block that
+comes out in another state is reported as `wrong=`. It never retries such a block. The rows in the
 table marked for trapdoors and front-facing blocks are confirmed by one live placement each before they are trusted.
 
 `mark` also needs fields for the blueprint name, rotation, parameters and hash. Until then they ride in the note.
