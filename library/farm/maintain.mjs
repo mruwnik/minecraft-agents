@@ -8,6 +8,7 @@ import { fieldLeg, footprintOf, spareCells } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
 import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
 import { depositTarget } from '../../src/lib/storage.mjs'
+import { fillShortfall, holeJobs } from '../../src/lib/fill.mjs'
 import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
@@ -18,13 +19,19 @@ const reservePlans = (api, own, names) => [own.name, ...String(names ?? '').spli
   .filter((name, i, all) => all.indexOf(name) === i).map(name => name === own.name ? own : api.plan(name))
 // the counts first, bare= right after them: the routine keeps 120 characters of a step's summary, and what stood
 // behind lowSlabs= and clutter= was the line nobody read (09-26)
-const SAID_FIRST = ['sweeps', 'harvested', 'replanted', 'bare', 'tilled', 'poured', 'covered', 'built']
+const SAID_FIRST = ['sweeps', 'harvested', 'replanted', 'bare', 'filled', 'tilled', 'poured', 'covered', 'built']
 const ordered = summary => Object.fromEntries([
   ...SAID_FIRST.filter(k => summary[k] !== undefined).map(k => [k, summary[k]]),
   ...Object.entries(summary).filter(([k]) => !SAID_FIRST.includes(k))
 ])
 // a bed is one cell of the plan whatever its level: the till works the ground, the plant the cell above it
 const bedKey = job => `${job.x},${job.z}`
+// the floor blocks the fills want that the pockets lack, from the plan's chest (its first C cell): withdraw takes
+// what there is and complains of the rest, and the rest is the sweep's missing= line, not its failure
+const fetchFloor = async (api, short, chest) => {
+  if (!chest || !Object.keys(short).length) return
+  await api.act('withdraw', { items: short, x: chest.x, y: chest.y, z: chest.z }).catch(e => api.note(`no ${shortLine(short)} to fill the beds with from the chest at ${chest.x},${chest.y},${chest.z}: ${e.message}`))
+}
 
 export default {
   doc: 'farm.maintain place= [days=] [within=] [deposit=] [compost=] [reserve_for=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. deposit= is where the harvest goes: the plan\'s C chests (the default), a chest cell x,y,z, or a marked storage place; a full chest spills into the next and what nothing takes is storage_full=. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
@@ -40,6 +47,7 @@ export default {
     if (store?.error) throw new Error(store.error)
     const canDeposit = canStore(store, plan.cells)
     const composter = seedTarget(planStructure(plan.cells, 'K'), api.places(), a.compost)
+    const chest = planStructure(plan.cells, 'C')
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
     // every walk of the sweep is a leg of src/fieldleg.mjs: plain first, once more with dig=true when the path fails
@@ -67,6 +75,7 @@ export default {
       if (job.do === 'pour') summary.poured++
       if (job.do === 'cover') summary.covered++
       if (job.do === 'place') summary.built++
+      if (job.do === 'fill') summary.filled = (summary.filled ?? 0) + 1
       return null
     }
 
@@ -122,7 +131,12 @@ export default {
       // cell. So when any job wants water and none is carried, a bucket is fetched (the nearest still source within
       // range: waterShortfall in src/builder.mjs) BEFORE the list is read, and a channel that still stays dry is skipped
       // with the one reason there is: no bucket at all, or no water within range (card 72e49b3d)
-      const listed = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
+      // beds whose ground is gone (air, or water the plan never asked for: src/lib/fill.mjs) are filled before anything
+      // else is tried on them, the floor block from the pockets and what those lack from the plan's chest, so a field
+      // with holes is put back in one sweep instead of read as unreachable bed by bed (jizo-melon-patch, 09-26)
+      const holes = () => holeJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
+      await fetchFloor(api, fillShortfall(holes(), api.inv()), chest)
+      const listed = () => [...holes(), ...farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })]
       const water = listed().some(j => j.item === 'water_bucket') ? await waterShortfall(api) : null
       const all = listed()
       const jobs = all.filter(j => j.do !== 'skip')
@@ -143,7 +157,12 @@ export default {
       // for it: seed thrown on dirt is a failure too, and a wasted one
       const hoe = hasHoe(api.inv())
       const untilled = new Set(hoe ? [] : jobs.filter(j => j.do === 'till').map(bedKey))
+      // a hole that stayed one (nothing to fill it with, or the fill failed) is one bare bed, said once: its till
+      // and its plant are not tried on air
+      const unfilled = new Set()
+      const stillHole = job => { unfilled.add(bedKey(job)); leave(job, 'unfilled', `${job.x},${job.y},${job.z}`) }
       for (const job of jobs) {
+        if ((job.do === 'till' || job.do === 'plant') && unfilled.has(bedKey(job))) continue
         if (job.do === 'till' && !hoe) { leave(job, 'untilled', NO_HOE); continue }
         if (job.do === 'plant' && untilled.has(bedKey(job))) continue
         // one bucket bills for a whole field but empties on the first pour: the pockets are asked again before every
@@ -153,13 +172,15 @@ export default {
           const why = await waterShortfall(api)
           if (why) { dry.push(`${job.x},${job.do === 'pour' ? job.y + 1 : job.y},${job.z} (${why})`); continue }
         }
-        // the pockets now, not the job list: seed runs out halfway through a field, and the place primitive's own
-        // "you carry no" would be the same failure for every bed after it
-        const seedless = job.do === 'plant' && !((api.inv()[job.item] ?? 0) > 0)
-        if (seedless) leave(job, 'no seed', job.item)
-        if (seedless || (job.item && job.item !== 'water_bucket' && !job.have)) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
+        // the pockets now, not the job list: seed (or dirt) runs out halfway through a field, and the place primitive's
+        // own "you carry no" would be the same failure for every bed after it
+        const outOf = (job.do === 'plant' || job.do === 'fill') && !((api.inv()[job.item] ?? 0) > 0)
+        if (outOf && job.do === 'plant') leave(job, 'no seed', job.item)
+        if (outOf && job.do === 'fill') stillHole(job)
+        if (outOf || (job.item && job.item !== 'water_bucket' && !job.have)) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
         if (job.do === 'plant' && unreachable(job)) { leave(job, 'unreachable', `${job.x},${job.y},${job.z}`); continue }
         const failed = await tryJob(job)
+        if (failed && job.do === 'fill') stillHole(job)
         if (failed && job.do === 'till') { untilled.add(bedKey(job)); leave(job, 'untilled', failed) }
         if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
         await api.checkpoint({ canDeposit })

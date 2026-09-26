@@ -181,14 +181,15 @@ export const seedSource = crop => SEED_SOURCES[CROP_ALIASES[crop] ?? crop] ?? nu
 // no hoe: the first till failed, the seed thrown on that dirt failed, the second till failed the same way and the
 // runner's "twice in a row" ended the sweep before one plant job on ready farmland had run, with nothing in the day's
 // summary but stopped=. So a sweep never tries a till it has no hoe for, and counts every planned crop cell it leaves
-// empty under one of these words: untilled (no hoe, or a bed the hoe could not work), no seed, unreachable (nothing to
-// stand on within work range), water (standing on the bed), failed (anything else the place primitive said)
+// empty under one of these words: unfilled (a bed whose ground is gone and nothing filled it: src/lib/fill.mjs),
+// untilled (no hoe, or a bed the hoe could not work), no seed, unreachable (nothing to stand on within work range),
+// water (standing on the bed), failed (anything else the place primitive said)
 export const NO_HOE = 'no hoe: craft item=wooden_hoe (2 planks + 2 sticks)'
 // the till primitive takes any hoe: an item whose name ends in _hoe
 export const hasHoe = items => Object.keys(items ?? {}).some(name => name.endsWith('_hoe'))
 // a plant job's failure in the summary's word: nowhere to stand or walk to is unreachable, anything else failed
 export const bareWhy = message => /nowhere to stand|no cell to stand|no walkable path|no path/.test(String(message)) ? 'unreachable' : 'failed'
-const BARE_ORDER = ['untilled', 'no seed', 'unreachable', 'water', 'failed']
+const BARE_ORDER = ['unfilled', 'untilled', 'no seed', 'unreachable', 'water', 'failed']
 // one line for bare=: the count, then each reason with its count and its notes (a tool to craft, the seed short, the cells)
 export function bareLine (entries) {
   if (!entries.length) return null
