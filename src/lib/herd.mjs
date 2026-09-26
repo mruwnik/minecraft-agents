@@ -1,5 +1,8 @@
 // Leading and herding: picking who to lead, whether the herd kept up, and a pen's census of strays.
 
+import { within } from './world.mjs'
+import { invited } from './places.mjs'
+
 // leading animals with food in hand: they follow from up to 10 blocks and are slower than I am. distances = how far each one still with me is
 // heldFor: seconds I have stood waiting. An animal that does not come (a fence between us) would keep me waiting for ever: go and get it,
 // and after 3 fetches that brought me no nearer the goal, give up and tell the driver
