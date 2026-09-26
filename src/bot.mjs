@@ -763,7 +763,9 @@ const codeHere = (() => {
 let staleTold = ''
 setInterval(() => {
   if (!ready) return
-  const files = ['src/bot.mjs', 'src/lib.mjs', 'src/eyes.mjs', 'src/vision.mjs', 'src/builder.mjs', 'src/pens.mjs', ...libraryFiles().map(f => `library/${f}`)]
+  // was a hard-coded list of src/ files: a split into src/lib/ or src/body/ modules would announce nothing for
+  // an edit to any of them, so this now walks src/ itself, the same way tools/check-code.mjs's codeFiles() does
+  const files = [...fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).map(f => path.join('src', f)).filter(f => f.endsWith('.mjs')), ...libraryFiles().map(f => `library/${f}`)]
   const mtimes = Object.fromEntries(files.map(f => [f, fs.statSync(path.join(ROOT, f), { throwIfNoEntry: false })?.mtimeMs]))
   const stale = staleCode(codeLoaded, mtimes, Date.now())
   if (!stale || staleKey(stale, mtimes) === staleTold) return
