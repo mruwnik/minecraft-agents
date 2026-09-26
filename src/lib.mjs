@@ -41,6 +41,7 @@ export * from './lib/plan.mjs'
 export * from './lib/anchor.mjs'
 export * from './lib/handover.mjs'
 export * from './lib/settle.mjs'
+export * from './lib/leash.mjs'
 
 // The actions that changed name when the library was namespaced. Journals, habits and old notes still say the left-hand
 // side, so every "unknown action" names its successor rather than leaving the driver to guess. No aliases: the old name stays dead.
@@ -379,7 +380,9 @@ export const PRIMITIVES = {
   attack: { section: 'creature', args: 'mob= [id=] [leash=24]', doc: 'hunt one animal or monster: the nearest of its kind, or the id= that animals gave you; it leaves the drops lying where they fall' },
   shear: { section: 'creature', args: '[count=] [within=40]', doc: 'wool without killing: needs shears' },
   feed: { section: 'creature', args: 'mob= [id=]', doc: 'walk to one animal and hold out the food it breeds on (id= from animals)' },
-  escort: { section: 'creature', args: 'mob= x= y= z= [count=] [within=32] [penned=] [range=]', doc: 'the walk itself: fetch the animals and bring them to a spot, stopping for stragglers (flock.lead is the whole job)' },
+  escort: { section: 'creature', args: 'mob= x= y= z= [count=] [within=32] [penned=] [range=]', doc: 'the walk itself: fetch the animals and bring them to a spot, stopping for stragglers (flock.lead is the whole job); with leads in your pocket it puts up to count= (2) of them on leads instead and pulls them along, gates included, taking the leads off at the goal' },
+  leash: { section: 'creature', args: 'mob=|id= [count=1] [within=16] [penned=]', doc: 'put a lead on the nearest grown such animal (or the one id= names), one lead each, and hold it: it is pulled after me from then on. Answers leashed= (mob#id@x,y,z) and leads= left in the pocket' },
+  unleash: { section: 'creature', args: '[x= y= z=]', doc: 'take the leads off every animal on my leads: each lead drops and is picked up (leads=). With a fence post or wall at x= y= z=, ties them to a knot there instead and the leads stay on it (tied=)' },
   'pen.check': { section: 'pen', args: '[x= y= z=] [radius=]', doc: 'walk a fence and find where a pen leaks: gaps, corner gates, rims an animal can hop' },
   // ---- self
   eat: { section: 'self', args: '[item=] [anyway=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong. At food 6 or less with nothing else edible I eat the never-eat list too (rotten flesh: its hunger cannot take me below where the empty belly already would); anyway=true does that at any hunger, on your say-so. A meal the plugin calls missing is judged again once the pockets have settled (right after a craft they are still moving) and tried once more' },
