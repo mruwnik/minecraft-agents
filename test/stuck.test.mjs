@@ -21,6 +21,7 @@ const base = {
   buried: false,
   boxed: false,
   frozenWalks: 0,
+  failedWalks: 0,
   routine: null
 }
 // a sample a second from second 0 to `seconds`, each one `base` with the overrides `at(i)` gives for second i
@@ -191,4 +192,28 @@ test('stuckVerdict: the storage alert says what to do', () => {
   const samples = series(10, () => ({ ...routineAt(4), routine: { ...routineAt(4).routine, storageFull: [3, 4] } }))
   assert.deepEqual([stuckVerdict(samples).reason, stuckVerdict(samples).advice],
     ['the store was full 2 days running', 'the harvest is being carried round: build or empty a chest at the place (or point the routine at another with store=), and the next day stores it'])
+})
+
+// A body whose walks find no path from where it stands, and that has not moved: a routine that sat in a one-deep hole
+// through a night and a day was WAITING between its days (exempt on purpose) and its two-day-old failing step was one
+// day short of the three-day rule, so nothing fired in five minutes (card 94e6dcb1). failedWalks counts every walk that
+// ended with no path, like frozenWalks: two of them with no movement in STILL_MS is a body that cannot leave its cell
+const failedAt = times => i => ({ failedWalks: times.filter(t => t <= i).length })
+for (const [name, samples, expected] of [
+  ['two walks failed but the body moves between them', series(200, i => ({ ...failedAt([10, 100])(i), pos: { x: 10 + i * 0.1, y: 64, z: -20 } })), null],
+  ['one walk failed and no movement for 3 min', series(200, failedAt([10])), null],
+  ['two walks failed in 179 s of standing still', series(179, failedAt([10, 100])), null],
+  ['two walks failed and no movement for 3 min, idle between them', series(180, failedAt([10, 100])), 'walks'],
+  ['two walks failed and no movement for 3 min while a routine waits for dusk', series(180, i => ({ ...routineAt(1, [], 'dusk'), ...failedAt([10, 100])(i) })), 'walks'],
+  ['two walks failed, then the body walked away and stood 3 min', series(400, i => ({ ...failedAt([10, 100])(i), pos: i < 150 ? { x: 30, y: 64, z: -20 } : base.pos })), null],
+  ['two walks failed seven minutes into one stand', series(420, failedAt([10, 100])), 'walks'],
+  ['walks failing while asleep', series(400, i => ({ ...failedAt([10, 100])(i), sleeping: true, night: true })), null],
+  ['boxed in comes first', series(200, i => ({ ...failedAt([10, 100])(i), boxed: true })), 'boxed']
+]) {
+  test(`stuckVerdict: ${name}`, () => assert.equal(kinds(samples), expected))
+}
+test('stuckVerdict: the walks verdict says what lifts a body out of a hole', () => {
+  const verdict = stuckVerdict(series(180, failedAt([10, 100])))
+  assert.equal(verdict.reason, '2 walks found no path and no movement in 3 min')
+  assert.match(verdict.advice, /pillar_up steps=1/)
 })

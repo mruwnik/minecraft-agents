@@ -107,8 +107,15 @@ export const breaksUnderfoot = name => CROPS_UNDERFOOT.has(name)
 export const CROP_STEP = 10
 export const cropStepCost = name => breaksUnderfoot(name) ? CROP_STEP : 0
 // may the planner keep this move? `floor` is the name of the block under the move's landing cell: a landing from
-// above (any change of level, or a leap) on farmland is what tramples it; a level step onto it is harmless
-export const keepMove = (from, move, floor) => floor !== 'farmland' || (move.y === from.y && !move.parkour)
+// above (a drop, or a leap) on farmland is what tramples it (vanilla: a fall of more than half a block); a level step
+// onto it is harmless, and so is a jump up of one (the body clears the 15/16 top by a quarter block and lands from
+// there). Without the jump a body in a one-deep hole ringed by farmland had no move out at all (card 94e6dcb1)
+export const keepMove = (from, move, floor) => floor !== 'farmland' || (move.y >= from.y && move.y <= from.y + 1 && !move.parkour)
+// does the goto step sideways off this block after a failed walk? A bed, a slab or a chest is lower than a block and the
+// pathfinder plans from the cell above it, where a low roof leaves no move (see stepOffChoice). Farmland and a dirt path
+// are lower than a block too, but the planner walks them from the cell above like any floor; stepping off one scans for
+// free floor at the farmland's own level, and the only such floor in a field is a hole in it
+export const stepsOff = blockName => !['farmland', 'dirt_path'].includes(blockName)
 // the flags the leg in `nodes` walks with: sprint only when no node of it stands in a crop or on farmland (the executor
 // sprint-jumps a straight line it cannot walk in one go, and that lands). `nameAt(x, y, z)` is the block name there
 export const legFlags = (nodes, nameAt) => ({

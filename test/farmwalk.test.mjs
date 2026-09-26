@@ -23,14 +23,17 @@ for (const [name, move, floor, expected] of [
   ['a level step onto farmland', { x: 1, y: 64, z: 0 }, 'farmland', true],
   ['a level step onto a crop over farmland', { x: 1, y: 64, z: 0 }, 'farmland', true],
   ['a level step onto dirt', { x: 1, y: 64, z: 0 }, 'dirt', true],
-  ['a jump up onto farmland', { x: 1, y: 65, z: 0 }, 'farmland', false],
+  // farmland tramples under a fall of more than half a block; a jump up of one lands with a quarter of a block to fall, and
+  // a body that dropped into a one-deep hole ringed by farmland had no other way out (it sat there five minutes, card 94e6dcb1)
+  ['a jump up onto farmland (out of a hole)', { x: 1, y: 65, z: 0 }, 'farmland', true],
   ['a jump up onto stone', { x: 1, y: 65, z: 0 }, 'stone', true],
   ['a drop down onto farmland', { x: 1, y: 63, z: 0 }, 'farmland', false],
   ['a drop down onto dirt', { x: 1, y: 63, z: 0 }, 'dirt', true],
   ['a parkour leap that lands level on farmland', { x: 3, y: 64, z: 0, parkour: true }, 'farmland', false],
   ['a parkour leap onto grass', { x: 3, y: 64, z: 0, parkour: true }, 'grass_block', true],
   ['a diagonal level step onto farmland', { x: 1, y: 64, z: 1 }, 'farmland', true],
-  ['a diagonal jump onto farmland', { x: 1, y: 65, z: 1 }, 'farmland', false],
+  ['a diagonal jump up onto farmland', { x: 1, y: 65, z: 1 }, 'farmland', true],
+  ['a parkour leap up onto farmland: a leap lands hard', { x: 3, y: 65, z: 0, parkour: true }, 'farmland', false],
   ['the floor not loaded', { x: 1, y: 65, z: 0 }, undefined, true]
 ]) {
   test(`keepMove: ${name}`, () => assert.equal(keepMove(FROM, move, floor), expected))
@@ -82,15 +85,15 @@ test('farmWalk: a diagonal onto a crop is priced too (the base class prices only
   assert.deepEqual(neighbours([step(1, 64, 1, Math.SQRT2)], cells), [`1,64,1:${Math.SQRT2 + CROP_STEP}`])
 })
 
-test('farmWalk: a jump up, a drop and a parkour leap onto farmland are dropped; the same onto dirt stay', () => {
+test('farmWalk: a drop and a parkour leap onto farmland are dropped; a jump up onto it stays (the way out of a hole), and everything onto dirt', () => {
   const cells = { '1,64,0': 'farmland', '0,62,1': 'farmland', '3,63,0': 'farmland', '-1,64,0': 'dirt', '0,62,-1': 'dirt' }
   assert.deepEqual(neighbours([
-    step(1, 65, 0, 2), // jump up: lands on the farmland at 1,64,0
+    step(1, 65, 0, 2), // jump up: lands on the farmland at 1,64,0 from a quarter block up, no trample
     step(0, 63, 1, 1), // drop: lands on the farmland at 0,62,1
     step(3, 64, 0, 1, true), // parkour leap: lands on the farmland at 3,63,0
     step(-1, 65, 0, 2), // jump up onto dirt
     step(0, 63, -1, 1) // drop onto dirt
-  ], cells), ['-1,65,0:2', '0,63,-1:1'])
+  ], cells), ['1,65,0:2', '-1,65,0:2', '0,63,-1:1'])
 })
 
 test('farmWalk: bare farmland at the same level is free, as it always was', () => {
@@ -142,3 +145,12 @@ test('farm.plan: a three by three bed with no lane warns about nothing but its l
   const out = await farmPlan.run(api, { map: '~wwww\n~wwww\n~wwww', x: 0, y: 63, z: 0, check: true })
   assert.deepEqual([calls, /walled in|trample/.test(out.warn ?? '')], [[], false])
 })
+
+// Standing on a partial block the walk failed from, the goto steps off it sideways (a bed under a low roof, a slab, a chest).
+// Farmland is a partial block too, and the body's feet floor into its cell, so the scan for free floor beside it ran at the
+// farmland's own level, where the only "floor" was a one-deep hole in the field: stepped_off to that hole on four days
+// running (card 94e6dcb1). Worked ground is walked from the cell above by the pathfinder and needs no step off
+import { stepsOff } from '../src/lib/path.mjs'
+for (const [name, expected] of [['white_bed', true], ['oak_slab', true], ['chest', true], ['farmland', false], ['dirt_path', false]]) {
+  test(`stepsOff: ${name} ${expected ? 'is stepped off' : 'is not'}`, () => assert.equal(stepsOff(name), expected))
+}

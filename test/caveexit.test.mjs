@@ -38,3 +38,29 @@ for (const [name, given, expected] of [
     { text: 'Took to long to decide path to goal!', dig: true, ...dry, wet: true },
     'no path even with dig=true: a dig walk breaks nothing that touches water (the way would flood), so from a pool nothing can be dug. Swim to the pool\'s edge, walk two blocks clear of the water, then goto dig=true again; or pillar up: place a block at your feet, again and again']
 ]) test(`noPathAdvice: ${name}`, () => assert.equal(noPathAdvice(given), expected))
+
+// A body a block low (in a one-deep hole, or sunk into worked ground) fails every walk with the same "no walkable path", and
+// the driver read it as a distant obstacle for five minutes (card 94e6dcb1). Read off the body: the feet cell is open, every
+// cell beside it at feet height is a block, and the cells over those are open (a hole one deep, not a shaft)
+import { inHole } from '../src/caveexit.mjs'
+// `passable(dx, dy, dz)` about the cells round the feet; a world as a map of 'dx,dy,dz' -> passable, unnamed cells open
+const round = blocked => (dx, dy, dz) => !blocked.includes(`${dx},${dy},${dz}`)
+const SIDES = ['1,0,0', '-1,0,0', '0,0,1', '0,0,-1']
+for (const [name, passable, expected] of [
+  ['a one-deep hole ringed by farmland', round(SIDES), true],
+  ['open ground', round([]), false],
+  ['a hole with one side open (a step out)', round(SIDES.slice(1)), false],
+  ['a shaft: the cells over the sides are blocks too', round([...SIDES, '1,1,0', '-1,1,0', '0,1,1', '0,1,-1']), false],
+  ['a hole under a roof: no room to jump', round([...SIDES, '0,2,0']), false]
+]) {
+  test(`inHole: ${name}`, () => assert.equal(inHole(passable), expected))
+}
+const HOLE = 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block), and a walk out of it did not go. pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true; then walk on'
+for (const [name, given, expected] of [
+  ['no path from a one-deep hole: the hole is named and what lifts out', { text: NO_PATH, dig: false, ...dry, holed: true }, HOLE],
+  ['a raw no-path from the hole too', { text: RAW, dig: false, ...dry, holed: true }, HOLE],
+  ['a dig walk that found no path from the hole: the hole still', { text: NO_PATH, dig: true, ...dry, holed: true }, HOLE],
+  ['not a no-path failure, in a hole: untouched', { text: 'a creeper hit me', dig: false, ...dry, holed: true }, 'a creeper hit me']
+]) {
+  test(`noPathAdvice: ${name}`, () => assert.equal(noPathAdvice(given), expected))
+}

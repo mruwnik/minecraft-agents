@@ -1,7 +1,7 @@
 // The stuck watch (autopilot card): a role on autopilot runs for days with no driver reading its results, so the body
 // itself must say when it is going nowhere. bot.mjs takes one sample a second and keeps the last WINDOW_MS of them:
 //   { t, pos, taskId, taskName, taskProgress, sleeping, night, health, food, edible, oxygen, holedUp, buried, boxed,
-//     frozenWalks (a running count), routine: { lastDayStartedAt, day, failedSteps: [{ day, step }], storageFull: [day], phase } | null }
+//     frozenWalks, failedWalks (running counts), routine: { lastDayStartedAt, day, failedSteps: [{ day, step }], storageFull: [day], phase } | null }
 // stuckVerdict reads the window and names the most urgent condition that holds; nextEpisode turns a run of verdicts
 // into one episode, said once (the `stuck` event and the chat line) and shown by `state` while it lasts. Pure.
 
@@ -9,6 +9,7 @@ export const WINDOW_MS = 30 * 60000
 export const STILL_MS = 3 * 60000
 export const FROZEN_MS = 5 * 60000
 export const FROZEN_WALKS = 3
+export const FAILED_WALKS = 2
 export const HOLE_MS = 5 * 60000
 export const OXYGEN_MS = 20000
 export const DAY_MS = 30 * 60000
@@ -95,6 +96,22 @@ const still = samples => {
   return { kind: 'still', reason: `no movement and no progress in ${last.taskName} for ${minutes(STILL_MS)}`, advice: `${last.taskName} is going nowhere: stop it, step two blocks away (goto), start it again, and if the walk will not go read what surrounds the body (look, block_at)`, pos: last.pos }
 }
 
+// Walks that found no path from where the body stands, and the body not moving between them. failedWalks counts every
+// walk that ended with no path (like frozenWalks); FAILED_WALKS of them inside a run of STILL_MS standing still is a body
+// that cannot leave its cell, whatever its tasks say: a routine in a one-deep hole in its field was WAITING between its
+// days (exempt on purpose) and its failing step was a day short of the three-day rule, so it sat five minutes with no
+// alert (card 94e6dcb1). Any cell counts, day or night: the walks are the evidence, not the standing
+const stillRun = (s, last) => !s.sleeping && near(s.pos, last.pos)
+const walks = samples => {
+  const last = samples[samples.length - 1]
+  if (last.sleeping) return null
+  const standing = runBack(samples, stillRun)
+  if (standing < STILL_MS) return null
+  const first = samples.find(s => s.t >= last.t - standing)
+  if ((last.failedWalks ?? 0) - (first.failedWalks ?? 0) < FAILED_WALKS) return null
+  return { kind: 'walks', reason: `${FAILED_WALKS} walks found no path and no movement in ${minutes(STILL_MS)}`, advice: 'the body cannot leave its cell: read what surrounds it (look, block_at at the four sides). A block low (a hole one deep, sunk into worked ground): pillar_up steps=1 lifts it out; walled in: goto the same spot with dig=true, or dig the block in the way by hand', pos: last.pos }
+}
+
 // the same routine step failing on three consecutive routine days
 const consecutive = days => days.some((day, i) => days[i + 1] === day + 1 && days[i + 2] === day + 2)
 const failingStep = ({ last }) => {
@@ -123,7 +140,7 @@ const hungDay = ({ last }) => {
 export function stuckVerdict (samples) {
   if (!samples.length) return null
   const last = samples[samples.length - 1]
-  return drowning(samples) ?? starving({ last }) ?? entombed(samples) ?? frozen(samples) ?? still(samples) ?? failingStep({ last }) ?? fullStore({ last }) ?? hungDay({ last })
+  return drowning(samples) ?? starving({ last }) ?? entombed(samples) ?? frozen(samples) ?? still(samples) ?? walks(samples) ?? failingStep({ last }) ?? fullStore({ last }) ?? hungDay({ last })
 }
 
 // One episode per kind of condition. `started` is the moment to write the event and say the chat line, once; `ended` the

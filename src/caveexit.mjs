@@ -10,8 +10,17 @@ const SURFACE_DY = 3
 const PILLAR = 'pillar up: place a block at your feet, again and again'
 const WATER_RULE = 'a dig walk breaks nothing that touches water'
 
-export function noPathAdvice ({ text, dig, underground = false, goalDy = null, wet = false, zoned = false, boxed = false }) {
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+// A hole one block deep: every cell beside the feet at feet height is a block and the cells over those are open, with
+// headroom to jump. A body that dropped into one in the middle of a field stood there five minutes while every walk
+// said "no walkable path" (card 94e6dcb1): the answer is about the cell it is in. `passable(dx, dy, dz)` is relative
+// to the feet, like boxedIn's. A shaft (walls at head height too) is boxedIn's case, not this one
+export const inHole = passable =>
+  passable(0, 2, 0) && SIDES.every(([dx, dz]) => !passable(dx, 0, dz) && passable(dx, 1, dz) && passable(dx, 2, dz))
+
+export function noPathAdvice ({ text, dig, underground = false, goalDy = null, wet = false, zoned = false, boxed = false, holed = false }) {
   if (!NO_PATH.test(text)) return text
+  if (holed) return 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block), and a walk out of it did not go. pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true; then walk on'
   if (dig && wet) return `no path even with dig=true: ${WATER_RULE} (the way would flood), so from a pool nothing can be dug. Swim to the pool's edge, walk two blocks clear of the water, then goto dig=true again; or ${PILLAR}`
   if (dig && zoned) return 'no path even with dig=true: a dig walk breaks nothing inside a protected zone or that looks built (cobblestone, planks, fences...). Dig by hand: dig x= y= z= the wall at head height, step up, again (a staircase), or pillar up: place a block at your feet'
   if (dig && boxed) return `no path even with dig=true: you stand in a 1-wide shaft. Pillar up: place a block at your feet, again and again (dirt or cobblestone in the pocket also lets the walk tower by itself), or dig a staircase by hand: dig the wall at head height, step up, again`
