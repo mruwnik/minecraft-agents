@@ -26,7 +26,7 @@ import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './
 import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
-import { addSample, stuckVerdict, nextEpisode, stuckLine } from './stuck.mjs'
+import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
@@ -986,8 +986,10 @@ const trappedIn = () => {
 }
 function watchStuck () {
   stuckSamples = addSample(stuckSamples, stuckSample())
-  const { episode, started } = nextEpisode(stuckNow, stuckVerdict(stuckSamples), Date.now())
+  const { episode, started, ended } = nextEpisode(stuckNow, stuckVerdict(stuckSamples), Date.now())
   stuckNow = episode
+  // free again (the verdict clear for END_MS): said once, in the log only
+  if (ended) emit('stuck_end', { pos: pos(), reason: episode.reason, seconds: Math.round((episode.over - episode.since) / 1000) })
   if (!started) return
   emit('stuck', { pos: pos(), reason: episode.reason, advice: episode.advice })
   bot.chat(stuckLine(bot.entity.position, episode.reason))
@@ -2921,7 +2923,7 @@ const quick = {
       holding: bot.heldItem?.name,
       asleep: bot.isSleeping,
       doing: task && doingText({ name: task.name, seconds: Math.round((Date.now() - task.started) / 1000), paused: task.paused }),
-      stuck: stuckNow?.reason,
+      stuck: stuckField(stuckNow),
       following: followTarget,
       reflexesOff: !reflexes,
       // which code this is, so `am I running the fix?` is answered by the line every driver already reads (#140)
