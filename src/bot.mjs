@@ -240,6 +240,10 @@ let digging = false
 let scaffolded = []
 // >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
 let handPlacing = 0
+// cells a dig walk must not break whatever their block, as "x,y,z": the plan a farm sweep walks inside (goto spare=,
+// src/fieldleg.mjs). Set for one walk and cleared after it; looksBuilt keeps guarding everything else
+let spared = new Set()
+const sparedCells = spare => new Set((typeof spare === 'string' ? JSON.parse(spare) : spare ?? []).map(c => `${c.x},${c.y},${c.z}`))
 const FarmMovements = farmWalk(Movements)
 function makeMoves (dig) {
   const moves = new FarmMovements(bot)
@@ -267,6 +271,7 @@ function makeMoves (dig) {
   moves.exclusionAreasBreak.push(zoneCost)
   // nor anything that looks built, protected or not
   moves.exclusionAreasBreak.push(block => looksBuilt(block.name) ? 100 : 0)
+  moves.exclusionAreasBreak.push(block => block.position && spared.has(`${block.position.x},${block.position.y},${block.position.z}`) ? 100 : 0)
   moves.exclusionAreasPlace.push(zoneCost)
   moves.exclusionAreasStep.push(block => gateStepCost(block.name))
   moves.exclusionAreasStep.push(block => thicketCost(besideNames(block.position, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name)))
@@ -1939,6 +1944,28 @@ async function workGround (a, work) {
   return { ...outcome, [dry.length ? 'dry' : 'advice']: tillWarning(dry.length, worked.length) }
 }
 
+// the walk itself: goto sets the cells spared from digging round it
+async function gotoWalk (a) {
+  let walked = { legs: 1 }
+  if (a.place) {
+    const p = readPlaces().find(q => q.name === a.place)
+    if (!p) throw new Error(`no place called ${a.place}; see ./mc places`)
+    walked = await walkLegs({ x: p.x, y: p.y, z: p.z }, a.range ?? 2, a.into === true)
+  } else if (a.player) {
+    const e = bot.players[a.player]?.entity
+    if (!e) throw new Error(`can't see ${a.player}`)
+    await bot.pathfinder.goto(new goals.GoalFollow(e, a.range ?? 2))
+  } else if (coordsError(a, a.y !== undefined)) {
+    throw new Error(coordsError(a, a.y !== undefined))
+  } else if (a.y === undefined) {
+    await bot.pathfinder.goto(new goals.GoalNearXZ(a.x, a.z, a.range ?? 1))
+    // an x/z goal is met at any depth, and a walk that may not dig likes caves: say so rather than let the driver assume the surface
+    if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
+  } else {
+    walked = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1, a.into === true)
+  }
+  return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
+}
 const long = {
   async boat_place (a) {
     const item = a.item ?? 'oak_boat'
@@ -2121,25 +2148,8 @@ const long = {
     } finally { closeOriginal() }
   },
   async goto (a) {
-    let walked = { legs: 1 }
-    if (a.place) {
-      const p = readPlaces().find(q => q.name === a.place)
-      if (!p) throw new Error(`no place called ${a.place}; see ./mc places`)
-      walked = await walkLegs({ x: p.x, y: p.y, z: p.z }, a.range ?? 2, a.into === true)
-    } else if (a.player) {
-      const e = bot.players[a.player]?.entity
-      if (!e) throw new Error(`can't see ${a.player}`)
-      await bot.pathfinder.goto(new goals.GoalFollow(e, a.range ?? 2))
-    } else if (coordsError(a, a.y !== undefined)) {
-      throw new Error(coordsError(a, a.y !== undefined))
-    } else if (a.y === undefined) {
-      await bot.pathfinder.goto(new goals.GoalNearXZ(a.x, a.z, a.range ?? 1))
-      // an x/z goal is met at any depth, and a walk that may not dig likes caves: say so rather than let the driver assume the surface
-      if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
-    } else {
-      walked = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1, a.into === true)
-    }
-    return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
+    spared = sparedCells(a.spare)
+    try { return await gotoWalk(a) } finally { spared = new Set() }
   },
 
   async dig (a) {
