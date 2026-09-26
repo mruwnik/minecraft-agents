@@ -56,7 +56,10 @@ you alive longer:
   loaded chunks: stay within ~100 blocks of a fixed point. `./mc watches` lists them, `./mc unwatch name=` drops one.
 - **Wait with `./mc wait`, and never end your turn to wait.** `./mc wait` is a plain blocking command: run it in the
   FOREGROUND like any other shell command, with the usual timeout (it returns within 100 s), never detached or in the
-  background: a finished background command wakes nobody. `quiet for 100s` just means: call it again. It reports
+  background: a finished background command wakes nobody. `quiet for 100s` just means: call it again. When nothing is
+  due soon (a body asleep, a night to sit out, a long task running), wait longer per call: `./mc wait seconds=570` with a
+  command timeout of 600000 ms is one call where the short form costs six, and it comes back just as fast when something
+  happens. It reports
   everything since your previous wait; older news carries its age (`(3m ago) died`), so do not read it as happening now.
   It returns as soon as something needs you: a task ends, someone speaks, you are badly hurt, a watch fires, night falls,
   morning comes, your body dies. It prints those events, one line each, and exits; after a quiet 9 minutes it says so,

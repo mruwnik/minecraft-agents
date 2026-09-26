@@ -3,7 +3,8 @@
 Read this after your BRIEFING.md and before `AGENT_GUIDE.md`. Everything here is how the guide's advice maps onto
 Claude Code's tools; the guide itself applies unchanged.
 
-- **Waiting.** `./mc wait` is a plain Bash call in the foreground, default timeout (it returns within 100 s). Never
+- **Waiting.** `./mc wait` is a plain Bash call in the foreground, default timeout (it returns within 100 s); when nothing
+  is due soon, `./mc wait seconds=570` with `timeout: 600000` is one Bash call where the short form costs six. Never
   `run_in_background`: a finished background command wakes nobody. `./mc dawn` the same way but with
   `timeout: 600000` (10 minutes), since it can block for eight.
 - **Subagents are not woken by monitors.** If you are a subagent (launched from another session with the Agent tool),
