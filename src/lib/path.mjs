@@ -95,7 +95,8 @@ export const circling = ({ dist, best, bestAgeMs }) => dist > 2 && bestAgeMs >= 
 // from plain walking, and the crop on it pops off with it. The pathfinder sprints and jumps by default, which is why
 // crops used to be fenced off from every walk (blocksToAvoid), a pocket of them refused every goal and trample=true
 // was the way out. Now a crop cell is passable at CROP_STEP a cell, so any crop-free way wins and a way across the
-// rows exists when there is no other; no move that changes level (or a parkour leap) may land on a farmland floor;
+// rows exists when there is no other; no parkour leap and no drop of two or more may land on a farmland floor, a drop
+// of one only at TRAMPLE_STEP (the way down off a perch);
 // and a leg with a crop or farmland node in it walks without sprinting (legFlags).
 const CROPS_UNDERFOOT = new Set([
   'wheat', 'carrots', 'potatoes', 'beetroots', 'melon_stem', 'pumpkin_stem',
@@ -109,8 +110,13 @@ export const cropStepCost = name => breaksUnderfoot(name) ? CROP_STEP : 0
 // may the planner keep this move? `floor` is the name of the block under the move's landing cell: a landing from
 // above (a drop, or a leap) on farmland is what tramples it (vanilla: a fall of more than half a block); a level step
 // onto it is harmless, and so is a jump up of one (the body clears the 15/16 top by a quarter block and lands from
-// there). Without the jump a body in a one-deep hole ringed by farmland had no move out at all (card 94e6dcb1)
-export const keepMove = (from, move, floor) => floor !== 'farmland' || (move.y >= from.y && move.y <= from.y + 1 && !move.parkour)
+// there). Without the jump a body in a one-deep hole ringed by farmland had no move out at all (card 94e6dcb1); without
+// the drop of one, a body on a log in the rows had no move down (Jizo, 09-26 23:24Z). The drop tramples, and the
+// next farm.maintain re-tills: it stays at TRAMPLE_STEP. A leap or a drop of two has a way round
+export const keepMove = (from, move, floor) => floor !== 'farmland' || (move.y >= from.y - 1 && move.y <= from.y + 1 && !move.parkour)
+// twenty, two crop steps: a drop into a field is taken only when no level way is within twenty steps
+export const TRAMPLE_STEP = 20
+export const trampleCost = (from, move, floor) => floor === 'farmland' && move.y < from.y ? TRAMPLE_STEP : 0
 // does the goto step sideways off this block after a failed walk? A bed, a slab or a chest is lower than a block and the
 // pathfinder plans from the cell above it, where a low roof leaves no move (see stepOffChoice). Farmland and a dirt path
 // are lower than a block too, but the planner walks them from the cell above like any floor; stepping off one scans for
@@ -128,7 +134,7 @@ export const farmWalk = Base => class extends Base {
     const floor = move => this.getBlock(move, 0, -1, 0)?.name
     return super.getNeighbors(node)
       .filter(move => keepMove(node, move, floor(move)))
-      .map(move => Object.assign(move, { cost: move.cost + cropStepCost(this.getBlock(move, 0, 0, 0)?.name) }))
+      .map(move => Object.assign(move, { cost: move.cost + cropStepCost(this.getBlock(move, 0, 0, 0)?.name) + trampleCost(node, move, floor(move)) }))
   }
 }
 export const thicketCost = neighbours => neighbours.includes('bamboo') ? 25 : 0

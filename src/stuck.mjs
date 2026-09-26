@@ -109,7 +109,7 @@ const walks = samples => {
   if (standing < STILL_MS) return null
   const first = samples.find(s => s.t >= last.t - standing)
   if ((last.failedWalks ?? 0) - (first.failedWalks ?? 0) < FAILED_WALKS) return null
-  return { kind: 'walks', reason: `${FAILED_WALKS} walks found no path and no movement in ${minutes(STILL_MS)}`, advice: 'the body cannot leave its cell: read what surrounds it (look, block_at at the four sides). A block low (a hole one deep, sunk into worked ground): pillar_up steps=1 lifts it out; walled in: goto the same spot with dig=true, or dig the block in the way by hand', pos: last.pos }
+  return { kind: 'walks', reason: `${FAILED_WALKS} walks found no path and no movement in ${minutes(STILL_MS)}`, advice: 'the body cannot leave its cell: read what surrounds it (look, block_at at the four sides). A block low (a hole one deep, sunk into worked ground): pillar_up steps=1 lifts it out; a block high (perched over a field, farmland one below beside it): dig the block underfoot, or goto with dig=true; walled in: goto the same spot with dig=true, or dig the block in the way by hand', pos: last.pos }
 }
 
 // the same routine step failing on three consecutive routine days

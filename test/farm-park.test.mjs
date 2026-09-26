@@ -16,12 +16,21 @@ const cellAtIn = world => (x, y, z) => cellOf(fakeApi({ world }).api.block(x, y,
 const column = (x, z, ground, over = 'air') => ({ [`${x},63,${z}`]: ground, [`${x},64,${z}`]: over, [`${x},65,${z}`]: 'air' })
 const LANED = { ...column(0, 0, 'farmland', 'wheat#3'), ...column(1, 0, 'farmland', 'wheat#3'), ...column(0, 1, 'dirt'), ...column(1, 1, 'dirt'), ...column(-1, 0, 'grass_block'), ...column(-1, 1, 'grass_block') }
 
+// a two-by-two field, a birch log standing in its south-east bed with room to stand on it, grass west of its north row
+const PERCH = {
+  ...column(0, 0, 'farmland', 'wheat#3'), ...column(1, 0, 'farmland', 'wheat#3'), ...column(0, 1, 'farmland', 'wheat#3'),
+  ...column(1, 1, 'farmland', 'birch_log'), '1,66,1': 'air', ...column(-1, 0, 'grass_block')
+}
 for (const [name, plan, world, from, expected] of [
   ['over a crop: the nearest lane cell', 'ww\n..', LANED, { x: 1.5, y: 64, z: 0.5 }, { x: 1, y: 64, z: 1, why: 'lane' }],
   ['already on the lane: nowhere to go', 'ww\n..', LANED, { x: 0.5, y: 64, z: 1.5 }, null],
   ['off the plan (at a chest, say): nowhere to go', 'ww\n..', LANED, { x: 9.5, y: 64, z: 9.5 }, null],
   ['no lane in the plan: the nearest cell of the field\'s edge', 'ww', LANED, { x: 0.5, y: 64, z: 0.5 }, { x: 0, y: 64, z: 1, why: 'edge' }],
   ['a lane cell with a block over it is passed over', 'ww\n..', { ...LANED, ...column(1, 1, 'dirt', 'stone') }, { x: 1.5, y: 64, z: 0.5 }, { x: 0, y: 64, z: 1, why: 'lane' }],
+  // the top of a log left standing in the rows is standable and nearer than the grass beyond them: the edge is off the
+  // plan, never on the clutter, where a body sat one above its field with no way down (Jizo, 09-26 23:24Z)
+  ['no lane, a log in the rows: the edge is off the plan, not the log\'s top', 'ww\nww', PERCH, { x: 0.5, y: 64, z: 0.5 }, { x: -1, y: 64, z: 0, why: 'edge' }],
+  ['no lane, a bare bed in the rows: the edge is off the plan, not the bed', 'ww\nww', { ...PERCH, ...column(1, 1, 'farmland') }, { x: 0.5, y: 64, z: 0.5 }, { x: -1, y: 64, z: 0, why: 'edge' }],
   ['nothing to stand on anywhere: stay', 'ww', { ...column(0, 0, 'farmland', 'wheat#3'), ...column(1, 0, 'farmland', 'wheat#3') }, { x: 0.5, y: 64, z: 0.5 }, null]
 ]) {
   test(`parkSpot: ${name}`, () => assert.deepEqual(parkSpot(cellAtIn(world), cellsOf(plan), from), expected))

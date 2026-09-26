@@ -42,7 +42,7 @@ for (const [name, given, expected] of [
 // A body a block low (in a one-deep hole, or sunk into worked ground) fails every walk with the same "no walkable path", and
 // the driver read it as a distant obstacle for five minutes (card 94e6dcb1). Read off the body: the feet cell is open, every
 // cell beside it at feet height is a block, and the cells over those are open (a hole one deep, not a shaft)
-import { inHole } from '../src/caveexit.mjs'
+import { inHole, perchedOverField } from '../src/caveexit.mjs'
 // `passable(dx, dy, dz)` about the cells round the feet; a world as a map of 'dx,dy,dz' -> passable, unnamed cells open
 const round = blocked => (dx, dy, dz) => !blocked.includes(`${dx},${dy},${dz}`)
 const SIDES = ['1,0,0', '-1,0,0', '0,0,1', '0,0,-1']
@@ -61,6 +61,32 @@ for (const [name, given, expected] of [
   ['a raw no-path from the hole too', { text: RAW, dig: false, ...dry, holed: true }, HOLE],
   ['a dig walk that found no path from the hole: the hole still', { text: NO_PATH, dig: true, ...dry, holed: true }, HOLE],
   ['not a no-path failure, in a hole: untouched', { text: 'a creeper hit me', dig: false, ...dry, holed: true }, 'a creeper hit me']
+]) {
+  test(`noPathAdvice: ${name}`, () => assert.equal(noPathAdvice(given), expected))
+}
+
+// A body one block ABOVE its field: farm.maintain parked Jizo on a log in the melon rows (09-26 23:24Z) and every walk
+// said "no walkable path" while the stuck watch advised only for a body a block low. Read off the body: beside the feet,
+// farmland two below with the cells over it open (air or a crop). `nameAt(dx, dy, dz)` names the block about the feet
+const named = cells => (dx, dy, dz) => cells[`${dx},${dy},${dz}`] ?? (dy < 0 ? 'dirt' : 'air')
+const FIELD_BESIDE = { '1,-1,0': 'melon_stem', '1,-2,0': 'farmland' }
+for (const [name, nameAt, expected] of [
+  ['on a log in the rows: a melon stem over farmland beside', named({ '0,-1,0': 'birch_log', ...FIELD_BESIDE }), true],
+  ['bare farmland one below beside', named({ '0,-1,0': 'birch_log', '0,-1,1': 'air', '0,-2,1': 'farmland' }), true],
+  ['open ground', named({}), false],
+  ['a step down onto dirt', named({ '1,-1,0': 'air', '1,-2,0': 'dirt' }), false],
+  ['level with the field: farmland under the side cell, not two below', named({ '1,-1,0': 'farmland', '1,0,0': 'wheat' }), false],
+  ['the field beside is walled off at feet height', named({ ...FIELD_BESIDE, '1,0,0': 'oak_fence' }), false],
+  ['nothing loaded', () => undefined, false]
+]) {
+  test(`perchedOverField: ${name}`, () => assert.equal(perchedOverField(nameAt), expected))
+}
+const PERCHED = 'no path: you stand one block above a field (farmland one below beside you). If getting down is what stops the walk, dig the block underfoot, or goto with dig=true, then walk on; if not, the goal is what has no way to it: path_to x= y= z= from down there names the gap'
+for (const [name, given, expected] of [
+  ['no path from a perch over a field: the perch is named and the way down', { text: NO_PATH, dig: false, ...dry, perched: true }, PERCHED],
+  ['a raw no-path from the perch too', { text: RAW, dig: false, ...dry, perched: true }, PERCHED],
+  ['not a no-path failure, perched: untouched', { text: 'a creeper hit me', dig: false, ...dry, perched: true }, 'a creeper hit me'],
+  ['a hole comes first', { text: NO_PATH, dig: false, ...dry, holed: true, perched: true }, HOLE]
 ]) {
   test(`noPathAdvice: ${name}`, () => assert.equal(noPathAdvice(given), expected))
 }

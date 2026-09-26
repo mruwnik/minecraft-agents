@@ -27,9 +27,10 @@ const candidates = cells => {
 
 // the nearest cell to `from` the body can stand in, dry, within work range of the plan, and how far it must reach from there
 // to cover every cell of the plan; null when the plan is empty or nothing within reach of it can be stood in (not loaded, all
-// planted). Dry: a pond beside the field is where a walk can end and drops float off, not where a harvest stands
-export const fieldEdge = (cellAt, cells, from) => {
-  const spots = candidates(cells).filter(c => dryStandable(cellAt, c))
+// planted). Dry: a pond beside the field is where a walk can end and drops float off, not where a harvest stands.
+// `keep` narrows the spots further (parkSpot keeps those off the plan)
+export const fieldEdge = (cellAt, cells, from, keep = () => true) => {
+  const spots = candidates(cells).filter(c => dryStandable(cellAt, c) && keep(c))
   if (!spots.length) return null
   const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
   const spot = spots.reduce((best, c) => distance(c) < distance(best) ? c : best)
@@ -39,8 +40,14 @@ export const fieldEdge = (cellAt, cells, from) => {
 // Where a sweep ends (card 46614365). A days=0 routine parks the body wherever the last job left it, and a body left in
 // the middle of a planted pocket starts its next leg through the crops (walkable, at a cost: the slowest cell to start
 // from). From over a crop cell the nearest cell of the plan's `.` lane the body can stand on is the place to end, the
-// field's edge when the plan has no lane; already on a lane, or off the plan (at the chest), there is nowhere to go
+// field's edge when the plan has no lane; already on a lane, or off the plan (at the chest), there is nowhere to go.
+// The edge is off the plan: over it, the nearest standable cell was the top of a log left in the rows, one above the
+// field, and the body parked there had no way down (Jizo, 09-26 23:24Z); a bare bed is the planted pocket again
 const overCell = (cells, from) => cells.find(c => c.x === Math.floor(from.x) && c.z === Math.floor(from.z))
+const offPlan = cells => {
+  const columns = new Set(cells.map(c => `${c.x},${c.z}`))
+  return c => !columns.has(`${c.x},${c.z}`)
+}
 export const parkSpot = (cellAt, cells, from) => {
   const over = overCell(cells, from)
   if (!over || PLAN_LEGEND[over.ch]?.kind === 'path') return null
@@ -50,7 +57,7 @@ export const parkSpot = (cellAt, cells, from) => {
     const lane = lanes.reduce((best, c) => distance(c) < distance(best) ? c : best)
     return { ...lane, why: 'lane' }
   }
-  const edge = fieldEdge(cellAt, cells, from)
+  const edge = fieldEdge(cellAt, cells, from, offPlan(cells))
   return edge ? { x: edge.x, y: edge.y, z: edge.z, why: 'edge' } : null
 }
 

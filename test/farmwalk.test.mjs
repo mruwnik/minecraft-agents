@@ -5,7 +5,7 @@
 // the block fakes here answer getProperties() the way a prismarine Block does.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CROP_STEP, cropStepCost, keepMove, legFlags, farmWalk, explainNoPath } from '../src/lib/path.mjs'
+import { CROP_STEP, TRAMPLE_STEP, cropStepCost, trampleCost, keepMove, legFlags, farmWalk, explainNoPath } from '../src/lib/path.mjs'
 
 test('a crop cell costs ten steps: a lane three cells longer still wins, a whole bed crossed does not', () => assert.equal(CROP_STEP, 10))
 
@@ -27,7 +27,12 @@ for (const [name, move, floor, expected] of [
   // a body that dropped into a one-deep hole ringed by farmland had no other way out (it sat there five minutes, card 94e6dcb1)
   ['a jump up onto farmland (out of a hole)', { x: 1, y: 65, z: 0 }, 'farmland', true],
   ['a jump up onto stone', { x: 1, y: 65, z: 0 }, 'stone', true],
-  ['a drop down onto farmland', { x: 1, y: 63, z: 0 }, 'farmland', false],
+  // a drop of one tramples, and is the only way down for a body perched one above its field (on a log in the rows,
+  // 09-26 23:24Z): kept, at TRAMPLE_STEP. A drop of two lands harder and has a way round
+  ['a drop of one onto farmland (the way down off a perch)', { x: 1, y: 63, z: 0 }, 'farmland', true],
+  ['a drop of two onto farmland', { x: 1, y: 62, z: 0 }, 'farmland', false],
+  ['a drop of three onto farmland', { x: 1, y: 61, z: 0 }, 'farmland', false],
+  ['a parkour leap down onto farmland', { x: 3, y: 63, z: 0, parkour: true }, 'farmland', false],
   ['a drop down onto dirt', { x: 1, y: 63, z: 0 }, 'dirt', true],
   ['a parkour leap that lands level on farmland', { x: 3, y: 64, z: 0, parkour: true }, 'farmland', false],
   ['a parkour leap onto grass', { x: 3, y: 64, z: 0, parkour: true }, 'grass_block', true],
@@ -38,6 +43,18 @@ for (const [name, move, floor, expected] of [
 ]) {
   test(`keepMove: ${name}`, () => assert.equal(keepMove(FROM, move, floor), expected))
 }
+
+// what a kept move adds for the farmland it tramples: only a landing from above does, at TRAMPLE_STEP
+for (const [name, move, floor, expected] of [
+  ['a drop of one onto farmland', { x: 1, y: 63, z: 0 }, 'farmland', TRAMPLE_STEP],
+  ['a drop of one onto dirt', { x: 1, y: 63, z: 0 }, 'dirt', 0],
+  ['a level step onto farmland', { x: 1, y: 64, z: 0 }, 'farmland', 0],
+  ['a jump up onto farmland', { x: 1, y: 65, z: 0 }, 'farmland', 0],
+  ['the floor not loaded', { x: 1, y: 63, z: 0 }, undefined, 0]
+]) {
+  test(`trampleCost: ${name}`, () => assert.equal(trampleCost(FROM, move, floor), expected))
+}
+test('a trample costs two crop steps: a last resort, still small enough not to widen the search much', () => assert.equal(TRAMPLE_STEP, 2 * CROP_STEP))
 
 // the flags a leg walks with: no sprint when any node of it stands in a crop or on farmland
 const world = cells => (x, y, z) => cells[`${x},${y},${z}`] ?? (y <= 63 ? 'dirt' : 'air')
@@ -85,11 +102,11 @@ test('farmWalk: a diagonal onto a crop is priced too (the base class prices only
   assert.deepEqual(neighbours([step(1, 64, 1, Math.SQRT2)], cells), [`1,64,1:${Math.SQRT2 + CROP_STEP}`])
 })
 
-test('farmWalk: a drop and a parkour leap onto farmland are dropped; a jump up onto it stays (the way out of a hole), and everything onto dirt', () => {
-  const cells = { '1,64,0': 'farmland', '0,62,1': 'farmland', '3,63,0': 'farmland', '-1,64,0': 'dirt', '0,62,-1': 'dirt' }
+test('farmWalk: a drop of two and a parkour leap onto farmland are dropped; a jump up onto it stays (the way out of a hole), and everything onto dirt', () => {
+  const cells = { '1,64,0': 'farmland', '0,61,1': 'farmland', '3,63,0': 'farmland', '-1,64,0': 'dirt', '0,62,-1': 'dirt' }
   assert.deepEqual(neighbours([
     step(1, 65, 0, 2), // jump up: lands on the farmland at 1,64,0 from a quarter block up, no trample
-    step(0, 63, 1, 1), // drop: lands on the farmland at 0,62,1
+    step(0, 62, 1, 2), // drop of two: lands on the farmland at 0,61,1
     step(3, 64, 0, 1, true), // parkour leap: lands on the farmland at 3,63,0
     step(-1, 65, 0, 2), // jump up onto dirt
     step(0, 63, -1, 1) // drop onto dirt
@@ -99,6 +116,12 @@ test('farmWalk: a drop and a parkour leap onto farmland are dropped; a jump up o
 test('farmWalk: the jump out of a one-deep hole ringed by wheat on farmland stays, priced as a crop step (the trap the human set)', () => {
   const cells = { '1,64,0': 'farmland', '1,65,0': 'wheat', '-1,64,0': 'farmland', '-1,65,0': 'wheat' }
   assert.deepEqual(neighbours([step(1, 65, 0, 2), step(-1, 65, 0, 2)], cells), [`1,65,0:${2 + CROP_STEP}`, `-1,65,0:${2 + CROP_STEP}`])
+})
+
+test('farmWalk: perched one above a field (on a log in the rows), the drops of one into the crops stay, priced as a crop and a trample', () => {
+  const cells = { '0,63,0': 'birch_log', '1,63,0': 'wheat', '1,62,0': 'farmland', '-1,63,0': 'melon_stem', '-1,62,0': 'farmland', '0,63,1': 'air', '0,62,1': 'farmland' }
+  assert.deepEqual(neighbours([step(1, 63, 0, 1), step(-1, 63, 0, 1), step(0, 63, 1, 1)], cells),
+    [`1,63,0:${1 + CROP_STEP + TRAMPLE_STEP}`, `-1,63,0:${1 + CROP_STEP + TRAMPLE_STEP}`, `0,63,1:${1 + TRAMPLE_STEP}`])
 })
 
 test('farmWalk: bare farmland at the same level is free, as it always was', () => {

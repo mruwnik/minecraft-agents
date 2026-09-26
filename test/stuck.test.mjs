@@ -212,8 +212,14 @@ for (const [name, samples, expected] of [
 ]) {
   test(`stuckVerdict: ${name}`, () => assert.equal(kinds(samples), expected))
 }
-test('stuckVerdict: the walks verdict says what lifts a body out of a hole', () => {
-  const verdict = stuckVerdict(series(180, failedAt([10, 100])))
-  assert.equal(verdict.reason, '2 walks found no path and no movement in 3 min')
-  assert.match(verdict.advice, /pillar_up steps=1/)
+test('stuckVerdict: the walks verdict names its reason', () => {
+  assert.equal(stuckVerdict(series(180, failedAt([10, 100]))).reason, '2 walks found no path and no movement in 3 min')
 })
+// a body a block low, and one a block high over its field (parked on a log in the rows, Jizo 09-26 23:24Z)
+for (const [name, expected] of [
+  ['what lifts a body out of a hole', /A block low \(a hole one deep, sunk into worked ground\): pillar_up steps=1 lifts it out/],
+  ['what gets a perched body down to its field', /a block high \(perched over a field, farmland one below beside it\): dig the block underfoot, or goto with dig=true/],
+  ['what opens a walled-in body', /walled in: goto the same spot with dig=true/]
+]) {
+  test(`stuckVerdict: the walks verdict says ${name}`, () => assert.match(stuckVerdict(series(180, failedAt([10, 100]))).advice, expected))
+}
