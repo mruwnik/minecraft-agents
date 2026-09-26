@@ -16,7 +16,7 @@ import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
@@ -25,13 +25,13 @@ import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
-import { facesForHalf } from './cover.mjs'
-import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice } from './caveexit.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
+import { facesForHalf } from './cover.mjs'
+import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -766,7 +766,6 @@ setInterval(() => {
   const stale = staleCode(codeLoaded, mtimes, Date.now())
   if (!stale || staleKey(stale, mtimes) === staleTold) return
   staleTold = staleKey(stale, mtimes)
-  // the advice names the time: a body restarted outside at night dies (src/restart.mjs, a7cd6038)
   emit('code_updated', { files: stale.join(' '), advice: restartAdvice({ day: !isNight(bot.time.timeOfDay), timeOfDay: bot.time.timeOfDay, at: Date.now() }) })
 }, 60000)
 let doorBusy = false
@@ -782,7 +781,7 @@ async function doorTick () {
   const doorIds = mcData.blocksArray.filter(isWoodDoor).map(b => b.id)
   // fence gates: the pathfinder opens them itself but never shuts them, and an open gate empties a pen. A gate is mine to
   // shut only when my own walk or click opened it (the gates.log listener decides that): "any open gate I pass" shut the
-  // gate Dan had just opened, 16 ms after, again and again (Perrin's idle body, 13:30Z)
+  // gate the human had just opened, 16 ms after, again and again (Perrin's idle body, 13:30Z)
   const gateIds = mcData.blocksArray.filter(b => b.name.endsWith('_fence_gate')).map(b => b.id)
   const doors = bot.findBlocks({ matching: [...doorIds, ...gateIds], maxDistance: 5, count: 8 }).map(p => bot.blockAt(p)).filter(b => (b.getProperties().half ?? 'lower') === 'lower')
   if (foodAway({ held: bot.heldItem?.name, luring, feeding, gateNear: doors.some(d => d.name.endsWith('_fence_gate')), eating: Boolean(bot.autoEat?.isEating) })) {
@@ -2645,7 +2644,7 @@ const long = {
         while (Date.now() < until && herd.some(e => e.isValid && !inPen(e))) { alive(); await bot.waitForTicks(5) }
       }
       await waitForHerd(deepest ? 8000 : 20000)
-      // one that followed me along the OUTSIDE of the fence never finds the gate by itself, and the gate stood open for 20 s while I waited (a sheep of Dan's
+      // one that followed me along the OUTSIDE of the fence never finds the gate by itself, and the gate stood open for 20 s while I waited (a sheep of the human's
       // at 11,67,-117): go and get it once, the way back leads it through the gate
       const straggler = deepest && herd.find(e => e.isValid && !inPen(e))
       if (straggler) {
@@ -2843,13 +2842,15 @@ const quick = {
   watches: () => ({ text: watches.map(describeWatch).join('\n') || 'no watches' }),
   state () {
     const others = Object.values(bot.players).filter(p => p.username !== bot.username)
+    const playersSeen = Object.fromEntries(others.map(p => [p.username, p.entity ? roundVec(p.entity.position) : 'out of sight']))
+    const { humans } = splitPlayers(playersSeen, agentNames(path.join(ROOT, 'state')))
     return {
       hp: Math.round(bot.health),
       food: bot.food,
       xp: bot.experience.level,
+      oxygen: bot.oxygenLevel,
       inWater: bot.entity.isInWater,
       exact: bot.entity.position.toArray().map(n => Math.round(n * 100) / 100).join(','),
-      oxygen: bot.oxygenLevel,
       // where the server last put the body, when that is off the client's position (card 962beec2)
       ...serverPosNote({ client: bot.entity.position, server: lastServerPos, now: Date.now() }),
       time: `${isNight(bot.time.timeOfDay) ? 'night' : 'day'} ${bot.time.timeOfDay}`,
@@ -2864,7 +2865,9 @@ const quick = {
       // which code this is, so `am I running the fix?` is answered by the line every driver already reads (#140)
       code: codeHere.code,
       dirty: codeHere.dirty,
-      players: Object.fromEntries(others.map(p => [p.username, p.entity ? roundVec(p.entity.position) : 'out of sight']))
+      players: playersSeen,
+      // only the humans some body can currently see right now (not agent bodies, and not 'out of sight' ones)
+      humans: humans.filter(name => playersSeen[name] !== 'out of sight').join(',')
     }
   },
 
@@ -3301,7 +3304,7 @@ async function walkLegs (to, range, into = false) {
 }
 // given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 // the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
-// An open gate empties a pen (Dan's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
+// An open gate empties a pen (the human's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
 // gates on the ring of this pen (floor: "x,y,z" keys) that nothing can walk through: see blindGates. topsAt is penAround's own column
 // reader, the one penLeak walks by: heights an animal can stand at, so a step up outside a gate reads as the step it is (Chani's report, 2026-09-24)
 function blindGateAdvice (floor, topsAt) {

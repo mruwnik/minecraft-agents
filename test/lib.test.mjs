@@ -176,7 +176,7 @@ const compactCases = [
   ['counts read name:count, and a count of 1 is just the name', { granite: 43, iron_pickaxe: 1, coal: 6 }, 'granite:43 iron_pickaxe coal:6'],
   ['key=value, true is a bare key, empty things vanish',
     { hp: 19, holding: null, raining: false, sleeping: true, task: '', armor: {}, seen: [] }, 'hp=19 sleeping'],
-  ['nested objects are bracketed', { players: { mruwnik: { x: 15.4, y: 63, z: -78.8 } }, time: 'day 873' }, 'players(mruwnik=15,63,-79) time=day 873'],
+  ['nested objects are bracketed', { players: { Steve: { x: 15.4, y: 63, z: -78.8 } }, time: 'day 873' }, 'players(Steve=15,63,-79) time=day 873'],
   ['lists of scalars and positions are space separated', { positions: [{ x: 1, y: 2, z: 3 }, { x: 4, y: 5, z: 6 }], quick: ['state', 'look'] }, 'positions=1,2,3 4,5,6 quick=state look'],
   ['lists of objects are bracketed one by one', { results: [{ action: 'goto' }, { action: 'block_at', name: 'oak_door' }] }, 'results=(action=goto) (action=block_at name=oak_door)']
 ]
@@ -189,7 +189,7 @@ test('capOutput cuts a flood and says how much was cut', () =>
   assert.equal(capOutput('x'.repeat(30), 10), 'xxxxxxxxxx\n[+20 chars cut: narrow the query, or delegate reading the full output (-v) to a subagent]'))
 
 const places = [
-  { name: 'dan-farm', kind: 'farm', x: 17, y: 63, z: -85, by: 'mruwnik', note: 'wheat' },
+  { name: 'steve-farm', kind: 'farm', x: 17, y: 63, z: -85, by: 'Steve', note: 'wheat' },
   { name: 'claude-hut', kind: 'base', x: 116, y: 69, z: -141, by: 'Claude', note: '' },
   { name: 'east-hill', kind: 'mine', x: 140, y: 75, z: -140, by: 'Claude', note: 'exposed stone' }
 ]
@@ -197,7 +197,7 @@ test('describePlaces lists nearest first, one line each', () => {
   assert.deepEqual(describePlaces(places, { x: 116, y: 69, z: -137 }), [
     'claude-hut base 4m @116,69,-141 (Claude)',
     'east-hill mine 25m @140,75,-140 (Claude: exposed stone)',
-    'dan-farm farm 112m @17,63,-85 (mruwnik: wheat)'
+    'steve-farm farm 112m @17,63,-85 (Steve: wheat)'
   ])
 })
 test('describePlaces filters by kind and limits', () => {
@@ -206,7 +206,7 @@ test('describePlaces filters by kind and limits', () => {
   assert.deepEqual(describePlaces(places, { x: 116, y: 69, z: -137 }, { maxDist: 30, notes: false }), ['claude-hut base 4m @116,69,-141', 'east-hill mine 25m @140,75,-140'])
 })
 
-// 7c (Dan): places.json passed 60 entries, and a nearest-12 list is no way to find the one you want. Nobody should
+// 7c (the human): places.json passed 60 entries, and a nearest-12 list is no way to find the one you want. Nobody should
 // ever cat the file: the filters are the search, and a name asked for by name comes back whole.
 const searchPlaces = [
   ...places,
@@ -216,7 +216,7 @@ const searchPlaces = [
 for (const [title, opts, expected] of [
   ['q matches a name', { q: 'hut' }, ['claude-hut']],
   ['q matches a note too, and ignores case', { q: 'HOE' }, ['trial-chest']],
-  ['q is a substring, not a whole word', { q: 'wheat' }, ['chani-wheat-field', 'dan-farm']],
+  ['q is a substring, not a whole word', { q: 'wheat' }, ['chani-wheat-field', 'steve-farm']],
   ['q that matches nothing gives nothing', { q: 'diamond' }, []],
   ['by names the agent who marked it', { by: 'Chani' }, ['chani-wheat-field', 'trial-chest']],
   ['by ignores case as well', { by: 'chani' }, ['chani-wheat-field', 'trial-chest']],
@@ -779,7 +779,7 @@ for (const [title, cells, expected] of stepOffCases) {
 
 const wakeCases = [
   ['a finished task', { type: 'task_done', ok: true }, true],
-  ['someone else talking', { type: 'chat', from: 'mruwnik', message: 'hi' }, true],
+  ['someone else talking', { type: 'chat', from: 'Steve', message: 'hi' }, true],
   ['my own chat echo', { type: 'chat', from: 'Jizo', message: 'hi' }, false],
   ['morning', { type: 'dawn' }, true],
   ['the body died', { type: 'body_down', exit: 134 }, true],
@@ -1294,7 +1294,7 @@ for (const [name, block, expected] of [
 
 // wedged: the server pins a body whose hitbox lies flush against a block. Which cells can that be? (feet and head level, per flush side)
 for (const [name, pos, expected] of [
-  ['flush to the west (the leaf at head height by dan-farm)', { x: 4.3, y: 65, z: -99.4 }, [[3, 65, -100], [3, 66, -100]]],
+  ['flush to the west (the leaf at head height by steve-farm)', { x: 4.3, y: 65, z: -99.4 }, [[3, 65, -100], [3, 66, -100]]],
   ['flush to the east, and so far south that the hitbox spans two z cells', { x: 4.7, y: 65, z: 10.9 }, [[5, 65, 10], [5, 66, 10], [5, 65, 11], [5, 66, 11], [4, 65, 11], [4, 66, 11]]],
   ['flush to the north', { x: 0.5, y: 70, z: -5.7 }, [[0, 70, -7], [0, 71, -7]]],
   ['in a corner', { x: 2.3, y: 64, z: 8.7 }, [[1, 64, 8], [1, 65, 8], [2, 64, 9], [2, 65, 9]]],
@@ -1557,7 +1557,7 @@ test('penLeak: a wide gap and no slope anywhere', () => {
   const rows = ['          ', ' #####    ', ' #S..     ', ' #...     ', ' #####    ', '          ']
   assert.deepEqual(penLeak({ start: startOf(rows), topsAt: penMap(rows), radius: 7 }), { enclosed: false, via: '5,0,2' })
 })
-// Dan's starter pen is 17 long: checked from its north end, the far end lay beyond 12 columns and an intact pen read LEAKS (from 2 cells further south it held)
+// The starter pen is 17 long: checked from its north end, the far end lay beyond 12 columns and an intact pen read LEAKS (from 2 cells further south it held)
 test('penLeak: a long pen checked from one end still holds', () => {
   const rows = ['###', '#S#', ...Array(18).fill('#.#'), '###']
   assert.deepEqual(penLeak({ start: startOf(rows), topsAt: penMap(rows) }), { enclosed: true, cells: 19 })
@@ -2208,7 +2208,7 @@ for (const [name, where, expected] of [['a map', undefined, 1500], ['where= only
 const DOOR = { near: false, open: true, mine: true, leading: false, moving: false, inDoorway: false, reflexes: true, otherNear: false, otherToggledMsAgo: Infinity }
 for (const [name, state, expected] of [
   ['walked on past it', DOOR, true],
-  // Perrin's idle body shut the starter-complex gate 16 ms after Dan opened it, again and again, while he moved animals (13:30Z)
+  // Perrin's idle body shut the starter-complex gate 16 ms after the human opened it, again and again, while they moved animals (13:30Z)
   ['another player stands within 4 of it', { ...DOOR, otherNear: true }, false],
   ['another player toggled it 20 s ago', { ...DOOR, otherToggledMsAgo: 20000 }, false],
   ['another player toggled it over a minute ago', { ...DOOR, otherToggledMsAgo: 61000 }, true],
@@ -2297,13 +2297,13 @@ for (const [name, home, action, expected] of [
 ]) {
   test(`noHomeError: ${name}`, () => assert.equal(Boolean(noHomeError(home, action)), expected))
 }
-test('noHomeError: says where to go', () => assert.match(noHomeError(undefined, 'goto'), /agents\/<YourName>/))
+test('noHomeError: says where to go', () => assert.match(noHomeError(undefined, 'goto'), /state\/agents\/<YourName>\/mc/))
 
 // "all" of an item: tidying rubble into a chest asked for 64 of everything and was called a failure for carrying 20
 test('withdrawPlan: "all" takes what there is and is never short', () =>
   assert.deepEqual(withdrawPlan({ andesite: 'all', granite: 'all', dirt: 4 }, { andesite: 20, dirt: 9 }), { take: [{ name: 'andesite', count: 20 }, { name: 'dirt', count: 4 }], short: [] }))
 
-// seen at Dan's pen 09-19: adults {9: 10}, the calf {9: 10, 16: true}. Feeding a baby wastes the food and breeds nothing
+// seen at the human's pen 09-19: adults {9: 10}, the calf {9: 10, 16: true}. Feeding a baby wastes the food and breeds nothing
 for (const [name, metadata, expected] of [
   ['an adult', [0, 300, null, false, false, false, 'standing', 0, 0, 10], false],
   ['a calf', Object.assign([0, 300, null, false, false, false, 'standing', 0, 0, 10], { 16: true }), true],
@@ -2314,7 +2314,7 @@ for (const [name, metadata, expected] of [
 
 // an uncaught error was logged as its message only: 485 "reading 'y'" lines in Ganesha's log and no way to tell where from
 test('stackTop: the first frames, short, without the message line', () =>
-  assert.equal(stackTop("TypeError: Cannot read properties of undefined (reading 'y')\n    at feetCell (file:///home/dan/minecraft/claude/bot/lib.mjs:355:37)\n    at Timeout._onTimeout (file:///home/dan/minecraft/claude/bot/bot.mjs:501:9)\n    at listOnTimeout (node:internal/timers:581:17)\n    at process.processTimers (node:internal/timers:519:7)"),
+  assert.equal(stackTop("TypeError: Cannot read properties of undefined (reading 'y')\n    at feetCell (file:///home/x/bot/lib.mjs:355:37)\n    at Timeout._onTimeout (file:///home/x/bot/bot.mjs:501:9)\n    at listOnTimeout (node:internal/timers:581:17)\n    at process.processTimers (node:internal/timers:519:7)"),
     'feetCell lib.mjs:355:37 < Timeout._onTimeout bot.mjs:501:9 < listOnTimeout node:internal/timers:581:17'))
 test('stackTop: no stack', () => assert.equal(stackTop(undefined), ''))
 
@@ -2671,7 +2671,7 @@ for (const [name, dig, expected] of [
   test(`waterWary: ${name}`, () => assert.deepEqual(waterWary(dig), expected))
 }
 
-// my mine took Dan's pen for a shortcut: in by one gate, out by the other, and a cow went with me. A gate cell now costs a walk 30 steps:
+// my mine took the human's pen for a shortcut: in by one gate, out by the other, and a cow went with me. A gate cell now costs a walk 30 steps:
 // still the way in and out of a pen (there is no other), never a shortcut across one
 for (const [name, block, expected] of [
   ['a fence gate', 'oak_fence_gate', 8],
@@ -2715,7 +2715,7 @@ for (const [name, message, way, expected] of [
   test(`fullSide: ${name}`, () => assert.equal(fullSide(message, way), expected))
 }
 
-// my mine, started inside Dan's starter pen, sank a 3-deep shaft in the pen floor and left it open: a calf trap. inside = the census of the pen I stand in
+// my mine, started inside the starter pen, sank a 3-deep shaft in the pen floor and left it open: a calf trap. inside = the census of the pen I stand in
 for (const [name, inside, force, expected] of [
   ['animals live here', 'sheep:3 cow:4', undefined, 'you stand in a pen with animals in it (sheep:3 cow:4): mine digs its way down from where you stand and would leave a shaft for them to fall into. Walk out through the gate first, then mine (force=true if you really mean it, and fill the hole after)'],
   ['forced', 'cow:2', true, null],
@@ -2724,7 +2724,7 @@ for (const [name, inside, force, expected] of [
   test(`penShaftRefusal: ${name}`, () => assert.equal(penShaftRefusal(inside, force), expected))
 }
 
-// mine climbs back out of its shaft but leaves the top of it open: a pit at my own front door (and my cornflower gone), one in Dan's pen.
+// mine climbs back out of its shaft but leaves the top of it open: a pit at my own front door (and my cornflower gone), one in the human's pen.
 // before/after: the ground around the start, { 'x,y,z': block name }; carried: what I have to fill with
 for (const [name, before, after, carried, expected] of [
   ['the shaft mouth, filled with what came out of it', { '1,67,1': 'grass_block', '2,67,1': 'dirt' }, { '1,67,1': 'air', '2,67,1': 'dirt' }, ['cobblestone', 'dirt'], [{ x: 1, y: 67, z: 1, item: 'dirt' }]],
@@ -2827,7 +2827,7 @@ for (const [name, candidates, allowPenned, expected] of [
   test(`leadPick: ${name}`, () => assert.deepEqual(leadPick(candidates, allowPenned, 'cow'), expected))
 }
 
-// Dan: "make sure the harvest properly reseeds those canes". The cut is the second segment and the base regrows, but a base that is gone all the
+// The human: "make sure the harvest properly reseeds those canes". The cut is the second segment and the base regrows, but a base that is gone all the
 // same after the cut (cut from under by someone else between the look and the dig, popped off by a water change) is planted again from the pockets.
 // cut: [{ stalk, base: [x, y, z], baseNow }]
 for (const [name, cut, carried, expected] of [
@@ -2856,7 +2856,7 @@ for (const [name, pressed, inFence, nudge, pos, expected] of [
 // the starter pen's south gate stood open and the herd was gone (21:33Z): no log could say who opened it. Every body near a gate notes each change in gates.log
 const SOUTH_GATE = { x: 21, y: 66, z: -103 }
 for (const [name, before, after, players, expected] of [
-  ['a gate opens: the nearest player did it', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 9.2 }, { name: 'mruwnik', dist: 1.6 }], { gate: '21,66,-103', now: 'open', nearest: 'mruwnik', dist: 2, mine: false, byOther: true }],
+  ['a gate opens: the nearest player did it', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 9.2 }, { name: 'Steve', dist: 1.6 }], { gate: '21,66,-103', now: 'open', nearest: 'Steve', dist: 2, mine: false, byOther: true }],
   ['a gate shuts', { name: 'oak_fence_gate', open: true }, { name: 'oak_fence_gate', open: false }, [{ name: 'Claude', dist: 1 }], { gate: '21,66,-103', now: 'shut', nearest: 'Claude', dist: 1, mine: false, byOther: true }],
   ['nobody in sight', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [], { gate: '21,66,-103', now: 'open', nearest: null, dist: null, mine: false, byOther: true }],
   ['the only player I can see is far off (my body saw Kettricken\'s gate move and blamed Miles, 26 away): nobody named', { name: 'oak_fence_gate', open: false }, { name: 'oak_fence_gate', open: true }, [{ name: 'Miles', dist: 26 }], { gate: '21,66,-103', now: 'open', nearest: null, dist: null, mine: false, byOther: true }],
@@ -2867,7 +2867,7 @@ for (const [name, before, after, players, expected] of [
   test(`gateChange: ${name}`, () => assert.deepEqual(gateChange(SOUTH_GATE, before, after, players), expected))
 }
 
-// who opened it decides whose it is to shut (Dan, 13:30Z: Perrin's body, standing still a block away, claimed his gate).
+// who opened it decides whose it is to shut (the human, 13:30Z: Perrin's body, standing still a block away, claimed their gate).
 // Mine: it opened while my own walk worked it or my own click did, and nobody else stood within 4. Anyone else's
 // change - the body standing still and not clicking - is theirs, and the reflex keeps its hands off it for a minute
 const GATE_SHUT = { name: 'oak_fence_gate', open: false }
@@ -2875,12 +2875,12 @@ const GATE_OPEN = { name: 'oak_fence_gate', open: true }
 for (const [name, before, after, players, ctx, expected] of [
   ['my walk opened it, nobody else about: mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.2 }], { me: 'Claude', moving: true, clicking: false }, { mine: true, byOther: false }],
   ['my own click opened it: mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.2 }], { me: 'Claude', moving: false, clicking: true }, { mine: true, byOther: false }],
-  ['it opened while I stood still: theirs', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2.5 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
+  ['it opened while I stood still: theirs', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1 }, { name: 'Steve', dist: 2.5 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
   ['it opened while I stood still and nobody is in sight: still not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
-  ['I was walking but Dan stood within 4: not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.5 }, { name: 'mruwnik', dist: 3 }], { me: 'Claude', moving: true, clicking: false }, { mine: false, byOther: true }],
+  ['I was walking but Steve stood within 4: not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 1.5 }, { name: 'Steve', dist: 3 }], { me: 'Claude', moving: true, clicking: false }, { mine: false, byOther: true }],
   ['I was walking, far from it: not mine', GATE_SHUT, GATE_OPEN, [{ name: 'Claude', dist: 5 }], { me: 'Claude', moving: true, clicking: false }, { mine: false, byOther: true }],
-  ['someone shut it while I stood still: theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
-  ['my own click shut it: not theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'mruwnik', dist: 2 }], { me: 'Claude', moving: false, clicking: true }, { mine: false, byOther: false }]
+  ['someone shut it while I stood still: theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'Steve', dist: 2 }], { me: 'Claude', moving: false, clicking: false }, { mine: false, byOther: true }],
+  ['my own click shut it: not theirs', GATE_OPEN, GATE_SHUT, [{ name: 'Claude', dist: 1 }, { name: 'Steve', dist: 2 }], { me: 'Claude', moving: false, clicking: true }, { mine: false, byOther: false }]
 ]) {
   test(`gateChange who opened it: ${name}`, () => {
     const line = gateChange(SOUTH_GATE, before, after, players, ctx)
@@ -3151,7 +3151,7 @@ test('fieldCensus: a channel with no water in it is dry', () => {
   assert.equal(fieldCensus(planCells({ plan: '~', x: 0, y: 63, z: 0 }), fakeWorld({ '0,63,0': 'air' })).dry, 1)
 })
 
-// Item 1b (Dan, 2026-09-22): a plan's y is the GROUND block, the farmland / pen floor / path the plan describes.
+// Item 1b (the human, 2026-09-22): a plan's y is the GROUND block, the farmland / pen floor / path the plan describes.
 // Two agents anchored their plans there and the code read it as the level they STAND on: Chani's census called her
 // 28 wheat empty beds, and pen.build dug the turf out of her sheep pen to lay a floor one block lower.
 test('a plan\u0027s y is the ground block: the crop stands on it at y+1', () => {
@@ -3346,7 +3346,7 @@ for (const [name, spec, given, expected] of [
 const RUNNING_WELL = { health: 20, food: 20, edible: true, night: false, bedNear: true, elapsedDays: 0, now: 0 }
 for (const [name, state, expected] of [
   ['nothing wrong', {}, null],
-  ['someone spoke to me', { spoken: 'mruwnik: claude come here' }, 'spoken to (mruwnik: claude come here)'],
+  ['someone spoke to me', { spoken: 'Steve: claude come here' }, 'spoken to (Steve: claude come here)'],
   ['half dead', { health: 6 }, 'health 6'],
   ['starving with nothing to eat', { food: 5, edible: false }, 'food 5 and nothing edible carried'],
   ['starving with bread in my pocket is no reason to stop', { food: 5, edible: true }, null],
@@ -3443,8 +3443,6 @@ test('maintain_farm: an open channel is covered, and counted under its own name'
   assert.equal(summary.covered, 1)
 })
 
-test('maintain_farm: says what it had no seed for, and does not try it', async () => {
-  const { api, calls } = fakeApi({ place: fakePlace('c'), world: { '0,63,0': 'farmland' }, items: {} })
 // same fix as farm.build's (see its "a cover is held back until the pour before it actually lands" test): a pour
 // that reports success without truly wetting the cell must not be capped with a slab anyway.
 test('maintain_farm: a cover is held back until the pour before it actually lands', async () => {
@@ -3460,6 +3458,8 @@ test('maintain_farm: a cover is held back until the pour before it actually land
   assert.match(summary.stuck, /not holding water/)
 })
 
+test('maintain_farm: says what it had no seed for, and does not try it', async () => {
+  const { api, calls } = fakeApi({ place: fakePlace('c'), world: { '0,63,0': 'farmland' }, items: {} })
   const summary = await maintainFarm.run(api, { place: 'test-field' })
   assert.deepEqual([summary.missing, calls.filter(c => c.startsWith('place'))], ['carrot:1', []])
 })
@@ -3817,7 +3817,7 @@ test('farm.build: a plan anchored at the wrong level is refused before a block i
   assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2'])
 })
 
-// The other way round, and the one Dan watched happen: a plan saved at the level you STAND on, over ground nothing is
+// The other way round, and the one the human watched happen: a plan saved at the level you STAND on, over ground nothing is
 // built on yet. Chani's pen.build dug the turf out of chani-sheep-pen and laid its floor a block lower.
 test('farm.build: a plan saved at the level you stand on is refused, with the y to re-save it with', async () => {
   const place = fakePlace('ww', 0, 64, 0)
@@ -4018,7 +4018,7 @@ test('collect: a full inventory stops it where it stands, having picked up nothi
 })
 
 // ---------------------------------------------------------------- farm.harvest
-// Dan, 14:26Z: "run and cut everything, then collect everything, then replant everything". Cutting, chasing the drop and
+// The human, 14:26Z: "run and cut everything, then collect everything, then replant everything". Cutting, chasing the drop and
 // replanting cell by cell cost 3 s a cell (23 wheat in 71 s). Three sweeps: cut in row order with batch digs (no wait, no
 // drop chase), ONE collect over the field, then ONE place batch of what the pockets hold, a checkpoint per row
 const sweepWorld = () => ({ '0,64,0': 'wheat#7', '1,64,0': 'wheat#7', '2,64,0': 'wheat#3', '0,64,1': 'wheat#7', '1,64,1': 'wheat#7' })
@@ -5076,7 +5076,7 @@ for (const [name, answers, opts, expected] of [
 }
 
 // A chore loop must not fail because a dusk went missing. Mariel's routine died three times with "the day never
-// ended": twice the machine napped, once Dan set the time to day (09-24 01:45Z). A wait that gives up simply starts
+// ended": twice the machine napped, once the human set the time to day (09-24 01:45Z). A wait that gives up simply starts
 // the next round and says so; a clock that jumps backwards counts as the day having turned.
 const routineWithClock = async (times) => {
   const { api, calls } = fakeApi({ answers: { compost: {} } })
@@ -5429,7 +5429,7 @@ test('repeatByType: an ordinary error still says its count after a minute', () =
 // hit EADDRINUSE and "logged in from another location" as two of her bodies traded one login every 10 s, then killed
 // PIDs from `ps aux | grep node.*bot.mjs` - every body has the identical command line - and took Perrin's, Mariel's
 // and my body down with it. The launcher has to refuse the second start itself.
-const LIVE = 'node --max-old-space-size=1536 /home/dan/minecraft/claude/bot/src/bot.mjs .'
+const LIVE = 'node --max-old-space-size=1536 /home/x/bot/src/bot.mjs .'
 ;[
   ['a live body of mine refuses the start', { pid: 4242, cmdline: LIVE, listening: false, port: 3777 }, /already up \(pid 4242\)/],
   ['no pid file and a silent port starts', { pid: null, cmdline: null, listening: false, port: 3777 }, null],

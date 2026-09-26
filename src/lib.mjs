@@ -1,6 +1,7 @@
 // Pure helpers, kept apart from bot.mjs so they can be tested without a server.
 import { compact, between } from './cli.mjs'
 export * from './cli.mjs'
+export * from './players.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -758,7 +759,8 @@ export function airReflex (s) {
   if (!s.surfacing) return s.headInWater && s.oxygen <= 8 ? 'start' : null
   // Older protocol bridges can report a full oxygen bar while the head is
   // still submerged. Keep swimming until we can actually breathe.
-  return !s.headInWater ? 'stop' : 'hold'}
+  return !s.headInWater ? 'stop' : 'hold'
+}
 
 // swimming is faster than any walk, so the reflex only looks for open water sideways when the column over the head is
 // roofed. `names` are the blocks from just over the head upwards; water plants and a bubble column are still water.
@@ -929,7 +931,7 @@ export const oversleeping = s => s.asleep && !s.thundering && s.timeOfDay > 300 
 // doors are mine to open on a walk; gates are the pathfinder's, except the one whose cell I already stand in: pressed against its closed panel the body floors into the gate's cell, the path starts there and never includes opening it
 export const openNow = ({ near, open, door, moving, inDoorway }) => near && !open && moving && (door || inDoorway)
 // a gate is only ever the body's to shut when its own walk opened it, never one another player stands by or touched
-// within the minute (Perrin's body shut Dan's gate 16 ms after he opened it, 13:30Z), and never with reflexes off
+// within the minute (Perrin's body shut the human's gate 16 ms after they opened it, 13:30Z), and never with reflexes off
 export const GATE_OTHERS_NEAR = 4
 export const GATE_HANDS_OFF_MS = 60000
 // A gate `held` open by toggle is never shut either: the gates.log listener takes the toggle's own click for a walk's (mine), and the
@@ -2015,7 +2017,7 @@ export function repeatByType (seen, type, message, now) {
 // what water costs a walk: a digging one tunnelled into an underground lake and half drowned in its own shaft (Aviendha)
 export const waterWary = dig => dig ? { liquidCost: 40, infiniteLiquidDropdownDistance: false } : { liquidCost: 1, infiniteLiquidDropdownDistance: true }
 
-// what stepping into this block costs a walk, in steps: pen gates are doors for those with business in the pen, not shortcuts (a cow left Dan's pen with my mine)
+// what stepping into this block costs a walk, in steps: pen gates are doors for those with business in the pen, not shortcuts (a cow left the human's pen with my mine)
 // 8, not 30: every extra point widens the search (30 made a 9-step walk into my paddock visit 1308 nodes, and Ganesha's walks back to their pen over
 // hilly ground ran into the 5 s limit: `lead` arrived with=0 three times). Two gates = 16: a pen is still no shortcut unless the way round is longer than that
 export const gateStepCost = name => name?.endsWith('_fence_gate') ? 8 : 0
@@ -2040,7 +2042,7 @@ export const fullSide = (message, way) => !/destination full|inventory is full/i
     ? 'YOUR INVENTORY is full: what fitted was taken (the + above). deposit or toss something, then withdraw the rest'
     : 'the CHEST is full: what fitted went in (the - above). Put the rest in another chest, or take out what does not belong here'
 
-// mine started inside a stocked pen: it digs down from where the body stands and the shaft stays (mine in Dan's starter pen, 09-19)
+// mine started inside a stocked pen: it digs down from where the body stands and the shaft stays (mine in the starter pen, 09-19)
 export const penShaftRefusal = (inside, force) => inside && !force
   ? `you stand in a pen with animals in it (${inside}): mine digs its way down from where you stand and would leave a shaft for them to fall into. Walk out through the gate first, then mine (force=true if you really mean it, and fill the hole after)`
   : null
