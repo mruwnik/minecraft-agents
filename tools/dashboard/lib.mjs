@@ -1,7 +1,7 @@
 // The node-side pure helpers behind tools/dashboard.mjs: reading the agent folders, deciding which file a look may
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
-import { parsePlan } from '../../src/lib.mjs'
+import { parsePlan } from '../../src/lib/plan.mjs'
 
 const parseConfig = text => {
   try {

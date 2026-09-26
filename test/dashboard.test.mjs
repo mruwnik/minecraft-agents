@@ -1,8 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
@@ -221,6 +225,35 @@ const routes = [
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
   assert.deepEqual(route(url), expected)
 }))
+
+// The browser links the page's whole module graph before running any of it, so one module the server cannot serve
+// (404 JSON under a .mjs URL: "corrupted" modules in the console) or one `node:` import anywhere below map.mjs leaves
+// the page static, with no map and no polling. Walk the graph the way the browser resolves it and check both.
+const moduleImports = text => [...text.matchAll(/^(?:import|export)\b[^\n]*?\bfrom\s+['"]([^'"]+)['"]|^import\s+['"]([^'"]+)['"]/gm)].map(m => m[1] ?? m[2])
+const moduleFile = url => {
+  const r = route(url)
+  const files = { script: path.join(ROOT, 'tools', 'dashboard', 'map.mjs'), srclib: path.join(ROOT, 'src', r.name ?? '') }
+  return files[r.kind] ?? null
+}
+const browserGraph = () => {
+  const graph = {}
+  const queue = ['/map.mjs']
+  while (queue.length) {
+    const url = queue.shift()
+    if (graph[url]) continue
+    const file = moduleFile(url)
+    const specs = file ? moduleImports(fs.readFileSync(file, 'utf8')) : []
+    graph[url] = { served: file !== null, imports: specs }
+    specs.filter(s => s.startsWith('.')).forEach(s => queue.push(new URL(s, `http://dashboard${url}`).pathname))
+  }
+  return graph
+}
+
+test('the page module graph: every module below map.mjs is served, and none imports a node builtin or a package', () => {
+  const graph = browserGraph()
+  assert.deepEqual(Object.entries(graph).filter(([, m]) => !m.served).map(([url]) => url), [], 'modules the route table cannot serve')
+  assert.deepEqual(Object.entries(graph).flatMap(([url, m]) => m.imports.filter(s => !s.startsWith('.')).map(s => `${url} imports ${s}`)), [], 'imports a browser cannot resolve')
+})
 
 // ---------------------------------------------------------------- farm footprints and the plan popup
 const wheatField = { name: 'chani-wheat-field', kind: 'farm', x: 110, y: 71, z: -70, by: 'Chani', note: 'anyone welcome',

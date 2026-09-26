@@ -1,8 +1,11 @@
-// The map and the merge, shared by tools/dashboard.mjs and the page it serves: the only import is src/lib.mjs, which
-// is pure too (no node builtins), so the dashboard server serves it at /src/lib.mjs and this module loads exactly the
-// same way for node (test/dashboard.test.mjs, tools/dashboard.mjs) and for the browser (relative import resolves to
-// that same route from either location - see the route table in tools/dashboard/lib.mjs).
-import { parsePlan, PLAN_LEGEND } from '../../src/lib.mjs'
+// The map and the merge, shared by tools/dashboard.mjs and the page it serves: the only import is src/lib/plan.mjs,
+// whose subtree (cli, walk, lib/world) is pure too (no node builtins), so the dashboard server serves it under /src/
+// and this module loads exactly the same way for node (test/dashboard.test.mjs, tools/dashboard.mjs) and for the
+// browser (relative import resolves to that same route from either location - see the route table in
+// tools/dashboard/lib.mjs). Never import the src/lib.mjs barrel here: it re-exports node-only modules (players.mjs
+// reads state/ with fs), and a browser links the whole graph before running any of it, so one `node:` import
+// anywhere below map.mjs leaves the page static. test/dashboard.test.mjs walks the graph to keep this true.
+import { parsePlan, PLAN_LEGEND } from '../../src/lib/plan.mjs'
 export { parsePlan }
 
 // polls: { <agent name>: { ok, state, error, at } }. A port that does not answer is a body that is down, which is
