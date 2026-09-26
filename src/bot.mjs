@@ -24,6 +24,7 @@ import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './
 import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
+import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { facesForHalf } from './cover.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
@@ -614,8 +615,9 @@ function connect () {
   let lastResetLogged = 0
   bot.on('forcedMove', () => {
     resets++
-    if (Date.now() - lastResetLogged < 1000) return
+    // the LAST packet, rate limit or not: the oxygen evidence (card 962beec2) reads its age
     lastServerPos = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z, at: Date.now() }
+    if (Date.now() - lastResetLogged < 1000) return
     lastResetLogged = Date.now()
     console.log('  claimed before the reset:', claimed.join(' | '))
     console.log('forcedMove (server reset position) ->', JSON.stringify(pos()), 'exact', bot.entity.position.x, bot.entity.position.y, bot.entity.position.z, 'onGround', bot.entity.onGround)
@@ -635,6 +637,26 @@ function connect () {
 
   let tick = 0
   bot.on('physicsTick', () => { if (++tick % 10 === 0 && ready && reflexes) reflexTick() })
+  // card 962beec2: every change of the air number is an `oxygen` event with the evidence that says whether the server
+  // holds the body somewhere wet (reflexes or not: the number is read, never acted on here)
+  let airMemory = freshAir
+  bot.on('physicsTick', () => {
+    if (tick % 5 !== 0 || !ready) return
+    const me = bot.entity.position
+    const { memory, event } = airSample({ memory: airMemory, oxygen: bot.oxygenLevel, health: bot.health, client: me, server: lastServerPos, now: Date.now(), head: blockName(bot.blockAt(me.offset(0, 1.62, 0))), inWater: bot.entity.isInWater })
+    airMemory = memory
+    if (event) emit('oxygen', { ...event, ...(lastAirMeta ? { meta: lastAirMeta } : {}) })
+  })
+  // the raw air metadata, by entity id: a number that swings 8 -> 20 -> 8 within a second is no drain, so WHICH entity
+  // the server meant, and what else rode in the packet, is the question (card 962beec2)
+  let lastAirMeta = null
+  bot._client.on('entity_metadata', p => {
+    const air = (p.metadata ?? []).find(m => m.key === 1)
+    if (!air) return
+    const own = Boolean(bot.entity) && p.entityId === bot.entity.id
+    lastAirMeta = { entityId: p.entityId, own, who: bot.entities[p.entityId]?.username ?? bot.entities[p.entityId]?.name ?? null, air: air.value, packet: p.metadata.map(m => `${m.key}:${m.type}=${JSON.stringify(m.value)}`).join(' ') }
+    if (own) console.log('[air_meta]', JSON.stringify(lastAirMeta))
+  })
   bot.on('physicsTick', () => { if (tick % 2 === 0 && ready) doorTick() })
   let lastSurfaceTrace = 0
   // a walk or the idle nudge can reset the controls between reflex ticks: the swim is pressed on every physics tick until the body breathes
@@ -2620,6 +2642,9 @@ const quick = {
       hp: Math.round(bot.health),
       food: bot.food,
       xp: bot.experience.level,
+      oxygen: bot.oxygenLevel,
+      // where the server last put the body, when that is off the client's position or older than a minute (card 962beec2)
+      ...serverPosNote({ client: bot.entity.position, server: lastServerPos, now: Date.now() }),
       time: `${isNight(bot.time.timeOfDay) ? 'night' : 'day'} ${bot.time.timeOfDay}`,
       pos: pos(),
       dimension: bot.game.dimension === 'overworld' ? null : bot.game.dimension,
