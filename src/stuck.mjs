@@ -64,12 +64,13 @@ const frozen = samples => {
 }
 
 // no movement and no task progress for STILL_MS while a task runs (a routine between its days waits on purpose), or
-// while an idle body stands boxed in (no neighbouring cell to step to) by day: a night hole is deliberate
+// while an idle body stands boxed in (no neighbouring cell to step to) by day. Never at night: a hole dug by hand and
+// capped over at dusk carries no holedUp flag, and a body sitting in one is sheltering, not stuck (Pacer, 09-26 19:20Z)
 const still = samples => {
   const { last, window, covered } = lastSpan(samples, STILL_MS)
   if (!covered || last.sleeping) return null
   const waiting = last.routine && WAITING.includes(last.routine.phase)
-  const trapped = last.boxed && !(last.holedUp && last.night)
+  const trapped = last.boxed && !last.night
   const working = last.taskId !== null && last.taskId !== undefined && !waiting
   if (!working && !trapped) return null
   const unchanged = window.every(s => !s.sleeping && near(s.pos, last.pos) && (!working || (s.taskId === last.taskId && s.taskProgress === last.taskProgress)))
