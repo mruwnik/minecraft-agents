@@ -1674,6 +1674,9 @@ async function sweepDrops (range = 8) {
     if (!drop) break
     tried.add(drop.id)
     const goal = dropGoal(drop)
+    // a drop on the floor of a pit is left lying (the result names it), not followed down: a dig of a pit's own wall from the rim
+    // dropped its dirt on the floor and this sweep jumped in after it (src/walk.mjs rimGoal, card 3fe30fb4)
+    if (rimGoal(cellAt, goal, goal.range, { from: feetCell(bot.entity.position, bot.entity.onGround) })) continue
     await bot.pathfinder.goto(new goals.GoalNear(goal.x, goal.y, goal.z, goal.range)).catch(() => {})
     await bot.waitForTicks(10)
     if (!bot.inventory.emptySlotCount()) break
