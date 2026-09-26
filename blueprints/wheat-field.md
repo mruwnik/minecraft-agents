@@ -18,7 +18,7 @@ The channel is a row of waterlogged top slabs laid in the ground layer: water un
 wheat cell is within two blocks of it, so the whole field is served from the lane and stays wet.
 
 ```legend
-r  dirt                                     #ground
+r  dirt|grass_block                         #ground
 f  farmland                                 #ground
 =  {wood:slab}[type=top,waterlogged=true]   #ground #cover #lane
 w  wheat[age=0]                             #crop
