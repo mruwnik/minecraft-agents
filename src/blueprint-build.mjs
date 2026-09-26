@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, faceWord, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
@@ -203,8 +203,9 @@ export async function checkBlueprint (api, a, io = {}) {
 
 // ---------------------------------------------------------------- the build
 
-// the argument place takes for a job: the item, the cell, and the way to look or the half when the state needs it
-const placeArgs = job => ({ item: job.item, x: job.x, y: job.y, z: job.z, ...(job.facing ? { facing: job.facing } : {}), ...(job.half ? { half: job.half } : {}) })
+// the argument place takes for a job: the item, the cell, and the way to look, the half or the neighbour to click when
+// the state needs it
+const placeArgs = job => ({ item: job.item, x: job.x, y: job.y, z: job.z, ...(job.facing ? { facing: job.facing } : {}), ...(job.half ? { half: job.half } : {}), ...(job.against ? { against: faceWord(job.against) } : {}) })
 const hasTool = (items, tool) => Object.keys(items).some(name => name.endsWith(`_${tool}`))
 const stageSentence = (stage, short, supply, place) =>
   `stage ${stage.n} of ${stage.of} needs ${shortLine(short)} more: ${supply ? `put it in the supply chest at ${supply.label}` : 'fetch it, or put it in a chest and pass supply=x,y,z'}${supply ? ' and' : ', then'} run blueprint.build place=${place} again`

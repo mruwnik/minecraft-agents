@@ -281,7 +281,7 @@ test('enclosure: the hut is enclosed and lit, the hut without its torch is not',
 test('lint: the examples', () => {
   assert.deepEqual(lint(resolve(hut())), { errors: [], warnings: [] })
   assert.deepEqual(lint(resolve(field())), { errors: [], warnings: [] })
-  assert.deepEqual(lint(resolve(tower())), { errors: [], warnings: ['H: ladder needs place against=, not available yet: build refuses this blueprint until it is'] })
+  assert.deepEqual(lint(resolve(tower())), { errors: [], warnings: [] })
 })
 
 test('lint: errors', () => {
@@ -307,7 +307,6 @@ test('lint: warnings', () => {
   const rows = [
     ['a torch whose support is _', parse({ legend: 'i  torch\nS  cobblestone', layers: [[0, '_S'], [1, 'iS']] }), 'the torch at y1 0,0 stands on 0,0 below it, which is _: whatever is there must hold it'],
     ['unlit room without the shelter tag', parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S').replace('tags: shelter, storage', 'tags: storage')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source'],
-    ['a wall torch', parse({ legend: 't  wall_torch[facing=south]\nS  cobblestone', layers: [[0, 'S\nt']] }), 't: wall_torch needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a torch over a crafting table', parse({ legend: 'i  torch\nT  crafting_table\nS  cobblestone', layers: [[0, 'TS'], [1, 'iS']] }), 'i: torch over a crafting_table is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)']
@@ -318,12 +317,14 @@ test('lint: warnings', () => {
   }
 })
 
+// place against= clicks the one neighbour a wall-hung, wall-faced or hanging block hangs on, and orderJobs puts that
+// neighbour first (supportOf); a log on its side needs a neighbour along its axis that nothing orders, so it stays a gap
 test('placeGap: which tokens place cannot do yet', () => {
   const rows = [
-    [{ name: 'wall_torch', states: { facing: 'south' } }, true],
-    [{ name: 'ladder', states: { facing: 'south' } }, true],
-    [{ name: 'oak_wall_sign', states: { facing: 'south' } }, true],
-    [{ name: 'oak_button', states: { face: 'wall', facing: 'south' } }, true],
+    [{ name: 'wall_torch', states: { facing: 'south' } }, false],
+    [{ name: 'ladder', states: { facing: 'south' } }, false],
+    [{ name: 'oak_wall_sign', states: { facing: 'south' } }, false],
+    [{ name: 'oak_button', states: { face: 'wall', facing: 'south' } }, false],
     [{ name: 'lever', states: { face: 'floor' } }, false],
     [{ name: 'oak_log', states: { axis: 'x' } }, true],
     [{ name: 'oak_log', states: { axis: 'y' } }, false],
@@ -331,7 +332,7 @@ test('placeGap: which tokens place cannot do yet', () => {
     [{ name: 'torch', states: {} }, false],
     [{ name: 'oak_stairs', states: { facing: 'east', half: 'top' } }, false],
     [{ name: 'oak_door', states: { facing: 'north', half: 'lower', hinge: 'left' } }, false],
-    [{ name: 'lantern', states: { hanging: 'true' } }, true],
+    [{ name: 'lantern', states: { hanging: 'true' } }, false],
     [{ name: 'lantern', states: {} }, false]
   ]
   for (const [alt, want] of rows) assert.equal(Boolean(placeGap(alt)), want, `${alt.name} ${JSON.stringify(alt.states)}`)

@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { farmJobs, jobCall, planCells, parsePlan, planBill } from '../src/lib.mjs'
-import { lowSlabs, lowSlabLine, facesForHalf, FLOW_REASON, channelCovered } from '../src/cover.mjs'
+import { lowSlabs, lowSlabLine, facesForHalf, placeFaces, FLOW_REASON, channelCovered } from '../src/cover.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
@@ -68,6 +68,24 @@ test('facesForHalf: a bottom slab is placed against the block below first, the b
 })
 test('facesForHalf: a plain block keeps the old order, the block below first', () => {
   assert.deepEqual(facesForHalf(undefined), [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]])
+})
+
+// against= names the one neighbour to click, the way a wall-hung block takes its facing from the face it is put on: a
+// ladder facing south is clicked onto the south face of the wall north of it (the watchtower's shaft)
+for (const [args, expected] of [
+  [{ against: 'north' }, [[0, 0, -1]]],
+  [{ against: 'south' }, [[0, 0, 1]]],
+  [{ against: 'east' }, [[1, 0, 0]]],
+  [{ against: 'west' }, [[-1, 0, 0]]],
+  [{ against: 'up' }, [[0, 1, 0]]],
+  [{ against: 'down' }, [[0, -1, 0]]],
+  [{ half: 'top' }, facesForHalf('top')],
+  [{}, facesForHalf(undefined)]
+]) {
+  test(`placeFaces: ${JSON.stringify(args)}`, () => assert.deepEqual(placeFaces(args), expected))
+}
+test('placeFaces: against= that is no direction is refused by the list', () => {
+  assert.throws(() => placeFaces({ against: 'behind' }), { message: 'against=behind is not a direction: north, south, east, west, up or down (the neighbour to click)' })
 })
 
 // ---------------------------------------------------------------- old bottom-slab channels: left alone, counted once

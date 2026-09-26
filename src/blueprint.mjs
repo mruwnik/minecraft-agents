@@ -153,11 +153,13 @@ export const placement = alt => {
   if (/_slab$/.test(name) && states.type && states.type !== 'double') out.half = states.type
   return out
 }
-// the label lint uses for a token place cannot do yet: the block, with its axis when that is what needs the click face
-export const placeGap = alt => {
-  if (!placement(alt).against) return null
-  return alt.states.axis ? `${alt.name}[axis=${alt.states.axis}]` : alt.name
-}
+// the label lint uses for a token place cannot do yet. place against= clicks the neighbour a wall-hung, wall-faced or
+// hanging block hangs on, and orderJobs puts that one first (supportOf); a log on its side needs a neighbour along its
+// axis that nothing orders, so that alone is still a gap
+export const placeGap = alt => placement(alt).against && alt.states.axis ? `${alt.name}[axis=${alt.states.axis}]` : null
+// place's against= word for a neighbour's offset
+const FACE_WORD = { '0,0,-1': 'north', '0,0,1': 'south', '1,0,0': 'east', '-1,0,0': 'west', '0,1,0': 'up', '0,-1,0': 'down' }
+export const faceWord = ({ dx, dy, dz }) => FACE_WORD[`${dx},${dy},${dz}`]
 export const gapWarning = (token, alt) => `${token}: ${placeGap(alt)} needs place against=, not available yet: build refuses this blueprint until it is`
 // the tokens lint flagged as gaps, with their sentences: what build refuses a blueprint over
 export const gapTokens = ({ warnings }) => warnings.filter(w => /needs place against=/.test(w)).map(w => ({ token: w.split(':')[0], warning: w }))

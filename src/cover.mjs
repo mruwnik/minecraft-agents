@@ -21,6 +21,15 @@ export const facesForHalf = half => {
   return [BELOW, ABOVE, ...SIDES]
 }
 
+// against= names the one neighbour to click: a ladder, a wall torch or a wall sign takes its facing from the face it is
+// put on, so only the block it hangs on will do (a ladder facing south goes on the south face of the wall north of it)
+const AGAINST = { north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] }
+export const placeFaces = ({ half, against }) => {
+  if (against === undefined) return facesForHalf(half)
+  if (!AGAINST[against]) throw new Error(`against=${against} is not a direction: north, south, east, west, up or down (the neighbour to click)`)
+  return [AGAINST[against]]
+}
+
 // The channel cells capped the old way: a waterlogged BOTTOM slab. They hold their water and farm.maintain leaves them
 // alone (no churn), but they are counted so the driver knows the field walks worse than it could.
 const isLowSlab = block => Boolean(block) && /_slab$/.test(block.name) && holdsWater(block) && block.properties?.type !== 'top'

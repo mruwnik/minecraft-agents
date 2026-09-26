@@ -295,13 +295,17 @@ test("somebody else's plain place is not renamed into a build", async () => {
   assert.deepEqual(calls, [])
 })
 
-test('a blueprint with a token place cannot do yet is refused by that token', async () => {
+// the shaft's ladder hangs on the wall north of it: place is told which neighbour to click (against=), and the ladder
+// takes its facing from that face (Hollis, 09-26: the watchtower was refused on every facing)
+test('the watchtower builds, its ladder placed against the wall behind it', async () => {
   const world = worldOf()
   const tower = fs.readFileSync(path.join(BLUEPRINT_DIR, 'watchtower.md'), 'utf8')
   const files = { watchtower: tower }
-  const { api, calls } = body({ world, items: hutKit() })
-  await assert.rejects(buildBlueprint(api, { name: 'watchtower', place: 'tower', ...AT }, { read: name => ({ name, text: files[name], hash: blueprintHash(files[name]) }) }), { message: 'watchtower: H: ladder needs place against=, not available yet: build refuses this blueprint until it is' })
-  assert.deepEqual(calls, [])
+  const kit = { cobblestone: 128, jack_o_lantern: 1, ladder: 16, oak_door: 1, oak_planks: 32, oak_trapdoor: 1, oak_fence: 16, torch: 4, dirt: 64 }
+  const { api, calls } = body({ world, items: kit })
+  await buildBlueprint(api, { name: 'watchtower', place: 'tower', partial: true, ...AT }, { read: name => ({ name, text: files[name], hash: blueprintHash(files[name]) }) })
+  assert.equal(calls.includes(`place item=ladder x=${AT.x + 2} y=${AT.y} z=${AT.z + 2} against=north`), true)
+  assert.deepEqual(calls.filter(c => c.startsWith('place item=ladder ')).filter(c => !c.endsWith(' against=north')), [])
 })
 
 test('a new build needs a place name, a blueprint and an anchor', async () => {
