@@ -25,7 +25,7 @@ import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { facesForHalf } from './cover.mjs'
-import { fetchFailure, stalledSince } from './fetch.mjs'
+import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice } from './caveexit.mjs'
@@ -2347,8 +2347,10 @@ const long = {
     const inRange = free().filter(e => near(e) <= (a.within ?? 32)).sort((x, y) => near(x) - near(y))
     if (!inRange.length) throw new Error(`no ${a.mob} within ${a.within ?? 32} blocks${floor ? ' (not counting those already in the pen)' : ''}`)
     // one that stands in a pen is somebody's (my lead went to Aviendha's base for her cow). Only the nearest few are checked: a pen check in open country is a long walk
-    const candidates = inRange.slice(0, 6).map(e => ({ id: e.id, at: `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`, penned: Boolean(penAround(e.position.floored())?.enclosed), grown: !isBaby(e.metadata) }))
-    const picked = leadPick(candidates, a.penned === true, a.mob)
+    const candidates = inRange.slice(0, 6).map(e => ({ id: e.id, at: `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`, penned: Boolean(penAround(e.position.floored())?.enclosed), grown: !isBaby(e.metadata), wedged: wedgedIn(bot.blockAt(e.position.floored()), e.position.y) }))
+    // one wedged in a fence post cannot walk (card fc47bf28: two cows floored to the post's own cell): a free one first, and the wedge is the refusal only when nothing else is in range
+    const walkable = candidates.filter(c => !c.wedged)
+    const picked = leadPick(walkable.length ? walkable : candidates, a.penned === true, a.mob)
     if (picked.error) throw new Error(`no ${a.mob} to lead: ${picked.error}`)
     const first = inRange.find(e => e.id === picked.id)
     const alive = cancelGuard()
@@ -2357,8 +2359,17 @@ const long = {
       await bot.equip(bot.inventory.items().find(i => i.name === foodName), 'hand')
       // one that stands in a pen: INTO the pen, to its own cell. Two blocks from it is also a spot outside the fence, and from there I walked off without ever
       // opening the gate (my sheep, with=0 twice: it stood at the shut gate and watched the wheat go)
-      if (candidates.find(c => c.id === picked.id).penned) await goNear(first.position.floored(), 0).catch(() => {})
-      else await bot.pathfinder.goto(new goals.GoalFollow(first, 2))
+      const pick = candidates.find(c => c.id === picked.id)
+      const wedged = wedgedRefusal({ mob: a.mob, at: pick.at, block: pick.wedged })
+      if (wedged) return { arrived: false, with: 0, why: wedged, pos: pos() }
+      if (pick.penned) {
+        // a pen the body is not in is the end of the lead, said before any walk: a walk into it follows partial paths
+        // round the fence until the 12 s stall alarm cancels the task, and the fetch loop below would otherwise walk
+        // three times to the nearest cell outside the fence and blame the animal (card fc47bf28)
+        const fenced = fencedRefusal({ mob: a.mob, at: pick.at, pen: penAround(first.position.floored()), feet: pos() })
+        if (fenced) return { arrived: false, with: 0, why: fenced, pos: pos() }
+        await goNear(first.position.floored(), 0).catch(() => {})
+      } else await bot.pathfinder.goto(new goals.GoalFollow(first, 2))
       alive()
       // the ones that come along are the ones close to me now, where they can see the food - the GROWN ones first, or a
       // lead for a breeding pair comes home with two calves and a herd that cannot breed (Perrin, from 24 cows)
