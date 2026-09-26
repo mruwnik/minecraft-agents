@@ -42,14 +42,13 @@ export function airSample ({ memory, oxygen, health, client, server, now, head, 
   }
 }
 
-// the state line: where the server last put the body, only when that is worth a look (more than a block off the
-// client's position, or older than a minute)
-export function serverPosNote ({ client, server, now, farBlocks = 1, staleMs = 60000 }) {
+// the state line: where the server last put the body, only when it disagrees with the client by more than a block
+// (its age rides along; age alone says nothing: the spawn packet is the only one most bodies ever get)
+export function serverPosNote ({ client, server, now, farBlocks = 1 }) {
   if (!server) return null
   const off = Math.hypot(server.x - client.x, server.y - client.y, server.z - client.z)
-  const ageMs = now - server.at
-  if (off <= farBlocks && ageMs <= staleMs) return null
-  return { serverPos: cell(server), age: `${Math.round(ageMs / 1000)}s` }
+  if (off <= farBlocks) return null
+  return { serverPos: cell(server), age: `${Math.round((now - server.at) / 1000)}s` }
 }
 
 // mineflayer 4.39.0 lib/plugins/entities.js: the air_supply in EVERY entity's metadata packet lands in bot.oxygenLevel

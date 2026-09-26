@@ -41,14 +41,16 @@ for (const [name, memory, sample, expected] of [
   test(`airSample memory: ${name}`, () => assert.deepEqual(airSample({ memory, ...sample }).memory, expected))
 }
 
-// the state line: the server's last position only when it is worth reading (off by more than a block, or older than a minute)
+// the state line: the server's last position only when it disagrees with the client by more than a block (its age rides along;
+// an old packet alone says nothing: the spawn packet is the only one most bodies ever get, and it would show for ever)
 for (const [name, server, expected] of [
   ['never corrected: nothing', null, null],
   ['the server agrees and spoke lately: nothing', { x: 119.6, y: 72, z: -65.4, at: 90000 }, null],
   ['the server put the body more than a block away', { x: 121.5, y: 72, z: -65.5, at: 90000 }, { serverPos: '121.5,72,-65.5', age: '10s' }],
   ['a level lower counts too', { x: 119.5, y: 70.5, z: -65.5, at: 99000 }, { serverPos: '119.5,70.5,-65.5', age: '1s' }],
-  ['the last packet is older than a minute', { x: 119.5, y: 72, z: -65.5, at: 30000 }, { serverPos: '119.5,72,-65.5', age: '70s' }],
-  ['two days old, rounded to whole seconds', { x: 119.5, y: 72, z: -65.5, at: -160333731 }, { serverPos: '119.5,72,-65.5', age: '160434s' }]
+  ['the last packet is old but agrees: nothing', { x: 119.5, y: 72, z: -65.5, at: 30000 }, null],
+  ['two days old and agreeing (the spawn packet of a long-running body): nothing', { x: 119.5, y: 72, z: -65.5, at: -160333731 }, null],
+  ['two days old and off: shown, the age rounded to whole seconds', { x: 121.5, y: 72, z: -65.5, at: -160333731 }, { serverPos: '121.5,72,-65.5', age: '160434s' }]
 ]) {
   test(`serverPosNote: ${name}`, () => assert.deepEqual(serverPosNote({ client: here, server, now: 100000 }), expected))
 }
