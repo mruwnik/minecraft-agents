@@ -3077,14 +3077,15 @@ for (const [name, parsed, expected] of [
   test(`planErrors: ${name}`, () => assert.deepEqual(planErrors(parsed), expected))
 }
 
-// Item 21 (Chani, 09-23): `goto` deliberately steps AROUND planted cells rather than trample them, so a crop with
-// nothing to stand on within a job's reach is a crop no job can be done on - her carrot patch sandwiched its water row
-// between two carrot rows with nothing but crops between the gate and the far row, and every walk into it answered `no
-// walkable path`. A plan can say that before it is built, and a built field can say it when asked what is standing.
+// Item 21 (Chani, 09-23): a job stands on dry footing within its reach of the cell it works and never in a planted
+// cell (a walk crosses the rows only where it must, card fcd996fe, but noStanding refuses a crop as a place to work
+// from), so a crop with nothing to stand on within a job's reach is a crop no job can be done on - her carrot patch
+// sandwiched its water row between two carrot rows with nothing but crops between the gate and the far row, and every
+// job there answered `nowhere to stand`. A plan can say that before it is built, and a built field can say it when asked.
 // Reach, not adjacency (09-26): a job stands within WORK_RANGE of its cell, so a lane four across serves a bed and the
 // eight rows between jizo-melon-patch's two covered channels are all served; test/lane.test.mjs has the shapes.
 const laneOf = (...rows) => planLane(parsePlan(rows.join('\n')).cells)
-const laneAdvice = 'lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand'
+const laneAdvice = 'lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)'
 for (const [name, cells, expected] of [
   ['a lane from the gate down the rows reaches every crop', laneOf('#G##', '#.c#', '#~c#', '#.c#', '####'), {}],
   ['the gate cell serves the rows within reach of it even where no path is laid', laneOf('#G##', '#cc#', '#~~#', '#cc#', '####'), {}],
