@@ -62,20 +62,27 @@ export function stopAdvice (reason, days) {
   if (/^food /.test(reason)) return 'nothing edible carried: fetch or grow food (WORLD.md says where the shared food is), then start the routine again'
   if (/broke|tool|no (\w+_)?(pickaxe|axe|hoe|shovel|shears|sword)\b/i.test(reason)) return 'a tool broke or is missing: craft another and carry a spare, then start the routine again'
   if (/^twice in a row/.test(reason)) return 'the same step failed twice: run it by hand and read its FAIL, fix what it names, then start the routine again'
-  if (/^night and no bed/.test(reason)) return 'put a bed within 32 blocks of the places (or carry one), or quit for the night (./mc quit, then ./mc dawn), then start the routine again'
+  if (/^night and no bed/.test(reason)) return 'put a bed within 32 blocks of the places, or mark your own bed (mark name=<you>-bed kind=bed, standing on it) or pass bed=<place> so the routine walks to it at nightfall when it is within bed_range (default 200) blocks; or quit for the night (./mc quit, then ./mc dawn); then start the routine again'
   if (/^spoken to/.test(reason)) return 'answer them in chat, then start the routine again'
   if (/^inventory full/.test(reason)) return 'deposit into a chest near the places (deposit=true in the farm steps does it), then start the routine again'
   return 'read the error, fix what it names, then start the routine again'
 }
 
-export const stopEvent = ({ reason, step = null, place = null, days }) => ({ reason, step, place, advice: stopAdvice(reason, days) })
+// bed: at a night stop, which bed the routine knew of and why it did not walk there (library/routine.mjs)
+export const stopEvent = ({ reason, step = null, place = null, days, bed = null }) => ({ reason, step, place, advice: stopAdvice(reason, days), ...(bed ? { bed } : {}) })
 
 // what each step reported, per place ("here" for a step with no place), short enough for one event line
 const outcomeText = outcome => outcome.failed ? `FAILED ${outcome.failed}` : `ok ${compact(outcome, false)}`.trim().slice(0, 120)
-export function dayEvent (day, outcomes) {
+// night: one line on the night before this day when the routine walked to its bed for it
+export function dayEvent (day, outcomes, night = null) {
   const places = {}
   for (const { action, place, outcome } of outcomes) {
     places[place ?? 'here'] = { ...places[place ?? 'here'], [action]: outcomeText(outcome) }
   }
-  return { day, places }
+  return { day, places, ...(night ? { night } : {}) }
 }
+
+// the routine_bed_walk event for one leg, and the day summary's line on the night
+export const posKey = p => `${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`
+export const bedWalkEvent = ({ leg, bed, from, to, distance, seconds }) => ({ leg, bed: bed.name, from: posKey(from), to: posKey(to), distance, seconds })
+export const nightLine = ({ bed, distance, seconds, back }) => `walked ${distance} blocks to ${bed.name} (${seconds}s), back at dawn${back === null ? ' failed' : ` (${back}s)`}`

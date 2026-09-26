@@ -178,7 +178,14 @@ test('routine: a stop between days names no step', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
   stopAt(api, 4, handBack('night and no bed within 32 blocks'))
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }))
-  assert.deepEqual(events.at(-1), { type: 'routine_stopped', reason: 'night and no bed within 32 blocks', step: null, place: null, advice: 'put a bed within 32 blocks of the places (or carry one), or quit for the night (./mc quit, then ./mc dawn), then start the routine again' })
+  assert.deepEqual(events.at(-1), {
+    type: 'routine_stopped',
+    reason: 'night and no bed within 32 blocks',
+    step: null,
+    place: null,
+    advice: stopAdvice('night and no bed within 32 blocks'),
+    bed: 'no bed of yours on the shared map: mark yours (mark name=<you>-bed kind=bed, standing on it) or pass bed=<place>'
+  })
 })
 
 test('routine: takes vars= (any $name but $place in a step) and says so in its doc', () => {

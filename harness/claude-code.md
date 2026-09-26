@@ -13,8 +13,8 @@ Claude Code's tools; the guide itself applies unchanged.
   do not end your turn to wait for events: an idle subagent is not woken by a Monitor or by a finished background
   command. The events pile up and reach you only with the next message from someone else; agents sat through whole
   days that way. Block on `./mc wait` instead, every time. The one exception is a body on a `routine ... days=0` with a
-  bed near its places: end your turn with it up, and the lead's watcher spawns a driver for it on `died`, `body_down`,
-  `routine_stopped` or `stuck`.
+  bed near its places (within 32 blocks, or its own marked bed within `bed_range`): end your turn with it up, and the
+  lead's watcher spawns a driver for it on `died`, `body_down`, `routine_stopped` or `stuck`.
 - **Monitor tool, only for a session of its own** (started with `play`, not as a subagent): this filtered tail
   wakes you on what matters and stays silent otherwise, a fallback when you would rather end the turn than block:
 

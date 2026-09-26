@@ -43,3 +43,31 @@ export function bedExit (exits) {
   const [x, y, z] = low.at.split(',').map(Number)
   return `this bed is a trap: you wake up standing ON it (0.56 high) and the only free cell beside it (${low.at}) has a block 2 above its floor, which leaves 1.44: nobody fits and no walk will start. Dig the block at ${x},${y + 2},${z} (or move the bed next to a cell with 3 of headroom). In the morning, if stuck: dig the bed, walk out, place it back`
 }
+
+// ---------------------------------------------------------------- nightfall away from any bed (card bebf3a5f)
+// A routine's places are often further than 32 blocks from its bed, and "night and no bed within 32 blocks" cost a
+// farm five nights of stops. The body's own bed is looked up on the shared map: the client never learns its spawn
+// bed and a body is restarted most nights, so the last bed slept in dies with the process, while a mark survives.
+// In order: bed=<place> (any mark, a base with a bed inside included), the nearest mark of kind=bed by the body
+// itself, and within one run the spot it last woke at. null when none of these is known.
+export const BED_RANGE = 200
+
+const blocksApart = (a, b) => Math.round(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z))
+
+export function ownBed (places, me, { bed, sleptAt, from } = {}) {
+  const map = places ?? []
+  if (bed) return map.find(p => p.name === bed) ?? null
+  const mine = map.filter(p => p.kind === 'bed' && p.by === me).sort((p, q) => blocksApart(p, from) - blocksApart(q, from))
+  if (mine.length) return mine[0]
+  return sleptAt ? { name: 'where you last woke', x: sleptAt.x, y: sleptAt.y, z: sleptAt.z } : null
+}
+
+// near: a bed within 32 blocks (the runner sleeps there as it always did). Otherwise the own bed within range is
+// walked to, and beyond it, or unknown, the night is a stop with the reason spelled out
+export function nightPlan ({ near, bed, from, bedRange = BED_RANGE }) {
+  if (near) return { do: 'sleep' }
+  if (!bed) return { do: 'stop', why: 'no bed of yours on the shared map: mark yours (mark name=<you>-bed kind=bed, standing on it) or pass bed=<place>' }
+  const distance = blocksApart(bed, from)
+  if (distance > bedRange) return { do: 'stop', why: `${bed.name} is ${distance} blocks away, beyond bed_range=${bedRange}` }
+  return { do: 'walk', to: bed, distance }
+}
