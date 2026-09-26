@@ -330,7 +330,7 @@ export const PRIMITIVES = {
   scan: { section: 'sense', args: 'x1= y1= z1= x2= y2= z2= [where=]', doc: 'an ASCII map of a box of the world, or with where= just the coordinates of one kind of block' },
   path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=] [route=] [live=]', doc: 'what the pathfinder makes of a walk from here, without walking it; route=true names the gates it opens and a waypoint every six steps; live=true plans with the movements walks use right now and names what differs from a fresh set' },
   inventory: { section: 'sense', args: '', doc: 'what I carry, what I wear and how many slots are free' },
-  chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest' },
+  chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest, with free= (empty slots) and slots= (its size) so a deposit can pick a chest with room' },
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
   // ---- map
   places: { section: 'map', args: '[name=] [q=] [by=] [kind=] [within=] [limit=]', doc: 'search the shared map: bases, farms, mines, villages, dangers. name= gives one place whole; never read places.json yourself' },
