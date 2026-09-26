@@ -136,6 +136,18 @@ export const farmWalk = Base => class extends Base {
       .filter(move => keepMove(node, move, floor(move)))
       .map(move => Object.assign(move, { cost: move.cost + cropStepCost(this.getBlock(move, 0, 0, 0)?.name) + trampleCost(node, move, floor(move)) }))
   }
+
+  // how many moves the pathfinder makes off `node`, and how many of them the farmland rule keeps (see noFirstMove)
+  firstMoves (node) {
+    return { made: super.getNeighbors(node).length, kept: this.getNeighbors(node).length }
+  }
+}
+// why a search that visited one node ended `here` (path_to: noPath nodes=0 visited=1): its start had no move the walk
+// keeps. Made but refused is the farmland rule; none made is a wall, a low roof or a deep drop. null: a move was kept
+export const noFirstMove = ({ made, kept }) => {
+  if (kept) return null
+  if (made) return `no first move from here: all ${made} moves off this cell land on farmland from a leap or a drop of two or more, which a walk never takes. Dig the block underfoot or step down by hand, or goto with dig=true`
+  return 'no first move from here: no cell beside, above or below this one can be walked, jumped or dropped to (walled in, a roof too low to jump, or a drop too deep). Read the four sides (block_at), then dig the block in the way, or goto with dig=true'
 }
 export const thicketCost = neighbours => neighbours.includes('bamboo') ? 25 : 0
 

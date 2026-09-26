@@ -5,7 +5,7 @@
 // the block fakes here answer getProperties() the way a prismarine Block does.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CROP_STEP, TRAMPLE_STEP, cropStepCost, trampleCost, keepMove, legFlags, farmWalk, explainNoPath } from '../src/lib/path.mjs'
+import { CROP_STEP, TRAMPLE_STEP, cropStepCost, trampleCost, keepMove, legFlags, farmWalk, explainNoPath, noFirstMove } from '../src/lib/path.mjs'
 
 test('a crop cell costs ten steps: a lane three cells longer still wins, a whole bed crossed does not', () => assert.equal(CROP_STEP, 10))
 
@@ -123,6 +123,24 @@ test('farmWalk: perched one above a field (on a log in the rows), the drops of o
   assert.deepEqual(neighbours([step(1, 63, 0, 1), step(-1, 63, 0, 1), step(0, 63, 1, 1)], cells),
     [`1,63,0:${1 + CROP_STEP + TRAMPLE_STEP}`, `-1,63,0:${1 + CROP_STEP + TRAMPLE_STEP}`, `0,63,1:${1 + TRAMPLE_STEP}`])
 })
+
+// a search that visits one node and ends `here` had no first move: how many the pathfinder made from the start, how many
+// the farmland rule kept (Jizo on the log, 09-26: four drops made, none kept, nodes=0 visited=1)
+for (const [name, moves, cells, expected] of [
+  ['four drops of two onto farmland: made, none kept', [step(1, 62, 0, 1), step(-1, 62, 0, 1), step(0, 62, 1, 1), step(0, 62, -1, 1)],
+    { '1,61,0': 'farmland', '-1,61,0': 'farmland', '0,61,1': 'farmland', '0,61,-1': 'farmland' }, { made: 4, kept: 0 }],
+  ['a drop of one onto farmland and a step onto dirt: both kept', [step(1, 63, 0, 1), step(-1, 64, 0, 1)], { '1,62,0': 'farmland' }, { made: 2, kept: 2 }],
+  ['no move at all', [], {}, { made: 0, kept: 0 }]
+]) {
+  test(`farmWalk.firstMoves: ${name}`, () => assert.deepEqual(new Moves(moves, cells).firstMoves(node), expected))
+}
+for (const [name, first, expected] of [
+  ['moves made, none kept: the farmland rule is named', { made: 4, kept: 0 }, 'no first move from here: all 4 moves off this cell land on farmland from a leap or a drop of two or more, which a walk never takes. Dig the block underfoot or step down by hand, or goto with dig=true'],
+  ['no move made at all: walled in or nothing to land on', { made: 0, kept: 0 }, 'no first move from here: no cell beside, above or below this one can be walked, jumped or dropped to (walled in, a roof too low to jump, or a drop too deep). Read the four sides (block_at), then dig the block in the way, or goto with dig=true'],
+  ['a move kept: the start is not the problem', { made: 3, kept: 1 }, null]
+]) {
+  test(`noFirstMove: ${name}`, () => assert.equal(noFirstMove(first), expected))
+}
 
 test('farmWalk: bare farmland at the same level is free, as it always was', () => {
   assert.deepEqual(neighbours([step(1, 64, 0, 1)], { '1,63,0': 'farmland' }), ['1,64,0:1'])
