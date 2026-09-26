@@ -6,7 +6,7 @@
 // (when an inventory has stopped moving, and whether a meal that "never showed" showed after all).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { givePlan, GIVE_REACH, tooFarToGive, lyingFrom, shortNote } from '../src/lib/handover.mjs'
+import { givePlan, GIVE_REACH, tooFarToGive, lyingFrom, shortNote, chestFree } from '../src/lib/handover.mjs'
 import { settleVerdict, SETTLE_QUIET_MS, SETTLE_MAX_MS, lateMeal } from '../src/lib/settle.mjs'
 import { craftReport, craftShortfall } from '../src/lib/craft.mjs'
 
@@ -45,6 +45,17 @@ for (const [name, drop, player, expected] of [
   ['player gone', { x: 19.3, y: 64, z: -75.5 }, null, '19,64,-76 (Jizo out of sight)']
 ]) {
   test(`lyingFrom: ${name}`, () => assert.equal(lyingFrom(drop, player, 'Jizo'), expected))
+}
+
+// chest_contents says how many slots a chest has free, so a deposit plan knows its room before walking there
+const slotsOf = (filled, size, pockets = 36) => [...Array.from({ length: size }, (_, i) => i < filled ? { name: 'wheat', count: 64 } : null), ...Array(pockets).fill({ name: 'bread', count: 1 })]
+for (const [name, slots, containerSlots, expected] of [
+  ['an empty single chest', slotsOf(0, 27), 27, 27],
+  ['a single chest with three stacks', slotsOf(3, 27), 27, 24],
+  ['a full double chest', slotsOf(54, 54), 54, 0],
+  ['the pockets are not the chest', slotsOf(27, 27), 27, 0]
+]) {
+  test(`chestFree: ${name}`, () => assert.equal(chestFree(slots, containerSlots), expected))
 }
 
 // an inventory has settled when no slot has changed for SETTLE_QUIET_MS; a wait never outlives SETTLE_MAX_MS

@@ -24,6 +24,10 @@ export const tooFarToGive = (player, distance) => distance > GIVE_REACH + 0.5
   ? `${player} is ${distance.toFixed(1)} blocks away, beyond arm's reach (${GIVE_REACH}): nothing given. Ask them to stand still, or use a chest`
   : null
 
+// how many of a container's own slots are empty (slots: the window's slot array, containerSlots: how many of them are
+// the container's, the rest being the pockets): a deposit plan can know a chest's room before it walks there
+export const chestFree = (slots, containerSlots) => slots.slice(0, containerSlots).filter(s => !s).length
+
 // where a drop still lies, and how far that is from the player it was thrown to
 export const lyingFrom = (drop, player, name) => {
   const cell = `${Math.floor(drop.x)},${Math.floor(drop.y)},${Math.floor(drop.z)}`
