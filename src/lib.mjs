@@ -39,6 +39,8 @@ export * from './lib/flee.mjs'
 export * from './lib/herd.mjs'
 export * from './lib/plan.mjs'
 export * from './lib/anchor.mjs'
+export * from './lib/handover.mjs'
+export * from './lib/settle.mjs'
 
 // The actions that changed name when the library was namespaced. Journals, habits and old notes still say the left-hand
 // side, so every "unknown action" names its successor rather than leaving the driver to guess. No aliases: the old name stays dead.
@@ -361,7 +363,7 @@ export const PRIMITIVES = {
   toggle: { section: 'block', args: 'x= y= z= [open=]', doc: 'work a gate, door, trapdoor, lever or button by hand' },
   use: { section: 'block', args: 'x= y= z= [item=] [ticks=]', doc: 'right-click a block with what I hold: a composter, a lectern, anything toggle refuses' },
   // ---- item
-  craft: { section: 'item', args: 'item= [count=1]', doc: 'craft, using a crafting table within 32 blocks when the recipe needs one. Answers made= (a batch can overshoot what you asked for). A failure says whether the ingredients were consumed: if they were not, retry, the second call usually works' },
+  craft: { section: 'item', args: 'item= [count=1]', doc: 'craft, using a crafting table within 32 blocks when the recipe needs one. Answers made= (a batch can overshoot what you asked for). It counts its result and what went in once the pockets have settled (a crafting window hands its grid back after it closes), so what it says was consumed is what really left. A failure says whether the ingredients were consumed: if they were not, retry, the second call usually works' },
   smelt: { section: 'item', args: 'item= [count=] [fuel=] [fuelCount=] [wait=] [x= y= z=]', doc: 'cook or melt in the nearest furnace and wait for it, by day' },
   furnace_take: { section: 'item', args: '[x= y= z=]', doc: 'take what is done out of a furnace' },
   deposit: { section: 'item', args: 'items= | item= [count=] | all=true [x= y= z=]', doc: 'put things into a chest, then open it again to check they really went in' },
@@ -369,7 +371,7 @@ export const PRIMITIVES = {
   equip: { section: 'item', args: 'item= [destination=]', doc: 'hold it, or wear it: armour finds its own slot' },
   toss: { section: 'item', args: 'item= [count=]', doc: 'drop something on the ground' },
   villager_food: { section: 'creature', args: 'uuid= item= count=', doc: 'drop a bounded breeding-food portion toward one observed on-foot adult and report server-confirmed item pickup by UUID' },
-  give: { section: 'item', args: 'player= item= [count=] [dig=]', doc: 'hand something to a player and watch that it was taken' },
+  give: { section: 'item', args: 'player= item= [count=] [dig=]', doc: 'walk to within arm\'s reach of a player, toss every stack until count= is met and watch that it was taken. short= says what the pocket lacked; lying= where a drop still lies and how far from them' },
   enchant: { section: 'item', args: 'item= [slot=] [x= y= z=]', doc: 'enchant one item I carry at an enchanting table, paying lapis and levels' },
   trades: { section: 'item', args: '[x= y= z=] [id=]', doc: 'read one nearby villager profession and numbered offers' },
   trade: { section: 'item', args: 'offer= [times=1] [x= y= z=] [id=]', doc: 'buy a numbered offer from one nearby villager and verify the inventory change' },
@@ -380,7 +382,7 @@ export const PRIMITIVES = {
   escort: { section: 'creature', args: 'mob= x= y= z= [count=] [within=32] [penned=] [range=]', doc: 'the walk itself: fetch the animals and bring them to a spot, stopping for stragglers (flock.lead is the whole job)' },
   'pen.check': { section: 'pen', args: '[x= y= z=] [radius=]', doc: 'walk a fence and find where a pen leaks: gaps, corner gates, rims an animal can hop' },
   // ---- self
-  eat: { section: 'self', args: '[item=] [anyway=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong. At food 6 or less with nothing else edible I eat the never-eat list too (rotten flesh: its hunger cannot take me below where the empty belly already would); anyway=true does that at any hunger, on your say-so' },
+  eat: { section: 'self', args: '[item=] [anyway=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong. At food 6 or less with nothing else edible I eat the never-eat list too (rotten flesh: its hunger cannot take me below where the empty belly already would); anyway=true does that at any hunger, on your say-so. A meal the plugin calls missing is judged again once the pockets have settled (right after a craft they are still moving) and tried once more' },
   sleep: { section: 'self', args: '[any=] [bed=] [bed_range=]', doc: 'sleep in the nearest free bed within 32 blocks; with none, walk to your own bed (bed=<place>, else your nearest kind=bed mark) when it is within bed_range (default 200) and sleep there' },
   wake: { section: 'self', args: '', doc: 'get out of bed' },
   quit: { section: 'self', args: '', doc: 'stop my body; ./start in the background brings it back' },

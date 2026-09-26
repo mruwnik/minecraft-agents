@@ -18,7 +18,7 @@ import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { dropGoal } from './drop.mjs'
 import { isGreeting } from './chatter.mjs'
-import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
@@ -1623,6 +1623,22 @@ function inventoryCounts () {
   for (const i of bot.inventory.items()) out[i.name] = (out[i.name] || 0) + i.count
   return out
 }
+// the pockets are still moving after a crafting window closes (the grid and the cursor come back one set_slot at a
+// time): a count read the moment a batch resolves showed the whole wheat stack spent (card c13b704d). Wait for the
+// slots to go quiet before counting anything; the verdict is 'settled' or 'timeout' (src/lib/settle.mjs)
+async function inventoryQuiet () {
+  const startedAt = Date.now()
+  let lastChangeAt = null
+  const moved = () => { lastChangeAt = Date.now() }
+  bot.inventory.on('updateSlot', moved)
+  try {
+    for (;;) {
+      const verdict = settleVerdict({ lastChangeAt, startedAt, now: Date.now() })
+      if (verdict !== 'wait') return verdict
+      await bot.waitForTicks(1)
+    }
+  } finally { bot.inventory.off('updateSlot', moved) }
+}
 function diffCounts (before, after) {
   const gained = {}; const lost = {}
   for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
@@ -2307,10 +2323,12 @@ const long = {
     // read as a failure and the loop crafted it AGAIN: that is how a shears craft ate two iron ingots and still said
     // nothing was made. Wait for the count to MOVE, up to five seconds, and stop waiting the moment it does.
     const settleTo = async target => { for (let i = 0; i < 25 && have() < target; i++) await bot.waitForTicks(4) }
+    const recipeSettled = async () => { await inventoryQuiet(); return bot.recipesFor(item.id, null, 1, table)[0] }
     // what the ingredients really cost, read back at the end: the difference between a free retry and a real loss
     const spent = () => Object.fromEntries(ingredients.map(name => [name, Math.max(0, (before[name] ?? 0) - (inventoryCounts()[name] ?? 0))]))
     // before calling ingredients lost, look on the ground: Chani's 16 planks were lying by the table the whole time
     const giveUp = async why => {
+      await inventoryQuiet()
       const onGround = () => dropsNear(6).filter(d => ingredients.includes(d.item))
       const fell = onGround().map(d => d.item)
       if (fell.length) await sweepDrops(6)
@@ -2321,11 +2339,14 @@ const long = {
       const full = craftRoom({ freeSlots: bot.inventory.emptySlotCount(), stacks: bot.inventory.items().filter(i => i.name === a.item).map(i => i.count), stackSize: item.stackSize, batch: recipe.result.count, item: a.item, made: have() - start, count })
       if (full) throw new Error(full)
       if (attempt > Math.ceil(count / recipe.result.count) + 5) await giveUp('the server kept rejecting the craft')
-      const r = bot.recipesFor(item.id, null, 1, table)[0]
+      // the last batch's grid and cursor may still be on their way back to the pockets: a recipe the pockets cannot
+      // fill is asked for again once they are quiet, before the ingredients are called gone
+      const r = bot.recipesFor(item.id, null, 1, table)[0] ?? await recipeSettled()
       if (!r) await giveUp('the ingredients ran out')
       const target = have() + r.result.count
       await craftBatch(r, table)
       await settleTo(target)
+      await inventoryQuiet()
     }
     return craftReport({ item: a.item, count, made: have() - start })
   },
@@ -2421,16 +2442,19 @@ const long = {
   async give (a) {
     const e = bot.players[a.player]?.entity
     if (!e) throw new Error(`can't see ${a.player}`)
-    await bot.pathfinder.goto(new goals.GoalFollow(e, 2))
+    // within arm's reach first: a toss flies about three blocks, and from three off it lay where the player never came
+    // (card 8c7b6652); the goal is half a block inside the reach so a diagonal cell still counts
+    await bot.pathfinder.goto(new goals.GoalFollow(e, GIVE_REACH - 0.5))
     // a fleeing or walking player is gone again by the time we toss: keep the items rather than litter
-    const dist = bot.entity.position.distanceTo(e.position)
-    if (dist > 3.5) throw new Error(`${a.player} moved away (${Math.round(dist)}m): nothing given. Ask them to stand still, or use a chest`)
+    const tooFar = tooFarToGive(a.player, bot.entity.position.distanceTo(e.position))
+    if (tooFar) throw new Error(tooFar)
     await bot.lookAt(e.position.offset(0, 1.2, 0))
     const item = findItem(a.item)
     const drops = () => Object.values(bot.entities).filter(d => d.name === 'item' && d.position.distanceTo(bot.entity.position) <= 8)
     const before = new Set(drops().map(d => d.id))
     const had = inventoryCounts()[item.name] ?? 0
-    const tossed = Math.min(a.count ?? item.count, item.count)
+    // every stack until the count is met (bot.toss crosses stacks): capped at the first stack, count=101 gave 64 and said taken=yes
+    const { give: tossed } = givePlan({ count: a.count, carried: had })
     await bot.toss(item.type, null, tossed)
     // did it arrive? Watch my own drop: gone within 5 s = picked up (the toss itself said ok even when nobody got the bread)
     const mine = () => drops().filter(d => !before.has(d.id))
@@ -2438,7 +2462,10 @@ const long = {
     for (let i = 0; i < 18 && mine().length; i++) await bot.waitForTicks(5)
     // my own drop is mine again after 2 s: across a fence it falls at my feet and I pick it up myself, which looked like taken
     const cameBack = Math.max(0, (inventoryCounts()[item.name] ?? 0) - (had - tossed))
-    return giveReport(a.player, mine().map(d => `${Math.floor(d.position.x)},${Math.floor(d.position.y)},${Math.floor(d.position.z)}`), cameBack)
+    // a drop still lying says how far it is from the player: "has not picked it up" read as a full inventory when it was distance
+    const theirs = bot.players[a.player]?.entity?.position ?? null
+    const short = shortNote({ item: item.name, asked: a.count ?? had, carried: had })
+    return { ...giveReport(a.player, mine().map(d => lyingFrom(d.position, theirs, a.player)), cameBack), ...(short ? { short } : {}) }
   },
 
   // farming in one call: every ripe crop within `within` blocks is dug and replanted with its own seed, then the drops are picked up.
@@ -3174,22 +3201,37 @@ const quick = {
     const pick = a.item ? edible.find(i => i.name === a.item) : (carried.edible.length ? null : edible[0])
     const opts = pick ? { food: pick } : {}
     // with strictErrors off a failed meal resolves and emits eatFail instead of throwing: catch both, or `ate` would lie
-    let failure = null
-    const onFail = error => { failure ??= error }
-    bot.autoEat.on('eatFail', onFail)
-    try {
-      await eatOnce(opts)
-    } catch (error) {
-      failure ??= error
-    } finally {
-      bot.autoEat.off('eatFail', onFail)
+    const attempt = async () => {
+      let failure = null
+      const onFail = error => { failure ??= error }
+      bot.autoEat.on('eatFail', onFail)
+      try {
+        await eatOnce(opts)
+      } catch (error) {
+        failure ??= error
+      } finally {
+        bot.autoEat.off('eatFail', onFail)
+      }
+      return failure
     }
-    if (failure) throw new Error(eatFailure(failure, carriedFood().edible))
+    // a meal "never showed" right after a craft: the plugin asked for bread from a slot the server had just moved, and
+    // the second eat worked (card c13b704d). Once the pockets have settled, judge it again and try once more
+    const pocket = () => inventoryCounts()[opts.food?.name] ?? 0
+    const judge = (failure, retried) => lateMeal({ failure, before: { food: before, carried: countsBefore[opts.food?.name] ?? 0 }, after: { food: bot.food, carried: pocket() }, retried })
+    let failure = await attempt()
+    let late = null
+    if (failure) { await inventoryQuiet(); late = judge(failure, false) }
+    if (late === 'retry') {
+      failure = await attempt()
+      late = failure ? (await inventoryQuiet(), judge(failure, true)) : 'retried'
+    }
+    if (failure && late !== 'ate') throw new Error(eatFailure(failure, carriedFood().edible))
     await bot.waitForTicks(5) // the food number comes in the update_health after the meal, not with it
     const eaten = opts.food?.name ?? null
-    const uneaten = uneatenMeal({ item: eaten, before: countsBefore[eaten] ?? 0, after: inventoryCounts()[eaten] ?? 0 })
+    const uneaten = late === 'ate' ? null : uneatenMeal({ item: eaten, before: countsBefore[eaten] ?? 0, after: inventoryCounts()[eaten] ?? 0 })
     if (uneaten) throw new Error(uneaten)
-    return { ate: opts.food?.name ?? null, gained: bot.food - before, food: bot.food, health: Math.round(bot.health) }
+    const note = late === 'ate' ? 'the meal showed once the pockets settled' : late === 'retried' ? 'the first try asked for a slot the server had just moved; the second ate' : null
+    return { ate: eaten, gained: bot.food - before, food: bot.food, health: Math.round(bot.health), ...(note ? { note } : {}) }
   },
 
   async wake () {
