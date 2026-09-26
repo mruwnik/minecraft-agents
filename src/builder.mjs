@@ -11,23 +11,32 @@ const WATER_CANDIDATES = 32
 // missing=water_bucket and gave up - the driver had to notice, walk to a lake, fill a bucket by hand and run the
 // build again. `fill` already walks to its target itself (see bot.mjs), so all this adds is finding one: the nearest
 // water within reach, tried in order until one is a settled source, rather than something this body has to work out
-// first. Shared with maintain_farm, which imports it from here rather than duplicate it.
-// find_blocks matches by NAME and returns the nearest first - standing beside an unfinished channel, the nearest
-// water is that channel's own flowing cells, the very thing this build is trying to fix, not the lake further off.
-// `fill` refuses flowing water, but only after walking to it (Chani's field, 09-26: a dozen-odd flowing channel
-// cells all closer than the real lake, each one a wasted walk). So each candidate's OWN level is read first, and
-// only a settled source is ever walked to; a generous count keeps a real source in the list past a field's own mess.
-export async function fetchWaterBucket (api, range = WATER_RANGE) {
-  if ((api.inv().water_bucket ?? 0) > 0) return true
-  if ((api.inv().bucket ?? 0) < 1) return false
+// first. Shared with farm.maintain, which imports it from here rather than duplicate it.
+// find_blocks matches by NAME and returns its matches in no particular order - standing beside an unfinished channel,
+// the nearest water is that channel's own flowing cells, the very thing this build is trying to fix, not the lake
+// further off. `fill` refuses flowing water, but only after walking to it (one field, 09-26: a dozen-odd flowing
+// channel cells all closer than the real lake, each one a wasted walk). So each candidate's OWN level is read first,
+// only a settled source is ever walked to, the nearest of those first, and a generous count keeps a real source in
+// the list past a field's own mess.
+// A channel stays dry for exactly two reasons, and a sweep says which (card 72e49b3d): no bucket at all, or no still
+// water within range
+export const NO_BUCKET = 'no bucket: craft item=bucket (3 iron_ingot)'
+export const noWaterLine = range => `no water within ${range} blocks`
+// why no bucket of water can be had, or null once one is carried: fetched from the nearest still source within range
+export async function waterShortfall (api, range = WATER_RANGE) {
+  if ((api.inv().water_bucket ?? 0) > 0) return null
+  if ((api.inv().bucket ?? 0) < 1) return NO_BUCKET
   const { positions = [] } = await api.act('find_blocks', { block: 'water', maxDistance: range, count: WATER_CANDIDATES }).then(r => r, () => ({}))
-  const sources = positions.filter(p => hasWaterSource(api.block(p.x, p.y, p.z)))
+  const here = api.pos()
+  const away = p => Math.hypot(p.x - here.x, p.y - here.y, p.z - here.z)
+  const sources = positions.filter(p => hasWaterSource(api.block(p.x, p.y, p.z))).sort((p, q) => away(p) - away(q))
   for (const p of sources) {
     const filled = await api.act('fill', { x: p.x, y: p.y, z: p.z }).then(() => true, () => false)
-    if (filled) return true
+    if (filled) return null
   }
-  return false
+  return noWaterLine(range)
 }
+export const fetchWaterBucket = async (api, range = WATER_RANGE) => (await waterShortfall(api, range)) === null
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 

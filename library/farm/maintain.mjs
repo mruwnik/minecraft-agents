@@ -1,9 +1,10 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
-import { fetchWaterBucket } from '../../src/builder.mjs'
+import { waterShortfall } from '../../src/builder.mjs'
 import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
+import { fieldLeg, footprintOf } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
 import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
@@ -37,6 +38,11 @@ export default {
     const composter = seedTarget(planStructure(plan.cells, 'K'), api.places(), a.compost)
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
+    // every walk of the sweep is a leg of src/fieldleg.mjs: plain first, once more with dig=true when the path fails
+    // inside the plan's footprint (never a plan block), and both failing is one stuck= line naming the cell (card 72e49b3d)
+    const box = footprintOf(plan.cells)
+    const dug = []
+    const leg = to => fieldLeg(api, to, box).then(r => { if (r?.dug) dug.push(r.dug); return r })
     const keep = seedReserve(reservePlans(api, plan, a.reserve_for).map(p => p.parsed))
 
     const tryJob = async job => {
@@ -49,7 +55,7 @@ export default {
       }
       // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
       // next slab or a crop instead, twice on jizo-melon-patch (09-26)
-      const failed = await workFrom(api, job).then(() => null, e => e.message)
+      const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, e => e.message)
       if (failed) { summary.stuck = summary.stuck ?? failed; return failed }
       if (job.do === 'plant') summary.replanted++
       if (job.do === 'till') summary.tilled++
@@ -80,12 +86,14 @@ export default {
     const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height) / 2))
     const walkToEdge = async () => {
       const edge = () => fieldEdge(cellAt, plan.cells, api.pos())
-      const spot = edge() ?? await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: approach }).then(edge)
-      if (spot) await api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 1 })
+      const spot = edge() ?? await leg({ x: middle.x, y: middle.y, z: middle.z, range: approach }).then(edge)
+      if (spot) await leg({ x: spot.x, y: spot.y, z: spot.z, range: 1 })
     }
 
     const sweep = async () => {
-      await walkToEdge()
+      // no way to the field is the sweep's stuck= line, not its crash: the next day tries again
+      const noWay = await walkToEdge().then(() => null, e => e.message)
+      if (noWay) { summary.stuck = summary.stuck ?? noWay; summary.sweeps++; api.report(ordered(summary)); return }
       // the plan is only worth following once the ground is in sight and it points at the right level: a plan anchored
       // one block low would have me till the dirt UNDER somebody's farm and plant seed inside their farmland
       const anchor = planAnchor(plan.cells, api.block)
@@ -106,12 +114,16 @@ export default {
       // up on "twice in a row". It is handed back as skipped= for the driver to drain
       // farmJobs decides pour vs. skip from whether water_bucket is ALREADY carried right here: a dry cell with none
       // becomes 'skip', not 'pour', and fetching water further down never reaches a job list that never named the
-      // cell. Tried once up front so a fetchable bucket turns skip back into pour before the list is even read
-      await fetchWaterBucket(api)
-      const all = farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
+      // cell. So when any job wants water and none is carried, a bucket is fetched (the nearest still source within
+      // range: waterShortfall in src/builder.mjs) BEFORE the list is read, and a channel that still stays dry is skipped
+      // with the one reason there is: no bucket at all, or no water within range (card 72e49b3d)
+      const listed = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
+      const water = listed().some(j => j.item === 'water_bucket') ? await waterShortfall(api) : null
+      const all = listed()
       const jobs = all.filter(j => j.do !== 'skip')
-      const skipped = all.filter(j => j.do === 'skip')
-      if (skipped.length) summary.skipped = skipped.map(j => `${j.x},${j.y},${j.z} (${j.why})`).join('; ')
+      // a dry channel's skip is the water reason alone; a flowing cell's keeps its own words (a source first), then the reason
+      const dryWhy = j => !water || j.item !== 'water_bucket' ? j.why : /is dry and I carry no water/.test(j.why) ? water : `${j.why}; ${water}`
+      const dry = all.filter(j => j.do === 'skip').map(j => `${j.x},${j.y},${j.z} (${dryWhy(j)})`)
       // channels capped the old way, with a bottom slab, still hold their water and are left alone: no churn on a
       // working field. But they walk worse than a top slab would (a half-step down into every one), so they are
       // counted, once per sweep, with how to raise them
@@ -129,8 +141,13 @@ export default {
       for (const job of jobs) {
         if (job.do === 'till' && !hoe) { leave(job, 'untilled', NO_HOE); continue }
         if (job.do === 'plant' && untilled.has(bedKey(job))) continue
-        // a missing water_bucket is fetched, not just reported: see fetchWaterBucket in src/builder.mjs
-        if (job.item === 'water_bucket' && !job.have && !(await fetchWaterBucket(api))) { short.water_bucket = (short.water_bucket ?? 0) + 1; continue }
+        // one bucket bills for a whole field but empties on the first pour: the pockets are asked again before every
+        // job that wants water, the bucket filled again when they are empty, and a cell that cannot have it is skipped
+        // with the reason. A pour names the block under the channel cell; the cell itself is what is said
+        if (job.item === 'water_bucket' && !((api.inv().water_bucket ?? 0) > 0)) {
+          const why = await waterShortfall(api)
+          if (why) { dry.push(`${job.x},${job.do === 'pour' ? job.y + 1 : job.y},${job.z} (${why})`); continue }
+        }
         // the pockets now, not the job list: seed runs out halfway through a field, and the place primitive's own
         // "you carry no" would be the same failure for every bed after it
         const seedless = job.do === 'plant' && !((api.inv()[job.item] ?? 0) > 0)
@@ -142,6 +159,8 @@ export default {
         if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
         await api.checkpoint({ canDeposit: Boolean(chest) })
       }
+      if (dry.length) summary.skipped = dry.join('; ')
+      if (dug.length) summary.dug = dug.join('; ')
       if (Object.keys(short).length) summary.missing = shortLine(short)
       const bareSaid = bareLine(bare)
       if (bareSaid) summary.bare = bareSaid

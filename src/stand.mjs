@@ -112,13 +112,14 @@ const BLIND = /cannot see the top|did not take/
 // do one job from a cell that sees it: walk there (range 0, the cell itself), call the primitive, and when it still
 // answers blind, once more from the next spot. With no spot to offer (the target's chunks not loaded, or nothing in
 // sight of it) the primitive is left to walk by itself, as before, and a blind answer then carries the reason
-export async function workFrom (api, job) {
+// `walk` is how the spot is reached: the plain goto by default; a farm sweep passes its own leg (src/fieldleg.mjs)
+export async function workFrom (api, job, walk = spot => api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 0 })) {
   const [action, args] = jobCall(job)
   const sight = jobSight(job)
   if (!sight) return api.act(action, args)
   const spots = standingSpots({ target: sight.at, blockAt: api.block, range: sight.range })
   const from = async spot => {
-    if (spot) await api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 0 })
+    if (spot) await walk({ x: spot.x, y: spot.y, z: spot.z })
     return api.act(action, args)
   }
   const first = await from(spots[0]).then(r => ({ r }), e => ({ e }))
