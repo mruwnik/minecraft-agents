@@ -240,8 +240,17 @@ test('the blueprint file changing after the mark is reported, not followed', asy
   const world = worldOf()
   const stale = { ...hutPlace, note: buildNote({ blueprint: 'starter-hut', facing: 'south', params: {}, hash: 'deadbeef' }) }
   const { api, calls } = body({ world, items: hutKit(), places: [stale] })
-  await assert.rejects(buildBlueprint(api, { place: 'hut' }, io), { message: /^the blueprint changed since this build started: hut was marked from starter-hut h=deadbeef and the file is now h=/ })
+  await assert.rejects(buildBlueprint(api, { place: 'hut' }, io), { message: /^the blueprint changed since this build started: hut was marked from starter-hut h=deadbeef and the file is now h=[0-9a-f]{8}; run blueprint.build name=starter-hut x=100 y=65 z=-20 place=hut to go on with the new version$/ })
   assert.deepEqual(calls, [])
+})
+
+test('name= and the anchor restated over the stale mark start afresh and mark it again', async () => {
+  const world = worldOf(halfBuilt())
+  const stale = { ...hutPlace, note: buildNote({ blueprint: 'starter-hut', facing: 'south', params: {}, hash: 'deadbeef' }) }
+  const { api, calls } = body({ world, items: hutKit(), places: [stale] })
+  const r = await buildBlueprint(api, { name: 'starter-hut', place: 'hut', ...AT }, io)
+  assert.equal(r.built, 42)
+  assert.equal(calls[0], `mark name=hut kind=build x=100 y=65 z=-20 note=bp=starter-hut f=south h=${blueprintHash(HUT)}`)
 })
 
 test("somebody else's place is refused by name", async () => {

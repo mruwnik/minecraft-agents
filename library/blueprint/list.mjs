@@ -8,5 +8,5 @@ export default {
   instant: true,
   args: { tag: 'string', q: 'string' },
 
-  run: (api, a) => ({ text: listText(a) })
+  run: async (api, a) => ({ text: listText(a) })
 }

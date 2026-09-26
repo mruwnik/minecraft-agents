@@ -2,7 +2,7 @@
 name: starter-hut
 title: Starter hut
 tags: shelter, storage
-description: A 5x5 one-room hut with a bed, a chest, a crafting table, a torch on the table and a closed interior.
+description: A 5x5 one-room hut with a bed, a chest, a crafting table, a torch on the floor and a closed interior.
 front: south
 foundation: flat
 clearance: 1
@@ -15,7 +15,8 @@ notes: The floor is dug one block into the ground (layer y-1). Place it on flat 
 # Starter hut
 
 Written for this library, not transcribed. The door faces the blueprint's south; `facing=` turns the whole hut. The
-torch stands on the crafting table: a wall torch needs a click face `place` cannot yet be told (see the spec).
+torch stands on the floor: a wall torch needs a click face `place` cannot yet be told, and a torch over the crafting
+table is clicked against the plainer wall beside it and comes out as a wall torch (Pacer's hut, 09-26).
 
 ```legend
 S  {stone:block}
@@ -48,7 +49,7 @@ SSSSS
 LSSSL
 S^.CS
 SFH.S
-ST..S
+ST.iS
 LSDSL
 ```
 
@@ -58,7 +59,7 @@ LSDSL
 LSSSL
 S...S
 G...G
-Si..S
+S...S
 LSdSL
 ```
 

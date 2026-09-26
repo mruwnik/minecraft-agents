@@ -45,6 +45,9 @@ const CROP = /^(wheat|carrots|potatoes|beetroots|melon_stem|pumpkin_stem|attache
 const WALL_HUNG = /^(wall_torch|soul_wall_torch|redstone_wall_torch|ladder|tripwire_hook|.*_wall_sign|.*_wall_hanging_sign|.*_wall_banner|.*_wall_fan|.*_wall_skull|.*_wall_head|vine|glow_lichen|sculk_vein)$/
 const FRONT_FACING = /^(chest|trapped_chest|ender_chest|furnace|blast_furnace|smoker|barrel|dispenser|dropper|observer|lectern|loom|stonecutter|grindstone|beehive|bee_nest|jack_o_lantern|carved_pumpkin|end_portal_frame|hopper|crafter|vault|trial_spawner|chiseled_bookshelf|decorated_pot|bell|campfire|soul_campfire|anvil|chipped_anvil|damaged_anvil)$/
 const LOOK_TOWARD = /(_stairs|_door|_bed|_fence_gate|_trapdoor)$/
+// a right-click on these uses them instead of placing against them, so `place` clicks a plainer neighbour when there is
+// one (src/lib/place.mjs placeAgainst): a torch over a crafting table with a wall beside it comes out as a wall torch
+const CLICKABLE = /(_bed|_door|_trapdoor|_fence_gate|_button|chest|barrel|shulker_box|crafting_table|furnace|smoker|hopper|dispenser|dropper|anvil|lever|loom|stonecutter|grindstone|smithing_table|cartography_table|brewing_stand|enchanting_table|beacon|note_block|repeater|comparator|composter|cauldron)$/
 export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
 export const FLUIDS = new Set(['water', 'lava', 'flowing_water', 'flowing_lava', 'bubble_column'])
 // blocks somebody put there, as src/lib/world.mjs judges them: never dug without clear=true
@@ -156,6 +159,8 @@ export const placeGap = alt => {
   return alt.states.axis ? `${alt.name}[axis=${alt.states.axis}]` : alt.name
 }
 export const gapWarning = (token, alt) => `${token}: ${placeGap(alt)} needs place against=, not available yet: build refuses this blueprint until it is`
+// the tokens lint flagged as gaps, with their sentences: what build refuses a blueprint over
+export const gapTokens = ({ warnings }) => warnings.filter(w => /needs place against=/.test(w)).map(w => ({ token: w.split(':')[0], warning: w }))
 
 // ---------------------------------------------------------------- parsing
 
@@ -539,6 +544,7 @@ export function lint (bp, registry = REGISTRY) {
   const cells = blueprintCells(bp)
   const minY = bp.layers[0].y
   const below = (dx, dy, dz) => tokenAt(bp, dx, dy - 1, dz)
+  const clickableSaid = new Set()
   for (const { dx, dy, dz, spec, token } of cells) {
     const alt = primary(spec)
     const second = secondPart(alt)
@@ -568,6 +574,10 @@ export function lint (bp, registry = REGISTRY) {
       if (there === undefined && !(s.dy === -1 && dy === minY && dy <= 0)) warnings.push(`the ${name} at ${at(dy, dx, dz)} stands on ${where}, which is outside the blueprint: whatever is there must hold it`)
       else if (there === '_') warnings.push(`the ${name} at ${at(dy, dx, dz)} stands on ${where}, which is _: whatever is there must hold it`)
       else if (there !== undefined && isAir(primary(bp.legend[there]).name)) errors.push(`the ${name} at ${at(dy, dx, dz)} needs a block at ${where}; that cell is . (air)`)
+      else if (there !== undefined && CLICKABLE.test(primary(bp.legend[there]).name) && !clickableSaid.has(token)) {
+        clickableSaid.add(token)
+        warnings.push(`${token}: ${name} over a ${primary(bp.legend[there]).name} is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is`)
+      }
     }
     if (isCropName(alt.name)) {
       const floor = below(dx, dy, dz)

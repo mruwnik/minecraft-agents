@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, placeGap, gapWarning, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
@@ -39,8 +39,8 @@ export function prepare ({ name, facing, params = {} }, read = readBlueprint) {
   const way = facing ?? parsed.front
   if (!DIRS.includes(way)) throw new Error(`facing=${way} is not a direction: ${DIRS.join(', ')}`)
   const bp = rotate(resolve(parsed, params), turnsFor(parsed.front, way))
-  const gaps = Object.values(bp.legend).filter(spec => placeGap(spec.alts[0])).map(spec => spec.token)
-  return { bp, text, hash, front: parsed.front, facing: way, params, lint: lint(bp), gaps }
+  const checked = lint(bp)
+  return { bp, text, hash, front: parsed.front, facing: way, params, lint: checked, gaps: gapTokens(checked) }
 }
 
 // the supply chest: x,y,z or the name of a marked place
@@ -66,9 +66,12 @@ export function siteOf (api, a, read, command = 'blueprint.build') {
   if (refusal) throw new Error(refusal)
   if (note && a.name !== undefined && a.name !== note.blueprint) throw new Error(`${saved.name} was started from ${note.blueprint}: run ${command} place=${saved.name} alone to go on with it, or mark a new name`)
   if (note && a.x !== undefined && (a.x !== saved.x || a.y !== saved.y || a.z !== saved.z)) throw new Error(`${saved.name} is marked at ${cellText(saved)}: run ${command} place=${saved.name} without x= y= z= to go on with it, or mark a new name`)
-  if (note) {
+  // name= and the anchor restated over a build's own mark start it afresh from the file as it is now (the mark is
+  // written again); place= alone goes on with the file the mark was made from
+  const restated = note && a.name !== undefined && a.x !== undefined
+  if (note && !restated) {
     const prep = prepare({ name: note.blueprint, facing: note.facing, params: note.params }, read)
-    if (prep.hash !== note.hash) throw new Error(`the blueprint changed since this build started: ${saved.name} was marked from ${note.blueprint} h=${note.hash} and the file is now h=${prep.hash}; mark a new name to build the new version`)
+    if (prep.hash !== note.hash) throw new Error(`the blueprint changed since this build started: ${saved.name} was marked from ${note.blueprint} h=${note.hash} and the file is now h=${prep.hash}; run ${command} name=${note.blueprint} x=${saved.x} y=${saved.y} z=${saved.z} place=${saved.name} to go on with the new version`)
     return { ...prep, at: { x: saved.x, y: saved.y, z: saved.z }, saved, resume: true }
   }
   if (a.name === undefined) throw new Error(`${command} needs name= x= y= z= (a blueprint at its anchor), or place=<a build already marked>`)
@@ -182,10 +185,9 @@ export async function checkBlueprint (api, a, io = {}) {
   const span = `y${bp.layers[0].y}..y${bp.layers.at(-1).y}`
   const head = `${bp.name} at ${cellText(at)} facing=${facing} ${bp.width}x${bp.depth}, ${span}, ${total} items${saved ? ` (place ${saved.name}, ${standing} stand)` : ''}`
   const table = stagesOf(jobs, api, bp).map(stage => stageLine(stage, have))
-  const gaps = found.gaps.map(token => gapWarning(token, bp.legend[token].alts[0]))
   const verdict = site.refusal ? `refusal: ${site.refusal}`
     : found.lint.errors.length ? `refusal: ${bp.name} does not lint: ${found.lint.errors[0]}`
-    : gaps.length ? `refusal: ${gaps[0]}`
+    : found.gaps.length ? `refusal: ${found.gaps[0].warning}`
     : jobs.length ? 'ok: build would start' : `already: everything ${bp.name} asks for stands at ${cellText(at)}`
   const lines = [
     head,
@@ -214,7 +216,7 @@ export async function buildBlueprint (api, a, io = {}) {
   const found = siteOf(api, a, read)
   const { bp, at, hash, facing, params, saved, resume } = found
   if (found.lint.errors.length) throw new Error(`${bp.name} does not lint: ${found.lint.errors[0]}`)
-  if (found.gaps.length) throw new Error(`${bp.name}: ${gapWarning(found.gaps[0], bp.legend[found.gaps[0]].alts[0])}`)
+  if (found.gaps.length) throw new Error(`${bp.name}: ${found.gaps[0].warning}`)
   const supply = supplyOf(api, a.supply)
   const note = buildNote({ blueprint: bp.name, facing, params, hash })
   // the site has to be in sight before it can be judged: a body far from it walks up first, and only then decides

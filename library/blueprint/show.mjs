@@ -8,5 +8,5 @@ export default {
   instant: true,
   args: { name: 'string!', facing: 'string', layer: 'number', ...paramArgs() },
 
-  run: (api, a) => ({ text: showText(api, a) })
+  run: async (api, a) => ({ text: showText(api, a) })
 }

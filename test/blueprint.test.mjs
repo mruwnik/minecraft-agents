@@ -270,7 +270,7 @@ test('enclosure: the hut is enclosed and lit, the hut without its torch is not',
   assert.equal(lit.enclosed, 21)
   assert.equal(lit.lit, true)
   assert.equal(lit.spawnSafe, true)
-  const dark = parseBlueprint(read('starter-hut').replace('Si..S', 'S...S'))
+  const dark = parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S'))
   const unlit = enclosure(resolve(dark))
   assert.equal(unlit.enclosed, 22)
   assert.equal(unlit.lit, false)
@@ -294,7 +294,7 @@ test('lint: errors', () => {
     ['wall torch off its wall', parse({ legend: 't  wall_torch[facing=south]\nS  cobblestone', layers: [[0, '..\ntS']] }), 'the wall_torch at y0 0,1 needs a block at 0,0 north of it; that cell is . (air)'],
     ['crop without farmland', parse({ legend: 'w  wheat[age=0]\nr  dirt', layers: [[-1, 'r'], [0, 'w']] }), 'the wheat at y0 0,0 needs farmland under it; y-1 0,0 is r (dirt)'],
     ['farmland with no water', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, 'fffff'], [0, 'wwwww']] }), '5 cells are farmland with no water within 4 blocks (0,0 1,0 2,0 3,0 and 1 more): move the channel or shorten the row'],
-    ['unlit shelter', parseBlueprint(read('starter-hut').replace('Si..S', 'S...S')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source (a shelter must be spawn-safe)'],
+    ['unlit shelter', parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source (a shelter must be spawn-safe)'],
     ['a block no pillar outside the footprint can reach', parse({ legend: 'S  cobblestone', layers: [[6, Array(5).fill('_'.repeat(11)).concat(['_____S_____'], Array(5).fill('_'.repeat(11))).join('\n')]] }), 'y6 5,5 has no cell to stand on within reach, even with a scaffold']
   ]
   for (const [label, bp, want] of rows) {
@@ -306,8 +306,9 @@ test('lint: errors', () => {
 test('lint: warnings', () => {
   const rows = [
     ['a torch whose support is _', parse({ legend: 'i  torch\nS  cobblestone', layers: [[0, '_S'], [1, 'iS']] }), 'the torch at y1 0,0 stands on 0,0 below it, which is _: whatever is there must hold it'],
-    ['unlit room without the shelter tag', parseBlueprint(read('starter-hut').replace('Si..S', 'S...S').replace('tags: shelter, storage', 'tags: storage')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source'],
+    ['unlit room without the shelter tag', parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S').replace('tags: shelter, storage', 'tags: storage')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source'],
     ['a wall torch', parse({ legend: 't  wall_torch[facing=south]\nS  cobblestone', layers: [[0, 'S\nt']] }), 't: wall_torch needs place against=, not available yet: build refuses this blueprint until it is'],
+    ['a torch over a crafting table', parse({ legend: 'i  torch\nT  crafting_table\nS  cobblestone', layers: [[0, 'TS'], [1, 'iS']] }), 'i: torch over a crafting_table is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand']
   ]
@@ -535,7 +536,7 @@ test('blueprintHash is eight hex characters of the file', () => {
 })
 
 test('renderLayer prints the grid after rotation with its y', () => {
-  assert.equal(renderLayer(resolve(hut()), 0), 'y0\nLSSSL\nS^.CS\nSFH.S\nST..S\nLSDSL')
+  assert.equal(renderLayer(resolve(hut()), 0), 'y0\nLSSSL\nS^.CS\nSFH.S\nST.iS\nLSDSL')
   assert.equal(renderLayer(rotate(resolve(hut()), 1), 0).split('\n')[3], 'D.H.S')
 })
 
