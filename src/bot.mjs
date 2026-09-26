@@ -108,6 +108,7 @@ function sayError (message, extra = {}, type = 'error') {
 
 // ---------------------------------------------------------------- bot lifecycle
 let bot = null
+let boatLeashHolder = new Map()
 let eatTimer = null
 // item 13 (#109): what a death line needs and cannot work out after the fact. The server's own words, the last wound,
 // and the last place the body stood: the respawn point is the world spawn, which tells nobody where the kit fell.
@@ -283,6 +284,13 @@ function connect () {
   bot.loadPlugin(pvp.plugin)
   bot.loadPlugin(armorManager)
   bot.loadPlugin(autoEat)
+  boatLeashHolder = new Map()
+  bot._client.on('attach_entity', packet => {
+    const entity = bot.entities[packet.entityId]
+    if (!isBoat(entity)) return
+    if (packet.vehicleId <= 0) boatLeashHolder.delete(entity.id)
+    else boatLeashHolder.set(entity.id, packet.vehicleId)
+  })
   // 9 physicsTick listeners stand by design and a walk or a wait adds two for a moment: the warning at 11 was noise, not a leak ([listeners] stayed at 9 for hours on every body)
   bot.setMaxListeners(30)
 
@@ -672,9 +680,17 @@ function connect () {
   }
   bot.on('physicsTick', () => { if (tick % 2 === 0 && ready) doorTick() })
   let lastSurfaceTrace = 0
-  // a walk or the idle nudge can reset the controls between reflex ticks: the swim is pressed on every physics tick until the body breathes
+  // Pathfinding and idle motion can reset controls between reflexTick calls.
+  // Keep the emergency swim pressed on every physics tick until breathing.
   bot.on('physicsTick', () => {
     if (!ready) return
+    if (swimStepTarget) {
+      // The bounded swim action owns horizontal steering. Keep the upward
+      // stroke even if the air reflex changes state during this physics tick.
+      bot.setControlState('jump', true)
+      bot.setControlState('forward', true)
+      return
+    }
     if (!reflexes || !surfacing || !surfaceWayNow) return
     if (bot.pathfinder.isMoving()) bot.pathfinder.setGoal(null)
     bot.setControlState('jump', true)
@@ -804,6 +820,7 @@ let fightStart = null
 let chaseHeldUntil = 0
 let chaseLeash = CHASE_LEASH
 let surfacing = false
+let swimStepTarget = null
 // what the surfacing reflex is doing now (src/surface.mjs: up, sideways to an opening, or a pocket dug in the ceiling),
 // judged again every reflex tick as the body moves
 let surfaceWayNow = null
@@ -840,7 +857,7 @@ function steerSurfacing (me) {
   }
   surfaceWayNow = way
   if (way.way === 'sideways') {
-    bot.lookAt(new Vec3(way.to.x + 0.5, me.y + 1.62, way.to.z + 0.5), true).catch(() => {})
+    if (!swimStepTarget) bot.lookAt(new Vec3(way.to.x + 0.5, me.y + 1.62, way.to.z + 0.5), true).catch(() => {})
     swimTrack = swimProgress(swimTrack, way.dist, Date.now())
     if (swimTrack.stalled) surfaceTried = [...surfaceTried, cellKey(way.to)]
   }
@@ -1313,7 +1330,7 @@ function reflexTick () {
     surfaceTried = []
     swimTrack = null
     // a running task steers the body every tick and wins over one press of jump: Jizo drowned that way, mid-harvest
-    if (task) cancelTask('out of air: swimming up to breathe. Work from dry land, then retry')
+    if (task && !swimStepTarget) cancelTask('out of air: swimming up to breathe. Work from dry land, then retry')
     bot.pathfinder.setGoal(null)
   }
   // the way out is judged again every half second (src/surface.mjs): a sideways swim ends under open water, where up is
@@ -1324,12 +1341,14 @@ function reflexTick () {
     surfacing = false
     surfaceWayNow = null
     bot.pathfinder.setGoal(null)
-    bot.setControlState('jump', false)
-    bot.setControlState('forward', false)
+    if (!swimStepTarget) {
+      bot.setControlState('jump', false)
+      bot.setControlState('forward', false)
+    }
   }
   // an idle body sinks like a stone, then yo-yos between drowning and surfacing: tread water until the driver moves it
   const afloat = bot.entity.isInWater && !task && !surfacing && !bot.pathfinder.isMoving()
-  if (afloat || floating) bot.setControlState('jump', afloat)
+  if ((afloat || floating) && !swimStepTarget) bot.setControlState('jump', afloat)
   floating = afloat
   // buried (gravel or sand fell on us): dig our head free before we suffocate
   const burying = buriedIn([bot.blockAt(me.offset(0, 1.62, 0))])
@@ -1743,6 +1762,43 @@ async function openVillagerWindow (entity, timeoutMessage) {
     throw error
   }
 }
+function isBoat (entity) { return /(^|_)boat$/.test(entity?.name ?? '') }
+function boatById (id) {
+  const boat = bot.entities[id]
+  if (!isBoat(boat)) throw new Error(`no boat with id ${id} is in sight`)
+  return boat
+}
+function currentVehicleId (entity) {
+  const vehicle = entity?.vehicle
+  // Mineflayer may retain this pointer after the server destroys a boat.
+  return vehicle && vehicle.isValid && bot.entities[vehicle.id] === vehicle ? vehicle.id : null
+}
+function boatPassengers (boat) {
+  const seated = boat.passengers ?? Object.values(bot.entities).filter(e => currentVehicleId(e) === boat.id)
+  return seated.map(e => ({ id: e.id, uuid: e.uuid, name: e.name, at: e.position.floored().toArray().join(',') }))
+}
+function boatView (boat) {
+  const passengers = boatPassengers(boat)
+  return { id: boat.id, uuid: boat.uuid, exact: boat.position.toArray().map(n => Math.round(n * 100) / 100).join(','), controller: passengers[0] ? { id: passengers[0].id, uuid: passengers[0].uuid, name: passengers[0].name } : null, passengers, leashHolderId: boatLeashHolder.get(boat.id) ?? null }
+}
+async function reachBoatForUse (boat) {
+  // A dock can leave the bot outside a one-block service slot. If already in
+  // reach, don't pathfind through its closed wall just to interact.
+  const point = boat.position.offset(0, 0.35, 0)
+  const eye = () => bot.entity.position.offset(0, bot.entity.eyeHeight, 0)
+  const from = eye()
+  const distance = from.distanceTo(point)
+  if (distance > 3.5) throw new Error(`boat ${boat.id} is ${distance.toFixed(1)} blocks away; move to its service slot`)
+  if (bot.world.raycast(from, point.minus(from).normalize(), distance - 0.2)) throw new Error(`solid block obstructs boat ${boat.id} interaction`)
+}
+async function equipBoatBreakingAxe () {
+  // A lead or empty hand can leave a boat intact after three attacks. Avoid
+  // swords here: their sweep can strike the villager beside the boat.
+  const order = ['netherite_axe', 'diamond_axe', 'iron_axe', 'stone_axe', 'golden_axe', 'wooden_axe']
+  const axe = order.map(name => bot.inventory.items().find(item => item.name === name)).find(Boolean)
+  if (!axe) throw new Error('breaking a boat safely needs an axe; equip one before releasing or recovering it')
+  await bot.equip(axe, 'hand')
+}
 // "long" actions take over the body; starting a new one cancels the previous.
 // using a tool on the ground: hoe -> farmland, shovel -> dirt_path. One block (x y z) or many (blocks=[{x,y,z},...])
 const GROUND_WORK = {
@@ -1787,6 +1843,126 @@ async function workGround (a, work) {
 }
 
 const long = {
+  async boat_place (a) {
+    const item = a.item ?? 'oak_boat'
+    if (!/^\w+_(?:chest_)?boat$/.test(item)) throw new Error('boat_place needs a boat item, such as oak_boat or oak_chest_boat')
+    const p = vecOf(a)
+    const centerGiven = a.centerX !== undefined || a.centerZ !== undefined
+    if (centerGiven && (![a.centerX, a.centerZ].every(Number.isFinite) || Math.abs(a.centerX - (p.x + 0.5)) > 0.8 || Math.abs(a.centerZ - (p.z + 0.5)) > 0.8)) throw new Error('boat_place centerX= and centerZ= must both be within 0.8 block of the launch cell center')
+    const center = p.offset(centerGiven ? a.centerX - p.x : 0.5, 0.5, centerGiven ? a.centerZ - p.z : 0.5)
+    const at = bot.blockAt(p)
+    const below = bot.blockAt(p.offset(0, -1, 0))
+    const water = at?.name === 'water'
+    if (!water && !(isAir(at?.name) && below?.boundingBox === 'block')) throw new Error(`boat_place needs water at ${p} or air over solid ground (found ${at?.name ?? 'unloaded'})`)
+    if (a.aimY !== undefined && (!water || !Number.isFinite(a.aimY) || a.aimY < p.y + 0.5 || a.aimY > p.y + 1)) throw new Error('boat_place aimY= needs a water height within the launch cell')
+    const aimY = a.aimY ?? p.y + (water ? 1 : 0.5)
+    if (Object.values(bot.entities).some(e => isBoat(e) && e.position.distanceTo(center) < 2)) throw new Error('a boat already occupies this launch cell')
+    await goNear(p, 3)
+    await bot.equip(findItem(item), 'hand')
+    const before = inventoryCounts()[item] ?? 0
+    const beforeIds = new Set(Object.values(bot.entities).filter(isBoat).map(e => e.id))
+    // Minecraft places boats with use_item and an eye raycast. Mineflayer's
+    // placeEntity omits the modern use_item rotation/sequence and can silently
+    // leave the boat in hand, so use its normal item activation packet here.
+    await bot.lookAt(new Vec3(center.x, aimY, center.z), true)
+    const eye = bot.entity.position.offset(0, bot.entity.eyeHeight, 0)
+    const aimedAt = bot.blockAtCursor(5)
+    bot.activateItem()
+    await bot.waitForTicks(5)
+    bot.deactivateItem()
+    const candidates = Object.values(bot.entities).filter(e => isBoat(e) && !beforeIds.has(e.id) && e.position.distanceTo(center) < 3)
+    const boat = candidates.length === 1 ? candidates[0] : null
+    if (!isBoat(boat) || (inventoryCounts()[item] ?? 0) >= before) throw new Error(`boat placement at ${p} was not confirmed: eye=${eye.toArray().map(n => Math.round(n * 100) / 100).join(',')} aim=${center.x},${aimY},${center.z} sight=${aimedAt ? `${aimedAt.name}@${aimedAt.position}` : 'none'} itemBefore=${before} itemNow=${inventoryCounts()[item] ?? 0}; inspect nearby boats before retrying`)
+    return { boat: boatView(boat), item, at: `${p.x},${p.y},${p.z}` }
+  },
+  async boat_mount (a) {
+    const boat = boatById(a.id)
+    if (bot.vehicle?.id === boat.id) return { mounted: boatView(boat) }
+    if (bot.vehicle) throw new Error(`already riding vehicle ${bot.vehicle.id}: dismount first`)
+    await goNear(boat.position, 2.5)
+    bot.mount(boat)
+    for (let i = 0; i < 20 && bot.vehicle?.id !== boat.id; i++) await bot.waitForTicks(1)
+    if (bot.vehicle?.id !== boat.id) throw new Error(`boat ${boat.id} did not accept the mount`)
+    if (boat.passengers?.[0]?.id !== bot.entity.id) throw new Error(`mounted boat ${boat.id} but another passenger controls it; do not steer`)
+    return { mounted: boatView(boat) }
+  },
+  async boat_dismount (a) {
+    if (!bot.vehicle || !isBoat(bot.vehicle)) throw new Error('not riding a boat')
+    if (a.id !== undefined && bot.vehicle.id !== a.id) throw new Error(`riding boat ${bot.vehicle.id}, not ${a.id}`)
+    const id = bot.vehicle.id
+    bot.dismount()
+    for (let i = 0; i < 20 && bot.vehicle; i++) await bot.waitForTicks(1)
+    if (bot.vehicle) throw new Error(`still riding boat ${id}: dismount was not confirmed`)
+    return { dismounted: id, at: pos() }
+  },
+  async boat_leash (a) {
+    const boat = boatById(a.id)
+    if (boatLeashHolder.get(boat.id) === bot.entity.id) return { leashed: boatView(boat) }
+    if (boatLeashHolder.has(boat.id)) throw new Error(`boat ${boat.id} is leashed to another entity`)
+    if (!(inventoryCounts().lead > 0)) throw new Error('boat_leash needs one lead')
+    await reachBoatForUse(boat)
+    await bot.equip(findItem('lead'), 'hand')
+    bot.useOn(boat)
+    for (let i = 0; i < 20 && boatLeashHolder.get(boat.id) !== bot.entity.id; i++) await bot.waitForTicks(1)
+    if (boatLeashHolder.get(boat.id) !== bot.entity.id) throw new Error(`boat ${boat.id} leash was not confirmed: inspect boat_state before retrying`)
+    return { leashed: boatView(boat) }
+  },
+  async boat_unleash (a) {
+    const boat = boatById(a.id)
+    if (boatLeashHolder.get(boat.id) !== bot.entity.id) throw new Error(`boat ${boat.id} is not leashed to this body`)
+    await reachBoatForUse(boat)
+    await bot.unequip('hand')
+    bot.useOn(boat)
+    for (let i = 0; i < 20 && boatLeashHolder.has(boat.id); i++) await bot.waitForTicks(1)
+    if (boatLeashHolder.has(boat.id)) throw new Error(`boat ${boat.id} leash did not detach`)
+    return { unleashed: boatView(boat) }
+  },
+  async boat_release (a) {
+    if (!Number.isInteger(a.id) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(a.passengerUuid ?? '')) throw new Error('boat_release needs boat id= and passengerUuid=')
+    if (bot.vehicle) throw new Error('dismount before releasing the boat passenger')
+    const boat = boatById(a.id)
+    const seated = boatPassengers(boat)
+    if (seated.length !== 1 || seated[0].uuid !== a.passengerUuid || seated[0].name !== 'villager') throw new Error(`boat ${boat.id} must contain only villager ${a.passengerUuid}; seated=${JSON.stringify(seated)}`)
+    const villager = Object.values(bot.entities).find(e => e.uuid === a.passengerUuid)
+    if (!villager) throw new Error(`villager ${a.passengerUuid} is not visible`)
+    const edge = boat.position.floored()
+    const dry = [-2, -1, 0, 1, 2].some(dx => [-2, -1, 0, 1, 2].some(dz => [0, 1].some(dy => {
+      const ground = bot.blockAt(edge.offset(dx, dy, dz))
+      const above = ground && bot.blockAt(ground.position.offset(0, 1, 0))
+      return ground?.boundingBox === 'block' && isAir(above?.name) && ground.position.y >= Math.floor(boat.position.y)
+    })))
+    if (!dry) throw new Error('boat_release needs a dry landing within two blocks of the boat')
+    await reachBoatForUse(boat)
+    await equipBoatBreakingAxe()
+    for (let hit = 0; hit < 3 && bot.entities[boat.id]; hit++) {
+      bot.attack(boat)
+      await bot.waitForTicks(7)
+    }
+    if (bot.entities[boat.id]) throw new Error(`boat ${boat.id} did not break after three hits; villager still aboard`)
+    for (let i = 0; i < 10 && currentVehicleId(villager) !== null; i++) await bot.waitForTicks(1)
+    if (!villager.isValid || currentVehicleId(villager) !== null) throw new Error(`boat broke but villager ${a.passengerUuid} was not confirmed safely on foot`)
+    return { released: a.passengerUuid, onFoot: { uuid: villager.uuid, exact: villager.position.toArray().map(n => Math.round(n * 100) / 100).join(','), vehicleId: null }, boatBroken: a.id }
+  },
+  async boat_recover (a) {
+    const boat = boatById(a.id)
+    if (boatPassengers(boat).length) throw new Error(`boat ${a.id} still has passengers`)
+    if (boatLeashHolder.has(boat.id)) throw new Error(`boat ${a.id} is leashed; detach before recovering it`)
+    const at = boat.position.clone()
+    const before = Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
+    await reachBoatForUse(boat)
+    await equipBoatBreakingAxe()
+    for (let hit = 0; hit < 3 && bot.entities[boat.id]; hit++) {
+      bot.attack(boat)
+      await bot.waitForTicks(7)
+    }
+    if (bot.entities[boat.id]) throw new Error(`empty boat ${boat.id} did not break after three hits`)
+    for (let i = 0; i < 20; i++) {
+      const now = Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
+      if (now > before) return { recovered: boat.id, itemCount: now - before, at: pos() }
+      await bot.waitForTicks(1)
+    }
+    return { broken: boat.id, itemPending: at.toArray().map(n => Math.round(n * 100) / 100).join(','), advice: 'boat item did not reach this safe stance; collect it separately' }
+  },
   async trades (a) {
     const entity = targetVillager(a)
     const data = villagerData(entity)
@@ -2606,6 +2782,12 @@ setInterval(() => {
 }, 5000)
 
 const quick = {
+  boat_state (a) {
+    const boats = Object.values(bot.entities).filter(isBoat).filter(e => a.id === undefined || e.id === a.id)
+      .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position))
+      .slice(0, 20).map(boatView)
+    return { selfId: bot.entity.id, selfUuid: bot.entity.uuid, mounted: bot.vehicle?.id ?? null, boats }
+  },
   // the catalogue every driver starts from: each action with its arguments, and for a composite what hands the body back.
   // It is built from the dispatch tables themselves, so it cannot drift from what this body can actually do.
   help (a) {
@@ -2647,7 +2829,7 @@ const quick = {
   entity: (a) => ({
     found: Object.values(bot.entities).filter(e => e !== bot.entity && matcher(a.name)(e.name ?? ''))
       .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position)).slice(0, a.count ?? 2)
-      .map(e => ({ id: e.id, dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata) }))
+      .map(e => ({ id: e.id, ...(a.uuid ? { uuid: e.uuid, vehicleId: currentVehicleId(e) } : {}), dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata) }))
   }),
   watch: (a) => {
     if (!a.name || [a.block, a.mob, a.item].filter(Boolean).length !== 1) throw new Error('watch needs name= and exactly one of block=, mob=, item=')
@@ -2665,6 +2847,8 @@ const quick = {
       hp: Math.round(bot.health),
       food: bot.food,
       xp: bot.experience.level,
+      inWater: bot.entity.isInWater,
+      exact: bot.entity.position.toArray().map(n => Math.round(n * 100) / 100).join(','),
       oxygen: bot.oxygenLevel,
       // where the server last put the body, when that is off the client's position (card 962beec2)
       ...serverPosNote({ client: bot.entity.position, server: lastServerPos, now: Date.now() }),
@@ -2956,6 +3140,32 @@ const quick = {
     await new Promise(r => setTimeout(r, a.ms ?? 1000))
     bot.setControlState(a.state ?? 'forward', false)
     return { from, to: pos(), onGround: bot.entity.onGround, velocity: roundVec(bot.entity.velocity) }
+  },
+
+  async boat_swim (a) {
+    if (![a.x, a.y, a.z].every(Number.isFinite)) throw new Error('boat_swim needs finite x= y= z=')
+    const ms = a.ms ?? 700
+    if (!Number.isInteger(ms) || ms < 100 || ms > 1000) throw new Error('boat_swim ms= must be 100..1000')
+    if (swimStepTarget) throw new Error('another boat_swim is still steering')
+    const belowFeet = ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(bot.blockAt(bot.entity.position.offset(0, -0.5, 0))?.name)
+    if (!bot.entity.isInWater && !belowFeet) throw new Error('boat_swim needs the bot in or just above water')
+    if (!openAbove(columnAbove(bot.entity.position))) throw new Error('boat_swim needs open water overhead')
+    const from = bot.entity.position.clone()
+    const target = new Vec3(a.x, Math.max(a.y + 1.5, from.y + 1.6), a.z)
+    if (Math.hypot(target.x - from.x, target.z - from.z) < 0.5) throw new Error('boat_swim target is too close')
+    bot.pathfinder.setGoal(null)
+    swimStepTarget = target
+    try {
+      await bot.lookAt(target, true)
+      bot.setControlState('jump', true)
+      bot.setControlState('forward', true)
+      await new Promise(resolve => setTimeout(resolve, ms))
+      return { from: from.toArray().map(n => Math.round(n * 100) / 100).join(','), to: bot.entity.position.toArray().map(n => Math.round(n * 100) / 100).join(','), oxygen: bot.oxygenLevel }
+    } finally {
+      swimStepTarget = null
+      bot.setControlState('forward', false)
+      bot.setControlState('jump', false)
+    }
   },
 
   stop () { cancelTask('stop'); followTarget = null; endFlee(); return {} },
