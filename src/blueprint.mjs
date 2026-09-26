@@ -980,7 +980,28 @@ export const unloadedRefusal = c => `the chunk under ${c.x},${c.y},${c.z} is not
 
 // ---------------------------------------------------------------- the place note, the hash, the rendering
 
-export const blueprintHash = text => createHash('sha1').update(String(text)).digest('hex').slice(0, 8)
+// eight hex characters of what a build depends on: the front matter it reads (name, tags, front, foundation, clearance,
+// parameters), the legend and the layer grids, and not the title, description, notes or prose. A mark carries it and a
+// build resumes only while it matches, so a sentence fixed in the prose no longer strands every build marked from the
+// file. A file that does not parse is hashed whole
+const sha8 = text => createHash('sha1').update(String(text)).digest('hex').slice(0, 8)
+export const blueprintHash = text => {
+  const bp = parseBlueprint(text)
+  if (bp.errors?.length || !bp.layers) return sha8(text)
+  const legend = Object.keys(bp.legend).sort().map(token => [token, bp.legend[token].alts, bp.legend[token].tags])
+  const layers = bp.layers.map(l => [l.y, l.grid])
+  return sha8(JSON.stringify({ name: bp.name, tags: bp.tags, front: bp.front, foundation: bp.foundation, clearance: bp.clearance, params: bp.params, legend, layers }))
+}
+// the whole-file hashes marks were made with before blueprintHash covered only what a build depends on, each version the
+// library shipped, with that version's blueprintHash: a mark carrying one resumes while the file still builds the same
+export const LEGACY_HASHES = {
+  '09b5894a': '05b48a40', // starter-hut, 09-26 (the torch on the floor): hollis-hut and pacer-hut
+  c0596f57: 'ae0f6a36', // starter-hut, first version (the torch on the table)
+  e89af12d: '822d9fe1', // watchtower, first version
+  '9a627d1e': 'd50a2cb8' // wheat-field, first version
+}
+// does a mark's hash still name this file's build: the hash itself, or a legacy whole-file hash of the same build
+export const hashMatches = (marked, now) => marked === now || LEGACY_HASHES[marked] === now
 // what a build's place carries in its note until mark has fields for it: the blueprint, the facing, the file's hash,
 // then the parameters that differ from the defaults. A note holds 80 characters
 export const buildNote = ({ blueprint, facing, params = {}, hash }) =>

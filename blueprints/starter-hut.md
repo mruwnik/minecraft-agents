@@ -15,8 +15,8 @@ notes: The floor is dug one block into the ground (layer y-1). Place it on flat 
 # Starter hut
 
 Written for this library, not transcribed. The door faces the blueprint's south; `facing=` turns the whole hut. The
-torch stands on the floor: a wall torch needs a click face `place` cannot yet be told, and a torch over the crafting
-table is clicked against the plainer wall beside it and comes out as a wall torch (Pacer's hut, 09-26).
+torch stands on the floor, clicked onto the block under it (`place against=down`); a torch clicked against the wall
+beside it would come out as a wall torch (Pacer's hut, 09-26).
 
 ```legend
 S  {stone:block}

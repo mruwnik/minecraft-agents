@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, GAP, faceWord, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, GAP, faceWord, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
@@ -71,7 +71,7 @@ export function siteOf (api, a, read, command = 'blueprint.build') {
   const restated = note && a.name !== undefined && a.x !== undefined
   if (note && !restated) {
     const prep = prepare({ name: note.blueprint, facing: note.facing, params: note.params }, read)
-    if (prep.hash !== note.hash) throw new Error(`the blueprint changed since this build started: ${saved.name} was marked from ${note.blueprint} h=${note.hash} and the file is now h=${prep.hash}; run ${command} name=${note.blueprint} x=${saved.x} y=${saved.y} z=${saved.z} place=${saved.name} to go on with the new version`)
+    if (!hashMatches(note.hash, prep.hash)) throw new Error(`the blueprint changed since this build started: ${saved.name} was marked from ${note.blueprint} h=${note.hash} and the file is now h=${prep.hash}; run ${command} name=${note.blueprint} x=${saved.x} y=${saved.y} z=${saved.z} place=${saved.name} to go on with the new version`)
     return { ...prep, at: { x: saved.x, y: saved.y, z: saved.z }, saved, resume: true }
   }
   if (a.name === undefined) throw new Error(`${command} needs name= x= y= z= (a blueprint at its anchor), or place=<a build already marked>`)

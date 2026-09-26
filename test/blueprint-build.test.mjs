@@ -265,6 +265,19 @@ test('the blueprint file changing after the mark is reported, not followed', asy
   assert.deepEqual(calls, [])
 })
 
+// marks made before the hash covered only what a build depends on carry the whole file's hash: those of the library's
+// own versions still resume (hollis-hut and pacer-hut hold h=09b5894a, the starter-hut of 09-26)
+test('a mark carrying the old whole-file hash of the same hut resumes, and a stranger hash is still refused', async () => {
+  const world = worldOf(halfBuilt())
+  const legacy = { ...hutPlace, note: buildNote({ blueprint: 'starter-hut', facing: 'south', params: {}, hash: '09b5894a' }) }
+  const { api } = body({ world, items: hutKit(), places: [legacy] })
+  const r = await buildBlueprint(api, { place: 'hut' }, io)
+  assert.equal(r.skipped, 60)
+  const older = { ...hutPlace, note: buildNote({ blueprint: 'starter-hut', facing: 'south', params: {}, hash: 'c0596f57' }) }
+  const second = body({ world: worldOf(halfBuilt()), items: hutKit(), places: [older] })
+  await assert.rejects(buildBlueprint(second.api, { place: 'hut' }, io), { message: /^the blueprint changed since this build started: hut was marked from starter-hut h=c0596f57/ })
+})
+
 test('name= and the anchor restated over the stale mark start afresh and mark it again', async () => {
   const world = worldOf(halfBuilt())
   const stale = { ...hutPlace, note: buildNote({ blueprint: 'starter-hut', facing: 'south', params: {}, hash: 'deadbeef' }) }

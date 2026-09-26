@@ -565,10 +565,37 @@ test('buildNote and parseNote round-trip inside 80 characters', () => {
   assert.equal(parseNote('a farm, anyone welcome'), null)
 })
 
-test('blueprintHash is eight hex characters of the file', () => {
+test('blueprintHash is eight hex characters of what a build depends on', () => {
   assert.match(blueprintHash(read('starter-hut')), /^[0-9a-f]{8}$/)
   assert.notEqual(blueprintHash(read('starter-hut')), blueprintHash(read('watchtower')))
 })
+
+// a mark carries the hash, and a build resumes only while it matches: fixing a sentence in the prose must not strand
+// every build marked from the file (hollis-hut and pacer-hut, 09-27), while a change to what gets built must
+const HUT = read('starter-hut')
+for (const [label, edit, same] of [
+  ['the title', t => t.replace('title: Starter hut', 'title: A hut'), true],
+  ['the description', t => t.replace('description: A 5x5', 'description: A small 5x5'), true],
+  ['the notes', t => t.replace('notes: The floor', 'notes: Its floor'), true],
+  ['the difficulty and the author', t => t.replace('difficulty: easy', 'difficulty: medium').replace('by: blueprint', 'by: someone'), true],
+  ['the prose between the blocks', t => t.replace('Written for this library, not transcribed.', 'Written here.'), true],
+  ['a comment and the heading in the prose', t => t.replace('# Starter hut', '# The starter hut\n\n<!-- checked 09-27 -->'), true],
+  ['a layer grid', t => t.replace('ST.iS', 'STi.S'), false],
+  ['a legend block', t => t.replace('T  crafting_table', 'T  barrel'), false],
+  ['a legend state', t => t.replace('^  {wood:stairs}[facing=west,half=bottom]', '^  {wood:stairs}[facing=east,half=bottom]'), false],
+  ['a legend tag', t => t.replace('#entrance\nd', '#door\nd'), false],
+  ['a parameter default', t => t.replace('wood=oak', 'wood=spruce'), false],
+  ['the front', t => t.replace('front: south', 'front: north'), false],
+  ['the foundation', t => t.replace('foundation: flat', 'foundation: any'), false],
+  ['the clearance', t => t.replace('clearance: 1', 'clearance: 2'), false],
+  ['the tags (the kind a finished build is marked)', t => t.replace('tags: shelter, storage', 'tags: shelter'), false]
+]) {
+  test(`blueprintHash: an edit to ${label} ${same ? 'keeps' : 'changes'} it`, () => {
+    const edited = edit(HUT)
+    assert.notEqual(edited, HUT, 'the edit applies')
+    assert.equal(blueprintHash(edited) === blueprintHash(HUT), same)
+  })
+}
 
 test('renderLayer prints the grid after rotation with its y', () => {
   assert.equal(renderLayer(resolve(hut()), 0), 'y0\nLSSSL\nS^.CS\nSFH.S\nST.iS\nLSDSL')
