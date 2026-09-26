@@ -84,9 +84,9 @@ test('routine: at nightfall with my bed within bed_range it walks there, sleeps,
   nightAt(api, 4) // checkpoints: two steps, the day's end, then dusk
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2 })
   assert.deepEqual(noNotes(calls), [
-    'farm.tidy place=a', 'farm.maintain place=a deposit',
+    'farm.tidy place=a', 'farm.maintain place=a deposit reserve_for=a',
     'goto x=100 y=64 z=0 range=2', 'goto x=10 y=64 z=10 range=3',
-    'farm.tidy place=a', 'farm.maintain place=a deposit'
+    'farm.tidy place=a', 'farm.maintain place=a deposit reserve_for=a'
   ])
   assert.deepEqual([summary.days, summary.bedWalks], [2, 1])
   assert.deepEqual(events.map(e => e.type), ['routine_day', 'routine_bed_walk', 'routine_bed_walk', 'routine_day', 'routine_stopped'])

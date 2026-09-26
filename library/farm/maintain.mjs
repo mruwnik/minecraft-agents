@@ -1,7 +1,7 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fetchWaterBucket } from '../../src/builder.mjs'
-import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planBill, planStructure, seedDrop, seedTarget, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
@@ -9,8 +9,10 @@ import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
-// enough seed to sow the whole plan twice over stays in my pockets; the rest goes in the chest
-const seedReserve = plan => Object.fromEntries(Object.entries(planBill(plan.parsed)).filter(([item]) => SEED_ITEMS.has(item)).map(([item, n]) => [item, n * 2]))
+// the plans whose seed stays in my pockets (src/lib/farm.mjs seedReserve): this one, and every other reserve_for=
+// names (a homestead's, from the routine's $places), each once
+const reservePlans = (api, own, names) => [own.name, ...String(names ?? '').split(',').map(n => n.trim()).filter(Boolean)]
+  .filter((name, i, all) => all.indexOf(name) === i).map(name => name === own.name ? own : api.plan(name))
 // the counts first, bare= right after them: the routine keeps 120 characters of a step's summary, and what stood
 // behind lowSlabs= and clutter= was the line nobody read (09-26)
 const SAID_FIRST = ['sweeps', 'harvested', 'replanted', 'bare', 'tilled', 'poured', 'covered', 'built']
@@ -22,9 +24,9 @@ const ordered = summary => Object.fromEntries([
 const bedKey = job => `${job.x},${job.z}`
 
 export default {
-  doc: 'farm.maintain place= [days=] [within=] [compost=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest)',
+  doc: 'farm.maintain place= [days=] [within=] [compost=] [reserve_for=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
   stops: 'days= done, a step that failed twice, or nothing left it can do',
-  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any' },
+  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any', reserve_for: 'string' },
 
   async run (api, a) {
     const plan = api.plan(a.place)
@@ -35,7 +37,7 @@ export default {
     const composter = seedTarget(planStructure(plan.cells, 'K'), api.places(), a.compost)
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
-    const keep = seedReserve(plan)
+    const keep = seedReserve(reservePlans(api, plan, a.reserve_for).map(p => p.parsed))
 
     const tryJob = async job => {
       // a cover is only real once the cell it caps is actually holding its OWN water, a settled source, not merely a

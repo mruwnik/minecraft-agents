@@ -1,4 +1,4 @@
 [
   { "action": "farm.tidy", "place": "$place" },
-  { "action": "farm.maintain", "place": "$place", "deposit": true, "compost": "$compost" }
+  { "action": "farm.maintain", "place": "$place", "deposit": true, "compost": "$compost", "reserve_for": "$places" }
 ]

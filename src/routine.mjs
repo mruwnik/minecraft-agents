@@ -18,7 +18,7 @@ export function routinePlan (a, readRole) {
   }
   const rounds = []
   for (const place of places) {
-    const { steps, error } = routineSteps({ ...a, place }, readRole)
+    const { steps, error } = routineSteps({ ...a, place, places: places.join(',') }, readRole)
     if (error) return { error }
     rounds.push(steps)
   }
@@ -71,8 +71,19 @@ export function stopAdvice (reason, days) {
 // bed: at a night stop, which bed the routine knew of and why it did not walk there (library/routine.mjs)
 export const stopEvent = ({ reason, step = null, place = null, days, bed = null }) => ({ reason, step, place, advice: stopAdvice(reason, days), ...(bed ? { bed } : {}) })
 
-// what each step reported, per place ("here" for a step with no place), short enough for one event line
-const outcomeText = outcome => outcome.failed ? `FAILED ${outcome.failed}` : `ok ${compact(outcome, false)}`.trim().slice(0, 120)
+// what each step reported, per place ("here" for a step with no place), short enough for one event line. What went
+// wrong comes first and is never cut: on 09-26 a farm's stuck= and missing= stood behind lowSlabs= and clutter=, past
+// the cut, and the day line read as a field maintained while its summary said otherwise
+const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare']
+const OUTCOME_MAX = 120
+export function outcomeText (outcome) {
+  if (outcome.failed) return `FAILED ${outcome.failed}`
+  const wrong = compact(Object.fromEntries(SAID_FIRST.filter(k => outcome[k] !== undefined).map(k => [k, outcome[k]])), false)
+  const rest = compact(Object.fromEntries(Object.entries(outcome).filter(([k]) => !SAID_FIRST.includes(k))), false)
+  const head = ['ok', wrong].filter(Boolean).join(' ')
+  const room = OUTCOME_MAX - head.length - 1
+  return rest && room > 0 ? `${head} ${rest.slice(0, room)}` : head
+}
 // night: one line on the night before this day when the routine walked to its bed for it
 export function dayEvent (day, outcomes, night = null) {
   const places = {}

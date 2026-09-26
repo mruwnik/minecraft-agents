@@ -1,4 +1,5 @@
 // Crop bookkeeping: ripeness, replant order and spots, seed sourcing, and a farm's surplus/compost plan.
+import { planBill } from './plan.mjs'
 
 // farming: the seed to replant a ripe crop with, or null when it is not a crop or not ripe yet
 const CROPS = { wheat: [7, 'wheat_seeds'], carrots: [7, 'carrot'], potatoes: [7, 'potato'], beetroots: [3, 'beetroot_seeds'], cocoa: [2, 'cocoa_beans'] }
@@ -62,6 +63,19 @@ export function stalkReplant (cut, carried) {
 // ---------------------------------------------------------------- composite actions: the farm's produce
 // the seed a field is sown from: kept back from the chest, so a farm always carries enough to sow itself again
 export const SEED_ITEMS = new Set(['wheat_seeds', 'beetroot_seeds', 'melon_seeds', 'pumpkin_seeds', 'carrot', 'potato', 'sugar_cane', 'bamboo'])
+// the seed kept back from the compost and the chest: enough to sow every one of these plans twice over. A homestead
+// is several plans and the body carries one pocket: a reserve read off the plan being swept alone had the crop-field
+// and cane passes compost every wheat seed the melon patch would need (09-26, 44-53 a day). farm.maintain's
+// reserve_for= names the other plans; the routine fills it with $places
+export const seedReserve = parsedPlans => {
+  const keep = {}
+  for (const parsed of parsedPlans) {
+    for (const [item, n] of Object.entries(planBill(parsed))) {
+      if (SEED_ITEMS.has(item)) keep[item] = (keep[item] ?? 0) + n * 2
+    }
+  }
+  return keep
+}
 // what a farm makes. Anything else I carry (tools, armour, cobblestone, the bread I live on) is mine, not the chest's.
 const FARM_GOODS = new Set([...SEED_ITEMS, 'wheat', 'beetroot', 'melon_slice', 'melon', 'pumpkin', 'poisonous_potato', 'hay_block', 'cocoa_beans'])
 // what belongs in the farm's chest: its produce, above the reserve the plan needs to sow itself again

@@ -7,7 +7,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
-import { bareLine, bareWhy, hasHoe, NO_HOE } from '../src/lib/farm.mjs'
+import { bareLine, bareWhy, hasHoe, NO_HOE, seedReserve } from '../src/lib/farm.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 
@@ -100,4 +100,37 @@ for (const [name, entries, expected] of [
   ['a reason with no note', [{ why: 'failed' }], '1 (failed:1)']
 ]) {
   test(`bareLine: ${name}`, () => assert.equal(bareLine(entries), expected))
+}
+
+// ---------------------------------------------------------------- the seed reserve of a homestead (card b22fa1c9)
+// The reserve was this plan's seed bill twice over, and nothing else: on a homestead of three plans the crop-field
+// and cane passes composted EVERY wheat seed the body carried, since their plans sow none (Jizo, 09-26: 44-53
+// wheat_seeds lost a day). reserve_for= names the other plans whose seed is kept as well
+for (const [name, plans, expected] of [
+  ['one plan: its seed twice over', ['ww'], { wheat_seeds: 4 }],
+  ['several plans: the sum of their bills, twice over', ['ww', 'bbb', 'w'], { wheat_seeds: 6, beetroot_seeds: 6 }],
+  ['structures are not seed', ['wCK~'], { wheat_seeds: 2 }],
+  ['the same plan named twice counts once', ['ww', 'ww'], { wheat_seeds: 4 }]
+]) {
+  test(`seedReserve: ${name}`, () => assert.deepEqual(seedReserve([...new Set(plans)].map(parsePlan)), expected))
+}
+
+const homestead = () => {
+  const own = fakePlace('wK')
+  const other = { ...fakePlace('bb', 10, 63, 0), name: 'other' }
+  const world = { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'composter', '10,63,0': 'farmland', '11,63,0': 'farmland' }
+  const made = fakeApi({ place: own, world, items: { wheat_seeds: 10, beetroot_seeds: 10 }, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, 'farm.compost': { fed: 'fed' } } })
+  made.api.plan = name => ({ 'test-field': own, other })[name]
+  return made
+}
+for (const [name, args, expected] of [
+  ['without reserve_for the other plan\'s seed is compost', { place: 'test-field' }, ['farm.compost items(wheat_seeds:8 beetroot_seeds:10) x=1 y=64 z=0']],
+  ['reserve_for keeps the other plan\'s seed too', { place: 'test-field', reserve_for: 'other' }, ['farm.compost items(wheat_seeds:8 beetroot_seeds:6) x=1 y=64 z=0']],
+  ['the plan itself in the list changes nothing', { place: 'test-field', reserve_for: 'test-field, other' }, ['farm.compost items(wheat_seeds:8 beetroot_seeds:6) x=1 y=64 z=0']]
+]) {
+  test(`farm.maintain: ${name}`, async () => {
+    const { api, calls } = homestead()
+    await maintainFarm.run(api, args)
+    assert.deepEqual(calls.filter(c => c.startsWith('farm.compost')), expected)
+  })
 }
