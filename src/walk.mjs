@@ -60,7 +60,7 @@ export const noStanding = (cellAt, target, range) => {
   if (only?.solid) return `${head}: it is ${only.name}, a block; aim at the cell above it (y=${Math.floor(target.y) + 1}) or pass range=1`
   const blockers = cells.map(cell => blocker(cellAt, cell)).filter(Boolean)
   const crops = cells.some(cell => cellAt(cell.x, cell.y, cell.z)?.crop)
-  if (crops) return `${head}: every cell in reach is planted (${tally(blockers)}); a walk steps round crops, so leave a . path or a covered channel through the field, or work the rows from one`
+  if (crops) return `${head}: every cell in reach is planted (${tally(blockers)}); work the rows from a . path or a covered channel (a walk crosses crops only where it must, at a walking pace)`
   if (blockers.includes('unloaded')) return `${head}: that part of the world is not loaded here (${tally(blockers)}): walk nearer first`
   if (blockers.length) return `${head}: every cell in reach is blocked (${tally(blockers)})`
   return `${head}: nothing to stand on there (mid-air, or inside a block)`

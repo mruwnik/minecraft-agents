@@ -45,7 +45,7 @@ const span = n => Array.from({ length: 2 * n + 1 }, (_, i) => i - n)
 const planted = world(Object.assign({}, ...span(8).flatMap(dx => span(8).map(dz => farmland(5 + dx, -80 + dz, true)))), 62)
 // the same field with a covered channel (a bottom slab in the water) two rows south of (5,-80): a walkable lane
 const laned = (x, y, z) => (z === -78 && y === 62) ? { name: 'oak_slab', solid: true } : (z === -78 && y === 63) ? AIR : planted(x, y, z)
-const CROPS = 'a walk steps round crops, so leave a . path or a covered channel through the field, or work the rows from one'
+const CROPS = 'work the rows from a . path or a covered channel (a walk crosses crops only where it must, at a walking pace)'
 for (const [name, at, target, range, expected] of [
   ['open ground beside the cell: nothing to say', world({}), { x: 5, y: 62, z: -80 }, 1, null],
   ['range 0 at a ground block: nothing can stand inside it', world(farmland(5, -80, false)), { x: 5, y: 62, z: -80 }, 0,
