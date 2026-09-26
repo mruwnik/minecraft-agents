@@ -26,6 +26,7 @@ import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './
 import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
+import { addSample, stuckVerdict, nextEpisode, stuckLine } from './stuck.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
@@ -956,6 +957,26 @@ setInterval(() => {
 }, 5000)
 // stall watchdog: a task with somewhere to walk that neither moves nor digs is hung; fail it loudly instead of forever
 let stillFrom = null
+// the stuck watch (src/stuck.mjs, autopilot card): one sample a second over a rolling window, one `stuck` event and one
+// chat line per episode, stuck=<reason> in `state` while it lasts
+let stuckSamples = []
+let stuckNow = null
+let frozenWalks = 0 // every frozen_walk said, for the watch's five-minute window
+let stepsDone = 0 // composite steps finished: the task progress the watch reads
+const stuckSample = () => ({
+  t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
+  sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
+  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: amBoxedIn(), frozenWalks,
+  routine: task?.progress?.routine ?? null
+})
+function watchStuck () {
+  stuckSamples = addSample(stuckSamples, stuckSample())
+  const { episode, started } = nextEpisode(stuckNow, stuckVerdict(stuckSamples), Date.now())
+  stuckNow = episode
+  if (!started) return
+  emit('stuck', { pos: pos(), reason: episode.reason, advice: episode.advice })
+  bot.chat(stuckLine(bot.entity.position, episode.reason))
+}
 let kickedFor = null // the stand-still (a stillFrom) whose walk I already restarted once
 // bot.controlState has no enumerable keys (getters): Object.entries on it is always empty, which made every stall report say keys=[] until 09-19
 const keysDown = () => ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak'].filter(k => bot.getControlState(k))
@@ -994,6 +1015,7 @@ const stallEvidence = () => ({
 })
 setInterval(() => {
   if (!ready) return
+  watchStuck()
   const here = bot.entity.position.clone()
   if (!task || !stillFrom || progressed(stillFrom.pos, here) || stillFrom.task !== task.id) stillFrom = { pos: here, at: Date.now(), task: task?.id }
   const sample = { hasGoal: Boolean(task && bot.pathfinder.goal), moved: Math.hypot(here.x - stillFrom.pos.x, here.z - stillFrom.pos.z), digging: Boolean(bot.targetDigBlock), seconds: (Date.now() - stillFrom.at) / 1000, path: lastPath && lastPath.at >= goalSetAt ? lastPath : null }
@@ -1003,6 +1025,7 @@ setInterval(() => {
     frozenFor = stillFrom
     const evidence = stallEvidence()
     lastFrozen = { at: Date.now(), pos: pos(), advice: frozenAdvice(evidence) }
+    frozenWalks++
     emit('frozen_walk', { pos: lastFrozen.pos, evidence, advice: lastFrozen.advice })
   }
   // a goto that keeps moving and gets nowhere (Perrin's cow pen gate: 290 s, ended 20 blocks further off)
@@ -2872,6 +2895,7 @@ const quick = {
       holding: bot.heldItem?.name,
       asleep: bot.isSleeping,
       doing: task && doingText({ name: task.name, seconds: Math.round((Date.now() - task.started) / 1000), paused: task.paused }),
+      stuck: stuckNow?.reason,
       following: followTarget,
       reflexesOff: !reflexes,
       // which code this is, so `am I running the fix?` is answered by the line every driver already reads (#140)
@@ -3588,7 +3612,7 @@ function makeApi (composite, a, alive) {
     if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
     useMoves(mayDig(name, args))
     return Promise.resolve().then(() => fn(args)).then(
-      r => { failures.delete(name); return r ?? {} },
+      r => { failures.delete(name); stepsDone++; return r ?? {} },
       e => {
         const why = `${name}: ${explainFailure(e.message)}`
         noteFailure(name, why)
@@ -3689,7 +3713,10 @@ function makeApi (composite, a, alive) {
       pause: async seconds => { await bot.waitForTicks(Math.max(1, Math.round((seconds ?? 0.5) * 20))) },
       note: line => { notes.push(String(line)) },
       // what the task reports even if a hand-back rule cuts it short
-      report: partial => Object.assign(report, partial)
+      report: partial => Object.assign(report, partial),
+      // an event of the composite's own (routine_day, routine_stopped), and what it tells the stuck watch about itself
+      emit,
+      progress: data => { if (ownerTask) ownerTask.progress = { ...ownerTask.progress, ...data } }
     }
   }
 }
