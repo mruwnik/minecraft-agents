@@ -47,6 +47,7 @@ you alive longer:
 - **Don't poll.** A new long action CANCELS the one still running (`state` shows it as `doing=`), so after an
   `ok running` wait for its `task_done`/`task_cancelled` event before driving again. Long actions return when done. If one outlasts `timeout=` (default 60 s) it reports `running` and a
   `task_done` line lands in `events.jsonl` later.
+  A task that finishes inside its timeout writes a `task_result` line instead: the log copy of a result you already got, so `./mc wait` never wakes for it.
 - **Wait with a watch, not by checking.** `./mc watch name=wheat-ripe block=wheat where='{"age":7}' count=20 x=10 y=63 z=-85`
   writes one `watch_hit` event when at least 20 ripe wheat are within 16 blocks of that point. Also `mob=cow` (any
   entity or player name, `*` wildcards), `item=iron_ingot` (in your inventory), `within=`, `atMost=true` ("tell me
