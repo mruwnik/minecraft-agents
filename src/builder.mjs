@@ -3,19 +3,24 @@
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 
 const WATER_RANGE = 32
-const WATER_CANDIDATES = 8
+const WATER_CANDIDATES = 32
 
 // A dry channel cell's job carries water_bucket, and until now a body that reached one empty-handed just reported
 // missing=water_bucket and gave up - the driver had to notice, walk to a lake, fill a bucket by hand and run the
 // build again. `fill` already walks to its target itself (see bot.mjs), so all this adds is finding one: the nearest
-// water within reach, tried in order until one is a settled source (fill refuses flowing water on its own, so a miss
-// here just moves on to the next candidate) rather than something this body has to work out first. Shared with
-// maintain_farm, which imports it from here rather than duplicate it.
+// water within reach, tried in order until one is a settled source, rather than something this body has to work out
+// first. Shared with maintain_farm, which imports it from here rather than duplicate it.
+// find_blocks matches by NAME and returns the nearest first - standing beside an unfinished channel, the nearest
+// water is that channel's own flowing cells, the very thing this build is trying to fix, not the lake further off.
+// `fill` refuses flowing water, but only after walking to it (Chani's field, 09-26: a dozen-odd flowing channel
+// cells all closer than the real lake, each one a wasted walk). So each candidate's OWN level is read first, and
+// only a settled source is ever walked to; a generous count keeps a real source in the list past a field's own mess.
 export async function fetchWaterBucket (api, range = WATER_RANGE) {
   if ((api.inv().water_bucket ?? 0) > 0) return true
   if ((api.inv().bucket ?? 0) < 1) return false
   const { positions = [] } = await api.act('find_blocks', { block: 'water', maxDistance: range, count: WATER_CANDIDATES }).then(r => r, () => ({}))
-  for (const p of positions) {
+  const sources = positions.filter(p => hasWaterSource(api.block(p.x, p.y, p.z)))
+  for (const p of sources) {
     const filled = await api.act('fill', { x: p.x, y: p.y, z: p.z }).then(() => true, () => false)
     if (filled) return true
   }
