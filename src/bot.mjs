@@ -37,6 +37,7 @@ import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice, inHole, perchedOverField } from './caveexit.mjs'
 import { farmWalk, legFlags, stepsOff, noFirstMove } from './lib/path.mjs'
+import { spareTest } from './fieldleg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { carryReport, failedResult, deathLine, deathCancel } from './composite.mjs'
@@ -247,10 +248,11 @@ let digging = false
 let scaffolded = []
 // >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
 let handPlacing = 0
-// cells a dig walk must not break whatever their block, as "x,y,z": the plan a farm sweep walks inside (goto spare=,
-// src/fieldleg.mjs). Set for one walk and cleared after it; looksBuilt keeps guarding everything else
-let spared = new Set()
-const sparedCells = spare => new Set((typeof spare === 'string' ? JSON.parse(spare) : spare ?? []).map(c => `${c.x},${c.y},${c.z}`))
+// whether a dig walk must leave a block whole, whatever it is: the cells and the ground of the plan a farm sweep walks
+// inside (goto spare= floor=, src/fieldleg.mjs spareTest). Set for one walk and cleared after it; looksBuilt keeps
+// guarding everything else
+const NONE_SPARED = () => false
+let spared = NONE_SPARED
 const FarmMovements = farmWalk(Movements)
 function makeMoves (dig) {
   const moves = new FarmMovements(bot)
@@ -278,7 +280,7 @@ function makeMoves (dig) {
   moves.exclusionAreasBreak.push(zoneCost)
   // nor anything that looks built, protected or not
   moves.exclusionAreasBreak.push(block => looksBuilt(block.name) ? 100 : 0)
-  moves.exclusionAreasBreak.push(block => block.position && spared.has(`${block.position.x},${block.position.y},${block.position.z}`) ? 100 : 0)
+  moves.exclusionAreasBreak.push(block => block.position && spared(block.position) ? 100 : 0)
   moves.exclusionAreasPlace.push(zoneCost)
   moves.exclusionAreasStep.push(block => gateStepCost(block.name))
   moves.exclusionAreasStep.push(block => thicketCost(besideNames(block.position, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name)))
@@ -2280,8 +2282,8 @@ const long = {
     } finally { closeOriginal() }
   },
   async goto (a) {
-    spared = sparedCells(a.spare)
-    try { return await gotoWalk(a) } finally { spared = new Set() }
+    spared = spareTest(a)
+    try { return await gotoWalk(a) } finally { spared = NONE_SPARED }
   },
 
   async dig (a) {
