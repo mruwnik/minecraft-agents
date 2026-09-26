@@ -17,8 +17,16 @@ export const fetchFailure = ({ mob, frozen }) => {
 // then walked three times to the nearest reachable cell outside the fence and blamed the animal. `entered` is whether
 // the walk to its cell arrived; `pen` is penAround's answer for that cell (enclosed pens only; a leaking one is open
 // country to a walk). The pen check names the gates, so the answer points at it rather than repeat its work.
-export const fencedRefusal = ({ mob, at, pen, entered }) => {
-  if (entered || !pen?.enclosed) return null
+// the body's own feet on the pen floor (x and z of a floor cell, within a step of its height: a slab floor is half a block up)
+const standsIn = (pen, feet) => pen.floor.some(key => {
+  const [x, y, z] = key.split(',').map(Number)
+  return x === Math.floor(feet.x) && z === Math.floor(feet.z) && Math.abs(y - feet.y) <= 1
+})
+// an animal fenced in, judged before any walk: a walk into an enclosed pen never fails cleanly (the pathfinder
+// follows partial paths round the fence until the 12 s stall alarm cancels the task), so the pen and the body's
+// feet decide. pen is penAround's answer for the animal's cell (null when that cell is no spot to stand on)
+export const fencedRefusal = ({ mob, at, pen, feet }) => {
+  if (!pen?.enclosed || standsIn(pen, feet)) return null
   const [x, y, z] = String(at).split(',')
   return `the ${mob} at ${at} stands fenced in (a ${pen.cells}-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=${x} y=${y} z=${z} names its gates), or lead from inside`
 }

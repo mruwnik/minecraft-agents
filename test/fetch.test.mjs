@@ -33,15 +33,19 @@ for (const [name, frozen, since, expected] of [
 }
 
 // ---------------------------------------------------------------- an animal fenced in: said before the fetches, not after three
-// Perrin's cows stood inside a small decorative fence cell inside a wheat field (card fc47bf28): the walk into the
-// pen failed quietly, the fetch loop then walked to the nearest reachable cell three times and blamed the cow
-const PEN = { enclosed: true, cells: 2 }
+// Two cows stood inside a small decorative fence cell inside a wheat field (card fc47bf28): the walk into the pen
+// never fails cleanly (the pathfinder follows partial paths round the fence until the 12 s stall alarm cancels the
+// task), so the pen is judged before any walk: where the animal stands, and whether the body's own feet are in it
+const PEN = { enclosed: true, cells: 2, floor: ['114,72,-70', '115,72,-70'] }
 for (const [name, input, expected] of [
-  ['the walk into the pen failed: fenced in, with the pen check to run', { mob: 'cow', at: '114,72,-70', pen: PEN, entered: false },
+  ['the body stands outside the pen: fenced in, with the pen check to run', { mob: 'cow', at: '114,72,-70', pen: PEN, feet: { x: 108.3, y: 72, z: -68.6 } },
     'the cow at 114,72,-70 stands fenced in (a 2-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=114 y=72 z=-70 names its gates), or lead from inside'],
-  ['the walk into the pen arrived: nothing to say', { mob: 'cow', at: '114,72,-70', pen: PEN, entered: true }, null],
-  ['no pen round the animal: the walk failing is the fetch loop’s business', { mob: 'cow', at: '114,72,-70', pen: null, entered: false }, null],
-  ['a leaking enclosure is no pen', { mob: 'sheep', at: '1,2,3', pen: { enclosed: false, via: '1,2,4' }, entered: false }, null]
+  ['the body stands in the pen: nothing to say', { mob: 'cow', at: '114,72,-70', pen: PEN, feet: { x: 115.4, y: 72, z: -69.5 } }, null],
+  ['the body stands in the pen on a half step', { mob: 'cow', at: '114,72,-70', pen: PEN, feet: { x: 114.5, y: 72.5, z: -69.2 } }, null],
+  ['a whole block above the floor is not in the pen', { mob: 'cow', at: '114,72,-70', pen: PEN, feet: { x: 114.5, y: 74, z: -69.5 } },
+    'the cow at 114,72,-70 stands fenced in (a 2-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=114 y=72 z=-70 names its gates), or lead from inside'],
+  ['no pen round the animal: the walk is the fetch loop\u2019s business', { mob: 'cow', at: '114,72,-70', pen: null, feet: { x: 108.3, y: 72, z: -68.6 } }, null],
+  ['a leaking enclosure is no pen', { mob: 'sheep', at: '1,2,3', pen: { enclosed: false, via: '1,2,4' }, feet: { x: 0, y: 2, z: 0 } }, null]
 ]) {
   test(`fencedRefusal: ${name}`, () => assert.equal(fencedRefusal(input), expected))
 }
