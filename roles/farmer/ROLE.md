@@ -70,6 +70,23 @@ This world expects a field to look built, not scratched into the ground:
 | get more seed | `farm.get_seeds crop=wheat count=64` (roots come out of a farm chest: `farm.get_seeds crop=carrot place=<name>`) |
 | do the whole day, every day | `routine name=farmer/homestead place=<name> [vars='{"compost":"shared-composter"}'] days=3` — several fields are one homestead: `place=crop-field,melon-patch,cane` runs the routine once per field, in that order, every day. The homestead's `farm.maintain` step composts its own spare seed; `vars=` names the one composter (or chest-like block) every field feeds, shared across all of them; leave it out and each field falls back to its own plan's `K` cell. `dry=true` prints the day's steps and runs nothing; `days=0` runs it until stopped (the autopilot: `routine_day` and `routine_stopped` events say how it went). Fields further than 32 blocks from your bed are fine: mark the bed once (`mark name=<you>-bed kind=bed`, standing on it) or pass `bed=<place>`, and at nightfall the routine walks to it when it is within `bed_range` (default 200), sleeps, and walks back at dawn; beyond that, or with no bed marked, the night still stops it |
 
+## When a sweep stalls, or a channel stays dry
+
+- **`stuck=` naming a cell.** `farm.maintain` walks every leg plain first and, when the path fails inside the plan's
+  footprint, once more with `dig=true` (never through a plan block); `stuck=` means both failed, or that it stood
+  outside the footprint and would not dig from there. The recipe that works: step back the way you came (10 blocks or
+  so), `goto x= y= z= dig=true` to the cell `stuck=` names, and run `farm.maintain place=<name>` again from there. A
+  sweep started from inside the field never has to cross the crops to reach its first cell.
+- **`skipped=` with `no bucket`.** The sweep waters its own channels, but only from a bucket you carry: keep an empty
+  `bucket` in your pockets (`craft item=bucket`, 3 iron ingots), and it fills it at the nearest still water within 32
+  blocks and pours the dry cells itself. `no water within 32 blocks` means the field is too far from any pond: dig a
+  2x2 pool beside it and pour two buckets in corner to corner (an infinite source), then sweep again.
+- **A gate at a terrain step.** Where two fields meet across a one-block step in the ground, the gate cell between them
+  is a chokepoint: `goto` walks through an open gate at a step now, so rebuild the gate properly (the plan's own gate
+  cell, mid-wall, one full block of level ground on each side, no second fence row behind it) rather than digging it to
+  a bare gap. `farm.maintain` and `farm.build` put the plan's gate back on every pass, so a bare gap never lasts, and
+  each rebuild of it is a stall until the ground on both sides is levelled.
+
 ## Marks a farmer keeps on the shared map
 
 - `kind=farm` with a plan for every field I tend: that is what `farm.fields` and `farm.maintain` read.

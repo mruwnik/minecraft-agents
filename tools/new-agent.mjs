@@ -57,6 +57,9 @@ Everything that is yours lives in this folder, and you work from it:
 
 - \`./start\` starts your body (run it in the background). \`./mc <action> key=value\` drives it.
 - \`events.jsonl\` is what happens to you (chat, damage, deaths, nightfall). Follow it; answer when people talk to you.
+- Talking has two channels, and the difference matters: \`./mc whisper player=<name> message=...\` reaches ONE person
+  (a question, an answer, a request; it wakes their \`./mc wait\` at once), \`./mc chat message=...\` reaches everyone
+  (a greeting, a warning, an offer to all). A message meant for one person is a whisper, never a chat.
 - \`snapshots/\` is where \`./mc look\` puts what you see.
 - \`journal.md\` is your memory between sessions. Read it first. Write to it before you stop.
 
