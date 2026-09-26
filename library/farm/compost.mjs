@@ -3,13 +3,15 @@
 import { compostPlan, planStructure } from '../../src/lib.mjs'
 
 const RANGE = 32
-// the composter to walk to: the one I was given, the one the plan marks with K, or the nearest one
+// the composter to walk to: the one I was given, the one the plan marks with K, or the nearest one. A plan drawn
+// before it had a composter of its own (or one meant to share a neighbour's, standing outside every plan's own
+// footprint) is not stranded: it falls through to the same range search a bare call gets, rather than refusing
+// by name for a K cell nobody ever asked the plan to have
 async function composterAt (api, a) {
   if (a.x !== undefined) return { x: a.x, y: a.y, z: a.z }
   if (a.place) {
     const cell = planStructure(api.plan(a.place).cells, 'K')
-    if (!cell) throw new Error(`${a.place} has no K (composter) cell in its plan`)
-    return cell
+    if (cell) return cell
   }
   const { positions = [] } = await api.act('find_blocks', { block: 'composter', maxDistance: a.range ?? RANGE })
   const found = positions[0]
