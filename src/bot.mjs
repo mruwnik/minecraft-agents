@@ -31,8 +31,8 @@ import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
-import { noPathAdvice } from './caveexit.mjs'
-import { farmWalk, legFlags } from './lib/path.mjs'
+import { noPathAdvice, inHole } from './caveexit.mjs'
+import { farmWalk, legFlags, stepsOff } from './lib/path.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { facesForHalf } from './cover.mjs'
@@ -364,10 +364,11 @@ function connect () {
       const feet = feetCell(bot.entity.position, bot.entity.onGround)
       return goal.isEnd(bot.entity.position.floored()) || goal.isEnd(new Vec3(feet.x, feet.y, feet.z))
     }
-    // see stepOffChoice: only when I stand in a block that is not a full one high (a bed, a slab)
+    // see stepOffChoice: only when I stand in a block that is not a full one high (a bed, a slab), never on worked ground (stepsOff:
+    // from farmland the free floor beside the feet was a hole in the field, and the body stood in it five minutes, card 94e6dcb1)
     const stepOff = async () => {
       const here = bot.entity.position.floored()
-      if (bot.blockAt(here)?.boundingBox !== 'block') return false
+      if (bot.blockAt(here)?.boundingBox !== 'block' || !stepsOff(bot.blockAt(here).name)) return false
       const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => here.offset(dx, 0, dz))
       const box = p => bot.blockAt(p)?.boundingBox
       // low: not a full block high, like the one I stand in (the other half of my bed, the next slab)
@@ -398,9 +399,9 @@ function connect () {
       const trap = failure && bedTrap(bot.blockAt(here)?.name, bot.blockAt(here.offset(0, 2, 0))?.boundingBox)
       if (trap) throw new Error(trap)
       if (stepped) await walk(goal)
-      else if (failure) throw failure
+      else if (failure) throw noPathCounted(failure)
       const error = arrivalError(arrived(goal))
-      if (error) throw new Error(error)
+      if (error) throw noPathCounted(new Error(error))
     }
     // path_update hands out the live path before the pathfinder starts walking it: fix doorway waypoints in place (see doorwayNode)
     bot.on('path_update', r => r.path.forEach(n => Object.assign(n, doorwayNode(n, doorAt(n)))))
@@ -973,11 +974,13 @@ let stillFrom = null
 let stuckSamples = []
 let stuckNow = null
 let frozenWalks = 0 // every frozen_walk said, for the watch's five-minute window
+let failedWalks = 0 // every walk that ended with no path, for the watch's walks verdict (a body that cannot leave its cell)
+const noPathCounted = e => { if (/no path to the goal|no walkable path|took to long to decide/i.test(e.message)) failedWalks++; return e }
 let stepsDone = 0 // composite steps finished: the task progress the watch reads
 const stuckSample = () => ({
   t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
   sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
-  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: trappedIn(), frozenWalks,
+  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: trappedIn(), frozenWalks, failedWalks,
   routine: task?.progress?.routine ?? null
 })
 // boxed in for the watch: amBoxedIn (#128) is about solid shafts and reads the cell over a fence as a ledge to step up
@@ -3510,11 +3513,13 @@ let lastReflex = null
 const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
 // #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
 // included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
-const amBoxedIn = () => {
-  if (!bot?.entity) return false
+const passableAboutFeet = () => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return boxedIn((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block')
+  return (dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block'
 }
+const amBoxedIn = () => Boolean(bot?.entity) && boxedIn(passableAboutFeet())
+// a hole one block deep (card 94e6dcb1): the walk out of it is a jump, and a failed one reads as a distant obstacle
+const amInHole = () => Boolean(bot?.entity) && inHole(passableAboutFeet())
 // what the body can read off itself when a walk finds no path (src/caveexit.mjs): no sky over the head and the goal up
 // on the surface, water in or beside its cell (a dig walk breaks nothing beside a liquid), a protected zone round it
 const noPathEvidence = () => {
@@ -3528,7 +3533,7 @@ const noPathEvidence = () => {
 }
 const explainFailure = message => {
   const boxed = amBoxedIn()
-  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, ...noPathEvidence() })
+  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, holed: amInHole(), ...noPathEvidence() })
 }
 // the path a walk would take, searched the way path_to searches it: one 40 ms slice at a time until it is done or the budget is out
 function searchPath (aim, range) {
