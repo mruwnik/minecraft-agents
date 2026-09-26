@@ -7,6 +7,7 @@ export * from './players.mjs'
 export * from './lib/world.mjs'
 export * from './lib/agents.mjs'
 export * from './lib/code.mjs'
+export * from './lib/events.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -184,14 +185,6 @@ export async function retryUntilCount (attempt, count, maxRounds = 6) {
     if (empty >= 2) return { got, rounds, gaveUp: lastError }
   }
   return { got, rounds: maxRounds, gaveUp: 'round limit' }
-}
-
-// One check of a watch against how many matching things are there now. Fires on the edge (condition just became
-// true), so a standing condition doesn't repeat itself. {count=1, atMost=false, met} -> {fire, met}
-export function checkWatch (watch, seen) {
-  const wanted = watch.count ?? 1
-  const met = watch.atMost ? seen <= wanted : seen >= wanted
-  return { fire: met && !watch.met, met }
 }
 
 // why a long action may not start now, or null. Moving while the server has us in bed desyncs the body.
@@ -904,13 +897,6 @@ export function pitAdvice (mob, at, rises) {
   if (rises.every(r => r === Infinity)) return `the ${mob} at ${at} is walled in on all four sides: open a side (dig), then lead again`
   return `the ${mob} at ${at} stands in a pit (every way out is ${Math.min(...rises)}+ blocks up, it jumps 1): give it a step (place a block beside it, or dig the rim down), then lead again`
 }
-// what chat and whisper say: {text} | {error}. String(undefined) went out to the whole server as "undefined"
-export function chatText (args, max) {
-  const text = ['string', 'number'].includes(typeof args.message) ? String(args.message).trim() : ''
-  if (text) return { text: text.slice(0, max) }
-  const given = Object.keys(args).filter(k => k !== 'player')
-  return { error: `nothing said: the text goes in message=${given.length ? ` (you gave ${given.map(k => `${k}=`).join(' ')})` : ''}. Quote it: ./mc chat message="hello all"` }
-}
 export const wedgeBreakable = name => /_leaves$|^bamboo$/.test(name)
 // what the wedge reflex dug [{name, below, at:[x,y,z]}] -> the bamboo BASES among it, to plant again: an upper segment regrows, a base never does
 export const wedgeReplant = dug => dug.filter(d => d.name === 'bamboo' && d.below !== 'bamboo').map(d => ({ x: d.at[0], y: d.at[1], z: d.at[2], item: 'bamboo' }))
@@ -1394,13 +1380,6 @@ export const fencedIn = (floor, topsAt) => floor.some(k => {
   return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => topsAt(x + dx, z + dz).some(top => top % 1 === 0.5 && top - y > 1))
 })
 
-// `events` after a restart showed "nothing yet" although events.jsonl was full, and sent agents to the raw log: a body starts from the
-// tail of its own file. The read may cut the first line in half, and the last may be half written
-export function parseEventTail (text, limit) {
-  const parse = line => { try { return JSON.parse(line) } catch { return null } }
-  return text.split('\n').map(parse).filter(e => e && typeof e === 'object').slice(-limit)
-}
-
 // `fill` answered ok with an empty bucket (standing in the source, the click goes elsewhere)
 export const fillOutcome = held => /_bucket$/.test(held ?? '')
   ? { holding: held }
@@ -1857,28 +1836,6 @@ export function eatFailure (error, edible = []) {
   if (edible.length && /couldn't find a choice/i.test(first)) return `I carry ${edible.join(', ')}, but the eat reflex found no meal to take (it looked while the food was being moved and in no slot: near a fence gate the gate reflex puts tempting food away): ${first}`
   const advice = EAT_ADVICE.find(([pattern]) => pattern.test(first))
   return advice ? `${advice[1]}: ${first}` : first
-}
-
-// One fact, said once. After the 09-22 20:53 server restart Perrin's and Mariel's bodies wrote the same uncaught error
-// into their events files every few seconds until the file was unreadable, and the one line that mattered (the restart)
-// was buried under thousands of copies of itself. So the first of a message is said, the repeats are counted silently,
-// and the count is said when the message changes or the window runs out. `seen` is opaque state: keep it, pass it back.
-export function errorRepeat (seen, message, now, window = 60000) {
-  if (seen?.message !== message) return { say: message, seen: { message, said: now, suppressed: 0 } }
-  const suppressed = seen.suppressed + 1
-  if (now - seen.said < window) return { say: null, seen: { ...seen, suppressed } }
-  return { say: `${message} (${suppressed} more in the last ${Math.round((now - seen.said) / 1000)}s)`, seen: { message, said: now, suppressed: 0 } }
-}
-// One repeat window per KIND of message, not one for the whole process. A body refused at login is kicked again on
-// every retry, every ten seconds, for ever (#119), and the single shared slot made it worse than it looks: two faults
-// taking turns each reset the other's window, so neither was ever suppressed. A kick loop gets a long window because
-// it will never stop on its own and the first line already said everything; a changed reason is still said at once,
-// which a plain gate would have thrown away.
-export const REPEAT_DEFAULT = 60000
-export const REPEAT_WINDOW = { kicked: 600000 }
-export function repeatByType (seen, type, message, now) {
-  const { say, seen: next } = errorRepeat(seen?.[type] ?? null, message, now, REPEAT_WINDOW[type] ?? REPEAT_DEFAULT)
-  return { say, seen: { ...seen, [type]: next } }
 }
 
 // what water costs a walk: a digging one tunnelled into an underground lake and half drowned in its own shaft (Aviendha)
