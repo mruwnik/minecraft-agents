@@ -304,8 +304,10 @@ test('farm.maintain: a clean field says nothing about clutter', async () => {
   assert.equal(out.clutter, undefined)
 })
 
+// farm.maintain composts its own spare seed since 6198e2c, so the homestead's day is farm.tidy then farm.maintain:
+// no separate farm.compost step (card bc5dba13)
 test('the farmer routine clears the rubble before it works the field', () => {
   const steps = JSON.parse(fs.readFileSync(new URL('../roles/farmer/homestead.json', import.meta.url), 'utf8'))
   const read = routineSteps({ steps, place: 'test-field' }, () => null)
-  assert.deepEqual([read.error, read.steps.map(s => s.action)], [undefined, ['farm.tidy', 'farm.maintain', 'farm.compost']])
+  assert.deepEqual([read.error, read.steps.map(s => s.action)], [undefined, ['farm.tidy', 'farm.maintain']])
 })
