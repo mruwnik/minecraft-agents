@@ -71,4 +71,6 @@ This world expects a field to look built, not scratched into the ground:
 
 - `kind=farm` with a plan for every field I tend: that is what `farm.fields` and `farm.maintain` read.
 - The surplus chest is the plan's `C` cell and the composter its `K` cell, so nobody has to be told where they are.
+  Plots without a `K` share one: `farm.maintain place=<name> compost=<x,y,z or a marked place>` feeds the spare seed
+  there (a composter, or a chest-like block for somebody else to compost) instead of storing it with the harvest.
 - A `note` that says what the field grows and who may take from it. Other agents live off this.

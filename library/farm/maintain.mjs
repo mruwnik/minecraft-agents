@@ -1,7 +1,7 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fetchWaterBucket } from '../../src/builder.mjs'
-import { farmJobs, farmSurplus, hasWaterSource, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { farmJobs, farmSurplus, farmWaste, hasWaterSource, planAnchor, planBill, planStructure, seedDrop, seedTarget, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
 import { workFrom } from '../../src/stand.mjs'
@@ -12,9 +12,9 @@ const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) in
 const seedReserve = plan => Object.fromEntries(Object.entries(planBill(plan.parsed)).filter(([item]) => SEED_ITEMS.has(item)).map(([item, n]) => [item, n * 2]))
 
 export default {
-  doc: 'farm.maintain place= [days=] [within=]: harvest, replant, re-till, refill the channels and store the surplus of one saved farm plan',
+  doc: 'farm.maintain place= [days=] [within=] [compost=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest)',
   stops: 'days= done, a step that failed twice, or nothing left it can do',
-  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'boolean' },
+  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any' },
 
   async run (api, a) {
     const plan = api.plan(a.place)
@@ -22,7 +22,8 @@ export default {
     // the plan's y is the ground block; the body stands one above it, and so do the chest and composter the plan marks
     const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
     const chest = planStructure(plan.cells, 'C')
-    const composter = planStructure(plan.cells, 'K')
+    const composter = seedTarget(planStructure(plan.cells, 'K'), api.places(), a.compost)
+    if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
     const keep = seedReserve(plan)
 
@@ -105,17 +106,21 @@ export default {
       const left = jobs.length ? farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip' && (!j.item || j.have)) : []
       if (left.length) summary.unfinished = left.map(j => `${j.do} ${j.x},${j.y},${j.z} (${j.why})`).join('; ')
 
+      // the spare seed goes to the composter (or the chest-like block compost= names) BEFORE the harvest is stored:
+      // stored seed was the whole complaint (09-26). A target that cannot take it is said, and the seed stays with the harvest
+      const waste = composter ? farmWaste(farmSurplus(api.inv(), keep)) : {}
+      const drop = Object.keys(waste).length ? seedDrop(api.block(composter.x, composter.y, composter.z)) : null
+      if (Object.keys(waste).length && !drop) summary.compost = `${api.block(composter.x, composter.y, composter.z)?.name ?? 'nothing'} at ${composter.x},${composter.y},${composter.z} is neither a composter nor a chest, so the seed stays with the harvest`
+      const composted = drop ? await api.act(drop, { items: waste, x: composter.x, y: composter.y, z: composter.z }).then(done => done?.fed ?? Object.entries(waste).map(([k, n]) => `${k}:${n}`).join(' '), e => { summary.compost = e.message; return null }) : null
+      if (composted) summary.composted = composted
       if (chest && a.deposit !== false) {
         const surplus = farmSurplus(api.inv(), keep)
+        for (const name of composted ? Object.keys(waste) : []) delete surplus[name]
         if (Object.keys(surplus).length) {
           const failed = await api.act('deposit', { items: surplus, x: chest.x, y: chest.y, z: chest.z }).then(() => null, e => e.message)
           if (failed) summary.stuck = summary.stuck ?? failed
           else summary.deposited = { ...(summary.deposited ?? {}), ...surplus }
         }
-      }
-      if (composter && a.compost !== false) {
-        const done = await api.act('farm.compost', { x: composter.x, y: composter.y, z: composter.z }).catch(() => null)
-        if (done?.fed) summary.composted = done.fed
       }
       summary.sweeps++
       api.report(summary)

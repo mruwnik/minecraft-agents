@@ -26,7 +26,7 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, replantBatch, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, farmWaste, seedTarget, seedDrop, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, replantBatch, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -3514,6 +3514,82 @@ for (const [name, items, reserve, expected] of [
   ['bread is kept to eat, not stored', { bread: 6, wheat: 3 }, {}, { wheat: 3 }]
 ]) {
   test(`farmSurplus: ${name}`, () => assert.deepEqual(farmSurplus(items, reserve), expected))
+}
+
+// the seed a farm makes above what it needs to sow itself again is waste: the composter's, not the chest's. Roots
+// (carrot, potato) are seed AND food, so they stay produce; the harvest itself is what the chest is for
+for (const [name, surplus, expected] of [
+  ['spare seed is compost, the harvest is not', { wheat: 40, wheat_seeds: 12, melon_seeds: 3 }, { wheat_seeds: 12, melon_seeds: 3 }],
+  ['roots are produce even though they are sown', { carrot: 20, potato: 9 }, {}],
+  ['nothing spare', {}, {}]
+]) {
+  test(`farmWaste: ${name}`, () => assert.deepEqual(farmWaste(surplus), expected))
+}
+
+test('maintain_farm: with a composter in the plan the spare seed is composted and only the harvest is stored', async () => {
+  const place = fakePlace('wCK')
+  const { api, calls } = fakeApi({
+    place, world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'chest', '2,63,0': 'dirt', '2,64,0': 'composter' },
+    items: { wheat: 40, wheat_seeds: 9 },
+    answers: { 'farm.harvest': { harvested: { wheat: 40 } }, 'farm.compost': { fed: 'wheat_seeds:7' } }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual([calls.filter(c => c.startsWith('farm.compost') || c.startsWith('deposit')), summary.composted],
+    [['farm.compost items(wheat_seeds:7) x=2 y=64 z=0', 'deposit items(wheat:40) x=1 y=64 z=0'], 'wheat_seeds:7'])
+})
+
+test('maintain_farm: a composter that cannot be fed does not stop the surplus reaching the chest', async () => {
+  const place = fakePlace('wCK')
+  const { api, calls } = fakeApi({
+    place, world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'chest', '2,63,0': 'dirt', '2,64,0': 'composter' },
+    items: { wheat: 40, wheat_seeds: 9 },
+    answers: { 'farm.harvest': { harvested: { wheat: 40 } }, 'farm.compost': new Error('farm.compost: too far') }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual([calls.filter(c => c.startsWith('deposit')), summary.compost, summary.stuck],
+    [['deposit items(wheat:40 wheat_seeds:7) x=1 y=64 z=0'], 'farm.compost: too far', undefined])
+})
+
+// no second composter: compost= names a shared composter or any chest-like block, and a block that is neither is said
+test('maintain_farm: compost=x,y,z sends the spare seed to a barrel instead of the harvest chest', async () => {
+  const { api, calls } = fakeApi({
+    place: fakePlace('wC'), world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'chest', '5,64,5': 'barrel' },
+    items: { wheat: 40, wheat_seeds: 9 }, answers: { 'farm.harvest': { harvested: { wheat: 40 } } }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field', compost: '5,64,5' })
+  assert.deepEqual([calls.filter(c => c.startsWith('deposit')), summary.composted],
+    [['deposit items(wheat_seeds:7) x=5 y=64 z=5', 'deposit items(wheat:40) x=1 y=64 z=0'], 'wheat_seeds:7'])
+})
+
+test('maintain_farm: the K cell with nothing on it is named, and the seed stays with the harvest', async () => {
+  const { api, calls } = fakeApi({
+    place: fakePlace('wCK'), world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'chest', '2,63,0': 'dirt', '2,64,0': 'air' },
+    items: { wheat: 40, wheat_seeds: 9 }, answers: { 'farm.harvest': { harvested: { wheat: 40 } } }
+  })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual([calls.filter(c => c.startsWith('deposit') || c.startsWith('farm.compost')), summary.compost],
+    [['deposit items(wheat:40 wheat_seeds:7) x=1 y=64 z=0'], 'air at 2,64,0 is neither a composter nor a chest, so the seed stays with the harvest'])
+})
+
+for (const [name, planCell, places, arg, expected] of [
+  ['nothing named: the plan\'s K cell', { x: 2, y: 64, z: 0 }, [], undefined, { x: 2, y: 64, z: 0 }],
+  ['nothing named and no K cell', null, [], undefined, null],
+  ['compost=false keeps the seed', { x: 2, y: 64, z: 0 }, [], false, null],
+  ['x,y,z', null, [], '5,64,5', { x: 5, y: 64, z: 5 }],
+  ['a marked place', null, [{ name: 'shared-composter', x: 7.5, y: 64, z: -3.2 }], 'shared-composter', { x: 7, y: 64, z: -4 }],
+  ['a name nobody marked', null, [], 'nowhere', { error: 'compost=nowhere is neither x,y,z nor a marked place: places lists them' }]
+]) {
+  test(`seedTarget: ${name}`, () => assert.deepEqual(seedTarget(planCell, places, arg), expected))
+}
+for (const [name, block, expected] of [
+  ['a composter is fed', { name: 'composter' }, 'farm.compost'],
+  ['a chest is deposited into', { name: 'chest' }, 'deposit'],
+  ['a barrel too', { name: 'barrel' }, 'deposit'],
+  ['a shulker box too', { name: 'red_shulker_box' }, 'deposit'],
+  ['a block that holds nothing', { name: 'dirt' }, null],
+  ['nothing loaded', null, null]
+]) {
+  test(`seedDrop: ${name}`, () => assert.equal(seedDrop(block), expected))
 }
 
 // ---------------------------------------------------------------- composite actions: composting

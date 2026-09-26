@@ -75,6 +75,28 @@ export function farmSurplus (items, reserve = {}) {
   return out
 }
 
+// the seed a farm makes above what it needs to sow itself again is waste: a composter's, not the chest's. Roots
+// (carrot, potato) are seed AND food, so they stay produce; the harvest itself is what the chest is for
+const WASTE_SEED = new Set(['wheat_seeds', 'beetroot_seeds', 'melon_seeds', 'pumpkin_seeds'])
+export const farmWaste = surplus => Object.fromEntries(Object.entries(surplus).filter(([name]) => WASTE_SEED.has(name)))
+
+// where that seed goes: compost=false keeps it with the harvest; compost=<place> or compost=x,y,z names a composter
+// or a chest-like block anywhere (no second composter needed to share one); nothing named means the cell the plan
+// marks K, if it has one. Marked places are taken as the block itself, not the ground under it
+export function seedTarget (planCell, places, arg) {
+  if (arg === false) return null
+  if (arg === undefined || arg === true) return planCell
+  const text = String(arg)
+  const nums = text.split(',').map(Number)
+  if (nums.length === 3 && nums.every(Number.isFinite)) return { x: nums[0], y: nums[1], z: nums[2] }
+  const place = places.find(p => p.name === text)
+  if (!place) return { error: `compost=${text} is neither x,y,z nor a marked place: places lists them` }
+  return { x: Math.floor(place.x), y: Math.floor(place.y), z: Math.floor(place.z) }
+}
+// what takes the seed at that cell: a composter is fed (farm.compost), a chest-like block is deposited into
+const SEED_BINS = new Set(['chest', 'trapped_chest', 'barrel'])
+export const seedDrop = block => block?.name === 'composter' ? 'farm.compost' : SEED_BINS.has(block?.name) || /shulker_box$/.test(block?.name ?? '') ? 'deposit' : null
+
 // ---------------------------------------------------------------- composite actions: composting
 // The game's own odds that one item raises a composter by a level; 7 raises fill it and it yields 1 bone meal.
 // Anything not here a composter refuses.
