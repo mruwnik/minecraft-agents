@@ -25,7 +25,11 @@ for (const [name, plan, world, items, expected] of [
   ['a cell nobody can see is nobody\'s job', 'w', {}, { dirt: 4 }, []],
   ['a cane bed is filled with sand', 's', column(0, 0, 'air'), { sand: 2 }, ['fill sand at 0,63,0']],
   ['a bamboo bed with dirt', 'B', column(0, 0, 'air'), { dirt: 2 }, ['fill dirt at 0,63,0']],
-  ['a lane, a channel and a chest cell are not beds: farm.build levels those', '.~C', { ...column(0, 0, 'air'), ...column(1, 0, 'air'), ...column(2, 0, 'air') }, { dirt: 4 }, []],
+  // a hole in a lane is the worst kind: the sweep parks the body on the lane, and a one-deep hole there is the trap
+  ['a lane cell with no ground is filled: the sweep parks there', '.', column(0, 0, 'air'), { dirt: 4 }, ['fill dirt at 0,63,0']],
+  ['the ground under a chest cell and a composter cell too', 'CK', { ...column(0, 0, 'air', 'chest'), ...column(1, 0, 'water') }, { dirt: 4 }, ['fill dirt at 0,63,0', 'fill dirt at 1,63,0']],
+  ['a flooded lane is not a hole either', '.', column(0, 0, 'air', 'water'), { dirt: 4 }, []],
+  ['a channel is farmJobs\'s to refill, and a fence over a hole is farm.build\'s', '~#', { ...column(0, 0, 'air'), ...column(1, 0, 'air', 'oak_fence') }, { dirt: 4 }, []],
   ['no dirt carried is said on the job', 'w', column(0, 0, 'air'), {}, ['fill dirt at 0,63,0 (none carried)']],
   ['every hole of a plan, in plan order', 'ww\nww', { ...column(0, 0, 'air'), ...column(1, 0, 'farmland'), ...column(0, 1, 'air'), ...column(1, 1, 'water') }, { dirt: 4 }, ['fill dirt at 0,63,0', 'fill dirt at 0,63,1', 'fill dirt at 1,63,1']]
 ]) {
@@ -115,6 +119,14 @@ test('farm.maintain: a fill the body cannot make leaves its bed unfilled, and th
   assert.deepEqual([report.filled, report.bare, report.replanted], [1, '1 (unfilled:1 0,63,1)', 2])
   assert.match(report.stuck, /nowhere to stand within 4.5 of 0,62,1/)
   assert.ok(!calls.some(c => /^till x=0 y=63 z=1/.test(c)), 'the hole is not tilled')
+})
+
+test('farm.maintain: a hole in the lane is filled with the rest, before the sweep parks on it', async () => {
+  const world = { ...column(0, 0, 'farmland'), ...column(1, 0, 'farmland'), ...column(0, 1, 'air'), ...column(1, 1, 'dirt') }
+  const { api, calls, report } = sweepOver({ plan: 'ww\n..', world, items: { dirt: 4, wheat_seeds: 8, stone_hoe: 1 } })
+  await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual(dirtFills(calls), ['place item=dirt x=0 y=63 z=1'])
+  assert.deepEqual([report.filled, report.bare, report.parked], [1, undefined, '0,64,1 (lane)'])
 })
 
 test('farm.maintain: filled= comes right after bare= in the summary', async () => {

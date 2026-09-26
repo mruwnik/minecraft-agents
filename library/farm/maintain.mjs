@@ -131,9 +131,10 @@ export default {
       // cell. So when any job wants water and none is carried, a bucket is fetched (the nearest still source within
       // range: waterShortfall in src/builder.mjs) BEFORE the list is read, and a channel that still stays dry is skipped
       // with the one reason there is: no bucket at all, or no water within range (card 72e49b3d)
-      // beds whose ground is gone (air, or water the plan never asked for: src/lib/fill.mjs) are filled before anything
-      // else is tried on them, the floor block from the pockets and what those lack from the plan's chest, so a field
-      // with holes is put back in one sweep instead of read as unreachable bed by bed (jizo-melon-patch, 09-26)
+      // beds, lanes and chest cells whose ground is gone (air, or water the plan never asked for: src/lib/fill.mjs) are
+      // filled before anything else is tried on them, the floor block from the pockets and what those lack from the
+      // plan's chest, so a field with holes is put back in one sweep instead of read as unreachable bed by bed, and the
+      // lane the sweep parks on has no pit in it (jizo-melon-patch, 09-26)
       const holes = () => holeJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })
       await fetchFloor(api, fillShortfall(holes(), api.inv()), chest)
       const listed = () => [...holes(), ...farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() })]

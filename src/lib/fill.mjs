@@ -2,24 +2,30 @@
 // jizo-melon-patch (09-26) a sweep read 71 beds unreachable, and block_at showed AIR at the farmland level over dirt
 // one below, all down the south rows (card 1ac82851; where the holes came from is card 94e6dcb1). So a sweep fills
 // such beds first: a planned crop cell whose ground is air, or water the plan never asked for, gets its floor block
-// back before its till and plant, from the pockets or the plan's chest. Pure judgements only; farm.maintain walks.
+// back before its till and plant, from the pockets or the plan's chest. The same for a `.` lane cell and the ground
+// under a chest or composter: a hole in the lane is the worst kind, since the sweep parks the body ON the lane, and a
+// one-deep hole there is a trap it walks out of only at a cost. Pure judgements only; farm.maintain walks.
 import { PLAN_LEGEND } from './plan.mjs'
 import { isAir } from './world.mjs'
 
-// what the floor of a bed is made of, by the ground its legend asks for: sand under cane, dirt under everything else
+// what the floor of a cell is made of, by the ground its legend asks for: sand under cane, dirt under everything else
+// (a lane's material is its legend's ground too, which is dirt for `.`)
 const FLOOR_OF = { sand: 'sand' }
 export const floorItem = spec => FLOOR_OF[spec.ground] ?? 'dirt'
 export const missingGround = name => isAir(name) || name === 'water'
+// the cells the sweep keeps the ground under: beds, lanes and what the sweep itself opens (its chest, its composter).
+// A channel's own refill is farmJobs's; a fence, gate or torch over a hole is farm.build partial=true's
+const KEPT = new Set(['crop', 'path', 'chest', 'composter'])
 
-// the fill jobs of a plan: one per crop cell whose ground is missing, in plan order, each carrying the block it wants
-// and whether any is carried (the way farmJobs marks its jobs). A bed with water standing OVER it is flooded, not a
-// hole: dirt under standing water is still a bed under water, and the sweep's water count says it. A cell nobody
+// the fill jobs of a plan: one per kept cell whose ground is missing, in plan order, each carrying the block it wants
+// and whether any is carried (the way farmJobs marks its jobs). A cell with water standing OVER it is flooded, not a
+// hole: dirt under standing water is still under water, and for a bed the sweep's water count says it. A cell nobody
 // can see is nobody's job
 export function holeJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
   for (const cell of cells) {
     const spec = PLAN_LEGEND[cell.ch]
-    if (spec?.kind !== 'crop') continue
+    if (!KEPT.has(spec?.kind)) continue
     const ground = worldAt(cell.x, cell.y, cell.z)
     if (!ground || !missingGround(ground.name)) continue
     if (worldAt(cell.x, cell.y + 1, cell.z)?.name === 'water') continue
