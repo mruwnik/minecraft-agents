@@ -3393,7 +3393,7 @@ const fakePlace = (plan, x = 0, y = 63, z = 0) => {
 test('maintain_farm: harvests first, then tills and plants what the plan says is missing', async () => {
   const world = { '0,63,0': 'dirt' }
   const { api, calls } = fakeApi({
-    place: fakePlace('w'), world, items: { wheat_seeds: 32 },
+    place: fakePlace('w'), world, items: { wheat_seeds: 32, stone_hoe: 1 },
     answers: {
       'farm.harvest': { harvested: { wheat: 1 }, replanted: 0 },
       till: () => { world['0,63,0'] = 'farmland'; return {} },
@@ -3478,7 +3478,7 @@ test('maintain_farm: says what it had no seed for, and does not try it', async (
 // pass that quietly did it again; the primitives now read the cell back, so a leftover is named instead (unfinished=).
 test('maintain_farm: a job that quietly did nothing is named, not silently repeated', async () => {
   const { api, calls } = fakeApi({
-    place: fakePlace('w'), world: { '0,63,0': 'dirt' }, items: { wheat_seeds: 32 },
+    place: fakePlace('w'), world: { '0,63,0': 'dirt' }, items: { wheat_seeds: 32, stone_hoe: 1 },
     answers: { till: () => ({}) }
   })
   const summary = await maintainFarm.run(api, { place: 'test-field' })
@@ -3486,13 +3486,15 @@ test('maintain_farm: a job that quietly did nothing is named, not silently repea
     [1, 'till 0,63,0 (dirt where farmland should be); plant 0,64,0 (an empty bed)'])
 })
 
+// (a till with NO hoe is never tried at all: test/farm-maintain.test.mjs)
 test('maintain_farm: one job that fails does not throw away the rest of the sweep', async () => {
   const { api, calls } = fakeApi({
-    place: fakePlace('ww'), world: { '0,63,0': 'dirt', '1,63,0': 'dirt' }, items: { wheat_seeds: 32 },
-    answers: { till: new Error('maintain_farm/till: no hoe') }
+    place: fakePlace('ww'), world: { '0,63,0': 'dirt', '1,63,0': 'dirt' }, items: { wheat_seeds: 32, stone_hoe: 1 },
+    answers: { till: new Error('maintain_farm/till: stone where farmland should be') }
   })
   const summary = await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual([calls.filter(c => c.startsWith('till')).length, summary.stuck], [2, 'maintain_farm/till: no hoe'])
+  assert.deepEqual([calls.filter(c => c.startsWith('till')).length, summary.stuck, summary.bare],
+    [2, 'maintain_farm/till: stone where farmland should be', '2 (untilled:2 maintain_farm/till: stone where farmland should be)'])
 })
 
 

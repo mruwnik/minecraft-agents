@@ -1,15 +1,25 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fetchWaterBucket } from '../../src/builder.mjs'
-import { farmJobs, farmSurplus, farmWaste, hasWaterSource, planAnchor, planBill, planStructure, seedDrop, seedTarget, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planBill, planStructure, seedDrop, seedTarget, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
-import { workFrom } from '../../src/stand.mjs'
+import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
+import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
 // enough seed to sow the whole plan twice over stays in my pockets; the rest goes in the chest
 const seedReserve = plan => Object.fromEntries(Object.entries(planBill(plan.parsed)).filter(([item]) => SEED_ITEMS.has(item)).map(([item, n]) => [item, n * 2]))
+// the counts first, bare= right after them: the routine keeps 120 characters of a step's summary, and what stood
+// behind lowSlabs= and clutter= was the line nobody read (09-26)
+const SAID_FIRST = ['sweeps', 'harvested', 'replanted', 'bare', 'tilled', 'poured', 'covered', 'built']
+const ordered = summary => Object.fromEntries([
+  ...SAID_FIRST.filter(k => summary[k] !== undefined).map(k => [k, summary[k]]),
+  ...Object.entries(summary).filter(([k]) => !SAID_FIRST.includes(k))
+])
+// a bed is one cell of the plan whatever its level: the till works the ground, the plant the cell above it
+const bedKey = job => `${job.x},${job.z}`
 
 export default {
   doc: 'farm.maintain place= [days=] [within=] [compost=] [trample=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). trample=true lets its walks step on crop cells: the last resort out of a crop pocket',
@@ -33,18 +43,30 @@ export default {
       // getting broken, reflooded by a neighbour's flow and blindly recapped
       if (job.do === 'cover' && !hasWaterSource(api.block(job.x, job.y, job.z))) {
         summary.stuck = summary.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
-        return
+        return null
       }
       // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
       // next slab or a crop instead, twice on jizo-melon-patch (09-26)
       const failed = await workFrom(api, job).then(() => null, e => e.message)
-      if (failed) { summary.stuck = summary.stuck ?? failed; return }
+      if (failed) { summary.stuck = summary.stuck ?? failed; return failed }
       if (job.do === 'plant') summary.replanted++
       if (job.do === 'till') summary.tilled++
       if (job.do === 'pour') summary.poured++
       if (job.do === 'cover') summary.covered++
       if (job.do === 'place') summary.built++
+      return null
     }
+
+    // a bed the sweep will leave empty, and why (bareLine's words). A planted cell whose bed is loaded all round and
+    // has nothing dry to stand on within work range is unreachable before a step is taken: the primitive's own walk
+    // would answer the same "no walkable path" for every such bed, and two of those in a row end the sweep
+    const unreachable = job => {
+      const sight = jobSight(job)
+      return loadedAround(cellAt, sight.at, sight.range) && !standingSpots({ target: sight.at, blockAt: api.block, range: sight.range, see: false }).length
+    }
+    // water standing on a bed is no job of farmJobs (nothing to dig, nothing to plant into): counted here, and named
+    const flooded = () => plan.cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop' && api.block(c.x, c.y + 1, c.z)?.name === 'water')
+      .map(c => ({ why: 'water', note: `${c.x},${c.y + 1},${c.z}` }))
 
     // Where the sweep starts. This used to walk to within 2 of the plan's middle: in a finished field that is a bed
     // walled in by crops on every side, and a walk steps round crops, so the pathfinder had no node to end in and ran
@@ -98,16 +120,37 @@ export default {
       const low = lowSlabs(plan.cells, api.block)
       if (low.length) summary.lowSlabs = lowSlabLine(low.length)
       const short = {}
+      const bare = flooded()
+      const bareBeds = new Set()
+      const leave = (job, why, note) => { bare.push({ why, note }); bareBeds.add(bedKey(job)) }
+      // a till with no hoe is not tried: the whole sweep used to die on the second one (the runner's "twice in a row")
+      // before a single plant job on ready farmland had run. Its bed is counted untilled, and so is the seed meant
+      // for it: seed thrown on dirt is a failure too, and a wasted one
+      const hoe = hasHoe(api.inv())
+      const untilled = new Set(hoe ? [] : jobs.filter(j => j.do === 'till').map(bedKey))
       for (const job of jobs) {
+        if (job.do === 'till' && !hoe) { leave(job, 'untilled', NO_HOE); continue }
+        if (job.do === 'plant' && untilled.has(bedKey(job))) continue
         // a missing water_bucket is fetched, not just reported: see fetchWaterBucket in src/builder.mjs
         if (job.item === 'water_bucket' && !job.have && !(await fetchWaterBucket(api))) { short.water_bucket = (short.water_bucket ?? 0) + 1; continue }
-        if (job.item && job.item !== 'water_bucket' && !job.have) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
-        await tryJob(job)
+        // the pockets now, not the job list: seed runs out halfway through a field, and the place primitive's own
+        // "you carry no" would be the same failure for every bed after it
+        const seedless = job.do === 'plant' && !((api.inv()[job.item] ?? 0) > 0)
+        if (seedless) leave(job, 'no seed', job.item)
+        if (seedless || (job.item && job.item !== 'water_bucket' && !job.have)) { short[job.item] = (short[job.item] ?? 0) + 1; continue }
+        if (job.do === 'plant' && unreachable(job)) { leave(job, 'unreachable', `${job.x},${job.y},${job.z}`); continue }
+        const failed = await tryJob(job)
+        if (failed && job.do === 'till') { untilled.add(bedKey(job)); leave(job, 'untilled', failed) }
+        if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
         await api.checkpoint({ canDeposit: Boolean(chest) })
       }
       if (Object.keys(short).length) summary.missing = shortLine(short)
-      // whatever a done job left undone: reported, never silently repeated (the next sweep picks it up)
-      const left = jobs.length ? farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip' && (!j.item || j.have)) : []
+      const bareSaid = bareLine(bare)
+      if (bareSaid) summary.bare = bareSaid
+      else delete summary.bare
+      // whatever a done job left undone: reported, never silently repeated (the next sweep picks it up). A bed
+      // bare= already accounts for is not "unfinished" as well
+      const left = jobs.length ? farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip' && (!j.item || j.have) && !bareBeds.has(bedKey(j))) : []
       if (left.length) summary.unfinished = left.map(j => `${j.do} ${j.x},${j.y},${j.z} (${j.why})`).join('; ')
 
       // the spare seed goes to the composter (or the chest-like block compost= names) BEFORE the harvest is stored:
@@ -127,7 +170,7 @@ export default {
         }
       }
       summary.sweeps++
-      api.report(summary)
+      api.report(ordered(summary))
     }
 
     // one sweep a day: wait out the daylight, let the runner put me to bed, then go again at dawn
@@ -140,7 +183,7 @@ export default {
     for (;;) {
       await sweep()
       await api.checkpoint({ canDeposit: Boolean(chest) })
-      if (!(a.days > 0)) return summary
+      if (!(a.days > 0)) return ordered(summary)
       await nextDay()
     }
   }
