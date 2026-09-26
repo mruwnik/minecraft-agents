@@ -70,3 +70,70 @@ export const goalDistance = (goal, from) => {
   if (typeof goal?.x !== 'number' || typeof goal?.z !== 'number') return null
   return Math.hypot(goal.x - from.x, typeof goal.y === 'number' ? goal.y - from.y : 0, goal.z - from.z)
 }
+
+// A pit: a floor walled in by rises of two or more on every side, which a walk can jump into and not out of. Eight dig walks
+// aimed at the mouth of the 1-wide, 3-deep test pit by spawn jumped in (card 3fe30fb4): the pathfinder's nearest node it
+// could stand on was the pit floor. So the cell a walk would land on is judged before the search, like noStanding: on a pit
+// floor, the goal moves to the pit's rim, unless the floor is meant (into=true, or the body is already down there)
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+// how far round the landing cell the way out is looked for: a floor that reaches this far is open ground (or a trench longer
+// than the look), and the pathfinder is trusted with it
+export const LOOK = 6
+// how far below a goal in mid-air its floor is looked for, and how far up a pit's rim
+const DEPTH = 8
+const key = ({ x, y, z }) => `${x},${y},${z}`
+const floored = ({ x, y, z }) => ({ x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) })
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+
+// the cell a walk to this goal lands on: the standable cell nearest the goal within its range (the higher of two as near),
+// else, for a goal in mid-air, the floor a fall from it reaches; null when there is none (inside a block, or not loaded)
+const landing = (cellAt, goal, range) => {
+  const at = floored(goal)
+  const near = cellsWithin(at, range).filter(cell => standable(cellAt, cell)).sort((a, b) => dist(a, at) - dist(b, at) || b.y - a.y)
+  if (near.length) return near[0]
+  const drop = Array.from({ length: DEPTH }, (_, i) => ({ x: at.x, y: at.y - 1 - i, z: at.z }))
+  const solid = drop.findIndex(cell => !passable(cellAt(cell.x, cell.y, cell.z)))
+  return drop.slice(0, solid === -1 ? DEPTH : solid).find(cell => standable(cellAt, cell)) ?? null
+}
+
+// every cell a walk reaches from `start` by steps of one across and at most one up or down (a step up needs head room);
+// null once a cell LOOK away is reached: that floor is open ground, not a pit
+const floorAround = (cellAt, start) => {
+  const seen = new Map([[key(start), start]])
+  const queue = [start]
+  while (queue.length) {
+    const cell = queue.shift()
+    if (Math.abs(cell.x - start.x) >= LOOK || Math.abs(cell.z - start.z) >= LOOK) return null
+    for (const [dx, dz] of SIDES) {
+      for (const dy of [0, 1, -1]) {
+        const next = { x: cell.x + dx, y: cell.y + dy, z: cell.z + dz }
+        if (seen.has(key(next)) || !standable(cellAt, next)) continue
+        if (dy === 1 && !passable(cellAt(cell.x, cell.y + 2, cell.z))) continue
+        seen.set(key(next), next)
+        queue.push(next)
+      }
+    }
+  }
+  return [...seen.values()]
+}
+
+// the tops of a floor's walls: the lowest standable cell two or more above a floor cell, in a column beside it, off the floor
+const rimOf = (cellAt, floor) => {
+  const inside = new Set(floor.map(key))
+  const tops = floor.flatMap(cell => SIDES.map(([dx, dz]) =>
+    Array.from({ length: DEPTH }, (_, i) => ({ x: cell.x + dx, y: cell.y + 2 + i, z: cell.z + dz })).find(top => standable(cellAt, top))))
+  return [...new Map(tops.filter(top => top && !inside.has(key(top))).map(top => [key(top), top])).values()]
+}
+
+// null when the goal may stand, else the rim cell to walk to instead (range 0) with the note for the driver. `from` is the
+// body's feet cell: a body already on the pit floor means to be there (a walk out is aimed at the rim, which is no pit)
+export const rimGoal = (cellAt, goal, range, { into = false, from = null } = {}) => {
+  if (into) return null
+  const floor = landing(cellAt, goal, range)
+  const pit = floor && floorAround(cellAt, floor)
+  if (!pit || (from && pit.some(cell => key(cell) === key(floored(from))))) return null
+  const at = floored(goal)
+  const rim = rimOf(cellAt, pit).sort((a, b) => dist(a, at) - dist(b, at) || (from ? dist(a, from) - dist(b, from) : 0))[0]
+  if (!rim) return null
+  return { x: rim.x, y: rim.y, z: rim.z, range: 0, note: `the goal is the floor of a pit: standing at the rim ${rim.x},${rim.y},${rim.z} instead` }
+}

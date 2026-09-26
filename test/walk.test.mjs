@@ -88,3 +88,46 @@ for (const [name, goal, expected] of [
 ]) {
   test(`goalDistance: ${name}`, () => assert.equal(goalDistance(goal, { x: 0, y: 64, z: 0 }), expected))
 }
+
+// A goal on the floor of a pit, or in mid-air over its mouth, is walked to the pit's rim. Eight dig walks aimed beside the
+// 1-wide, 3-deep test pit by spawn jumped in (card 3fe30fb4): the pathfinder's nearest node it could stand on was the pit
+// floor. The chooser judges the cell the walk would land on: walled in by rises of two or more on every side, it is a
+// pit, and the nearest rim cell (ties: nearest the body) is the goal instead, with a note. A goal MEANT for the pit floor
+// (into=true, or the body already down there) is left alone, as is a hole one deep (a step), open ground, or a trench
+// longer than the look round (LOOK), which the pathfinder is trusted with
+import { rimGoal } from '../src/walk.mjs'
+// the site by spawn: dirt at and below y=62, surface feet at 63; a pit dug `depth` deep in the column x,z
+const hole = (x, z, depth) => Object.fromEntries(Array.from({ length: depth }, (_, i) => [`${x},${62 - i},${z}`, AIR]))
+const site = (...holes) => world(Object.assign({}, ...holes), 62)
+const pit = site(hole(-11, -1, 3))
+const trench = site(...[-13, -12, -11, -10, -9].map(x => hole(x, -1, 3)))
+const longTrench = site(...span(10).map(dx => hole(-11 + dx, -1, 3)))
+const RIM = (x, y, z) => ({ x, y, z, range: 0, note: `the goal is the floor of a pit: standing at the rim ${x},${y},${z} instead` })
+const outside = { x: -5, y: 63, z: 0 }
+const inside = { x: -11, y: 60, z: -1 }
+for (const [name, at, goal, range, options, expected] of [
+  ['the pit floor itself: the rim nearest the body', pit, { x: -11, y: 60, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['mid-air over the mouth (the walks that jumped in): a fall from there lands on the floor', pit, { x: -11, y: 63, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['one over the floor with range 1: the range rounds to the floor', pit, { x: -11, y: 61, z: -1 }, 1, { from: outside }, RIM(-10, 63, -1)],
+  ['a fractional goal over the mouth', pit, { x: -10.6, y: 63.4, z: -0.7 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['the body on the far side: the rim on its side', pit, { x: -11, y: 60, z: -1 }, 0, { from: { x: -16, y: 63, z: -1 } }, RIM(-12, 63, -1)],
+  ['the surface beside the pit: nothing to change', pit, { x: -10, y: 63, z: -1 }, 0, { from: outside }, null],
+  ['the surface beside the pit with a range that reaches down: the goal cell stands', pit, { x: -10, y: 63, z: -1 }, 4, { from: outside }, null],
+  ['into=true: the floor is meant', pit, { x: -11, y: 60, z: -1 }, 0, { into: true, from: outside }, null],
+  ['the body already in the pit: the floor is meant', pit, { x: -11, y: 60, z: -1 }, 0, { from: inside }, null],
+  ['the body in the pit, aiming at the rim: climbing out is the walk\'s business', pit, { x: -10, y: 63, z: -1 }, 0, { from: inside }, null],
+  ['a hole one deep is a step, not a pit', site(hole(-11, -1, 1)), { x: -11, y: 62, z: -1 }, 0, { from: outside }, null],
+  ['a hole two deep is a pit', site(hole(-11, -1, 2)), { x: -11, y: 61, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['a trench: the rim beside the goal, on the body\'s side', trench, { x: -11, y: 60, z: -1 }, 0, { from: outside }, RIM(-11, 63, 0)],
+  ['a trench, aimed at its end: the end rim is as near as the sides, and nearer the body', trench, { x: -9, y: 60, z: -1 }, 0, { from: { x: -5, y: 63, z: -1 } }, RIM(-8, 63, -1)],
+  ['a trench longer than the look round is left to the pathfinder', longTrench, { x: -11, y: 60, z: -1 }, 0, { from: outside }, null],
+  ['open ground', site(), { x: -11, y: 63, z: -1 }, 0, { from: outside }, null],
+  ['a goal inside the ground: no floor to land on (noStanding says so)', pit, { x: -10, y: 62, z: -1 }, 0, { from: outside }, null],
+  ['a goal high over open ground: it lands on the surface', site(), { x: -11, y: 70, z: -1 }, 0, { from: outside }, null],
+  ['a goal high over the pit: it falls to the floor', pit, { x: -11, y: 66, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['a pit with a lid on: still a pit, the rim beside the lid', site({ ...hole(-11, -1, 3), '-11,63,-1': STONE }), { x: -11, y: 60, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['a stone room with no way up: no rim to stand on', world({ '0,10,0': AIR, '0,11,0': AIR }, 30), { x: 0, y: 10, z: 0 }, 0, { from: outside }, null],
+  ['a pit whose chunk is not loaded', () => null, { x: -11, y: 60, z: -1 }, 0, { from: outside }, null]
+]) {
+  test(`rimGoal: ${name}`, () => assert.deepEqual(rimGoal(at, goal, range, options), expected))
+}
