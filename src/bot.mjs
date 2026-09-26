@@ -18,9 +18,8 @@ import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { dropGoal } from './drop.mjs'
 import { isGreeting } from './chatter.mjs'
-import { breedPlan } from './villager-breed.mjs'
 import { inventoryCompactPair, compatibleInventoryStacks } from './inventory-compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
@@ -39,12 +38,13 @@ import { farmWalk, legFlags, stepsOff, noFirstMove } from './lib/path.mjs'
 import { spareTest } from './fieldleg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
-import { carryReport, failedResult, deathLine, deathCancel } from './composite.mjs'
+import { failedResult, deathLine, deathCancel } from './composite.mjs'
 import { facesForHalf } from './cover.mjs'
 import { slabMergeRefusal } from './slabmerge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
+import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, setLastSpoken, edibleCarried, runComposite } from './body/runner.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -53,11 +53,11 @@ for (const [axis, method] of ['computeOffsetX', 'computeOffsetY', 'computeOffset
 }
 
 const { pathfinder, Movements, goals } = pf
-const { Vec3 } = vec3
+export const { Vec3 } = vec3
 const armorManager = armorManagerMod.default ?? armorManagerMod
 
 // ---------------------------------------------------------------- bot lifecycle
-let bot = null
+export let bot = null
 let boatLeashHolder = new Map()
 let eatTimer = null
 // item 13 (#109): what a death line needs and cannot work out after the fact. The server's own words, the last wound,
@@ -70,17 +70,17 @@ let lastCarried = null
 let lastDeath = null
 let diedAt = 0
 let mcData = null
-let ready = false
+export let ready = false
 let reflexes = true
 let eyes = null
 let followTarget = null
-let task = null // { id, name, gen, started }
+export let task = null // { id, name, gen, started }
 let gen = 0
 // a long action calls `const alive = cancelGuard()` when it starts and `alive()` in every loop: once it has been cancelled
 // or superseded it must stop, or it keeps fighting the next command for the body
-const cancelGuard = () => { const mine = gen; return () => { if (gen !== mine) throw new Error('cancelled') } }
+export const cancelGuard = () => { const mine = gen; return () => { if (gen !== mine) throw new Error('cancelled') } }
 // A composite may finish restoring one job block after cancellation. This private token cannot be supplied by a CLI caller.
-const ROLLBACK_PLACE = Symbol('rollback-place')
+export const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
 // when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
 let eatingSince = null
@@ -89,7 +89,7 @@ let eatingSince = null
 // for days was invisible, and across every body's bot.log there are 140 jam lines and not one word of why. This is the
 // same rule -- eat below minHunger, or below minHealth however full I am -- with the failure said out loud as eat_failed.
 // Rate-limited like any other error (errorRepeat), so a reflex that fires every physics tick cannot wall the events file.
-const carriedFood = () => foodSort(bot.inventory.items().map(i => i.name), name => Boolean(bot.registry.foodsByName?.[name]), BANNED_FOOD)
+export const carriedFood = () => foodSort(bot.inventory.items().map(i => i.name), name => Boolean(bot.registry.foodsByName?.[name]), BANNED_FOOD)
 const eatFailed = error => sayError(eatFailure(error, carriedFood().edible), { food: bot?.food, health: Math.round(bot?.health ?? 0) }, 'eat_failed')
 let eatFailedAt = null
 // eat() marks itself eating BEFORE it equips the food, and only clears that inside its own try/finally: an equip that
@@ -226,7 +226,7 @@ function makeMoves (dig) {
   for (const guard of ['dontMineUnderFallingBlock', 'dontCreateFlow']) Object.defineProperty(moves, guard, { get: () => true, set () {} })
   return moves
 }
-function useMoves (dig) {
+export function useMoves (dig) {
   digging = dig
   bot.pathfinder.setMovements(dig ? digMoves : walkMoves)
 }
@@ -459,12 +459,12 @@ function connect () {
   // a running composite hands control back when a person addresses me: a whisper always, a chat that says my name
   bot.on('chat', (username, message) => {
     if (username === bot.username) return
-    if (new RegExp(cfg.username, 'i').test(message)) lastSpoken = { from: username, message, at: Date.now() }
+    if (new RegExp(cfg.username, 'i').test(message)) setLastSpoken({ from: username, message, at: Date.now() })
     emit('chat', { from: username, message })
   })
   bot.on('whisper', (username, message) => {
     if (username === bot.username) return
-    lastSpoken = { from: username, message, at: Date.now() }
+    setLastSpoken({ from: username, message, at: Date.now() })
     emit('whisper', { from: username, message })
   })
   bot.on('playerJoined', p => { if (ready && p.username !== bot.username) emit('player_joined', { player: p.username }) })
@@ -700,7 +700,7 @@ function connect () {
 }
 
 // ---------------------------------------------------------------- reflexes
-const pos = () => bot?.entity ? roundVec(bot.entity.position) : null
+export const pos = () => bot?.entity ? roundVec(bot.entity.position) : null
 const roundVec = v => ({ x: Math.round(v.x * 10) / 10, y: Math.round(v.y * 10) / 10, z: Math.round(v.z * 10) / 10 })
 const isHostile = e => e.type === 'hostile' || e.kind === 'Hostile mobs'
 function nearbyHostiles (range) {
@@ -795,7 +795,7 @@ async function doorTick () {
   doorBusy = false
 }
 
-let fighting = null
+export let fighting = null
 // where the body stood when the current fight began, and the leash that measures from it (#105)
 let fightStart = null
 let chaseHeldUntil = 0
@@ -940,7 +940,8 @@ let stuckNow = null
 let frozenWalks = 0 // every frozen_walk said, for the watch's five-minute window
 let failedWalks = 0 // every walk that ended with no path, for the watch's walks verdict (a body that cannot leave its cell)
 const noPathCounted = e => { if (/no path to the goal|no walkable path|took to long to decide/i.test(e.message)) failedWalks++; return e }
-let stepsDone = 0 // composite steps finished: the task progress the watch reads
+export let stepsDone = 0 // composite steps finished: the task progress the watch reads
+export const setStepsDone = n => { stepsDone = n }
 const stuckSample = () => ({
   t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
   sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
@@ -1061,7 +1062,7 @@ setInterval(() => {
 }, 1000)
 // #138: one flee run at a time, with a phase and a way home. `fleeingUntil` was a timer that every tick re-armed
 // while a threat stood near, which is how a body chased once kept running until something else stopped it.
-let flee = null // { mob, entity, home, phase, held, wasDigging, still: { pos, at } }
+export let flee = null // { mob, entity, home, phase, held, wasDigging, still: { pos, at } }
 let lastFleeReturn = null // the mob and time of the last walk back, for the oscillation guard
 let fleeGaveUp = null // the mob and time of the last run that handed control back, so it does not restart itself
 
@@ -1161,7 +1162,7 @@ const HOLE_AGAIN_MS = 300000
 const HOLE_STEP_MS = 3000 // a creeper refusal moves the body once per this
 const HOLE_WALK_MS = 4000 // the step to a sounder cell gets this long, not a search
 let holedUp = null // { at, why }: one hole per emergency, or the reflex digs a fresh one every tick it is still hungry
-let holingUp = false
+export let holingUp = false
 let lives = 0 // deaths so far: a hole-up dug by a body that has since died must stop, not cap a hole at the respawn point
 let holeRefusedAt = 0
 let holeSteppedAt = 0
@@ -1594,7 +1595,7 @@ const carried = () => WORN.reduce((out, slot) => {
   return item ? { ...out, [item.name]: (out[item.name] || 0) + item.count } : out
 }, bot.inventory ? inventoryCounts() : {})
 
-function inventoryCounts () {
+export function inventoryCounts () {
   const out = {}
   for (const i of bot.inventory.items()) out[i.name] = (out[i.name] || 0) + i.count
   return out
@@ -1638,7 +1639,7 @@ const vecOf = a => {
 // Every dropped item lying about: what it is, where it lies, whether it is deep in water and whether it is outside the
 // pen I stand in. Entity tracking is the body's own knowledge, so this is what the collect action is built on (through
 // api.drops) and what dig and shear use to fetch what they just knocked loose.
-function dropsNear (range = 16) {
+export function dropsNear (range = 16) {
   const me = bot.entity.position
   const pen = penAround(me.floored())
   const inPen = e => !pen?.fenced || unpenned(pen.floor, [e], x => x.position).length === 0
@@ -1742,7 +1743,7 @@ function findBlockByName (names, maxDistance = 48, count = 1, point = bot.entity
   if (!ids.length) throw new Error(`unknown block name: ${names}`)
   return findBlocksNear({ matching: ids, maxDistance, count, point })
 }
-const bedsNear = () => findBlockByName('*_bed', 32, 16).sort((p, q) => p.distanceTo(bot.entity.position) - q.distanceTo(bot.entity.position))
+export const bedsNear = () => findBlockByName('*_bed', 32, 16).sort((p, q) => p.distanceTo(bot.entity.position) - q.distanceTo(bot.entity.position))
 // One batch of a recipe. bot.craft clicks the table itself and starts filling the grid as soon as anything answers, so
 // after a walk in the click's own look could still be turning while the recipe ran against no window at all and the
 // server rejected every batch (bug #91, and #74's "12/15 made"). Open the window here, wait for it, then craft into it.
@@ -2036,7 +2037,7 @@ async function gotoWalk (a) {
   }
   return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
 }
-const long = {
+export const long = {
   async boat_place (a) {
     const item = a.item ?? 'oak_boat'
     if (!/^\w+_(?:chest_)?boat$/.test(item)) throw new Error('boat_place needs a boat item, such as oak_boat or oak_chest_boat')
@@ -3136,7 +3137,7 @@ setInterval(() => {
   if (JSON.stringify(watches) !== before) saveWatches()
 }, 5000)
 
-const quick = {
+export const quick = {
   boat_state (a) {
     const boats = Object.values(bot.entities).filter(isBoat).filter(e => a.id === undefined || e.id === a.id)
       .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position))
@@ -3684,7 +3685,7 @@ function cancelTask (why) {
 }
 
 // drowned once while mining at 4 hp; don't start risky work half dead unless told to
-const refusalFor = (name, args) => (['trades', 'trade'].includes(name) && bot.health <= 5 && !args.force
+export const refusalFor = (name, args) => (['trades', 'trade'].includes(name) && bot.health <= 5 && !args.force
   ? `health is ${Math.round(bot.health)}: eat/rest first, or pass force=true`
   : refuseReason({ name, health: bot.health, force: args.force, sleeping: bot.isSleeping }))
 
@@ -3724,7 +3725,7 @@ const firstMoveNote = moves => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
   return noFirstMove(moves.firstMoves({ ...feet, remainingBlocks: moves.countScaffoldingItems() }))
 }
-const explainFailure = message => {
+export const explainFailure = message => {
   const boxed = amBoxedIn()
   // appended, never instead: the sweeps' dig retry and the stuck count read the no-path words (src/fieldleg.mjs PATH_FAILURE)
   const stuckHere = /no path to the goal|no walkable path/i.test(message) ? firstMoveNote(bot.pathfinder.movements) : null
@@ -3819,7 +3820,7 @@ function blindGateAdvice (floor, topsAt) {
 }
 
 // the pen around a floor cell, walked the way an animal can (see penLeak); null when that cell is no spot to stand on
-function penAround (feet, radius) {
+export function penAround (feet, radius) {
   const columns = new Map()
   const rims = new Map()
   const thin = shape => shape[3] - shape[0] < 0.8 || shape[5] - shape[2] < 0.8
@@ -3857,7 +3858,7 @@ function straysAt (gateKey) {
   return strays(pen.floor, animals, [gate.x, gate.y, gate.z])
 }
 // who is in a pen and who stands outside it, within 16 blocks of its floor: counted from the cells just walked, not judged by eye
-function censusOf (floor) {
+export function censusOf (floor) {
   const cells = floor.map(k => k.split(',').map(Number))
   const close = e => cells.some(([x, , z]) => Math.abs(e.position.x - x) <= 16 && Math.abs(e.position.z - z) <= 16)
   return penCensus(floor, Object.values(bot.entities).filter(e => BREEDING_FOOD[e.name] && close(e)).map(e => ({ name: e.name, x: e.position.x, y: e.position.y, z: e.position.z })))
@@ -4011,211 +4012,6 @@ async function runLong (name, args, given = args, queuedAs = null) {
   // still going: report completion through the event stream instead
   work.then(r => { if (mine.gen === gen) record(false, r) })
   return { ok: true, status: 'running', task: mine.id, note: 'still going: run ./mc wait (blocking, Bash timeout 600000 ms) to get its task_done. Do not end your turn to wait' }
-}
-
-// ---------------------------------------------------------------- the composite runner ("autopilot")
-// src/bot.mjs holds primitives; a composite is one file in library/, `export default { doc, args, run }`. The runner loads
-// them at body start and registers each in `long`, so to a driver a composite is an ordinary action: a new one cancels
-// the old, `state` shows it as doing=, and one that outlasts timeout= reports through task_done like anything else.
-// The hand-back rules (handBackReason in lib.mjs) belong to the RUNNER: a composite cannot opt out of being stopped
-// when someone speaks to me, when I am hurt or starving, or when the same step fails twice.
-const LIBRARY_DIR = path.join(ROOT, 'library')
-// library/<file>.mjs is the action <file>; library/<folder>/<file>.mjs is <folder>.<file>. A new domain is a new folder.
-const libraryFiles = () => {
-  if (!fs.existsSync(LIBRARY_DIR)) return []
-  const here = fs.readdirSync(LIBRARY_DIR, { withFileTypes: true })
-  const top = here.filter(e => e.isFile() && e.name.endsWith('.mjs')).map(e => e.name)
-  const nested = here.filter(e => e.isDirectory()).flatMap(dir =>
-    fs.readdirSync(path.join(LIBRARY_DIR, dir.name)).filter(f => f.endsWith('.mjs')).map(f => `${dir.name}/${f}`))
-  return [...top, ...nested].sort()
-}
-const compositeName = file => file.replace(/\.mjs$/, '').split('/').join('.')
-// what ./mc help knows about the composites this body loaded
-const composites = new Map()
-// actions the CLI answers by itself, with no body running
-const CLI_ONLY = ['wait', 'dawn', 'clock']
-// what auto-eat will never touch, and so what does not count as food I carry
-const BANNED_FOOD = ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken']
-// the last thing a person said TO me: a whisper always counts, a chat only when it says my name
-let lastSpoken = null
-
-class HandBack extends Error {
-  constructor (reason) { super(reason); this.reason = reason }
-}
-
-const worldDay = () => Math.floor(Number(bot.time.age ?? 0) / 24000)
-// a body below the hunger floor carrying rotten flesh is not a body with nothing edible: it has a meal it is now
-// allowed to eat, and a composite that stopped for "nothing edible carried" was stopping over its own dinner (#139)
-const edibleCarried = () => eatAllowed({ food: bot.food, carried: carriedFood() }).allowed.length > 0
-// a saved plan with its cells in world coordinates and what it would cost to build. Every composite that builds,
-// tills, plants or fetches from a NAMED place resolves through here - farm.build, pen.build, farm.maintain,
-// farm.compost, farm.get_seeds, flock.maintain - and none of them only reads, so this is where they all ask whose
-// ground it is (#144). The apiary and flock composites resolve through placeTarget, which apiary.inspect shares, so
-// they ask for themselves rather than have a reading action refused.
-function planOf (name) {
-  const place = readPlaces().find(p => p.name === name)
-  if (!place) throw new Error(`no place called ${name}: mark it, then save a map with ./mc plan name=${name} kind=farm x= y= z= map='...'`)
-  const refusal = workRefusal(place, cfg.username)
-  if (refusal) throw new Error(refusal)
-  if (!place.plan) throw new Error(`${name} is on the map but has no plan: save one with ./mc plan name=${name} map='...'`)
-  const parsed = parsePlan(place.plan)
-  return { ...place, parsed, cells: planCells(place), bill: planBill(parsed) }
-}
-
-// everything a composite may do to the world, and the only way it may do it
-function makeApi (composite, a, alive) {
-  const ownerTask = task
-  let cleanupServiceDirection = null
-  const notes = []
-  const report = {}
-  const failures = new Map()
-  const startedDay = worldDay()
-  const startedAt = Date.now()
-  let sleptTonight = false
-  const night = () => isNight(bot.time.timeOfDay)
-  const blockAt = (x, y, z) => {
-    const b = bot.blockAt(new Vec3(Math.floor(x), Math.floor(y), Math.floor(z)))
-    return b ? { name: b.name, properties: b.getProperties?.() ?? {}, solid: b.boundingBox === 'block' } : null
-  }
-  const failedTwice = () => [...failures.values()].find(f => f.count >= 2)?.why
-  const noteFailure = (name, why) => {
-    const seen = failures.get(name)
-    failures.set(name, { why, count: seen?.why === why ? seen.count + 1 : 1 })
-  }
-  const act = async (name, args = {}) => {
-    alive()
-    const fn = long[name] ?? quick[name]
-    if (!fn) throw new Error(`${composite}: no action called ${name}`)
-    const refusal = refusalFor(name, args)
-    if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
-    useMoves(mayDig(name, args))
-    return Promise.resolve().then(() => fn(args)).then(
-      r => { failures.delete(name); stepsDone++; return r ?? {} },
-      e => {
-        const why = `${name}: ${explainFailure(e.message)}`
-        noteFailure(name, why)
-        throw new Error(`${composite}/${why}`)
-      })
-  }
-  const cleanupAct = async (name, args = {}) => {
-    const breedGates = ['villager.breed', 'villager.prepare', 'villager.receive'].includes(composite) ? breedPlan(a).gates : []
-    const closeBreedGate = name === 'toggle' && args.open === false && breedGates.some(gate => {
-      if (!['x', 'y', 'z'].every(k => args[k] === gate[k])) return false
-      const gateBlock = bot.blockAt(new Vec3(gate.x, gate.y, gate.z))
-      return gateBlock?.name === (a.gate ?? 'oak_fence_gate') && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
-    })
-    const lectern = name === 'place' && args.blocks === undefined && args.item === (a.block ?? 'lectern') && ['x', 'y', 'z'].every(k => args[k] === a[k])
-    const dx = args.x - a.x, dz = args.z - a.z
-    const serviceStand = name === 'goto' && args.y === a.y && args.range === 0 &&
-      ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0))
-    const serviceSill = name === 'place' && args.blocks === undefined && args.item === (a.penBlock ?? 'cobblestone') &&
-      args.y === a.y && cleanupServiceDirection && [1, 2].some(n =>
-        dx === cleanupServiceDirection.x * n && dz === cleanupServiceDirection.z * n)
-    if (!closeBreedGate && (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill))) throw new Error(`${composite}: cleanup may only restore its own job block/service route or close its own breeder doorway`)
-    const cell = `${a.x},${a.y},${a.z}`
-    if (!ready || !bot.entity || bot.health <= 0 || bot.isSleeping) throw new Error(`${composite}: restoration pending at ${cell}: body is offline, dead, or sleeping`)
-    if (flee || holingUp || fighting) throw new Error(`${composite}: restoration pending at ${cell}: emergency reflex owns the body`)
-    if (task && task !== ownerTask) throw new Error(`${composite}: restoration pending at ${cell}: another task owns the body`)
-    const refusal = refusalFor(name, args)
-    if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
-    if (closeBreedGate) { useMoves(false); return long.toggle(args) }
-    if (serviceStand) {
-      cleanupServiceDirection = { x: dx / 3, z: dz / 3 }
-      useMoves(false)
-      return long.goto(args)
-    }
-    return long.place({ ...args, [ROLLBACK_PLACE]: true })
-  }
-  const until = makeUntil({ waitTicks: n => bot.waitForTicks(n), alive, composite })
-  // between steps: night with a bed is slept through and the composite never sees it; anything else that needs a person stops the task
-  const checkpoint = async (extra = {}) => {
-    alive()
-    if (!night()) sleptTonight = false
-    if (night() && !sleptTonight && bedsNear().length) {
-      sleptTonight = true
-      // said out loud: an agent that saw `asleep doing=mine.get 174s` with nothing moving stopped it as wedged (Chani, twice)
-      const mine = task
-      if (mine) mine.paused = 'night'
-      emit('task_paused', { id: mine?.id, name: composite, why: PAUSES.night })
-      try {
-        await long.sleep({}).catch(() => {})
-        await until(() => !bot.isSleeping, { timeout: 900, every: 5, what: 'the night never ended' }).catch(() => {})
-      } finally {
-        if (mine) delete mine.paused
-      }
-      alive()
-      emit('task_resumed', { id: mine?.id, name: composite })
-    }
-    const reason = handBackReason({
-      spoken: lastSpoken && lastSpoken.at > startedAt ? `${lastSpoken.from}: ${lastSpoken.message}`.slice(0, 90) : null,
-      health: bot.health,
-      food: bot.food,
-      edible: edibleCarried(),
-      failedTwice: failedTwice(),
-      invFull: bot.inventory.emptySlotCount() === 0,
-      canDeposit: Boolean(extra.canDeposit),
-      night: night(),
-      bedNear: bedsNear().length > 0,
-      days: a.days,
-      elapsedDays: worldDay() - startedDay,
-      count: a.count,
-      done: extra.done ?? 0,
-      // until= is how many minutes of real time this errand may take at most
-      until: a.until === undefined ? undefined : startedAt / 60000 + a.until,
-      now: Date.now() / 60000
-    })
-    if (reason) throw new HandBack(reason)
-  }
-  return {
-    notes,
-    report,
-    api: {
-      act,
-      cleanupAct,
-      until,
-      checkpoint,
-      block: blockAt,
-      clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), raining: bot.isRaining, elapsedDays: worldDay() - startedDay }),
-      inv: () => inventoryCounts(),
-      // who this body is, for a composite that has to tell its own protected zones from somebody else's
-      me: () => cfg.username,
-      // is this block something you can stand on, and does a pen with animals in it surround me? (mine.get mends its own shaft)
-      solid: name => bot.registry.blocksByName[name]?.boundingBox === 'block',
-      // a floor to count over exists only once the walk came back enclosed: an open field has no census
-      pen: () => {
-        const found = penAround(bot.entity.position.floored())
-        if (!found) return null
-        return { ...found, census: found.enclosed ? censusOf(found.floor) : undefined }
-      },
-      pos: () => pos(),
-      plan: planOf,
-      // the shared map itself, for a composite that works over several places at once
-      places: () => readPlaces(),
-      zones: () => zones,
-      // what lies on the ground, how full I am, and a pause between steps: the body's own senses, not actions
-      drops: range => dropsNear(range),
-      freeSlots: () => bot.inventory.emptySlotCount(),
-      pause: async seconds => { await bot.waitForTicks(Math.max(1, Math.round((seconds ?? 0.5) * 20))) },
-      note: line => { notes.push(String(line)) },
-      // what the task reports even if a hand-back rule cuts it short
-      report: partial => Object.assign(report, partial),
-      // an event of the composite's own (routine_day, routine_stopped), and what it tells the stuck watch about itself
-      emit,
-      progress: data => { if (ownerTask) ownerTask.progress = { ...ownerTask.progress, ...data } }
-    }
-  }
-}
-
-async function runComposite (name, mod, a) {
-  const bad = checkArgs(name, mod.args, a)
-  if (bad) throw new Error(bad)
-  const alive = cancelGuard()
-  const { api, notes, report } = makeApi(name, a, alive)
-  const outcome = await mod.run(api, a).then(
-    r => ({ stopped: 'done', ...r }),
-    // whatever ends it early (stop, a death, a step that threw), the report built so far rides out on the error (src/composite.mjs)
-    e => { if (e instanceof HandBack) return { stopped: e.reason }; throw carryReport(e, report, notes) })
-  return { ...report, ...outcome, notes: notes.length ? notes.join('; ') : undefined }
 }
 
 for (const file of libraryFiles()) {
