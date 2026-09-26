@@ -27,6 +27,7 @@ import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
+import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
@@ -3149,6 +3150,7 @@ const quick = {
       holding: bot.heldItem?.name,
       asleep: bot.isSleeping,
       doing: task && doingText({ name: task.name, seconds: Math.round((Date.now() - task.started) / 1000), paused: task.paused }),
+      queued: queued.length ? queued.map(c => `${c.name} (${c.id})`).join(', ') : undefined,
       stuck: stuckField(stuckNow),
       following: followTarget,
       reflexesOff: !reflexes,
@@ -3482,7 +3484,8 @@ const quick = {
     }
   },
 
-  stop () { cancelTask('stop'); followTarget = null; endFlee(); return {} },
+  // the chores waiting behind the task (queue=true) go with it, and the reply names them
+  stop () { const dropped = droppedLine(queued); queued = []; cancelTask('stop'); followTarget = null; endFlee(); return dropped ? { dropped } : {} },
   // without on= it only tells: a bare `reflexes` "to look" used to switch them all off, silently
   reflexes (a) {
     if (a.on === undefined) return { reflexes, note: 'unchanged: reflexes on=true|false switches them' }
@@ -3712,7 +3715,19 @@ async function leaveFenceCell () {
   console.log(`[left fence cell] ${mine.name} -> ${cell.x},${cell.y},${cell.z}`)
 }
 
-async function runLong (name, args, given = args) {
+// ./mc <action> queue=true while a task runs: the chore waits its turn instead of superseding the task (a side craft
+// cancelled a running routine, card 6cf481c0). The next one starts when the task ends, however it ends; ./mc stop drops
+// them. Its result is written as task_done, since nobody holds a reply for it (src/queue.mjs)
+let queued = []
+const startQueued = () => {
+  const { next, rest } = dequeue(queued)
+  queued = rest
+  if (!next) return
+  console.log(`[queued ${next.id}] starting ${next.name} ${JSON.stringify(next.args)}`)
+  runLong(next.name, next.args, next.args, next.id).catch(e => sayError(`queued ${next.name}: ${e.message}`))
+}
+
+async function runLong (name, args, given = args, queuedAs = null) {
   // morning, and the server still has me in bed: get up rather than refuse (Arren added a `wake` to every morning after "you are asleep: wake first")
   if (bot.isSleeping && name !== 'wake' && oversleeping({ asleep: true, timeOfDay: bot.time.timeOfDay, thundering: bot.thunderState > 0 })) await long.wake().catch(() => {})
   const refusal = refusalFor(name, args)
@@ -3726,7 +3741,7 @@ async function runLong (name, args, given = args) {
     catch (e) { return { ok: false, error: e.message } }
   }
   followTarget = null
-  const mine = { id: ++taskId, name, gen, started: Date.now() }
+  const mine = { id: queuedAs ?? ++taskId, name, gen, started: Date.now() }
   task = mine
   console.log(`[task ${mine.id}] ${name} ${JSON.stringify(given)}`)
   gatesPassed.clear()
@@ -3742,6 +3757,7 @@ async function runLong (name, args, given = args) {
     const result = { task: mine.id, action: name, seconds, ...mealTally({ ...diffCounts(before, inventoryCounts()), ate: diffCounts(mealsAtStart, mealsEaten).gained }), pos: pos(), ...vitals, ...extra }
     // back to walking, so a later flee or follow doesn't tunnel
     if (task === mine) { task = null; useMoves(false); bot.setControlState('sneak', false) }
+    if (task === null) startQueued()
     return result
   }
   // inventory updates trail the action by a few ticks; wait so gained/lost are accurate
@@ -3806,7 +3822,7 @@ async function runLong (name, args, given = args) {
   // every result is written once, to events.jsonl and bot.log: a fast one as task_result (the caller holds it already, so no
   // wait wakes for it), a slow one as task_done, which is how the wait stream hands it over (src/taskresult.mjs)
   const record = (finished, r) => { const { type, data } = resultEvent(finished, r); emit(type, data) }
-  if (first !== timedOut) { record(true, first); return first }
+  if (first !== timedOut) { record(queuedAs === null, first); return first }
   // still going: report completion through the event stream instead
   work.then(r => { if (mine.gen === gen) record(false, r) })
   return { ok: true, status: 'running', task: mine.id, note: 'still going: run ./mc wait (blocking, Bash timeout 600000 ms) to get its task_done. Do not end your turn to wait' }
@@ -4046,7 +4062,8 @@ http.createServer((req, res) => {
       if (name === '' || name === 'help') out = { ok: true, ...quick.help(args) }
       else if (!ready && name !== 'events') out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
       else if (quick[name]) { if (name === 'wake') lastDriven = Date.now(); out = { ok: true, ...(await quick[name](args)) } }
-      else if (long[name]) { lastDriven = Date.now(); out = await runLong(name, args, tracked.given) }
+      else if (long[name] && args.queue && task) { lastDriven = Date.now(); queued = enqueue(queued, { name, args: { ...args } }, ++taskId); out = queuedReply(taskId, task, queued.length) }
+      else if (long[name]) { lastDriven = Date.now(); out = await runLong(name, args.queue ? withoutQueue({ ...args }) : args, tracked.given) }
       else out = { ok: false, error: didYouMean(name, [...Object.keys(long), ...Object.keys(quick)]) }
       const ignored = ignoredParams(tracked.unread(), out.ok, String(quick[name] ?? long[name] ?? ''))
       if (ignored && out.status !== 'running') out = { ...out, ignored }
