@@ -42,10 +42,12 @@ export function airSample ({ memory, oxygen, health, client, server, now, head, 
   }
 }
 
-// the state line: where the server last put the body, only when it disagrees with the client by more than a block
-// (its age rides along; age alone says nothing: the spawn packet is the only one most bodies ever get)
-export function serverPosNote ({ client, server, now, farBlocks = 1 }) {
-  if (!server) return null
+// the state line: where the server last put the body, only when that is more than a block from the client AND the packet is
+// under a minute old. A `position` packet moves the client to the server's cell and the body walks on from there, so an old
+// packet's distance is only how far it has walked since (Perrin: serverPos=30,66,108 age=404s standing at 111,70,-136), and
+// the spawn packet, the only one most bodies ever get, would show for ever. A wedged body is reset every tick: always fresh
+export function serverPosNote ({ client, server, now, farBlocks = 1, freshMs = 60000 }) {
+  if (!server || now - server.at > freshMs) return null
   const off = Math.hypot(server.x - client.x, server.y - client.y, server.z - client.z)
   if (off <= farBlocks) return null
   return { serverPos: cell(server), age: `${Math.round((now - server.at) / 1000)}s` }

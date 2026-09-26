@@ -41,16 +41,19 @@ for (const [name, memory, sample, expected] of [
   test(`airSample memory: ${name}`, () => assert.deepEqual(airSample({ memory, ...sample }).memory, expected))
 }
 
-// the state line: the server's last position only when it disagrees with the client by more than a block (its age rides along;
-// an old packet alone says nothing: the spawn packet is the only one most bodies ever get, and it would show for ever)
+// the state line: the server's last position, only when it disagrees with the client by more than a block AND the packet is
+// under a minute old. After a `position` packet the client walks on from where the server put it, so an old packet's distance
+// is only how far the body has walked since (Perrin: serverPos=30,66,108 age=404s while standing at 111,70,-136); the spawn
+// packet is the only one most bodies ever get, and a bare age clause showed it for ever
 for (const [name, server, expected] of [
   ['never corrected: nothing', null, null],
   ['the server agrees and spoke lately: nothing', { x: 119.6, y: 72, z: -65.4, at: 90000 }, null],
-  ['the server put the body more than a block away', { x: 121.5, y: 72, z: -65.5, at: 90000 }, { serverPos: '121.5,72,-65.5', age: '10s' }],
+  ['the server put the body more than a block away, 10 s ago', { x: 121.5, y: 72, z: -65.5, at: 90000 }, { serverPos: '121.5,72,-65.5', age: '10s' }],
   ['a level lower counts too', { x: 119.5, y: 70.5, z: -65.5, at: 99000 }, { serverPos: '119.5,70.5,-65.5', age: '1s' }],
+  ['a minute old and off: still shown', { x: 121.5, y: 72, z: -65.5, at: 40000 }, { serverPos: '121.5,72,-65.5', age: '60s' }],
+  ['older than a minute and off (the body walked on since a reset): nothing', { x: 121.5, y: 72, z: -65.5, at: 39000 }, null],
   ['the last packet is old but agrees: nothing', { x: 119.5, y: 72, z: -65.5, at: 30000 }, null],
-  ['two days old and agreeing (the spawn packet of a long-running body): nothing', { x: 119.5, y: 72, z: -65.5, at: -160333731 }, null],
-  ['two days old and off: shown, the age rounded to whole seconds', { x: 121.5, y: 72, z: -65.5, at: -160333731 }, { serverPos: '121.5,72,-65.5', age: '160434s' }]
+  ['two days old and off (the spawn packet of a long-running body): nothing', { x: 121.5, y: 72, z: -65.5, at: -160333731 }, null]
 ]) {
   test(`serverPosNote: ${name}`, () => assert.deepEqual(serverPosNote({ client: here, server, now: 100000 }), expected))
 }
