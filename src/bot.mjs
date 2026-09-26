@@ -179,7 +179,7 @@ const watchTheMeal = (food, timeoutMs) => {
 // no other way, at a walking pace (src/lib/path.mjs farmWalk and legFlags, card fcd996fe)
 let walkMoves = null
 let digMoves = null
-let digging = false
+export let digging = false
 // every cell the pathfinder aimed a scaffolding placement at during this task. Chani's cobblestone went that way twice with
 // nothing in the reply to say so (#111), so a task now reports what it built beside its drops and takes back what it can reach
 let scaffolded = []

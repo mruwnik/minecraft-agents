@@ -3,9 +3,9 @@
 import vec3 from 'vec3'
 import { dropGoal } from '../drop.mjs'
 import { fullSide, transferOutcome, compact, settleVerdict, coordsError, unpenned, nextDrop, feetCell, leftLying, DIG_WALK_MS, digUnreached, FLUIDS, breaksUnderfoot, within, gridLeftovers, isBaby, leashPlan, leashVerdict, leadBroke, deepestCell, ledReport } from '../lib.mjs'
-import { rimGoal, noStanding } from '../walk.mjs'
+import { rimGoal, walkRefusal } from '../walk.mjs'
 import { searchSections, enough } from '../blocksearch.mjs'
-import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, pos, censusOf } from '../bot.mjs'
+import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf } from '../bot.mjs'
 
 // ---------------------------------------------------------------- helpers
 export function matcher (names) {
@@ -178,8 +178,9 @@ export async function goNear (v, range = 2) {
   // in when the rim was 3.16 off with range 3, and the walk that takes a scaffold pillar back stood on the pillar and dug it from under itself
   const rim = rimGoal(cellAt, v, range, { from: feetCell(bot.entity.position, bot.entity.onGround) })
   const aim = rim ?? { x: v.x, y: v.y, z: v.z, range }
-  // no cell to stand in within range (a farmland cell walled in by crops): refused now, not after a 5 s search of 16k nodes (card 1ccb0ea1)
-  const nowhere = noStanding(cellAt, aim, aim.range)
+  // no cell to stand in within range (a farmland cell walled in by crops): refused now, not after a 5 s search of 16k nodes (card 1ccb0ea1).
+  // A dig walk makes its own room: mine.get's walk to ore under dirt was refused here as "mid-air, or inside a block" (Hollis, 09-26)
+  const nowhere = walkRefusal(cellAt, aim, { dig: digging })
   if (nowhere) throw new Error(nowhere)
   await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
 }
