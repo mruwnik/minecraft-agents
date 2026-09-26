@@ -1,6 +1,7 @@
 // Pick up what lies on the ground: walk onto each drop in turn, nearest first, and say what had to be left.
 // Inside a pen it takes only what lies inside it: a walk out after a drop beyond the fence takes the herd with you.
 import { nextDrop, leftLying, collectTally } from '../src/lib.mjs'
+import { dropGoal } from '../src/drop.mjs'
 
 const RANGE = 16
 const ROUNDS = 40
@@ -24,7 +25,7 @@ export default {
       seen.add(drop.id)
       // whether the walk arrived is the whole difference between "no cell to stand on beside it" and "I stood on it and
       // it would not come to hand", and those want different things from the driver, so it is remembered here (#142)
-      const reached = await api.act('goto', { x: drop.x, y: drop.y, z: drop.z, range: 0 }).then(() => true, () => false)
+      const reached = await api.act('goto', dropGoal(drop)).then(() => true, () => false)
       tried.push({ ...drop, reached })
       await api.pause(0.5)
       // full, and it did not stack either: the rest will not come
