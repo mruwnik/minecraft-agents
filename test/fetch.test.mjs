@@ -4,7 +4,7 @@
 // fc47bf28). A frozen walk during the fetches is the body's own failure, and the answer says so, with what froze it.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { fetchFailure, stalledSince, fencedRefusal } from '../src/fetch.mjs'
+import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from '../src/fetch.mjs'
 
 const FROZEN = { at: 1000, pos: { x: 119, y: 72, z: -66 }, advice: 'the head faces 90 degrees off the next node (119.5,72,-66.5) and the legs push into birch_fence at 119,72,-67: something else is turning the head (a lookAt in the task, or the fence nudge)' }
 
@@ -48,4 +48,31 @@ for (const [name, input, expected] of [
   ['a leaking enclosure is no pen', { mob: 'sheep', at: '1,2,3', pen: { enclosed: false, via: '1,2,4' }, feet: { x: 0, y: 2, z: 0 } }, null]
 ]) {
   test(`fencedRefusal: ${name}`, () => assert.equal(fencedRefusal(input), expected))
+}
+
+// ---------------------------------------------------------------- an animal wedged in a block: it cannot walk, so it cannot be led
+// The same two cows (card fc47bf28) both reported the cell 114,72,-70, a birch fence post: any animal centred in a
+// fence's cell overlaps the fence's collision, so it stands wedged and no fetch moves it. A floor block that only
+// raises the feet (a slab, a carpet) is what the animal stands ON, not what it stands IN.
+const FENCE = { name: 'birch_fence', shapes: [[0.375, 0, 0.375, 0.625, 1.5, 0.625], [0, 0, 0.375, 0.375, 1.5, 0.625]] }
+const SLAB = { name: 'oak_slab', shapes: [[0, 0, 0, 1, 0.5, 1]] }
+const CARPET = { name: 'white_carpet', shapes: [[0, 0, 0, 1, 0.0625, 1]] }
+const LITTER = { name: 'leaf_litter', shapes: [] }
+for (const [name, block, feetY, expected] of [
+  ['a fence post round the feet', FENCE, 72, 'birch_fence'],
+  ['a full block round the feet', { name: 'dirt', shapes: [[0, 0, 0, 1, 1, 1]] }, 72, 'dirt'],
+  ['a slab the feet stand on', SLAB, 72.5, null],
+  ['a carpet the feet stand on', CARPET, 72.0625, null],
+  ['ground cover with no box', LITTER, 72, null],
+  ['air', { name: 'air', shapes: [] }, 72, null],
+  ['an unloaded cell', null, 72, null]
+]) {
+  test(`wedgedIn: ${name}`, () => assert.equal(wedgedIn(block, feetY), expected))
+}
+for (const [name, input, expected] of [
+  ['wedged: free it or lead another', { mob: 'cow', at: '114,72,-70', block: 'birch_fence' },
+    'the cow at 114,72,-70 stands wedged in a birch_fence and cannot walk: free it (dig x=114 y=72 z=-70, if that fence is yours to break) or lead another'],
+  ['not wedged: nothing to say', { mob: 'cow', at: '114,72,-69', block: null }, null]
+]) {
+  test(`wedgedRefusal: ${name}`, () => assert.equal(wedgedRefusal(input), expected))
 }

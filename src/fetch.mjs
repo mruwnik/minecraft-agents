@@ -30,3 +30,19 @@ export const fencedRefusal = ({ mob, at, pen, feet }) => {
   const [x, y, z] = String(at).split(',')
   return `the ${mob} at ${at} stands fenced in (a ${pen.cells}-cell pen) and I found no way in: open a gate or a fence post beside it (pen.check x=${x} y=${y} z=${z} names its gates), or lead from inside`
 }
+
+// the block an animal stands IN, when its collision rises above the feet: the fence post of card fc47bf28's two cows
+// (both floored to the fence's own cell, so any centre there overlaps the post's box). A slab or carpet under the
+// feet lifts them to its own top, so it is what the animal stands ON and no wedge. Ground cover has no box at all
+export const wedgedIn = (block, feetY) => {
+  const shapes = block?.shapes ?? []
+  if (!shapes.length) return null
+  const top = Math.max(...shapes.map(shape => shape[4]))
+  return top > feetY - Math.floor(feetY) + 0.05 ? block.name : null
+}
+// an animal that cannot walk cannot be led: said before the walk, never after three fetches
+export const wedgedRefusal = ({ mob, at, block }) => {
+  if (!block) return null
+  const [x, y, z] = String(at).split(',')
+  return `the ${mob} at ${at} stands wedged in a ${block} and cannot walk: free it (dig x=${x} y=${y} z=${z}, if that ${block.replace(/^.*_/, '')} is yours to break) or lead another`
+}
