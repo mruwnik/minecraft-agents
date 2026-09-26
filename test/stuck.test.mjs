@@ -2,7 +2,7 @@
 // chat line per episode. Pure: bot.mjs takes the samples and hands them in.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addSample, stuckVerdict, nextEpisode, stuckLine, WINDOW_MS } from '../src/stuck.mjs'
+import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine, WINDOW_MS, END_MS, REPEAT_MS } from '../src/stuck.mjs'
 
 const T0 = 1_000_000_000
 const sec = n => T0 + n * 1000
@@ -52,6 +52,10 @@ for (const [name, samples, expected] of [
   ['boxed in at night, then still boxed 3 minutes after dawn', series(600, i => ({ boxed: true, night: i < 400 })), 'boxed'],
   ['boxed in and asleep', series(600, () => ({ boxed: true, sleeping: true, night: true })), null],
   ['boxed in while digging down a shaft (the position changes)', series(300, i => ({ ...working, boxed: true, pos: { x: 10, y: 64 - Math.floor(i / 20), z: -20 } })), null],
+  ['boxed in while walling itself in with one-second place tasks (a new task id every few seconds)', series(400, i => ({ boxed: true, ...(i % 40 < 2 ? { taskId: 40 + Math.floor(i / 40), taskName: 'place' } : {}) })), 'boxed'],
+  ['still for 5 minutes, then walled in 10 s ago: the boxed count starts when the wall closed', series(300, i => ({ boxed: i >= 290 })), null],
+  ['boxed in 5 minutes with one step sideways 60 s ago (a 2-cell pen): the count starts again', series(300, i => ({ boxed: true, pos: { x: i < 240 ? 11 : 10, y: 64, z: -20 } })), null],
+  ['a task still for 5 minutes with one nudge of a block 100 s ago', series(300, i => ({ ...working, pos: { x: i < 200 ? 11 : 10, y: 64, z: -20 } })), null],
   ['two frozen walks in 5 minutes', series(300, i => ({ ...working, frozenWalks: i < 100 ? 0 : i < 200 ? 1 : 2, pos: { x: 10 + i, y: 64, z: -20 } })), null],
   ['three frozen walks in 5 minutes', series(300, i => ({ ...working, frozenWalks: i < 100 ? 0 : i < 200 ? 1 : i < 250 ? 2 : 3, pos: { x: 10 + i, y: 64, z: -20 } })), 'frozen'],
   ['three frozen walks, but spread over 8 minutes', series(480, i => ({ ...working, frozenWalks: i < 10 ? 0 : i < 200 ? 1 : i < 400 ? 2 : 3, pos: { x: 10 + i, y: 64, z: -20 } })), null],
@@ -112,18 +116,52 @@ for (const [name, samples, reason, advice] of [
   })
 }
 
-// one episode per condition: said once when it starts, held while it lasts, over when the verdict clears
+// one episode per condition: said once when it starts, held while it lasts and through a blip of the verdict, over
+// (stuck_end) once the verdict has been clear for END_MS, and not said again for a repeat within REPEAT_MS of its start
 const still = { kind: 'still', reason: 'no movement and no progress in goto for 3 min', advice: 'a' }
 const boxed = { kind: 'boxed', reason: 'boxed in for 3 min', advice: 'b' }
-for (const [name, episode, verdict, expected] of [
-  ['nothing before, nothing now', null, null, { episode: null, started: false }],
-  ['an episode begins', null, still, { episode: { ...still, since: sec(5) }, started: true }],
-  ['the same condition holds: nothing new to say', { ...still, since: sec(1) }, still, { episode: { ...still, since: sec(1) }, started: false }],
-  ['the reason wording changes within the kind (health 6 -> 5): the same episode', { ...still, since: sec(1) }, { ...still, reason: 'other words' }, { episode: { ...still, since: sec(1) }, started: false }],
-  ['another kind takes over: a new episode', { ...still, since: sec(1) }, boxed, { episode: { ...boxed, since: sec(5) }, started: true }],
-  ['the condition clears: the episode is over', { ...still, since: sec(1) }, null, { episode: null, started: false }]
+const live = (v, since, lastSeen = since) => ({ ...v, since, lastSeen, quiet: false })
+const over = (v, since, at) => ({ ...live(v, since, at - END_MS), over: at })
+const none = { started: false, ended: false }
+for (const [name, episode, verdict, now, expected] of [
+  ['nothing before, nothing now', null, null, sec(5), { episode: null, ...none }],
+  ['an episode begins', null, still, sec(5), { episode: live(still, sec(5)), started: true, ended: false }],
+  ['the same condition holds: nothing new to say, the episode is seen again', live(still, sec(1)), still, sec(5), { episode: live(still, sec(1), sec(5)), ...none }],
+  ['the reason wording changes within the kind (health 6 -> 5): the same episode', live(still, sec(1)), { ...still, reason: 'other words' }, sec(5), { episode: live(still, sec(1), sec(5)), ...none }],
+  ['another kind takes over: a new episode', live(still, sec(1)), boxed, sec(5), { episode: live(boxed, sec(5)), started: true, ended: false }],
+  ['the verdict clears for a moment (a nudge, a task a second long): the episode holds', live(boxed, sec(1), sec(10)), null, sec(20), { episode: live(boxed, sec(1), sec(10)), ...none }],
+  ['the verdict has been clear for END_MS: the episode is over, said once', live(boxed, sec(1), sec(10)), null, sec(10) + END_MS, { episode: over(boxed, sec(1), sec(10) + END_MS), started: false, ended: true }],
+  ['an episode already over stays over, quietly', over(boxed, sec(1), sec(40)), null, sec(90), { episode: over(boxed, sec(1), sec(40)), ...none }],
+  ['the same kind returns within REPEAT_MS of the last start: held, not announced', over(boxed, sec(1), sec(40)), boxed, sec(60), { episode: { ...live(boxed, sec(60)), quiet: true }, ...none }],
+  ['a quiet episode that ends says nothing either', { ...live(boxed, sec(60), sec(70)), quiet: true }, null, sec(70) + END_MS, { episode: { ...live(boxed, sec(60), sec(70)), quiet: true, over: sec(70) + END_MS }, ...none }],
+  ['the same kind returns after REPEAT_MS: a new episode, announced', over(boxed, sec(1), sec(40)), boxed, sec(1) + REPEAT_MS, { episode: live(boxed, sec(1) + REPEAT_MS), started: true, ended: false }],
+  ['another kind after an episode is over: announced at once', over(boxed, sec(1), sec(40)), still, sec(60), { episode: live(still, sec(60)), started: true, ended: false }]
 ]) {
-  test(`nextEpisode: ${name}`, () => assert.deepEqual(nextEpisode(episode, verdict, sec(5)), expected))
+  test(`nextEpisode: ${name}`, () => assert.deepEqual(nextEpisode(episode, verdict, now), expected))
+}
+
+// ClaudeProbe's three alerts in 15 s (09-26 21:58Z), replayed tick by tick: boxed and still throughout, a one-second
+// place task every 40 s. One `stuck`, no repeat, and no stuck_end while it lasts
+test('nextEpisode: a run of verdicts over a body walling itself in says stuck exactly once', () => {
+  let episode = null
+  const said = []
+  for (let i = 0; i <= 900; i++) {
+    const samples = series(i, j => ({ boxed: true, ...(j % 40 < 2 ? { taskId: 40 + Math.floor(j / 40), taskName: 'place' } : {}) }))
+    const next = nextEpisode(episode, stuckVerdict(samples), sec(i))
+    episode = next.episode
+    if (next.started) said.push(`stuck ${i}`)
+    if (next.ended) said.push(`stuck_end ${i}`)
+  }
+  assert.deepEqual(said, ['stuck 180'])
+})
+
+for (const [name, episode, expected] of [
+  ['no episode', null, undefined],
+  ['a live episode', live(boxed, sec(1)), 'boxed in for 3 min'],
+  ['a quiet repeat still shows', { ...live(boxed, sec(1)), quiet: true }, 'boxed in for 3 min'],
+  ['an episode that is over', over(boxed, sec(1), sec(40)), undefined]
+]) {
+  test(`stuckField: ${name}`, () => assert.equal(stuckField(episode), expected))
 }
 
 test('stuckLine: the one chat line, with the position floored', () =>

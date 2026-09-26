@@ -13,6 +13,10 @@ export const HOLE_MS = 5 * 60000
 export const OXYGEN_MS = 20000
 export const DAY_MS = 30 * 60000
 export const LOW_HEALTH = 6
+// an episode ends only after the verdict has been clear this long (a one-tick blip is not freedom), and a second
+// episode of the same kind within this much of the last one's start is held but not announced again
+export const END_MS = 30000
+export const REPEAT_MS = 120000
 const STILL_DIST = 0.5
 const WAITING = ['dusk', 'dawn']
 
@@ -63,19 +67,31 @@ const frozen = samples => {
   return { kind: 'frozen', reason: `${FROZEN_WALKS} walks froze in ${minutes(FROZEN_MS)}`, advice: 'read events type=frozen_walk last=3: each names what the legs push into (a fence, a mob, a turned head); clear it or walk round it before the next goto', pos: last.pos }
 }
 
-// no movement and no task progress for STILL_MS while a task runs (a routine between its days waits on purpose), or
-// while an idle body stands boxed in (no neighbouring cell to step to) by day. Never at night: a hole dug by hand and
-// capped over at dusk carries no holedUp flag, and a body sitting in one is sheltering, not stuck (Pacer, 09-26 19:20Z)
+// how far back from the newest sample `holds` is true of every sample without a break, in ms: a run, not a window, so a
+// body that stepped away and came back starts its count again, and one condition is measured from when it began
+const runBack = (samples, holds) => {
+  const last = samples[samples.length - 1]
+  let first = last
+  for (let i = samples.length - 1; i >= 0 && holds(samples[i], last); i--) first = samples[i]
+  return last.t - first.t
+}
+
+// Boxed in (no neighbouring cell to step to) for STILL_MS by day, whatever the body's tasks are doing: ClaudeProbe walled
+// itself in with `place` calls a second long, and a rule that read the task first saw a new task id every few seconds,
+// cleared the verdict and fired three alerts in 15 s (09-26 21:58Z). Never at night: a hole dug by hand and capped over
+// at dusk carries no holedUp flag, and a body sitting in one is sheltering, not stuck (Pacer, 09-26 19:20Z)
+const boxedRun = (s, last) => s.boxed && !s.night && !s.sleeping && near(s.pos, last.pos)
+// or a task that has neither moved the body nor finished a step for STILL_MS (a routine between its days waits on purpose)
+const taskRun = (s, last) => s.taskId === last.taskId && s.taskProgress === last.taskProgress && !s.sleeping && near(s.pos, last.pos)
 const still = samples => {
-  const { last, window, covered } = lastSpan(samples, STILL_MS)
-  if (!covered || last.sleeping) return null
+  const last = samples[samples.length - 1]
+  if (last.sleeping) return null
+  if (last.boxed && !last.night && runBack(samples, boxedRun) >= STILL_MS) {
+    return { kind: 'boxed', reason: `boxed in for ${minutes(STILL_MS)}`, advice: 'no neighbouring cell to step to: dig or open a way out (a fence gate, the block in the way, the block over the head), or ask in chat for somebody to', pos: last.pos }
+  }
   const waiting = last.routine && WAITING.includes(last.routine.phase)
-  const trapped = last.boxed && !last.night
   const working = last.taskId !== null && last.taskId !== undefined && !waiting
-  if (!working && !trapped) return null
-  const unchanged = window.every(s => !s.sleeping && near(s.pos, last.pos) && (!working || (s.taskId === last.taskId && s.taskProgress === last.taskProgress)))
-  if (!unchanged) return null
-  if (trapped) return { kind: 'boxed', reason: `boxed in for ${minutes(STILL_MS)}`, advice: 'no neighbouring cell to step to: dig or open a way out (a fence gate, the block in the way, the block over the head), or ask in chat for somebody to', pos: last.pos }
+  if (!working || runBack(samples, taskRun) < STILL_MS) return null
   return { kind: 'still', reason: `no movement and no progress in ${last.taskName} for ${minutes(STILL_MS)}`, advice: `${last.taskName} is going nowhere: stop it, step two blocks away (goto), start it again, and if the walk will not go read what surrounds the body (look, block_at)`, pos: last.pos }
 }
 
@@ -102,10 +118,20 @@ export function stuckVerdict (samples) {
   return drowning(samples) ?? starving({ last }) ?? entombed(samples) ?? frozen(samples) ?? still(samples) ?? failingStep({ last }) ?? hungDay({ last })
 }
 
-// one episode per kind of condition: `started` is the moment to write the event and say the chat line, once
+// One episode per kind of condition. `started` is the moment to write the event and say the chat line, once; `ended` the
+// moment to say the body is free (stuck_end), once the verdict has been clear for END_MS. A finished episode is kept,
+// with `over`, so a repeat of the same kind within REPEAT_MS of its start is held quietly (state shows it, nothing is said)
 export function nextEpisode (episode, verdict, now) {
-  if (!verdict) return { episode: null, started: false }
-  if (episode && episode.kind === verdict.kind) return { episode, started: false }
+  const live = episode && !episode.over
+  if (!verdict) {
+    if (!live || now - episode.lastSeen < END_MS) return { episode, started: false, ended: false }
+    return { episode: { ...episode, over: now }, started: false, ended: !episode.quiet }
+  }
+  if (live && episode.kind === verdict.kind) return { episode: { ...episode, lastSeen: now }, started: false, ended: false }
   const { kind, reason, advice } = verdict
-  return { episode: { kind, reason, advice, since: now }, started: true }
+  const quiet = Boolean(episode && episode.kind === kind && now - episode.since < REPEAT_MS)
+  return { episode: { kind, reason, advice, since: now, lastSeen: now, quiet }, started: !quiet, ended: false }
 }
+
+// what `state` shows while an episode lasts, and nothing once it is over
+export const stuckField = episode => episode && !episode.over ? episode.reason : undefined
