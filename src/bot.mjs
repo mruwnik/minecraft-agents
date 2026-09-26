@@ -32,7 +32,7 @@ import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice, inHole, perchedOverField } from './caveexit.mjs'
-import { farmWalk, legFlags, stepsOff, noFirstMove } from './lib/path.mjs'
+import { farmWalk, legFlags, stepsOff, noFirstMove, clearGoalOnFailure } from './lib/path.mjs'
 import { spareTest } from './fieldleg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
@@ -310,7 +310,8 @@ function connect () {
     // 4 GB. This allows a detour of 160 cost units beyond the straight line, then gives up with noPath.
     bot.pathfinder.searchRadius = 160
     // the plugin's goto resolves when the search returns an empty path (nothing walkable from here, as in a shaft): check the goal ourselves
-    const plainWalk = bot.pathfinder.goto.bind(bot.pathfinder)
+    // and a walk that fails takes its goal with it: the plugin's goto keeps it, and the body walked on with no task (clearGoalOnFailure)
+    const plainWalk = clearGoalOnFailure(bot.pathfinder, bot.pathfinder.goto.bind(bot.pathfinder))
     // a near goal that 1.5 s of search has not found is walled in: say so then, not after the plugin's 5 s (card 1ccb0ea1). Every search of
     // this walk, replans included, reads thinkTimeout; reflex walks (setGoal) get the default back once the walk is over
     const walk = goal => {
