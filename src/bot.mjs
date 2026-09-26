@@ -966,9 +966,20 @@ let stepsDone = 0 // composite steps finished: the task progress the watch reads
 const stuckSample = () => ({
   t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
   sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
-  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: amBoxedIn(), frozenWalks,
+  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: trappedIn(), frozenWalks,
   routine: task?.progress?.routine ?? null
 })
+// boxed in for the watch: amBoxedIn (#128) is about solid shafts and reads the cell over a fence as a ledge to step up
+// onto, but a fence or wall is a block and a half tall, so a body fenced into a 1x1 cell has no way out either
+const TALL = /_fence$|_wall$|_fence_gate$/
+const openGate = b => /_fence_gate$/.test(b?.name ?? '') && String(b?.getProperties?.().open) === 'true'
+const trappedIn = () => {
+  if (!bot?.entity) return false
+  const feet = feetCell(bot.entity.position, bot.entity.onGround)
+  const at = (dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))
+  const passable = (dx, dy, dz) => { const b = at(dx, dy, dz); return openGate(b) || b?.boundingBox !== 'block' }
+  return boxedIn((dx, dy, dz) => passable(dx, dy, dz) && !(dy === 1 && (dx || dz) && TALL.test(at(dx, 0, dz)?.name ?? '') && !openGate(at(dx, 0, dz))))
+}
 function watchStuck () {
   stuckSamples = addSample(stuckSamples, stuckSample())
   const { episode, started } = nextEpisode(stuckNow, stuckVerdict(stuckSamples), Date.now())
