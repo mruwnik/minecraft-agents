@@ -65,13 +65,21 @@ if (action === 'wait') {
   tick()
 }
 
+// what went wrong across every agent since a time (autopilot card); tools/incidents.mjs is loaded only for this action,
+// so a fault in it breaks nothing but this answer
+if (action === 'incidents') {
+  import('./incidents.mjs')
+    .then(({ incidentsReport }) => console.log(incidentsReport(path.join(import.meta.dirname, '..', 'state', 'agents'), args.since)))
+    .catch(e => { console.error(`FAIL ${e.message}`); process.exit(1) })
+}
+
 // the one action that needs no body: what time is it in the world, as last seen by any running body
 if (action === 'clock') {
   console.log(describeClock(readClock(), Date.now()))
   process.exit(0)
 }
 
-// dawn and wait keep this process alive on their own timers and never talk to a body
+// dawn, wait and incidents keep this process alive on their own and never talk to a body
 // node:http, not fetch: fetch gives up ("fetch failed") when no answer has come after 300 s, and a long mine or build takes longer
 const post = (url, body) => new Promise((resolve, reject) => {
   const req = http.request(url, { method: 'POST' }, res => {
@@ -82,7 +90,7 @@ const post = (url, body) => new Promise((resolve, reject) => {
   req.on('error', reject)
   req.end(body)
 })
-if (action !== 'dawn' && action !== 'wait') post(`http://127.0.0.1:${apiPort}/${action}`, JSON.stringify(args))
+if (!['dawn', 'wait', 'incidents'].includes(action)) post(`http://127.0.0.1:${apiPort}/${action}`, JSON.stringify(args))
   .then(JSON.parse)
   // the catalogue is long by nature and read once: it is the one answer not cut down to 1500 characters
   .then(j => console.log(verbose ? JSON.stringify(j, null, 1) : capOutput(terse(j), action === 'help' ? 6000 : undefined)))

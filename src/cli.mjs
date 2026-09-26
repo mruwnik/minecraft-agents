@@ -152,7 +152,7 @@ export const bedtime = s => s.night && !s.busy && !s.asleep && s.bedNear && !s.h
 
 // mc without MC_HOME knows no body. It used to fall back to the first one (Claude's): whoever ran bot/mc from a drifted shell drove somebody else's body
 
-export const noHomeError = (home, action) => home || ['clock', 'dawn'].includes(action) ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
+export const noHomeError = (home, action) => home || ['clock', 'dawn', 'incidents'].includes(action) ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
 
 // clock.json as read from disk; null when it was caught mid-write (the next look, a few seconds on, finds it whole)
 export function parseClock (text) {
@@ -195,4 +195,36 @@ export function checkFailure (file, stderr) {
   const line = lines[0].match(/:(\d+)$/)?.[1]
   const error = lines.find(l => /^\w*Error\b/.test(l))
   return error ? `${file}${line ? `:${line}` : ''}: ${error}` : `${file}: node --check failed`
+}
+
+// ./mc incidents [since=<minutes|ISO>] (autopilot card): what went wrong across every agent since a time, one line each,
+// newest last, for a lead session that resumes and asks "what happened while I was away?". The folders are read by
+// tools/incidents.mjs; this is the shaping, pure, in the one file tools/mc.mjs may import.
+export const INCIDENT_TYPES = ['died', 'body_down', 'kicked', 'routine_stopped', 'stuck']
+
+export function sinceTime (since, now = Date.now()) {
+  if (since === undefined) return now - 60 * 60000
+  if (typeof since === 'number') return now - since * 60000
+  const at = Date.parse(since)
+  if (Number.isNaN(at)) throw new Error(`since=${since} is neither minutes nor an ISO time (since=90, since=2026-09-26T12:00:00Z)`)
+  return at
+}
+
+const incidentPos = pos => pos && typeof pos === 'object' ? ['x', 'y', 'z'].map(k => Math.floor(pos[k])).join(',') : (pos || '-')
+const incidentReason = e => {
+  if (e.type === 'died') return e.cause ?? '-'
+  if (e.type === 'body_down') return [e.exit !== undefined && `exit ${e.exit}`, e.advice ?? e.reason].filter(Boolean).join(': ')
+  if (e.type === 'routine_stopped') return `${e.reason}${e.step ? ` at ${e.step}` : ''}`
+  return e.reason ?? '-'
+}
+const parseEvent = line => { try { return JSON.parse(line) } catch { return null } }
+
+// logs: [{ agent, text }], the whole events.jsonl of each agent folder
+export function incidentLines (logs, since, now = Date.now()) {
+  const from = sinceTime(since, now)
+  return logs
+    .flatMap(({ agent, text }) => text.split('\n').filter(Boolean).map(parseEvent).filter(e => e && INCIDENT_TYPES.includes(e.type)).map(e => ({ agent, ...e })))
+    .filter(e => Date.parse(e.t) >= from)
+    .sort((a, b) => Date.parse(a.t) - Date.parse(b.t))
+    .map(e => `${e.t} ${e.agent} ${e.type} ${incidentPos(e.pos)} ${incidentReason(e)}`)
 }
