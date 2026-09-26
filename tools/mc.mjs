@@ -41,7 +41,13 @@ if (action === 'wait') {
   const home = process.env.MC_HOME ?? path.join(import.meta.dirname, '..')
   const eventsFile = path.join(home, 'events.jsonl')
   const offsetFile = path.join(home, '.wait-offset')
-  const me = JSON.parse(fs.readFileSync(configFile, 'utf8')).username
+  const { username: me, chat = {} } = JSON.parse(fs.readFileSync(configFile, 'utf8'))
+  // the agent roster (src/players.mjs agentNames, inlined: tools/mc.mjs may import nothing but src/cli.mjs, #148),
+  // so waitReport's chattiness filter can tell a human sender (not one of these) from another agent body
+  const agentsDir = path.join(home, '..')
+  const agents = fs.existsSync(agentsDir)
+    ? fs.readdirSync(agentsDir).filter(n => fs.existsSync(path.join(agentsDir, n, 'config.json')))
+    : []
   const size = () => fs.existsSync(eventsFile) ? fs.statSync(eventsFile).size : 0
   const saved = fs.existsSync(offsetFile) ? Number(fs.readFileSync(offsetFile, 'utf8')) : NaN
   let offset = saved <= size() ? saved : size()
@@ -49,7 +55,7 @@ if (action === 'wait') {
   const tick = () => {
     const fresh = Buffer.alloc(size() - offset)
     if (fresh.length) fs.readSync(fs.openSync(eventsFile, 'r'), fresh, 0, fresh.length, offset)
-    const report = waitReport(fresh.toString('utf8'), me)
+    const report = waitReport(fresh.toString('utf8'), me, Date.now(), chat, agents)
     offset += report.consumed
     fs.writeFileSync(offsetFile, String(offset))
     if (!report.lines.length && Date.now() < deadline) return setTimeout(tick, 1000)

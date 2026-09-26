@@ -1,7 +1,7 @@
 // The one-line result renderer that ./mc prints (src/cli.mjs, imported by nothing but tools/mc.mjs and lib.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP } from '../src/cli.mjs'
+import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP, waitReport } from '../src/cli.mjs'
 
 // `eat` answers ate= and gained= (AGENT_GUIDE), the same names a long result renders as +item:n and ate=item:n. The short
 // renderer dropped both as long-result bookkeeping: Chani ate at food 7 and read `ok food=10 health=10`, then reported
@@ -49,4 +49,47 @@ for (const [name, args, expected] of errorRows) {
 
 test('MAP_ARG_HELP: says what items= wants, with an example of both spellings', () => {
   assert.equal(MAP_ARG_HELP('items'), `items= wants JSON, e.g. items='{"bread":7,"oak_planks":2}' (or the shorthand items=bread:7,oak_planks:2)`)
+})
+
+// ---------------------------------------------------------------- waitReport: chattiness (card 2e032c4a)
+// no chat= at all is today's behaviour: chattiness defaults to 1, which hears everything (the lowest weight is 0.1)
+const chatLine = (from, message, type = 'chat') => JSON.stringify({ seq: 1, t: '2026-09-26T18:00:00Z', type, from, message }) + '\n'
+const at = Date.parse('2026-09-26T18:00:01Z')
+
+test('waitReport: with no chat config, a greeting still wakes the wait (unchanged default behaviour)', () =>
+  assert.deepEqual(waitReport(chatLine('Chani', 'good morning'), 'Jizo', at).lines, ['chat from=Chani message=good morning']))
+
+const chattinessRows = [
+  ['chattiness 1 hears a greeting', 'good morning', { chattiness: 1 }, ['chat from=Chani message=good morning']],
+  ['chattiness 0.5 does not hear a greeting, and says so', 'good morning', { chattiness: 0.5 },
+    ['skipped 1 chat line below your chattiness (0.5): ./mc events type=chat n=1']],
+  ['chattiness 0.5 hears a question naming me', 'Jizo, are you there?', { chattiness: 0.5 }, ['chat from=Chani message=Jizo, are you there?']],
+  ['chattiness 0 hears nothing from open chat', 'creeper!', { chattiness: 0 },
+    ['skipped 1 chat line below your chattiness (0): ./mc events type=chat n=1']],
+  ['a denied sender is skipped even asking a question', 'help, where are you?', { chattiness: 1, deny: ['Chani'] },
+    ['skipped 1 chat line below your chattiness (1): ./mc events type=chat n=1']]
+]
+for (const [name, message, chat, lines] of chattinessRows) {
+  test(`waitReport: ${name}`, () => assert.deepEqual(waitReport(chatLine('Chani', message), 'Jizo', at, chat).lines, lines))
+}
+
+test('waitReport: a whisper still wakes at chattiness 0 (whisper to me always weighs 1)', () =>
+  assert.deepEqual(waitReport(chatLine('Chani', 'hi', 'whisper'), 'Jizo', at, { chattiness: 0 }).lines, ['whisper from=Chani message=hi']))
+
+test('waitReport: deny reaches a whisper too, since that is what deny is for', () =>
+  assert.deepEqual(waitReport(chatLine('Chani', 'hi', 'whisper'), 'Jizo', at, { chattiness: 1, deny: ['Chani'] }).lines,
+    ['skipped 1 chat line below your chattiness (1): ./mc events type=chat n=1']))
+
+test('waitReport: a plain sender not in the agent roster gets the human bonus (0.8), heard at chattiness 0.5', () =>
+  assert.deepEqual(waitReport(chatLine('Steve', 'the wheat is ripe'), 'Jizo', at, { chattiness: 0.5 }, ['Jizo', 'Chani']).lines,
+    ['chat from=Steve message=the wheat is ripe']))
+
+test('waitReport: the same plain line from an agent (in the roster) is not heard at chattiness 0.5', () =>
+  assert.deepEqual(waitReport(chatLine('Chani', 'the wheat is ripe'), 'Jizo', at, { chattiness: 0.5 }, ['Jizo', 'Chani']).lines,
+    ['skipped 1 chat line below your chattiness (0.5): ./mc events type=chat n=1']))
+
+test('waitReport: skipped chat lines are counted alongside a wake-worthy line that is not chat at all', () => {
+  const text = chatLine('Chani', 'good morning') + JSON.stringify({ seq: 2, t: '2026-09-26T18:00:02Z', type: 'dawn' }) + '\n'
+  assert.deepEqual(waitReport(text, 'Jizo', at, { chattiness: 0.5 }).lines,
+    ['dawn', 'skipped 1 chat line below your chattiness (0.5): ./mc events type=chat n=1'])
 })
