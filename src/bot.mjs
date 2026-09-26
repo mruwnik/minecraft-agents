@@ -31,7 +31,7 @@ import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice } from './caveexit.mjs'
-import { cropPocket, mayTrample } from './lib/path.mjs'
+import { farmWalk, legFlags } from './lib/path.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { facesForHalf } from './cover.mjs'
@@ -228,20 +228,20 @@ const watchTheMeal = (food, timeoutMs) => {
   return meal
 }
 
-// Three ways of getting about: walking only (the default: digging walks tunnelled through hills and left pillars),
-// digging + scaffolding for `mine` and for walks that ask with dig=true, and walking over crops for walks that ask with
-// trample=true (the last resort out of a crop pocket, card 68f4e331: a body a sweep left with crops on all four sides)
+// Two ways of getting about: walking only (the default: digging walks tunnelled through hills and left pillars), and
+// digging + scaffolding for `mine` and for walks that ask with dig=true. Both cross planted cells only where there is
+// no other way, at a walking pace (src/lib/path.mjs farmWalk and legFlags, card fcd996fe)
 let walkMoves = null
 let digMoves = null
-let trampleMoves = null
 let digging = false
 // every cell the pathfinder aimed a scaffolding placement at during this task. Chani's cobblestone went that way twice with
 // nothing in the reply to say so (#111), so a task now reports what it built beside its drops and takes back what it can reach
 let scaffolded = []
 // >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
 let handPlacing = 0
-function makeMoves (dig, trample = false) {
-  const moves = new Movements(bot)
+const FarmMovements = farmWalk(Movements)
+function makeMoves (dig) {
+  const moves = new FarmMovements(bot)
   moves.allowParkour = true
   moves.canOpenDoors = true
   for (const block of Object.values(bot.registry.blocksByName)) if (plansFromOwnCell(block.name)) moves.emptyBlocks.add(block.id)
@@ -249,9 +249,6 @@ function makeMoves (dig, trample = false) {
   // (Vivenna's and Aviendha's cherry gates: lead said "no way", walks went over the fence by parkour or not at all)
   for (const block of Object.values(bot.registry.blocksByName)) if (block.name.endsWith('_fence_gate')) moves.openable.add(block.id)
   for (const block of Object.values(bot.registry.blocksByName)) if (noFooting(block.name)) moves.fences.add(block.id)
-  // a walk straight across a planted field broke the crops on the way (goto is not a licence to trample): route round them,
-  // unless trample=true asked for exactly that. Farmland itself stays walkable, so an empty bed is still a path.
-  if (!trample) for (const block of Object.values(bot.registry.blocksByName)) if (breaksUnderfoot(block.name)) moves.blocksToAvoid.add(block.id)
   moves.canDig = dig
   Object.assign(moves, waterWary(dig))
   moves.allow1by1towers = dig
@@ -276,9 +273,9 @@ function makeMoves (dig, trample = false) {
   for (const guard of ['dontMineUnderFallingBlock', 'dontCreateFlow']) Object.defineProperty(moves, guard, { get: () => true, set () {} })
   return moves
 }
-function useMoves (dig, trample = false) {
+function useMoves (dig) {
   digging = dig
-  bot.pathfinder.setMovements(dig ? digMoves : trample ? trampleMoves : walkMoves)
+  bot.pathfinder.setMovements(dig ? digMoves : walkMoves)
 }
 
 function connect () {
@@ -306,7 +303,6 @@ function connect () {
     eyes = makeEyes(bot, { textureDir: path.join(ROOT, 'textures'), snapshotDir: path.join(HOME, 'snapshots') })
     walkMoves = makeMoves(false)
     digMoves = makeMoves(true)
-    trampleMoves = makeMoves(false, true)
     // The pathfinder towers and bridges with the blocks I carry and says nothing about it (Chani's cobblestone, twice).
     // It aims at one cell several times a tick and its own place call rejects over blocks the server did put down, so the
     // clicks are only candidates: what it actually built is read off the world when the task ends (scaffoldBuilt).
@@ -356,7 +352,7 @@ function connect () {
     const walk = goal => {
       lastWalkGoal = goal
       bot.pathfinder.thinkTimeout = thinkBudget(goalDistance(goal, bot.entity.position))
-      return plainWalk(goal).finally(() => { bot.pathfinder.thinkTimeout = THINK_CAP_MS })
+      return plainWalk(goal).finally(() => { bot.pathfinder.thinkTimeout = THINK_CAP_MS; sprintFor([]) })
     }
     const arrived = goal => {
       const feet = feetCell(bot.entity.position, bot.entity.onGround)
@@ -405,6 +401,11 @@ function connect () {
     bot.on('goal_updated', () => { goalSetAt = Date.now() })
     bot.on('path_reset', reason => { pathResets.push({ reason, at: Date.now() }); if (pathResets.length > 200) pathResets.shift() })
     bot.on('path_update', r => { livePath = r.path })
+    // a leg with a crop or farmland node in it walks without sprinting: the executor sprint-jumps a straight line it cannot
+    // walk in one go, and a landing is what tramples farmland (card fcd996fe). Read per tick off the movements in use
+    const sprintFor = leg => { for (const moves of [walkMoves, digMoves]) moves.allowSprinting = legFlags(leg, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name).allowSprinting }
+    bot.on('path_update', r => sprintFor(r.path))
+    bot.on('goal_reached', () => sprintFor([]))
     // registered after the pathfinder's own tick, so a key pressed here survives until the next physics step (see idleNudge)
     // ...and released here, before it: what is pressed when my turn comes is then the pathfinder's own choice for this tick
     bot.prependListener('physicsTick', () => {
@@ -2775,7 +2776,7 @@ const long = {
       if (!fn) throw new Error(`${where}: unknown action`)
       const refusal = refusalFor(action, args)
       if (refusal) throw new Error(`${where}: ${refusal}`)
-      useMoves(mayDig(action, args), mayTrample(action, args))
+      useMoves(mayDig(action, args))
       const r = await Promise.resolve().then(() => fn(args)).catch(e => { throw new Error(`${where}: ${explainFailure(e.message)}`) })
       results.push({ action, ...r })
     }
@@ -3299,9 +3300,7 @@ const noPathEvidence = () => {
 }
 const explainFailure = message => {
   const boxed = amBoxedIn()
-  // a body deep in its own rows, crops on every side (src/lib/path.mjs cropPocket, card 68f4e331): the crop to harvest, or trample=true
-  const pocket = bot?.entity ? cropPocket(cellAt, feetCell(bot.entity.position, bot.entity.onGround), lastWalkGoal) : null
-  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed, pocket), dig: digging, boxed, ...noPathEvidence() })
+  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, ...noPathEvidence() })
 }
 // the path a walk would take, searched the way path_to searches it: one 40 ms slice at a time until it is done or the budget is out
 function searchPath (aim, range) {
@@ -3490,7 +3489,7 @@ async function runLong (name, args, given = args) {
   task = mine
   console.log(`[task ${mine.id}] ${name} ${JSON.stringify(given)}`)
   gatesPassed.clear()
-  useMoves(mayDig(name, args), mayTrample(name, args))
+  useMoves(mayDig(name, args))
   await leaveFenceCell().catch(() => {})
   scaffolded = []
   const before = inventoryCounts()
@@ -3643,8 +3642,7 @@ function makeApi (composite, a, alive) {
     if (!fn) throw new Error(`${composite}: no action called ${name}`)
     const refusal = refusalFor(name, args)
     if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
-    // a composite asked to trample (farm.maintain trample=true) tramples on every walk of its own, the primitives' short walks included
-    useMoves(mayDig(name, args), mayTrample(name, args) || mayTrample(composite, a))
+    useMoves(mayDig(name, args))
     return Promise.resolve().then(() => fn(args)).then(
       r => { failures.delete(name); stepsDone++; return r ?? {} },
       e => {

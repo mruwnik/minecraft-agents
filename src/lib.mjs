@@ -338,7 +338,7 @@ export const PRIMITIVES = {
   protect: { section: 'map', args: 'name= x1= y1= z1= x2= y2= z2=', doc: 'protect a box of the world, mine or shared' },
   unprotect: { section: 'map', args: 'name=', doc: 'drop a protected area' },
   // ---- move
-  goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=] [trample=]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true, and steps round crops unless trample=true' },
+  goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true, and crosses planted cells only where there is no other way, at a walking pace' },
   follow: { section: 'move', args: 'player=', doc: 'keep walking after someone until stop' },
   boat_state: { section: 'move', args: '[id=]', doc: 'read nearby boats, their passenger IDs and UUIDs, and the boat I ride' },
   boat_place: { section: 'move', args: 'item= x= y= z=', doc: 'place one carried boat at a checked water or ground cell and report its entity ID' },
