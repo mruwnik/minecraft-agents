@@ -96,6 +96,11 @@ test('farmWalk: a drop and a parkour leap onto farmland are dropped; a jump up o
   ], cells), ['1,65,0:2', '-1,65,0:2', '0,63,-1:1'])
 })
 
+test('farmWalk: the jump out of a one-deep hole ringed by wheat on farmland stays, priced as a crop step (the trap the human set)', () => {
+  const cells = { '1,64,0': 'farmland', '1,65,0': 'wheat', '-1,64,0': 'farmland', '-1,65,0': 'wheat' }
+  assert.deepEqual(neighbours([step(1, 65, 0, 2), step(-1, 65, 0, 2)], cells), [`1,65,0:${2 + CROP_STEP}`, `-1,65,0:${2 + CROP_STEP}`])
+})
+
 test('farmWalk: bare farmland at the same level is free, as it always was', () => {
   assert.deepEqual(neighbours([step(1, 64, 0, 1)], { '1,63,0': 'farmland' }), ['1,64,0:1'])
 })
