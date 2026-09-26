@@ -75,13 +75,15 @@ export default {
       skippedPlaced: skippedPlaced ? `${skippedPlaced} were placed wood (posts and beams in somebody's build), not trees, and were left alone` : undefined
     }
 
-    // mining ends in the pit it dug, and a walk (which may not dig) cannot leave one: get back to where I started
+    // mining ends in the pit it dug (buried ore is reached by a dig walk down), and a walk that may not dig cannot leave
+    // one: get back to where I started, digging the way up (a shaft is climbed by a niche ladder) when walking cannot
     const home = { x: Math.floor(start.x), y: Math.floor(start.y), z: Math.floor(start.z), range: 2 }
     const { status } = await api.act('path_to', home)
     if (status !== 'success') {
-      const stuck = await api.act('goto', home).then(() => null, e => e)
-      if (stuck) return { ...summary, pit: 'you are in the pit you dug and could not get back out: goto with dig=true' }
-      summary.climbedOut = 'back where you started'
+      const walked = await api.act('goto', home).then(() => true, () => false)
+      const dug = walked || await api.act('goto', { ...home, dig: true }).then(() => true, () => false)
+      if (!dug) return { ...summary, pit: 'you are in the pit you dug and could not get back out, even digging: pillar_up, or climb' }
+      summary.climbedOut = walked ? 'back where you started' : 'back where you started (dug my way up)'
     }
 
     const holes = holesLeft(groundBefore, ground(), Object.keys(api.inv()), api.solid).sort((p, q) => p.y - q.y)

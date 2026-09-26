@@ -5,7 +5,7 @@
 // stand on within range is a refusal in a millisecond, with the reason, not a five-second timeout.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cellsWithin, standable, noStanding, WORK_RANGE } from '../src/walk.mjs'
+import { cellsWithin, standable, noStanding, walkRefusal, WORK_RANGE } from '../src/walk.mjs'
 
 // the pathfinder's GoalNear counts integer node distance: dx²+dy²+dz² <= range²
 for (const [range, count] of [[0, 1], [1, 7], [1.5, 19], [2, 33], [3, 123]]) {
@@ -65,6 +65,16 @@ for (const [name, at, target, range, expected] of [
     'nowhere to stand within 2 of 500,62,500: that part of the world is not loaded here (unloaded:33): walk nearer first']
 ]) {
   test(`noStanding: ${name}`, () => assert.equal(noStanding(at, target, range), expected))
+}
+
+// a dig walk makes its own room: ore three under the dirt has no air cell within 3, and mine.get's dig walk was refused
+// there as "mid-air, or inside a block" every time (Hollis, 09-26: iron_ore at 27,59,-35 under plain dirt)
+const BURIED = 'nowhere to stand within 3 of 5,57,-80: nothing to stand on there (mid-air, or inside a block)'
+for (const [name, dig, expected] of [
+  ['a walk that may not dig is refused at a buried cell', false, BURIED],
+  ['a dig walk to a buried cell digs its way there', true, null]
+]) {
+  test(`walkRefusal: ${name}`, () => assert.equal(walkRefusal(world({}), { x: 5, y: 57, z: -80, range: 3 }, { dig }), expected))
 }
 
 // the arm reaches 4.5 from the eyes; a node one up and four across from a ground cell is 4.12 away, five across is 5.1

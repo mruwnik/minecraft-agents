@@ -66,6 +66,10 @@ export const noStanding = (cellAt, target, range) => {
   return `${head}: nothing to stand on there (mid-air, or inside a block)`
 }
 
+// the judgement a walk makes before it searches: a dig walk makes its own room (ore under a few blocks of dirt has no air
+// cell within reach, and mine.get's walk down to it was refused as "mid-air, or inside a block": Hollis, 09-26)
+export const walkRefusal = (cellAt, aim, { dig = false } = {}) => dig ? null : noStanding(cellAt, aim, aim.range)
+
 // how long a search may think, by how far off the goal is. The plugin gives every search 5 s of wall time (about 16k nodes):
 // a goal three blocks off that is not found in 1.5 s (5k nodes) is walled in, and the job wants to hear so then, not 3.5 s
 // later; a walk across the map keeps the full 5 s. Only walks are budgeted: reflexes (flee, fight) keep the plugin's default
