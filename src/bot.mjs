@@ -658,6 +658,17 @@ function connect () {
     lastAirMeta = { entityId: p.entityId, own, who: bot.entities[p.entityId]?.username ?? bot.entities[p.entityId]?.name ?? null, air: air.value, packet: p.metadata.map(m => `${m.key}:${m.type}=${JSON.stringify(m.value)}`).join(' ') }
     if (own) console.log('[air_meta]', JSON.stringify(lastAirMeta))
   })
+  // card 962beec2, hypothesis 2: a move of the body's OWN entity by the entity packets (not the `position` packet, so
+  // no forcedMove and no resend) puts the body where the server holds it without a word. Said, and kept as a server
+  // position for the oxygen event and the state line
+  for (const kind of ['entity_teleport', 'sync_entity_position', 'rel_entity_move', 'entity_move_look']) {
+    bot._client.on(kind, p => {
+      if (!bot.entity || p.entityId !== bot.entity.id) return
+      const at = p.x !== undefined ? { x: p.x, y: p.y, z: p.z } : null
+      if (at) lastServerPos = { ...at, at: Date.now() }
+      emit('server_moved_me', { packet: kind, ...(at ? { to: [at.x, at.y, at.z].map(n => Math.round(n * 100) / 100).join(',') } : { delta: [p.dX, p.dY, p.dZ].join(',') }), client: bot.entity.position.toArray().map(n => Math.round(n * 100) / 100).join(',') })
+    })
+  }
   bot.on('physicsTick', () => { if (tick % 2 === 0 && ready) doorTick() })
   let lastSurfaceTrace = 0
   // a walk or the idle nudge can reset the controls between reflex ticks: the swim is pressed on every physics tick until the body breathes
