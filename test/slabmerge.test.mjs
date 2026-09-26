@@ -11,6 +11,10 @@ const at = { x: -1, y: 62, z: -84 }
 const bottomSlab = (name = 'oak_slab', waterlogged = false) => ({ name, properties: { type: 'bottom', ...(waterlogged ? { waterlogged: 'true' } : {}) } })
 const topSlab = (name = 'oak_slab', waterlogged = false) => ({ name, properties: { type: 'top', ...(waterlogged ? { waterlogged: 'true' } : {}) } })
 const doubleSlab = (name = 'oak_slab') => ({ name, properties: { type: 'double' } })
+// what `place` actually hands the guard: a real mineflayer block, properties behind a method, no .properties field at
+// all. A field test at jizo-melon-patch caught this the wrong way round - every unit test above used the wrapped
+// shape, so the guard's dependence on a plain .properties field went unnoticed until a live bottom slab refused to refuse.
+const rawBottomSlab = (name = 'oak_slab') => ({ name, getProperties: () => ({ type: 'bottom' }) })
 
 for (const [name, existing, item, expected] of [
   ['a dry bottom slab refuses another slab', bottomSlab(), 'oak_slab', '-1,62,-84 holds a bottom slab: dig it first, placing another merges them into a full block'],
@@ -22,7 +26,8 @@ for (const [name, existing, item, expected] of [
   ['a non-slab item onto a bottom slab is somebody else\'s problem (occupiedBy blocks it)', bottomSlab(), 'cobblestone', null],
   ['a bottom slab is not itself a risk without something to place', bottomSlab(), undefined, null],
   ['no existing block: nothing to merge with', null, 'oak_slab', null],
-  ['a plain block in the way is not a slab-merge risk', { name: 'stone', properties: {} }, 'oak_slab', null]
+  ['a plain block in the way is not a slab-merge risk', { name: 'stone', properties: {} }, 'oak_slab', null],
+  ['a real mineflayer block (properties behind getProperties(), not a .properties field) refuses too', rawBottomSlab(), 'oak_slab', '-1,62,-84 holds a bottom slab: dig it first, placing another merges them into a full block']
 ]) {
   test(`slabMergeRefusal: ${name}`, () => assert.equal(slabMergeRefusal(at, existing, item), expected))
 }

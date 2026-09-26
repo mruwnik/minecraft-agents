@@ -8,9 +8,15 @@
 // occupiedBy treats a matching name there as already done. Only a bottom slab is unsafe, wet or dry, whatever wood.
 const isSlabItem = name => typeof name === 'string' && /_slab$/.test(name)
 
+// `existing` is whatever the caller has to hand: a real mineflayer block (properties live behind getProperties(),
+// there is no plain .properties field on it) or an already-wrapped block-like object (api.block's shape, and what
+// this module's own tests build). Read either without caring which: a live field test against a real bottom slab
+// found this the hard way - existing.properties was always undefined on the real thing, so the refusal never fired.
+const propsOf = block => block?.getProperties?.() ?? block?.properties ?? {}
+
 export function slabMergeRefusal ({ x, y, z }, existing, item) {
   if (!isSlabItem(item)) return null
   if (!existing || !isSlabItem(existing.name)) return null
-  if (existing.properties?.type !== 'bottom') return null
+  if (propsOf(existing).type !== 'bottom') return null
   return `${x},${y},${z} holds a bottom slab: dig it first, placing another merges them into a full block`
 }
