@@ -35,6 +35,7 @@ import { noPathAdvice, inHole } from './caveexit.mjs'
 import { farmWalk, legFlags, stepsOff } from './lib/path.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
+import { carryReport, failedResult, deathLine, deathCancel } from './composite.mjs'
 import { facesForHalf } from './cover.mjs'
 import { slabMergeRefusal } from './slabmerge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
@@ -122,6 +123,8 @@ let saidDeath = null
 let lastWound = null
 let lastStood = null
 let lastCarried = null
+// the last death: when, where the body fell and what fell with it, for the result of the task it ended (src/composite.mjs)
+let lastDeath = null
 let diedAt = 0
 let mcData = null
 let ready = false
@@ -531,7 +534,11 @@ function connect () {
     // from the snapshot, not from the world: by the time a death is handled the server has already emptied the
     // inventory, so a live read says the body died carrying nothing (03:14Z, the first died line with a cause on it)
     const kit = deathKit(lastCarried ?? {})
-    emit('died', { ...deathReport({ pos, said, wound: lastWound, now: Date.now() }), ...(kit ? { carried: kit } : {}) })
+    const line = deathReport({ pos, said, wound: lastWound, now: Date.now() })
+    emit('died', { ...line, ...(kit ? { carried: kit } : {}) })
+    lastDeath = { at: diedAt, pos, kit }
+    // a death ends the task it interrupted: its FAIL line says so and where the kit lies (card 8946c03a)
+    if (task) cancelTask(deathCancel({ pos, cause: line.cause }))
     saidDeath = null
   }
   // a beat, so the death message and the health packet can land in either order: they arrive in the same read, and
@@ -3785,7 +3792,11 @@ async function runLong (name, args, given = args) {
   const work = long[name](args).then(tidy).then(
     r => settle().then(() => finish({ ok: true, ...r })),
     // a cancelled task fails with the pathfinder's vague "goal was changed": say why it was cancelled instead
-    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => finish({ ...b, ...e.report, ok: false, error: lastCancel?.id === mine.id && !e.report?.restorationPending ? `cancelled: ${lastCancel.why}` : explainFailure(e.message) }))
+    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => {
+      // a death while it ran: the kit lies where the body fell, and the driver collects there first
+      const carried = deathLine({ diedAt: lastDeath?.at, startedAt: mine.started, pos: lastDeath?.pos, kit: lastDeath?.kit })
+      return finish(failedResult({ base: b, report: { ...e.report, ...(carried ? { carried } : {}) }, cancelled: lastCancel?.id === mine.id, why: lastCancel?.why, message: e.message, explain: explainFailure }))
+    })
   )
   mine.work = work
   const timeout = (args.timeout ?? 60) * 1000
@@ -3993,7 +4004,8 @@ async function runComposite (name, mod, a) {
   const { api, notes, report } = makeApi(name, a, alive)
   const outcome = await mod.run(api, a).then(
     r => ({ stopped: 'done', ...r }),
-    e => { if (e instanceof HandBack) return { stopped: e.reason }; if (name === 'villager.roll') e.report = { ...report }; throw e })
+    // whatever ends it early (stop, a death, a step that threw), the report built so far rides out on the error (src/composite.mjs)
+    e => { if (e instanceof HandBack) return { stopped: e.reason }; throw carryReport(e, report, notes) })
   return { ...report, ...outcome, notes: notes.length ? notes.join('; ') : undefined }
 }
 
