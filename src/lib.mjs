@@ -10,6 +10,7 @@ export * from './lib/code.mjs'
 export * from './lib/events.mjs'
 export * from './lib/chests.mjs'
 export * from './lib/craft.mjs'
+export * from './lib/inventory.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -347,15 +348,6 @@ export function placeOutcome (placed, skipped, verb = 'placed', already = 0, cel
   return why ? { [verb]: placed, skipped: skipped.length, why, ...there, ...at } : { [verb]: placed, ...there, ...at }
 }
 
-// the server tells a player which of its items just broke with an entity status (47 main hand .. 52 boots). Nothing else does: my axe
-// wore out unnoticed and the body, unarmed without knowing it, ran from a zombie it should have fought
-const BROKEN = { 47: 'hand', 48: 'off-hand', 49: 'head', 50: 'torso', 51: 'legs', 52: 'feet' }
-export const brokenSlot = status => BROKEN[status] ?? null
-
-// where an item goes when `equip` is given no destination: a helmet "equipped" into the hand answered ok and protected nothing
-const SLOTS = [[/_helmet$|^carved_pumpkin$/, 'head'], [/_chestplate$|^elytra$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet'], [/^shield$/, 'off-hand']]
-export const equipSlot = itemName => SLOTS.find(([pattern]) => pattern.test(itemName))?.[1] ?? 'hand'
-
 // fight or run. Running at 8 health was too late for a body without armour: two zombies took 20 health in 12 s, and it died fleeing.
 // So run earlier the less armour it wears and the more there are of them (never above 16: a fresh body may always try)
 export function shouldFlee (s) {
@@ -499,14 +491,6 @@ export function rangedThreat (s) {
 // Counting every gained item called a round that only dug dirt on the way a success
 export const minedCount = (gone, gained) => gained > 0 ? gone : 0
 
-// the weakest tool that can harvest a block, when none of the carried item types can; null when the block needs no tool or one is carried.
-// mineflayer-tool recurses for ever (until the heap is gone) when asked to equip for a block nothing carried can harvest
-export function missingTool (harvestTools, carriedTypes, nameOf) {
-  if (!harvestTools) return null
-  if (carriedTypes.some(type => harvestTools[type])) return null
-  return nameOf(Number(Object.keys(harvestTools)[0]))
-}
-
 // Standing on a partial block, the pathfinder plans from the cell ABOVE it. Right for farmland and slabs, wrong for a bed: you wake up on
 // it, and in a small hut with a low roof the cell above has no way out (no headroom, the door is one level down). Plan from the bed's cell
 export const plansFromOwnCell = blockName => /_bed$/.test(blockName)
@@ -614,10 +598,6 @@ export const attackRefusal = name => NEVER_FIGHT.has(name)
 // provoked already, and by then the body has about five seconds
 export const fleeUnwinnable = (mobs, range = ENDERMAN_RANGE) =>
   mobs.filter(m => NEVER_FIGHT.has(m.name) && m.dist <= range).sort((a, b) => a.dist - b.dist)[0] ?? null
-
-// tools: [{name (null = bare hand), time, harvests}]. The fastest that is not a weapon; undefined when only a weapon can harvest the block
-const isWeapon = name => /_sword$|^trident$|^mace$/.test(name ?? '')
-export const peacefulTool = tools => tools.filter(t => !isWeapon(t.name) && t.harvests).sort((a, b) => a.time - b.time)[0]
 
 // wraps an action's arguments and remembers which were read, so a reply can name the ones that were not (a misspelt name, mostly)
 export function trackReads (given) {
@@ -836,13 +816,6 @@ export const withDefaultItem = (blocks, item) => blocks.map(b => b.item || item 
 // luring: a lead is on, from its first step TOWARDS the animal (not only once it follows: started beside a gate, lead lost its wheat and gave up with=0)
 // eating: a meal is running. The food in my hand is going into my mouth: taking it out cancelled every meal by a gate (Chani, food 7, 1743 [food away] lines)
 export const foodAway = ({ held, luring, feeding, gateNear, eating = false }) => gateNear && !luring && !feeding && !eating && Object.values(BREEDING_FOOD).some(foods => foods.includes(held))
-
-// lying: where what I tossed still lies 5 s later ('x,y,z'); a thrown item can be picked up after 2 s
-export const giveReport = (player, lying, cameBack = 0) => cameBack > 0
-  ? { cameBack: `${cameBack} came back to you: NOT given. Something stands between you (a fence, a wall, a gate): go and stand on the same side as ${player}, within 2 blocks, and give again` }
-  : lying.length
-  ? { lying: `${lying.join(' ')}: ${player} has not picked it up (full inventory, walked off, or it fell out of their reach). Tell them where it lies, or take it back with collect` }
-  : { taken: 'yes' }
 
 // what the wedge reflex may break by itself to get the body free: it grows back and nobody built it
 // blocks the pathfinder takes for a full cube but that carry nobody: it must neither walk through them nor plan to stand on them (like a fence)
