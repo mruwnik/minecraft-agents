@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blueprints</title>
+<style>
+  :root {
+    --bg: #14171c; --panel: #1c2027; --line: #2c333d; --ink: #dfe4ec; --dim: #8b95a5;
+    --up: #6ee7a8; --down: #55606f; --human: #f08ad0; --place: #d9b25f; --zone: #5b8fd6; --warn: #e0a030; --err: #f0907e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .04em; }
+  header a { color: var(--zone); text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+  header .muted { color: var(--dim); }
+  header .spacer { flex: 1; }
+  main { display: flex; height: calc(100vh - 38px); }
+  aside { width: 380px; flex: none; border-right: 1px solid var(--line); overflow-y: auto; background: var(--panel); scrollbar-color: var(--dim) transparent; }
+  aside h2, #detail h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  aside section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .bp { padding: 7px 8px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; }
+  .bp:hover { background: #232932; }
+  .bp.sel { border-color: var(--place); background: #232932; }
+  .bp .head { display: flex; gap: 8px; align-items: baseline; }
+  .bp .name { color: var(--place); font-weight: 600; }
+  .bp .title { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bp .meta { color: var(--dim); display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+  .bp .kind { color: var(--zone); }
+  .pill { display: inline-block; padding: 0 6px; border-radius: 9px; font-size: 11px; line-height: 16px; border: 1px solid var(--line); color: var(--dim); }
+  .pill.ok { color: var(--up); border-color: rgba(110,231,168,0.4); }
+  .pill.warning { color: var(--warn); border-color: rgba(224,160,48,0.5); }
+  .pill.error, .pill.parse { color: var(--err); border-color: rgba(240,144,126,0.5); }
+  #detail { flex: 1; min-width: 0; overflow-y: auto; padding: 14px 18px 30px; scrollbar-color: var(--dim) transparent; }
+  #detail h3 { margin: 0; font-size: 15px; color: var(--place); letter-spacing: .03em; }
+  #detail .titleRow { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  #detail .desc { color: var(--ink); margin: 6px 0 2px; max-width: 90ch; }
+  #meta { color: var(--dim); display: flex; gap: 6px 18px; flex-wrap: wrap; margin: 6px 0 14px; }
+  #meta b { color: var(--ink); font-weight: 500; }
+  #builds { margin: -6px 0 14px; color: var(--dim); }
+  #builds .place { color: var(--place); }
+  #builds .stale { color: var(--warn); }
+  #empty { color: var(--dim); padding: 30px 0; }
+  .block { margin-bottom: 22px; }
+  #layers { display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: flex-start; }
+  .layer { display: flex; flex-direction: column; gap: 5px; }
+  .layer .cap { color: var(--dim); display: flex; gap: 8px; align-items: baseline; }
+  .layer .cap b { color: var(--ink); font-weight: 600; }
+  .layer canvas { display: block; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; cursor: crosshair; background: #0e1015; }
+  #gridRow { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-start; }
+  #legend { display: flex; flex-direction: column; gap: 5px; font-size: 12px; padding-top: 22px; min-width: 200px; }
+  .legendItem { display: flex; align-items: center; gap: 7px; }
+  .legendItem .tok { display: inline-block; width: 1.2em; text-align: center; color: var(--dim); }
+  .legendItem .n { color: var(--dim); margin-left: auto; padding-left: 10px; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.18); flex: none; }
+  .swatch.solid { background: repeating-linear-gradient(-45deg, rgba(139,149,165,0.7) 0 2px, transparent 2px 5px); border-color: #4b5462; }
+  #hover { color: var(--ink); min-height: 1.45em; margin-top: 10px; overflow-wrap: anywhere; }
+  #hover .muted { color: var(--dim); }
+  #bill { display: grid; grid-template-columns: max-content max-content 1fr; gap: 3px 12px; align-items: center; max-width: 560px; }
+  #bill .item { color: var(--ink); }
+  #bill .n { color: var(--dim); text-align: right; }
+  #bill .bar { height: 8px; border-radius: 4px; background: rgba(217,178,95,0.75); min-width: 2px; }
+  #billNote { color: var(--dim); margin-top: 8px; }
+  #lint div { padding: 2px 0 2px 14px; position: relative; max-width: 100ch; }
+  #lint div::before { content: '•'; position: absolute; left: 0; }
+  #lint .ok { color: var(--up); }
+  #lint .warning { color: var(--warn); }
+  #lint .error, #lint .parse { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <h1>blueprints</h1>
+  <a href="/">← agent bodies</a>
+  <span class="muted" id="counts">—</span>
+  <span class="spacer"></span>
+  <span class="muted" id="status">connecting…</span>
+</header>
+<main>
+  <aside>
+    <section>
+      <h2>the library</h2>
+      <div id="list"></div>
+    </section>
+  </aside>
+  <div id="detail">
+    <div id="empty">pick a blueprint</div>
+    <div id="card" hidden>
+      <div class="titleRow"><h3 id="name"></h3><span id="title"></span><span id="statusPill" class="pill"></span></div>
+      <div class="desc" id="desc"></div>
+      <div id="meta"></div>
+      <div id="builds"></div>
+      <div class="block">
+        <h2>layers, from the ground up</h2>
+        <div id="gridRow">
+          <div id="layers"></div>
+          <div id="legend"></div>
+        </div>
+        <div id="hover"></div>
+      </div>
+      <div class="block">
+        <h2>bill of materials</h2>
+        <div id="bill"></div>
+        <div id="billNote"></div>
+      </div>
+      <div class="block">
+        <h2>what lint says</h2>
+        <div id="lint"></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockCount } from './blueprint.mjs'
+
+const CELL_PX = 22
+const POLL_MS = 5000
+const el = id => document.getElementById(id)
+const tag = (name, cls, text) => { const e = document.createElement(name); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e }
+
+let library = { at: 0, blueprints: [] }
+let selected = new URLSearchParams(location.search).get('name')
+const drawn = {}   // per layer y: the cells the canvas shows, for the hover
+
+const levelOf = status => status === 'ok' ? 'ok' : status === 'build refuses' ? 'error' : status === 'does not parse' ? 'parse' : 'warning'
+
+// ---------------------------------------------------------------- the list
+
+const renderList = () => {
+  const list = el('list')
+  list.textContent = ''
+  library.blueprints.map(blueprintRow).forEach(row => {
+    const item = tag('div', `bp${row.name === selected ? ' sel' : ''}`)
+    const head = tag('div', 'head')
+    head.append(tag('span', 'name', row.name), tag('span', 'title', row.title))
+    const meta = tag('div', 'meta')
+    const facts = [row.kind && tag('span', 'kind', row.kind), row.footprint && tag('span', '', row.footprint), row.layers && tag('span', '', `${row.layers} layers`), row.blocks && tag('span', '', `${row.blocks} items`)].filter(Boolean)
+    meta.append(...facts, tag('span', `pill ${levelOf(row.status)}`, row.status), ...(row.builds ? [tag('span', '', `built ${row.builds}×`)] : []))
+    item.append(head, meta)
+    item.addEventListener('click', () => select(row.name))
+    list.append(item)
+  })
+  el('counts').textContent = `${library.blueprints.length} blueprint${library.blueprints.length === 1 ? '' : 's'}`
+}
+
+// ---------------------------------------------------------------- one blueprint
+
+const hatch = (c, px, py, w, h) => {
+  c.save()
+  c.beginPath(); c.rect(px, py, w, h); c.clip()
+  c.strokeStyle = 'rgba(139,149,165,0.6)'
+  c.lineWidth = 1.5
+  for (let d = -h; d < w; d += 5) { c.beginPath(); c.moveTo(px + d, py + h); c.lineTo(px + d + h, py); c.stroke() }
+  c.restore()
+}
+
+const drawLayer = (canvas, bp, cells, hovered) => {
+  const dpr = window.devicePixelRatio || 1
+  const w = bp.width * CELL_PX
+  const h = bp.depth * CELL_PX
+  canvas.style.width = `${w}px`
+  canvas.style.height = `${h}px`
+  canvas.width = Math.round(w * dpr)
+  canvas.height = Math.round(h * dpr)
+  const c = canvas.getContext('2d')
+  c.setTransform(dpr, 0, 0, dpr, 0, 0)
+  c.clearRect(0, 0, w, h)
+  cells.forEach(cell => {
+    const px = cell.dx * CELL_PX
+    const py = cell.dz * CELL_PX
+    c.fillStyle = cell.air ? '#161a20' : cell.colour
+    c.fillRect(px, py, CELL_PX - 1, CELL_PX - 1)
+    if (cell.name === '@solid') hatch(c, px, py, CELL_PX - 1, CELL_PX - 1)
+    if (cell.air) { c.fillStyle = '#242a33'; c.fillRect(px + CELL_PX / 2 - 1, py + CELL_PX / 2 - 1, 2, 2) }
+  })
+  if (!hovered) return
+  c.strokeStyle = '#fff'
+  c.lineWidth = 2
+  c.strokeRect(hovered.dx * CELL_PX + 1, hovered.dz * CELL_PX + 1, CELL_PX - 3, CELL_PX - 3)
+}
+
+const setHover = (detail, cell) => {
+  const hover = el('hover')
+  hover.textContent = ''
+  if (!cell) return
+  const [where, what] = hoverText(cell).split(' · ')
+  hover.append(where, tag('span', 'muted', ' · '), what)
+}
+
+const renderLayers = detail => {
+  const wrap = el('layers')
+  wrap.textContent = ''
+  const bp = detail.bp
+  const ys = bp.layers.map(l => l.y)
+  ys.forEach(y => {
+    const cells = layerCells(bp, y)
+    drawn[y] = cells
+    const box = tag('div', 'layer')
+    const cap = tag('div', 'cap')
+    const solid = cells.filter(c => !c.air).length
+    cap.append(tag('b', '', `y${y}`), tag('span', '', `${solid} block${solid === 1 ? '' : 's'}`))
+    const canvas = tag('canvas')
+    drawLayer(canvas, bp, cells, null)
+    canvas.addEventListener('mousemove', e => {
+      const r = canvas.getBoundingClientRect()
+      const dx = Math.floor((e.clientX - r.left) / CELL_PX)
+      const dz = Math.floor((e.clientY - r.top) / CELL_PX)
+      const cell = cells.find(c => c.dx === dx && c.dz === dz) ?? null
+      drawLayer(canvas, bp, cells, cell)
+      setHover(detail, cell)
+    })
+    canvas.addEventListener('mouseleave', () => { drawLayer(canvas, bp, cells, null); setHover(detail, null) })
+    box.append(cap, canvas)
+    wrap.append(box)
+  })
+  const legend = el('legend')
+  legend.textContent = ''
+  legendRows(bp).forEach(row => {
+    const item = tag('div', 'legendItem')
+    const swatch = tag('span', `swatch${row.name === '@solid' ? ' solid' : ''}`)
+    if (row.colour && row.name !== '@solid') swatch.style.background = row.colour
+    item.append(swatch, tag('span', 'tok', row.token), tag('span', '', row.label), tag('span', 'n', `×${row.count}`))
+    legend.append(item)
+  })
+}
+
+const renderBill = detail => {
+  const bill = el('bill')
+  bill.textContent = ''
+  billRows(detail.bill.total).forEach(row => {
+    const bar = tag('div', 'bar')
+    bar.style.width = `${Math.round(row.share * 100)}%`
+    bill.append(tag('span', 'item', row.item), tag('span', 'n', String(row.count)), bar)
+  })
+  const per = detail.bill.layers.map(l => `y${l.y}: ${Object.values(l.items).reduce((a, b) => a + b, 0)}`).join(' · ')
+  const extras = [detail.bill.tools.length ? `tools: ${detail.bill.tools.join(', ')}` : null, detail.bill.scaffold ? `scaffold: ${Object.entries(detail.bill.scaffold).map(([k, v]) => `${v} ${k}`).join(', ')}` : null].filter(Boolean)
+  el('billNote').textContent = [`${blockCount(detail.bill)} items in all`, `per layer ${per}`, ...extras].join(' · ')
+}
+
+const renderLint = detail => {
+  const lint = el('lint')
+  lint.textContent = ''
+  lintLines(detail).forEach(line => lint.append(tag('div', line.level, line.text)))
+}
+
+const renderMeta = detail => {
+  const bp = detail.bp
+  const meta = el('meta')
+  meta.textContent = ''
+  const facts = [
+    ['tags', bp.tags.join(', ')], ['front', bp.front], ['foundation', bp.foundation], ['clearance', `${bp.clearance} air layer${bp.clearance === 1 ? '' : 's'}`],
+    ['difficulty', bp.difficulty], ['params', Object.entries(bp.params).map(([k, v]) => `${k}=${v}`).join(' ')], ['by', bp.by], ['hash', detail.hash], ['notes', bp.notes]
+  ].filter(([, v]) => v)
+  facts.forEach(([k, v]) => { const f = tag('span'); f.append(`${k} `, tag('b', '', v)); meta.append(f) })
+  const builds = el('builds')
+  builds.textContent = ''
+  if (!detail.builds.length) { builds.append('not yet built anywhere: mark one with blueprint.build place=<name>'); return }
+  builds.append('standing at ')
+  detail.builds.forEach((b, i) => {
+    const params = Object.entries(b.params).map(([k, v]) => `${k}=${v}`).join(' ')
+    builds.append(i ? ', ' : '', tag('span', 'place', b.place), ` (${b.x},${b.y},${b.z}${b.facing ? `, facing ${b.facing}` : ''}${params ? `, ${params}` : ''}${b.by ? `, by ${b.by}` : ''})`, ...(b.current ? [] : [' ', tag('span', 'stale', 'from an older version of the file')]))
+  })
+}
+
+const renderDetail = () => {
+  const detail = library.blueprints.find(b => b.name === selected)
+  el('empty').hidden = Boolean(detail)
+  el('card').hidden = !detail
+  if (!detail) { el('empty').textContent = selected ? `no blueprint called ${selected}` : 'pick a blueprint'; return }
+  const row = blueprintRow(detail)
+  el('name').textContent = detail.name
+  el('title').textContent = detail.bp ? `${detail.bp.title} · ${row.footprint} · ${row.layers} layers` : ''
+  el('statusPill').textContent = row.status
+  el('statusPill').className = `pill ${levelOf(row.status)}`
+  el('desc').textContent = detail.bp?.description ?? ''
+  el('hover').textContent = ''
+  if (!detail.bp) {
+    el('meta').textContent = ''; el('builds').textContent = ''; el('layers').textContent = ''; el('legend').textContent = ''; el('bill').textContent = ''; el('billNote').textContent = ''
+    renderLint(detail)
+    return
+  }
+  renderMeta(detail)
+  renderLayers(detail)
+  renderBill(detail)
+  renderLint(detail)
+}
+
+const select = name => {
+  selected = name
+  const url = new URL(location.href)
+  url.searchParams.set('name', name)
+  history.replaceState(null, '', url)
+  renderList()
+  renderDetail()
+}
+
+// ---------------------------------------------------------------- polling: the library is re-read on the server, redrawn here only when a file changed
+const signature = lib => lib.blueprints.map(b => `${b.name}:${b.hash}:${b.builds.map(x => x.place).join('+')}`).join('|')
+const apply = lib => {
+  const changed = signature(lib) !== signature(library)
+  library = lib
+  el('status').textContent = `read ${new Date(lib.at).toLocaleTimeString()}`
+  if (changed) { renderList(); renderDetail() }
+}
+const refresh = () => fetch('/api/blueprints')
+  .then(r => r.json())
+  .then(apply)
+  .catch(e => { el('status').textContent = `no answer from the dashboard: ${e.message}` })
+
+if (window.__PRELOAD_LIBRARY__) { library = window.__PRELOAD_LIBRARY__; renderList(); renderDetail(); el('status').textContent = `read ${new Date(library.at).toLocaleTimeString()}` }
+if (!selected && library.blueprints.length) select(library.blueprints[0].name)
+refresh()
+setInterval(refresh, POLL_MS)
+</script>
+</body>
+</html>

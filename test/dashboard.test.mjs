@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
+import { parseBlueprint, resolve, bill, lint } from '../src/blueprint.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -216,6 +218,14 @@ const routes = [
   ['/src/lib.txt', { kind: 'unknown' }],
   // lib.mjs's split: the browser also needs the modules it re-exports, one lib/ segment deep
   ['/src/lib/plan.mjs', { kind: 'srclib', name: 'lib/plan.mjs' }],
+  // the blueprint library: its page, its module, the list and one blueprint by its kebab-case file name
+  ['/blueprints', { kind: 'blueprints' }],
+  ['/blueprint.mjs', { kind: 'bpscript' }],
+  ['/api/blueprints', { kind: 'bplist' }],
+  ['/api/blueprint/starter-hut', { kind: 'blueprint', name: 'starter-hut' }],
+  ['/api/blueprint/Starter_Hut', { kind: 'unknown' }],
+  ['/api/blueprint/', { kind: 'unknown' }],
+  ['/api/blueprint/../etc', { kind: 'unknown' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],
@@ -232,12 +242,12 @@ routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
 const moduleImports = text => [...text.matchAll(/^(?:import|export)\b[^\n]*?\bfrom\s+['"]([^'"]+)['"]|^import\s+['"]([^'"]+)['"]/gm)].map(m => m[1] ?? m[2])
 const moduleFile = url => {
   const r = route(url)
-  const files = { script: path.join(ROOT, 'tools', 'dashboard', 'map.mjs'), srclib: path.join(ROOT, 'src', r.name ?? '') }
+  const files = { script: path.join(ROOT, 'tools', 'dashboard', 'map.mjs'), bpscript: path.join(ROOT, 'tools', 'dashboard', 'blueprint.mjs'), srclib: path.join(ROOT, 'src', r.name ?? '') }
   return files[r.kind] ?? null
 }
-const browserGraph = () => {
+const browserGraph = entry => {
   const graph = {}
-  const queue = ['/map.mjs']
+  const queue = [entry]
   while (queue.length) {
     const url = queue.shift()
     if (graph[url]) continue
@@ -249,11 +259,11 @@ const browserGraph = () => {
   return graph
 }
 
-test('the page module graph: every module below map.mjs is served, and none imports a node builtin or a package', () => {
-  const graph = browserGraph()
+;['/map.mjs', '/blueprint.mjs'].forEach(entry => test(`the page module graph: every module below ${entry} is served, and none imports a node builtin or a package`, () => {
+  const graph = browserGraph(entry)
   assert.deepEqual(Object.entries(graph).filter(([, m]) => !m.served).map(([url]) => url), [], 'modules the route table cannot serve')
   assert.deepEqual(Object.entries(graph).flatMap(([url, m]) => m.imports.filter(s => !s.startsWith('.')).map(s => `${url} imports ${s}`)), [], 'imports a browser cannot resolve')
-})
+}))
 
 // ---------------------------------------------------------------- farm footprints and the plan popup
 const wheatField = { name: 'chani-wheat-field', kind: 'farm', x: 110, y: 71, z: -70, by: 'Chani', note: 'anyone welcome',
@@ -596,4 +606,198 @@ test('worldColour: a known block has its colour, an unknown one a stable colour 
   assert.equal(worldColour('unloaded'), '#2a2f38')
   assert.equal(worldColour('mystery_block'), worldColour('mystery_block'))
   assert.notEqual(worldColour('mystery_block'), worldColour('other_block'))
+})
+
+// ---------------------------------------------------------------- the blueprint library page
+// The server hands the page one detail per file: the parsed, resolved blueprint (plain data), its bill, what lint
+// says and the marked places built from it. Everything the page draws from that is pure and tested here.
+const alt = (name, states = {}) => ({ name, states })
+const tinyBp = {
+  name: 'tiny-hut', title: 'Tiny hut', description: 'd', tags: ['shelter', 'storage'], front: 'south', foundation: 'flat', clearance: 1, params: { wood: 'oak' }, width: 3, depth: 2,
+  legend: {
+    '.': { token: '.', alts: [alt('air')], tags: [] },
+    P: { token: 'P', alts: [alt('oak_planks')], tags: [] },
+    L: { token: 'L', alts: [alt('oak_log', { axis: 'y' })], tags: [] },
+    i: { token: 'i', alts: [alt('torch')], tags: [] },
+    S: { token: 'S', alts: [alt('@solid')], tags: [] }
+  },
+  layers: [{ y: -1, grid: ['SSS', 'S_S'] }, { y: 0, grid: ['LPL', '.i.'] }]
+}
+const tinyBill = { total: { oak_planks: 1, oak_log: 2, torch: 1 }, layers: [{ y: -1, items: {} }, { y: 0, items: { oak_planks: 1, oak_log: 2, torch: 1 } }], tools: [] }
+const clean = { errors: [], warnings: [] }
+const tinyDetail = { name: 'tiny-hut', hash: 'abcd1234', bp: tinyBp, bill: tinyBill, lint: clean, errors: [], builds: [] }
+const unparsed = { name: 'broken', hash: '00000000', bp: null, bill: null, lint: null, errors: ['front matter: name is required', 'no ## y<n> layer found'], builds: [] }
+
+test('blueprintRow: one list row per file - name, kind from the tags, footprint, layers, blocks from the bill', () => {
+  assert.deepEqual(blueprintRow(tinyDetail), { name: 'tiny-hut', title: 'Tiny hut', kind: 'shelter, storage', footprint: '3x2x2', layers: 2, blocks: 4, status: 'ok', builds: 0 })
+})
+
+test('blueprintRow: a file that does not parse still gets a row, saying so', () => {
+  assert.deepEqual(blueprintRow(unparsed), { name: 'broken', title: '', kind: '', footprint: '', layers: 0, blocks: 0, status: 'does not parse', builds: 0 })
+})
+
+const statuses = [
+  ['clean lint', { lint: clean }, 'ok'],
+  ['one warning', { lint: { errors: [], warnings: ['w'] } }, '1 warning'],
+  ['two warnings', { lint: { errors: [], warnings: ['w', 'w2'] } }, '2 warnings'],
+  ['a lint error, whatever the warnings', { lint: { errors: ['e'], warnings: ['w'] } }, 'build refuses'],
+  ['two builds standing', { builds: [{ place: 'a' }, { place: 'b' }] }, 'ok']
+]
+statuses.forEach(([why, patch, status]) => test(`blueprintRow status: ${why}`, () => {
+  assert.equal(blueprintRow({ ...tinyDetail, ...patch }).status, status)
+}))
+
+test('blueprintRow: counts the places built from it', () => {
+  assert.equal(blueprintRow({ ...tinyDetail, builds: [{ place: 'a' }, { place: 'b' }] }).builds, 2)
+})
+
+test('layerCells: every cell of the layer that is part of the blueprint, with its block, colour and label; _ is left out', () => {
+  assert.deepEqual(layerCells(tinyBp, -1).map(c => `${c.dx},${c.dz} ${c.token} ${c.label}`), ['0,0 S any solid block', '1,0 S any solid block', '2,0 S any solid block', '0,1 S any solid block', '2,1 S any solid block'])
+  assert.deepEqual(layerCells(tinyBp, 0).map(c => `${c.dx},${c.dz} ${c.token} ${c.label} ${c.air}`), ['0,0 L oak_log[axis=y] false', '1,0 P oak_planks false', '2,0 L oak_log[axis=y] false', '0,1 . air true', '1,1 i torch false', '2,1 . air true'])
+})
+
+test('layerCells: a cell carries the colour of its block, air none, and y of its layer', () => {
+  const cells = layerCells(tinyBp, 0)
+  assert.deepEqual(cells.map(c => c.colour), [blockColour('oak_log'), blockColour('oak_planks'), blockColour('oak_log'), null, blockColour('torch'), null])
+  assert.deepEqual([...new Set(cells.map(c => c.y))], [0])
+})
+
+test('layerCells: a waterlogged block is tinted toward water, so a covered channel reads as one', () => {
+  const bp = { ...tinyBp, legend: { ...tinyBp.legend, '=': { token: '=', alts: [alt('oak_slab', { type: 'top', waterlogged: 'true' })], tags: [] }, s: { token: 's', alts: [alt('oak_slab', { type: 'top' })], tags: [] } }, layers: [{ y: 0, grid: ['=s'] }] }
+  const [wet, dry] = layerCells(bp, 0)
+  assert.equal(dry.colour, blockColour('oak_slab'))
+  assert.equal(wet.colour, altColour(alt('oak_slab', { type: 'top', waterlogged: 'true' })))
+  assert.notEqual(wet.colour, dry.colour)
+  assert.equal(legendRows(bp)[0].colour, wet.colour)
+})
+
+test('altColour: water tints, air stays nothing', () => {
+  assert.equal(altColour(alt('oak_slab', { waterlogged: 'true' })), '#658bb0')
+  assert.equal(altColour(alt('oak_slab')), blockColour('oak_slab'))
+  assert.equal(altColour(alt('air', { waterlogged: 'true' })), null)
+})
+
+test('layerCells: a y the blueprint has no layer for is empty', () => {
+  assert.deepEqual(layerCells(tinyBp, 7), [])
+})
+
+const hovers = [
+  ['a block with states', layerCells(tinyBp, 0)[0], 'x+0 y0 z+0 · oak_log[axis=y] (L)'],
+  ['a plain block', layerCells(tinyBp, 0)[4], 'x+1 y0 z+1 · torch (i)'],
+  ['air', layerCells(tinyBp, 0)[3], 'x+0 y0 z+1 · air (.)'],
+  ['any solid', layerCells(tinyBp, -1)[4], 'x+2 y-1 z+1 · any solid block (S)']
+]
+hovers.forEach(([what, cell, text]) => test(`hoverText: ${what}`, () => {
+  assert.equal(hoverText(cell), text)
+}))
+
+test('legendRows: the tokens the layers use, in the order they are first met from the lowest layer up, with a count each; air and _ are not listed', () => {
+  assert.deepEqual(legendRows(tinyBp).map(r => `${r.token} ${r.label} ${r.count} ${r.colour}`), [
+    `S any solid block 5 ${blockColour('@solid')}`,
+    `L oak_log[axis=y] 2 ${blockColour('oak_log')}`,
+    `P oak_planks 1 ${blockColour('oak_planks')}`,
+    `i torch 1 ${blockColour('torch')}`
+  ])
+})
+
+test('legendRows: a token the legend defines but no layer uses is not listed', () => {
+  const bp = { ...tinyBp, legend: { ...tinyBp.legend, X: { token: 'X', alts: [alt('chest')], tags: [] } } }
+  assert.deepEqual(legendRows(bp).map(r => r.token), ['S', 'L', 'P', 'i'])
+})
+
+test('billRows: the items most needed first, ties by name, each with its share of the largest for a bar', () => {
+  assert.deepEqual(billRows({ torch: 1, oak_log: 2, oak_planks: 1, cobblestone: 8 }), [
+    { item: 'cobblestone', count: 8, share: 1 },
+    { item: 'oak_log', count: 2, share: 0.25 },
+    { item: 'oak_planks', count: 1, share: 0.125 },
+    { item: 'torch', count: 1, share: 0.125 }
+  ])
+})
+
+test('billRows: nothing to fetch is an empty list', () => {
+  assert.deepEqual(billRows({}), [])
+})
+
+const lints = [
+  ['a file that does not parse: every parser error, first', unparsed, [{ level: 'parse', text: 'front matter: name is required' }, { level: 'parse', text: 'no ## y<n> layer found' }]],
+  ['clean', tinyDetail, [{ level: 'ok', text: 'lint has nothing to say: build accepts it' }]],
+  ['lint errors (build refuses) before warnings', { ...tinyDetail, lint: { errors: ['the door at y0 1,1 stands on nothing'], warnings: ['H: ladder needs place against='] } }, [{ level: 'error', text: 'the door at y0 1,1 stands on nothing' }, { level: 'warning', text: 'H: ladder needs place against=' }]],
+  ['warnings alone', { ...tinyDetail, lint: { errors: [], warnings: ['w'] } }, [{ level: 'warning', text: 'w' }]]
+]
+lints.forEach(([what, detail, expected]) => test(`lintLines: ${what}`, () => {
+  assert.deepEqual(lintLines(detail), expected)
+}))
+
+// the palette: one hue per material, shaded by role, so a hut's oak planks, logs, stairs and fence read as one family
+const families = [
+  ['oak_planks', { family: 'wood', value: 'oak', role: 'planks' }],
+  ['oak_fence_gate', { family: 'wood', value: 'oak', role: 'fence_gate' }],
+  ['stripped_spruce_log', { family: 'wood', value: 'spruce', role: 'stripped_log' }],
+  ['crimson_stem', { family: 'wood', value: 'crimson', role: 'log' }],
+  ['dark_oak_door', { family: 'wood', value: 'dark_oak', role: 'door' }],
+  ['stone_brick_slab', { family: 'stone', value: 'stone_bricks', role: 'slab' }],
+  ['cobblestone', { family: 'stone', value: 'cobblestone', role: 'block' }],
+  ['polished_blackstone_brick_wall', { family: 'stone', value: 'polished_blackstone_bricks', role: 'wall' }],
+  ['white_bed', { family: 'dye', value: 'white', role: 'bed' }],
+  ['light_blue_wool', { family: 'dye', value: 'light_blue', role: 'wool' }],
+  ['torch', null],
+  ['@solid', null]
+]
+families.forEach(([name, expected]) => test(`familyOf: ${name}`, () => {
+  assert.deepEqual(familyOf(name), expected)
+}))
+
+const colours = [
+  ['oak_planks', '#b08a55'],
+  ['cobblestone', '#8a8a8a'],
+  ['white_bed', '#e9ecec'],
+  ['torch', '#e0a030'],
+  ['@solid', '#4b5462'],
+  ['air', null],
+  ['farmland', worldColour('farmland')]
+]
+colours.forEach(([name, colour]) => test(`blockColour: ${name}`, () => {
+  assert.equal(blockColour(name), colour)
+}))
+
+test('blockColour: the roles of one wood are shades of the same hue, darker for logs and lighter for stripped ones', () => {
+  const lightness = hex => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16)
+  const [log, planks, stripped] = ['oak_log', 'oak_planks', 'stripped_oak_log'].map(blockColour).map(lightness)
+  assert.ok(log < planks && planks < stripped, `${log} < ${planks} < ${stripped}`)
+  assert.notEqual(blockColour('oak_fence'), blockColour('spruce_fence'))
+})
+
+test('blockColour: a block nobody listed still gets a stable muted colour of its own', () => {
+  assert.equal(blockColour('sponge'), blockColour('sponge'))
+  assert.match(blockColour('sponge'), /^hsl\(/)
+})
+
+// the node side: one file read, parsed, resolved with its defaults, costed and linted, plus the places built from it
+const LIBRARY = path.join(ROOT, 'blueprints')
+const hutFile = { name: 'starter-hut', text: fs.readFileSync(path.join(LIBRARY, 'starter-hut.md'), 'utf8'), hash: 'f00dcafe' }
+const hutPlaces = [
+  { name: 'a-hut', kind: 'shelter', x: 10, y: 64, z: -5, by: 'Someone', note: 'bp=starter-hut f=east h=f00dcafe wood=spruce' },
+  { name: 'an-old-hut', kind: 'shelter', x: 1, y: 2, z: 3, by: 'Nobody', note: 'bp=starter-hut f=south h=01234567' },
+  { name: 'a-tower', kind: 'build', x: 0, y: 0, z: 0, note: 'bp=watchtower f=south h=f00dcafe' },
+  { name: 'a-field', kind: 'farm', x: 0, y: 0, z: 0, note: 'anyone welcome' }
+]
+
+test('blueprintDetail: the library file parsed and resolved, with its bill, lint and the places that carry its build note', () => {
+  const d = blueprintDetail(hutFile, hutPlaces)
+  assert.deepEqual({ name: d.name, hash: d.hash, errors: d.errors, title: d.bp.title, width: d.bp.width, layers: d.bp.layers.length, blocks: Object.values(d.bill.total).reduce((a, b) => a + b, 0), lint: d.lint, door: d.bp.legend.D.alts[0].name },
+    { name: 'starter-hut', hash: 'f00dcafe', errors: [], title: 'Starter hut', width: 5, layers: 5, blocks: 102, lint: clean, door: 'oak_door' })
+  assert.deepEqual(d.builds, [
+    { place: 'a-hut', kind: 'shelter', x: 10, y: 64, z: -5, by: 'Someone', facing: 'east', params: { wood: 'spruce' }, current: true },
+    { place: 'an-old-hut', kind: 'shelter', x: 1, y: 2, z: 3, by: 'Nobody', facing: 'south', params: {}, current: false }
+  ])
+})
+
+test('blueprintDetail: a file that does not parse carries the parser errors and no blueprint', () => {
+  const d = blueprintDetail({ name: 'nope', text: 'not a blueprint', hash: '0' }, [])
+  assert.deepEqual({ name: d.name, bp: d.bp, bill: d.bill, lint: d.lint, first: d.errors[0], builds: d.builds }, { name: 'nope', bp: null, bill: null, lint: null, first: 'the file must start with a --- front matter block', builds: [] })
+})
+
+test('blueprintRow over the real library: the hut is 5x5x5 in five layers of 102 items', () => {
+  const bp = resolve(parseBlueprint(hutFile.text))
+  assert.deepEqual(blueprintRow({ name: 'starter-hut', bp, bill: bill(bp), lint: lint(bp), errors: [], builds: [] }), { name: 'starter-hut', title: 'Starter hut', kind: 'shelter, storage', footprint: '5x5x5', layers: 5, blocks: 102, status: 'ok', builds: 0 })
 })

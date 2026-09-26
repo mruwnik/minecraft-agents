@@ -105,6 +105,13 @@ down. Its own API, for scripts: `/api/state` (every body, plus places and zones)
 The map arithmetic is in `tools/dashboard/map.mjs`, which has no node imports so the page and `npm test` use the
 same code; `tools/dashboard/lib.mjs` reads the folders and routes.
 
+`/blueprints` (the link in the header) is the blueprint library, `blueprints/*.md` as `src/blueprint.mjs` reads them:
+a list (name, tags, footprint, layers, items to fetch, what lint says) and, per blueprint, every layer drawn from the
+ground up - one coloured cell per block, the roles of one wood or stone as shades of one hue, hover for the block and
+its offset from the anchor - with the legend, the bill of materials and lint's lines, plus the marked places whose note
+says they were built from it. `/api/blueprints` and `/api/blueprint/<name>` hand out the same data as JSON; the drawing
+is `tools/dashboard/blueprint.mjs`, pure like the map module.
+
 ## Agents: one folder each
 
     node tools/new-agent.mjs             # draws a name from ~/.claude/hooks/choose_name.py (redraws until it is a valid, unused

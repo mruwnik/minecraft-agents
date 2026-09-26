@@ -2,6 +2,7 @@
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
 import { parsePlan } from '../../src/lib/plan.mjs'
+import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint.mjs'
 
 const parseConfig = text => {
   try {
@@ -44,9 +45,17 @@ const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
 // browser never loads) so /src/lib/plan.mjs etc still resolve.
 const SRCLIB = /^\/src\/((?:lib\/)?[A-Za-z0-9_.-]+\.mjs)$/
 
+// the blueprint library: one file by its kebab-case name, the same rule the front matter's name field obeys
+const BLUEPRINT = /^\/api\/blueprint\/([a-z0-9]+(?:-[a-z0-9]+)*)$/
+
 export const route = url => {
   const { pathname } = new URL(url, 'http://dashboard')
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
+  if (pathname === '/blueprints') return { kind: 'blueprints' }
+  if (pathname === '/blueprint.mjs') return { kind: 'bpscript' }
+  if (pathname === '/api/blueprints') return { kind: 'bplist' }
+  const blueprint = BLUEPRINT.exec(pathname)
+  if (blueprint) return { kind: 'blueprint', name: blueprint[1] }
   if (pathname === '/api/state') return { kind: 'state' }
   if (pathname === '/api/chat') return { kind: 'chat' }
   if (pathname === '/api/world') return { kind: 'world' }
@@ -155,4 +164,29 @@ export const unsureWater = (place, worldCells) => {
       const g = ground.get(`${c.x},${c.z}`)
       return g && g.waterlogged === undefined && !/^(water|air|cave_air|void_air|unloaded)$/.test(g.name)
     })
+}
+
+// ---------------------------------------------------------------- the blueprint library
+// One library file as the page shows it: parsed and resolved with its own default parameters (never re-implemented
+// here: src/blueprint.mjs does all of it), its bill, what lint says, the counts, and every marked place whose note
+// says it was built from this blueprint (`current` when the note's hash is this file's, else an older version stands).
+// A file that does not parse keeps its name and the parser's errors, so the list shows the library as it is on disk.
+export const blueprintBuilds = (name, hash, places) => places.flatMap(p => {
+  const note = parseNote(p.note)
+  if (note?.blueprint !== name) return []
+  return [{ place: p.name, kind: p.kind, x: p.x, y: p.y, z: p.z, by: p.by, facing: note.facing, params: note.params, current: note.hash === hash }]
+})
+const lintOf = bp => {
+  try {
+    return lint(bp)
+  } catch (e) {
+    return { errors: [`lint failed: ${e.message}`], warnings: [] }
+  }
+}
+export const blueprintDetail = ({ name, text, hash }, places = []) => {
+  const builds = blueprintBuilds(name, hash, places)
+  const parsed = parseBlueprint(text)
+  if (parsed.errors.length) return { name, hash, bp: null, bill: null, lint: null, counts: null, errors: parsed.errors, builds }
+  const bp = resolve(parsed)
+  return { name, hash, bp, bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds }
 }

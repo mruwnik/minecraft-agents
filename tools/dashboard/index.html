@@ -14,6 +14,8 @@
   header { display: flex; align-items: baseline; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
   header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .04em; }
   header .muted { color: var(--dim); }
+  header a { color: var(--zone); text-decoration: none; }
+  header a:hover { text-decoration: underline; }
   header .spacer { flex: 1; }
   button { font: inherit; color: var(--ink); background: #252b34; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
   button:hover { background: #2f3742; }
@@ -102,6 +104,7 @@
 <body>
 <header>
   <h1>agent bodies</h1>
+  <a href="/blueprints">blueprints →</a>
   <span class="muted" id="clock">—</span>
   <span class="muted" id="counts">—</span>
   <span class="spacer"></span>

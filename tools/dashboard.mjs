@@ -5,19 +5,23 @@
 //
 // It polls each body's `state` every 2 s (a quick action: it never takes the task slot, so a body mid-build is not
 // disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs)
-// and /api/look/<Name> which renders one PNG through that body's eyes.
+// and /api/look/<Name> which renders one PNG through that body's eyes. /blueprints is a second page: the blueprint
+// library (blueprints/*.md) as a list and, per blueprint, its layers drawn, its bill and what lint says.
 // Nothing here drives a body or spends an agent's tokens.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
+import { loadAll } from '../src/blueprint-build.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
+const BLUEPRINTS_PAGE = path.join(import.meta.dirname, 'dashboard', 'blueprints.html')
+const BLUEPRINT_MODULE = path.join(import.meta.dirname, 'dashboard', 'blueprint.mjs')
 const SRC_DIR = path.join(ROOT, 'src')
 const PORT = Number(process.env.PORT ?? 3700)
 const POLL_MS = 2000
@@ -172,6 +176,22 @@ const worldFor = name => {
   return promise
 }
 
+// ---------------------------------------------------------------- the blueprint library
+// Every file under blueprints/ is re-read on each ask (they are small, and one edited in place should show at once),
+// but parsing, costing and lint - lint builds the thing over flat ground - are kept per file hash; only the marked
+// places built from a blueprint, which change with the world, are matched afresh.
+const details = {}
+const blueprintFor = file => {
+  const cached = details[file.name]
+  if (cached && cached.hash === file.hash) return cached
+  details[file.name] = blueprintDetail(file)
+  return details[file.name]
+}
+const library = () => {
+  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
+  return { at: Date.now(), blueprints: loadAll().map(file => ({ ...blueprintFor(file), builds: blueprintBuilds(file.name, file.hash, places) })) }
+}
+
 const send = (res, code, type, payload, headers = {}) => {
   res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', ...headers })
   res.end(payload)
@@ -212,6 +232,8 @@ const renderPage = async query => {
   const preload = `<script>window.__PRELOAD_STATE__=${inline(snapshot())};window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
 }
+// the library is inlined for the same reason: the list and the chosen blueprint (?name=) are drawn on the first paint
+const renderBlueprintsPage = () => fs.readFileSync(BLUEPRINTS_PAGE, 'utf8').replace('</head>', `<script>window.__PRELOAD_LIBRARY__=${inline(library())}</script>\n</head>`)
 
 const handlers = {
   page: async (res, query) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query)),
@@ -222,10 +244,17 @@ const handlers = {
     return sendJson(res, answer.error ? 404 : 200, answer)
   },
   state: (res) => sendJson(res, 200, snapshot()),
+  blueprints: (res) => send(res, 200, 'text/html; charset=utf-8', renderBlueprintsPage()),
+  bplist: (res) => sendJson(res, 200, library()),
+  blueprint: (res, query, r) => {
+    const found = library().blueprints.find(b => b.name === r.name)
+    return found ? sendJson(res, 200, found) : sendJson(res, 404, { error: `no blueprint called ${r.name}: /api/blueprints lists them` })
+  },
+  bpscript: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(BLUEPRINT_MODULE)),
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /api/state, /api/chat?limit=200, /api/world?place=<name> or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /blueprints, /api/state, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
 }
 
 http.createServer(async (req, res) => {
