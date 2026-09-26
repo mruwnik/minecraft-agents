@@ -5,16 +5,20 @@
 const CROWD = new Set(['all', 'everyone', 'everybody', 'anyone', 'anybody'])
 // "@Chani ...", "Chani: ...", "Chani, ..." - a bare name with no mark after it is just a word ("Chani has the carrots")
 const OPENING = /^\s*(?:@([A-Za-z0-9_]{1,16})(?=\s|$)|([A-Za-z0-9_]{1,16})\s*[:,])/
+// "morning, Chani", "the bed is yours, Chani!" - a name after a comma at the very end is a vocative; without the comma it is a word
+const CLOSING = /,\s*@?([A-Za-z0-9_]{1,16})\s*[!?.]*\s*$/
 
 const onlineSpelling = (name, players) => players.find(p => p.toLowerCase() === String(name).toLowerCase()) ?? null
 
-// the online player the message opens with, in the spelling that is online, or null
+// the online player the message opens or closes with, in the spelling that is online, or null
 export const addressedTo = (text, players) => {
-  const m = OPENING.exec(String(text ?? ''))
-  if (!m) return null
-  const name = m[1] ?? m[2]
-  if (CROWD.has(name.toLowerCase())) return null
-  return onlineSpelling(name, players)
+  const named = m => {
+    if (!m) return null
+    const name = m[1] ?? m[2]
+    return CROWD.has(name.toLowerCase()) ? null : onlineSpelling(name, players)
+  }
+  const line = String(text ?? '')
+  return named(OPENING.exec(line)) ?? named(CLOSING.exec(line))
 }
 
 export const whisperHint = name => `this read as a message to ${name}: whisper player=${name} next time, only they see it and it wakes their wait`
