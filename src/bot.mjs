@@ -27,6 +27,7 @@ import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
+import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
@@ -794,7 +795,7 @@ async function doorTick () {
   // shut only when my own walk or click opened it (the gates.log listener decides that): "any open gate I pass" shut the
   // gate the human had just opened, 16 ms after, again and again (Perrin's idle body, 13:30Z)
   const gateIds = mcData.blocksArray.filter(b => b.name.endsWith('_fence_gate')).map(b => b.id)
-  const doors = bot.findBlocks({ matching: [...doorIds, ...gateIds], maxDistance: 5, count: 8 }).map(p => bot.blockAt(p)).filter(b => (b.getProperties().half ?? 'lower') === 'lower')
+  const doors = findBlocksNear({ matching: [...doorIds, ...gateIds], maxDistance: 5, count: 8 }).map(p => bot.blockAt(p)).filter(b => (b.getProperties().half ?? 'lower') === 'lower')
   if (foodAway({ held: bot.heldItem?.name, luring, feeding, gateNear: doors.some(d => d.name.endsWith('_fence_gate')), eating: Boolean(bot.autoEat?.isEating) })) {
     console.log('[food away] tempting food in hand at a gate: put away, or the animals follow me out')
     doorBusy = true
@@ -852,7 +853,7 @@ const ceilingOver = pos => {
   return { x: block.position.x, y: block.position.y, z: block.position.z, name: block.name, digTicks: Math.ceil(ms / 50), block }
 }
 // water cells with air over them round the body: where a sideways swim can surface
-const openingsNear = pos => bot.findBlocks({ point: pos, matching: bot.registry.blocksByName.water.id, useExtraInfo: b => isAir(bot.blockAt(b.position.offset(0, 1, 0))?.name), maxDistance: SURFACE_SCAN + 2, count: 64 })
+const openingsNear = pos => findBlocksNear({ point: pos, matching: bot.registry.blocksByName.water.id, useExtraInfo: b => isAir(bot.blockAt(b.position.offset(0, 1, 0))?.name), maxDistance: SURFACE_SCAN + 2, count: 64 })
 const cellKey = ({ x, y, z }) => `${x},${y},${z}`
 const wayLabel = way => way ? `${way.way}${way.to ? ` to ${cellKey(way.to)}` : ''}${way.at ? ` at ${cellKey(way.at)}` : ''}` : ''
 // one reflex tick of surfacing: judge the way out from where the body is now, say it when it changes, and steer.
@@ -1122,7 +1123,7 @@ function fleeTowards (me, entity) {
   flee.goal = nightFleeGoal({ night, me, home: flee.home, mob: entity.position, dist: fleeRange(entity.name) + 4, refuges })
   bot.pathfinder.setGoal(new goals.GoalNearXZ(flee.goal.x, flee.goal.z, 2), false)
 }
-const torchesNear = () => bot.findBlocks({ matching: ['torch', 'wall_torch', 'soul_torch', 'soul_wall_torch', 'lantern'].map(n => bot.registry.blocksByName[n]?.id).filter(Boolean), maxDistance: 24, count: 8 })
+const torchesNear = () => findBlocksNear({ matching: ['torch', 'wall_torch', 'soul_torch', 'soul_wall_torch', 'lantern'].map(n => bot.registry.blocksByName[n]?.id).filter(Boolean), maxDistance: 24, count: 8 })
 
 function endFlee () {
   if (!flee) return
@@ -1729,11 +1730,42 @@ async function goNear (v, range = 2) {
   if (nowhere) throw new Error(nowhere)
   await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
 }
-function findBlockByName (names, maxDistance = 48, count = 1) {
+// Every matching block within maxDistance of point (where I stand, by default), nearest first. Not bot.findBlocks: that
+// walks chunk sections in an octahedron of apothem ceil((range + 8) / 16), which at range 16 never reads the section one
+// over, one down and one across, so a body two blocks across a chunk line from what it looks for got one campfire in
+// four (mariel-apiary, 2026-09-26 21:00Z; card 4552230d). searchSections lists every section the range touches; the
+// palette short cut (skip a section whose palette holds none of the ids) is mineflayer's own.
+function findBlocksNear ({ matching, maxDistance = 16, count = 1, point = bot.entity.position, useExtraInfo = false }) {
+  const ids = new Set([].concat(matching))
+  const at = vec3(point).floored()
+  const inPalette = section => !section.palette || section.palette.some(id => ids.has(bot.registry.blocksByStateId[id]?.id))
+  const found = []
+  for (const s of searchSections(at, maxDistance, { minY: bot.game.minY, height: bot.game.height })) {
+    if (enough(found.map(f => f.dist), count, s.near)) break
+    const section = bot.world.getColumn(s.x, s.z)?.sections[s.y - (bot.game.minY >> 4)]
+    if (!section || (useExtraInfo !== true && !inPalette(section))) continue
+    const corner = vec3(s.x * 16, s.y * 16, s.z * 16)
+    for (let x = 0; x < 16; x++) {
+      for (let y = 0; y < 16; y++) {
+        for (let z = 0; z < 16; z++) {
+          const p = corner.offset(x, y, z)
+          const dist = p.distanceTo(at)
+          if (dist > maxDistance) continue
+          const block = bot.blockAt(p, Boolean(useExtraInfo))
+          if (!block || !ids.has(block.type)) continue
+          if (typeof useExtraInfo === 'function' && !useExtraInfo(block)) continue
+          found.push({ p, dist })
+        }
+      }
+    }
+  }
+  return found.sort((a, b) => a.dist - b.dist).slice(0, count).map(f => f.p)
+}
+function findBlockByName (names, maxDistance = 48, count = 1, point = bot.entity.position) {
   const m = matcher(names)
   const ids = Object.values(mcData.blocksByName).filter(b => m(b.name)).map(b => b.id)
   if (!ids.length) throw new Error(`unknown block name: ${names}`)
-  return bot.findBlocks({ matching: ids, maxDistance, count })
+  return findBlocksNear({ matching: ids, maxDistance, count, point })
 }
 const bedsNear = () => findBlockByName('*_bed', 32, 16).sort((p, q) => p.distanceTo(bot.entity.position) - q.distanceTo(bot.entity.position))
 // One batch of a recipe. bot.craft clicks the table itself and starts filling the grid as soon as anything answers, so
@@ -1901,7 +1933,7 @@ async function workGround (a, work) {
   if (outcome.error) throw new Error(outcome.error)
   if (work.to !== 'farmland' || !worked.length) return outcome
   // dry, unplanted farmland is grass again within minutes: two agents took that for a till that lied (BUGS.md 09-19)
-  const waters = bot.findBlocks({ point: worked[0], matching: mcData.blocksByName.water.id, maxDistance: 24, count: 200 }).map(w => w.toArray())
+  const waters = findBlocksNear({ point: worked[0], matching: mcData.blocksByName.water.id, maxDistance: 24, count: 200 }).map(w => w.toArray())
   const dry = dryCells(worked.map(w => w.toArray()), waters)
   // wet or not, farmland with nothing planted in it does not last: the warning always comes
   return { ...outcome, [dry.length ? 'dry' : 'advice']: tillWarning(dry.length, worked.length) }
@@ -2857,7 +2889,7 @@ function countForWatch (w) {
   }
   const m = matcher(w.block)
   const ids = Object.values(mcData.blocksByName).filter(b => m(b.name)).map(b => b.id)
-  const hits = bot.findBlocks({ matching: ids, maxDistance: within, count: 512, point: centre }).filter(p => matchesProps(bot.blockAt(p)?.getProperties(), w.where))
+  const hits = findBlocksNear({ matching: ids, maxDistance: within, count: 512, point: centre }).filter(p => matchesProps(bot.blockAt(p)?.getProperties(), w.where))
   return { seen: hits.length, at: hits[0] && roundVec(hits[0]) }
 }
 
@@ -3043,8 +3075,10 @@ const quick = {
     }
   },
 
+  // x= y= z= anchors the search on a cell instead of on me: a place's hives are the same list from wherever I stand
   find_blocks (a) {
-    return { positions: findBlockByName(a.block, a.maxDistance ?? 64, a.count ?? 10) }
+    const point = a.x === undefined ? bot.entity.position : vecOf(a)
+    return { positions: findBlockByName(a.block, a.maxDistance ?? 64, a.count ?? 10, point) }
   },
 
   // will this pen hold? Walks the way an animal can from a spot inside (default: where I stand) and says where it gets out
