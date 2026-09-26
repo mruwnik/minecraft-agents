@@ -3989,7 +3989,7 @@ test('collect: walks to each drop in turn, nearest first, and leaves what is out
   const { api, calls } = fakeApi({ drops: lying, answers: pickedUpOnArrival(lying) })
   const out = await collect.run(api, { range: 16 })
   assert.deepEqual([calls, out.picked, out.outsidePen], [
-    ['goto x=1 y=64 z=0 range=0', 'goto x=3 y=64 z=0 range=0'],
+    ['goto x=1 y=64 z=0 range=1', 'goto x=3 y=64 z=0 range=1'],
     2,
     '1 drops lie outside this pen and were left: walk out yourself (goto), then collect again'])
 })
