@@ -381,7 +381,7 @@ export const PRIMITIVES = {
   'pen.check': { section: 'pen', args: '[x= y= z=] [radius=]', doc: 'walk a fence and find where a pen leaks: gaps, corner gates, rims an animal can hop' },
   // ---- self
   eat: { section: 'self', args: '[item=] [anyway=]', doc: 'eat one of the foods I carry now: the reflex should beat you to it, but when it cannot this says what went wrong. At food 6 or less with nothing else edible I eat the never-eat list too (rotten flesh: its hunger cannot take me below where the empty belly already would); anyway=true does that at any hunger, on your say-so' },
-  sleep: { section: 'self', args: '[any=]', doc: 'sleep in the nearest free bed within 32 blocks' },
+  sleep: { section: 'self', args: '[any=] [bed=] [bed_range=]', doc: 'sleep in the nearest free bed within 32 blocks; with none, walk to your own bed (bed=<place>, else your nearest kind=bed mark) when it is within bed_range (default 200) and sleep there' },
   wake: { section: 'self', args: '', doc: 'get out of bed' },
   quit: { section: 'self', args: '', doc: 'stop my body; ./start in the background brings it back' },
   chat: { section: 'self', args: 'message=', doc: 'say something to everyone' },

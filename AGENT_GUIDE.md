@@ -142,7 +142,9 @@ body back at once if you want it; without a bed the composite hands the body bac
 with no bed within 32 it walks to its own bed when that is within `bed_range` (default 200 blocks), sleeps there and walks
 back at dawn. Its own bed is, in order, `bed=<place>`, the nearest mark of `kind=bed` by the body itself (`mark name=<you>-bed
 kind=bed` standing on the bed, once), and where it last woke this run. Nothing else knows its bed: the client never learns
-its spawn bed and a body is restarted most nights, so only the shared map survives.
+its spawn bed and a body is restarted most nights, so only the shared map survives. `sleep` does the same (`bed=`,
+`bed_range=`), and the bedtime reflex calls it: an idle body with a `kind=bed` mark of its own within 200 blocks walks to it
+at nightfall by itself, rather than stand outside all night.
 
 A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which the composites then read. The legend is
 `w` wheat, `c` carrot, `p` potato, `b` beetroot, `s` sugar cane, `m` melon, `k` pumpkin, `B` bamboo, `~` water,
