@@ -28,6 +28,7 @@ import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
+import { neededArgs } from './needs.mjs'
 import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
@@ -4056,11 +4057,15 @@ http.createServer((req, res) => {
     const name = new URL(req.url, 'http://x').pathname.slice(1)
     let out
     try {
-      const tracked = trackReads(body ? JSON.parse(body) : {})
+      // a primitive's required argument is named before it runs (find_blocks name=oak_log used to answer "unknown block
+      // name: undefined"), and the spelling a driver reaches for is folded into the one the action reads (src/needs.mjs)
+      const { args: filled, error: lacking } = neededArgs(name, body ? JSON.parse(body) : {})
+      const tracked = trackReads(filled)
       const args = tracked.args
       // help is answered even before the body is connected: a driver reads it first of all
       if (name === '' || name === 'help') out = { ok: true, ...quick.help(args) }
       else if (!ready && name !== 'events') out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
+      else if (lacking) out = { ok: false, error: lacking }
       else if (quick[name]) { if (name === 'wake') lastDriven = Date.now(); out = { ok: true, ...(await quick[name](args)) } }
       else if (long[name] && args.queue && task) { lastDriven = Date.now(); queued = enqueue(queued, { name, args: { ...args } }, ++taskId); out = queuedReply(taskId, task, queued.length) }
       else if (long[name]) { lastDriven = Date.now(); out = await runLong(name, args.queue ? withoutQueue({ ...args }) : args, tracked.given) }
