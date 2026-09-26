@@ -30,6 +30,7 @@ import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } fr
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice } from './caveexit.mjs'
+import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -1982,6 +1983,10 @@ const long = {
       if (obstacle) throw new Skip(obstacle)
       // walking is only needed when the block is out of reach or inside our own body; route searches on rough ground can time out
       if (!canPlaceFromHere(bot.entity.position, p)) {
+        // the body's own cell in a 1-wide shaft: no cell beside it to place from, and the search below took 5 s to say "cannot get
+        // within reach" (card 2b2d1f65). A niche to the side first, which climb digs
+        const own = ownCellRefusal({ feet: feetCell(bot.entity.position, bot.entity.onGround), target: { x: p.x, y: p.y, z: p.z }, boxed: amBoxedIn() })
+        if (own) throw new Skip(own)
         // the goal is a head within DIG_REACH of a face of the cell: from one up and four across that is 4.3, so a lane every eight rows
         // serves a field. Judged before the search: a cell walled in by crops has no such node, and A* took 5 s to say so (card 1ccb0ea1)
         const nowhere = noStanding(cellAt, p, WORK_RANGE)
@@ -3012,11 +3017,61 @@ const explainFailure = message => {
   const boxed = amBoxedIn()
   return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, ...noPathEvidence() })
 }
+// the path a walk would take, searched the way path_to searches it: one 40 ms slice at a time until it is done or the budget is out
+function searchPath (aim, range) {
+  const began = Date.now()
+  const budget = thinkBudget(goalDistance(aim, bot.entity.position))
+  let r = bot.pathfinder.getPathTo(bot.pathfinder.movements, new goals.GoalNear(aim.x, aim.y, aim.z, range), budget)
+  while (r.status === 'partial' && r.context && Date.now() - began < budget) r = Object.assign(r.context.compute(), { context: r.context })
+  return r.path
+}
+// one jump into the cell beside and one up, with the legs (a shaft is where the pathfinder found nothing, so it is not asked first)
+async function stepUp (cell) {
+  const there = () => { const feet = feetCell(bot.entity.position, bot.entity.onGround); return feet.x === cell.x && feet.y === cell.y && feet.z === cell.z }
+  await bot.lookAt(new Vec3(cell.x + 0.5, cell.y + 1.62, cell.z + 0.5), true).catch(() => {})
+  bot.setControlState('forward', true)
+  bot.setControlState('jump', true)
+  try {
+    for (let t = 0; t < 30 && !(there() && bot.entity.onGround); t++) await bot.waitForTicks(1)
+  } finally {
+    bot.setControlState('forward', false)
+    bot.setControlState('jump', false)
+  }
+  await bot.waitForTicks(4)
+  if (!there()) await within(3000, bot.pathfinder.goto(new goals.GoalBlock(cell.x, cell.y, cell.z)), 'stepping up').catch(() => {})
+  bot.pathfinder.setGoal(null)
+}
+// From the bottom of a 1-wide shaft a dig walk aimed at the surface dug or scaffolded further DOWN (card 2b2d1f65): from a cell
+// boxed in on four sides the pathfinder's best partial path goes the one way it can dig. A goal above the body is climbed first
+// when the body is boxed in or the search's path ends lower than the feet: by hand (src/climb.mjs), a niche to the side at
+// head height, a block under the feet, a step up, until the shaft opens on two sides; the legs take it from there
+async function climbFirst (to) {
+  const feet = feetCell(bot.entity.position, bot.entity.onGround)
+  if (to.y <= feet.y) return null
+  const boxed = amBoxedIn()
+  const path = boxed ? [] : searchPath(digLegs(bot.entity.position, to)[0], 1)
+  if (!boxed && !descendingLeg({ from: feet, path, goalY: to.y })) return null
+  const why = boxed ? 'in a 1-wide shaft with the goal above me: climbing first' : descentNote(path[path.length - 1])
+  const passable = (x, y, z) => { const cell = cellAt(x, y, z); return Boolean(cell) && !cell.solid && cell.name !== 'lava' }
+  const out = await climbShaft({
+    feetAt: () => feetCell(bot.entity.position, bot.entity.onGround),
+    goalY: to.y,
+    blockAt: cellAt,
+    carried: climbBlocks(inventoryCounts(), name => bot.registry.blocksByName[name]?.boundingBox === 'block'),
+    dig: cell => long.dig({ x: cell.x, y: cell.y, z: cell.z, batch: true }),
+    place: block => long.place({ item: block.item, x: block.x, y: block.y, z: block.z }),
+    step: stepUp,
+    until: now => !inPocket((dx, dy, dz) => passable(now.x + dx, now.y + dy, now.z + dz))
+  }).catch(e => { throw new Error(`${why}; ${e.message}`) })
+  return `${why}; climbed ${out.climbed} (${out.side} niche, ${out.placed} placed, ${out.dug} dug) to ${out.to.x},${out.to.y},${out.to.z}`
+}
 // a dig walk goes in legs of 6 (src/diglegs.mjs): a straight line of 20 through rock is more search than the 5 s budget
 // holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
 async function walkLegs (to, range, into = false) {
-  const legs = digging ? digLegs(bot.entity.position, to) : [to]
   const notes = []
+  const climbed = digging ? await climbFirst(to) : null
+  if (climbed) notes.push(climbed)
+  const legs = digging ? digLegs(bot.entity.position, to) : [to]
   for (const [i, leg] of legs.entries()) {
     const last = i === legs.length - 1
     // a leg on (or in mid-air over) the floor of a pit walks to the pit's rim instead (src/walk.mjs rimGoal, card 3fe30fb4)
