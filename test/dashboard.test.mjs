@@ -210,6 +210,8 @@ const routes = [
   ['/src/../lib.mjs', { kind: 'unknown' }],
   ['/src/sub/lib.mjs', { kind: 'unknown' }],
   ['/src/lib.txt', { kind: 'unknown' }],
+  // lib.mjs's split: the browser also needs the modules it re-exports, one lib/ segment deep
+  ['/src/lib/plan.mjs', { kind: 'srclib', name: 'lib/plan.mjs' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],

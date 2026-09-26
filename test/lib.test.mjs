@@ -2159,7 +2159,13 @@ const unimported = (source, lib, module = 'lib') => {
   return [...lib.matchAll(/export (?:const|function|async function) (\w+)/g)].map(m => m[1]).filter(n => !imported.has(n) && new RegExp(`\\b${n}\\(`).test(body))
 }
 const CLI_SOURCE = fs.readFileSync(new URL('../src/cli.mjs', import.meta.url), 'utf8')
-const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8') + CLI_SOURCE
+// once lib.mjs becomes a barrel over src/lib/*.mjs, its own exports live in those files: read them all so the
+// unimported() checks below still see every helper bot.mjs/mc.mjs/check-code.mjs might call.
+const LIB_DIR = new URL('../src/lib/', import.meta.url)
+const LIB_MODULE_SOURCE = fs.existsSync(LIB_DIR)
+  ? fs.readdirSync(LIB_DIR).filter(f => f.endsWith('.mjs')).map(f => fs.readFileSync(new URL(f, LIB_DIR), 'utf8')).join('\n')
+  : ''
+const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8') + LIB_MODULE_SOURCE + CLI_SOURCE
 test('unimported: spots a lib helper that is called but not imported', () => assert.deepEqual(unimported("import { terse } from './lib.mjs'\nfoodAway({})", LIB_SOURCE), ['foodAway']))
 for (const [file, module, source] of [['../src/bot.mjs', 'lib', LIB_SOURCE], ['../tools/mc.mjs', 'cli', CLI_SOURCE], ['../tools/check-code.mjs', 'cli', CLI_SOURCE]]) {
   test(`${file} imports every ${module} helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), source, module), []))

@@ -40,7 +40,9 @@ const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
 // same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
 // lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
 // agent gives lib.mjs a new sibling import (an import a static route list would miss with no visible error at all).
-const SRCLIB = /^\/src\/([A-Za-z0-9_.-]+\.mjs)$/
+// lib.mjs's split moved most of it under src/lib/: also match one lib/ segment (never src/body/, which the
+// browser never loads) so /src/lib/plan.mjs etc still resolve.
+const SRCLIB = /^\/src\/((?:lib\/)?[A-Za-z0-9_.-]+\.mjs)$/
 
 export const route = url => {
   const { pathname } = new URL(url, 'http://dashboard')
