@@ -1,5 +1,6 @@
 // Pure helpers, kept apart from bot.mjs so they can be tested without a server.
 import { compact, between } from './cli.mjs'
+import { WORK_RANGE } from './walk.mjs'
 export * from './cli.mjs'
 export * from './players.mjs'
 
@@ -2192,21 +2193,40 @@ export function planErrors (parsed) {
   ]
 }
 
-// A walk into a field steps AROUND planted cells rather than trample them, so a crop with nothing walkable beside it is
-// a crop the body can never stand next to: `goto` answers "no walkable path" and the whole field reads as unreachable.
-// Chani's carrot patch sandwiched its water row between two carrot rows and left nothing but crops between the gate and
-// the far row, and she took her own plan's fault for a tool bug (BUGS.md 09-23). A plan can be told this before it is
-// built, and a field that already stands can be asked. Walked THROUGH: a path, a covered channel, a gate, a flower, a
-// sapling - the ones a body passes without breaking. Not walked through: crops (stepped around), fences, torch posts,
-// chests, composters, tables. Anything outside the plan is walkable, because the plan says nothing about it and the
-// ground around a farm is where a walk starts from.
+// A walk into a field steps AROUND planted cells rather than trample them, and a job stands within WORK_RANGE of the
+// cell it works: one up and four across is 4.12, so a lane four blocks from a bed serves it and a covered channel every
+// eight rows serves a whole field. A crop with nothing to stand on within that reach is a crop no job can be done on:
+// `goto` beside it answers "nowhere to stand" and so does every till, plant and pour there. Chani's carrot patch
+// sandwiched its water row between two carrot rows and left nothing but crops between the gate and the far row, and she
+// took her own plan's fault for a tool bug (BUGS.md 09-23); jizo-melon-patch's census called 140 cells stranded for want
+// of a cell BESIDE them, on a field a sweep had just harvested end to end from its channels (09-26). A plan can be told
+// this before it is built, and a field that already stands can be asked. Stood on: a path, a covered channel, a gate, a
+// flower, a sapling - the ones a body passes without breaking - and anything outside the plan, because the plan says
+// nothing about it and the ground around a farm is where a walk starts from. Reached over: crops, which are seen over
+// and walked round. In the way of the arm as of the walk: fences, gate panels seen from outside, torch posts, chests,
+// composters, tables - anything taller than a crop on the straight line between the lane cell and the bed.
 const LANE_KINDS = new Set(['path', 'water', 'gate', 'flower', 'sapling'])
 const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+// the arm works a bed from a lane cell one up and beside it: dx²+dz²+1 <= WORK_RANGE², four across at most
+const LANE_REACH2 = WORK_RANGE * WORK_RANGE - 1
+const LANE_REACH = Math.floor(Math.sqrt(LANE_REACH2))
+// seen over from a lane: crops, and every lane kind but a gate, whose panel is a fence's height when it is not the cell stood in
+const SEEN_OVER = new Set(['crop', 'path', 'water', 'flower', 'sapling'])
+const tallKind = kind => Boolean(kind) && !SEEN_OVER.has(kind)
+// nothing taller than a crop on the line between two cell centres, sampled every quarter block
+const clearBetween = (kindAt, from, to) => {
+  const steps = Math.ceil(Math.hypot(to.dx - from.dx, to.dz - from.dz) * 4)
+  return Array.from({ length: Math.max(steps - 1, 0) }, (_, i) => (i + 1) / steps)
+    .map(t => [Math.floor(from.dx + 0.5 + (to.dx - from.dx) * t), Math.floor(from.dz + 0.5 + (to.dz - from.dz) * t)])
+    .filter(([dx, dz]) => !(dx === from.dx && dz === from.dz) && !(dx === to.dx && dz === to.dz))
+    .every(([dx, dz]) => !tallKind(kindAt(dx, dz)))
+}
 export function planLane (cells) {
   const crops = (cells ?? []).filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop')
   if (!crops.length) return {}
   const key = (dx, dz) => `${dx},${dz}`
   const map = new Map(cells.map(c => [key(c.dx, c.dz), c]))
+  const kindAt = (dx, dz) => PLAN_LEGEND[map.get(key(dx, dz))?.ch]?.kind ?? null
   const bounds = ['dx', 'dz'].map(k => [Math.min(...cells.map(c => c[k])) - 1, Math.max(...cells.map(c => c[k])) + 1])
   const inside = (dx, dz) => dx >= bounds[0][0] && dx <= bounds[0][1] && dz >= bounds[1][0] && dz <= bounds[1][1]
   const standable = (dx, dz) => {
@@ -2224,12 +2244,17 @@ export function planLane (cells) {
     reached.add(key(dx, dz))
     for (const [sx, sz] of STEPS) queue.push([dx + sx, dz + sz])
   }
-  const stranded = crops.filter(c => !STEPS.some(([sx, sz]) => reached.has(key(c.dx + sx, c.dz + sz))))
+  const lanes = [...reached].map(k => k.split(',').map(Number)).map(([dx, dz]) => ({ dx, dz }))
+  const served = crop => lanes.some(lane =>
+    (lane.dx - crop.dx) ** 2 + (lane.dz - crop.dz) ** 2 <= LANE_REACH2 && clearBetween(kindAt, lane, crop))
+  const stranded = crops.filter(c => !served(c))
   if (!stranded.length) return {}
   const named = stranded.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')
   const more = stranded.length > 4 ? ` and ${stranded.length - 4} more` : ''
-  const subject = stranded.length === 1 ? '1 crop cell has nothing walkable beside it' : `${stranded.length} crop cells have nothing walkable beside them`
-  return { noLane: `${subject} (${named}${more}): lay a . path from the gate through the rows, or a walk into the field answers no walkable path` }
+  const subject = stranded.length === 1
+    ? `1 crop cell has nothing to stand on within ${LANE_REACH} of it`
+    : `${stranded.length} crop cells have nothing to stand on within ${LANE_REACH} of them`
+  return { noLane: `${subject} (${named}${more}): lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand` }
 }
 
 // what it takes to build this plan from nothing: one water bucket does the whole field, a torch cell needs its post too

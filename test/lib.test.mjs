@@ -3070,26 +3070,29 @@ for (const [name, parsed, expected] of [
   test(`planErrors: ${name}`, () => assert.deepEqual(planErrors(parsed), expected))
 }
 
-// Item 21 (Chani, 09-23): `goto` deliberately steps AROUND planted cells rather than trample them, so a field with no
-// walkable lane through it is a field the body cannot stand in - her carrot patch sandwiched its water row between two
-// carrot rows with nothing but crops between the gate and the far row, and every walk into it answered `no walkable
-// path`. A plan can say that before it is built, and a built field can say it when asked what is standing.
+// Item 21 (Chani, 09-23): `goto` deliberately steps AROUND planted cells rather than trample them, so a crop with
+// nothing to stand on within a job's reach is a crop no job can be done on - her carrot patch sandwiched its water row
+// between two carrot rows with nothing but crops between the gate and the far row, and every walk into it answered `no
+// walkable path`. A plan can say that before it is built, and a built field can say it when asked what is standing.
+// Reach, not adjacency (09-26): a job stands within WORK_RANGE of its cell, so a lane four across serves a bed and the
+// eight rows between jizo-melon-patch's two covered channels are all served; test/lane.test.mjs has the shapes.
 const laneOf = (...rows) => planLane(parsePlan(rows.join('\n')).cells)
+const laneAdvice = 'lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand'
 for (const [name, cells, expected] of [
   ['a lane from the gate down the rows reaches every crop', laneOf('#G##', '#.c#', '#~c#', '#.c#', '####'), {}],
-  ['no lane: the gate opens onto the crop that blocks it', laneOf('#G##', '#cc#', '#~~#', '#cc#', '####'),
-    { noLane: '3 crop cells have nothing walkable beside them (2,1 1,3 2,3): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['the gate cell serves the rows within reach of it even where no path is laid', laneOf('#G##', '#cc#', '#~~#', '#cc#', '####'), {}],
+  ['no lane: rows more than four from the gate are out of reach', laneOf('#G##', '#cc#', '#cc#', '#cc#', '#cc#', '#cc#', '#cc#', '####'),
+    { noLane: `5 crop cells have nothing to stand on within 4 of them (2,4 1,5 2,5 1,6 and 1 more): ${laneAdvice}` }],
   ['an open field is worked from its edges', laneOf('www', 'www'), {}],
-  ['the middle of a wide open field is out of reach too', laneOf('wwww', 'wwww', 'wwww', 'wwww'),
-    { noLane: '4 crop cells have nothing walkable beside them (1,1 2,1 1,2 2,2): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['the middle of a wide open field is within reach of its edges too', laneOf('wwww', 'wwww', 'wwww', 'wwww'), {}],
   ['a plan with no crops has no rows to walk', laneOf('###', '#.#', '#G#'), {}],
   ['a fence with no gate leaves its crop unreachable', laneOf('###', '#w#', '###'),
-    { noLane: '1 crop cell has nothing walkable beside it (1,1): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+    { noLane: `1 crop cell has nothing to stand on within 4 of it (1,1): ${laneAdvice}` }],
   ['flowers and saplings are walked through, so they serve the row beside them', laneOf('#G##', '#Fc#', '#tc#', '####'), {}],
-  ['a chest is not a lane: it is a block in the way', laneOf('#G##', '#Cc#', '#Cc#', '####'),
-    { noLane: '2 crop cells have nothing walkable beside them (2,1 2,2): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
-  ['more than four unreachable cells are counted, not listed', laneOf('wwwww', 'wwwww', 'wwwww', 'wwwww', 'wwwww'),
-    { noLane: '9 crop cells have nothing walkable beside them (1,1 2,1 3,1 1,2 and 5 more): lay a . path from the gate through the rows, or a walk into the field answers no walkable path' }],
+  ['a chest is not a lane: it is a block in the way of the arm', laneOf('#G##', '#Cc#', '#Cc#', '####'),
+    { noLane: `1 crop cell has nothing to stand on within 4 of it (2,2): ${laneAdvice}` }],
+  ['more than four unreachable cells are counted, not listed', laneOf(...Array(13).fill('w'.repeat(13))),
+    { noLane: `25 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 7,4 and 21 more): ${laneAdvice}` }],
   ['an empty plan is not a complaint', planLane([]), {}]
 ]) {
   test(`planLane: ${name}`, () => assert.deepEqual(cells, expected))
@@ -3098,8 +3101,8 @@ for (const [name, cells, expected] of [
 // the census reads the same judgement off the plan the field was built from, so `farm.fields` says it about a field
 // that already stands and not only about a plan about to be saved
 test('fieldCensus: a field with no lane through it says so', () => {
-  const cells = planCells({ plan: '#G##\n#cc#\n#~~#\n#cc#\n####', x: 0, y: 63, z: 0 })
-  assert.match(fieldCensus(cells, () => null).noLane, /^3 crop cells have nothing walkable beside them/)
+  const cells = planCells({ plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(fieldCensus(cells, () => null).noLane, /^7 crop cells have nothing to stand on within 4 of them/)
 })
 test('fieldCensus: a field with a lane says nothing about it', () => {
   const cells = planCells({ plan: '#G##\n#.c#\n#~c#\n#.c#\n####', x: 0, y: 63, z: 0 })
@@ -3832,10 +3835,10 @@ test('farm.build: a plan saved at the level you stand on is refused, with the y 
 // Item 21 (Chani, 09-23): a field with nothing walkable between its gate and its far row cannot be worked at all, and
 // nothing said so until every walk into it had already answered "no walkable path". A lane-less plan is legal - it is a
 // shape, not a contradiction - so it is saved with a warning rather than refused, and the field says it too.
-test('farm.plan: a plan with no lane through its rows is saved, with the cells nothing can stand beside', async () => {
+test('farm.plan: a plan with no lane through its rows is saved, with the cells nothing can stand within reach of', async () => {
   const { api, calls } = fakeApi({ places: [] })
-  const out = await farmPlan.run(api, { name: 'north-field', map: '#G##\n#cc#\n#~~#\n#cc#\n####', x: 0, y: 63, z: 0 })
-  assert.match(out.warn, /^3 crop cells have nothing walkable beside them \(2,1 1,3 2,3\): lay a \. path/)
+  const out = await farmPlan.run(api, { name: 'north-field', map: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(out.warn, /^7 crop cells have nothing to stand on within 4 of them \(2,4 1,6 2,6 1,7 and 3 more\): lay a \. path/)
   assert.equal(calls.length, 1)
 })
 
@@ -3950,10 +3953,10 @@ test('farm.plan: saving onto my own place still works', async () => {
 })
 
 test('farm.fields: a field with no lane through it says so on a line of its own', async () => {
-  const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#~~#\n#cc#\n####' }] })
+  const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####' }] })
   const out = await farmFields.run(api, {})
   assert.match(out.text, /^north-field 0m crops\(carrots:0\)|^north-field 0m cells=/)
-  assert.match(out.text, /\n {2}lane: 3 crop cells have nothing walkable beside them \(2,1 1,3 2,3\): lay a \. path/)
+  assert.match(out.text, /\n {2}lane: 7 crop cells have nothing to stand on within 4 of them \(2,4 1,6 2,6 1,7 and 3 more\): lay a \. path/)
 })
 
 test('farm.fields: a place that is on the map but has no plan is not a field', async () => {
