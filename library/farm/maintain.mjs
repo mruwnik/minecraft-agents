@@ -105,6 +105,9 @@ export default {
       if (spot) await leg({ x: spot.x, y: spot.y, z: spot.z, range: 1 })
     }
 
+    // the report brought up to date before every checkpoint: a hand-back there (spoken to, low health) ends the task
+    // with what was reported, and a sweep that reported only at its end said nothing of 43 seed sown (Jizo, 09-26 23:43Z)
+    const pause = () => { api.report(ordered(summary)); return api.checkpoint({ canDeposit }) }
     const sweep = async () => {
       // no way to the field is the sweep's stuck= line, not its crash: the next day tries again
       const noWay = await walkToEdge().then(() => null, e => e.message)
@@ -120,7 +123,7 @@ export default {
       if (strays(plan.cells, api.block).length) {
         const zones = (await api.act('zones').catch(() => ({}))).zones ?? []
         const { todo, guarded, aside } = clearJobs(plan.cells, api.block, zones, api.me?.())
-        const { cleared, stopped } = await clearStrays(api, todo, to => leg({ ...to, range: 3 }), () => api.checkpoint({ canDeposit }))
+        const { cleared, stopped } = await clearStrays(api, todo, to => leg({ ...to, range: 3 }), done => { summary.cleared = clutterLine(done); return pause() })
         if (cleared.length) {
           summary.cleared = clutterLine(cleared)
           await api.act('collect', { range: 8 }).catch(e => api.note(`the cleared blocks' drops were not picked up: ${e.message}`))
@@ -131,11 +134,11 @@ export default {
         if (guarded.length) summary.inZone = zoneLine(guarded)
         if (aside.length) summary.leftAlone = asideLine(aside)
       }
-      await api.checkpoint({ canDeposit })
+      await pause()
       const cut = await api.act('farm.harvest', { within }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
       add(summary.harvested, cut.harvested)
       summary.replanted += cut.replanted ?? 0
-      await api.checkpoint({ canDeposit })
+      await pause()
 
       // ONE pass over the job list. This used to run twice, because a plant could report ok and leave the bed bare: the
       // place primitive counted a click the server quietly dropped as a block placed. It now reads the cell back and skips
@@ -178,6 +181,15 @@ export default {
       // and its plant are not tried on air
       const unfilled = new Set()
       const stillHole = job => { unfilled.add(bedKey(job)); leave(job, 'unfilled', `${job.x},${job.y},${job.z}`) }
+      // what the jobs so far left: said after every job and at the end alike
+      const sayJobs = () => {
+        if (dry.length) summary.skipped = dry.join('; ')
+        if (dug.length) summary.dug = dug.join('; ')
+        if (Object.keys(short).length) summary.missing = shortLine(short)
+        const bareSaid = bareLine(bare)
+        if (bareSaid) summary.bare = bareSaid
+        else delete summary.bare
+      }
       for (const job of jobs) {
         if ((job.do === 'till' || job.do === 'plant') && unfilled.has(bedKey(job))) continue
         if (job.do === 'till' && !hoe) { leave(job, 'untilled', NO_HOE); continue }
@@ -200,14 +212,10 @@ export default {
         if (failed && job.do === 'fill') stillHole(job)
         if (failed && job.do === 'till') { untilled.add(bedKey(job)); leave(job, 'untilled', failed) }
         if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
-        await api.checkpoint({ canDeposit })
+        sayJobs()
+        await pause()
       }
-      if (dry.length) summary.skipped = dry.join('; ')
-      if (dug.length) summary.dug = dug.join('; ')
-      if (Object.keys(short).length) summary.missing = shortLine(short)
-      const bareSaid = bareLine(bare)
-      if (bareSaid) summary.bare = bareSaid
-      else delete summary.bare
+      sayJobs()
       // whatever a done job left undone: reported, never silently repeated (the next sweep picks it up). A bed
       // bare= already accounts for is not "unfinished" as well
       const left = jobs.length ? farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip' && (!j.item || j.have) && !bareBeds.has(bedKey(j))) : []

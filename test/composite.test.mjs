@@ -2,7 +2,7 @@
 // stopped, cancelled or killed rides on its FAIL line, and a death during it names where the kit lies
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { carryReport, failedResult, deathLine, deathCancel } from '../src/composite.mjs'
+import { carryReport, failedResult, deathLine, deathCancel, compositeResult } from '../src/composite.mjs'
 
 const progress = { built: 12, stage: 'walls 2 of 3', dug: '3,64,1' }
 
@@ -65,4 +65,23 @@ for (const [name, given, expected] of [
   ['neither', {}, 'died']
 ]) {
   test(`deathCancel: ${name}`, () => assert.equal(deathCancel(given), expected))
+}
+
+// ---------------------------------------------------------------- compositeResult
+// the result of a composite that ran to its end or was handed back. A composite that reports before every checkpoint
+// (farm.maintain, so a hand-back still says what it did) fixed the report's key order at its first report: a finished
+// one's own return value decides the order instead, so its counts come first in the 120 characters a routine keeps.
+// What it returned wins over what it reported; a hand-back keeps the report as it stands
+for (const [name, report, outcome, notes, expected] of [
+  ['done: the return value\'s order, then what only the report has, then stopped',
+    { sweeps: 1, poured: 0, cleared: 2, filled: 1 }, { stopped: 'done', sweeps: 1, filled: 1, poured: 0 }, [],
+    [['sweeps', 1], ['filled', 1], ['poured', 0], ['cleared', 2], ['stopped', 'done'], ['notes', undefined]]],
+  ['done: the return value wins over an older report of the same field',
+    { cleared: 1 }, { stopped: 'done', cleared: '1(dirt)' }, [],
+    [['cleared', '1(dirt)'], ['stopped', 'done'], ['notes', undefined]]],
+  ['handed back: the report as it stands, then why, then the notes',
+    { sweeps: 0, harvested: { wheat: 2 }, tilled: 1 }, { stopped: 'spoken to (a player)' }, ['a note', 'another'],
+    [['sweeps', 0], ['harvested', { wheat: 2 }], ['tilled', 1], ['stopped', 'spoken to (a player)'], ['notes', 'a note; another']]]
+]) {
+  test(`compositeResult: ${name}`, () => assert.deepEqual(Object.entries(compositeResult(report, outcome, notes)), expected))
 }

@@ -10,6 +10,13 @@
 export const carryReport = (error, report = {}, notes = []) =>
   Object.assign(error, { report: { ...report, ...(notes.length ? { notes: notes.join('; ') } : {}), ...error.report } })
 
+// the result of a composite that ran to its end or was handed back (src/body/runner.mjs runComposite). A composite that
+// reports before every checkpoint, so a hand-back still says what it did (farm.maintain), fixed the report's key order
+// at its first report: a finished one's return value orders the line instead (the routine keeps 120 characters of it),
+// and wins over what it reported; then what only the report has, then stopped= and the notes
+export const compositeResult = (report, { stopped, ...said }, notes = []) =>
+  ({ ...said, ...report, ...said, stopped, notes: notes.length ? notes.join('; ') : undefined })
+
 // the FAIL result of a task that did not finish: the runner's own fields, then the report it carried, then why.
 // A cancel is said in the canceller's words (stop, superseded by, died at) unless the composite is still restoring
 // something, when its own words stand. The report never overrides ok= or error=

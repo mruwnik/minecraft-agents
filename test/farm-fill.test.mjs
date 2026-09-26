@@ -129,8 +129,10 @@ test('farm.maintain: a hole in the lane is filled with the rest, before the swee
   assert.deepEqual([report.filled, report.bare, report.parked], [1, undefined, '0,64,1 (lane)'])
 })
 
+// the order the sweep returns, which orders the task's line (src/composite.mjs compositeResult); the report itself is
+// brought up to date before every checkpoint, and its key order is whichever came first
 test('farm.maintain: filled= comes right after bare= in the summary', async () => {
-  const { api, report } = sweepOver({ items: { dirt: 4, wheat_seeds: 8, stone_hoe: 1 } })
-  await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual(Object.keys(report).slice(0, 5), ['sweeps', 'harvested', 'replanted', 'filled', 'tilled'])
+  const { api } = sweepOver({ items: { dirt: 4, wheat_seeds: 8, stone_hoe: 1 } })
+  const summary = await maintainFarm.run(api, { place: 'test-field' })
+  assert.deepEqual(Object.keys(summary).slice(0, 5), ['sweeps', 'harvested', 'replanted', 'filled', 'tilled'])
 })

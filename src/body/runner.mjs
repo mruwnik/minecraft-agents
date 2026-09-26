@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { breedPlan } from '../villager-breed.mjs'
 import { eatAllowed, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
-import { carryReport } from '../composite.mjs'
+import { carryReport, compositeResult } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
 import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard } from '../bot.mjs'
@@ -213,5 +213,5 @@ export async function runComposite (name, mod, a) {
     r => ({ stopped: 'done', ...r }),
     // whatever ends it early (stop, a death, a step that threw), the report built so far rides out on the error (src/composite.mjs)
     e => { if (e instanceof HandBack) return { stopped: e.reason }; throw carryReport(e, report, notes) })
-  return { ...report, ...outcome, notes: notes.length ? notes.join('; ') : undefined }
+  return compositeResult(report, outcome, notes)
 }

@@ -107,7 +107,7 @@ export const asideLine = aside => aside.map(b => `${b.name}@${b.x},${b.y},${b.z}
 
 // walk to each job (`walk(cell)`), dig it, and believe the world, not the click: a dig the server quietly dropped leaves
 // the block standing and is not counted. The first job that cannot be walked to or dug stops the round, and is said.
-// `pause` is the caller's checkpoint between blocks
+// `pause(cleared)` is the caller's checkpoint between blocks, handed what is cleared so far
 export async function clearStrays (api, todo, walk, pause = () => api.checkpoint()) {
   const cleared = []
   for (const block of todo) {
@@ -117,7 +117,7 @@ export async function clearStrays (api, todo, walk, pause = () => api.checkpoint
     if (failed) return { cleared, stopped: `${block.name} at ${block.x},${block.y},${block.z}: ${failed}` }
     if (api.block(block.x, block.y, block.z)?.name !== block.name) cleared.push(block)
     api.report({ cleared: cleared.length })
-    await pause()
+    await pause(cleared)
   }
   return { cleared }
 }
