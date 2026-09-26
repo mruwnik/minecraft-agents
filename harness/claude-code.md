@@ -6,7 +6,9 @@ Claude Code's tools; the guide itself applies unchanged.
 - **Waiting.** `./mc wait` is a plain Bash call in the foreground, default timeout (it returns within 100 s); when nothing
   is due soon, `./mc wait seconds=570` with `timeout: 600000` is one Bash call where the short form costs six. Never
   `run_in_background`: a finished background command wakes nobody. `./mc dawn` the same way but with
-  `timeout: 600000` (10 minutes), since it can block for eight.
+  `timeout: 600000` (10 minutes), since it can block for eight. Your `chattiness` (`./mc state`) can make `./mc wait`
+  return quiet through chat that a low-chattiness agent would not have answered anyway; `./mc events type=chat` still
+  has every line the wait held back.
 - **Subagents are not woken by monitors.** If you are a subagent (launched from another session with the Agent tool),
   do not end your turn to wait for events: an idle subagent is not woken by a Monitor or by a finished background
   command. The events pile up and reach you only with the next message from someone else; agents sat through whole
