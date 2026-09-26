@@ -8,7 +8,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
-import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, PATH_FAILURE } from '../src/fieldleg.mjs'
+import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, spareCells, PATH_FAILURE } from '../src/fieldleg.mjs'
 
 const cells = [{ x: 0, y: 63, z: 0 }, { x: 2, y: 63, z: 0 }, { x: 0, y: 63, z: 1 }]
 const NO_PATH = 'goto: no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
@@ -69,6 +69,18 @@ test('fieldLeg: a path failure inside the footprint is walked once more with dig
   assert.equal(r.dug, '2,64,1')
 })
 
+test('spareCells: every plan cell at its ground level and one above, whatever stands there', () => {
+  assert.deepEqual(spareCells([{ x: 0, y: 63, z: 0, ch: '.' }, { x: 1, y: 63, z: 0, ch: 'w' }]),
+    [{ x: 0, y: 63, z: 0 }, { x: 0, y: 64, z: 0 }, { x: 1, y: 63, z: 0 }, { x: 1, y: 64, z: 0 }])
+})
+
+test('fieldLeg: the digging walk is told the cells to spare; the plain walk is not', async () => {
+  const seen = []
+  const { api } = fakeApi({ answers: { goto: args => { seen.push(args.spare); if (args.dig !== true) throw new Error(NO_PATH); return {} } } })
+  await fieldLeg(api, leg, box, spareCells(cells))
+  assert.deepEqual(seen, [undefined, spareCells(cells)])
+})
+
 test('fieldLeg: both walks failing is one line naming the cell and both answers, and no third walk', async () => {
   const { api, calls } = fakeApi({ answers: walker(NO_PATH, TIMED_OUT) })
   await assert.rejects(fieldLeg(api, leg, box), { message: `2,64,1: ${NO_PATH}; with dig=true inside the plan's footprint: ${TIMED_OUT}` })
@@ -114,15 +126,22 @@ const field = () => {
 }
 // the walk to the field's edge (range 1) arrives; the walk to the cell the plant is worked from (range 0) fails as told
 const sweep = async goto => {
-  const legs = args => args.range === 0 ? goto(args) : {}
+  const spared = []
+  const legs = args => { if (args.dig === true) spared.push(args.spare); return args.range === 0 ? goto(args) : {} }
   const made = fakeApi({ place: fakePlace('ww'), world: field(), items: { wheat_seeds: 5 }, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, goto: legs } })
   const summary = await maintainFarm.run(made.api, { place: 'test-field' })
-  return { summary, walks: made.calls.filter(c => /^(goto|place) /.test(c)) }
+  return { summary, spared, walks: made.calls.filter(c => /^(goto|place) /.test(c)) }
 }
 
-test('farm.maintain: a walk to the cell a plant is worked from fails on the path: once more with dig=true, then the plant', async () => {
+test('farm.maintain: the digging walk spares both plan cells at their ground level and one above', async () => {
+  const { spared } = await sweep(walker(NO_PATH).goto)
+  assert.deepEqual(spared, [[{ x: 0, y: 63, z: 0 }, { x: 0, y: 64, z: 0 }, { x: 1, y: 63, z: 0 }, { x: 1, y: 64, z: 0 }]])
+})
+
+test('farm.maintain: a walk to the cell a plant is worked from fails on the path: once more with dig=true, sparing the plan, then the plant', async () => {
   const { summary, walks } = await sweep(walker(NO_PATH).goto)
-  assert.deepEqual(walks.filter(c => c.includes('range=0')), ['goto x=1 y=64 z=-1 range=0', 'goto x=1 y=64 z=-1 range=0 dig'])
+  assert.deepEqual(walks.filter(c => c.includes('range=0')).map(c => c.replace(/ spare=.*/, ' spare=…')), ['goto x=1 y=64 z=-1 range=0', 'goto x=1 y=64 z=-1 range=0 dig spare=…'])
+  assert.equal(walks.filter(c => c.includes('dig')).length, 1)
   assert.deepEqual(walks.filter(c => c.startsWith('place')), ['place item=wheat_seeds x=1 y=64 z=0'])
   assert.equal(summary.stuck, undefined)
   assert.equal(summary.dug, '1,64,-1')

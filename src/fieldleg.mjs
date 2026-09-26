@@ -37,16 +37,21 @@ export const digRetryRefusal = ({ error, from, to, box }) => {
   return null
 }
 
+// the cells a dig walk round a plan may never break, whatever stands there: every plan cell at its ground level and
+// the level above it (the crop, the fence, the slab), for goto spare=. looksBuilt guards what looks built wherever a
+// dig walk goes; this guards the plan's dirt path cells and the ground under its beds as well
+export const spareCells = cells => cells.flatMap(c => [{ x: c.x, y: c.y, z: c.z }, { x: c.x, y: c.y + 1, z: c.z }])
+
 // walk one leg of a sweep to `to` (x, y, z, range). The result is the walk's own, with `dug` naming the cell when it
-// took the second, digging walk to get there
-export async function fieldLeg (api, to, box) {
+// took the second, digging walk to get there; that walk is told the cells to spare
+export async function fieldLeg (api, to, box, spare = []) {
   const goal = { x: to.x, y: to.y, z: to.z, range: to.range ?? 0 }
   const first = await api.act('goto', goal).then(r => ({ r }), e => ({ e: e.message }))
   if (!first.e) return first.r
   const refusal = digRetryRefusal({ error: first.e, from: api.pos(), to, box })
   if (refusal === undefined) throw new Error(first.e)
   if (refusal) throw new Error(`${at(to)}: ${first.e} (no dig=true retry: ${refusal})`)
-  const second = await api.act('goto', { ...goal, dig: true }).then(r => ({ r }), e => ({ e: e.message }))
+  const second = await api.act('goto', { ...goal, dig: true, ...(spare.length ? { spare } : {}) }).then(r => ({ r }), e => ({ e: e.message }))
   if (second.e) throw new Error(`${at(to)}: ${first.e}; with dig=true inside the plan's footprint: ${second.e}`)
   return { ...second.r, dug: at(to) }
 }

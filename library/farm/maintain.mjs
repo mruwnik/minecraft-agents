@@ -4,7 +4,7 @@ import { waterShortfall } from '../../src/builder.mjs'
 import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
-import { fieldLeg, footprintOf } from '../../src/fieldleg.mjs'
+import { fieldLeg, footprintOf, spareCells } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
 import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
@@ -41,8 +41,9 @@ export default {
     // every walk of the sweep is a leg of src/fieldleg.mjs: plain first, once more with dig=true when the path fails
     // inside the plan's footprint (never a plan block), and both failing is one stuck= line naming the cell (card 72e49b3d)
     const box = footprintOf(plan.cells)
+    const spare = spareCells(plan.cells)
     const dug = []
-    const leg = to => fieldLeg(api, to, box).then(r => { if (r?.dug) dug.push(r.dug); return r })
+    const leg = to => fieldLeg(api, to, box, spare).then(r => { if (r?.dug) dug.push(r.dug); return r })
     const keep = seedReserve(reservePlans(api, plan, a.reserve_for).map(p => p.parsed))
 
     const tryJob = async job => {
