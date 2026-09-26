@@ -35,8 +35,8 @@ import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
-import { noPathAdvice, inHole } from './caveexit.mjs'
-import { farmWalk, legFlags, stepsOff } from './lib/path.mjs'
+import { noPathAdvice, inHole, perchedOverField } from './caveexit.mjs'
+import { farmWalk, legFlags, stepsOff, noFirstMove } from './lib/path.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { carryReport, failedResult, deathLine, deathCancel } from './composite.mjs'
@@ -3238,7 +3238,8 @@ const quick = {
     // one call searches for a single 40 ms slice: go on the way a walk does, until it is done or the time a walk this long gets is over
     while (r.status === 'partial' && r.context && Date.now() - began < budget) r = Object.assign(r.context.compute(), { context: r.context })
     const last = r.path[r.path.length - 1]
-    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', ...(rim && { note: rim.note }), gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
+    const stuckHere = r.status === 'noPath' && r.visitedNodes <= 1 ? firstMoveNote(moves) : null
+    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', ...(stuckHere && { why: stuckHere }), ...(rim && { note: rim.note }), gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
   },
   // debugging aid: the raw metadata of the nearest entities with this name (how does the server mark a shorn sheep?)
   entity: (a) => ({
@@ -3760,6 +3761,12 @@ const passableAboutFeet = () => {
 const amBoxedIn = () => Boolean(bot?.entity) && boxedIn(passableAboutFeet())
 // a hole one block deep (card 94e6dcb1): the walk out of it is a jump, and a failed one reads as a distant obstacle
 const amInHole = () => Boolean(bot?.entity) && inHole(passableAboutFeet())
+// one block above a field, on a log in the rows (Jizo, 09-26 23:24Z): the way down is a drop onto farmland
+const amPerched = () => {
+  if (!bot?.entity) return false
+  const feet = feetCell(bot.entity.position, bot.entity.onGround)
+  return perchedOverField((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.name)
+}
 // what the body can read off itself when a walk finds no path (src/caveexit.mjs): no sky over the head and the goal up
 // on the surface, water in or beside its cell (a dig walk breaks nothing beside a liquid), a protected zone round it
 const noPathEvidence = () => {
@@ -3771,9 +3778,18 @@ const noPathEvidence = () => {
   const goalY = typeof lastWalkGoal?.y === 'number' ? lastWalkGoal.y : null
   return { underground: bot.blockAt(me.offset(0, 1, 0))?.skyLight === 0, goalDy: goalY === null ? null : goalY - feet.y, wet, zoned: inAnyZone(zones, new Vec3(feet.x, feet.y, feet.z)) }
 }
+// the search's start with no move the walk keeps (path_to: noPath nodes=0 visited=1), named: src/lib/path.mjs noFirstMove
+const firstMoveNote = moves => {
+  if (!bot?.entity || !moves?.firstMoves) return null
+  const feet = feetCell(bot.entity.position, bot.entity.onGround)
+  return noFirstMove(moves.firstMoves({ ...feet, remainingBlocks: moves.countScaffoldingItems() }))
+}
 const explainFailure = message => {
   const boxed = amBoxedIn()
-  return noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, holed: amInHole(), ...noPathEvidence() })
+  // appended, never instead: the sweeps' dig retry and the stuck count read the no-path words (src/fieldleg.mjs PATH_FAILURE)
+  const stuckHere = /no path to the goal|no walkable path/i.test(message) ? firstMoveNote(bot.pathfinder.movements) : null
+  const advice = noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, holed: amInHole(), perched: amPerched(), ...noPathEvidence() })
+  return stuckHere ? `${advice}. ${stuckHere}` : advice
 }
 // the path a walk would take, searched the way path_to searches it: one 40 ms slice at a time until it is done or the budget is out
 function searchPath (aim, range) {
