@@ -276,6 +276,14 @@ export async function buildBlueprint (api, a, io = {}) {
     if (now?.name === job.block.name) { wrong.push(`${job.block.name} at ${cell}`); return }
     stuck = stuck ?? `${job.do} ${cell}: ${now?.name ?? 'nothing'} stands there after placing ${job.item}`
   }
+  // a bed or a door the game refused: what still stands in its other half, the one cause a rerun cannot get past
+  const mateBlocked = job => {
+    if (!job.second) return ''
+    const x = job.x + job.second.dx; const y = job.y + job.second.dy; const z = job.z + job.second.dz
+    const there = api.block(x, y, z)?.name
+    if (!there || isAir(there)) return ''
+    return `: ${there} stands in its other half at ${x},${y},${z}: dig it, then run blueprint.build place=${place} again`
+  }
   const tryJob = async job => {
     const cell = cellText(job)
     // one bucket does all the water; anything else is one item per cell
@@ -292,7 +300,7 @@ export async function buildBlueprint (api, a, io = {}) {
       : job.do === 'pour' ? ['pour', { x: job.x, y: job.y - 1, z: job.z }]
       : ['place', placeArgs(job)]
     const failed = await api.act(...call).then(() => null, e => e.message)
-    if (failed) { stuck = stuck ?? `${job.do} ${cell}: ${failed}`; return }
+    if (failed) { stuck = stuck ?? `${job.do} ${cell}: ${failed}${mateBlocked(job)}`; return }
     if (job.do === 'dig') { counts.dug++; return }
     if (job.do === 'till') { counts.tilled++; return }
     if (job.do === 'pour') { counts.poured++; return }

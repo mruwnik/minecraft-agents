@@ -168,6 +168,27 @@ test('the y-1 floor is dug out of the turf before it is laid', async () => {
   assert.equal(calls.indexOf(`dig x=100 y=64 z=-20`) < calls.indexOf('place item=cobblestone x=100 y=64 z=-20'), true)
 })
 
+test('grass left in the bed head cell is dug before the bed goes in, and the bed is built', async () => {
+  const head = key(AT.x + 2, AT.y, AT.z + 2)
+  const world = worldOf({ [head]: 'grass_block' })
+  const { api, calls } = body({ world, items: hutKit() })
+  const r = await buildBlueprint(api, { name: 'starter-hut', place: 'hut', ...AT }, io)
+  assert.equal(r.stuck, undefined)
+  const dug = calls.indexOf(`dig ${head}`)
+  assert.equal(dug >= 0 && dug < calls.findIndex(c => c.startsWith('place item=white_bed ')), true)
+})
+
+// a place the game refuses over a bed or door names the other half's cell and what still stands there, so the driver
+// can dig it rather than run the same build again into the same refusal
+test('a bed that does not take names what stands in its head cell', async () => {
+  const head = key(AT.x + 2, AT.y, AT.z + 2)
+  const world = worldOf()
+  const refuse = () => { world[head] = 'grass_block'; throw new Error('placing white_bed at (101, 65, -18) did not take with the requested facing and parts') }
+  const { api } = body({ world, items: hutKit(), answers: { place: args => args.item === 'white_bed' ? refuse() : placing(world, {}, {})(args) } })
+  const r = await buildBlueprint(api, { name: 'starter-hut', place: 'hut', ...AT }, io)
+  assert.equal(r.stuck, `place 101,65,-18: placing white_bed at (101, 65, -18) did not take with the requested facing and parts: grass_block stands in its other half at 102,65,-18: dig it, then run blueprint.build place=hut again`)
+})
+
 test('an obstacle is dug with clear=true and counted', async () => {
   const world = worldOf({ [key(AT.x + 1, AT.y, AT.z)]: 'oak_planks' })
   const { api } = body({ world, items: hutKit() })

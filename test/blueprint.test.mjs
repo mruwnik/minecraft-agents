@@ -416,6 +416,27 @@ test('jobsFor: a . cell holding grass is a dig, a wall cell holding planks is an
   assert.deepEqual({ natural: wall.natural, was: wall.was }, { natural: false, was: 'oak_planks' })
 })
 
+// the bed's head and the door's upper half are placed by the game with the first half, so terrain left in them makes the
+// placement fail: their cells are dug before the first half, in its layer (Hollis's hut, 09-26: grass in the head cell)
+test('jobsFor and orderJobs: terrain in the other half of a bed or a door is dug before the first half is placed', () => {
+  const rows = [
+    ['bed head', '102,65,-18', 'grass_block', 'white_bed'],
+    ['door upper', '102,66,-16', 'oak_leaves', 'oak_door']
+  ]
+  const bp = resolve(hut())
+  for (const [label, cell, was, item] of rows) {
+    const world = worldOf({ [cell]: fakeBlock(was) })
+    const dig = jobsFor(bp, AT, world).find(j => `${j.x},${j.y},${j.z}` === cell)
+    assert.deepEqual({ do: dig?.do, was: dig?.was, natural: dig?.natural }, { do: 'dig', was, natural: true }, label)
+    const { jobs } = orderJobs(jobsFor(bp, AT, world), bp, AT, world)
+    const dug = jobs.findIndex(j => `${j.x},${j.y},${j.z}` === cell && j.do === 'dig')
+    const placed = jobs.findIndex(j => j.item === item)
+    assert.ok(dug >= 0 && dug < placed, `${label}: dug at ${dug}, placed at ${placed}`)
+    const staged = stages(jobs, 99).flatMap(s => s.jobs)
+    assert.ok(staged.findIndex(j => j.do === 'dig' && `${j.x},${j.y},${j.z}` === cell) < staged.findIndex(j => j.item === item), `${label}: staged in order`)
+  }
+})
+
 test('orderJobs: layers bottom-up, digs first, walls out from the ground, furniture after the floor, torch after the table', () => {
   const bp = resolve(hut())
   const { jobs } = orderJobs(jobsFor(bp, AT, flatGround(64)), bp, AT, flatGround(64))

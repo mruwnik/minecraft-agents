@@ -668,9 +668,23 @@ export function jobsFor (bp, at, worldAt, registry = REGISTRY) {
     if (isSecondPart(alt)) return []
     const block = worldAt(at.x + cell.dx, at.y + cell.dy, at.z + cell.dz)
     if (!block || matchesCell(block, cell.spec.alts, registry)) return []
-    return cellJobs(cell, at, block, registry)
+    return [...mateDig(cell, at, worldAt), ...cellJobs(cell, at, block, registry)]
   })
 }
+
+// the game places a bed's head and a door's upper half with the first half, and refuses when anything stands there:
+// what does is dug first, grouped with the first half's layer so it comes before that placement (a door's upper cell
+// is a layer up)
+const mateDig = (cell, at, worldAt) => {
+  const second = secondPart(primary(cell.spec))
+  if (!second) return []
+  const x = at.x + cell.dx + second.dx; const y = at.y + cell.dy + second.dy; const z = at.z + cell.dz + second.dz
+  const standing = worldAt(x, y, z)?.name
+  if (!standing || isAir(standing) || FLUIDS.has(standing)) return []
+  return [{ x, y, z, token: cell.token, tags: cell.spec.tags, layer: cell.dy, groupY: at.y + cell.dy, do: 'dig', was: standing, natural: !looksBuilt(standing), keep: isKept(standing), class: 'dig' }]
+}
+// the layer a job is ordered and staged with: its own, or for a mate's dig, the first half's
+export const layerOf = job => job.groupY ?? job.y
 
 // ---------------------------------------------------------------- the predicted world, standing cells, order
 
@@ -776,7 +790,7 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
   const ordered = []
   const unreachable = []
   const ring = ringCells(bp, at, world, registry)
-  const layers = [...new Set(jobs.map(j => j.y))].sort((a, b) => a - b)
+  const layers = [...new Set(jobs.map(layerOf))].sort((a, b) => a - b)
   const attachAfter = list => {
     // an attachable goes after the job of the cell it hangs on, when that cell is in the same list
     const keys = new Map(list.map((j, i) => [key(j.x, j.y, j.z), i]))
@@ -806,7 +820,7 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
     return spots[0] ? { x: spots[0].x, y: spots[0].y, z: spots[0].z, scaffold: spots[0].y - at.y } : null
   }
   for (const y of layers) {
-    const ofLayer = jobs.filter(j => j.y === y)
+    const ofLayer = jobs.filter(j => layerOf(j) === y)
     const classes = CLASS_ORDER.map(cls => ofLayer.filter(j => j.class === cls).sort(byCell))
     const full = supportOrder(classes[1], world, registry)
     const attach = attachAfter(classes[3])
@@ -863,7 +877,7 @@ export function jobsBill (jobs, scaffoldItem = DEFAULT_SCAFFOLD) {
 // layer that does not fit cut inside its own order (section 4)
 export function stages (jobs, carry, registry = REGISTRY, scaffoldItem = DEFAULT_SCAFFOLD) {
   const fits = list => stackSlots(jobsBill(list, scaffoldItem), registry) <= Math.max(carry, 1)
-  const layers = [...new Set(jobs.map(j => j.y))].sort((a, b) => a - b).map(y => jobs.filter(j => j.y === y))
+  const layers = [...new Set(jobs.map(layerOf))].sort((a, b) => a - b).map(y => jobs.filter(j => layerOf(j) === y))
   const out = []
   let current = []
   const close = () => { if (current.length) out.push(current); current = [] }
