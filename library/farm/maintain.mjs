@@ -4,7 +4,7 @@ import { waterShortfall } from '../../src/builder.mjs'
 import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge, parkSpot } from '../../src/field.mjs'
-import { fieldLeg, footprintOf, spareCells } from '../../src/fieldleg.mjs'
+import { digGuard, fieldLeg, footprintOf } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
 import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
 import { depositTarget } from '../../src/lib/storage.mjs'
@@ -51,11 +51,12 @@ export default {
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
     // every walk of the sweep is a leg of src/fieldleg.mjs: plain first, once more with dig=true when the path fails
-    // inside the plan's footprint (never a plan block), and both failing is one stuck= line naming the cell (card 72e49b3d)
+    // inside the plan's footprint (never a plan block, never the ground: src/fieldleg.mjs digGuard), and both failing is
+    // one stuck= line naming the cell (card 72e49b3d)
     const box = footprintOf(plan.cells)
-    const spare = spareCells(plan.cells)
+    const guard = digGuard(plan.cells)
     const dug = []
-    const leg = to => fieldLeg(api, to, box, spare).then(r => { if (r?.dug) dug.push(r.dug); return r })
+    const leg = to => fieldLeg(api, to, box, guard).then(r => { if (r?.dug) dug.push(r.dug); return r })
     const keep = seedReserve(reservePlans(api, plan, a.reserve_for).map(p => p.parsed))
 
     const tryJob = async job => {

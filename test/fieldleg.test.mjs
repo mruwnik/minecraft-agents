@@ -8,7 +8,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
-import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, spareCells, PATH_FAILURE } from '../src/fieldleg.mjs'
+import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, spareCells, digGuard, spareTest, PATH_FAILURE } from '../src/fieldleg.mjs'
 
 const cells = [{ x: 0, y: 63, z: 0 }, { x: 2, y: 63, z: 0 }, { x: 0, y: 63, z: 1 }]
 const NO_PATH = 'goto: no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
@@ -74,12 +74,33 @@ test('spareCells: every plan cell at its ground level and one above, whatever st
     [{ x: 0, y: 63, z: 0 }, { x: 0, y: 64, z: 0 }, { x: 1, y: 63, z: 0 }, { x: 1, y: 64, z: 0 }])
 })
 
-test('fieldLeg: the digging walk is told the cells to spare; the plain walk is not', async () => {
+test('fieldLeg: the digging walk is told the cells to spare and the ground it may not break; the plain walk is not', async () => {
   const seen = []
-  const { api } = fakeApi({ answers: { goto: args => { seen.push(args.spare); if (args.dig !== true) throw new Error(NO_PATH); return {} } } })
-  await fieldLeg(api, leg, box, spareCells(cells))
-  assert.deepEqual(seen, [undefined, spareCells(cells)])
+  const { api } = fakeApi({ answers: { goto: args => { seen.push([args.spare, args.floor]); if (args.dig !== true) throw new Error(NO_PATH); return {} } } })
+  await fieldLeg(api, leg, box, digGuard(cells))
+  assert.deepEqual(seen, [[undefined, undefined], [spareCells(cells), { x1: -5, z1: -5, x2: 7, z2: 6, y: 63 }]])
 })
+
+// Fresh one-deep holes in a dry field (jizo-melon-patch, 09-26): a bare bed goes back to dirt, and dirt is nothing
+// looksBuilt guards. A dig walk round a plan may clear what stands above the plan's ground, never the ground itself
+test('digGuard: the plan cells to spare, and the floor: the whole footprint at the plan\'s level and below', () => {
+  assert.deepEqual(digGuard(cells), { spare: spareCells(cells), floor: { x1: -5, z1: -5, x2: 7, z2: 6, y: 63 } })
+})
+
+const guard = { spare: [{ x: 0, y: 64, z: 0 }], floor: { x1: -5, z1: -5, x2: 7, z2: 6, y: 63 } }
+for (const [name, given, at, expected] of [
+  ['a spared cell above the ground', guard, { x: 0, y: 64, z: 0 }, true],
+  ['a bed\'s ground', guard, { x: 0, y: 63, z: 0 }, true],
+  ['the ring\'s ground, off the plan\'s cells', guard, { x: -5, y: 63, z: -5 }, true],
+  ['the block under a bed', guard, { x: 0, y: 62, z: 0 }, true],
+  ['deep under the ring', guard, { x: 7, y: 10, z: 6 }, true],
+  ['above the ground and not spared: a dig walk may clear it', guard, { x: 1, y: 64, z: 0 }, false],
+  ['the plan\'s level outside the footprint', guard, { x: 8, y: 63, z: 0 }, false],
+  ['both as the command line gives them, JSON', { spare: JSON.stringify(guard.spare), floor: JSON.stringify(guard.floor) }, { x: 3, y: 62, z: 3 }, true],
+  ['nothing given spares nothing', {}, { x: 0, y: 63, z: 0 }, false]
+]) {
+  test(`spareTest: ${name}`, () => assert.equal(spareTest(given)(at), expected))
+}
 
 test('fieldLeg: both walks failing is one line naming the cell and both answers, and no third walk', async () => {
   const { api, calls } = fakeApi({ answers: walker(NO_PATH, TIMED_OUT) })
@@ -127,15 +148,21 @@ const field = () => {
 // the walk to the field's edge (range 1) arrives; the walk to the cell the plant is worked from (range 0) fails as told
 const sweep = async goto => {
   const spared = []
-  const legs = args => { if (args.dig === true) spared.push(args.spare); return args.range === 0 ? goto(args) : {} }
+  const floors = []
+  const legs = args => { if (args.dig === true) { spared.push(args.spare); floors.push(args.floor) } return args.range === 0 ? goto(args) : {} }
   const made = fakeApi({ place: fakePlace('ww'), world: field(), items: { wheat_seeds: 5 }, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, goto: legs } })
   const summary = await maintainFarm.run(made.api, { place: 'test-field' })
-  return { summary, spared, walks: made.calls.filter(c => /^(goto|place) /.test(c)) }
+  return { summary, spared, floors, walks: made.calls.filter(c => /^(goto|place) /.test(c)) }
 }
 
 test('farm.maintain: the digging walk spares both plan cells at their ground level and one above', async () => {
   const { spared } = await sweep(walker(NO_PATH).goto)
   assert.deepEqual(spared, [[{ x: 0, y: 63, z: 0 }, { x: 0, y: 64, z: 0 }, { x: 1, y: 63, z: 0 }, { x: 1, y: 64, z: 0 }]])
+})
+
+test('farm.maintain: the digging walk never breaks the ground: the footprint at the plan\'s level and below', async () => {
+  const { floors } = await sweep(walker(NO_PATH).goto)
+  assert.deepEqual(floors, [{ x1: -5, z1: -5, x2: 6, z2: 5, y: 63 }])
 })
 
 test('farm.maintain: a walk to the cell a plant is worked from fails on the path: once more with dig=true, sparing the plan, then the plant', async () => {

@@ -6,7 +6,8 @@
 // from there. A leg does that itself now: plain first, and on a path failure once more with dig=true, but only when
 // both ends of the leg lie inside the plan's footprint (its cells and the ring they are worked from), so the digging
 // stays at the field. It never digs a plan block: a dig walk refuses everything that looks built (farmland, crops,
-// slabs, fences, gates, chests, composters, torches: looksBuilt in src/lib/world.mjs) wherever it walks. Both walks
+// slabs, fences, gates, chests, composters, torches: looksBuilt in src/lib/world.mjs) wherever it walks, and is handed
+// the plan's cells and its ground as well (digGuard): it clears only what stands above the plan's level. Both walks
 // failing is one line naming the cell, which the sweep reports as stuck=.
 import { WORK_RANGE } from './walk.mjs'
 
@@ -42,16 +43,32 @@ export const digRetryRefusal = ({ error, from, to, box }) => {
 // dig walk goes; this guards the plan's dirt path cells and the ground under its beds as well
 export const spareCells = cells => cells.flatMap(c => [{ x: c.x, y: c.y, z: c.z }, { x: c.x, y: c.y + 1, z: c.z }])
 
+// what a dig walk round a plan is handed (goto spare= floor=): the plan's cells as above, and its floor, the footprint
+// at the plan's level and everything below it. A bare bed in a dry field is dirt again within minutes, and dirt is
+// nothing looksBuilt guards: a dig walk breaking the ground of a bed or of the ring it is worked from left one-deep
+// holes in the field (jizo-melon-patch, 09-26). It may clear what stands above the ground, never the ground
+export const digGuard = (cells, ring = RING) => ({ spare: spareCells(cells), floor: { ...footprintOf(cells, ring), y: Math.max(...cells.map(c => c.y)) } })
+
+// whether goto's dig walk must leave the block at `at` whole, from its spare= cells and floor= box (either may come as
+// JSON from the command line). The pathfinder never breaks a block its exclusion puts at 100
+const parsed = v => typeof v === 'string' ? JSON.parse(v) : v
+const cellKey = c => `${c.x},${c.y},${c.z}`
+export const spareTest = ({ spare, floor }) => {
+  const cells = new Set((parsed(spare) ?? []).map(cellKey))
+  const box = parsed(floor)
+  return at => cells.has(cellKey(at)) || (!!box && at.y <= box.y && inFootprint(box, at))
+}
+
 // walk one leg of a sweep to `to` (x, y, z, range). The result is the walk's own, with `dug` naming the cell when it
-// took the second, digging walk to get there; that walk is told the cells to spare
-export async function fieldLeg (api, to, box, spare = []) {
+// took the second, digging walk to get there; that walk is handed the guard (digGuard: the cells and the floor to spare)
+export async function fieldLeg (api, to, box, guard = {}) {
   const goal = { x: to.x, y: to.y, z: to.z, range: to.range ?? 0 }
   const first = await api.act('goto', goal).then(r => ({ r }), e => ({ e: e.message }))
   if (!first.e) return first.r
   const refusal = digRetryRefusal({ error: first.e, from: api.pos(), to, box })
   if (refusal === undefined) throw new Error(first.e)
   if (refusal) throw new Error(`${at(to)}: ${first.e} (no dig=true retry: ${refusal})`)
-  const second = await api.act('goto', { ...goal, dig: true, ...(spare.length ? { spare } : {}) }).then(r => ({ r }), e => ({ e: e.message }))
+  const second = await api.act('goto', { ...goal, dig: true, ...guard }).then(r => ({ r }), e => ({ e: e.message }))
   if (second.e) throw new Error(`${at(to)}: ${first.e}; with dig=true inside the plan's footprint: ${second.e}`)
   return { ...second.r, dug: at(to) }
 }

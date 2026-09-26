@@ -3,7 +3,7 @@
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { workFrom } from './stand.mjs'
-import { fieldLeg, footprintOf, spareCells } from './fieldleg.mjs'
+import { digGuard, fieldLeg, footprintOf } from './fieldleg.mjs'
 import { drainJobs, reopenJobs, shoreOrder, wetFooting } from './wetplan.mjs'
 
 const WATER_RANGE = 32
@@ -64,11 +64,12 @@ export async function buildFromPlan (api, a) {
   const counts = {}
   const missing = {}
   // a walk to a standing cell that finds no path is walked once more with dig=true inside the plan's own footprint,
-  // sparing every cell the plan lists (src/fieldleg.mjs), as farm.maintain's sweep does. What it dug is reported
+  // sparing every cell the plan lists and the ground of the whole footprint (src/fieldleg.mjs digGuard), as
+  // farm.maintain's sweep does. What it dug is reported
   const box = footprintOf(plan.cells)
-  const spare = spareCells(plan.cells)
+  const guard = digGuard(plan.cells)
   const dug = []
-  const leg = to => fieldLeg(api, to, box, spare).then(r => { if (r?.dug) dug.push(r.dug); return r })
+  const leg = to => fieldLeg(api, to, box, guard).then(r => { if (r?.dug) dug.push(r.dug); return r })
   // water standing in a plan cell is dammed with dirt and the dam dug out again once nothing can flow back into it. A
   // dam that has to stay (water from outside the plan against it) is named on kept=, and its column is left as it is:
   // the plan's own jobs there would dig the dam and flood the cell again (src/wetplan.mjs)

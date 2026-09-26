@@ -142,9 +142,11 @@ test('farm.build: a plan with no dry cell in reach of any job is refused, naming
 
 test('farm.build: a walk to a standing cell that fails on the path is walked once more with dig=true, sparing the plan', async () => {
   const spared = []
-  const goto = args => { if (args.dig === true) { spared.push(args.spare.length); return {} } if (args.range === 0) throw new Error('no walkable path'); return {} }
+  const floors = []
+  const goto = args => { if (args.dig === true) { spared.push(args.spare.length); floors.push(JSON.stringify(args.floor)); return {} } if (args.range === 0) throw new Error('no walkable path'); return {} }
   const { r, calls } = await build(trench(3), 3, { goto })
   assert.ok(calls.some(c => /^goto .* dig spare=/.test(c)), calls.join('\n'))
   assert.deepEqual([...new Set(spared)], [6], 'every dig walk spares the three plan cells at y and y+1')
+  assert.deepEqual([...new Set(floors)], [JSON.stringify({ x1: -5, z1: -5, x2: 7, z2: 5, y: 63 })], 'and never breaks the footprint at the plan\'s level or below')
   assert.match(r.dug, /^-?\d+,\d+,-?\d+/)
 })
