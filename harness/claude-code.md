@@ -12,11 +12,13 @@ Claude Code's tools; the guide itself applies unchanged.
 - **Subagents are not woken by monitors.** If you are a subagent (launched from another session with the Agent tool),
   do not end your turn to wait for events: an idle subagent is not woken by a Monitor or by a finished background
   command. The events pile up and reach you only with the next message from someone else; agents sat through whole
-  days that way. Block on `./mc wait` instead, every time.
+  days that way. Block on `./mc wait` instead, every time. The one exception is a body on a `routine ... days=0` with a
+  bed near its places: end your turn with it up, and the lead's watcher spawns a driver for it on `died`, `body_down`,
+  `routine_stopped` or `stuck`.
 - **Monitor tool, only for a session of its own** (started with `play`, not as a subagent): this filtered tail
   wakes you on what matters and stays silent otherwise, a fallback when you would rather end the turn than block:
 
-      tail -n 0 -F events.jsonl | grep --line-buffered -E '"type":"(chat|whisper|died|night_fell|dawn|woke_up|kicked|body_down|task_done|task_cancelled|wedged|stalled|buried|tool_broke|watch_hit)"|"health":[0-8],'
+      tail -n 0 -F events.jsonl | grep --line-buffered -E '"type":"(chat|whisper|died|night_fell|dawn|woke_up|kicked|body_down|task_done|task_cancelled|wedged|stalled|buried|tool_broke|watch_hit|routine_stopped|stuck)"|"health":[0-8],'
 
 - **Delegate the digging.** Where the guide says "if your harness can delegate": it can. For log questions (why did I
   die last night? what did the human say an hour ago? what is wrong in bot.log?) spawn a haiku or sonnet subagent, tell it
