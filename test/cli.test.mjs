@@ -93,3 +93,13 @@ test('waitReport: skipped chat lines are counted alongside a wake-worthy line th
   assert.deepEqual(waitReport(text, 'Jizo', at, { chattiness: 0.5 }).lines,
     ['dawn', 'skipped 1 chat line below your chattiness (0.5): ./mc events type=chat n=1'])
 })
+
+// ---------------------------------------------------------------- autopilot: a routine that stopped and a body that is stuck wake the wait (autopilot card)
+const autopilotLine = (type, data) => JSON.stringify({ seq: 1, t: new Date(at).toISOString(), type, ...data }) + '\n'
+for (const [name, type, data, expected] of [
+  ['routine_stopped', 'routine_stopped', { reason: 'health 6', step: 'farm.tidy place=a', place: 'a', advice: 'eat' }, ['routine_stopped reason=health 6 step=farm.tidy place=a place=a advice=eat']],
+  ['stuck', 'stuck', { pos: { x: 1, y: 2, z: 3 }, reason: 'boxed in for 3 min', advice: 'dig out' }, ['stuck pos={"x":1,"y":2,"z":3} reason=boxed in for 3 min advice=dig out']],
+  ['routine_day is news, not a wake-up', 'routine_day', { day: 2, places: {} }, []]
+]) {
+  test(`waitReport: ${name}`, () => assert.deepEqual(waitReport(autopilotLine(type, data), 'Jizo', at).lines, expected))
+}
