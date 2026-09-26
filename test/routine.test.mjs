@@ -7,14 +7,15 @@ import routine from '../library/routine.mjs'
 import { fakeApi } from './helpers.mjs'
 
 const ROLE_FILES = {
-  'farmer/homestead': '[{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":true},{"action":"farm.compost","place":"$place"}]',
+  'farmer/homestead': '[{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":true,"compost":"$compost"}]',
   'farmer/chores': '[{"action":"farm.compost"}]'
 }
 const readRole = name => ROLE_FILES[name] ?? null
-const homestead = place => [
+// farm.maintain feeds the composter itself now (compost=), so the day's own routine has no separate farm.compost step;
+// a $compost nobody gave in vars= is dropped, so farm.maintain falls back to the plan's own K cell
+const homestead = (place, compost) => [
   { action: 'farm.tidy', place },
-  { action: 'farm.maintain', place, deposit: true },
-  { action: 'farm.compost', place }
+  { action: 'farm.maintain', place, deposit: true, ...(compost !== undefined ? { compost } : {}) }
 ]
 
 for (const [name, place, expected] of [
@@ -37,7 +38,14 @@ for (const [name, args, expected] of [
   ['no place: the routine once, as before', { steps: [{ action: 'farm.compost' }] }, { places: [], steps: [{ action: 'farm.compost' }] }],
   ['a routine that needs a place and is given none', { name: 'farmer/homestead' }, { error: 'routine name=farmer/homestead needs place=<the name of a marked farm> to work on' }],
   ['several places for a routine that works on none', { name: 'farmer/chores', place: 'a,b' }, { error: 'roles/farmer/chores.json has no $place to fill: place=a,b would run the same steps 2 times' }],
-  ['a name nobody ships', { name: 'farmer/nope', place: 'a,b' }, { error: 'no routine called farmer/nope (roles/farmer/nope.json)' }]
+  ['a name nobody ships', { name: 'farmer/nope', place: 'a,b' }, { error: 'no routine called farmer/nope (roles/farmer/nope.json)' }],
+  // any other $name in a step is filled from vars=; one nobody gave is dropped, so the step's own default holds
+  ['vars= fills every other $name', { steps: [{ action: 'farm.maintain', place: '$place', compost: '$compost' }], place: 'a', vars: { compost: 'shared-composter' } }, { places: ['a'], steps: [{ action: 'farm.maintain', place: 'a', compost: 'shared-composter' }] }],
+  ['a $name with no vars= for it is left out of the step', { steps: [{ action: 'farm.maintain', place: '$place', compost: '$compost' }], place: 'a' }, { places: ['a'], steps: [{ action: 'farm.maintain', place: 'a' }] }],
+  ['vars= as the JSON text the command line gives', { steps: [{ action: 'farm.compost', x: '$x' }], vars: '{"x":5}' }, { places: [], steps: [{ action: 'farm.compost', x: 5 }] }],
+  ['vars= that is not an object', { steps: [{ action: 'farm.compost' }], vars: '5' }, { error: 'vars= must be an object like {"compost":"shared-composter"}' }],
+  // the homestead role's own $compost, shared by every plot from one vars=
+  ['farmer/homestead over three plots with one shared composter', { name: 'farmer/homestead', place: 'c,a,b', vars: { compost: 'shared-composter' } }, { places: ['c', 'a', 'b'], steps: [...homestead('c', 'shared-composter'), ...homestead('a', 'shared-composter'), ...homestead('b', 'shared-composter')] }]
 ]) {
   test(`routinePlan: ${name}`, () => assert.deepEqual(routinePlan(args, readRole), expected))
 }
@@ -62,11 +70,20 @@ for (const [name, names, expected] of [
 }
 
 test('routine: place=a,b runs the routine over both fields, a before b', async () => {
-  const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {}, 'farm.compost': {} } })
+  const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a,b' })
   assert.deepEqual([calls.filter(c => !c.startsWith('note')), summary.days, summary.ran], [
-    ['farm.tidy place=a', 'farm.maintain place=a deposit', 'farm.compost place=a',
-      'farm.tidy place=b', 'farm.maintain place=b deposit', 'farm.compost place=b'], 1, 6])
+    ['farm.tidy place=a', 'farm.maintain place=a deposit',
+      'farm.tidy place=b', 'farm.maintain place=b deposit'], 1, 4])
+})
+
+test('routine: vars=compost reaches farm.maintain for every plot, one shared composter', async () => {
+  const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
+  await routine.run(api, { name: 'farmer/homestead', place: 'a,b', vars: { compost: 'shared-composter' } })
+  assert.deepEqual(calls.filter(c => !c.startsWith('note')), [
+    'farm.tidy place=a', 'farm.maintain place=a deposit compost=shared-composter',
+    'farm.tidy place=b', 'farm.maintain place=b deposit compost=shared-composter'
+  ])
 })
 
 test('routine: a place nobody marked stops the round before day one, named', async () => {
@@ -99,14 +116,14 @@ const stopAt = (api, n, error) => {
   let calls = 0
   api.checkpoint = async () => { if (++calls === n) throw error }
 }
-const answers = { 'farm.tidy': {}, 'farm.maintain': { harvested: { wheat: 12 } }, 'farm.compost': {} }
+const answers = { 'farm.tidy': {}, 'farm.maintain': { harvested: { wheat: 12 } } }
 
 test('routine: days=0 runs day after day until the runner hands back, and says why it stopped', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
-  stopAt(api, 8, handBack('health 6'))
+  stopAt(api, 6, handBack('health 6'))
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }), /health 6/)
   assert.deepEqual(events.map(e => e.type), ['routine_day', 'routine_stopped'])
-  assert.deepEqual(events[1], { type: 'routine_stopped', reason: 'health 6', step: 'farm.compost place=a', place: 'a', advice: 'the body is hurt: eat to food 18 and rest until health is back, then start the routine again' })
+  assert.deepEqual(events[1], { type: 'routine_stopped', reason: 'health 6', step: 'farm.maintain place=a', place: 'a', advice: 'the body is hurt: eat to food 18 and rest until health is back, then start the routine again' })
 })
 
 test('routine: days=0 takes days off the args it shares with the runner, whose days rule would end it at once', async () => {
@@ -120,7 +137,7 @@ test('routine: days=0 takes days off the args it shares with the runner, whose d
 test('routine: days=2 stops after its two days with reason days, one routine_day per day', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2 })
-  assert.deepEqual([summary.days, summary.ran], [2, 6])
+  assert.deepEqual([summary.days, summary.ran], [2, 4])
   assert.deepEqual(events.map(e => [e.type, e.day ?? e.reason]), [['routine_day', 1], ['routine_day', 2], ['routine_stopped', 'days']])
   assert.deepEqual(events[2], { type: 'routine_stopped', reason: 'days', step: null, place: null, advice: 'the routine ran its 2 days: start it again (days=0 runs until stopped) or move on' })
 })
@@ -132,14 +149,14 @@ test('routine: no days= is one day, as before', async () => {
 })
 
 test('routine: routine_day says what each step reported per place, failures included', async () => {
-  const { api, events } = fakeApi({ places: marked, answers: { ...answers, 'farm.compost': new Error('farm.compost: no composter within 24') } })
+  const { api, events } = fakeApi({ places: marked, answers: { ...answers, 'farm.maintain': new Error('farm.maintain: no composter within 24') } })
   await routine.run(api, { name: 'farmer/homestead', place: 'a,b' })
   assert.deepEqual(events[0], {
     type: 'routine_day',
     day: 1,
     places: {
-      a: { 'farm.tidy': 'ok', 'farm.maintain': 'ok harvested(wheat:12)', 'farm.compost': 'FAILED farm.compost: no composter within 24' },
-      b: { 'farm.tidy': 'ok', 'farm.maintain': 'ok harvested(wheat:12)', 'farm.compost': 'FAILED farm.compost: no composter within 24' }
+      a: { 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' },
+      b: { 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' }
     }
   })
 })
@@ -151,17 +168,22 @@ test('routine: steps with no place report under "here"', async () => {
 })
 
 test('routine: the stuck watch is told which day began and which steps failed on which day', async () => {
-  const { api, progress } = fakeApi({ places: marked, answers: { ...answers, 'farm.compost': new Error('farm.compost: no composter') } })
+  const { api, progress } = fakeApi({ places: marked, answers: { ...answers, 'farm.maintain': new Error('farm.maintain: no composter') } })
   await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 3 })
   assert.deepEqual([progress.routine.day, progress.routine.failedSteps, progress.routine.phase, typeof progress.routine.lastDayStartedAt],
-    [3, [{ day: 1, step: 'farm.compost place=a' }, { day: 2, step: 'farm.compost place=a' }, { day: 3, step: 'farm.compost place=a' }], 'steps', 'number'])
+    [3, [{ day: 1, step: 'farm.maintain place=a' }, { day: 2, step: 'farm.maintain place=a' }, { day: 3, step: 'farm.maintain place=a' }], 'steps', 'number'])
 })
 
 test('routine: a stop between days names no step', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
-  stopAt(api, 5, handBack('night and no bed within 32 blocks'))
+  stopAt(api, 4, handBack('night and no bed within 32 blocks'))
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }))
   assert.deepEqual(events.at(-1), { type: 'routine_stopped', reason: 'night and no bed within 32 blocks', step: null, place: null, advice: 'put a bed within 32 blocks of the places (or carry one), or quit for the night (./mc quit, then ./mc dawn), then start the routine again' })
+})
+
+test('routine: takes vars= (any $name but $place in a step) and says so in its doc', () => {
+  assert.equal(routine.args.vars, 'any')
+  assert.match(routine.doc, /vars=/)
 })
 
 for (const [reason, advice] of [

@@ -70,10 +70,19 @@ const parseSteps = text => {
 }
 
 // a routine a role ships cannot know which farm it will be run on, so it writes $place and routine place= fills it in
-const fillPlace = (step, place) => Object.fromEntries(Object.entries(step).map(([k, v]) => [k, v === '$place' ? place : v]))
+// $place is filled from place=; any other $name from vars= (a JSON object on the command line), and one nobody gave
+// is left out of the step so the action's own default holds (farm.maintain's compost= falls back to the plan's K cell)
+const varName = v => typeof v === 'string' && /^\$\w+$/.test(v) ? v.slice(1) : null
+const fillVars = (step, vars) => Object.fromEntries(Object.entries(step).filter(([, v]) => !varName(v) || vars[varName(v)] !== undefined).map(([k, v]) => [k, varName(v) ? vars[varName(v)] : v]))
 const wantsPlace = steps => steps.some(step => Object.values(step).includes('$place'))
+const readVars = vars => {
+  if (vars === undefined) return {}
+  const parsed = typeof vars === 'string' ? parseSteps(vars) : { list: vars }
+  const ok = !parsed.error && parsed.list && typeof parsed.list === 'object' && !Array.isArray(parsed.list)
+  return ok ? parsed.list : { error: 'vars= must be an object like {"compost":"shared-composter"}' }
+}
 
-export function routineSteps ({ steps, name, place }, readRole) {
+export function routineSteps ({ steps, name, place, vars }, readRole) {
   if (!steps && !name) return { error: 'routine needs steps= or name= (a routine shipped in roles/<role>/<name>.json)' }
   const where = steps ? 'steps= must be a list of {"action":...} objects' : `roles/${name}.json is not a list of steps`
   const raw = steps ?? readRole(name)
@@ -84,7 +93,9 @@ export function routineSteps ({ steps, name, place }, readRole) {
   const bad = read.list.findIndex(step => !step || !step.action)
   if (bad >= 0) return { error: `step ${bad + 1} has no action=` }
   if (wantsPlace(read.list) && !place) return { error: `routine name=${name} needs place=<the name of a marked farm> to work on` }
-  return { steps: read.list.map(step => fillPlace(step, place)) }
+  const given = readVars(vars)
+  if (given.error) return { error: given.error }
+  return { steps: read.list.map(step => fillVars(step, { ...given, place })) }
 }
 
 // A composite's `until`: look, wait `every` seconds of ticks, look again, give up after `timeout` seconds OF WAITING.

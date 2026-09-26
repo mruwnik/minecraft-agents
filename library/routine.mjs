@@ -11,9 +11,9 @@ const readRole = name => {
 }
 
 export default {
-  doc: 'routine steps=|name= [place=a,b,c] [days=1] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights; several places run the routine once per place, in order; days=0 runs until stopped; dry=true only prints the expanded steps',
+  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights; several places run the routine once per place, in order; $place in a step is filled from place=, any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
   stops: 'days= done (a step that fails is noted, and the next one still runs); every stop writes a routine_stopped event with its reason and advice, every day a routine_day one',
-  args: { steps: 'any', name: 'string', place: 'string', days: 'number', until: 'number', dry: 'boolean' },
+  args: { steps: 'any', name: 'string', place: 'string', vars: 'any', days: 'number', until: 'number', dry: 'boolean' },
 
   async run (api, a) {
     const { steps, places, error } = routinePlan(a, readRole)

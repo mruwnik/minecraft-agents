@@ -65,7 +65,7 @@ This world expects a field to look built, not scratched into the ground:
 | clear the rubble off a field | `farm.tidy place=<name>` — digs the stray dirt, cobblestone, logs and saplings standing over the plan and picks the drops up. `farm.fields` and `farm.maintain` say `clutter=` when there is any |
 | turn trimmings into bone meal | `farm.compost place=<name>` |
 | get more seed | `farm.get_seeds crop=wheat count=64` (roots come out of a farm chest: `farm.get_seeds crop=carrot place=<name>`) |
-| do the whole day, every day | `routine name=farmer/homestead place=<name> days=3` — several fields are one homestead: `place=crop-field,melon-patch,cane` runs the routine once per field, in that order, every day. `dry=true` prints the day's steps and runs nothing; `days=0` runs it until stopped (the autopilot: `routine_day` and `routine_stopped` events say how it went) |
+| do the whole day, every day | `routine name=farmer/homestead place=<name> [vars='{"compost":"shared-composter"}'] days=3` — several fields are one homestead: `place=crop-field,melon-patch,cane` runs the routine once per field, in that order, every day. The homestead's `farm.maintain` step composts its own spare seed; `vars=` names the one composter (or chest-like block) every field feeds, shared across all of them; leave it out and each field falls back to its own plan's `K` cell. `dry=true` prints the day's steps and runs nothing; `days=0` runs it until stopped (the autopilot: `routine_day` and `routine_stopped` events say how it went) |
 
 ## Marks a farmer keeps on the shared map
 
