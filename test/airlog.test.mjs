@@ -4,7 +4,7 @@
 // of a body that has no air number yet. Pure: nothing here touches a body.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { airSample, freshAir, serverPosNote } from '../src/airlog.mjs'
+import { airSample, freshAir, serverPosNote, patchOwnBreath } from '../src/airlog.mjs'
 
 const here = { x: 119.52, y: 72, z: -65.5 }
 const reading = { oxygen: 20, health: 20, client: here, server: null, now: 100000, head: 'air', inWater: false }
@@ -51,4 +51,17 @@ for (const [name, server, expected] of [
   ['two days old, rounded to whole seconds', { x: 119.5, y: 72, z: -65.5, at: -160333731 }, { serverPos: '119.5,72,-65.5', age: '160434s' }]
 ]) {
   test(`serverPosNote: ${name}`, () => assert.deepEqual(serverPosNote({ client: here, server, now: 100000 }), expected))
+}
+
+// mineflayer 4.39.0 lib/plugins/entities.js: the air_supply of EVERY entity's metadata packet lands in bot.oxygenLevel
+// (breath.js used to check the entity id before it moved in here). Standing beside a pond a body reads a glow squid's
+// air (8) and a swimmer's (20) by turns: Sancho at -145,60,-195, 41 packets in a minute, none its own
+const BREATH_ANY = "      // Breathing (formerly in breath.js)\n      if (metas.air_supply != null) {\n        bot.oxygenLevel = Math.round(metas.air_supply / 15)\n"
+const BREATH_OWN = "      // Breathing (formerly in breath.js)\n      if (metas.air_supply != null && entity === bot.entity) { // patched by bot/patch-deps.mjs: my own air, not every swimmer's\n        bot.oxygenLevel = Math.round(metas.air_supply / 15)\n"
+for (const [name, source, expected] of [
+  ['the upstream source gets the entity check', `a\n${BREATH_ANY}b`, { status: 'patched', source: `a\n${BREATH_OWN}b` }],
+  ['patched already: left alone', `a\n${BREATH_OWN}b`, { status: 'already', source: `a\n${BREATH_OWN}b` }],
+  ['a new upstream version without that code: say so, change nothing', 'something else', { status: 'anchor missing', source: 'something else' }]
+]) {
+  test(`patchOwnBreath: ${name}`, () => assert.deepEqual(patchOwnBreath(source), expected))
 }

@@ -2,12 +2,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { patchPathfinder, patchGotoPartial, patchParkourFences, patchItemEnchants } from '../src/lib.mjs'
+import { patchOwnBreath } from '../src/airlog.mjs'
 
 const PATCHES = [
   ['node_modules/mineflayer-pathfinder/index.js', patchPathfinder, 'mineflayer-pathfinder gate fix', 'read patchPathfinder in src/lib.mjs: walks through gates may crash every tick'],
   ['node_modules/mineflayer-pathfinder/lib/movements.js', patchParkourFences, 'mineflayer-pathfinder no parkour over fences', 'read patchParkourFences in src/lib.mjs: a walk replanned mid-jump beside a fence row may try to jump along it and stall'],
   ['node_modules/mineflayer-pathfinder/lib/goto.js', patchGotoPartial, 'mineflayer-pathfinder goto waits out a partial search', 'read patchGotoPartial in src/lib.mjs: a goto from a dead end may fail at once and the body walk on after'],
-  ['node_modules/prismarine-item/index.js', patchItemEnchants, 'prismarine-item enchants list', 'read patchItemEnchants in src/lib.mjs: an enchanted tool in hand may break harvest and slow every dig']
+  ['node_modules/prismarine-item/index.js', patchItemEnchants, 'prismarine-item enchants list', 'read patchItemEnchants in src/lib.mjs: an enchanted tool in hand may break harvest and slow every dig'],
+  ['node_modules/mineflayer/lib/plugins/entities.js', patchOwnBreath, 'mineflayer own air only', 'read patchOwnBreath in src/airlog.mjs: every swimmer and squid in sight may set this body\'s oxygen (card 962beec2)']
 ]
 for (const [relative, patch, title, warning] of PATCHES) {
   const file = path.join(import.meta.dirname, '..', relative)

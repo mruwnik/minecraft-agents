@@ -143,4 +143,7 @@ Each name must be whitelisted once, on the server console: `whitelist add <Name>
 `tools/patch-deps.mjs` fixes `node_modules/mineflayer-pathfinder/index.js` (a crash on every tick after a walk opens a fence gate while the
 body carries a scaffolding block). `start-body` runs it at every body start, so an `npm install` cannot undo it; the first line of each
 `bot.log` says `patched`, `already` or `anchor missing` (= a new pathfinder version: read `patchPathfinder` in `src/lib.mjs`).
+It also fixes `node_modules/mineflayer/lib/plugins/entities.js`: mineflayer 4.39.0 writes the air_supply of EVERY entity's
+metadata packet into `bot.oxygenLevel`, so a body beside a pond read a squid's air and a swimmer's by turns (`oxygen` fell
+20 -> 8 -> 7 on dry land, card 962beec2). The patch keeps only the body's own (`patchOwnBreath` in `src/airlog.mjs`).
 
