@@ -115,7 +115,8 @@ for (const [name, mob, expected] of [
 for (const [name, args, pattern] of [
   ['holding against an archer, gap plugged', { mob: 'skeleton', plugged: true }, /skeleton.*not charging.*plugged/i],
   ['holding against an archer, nothing to plug with', { mob: 'skeleton', plugged: false }, /skeleton.*not charging.*(nothing to plug|step out of its line)/i],
-  ['a zombie at the door: swing from inside', { mob: 'zombie', melee: true }, /zombie.*from inside|not chasing/i]
+  ['a zombie in reach: swing from inside', { mob: 'zombie', melee: true }, /zombie in reach.*from inside/i],
+  ['a spider outside the door is held, not chased, and not called an archer', { mob: 'spider', door: true }, /^a spider outside at night: not chasing it out of the door(?!.*shooting)/i]
 ]) {
   test(`holdNote: ${name}`, () => assert.match(holdNote(args), pattern))
 }

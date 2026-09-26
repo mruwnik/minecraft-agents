@@ -63,7 +63,9 @@ export function plugCells (me, mob) {
   return [{ ...step, dy: 1 }, { ...step, dy: 0 }].map(({ dx, dy, dz }) => ({ dx, dy, dz }))
 }
 
-export function holdNote ({ mob, plugged = false, melee = false }) {
+// three holds: a mob in reach is swung at (melee), a mob outside the door is waited for (door), an archer is not charged
+export function holdNote ({ mob, plugged = false, melee = false, door = false }) {
   if (melee) return `a ${mob} in reach at night: swinging at it from inside, not chasing it out of the door`
+  if (door) return `a ${mob} outside at night: not chasing it out of the door into the dark${plugged ? '; I plugged the way in' : ''}. It is swung at if it comes in reach`
   return `a ${mob} shooting at me at night: not charging it into the dark. ${plugged ? 'I plugged the gap it shoots through' : 'Nothing to plug the gap with: step out of its line of sight, or place a block between us'}`
 }
