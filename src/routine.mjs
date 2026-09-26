@@ -2,6 +2,7 @@
 // stand), and `routine name=farmer/homestead place=a,b,c` is the whole day: the role's routine expanded once per
 // place, in the order given. The one-place call is the routine exactly as it was.
 import { routineSteps, placeRefusal, compact } from './lib.mjs'
+import { carriedOfKind } from './kit.mjs'
 
 // place=a,b,c as the CLI hands it over (one string), or a list already
 export const placeList = place => (Array.isArray(place) ? place : String(place ?? '').split(','))
@@ -74,10 +75,10 @@ export const stopEvent = ({ reason, step = null, place = null, days, bed = null 
 // what each step reported, per place ("here" for a step with no place), short enough for one event line. What went
 // wrong comes first and is never cut: on 09-26 a farm's stuck= and missing= stood behind lowSlabs= and clutter=, past
 // the cut, and the day line read as a field maintained while its summary said otherwise
-const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare', 'storage_full']
+const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare', 'storage_full', 'rekit', 'kit_short']
 const OUTCOME_MAX = 120
 export function outcomeText (outcome) {
-  if (outcome.failed) return `FAILED ${outcome.failed}`
+  if (outcome.failed) return `FAILED ${outcome.failed}${outcome.rekit ? ` (${outcome.rekit})` : ''}`
   const wrong = compact(Object.fromEntries(SAID_FIRST.filter(k => outcome[k] !== undefined).map(k => [k, outcome[k]])), false)
   const rest = compact(Object.fromEntries(Object.entries(outcome).filter(([k]) => !SAID_FIRST.includes(k))), false)
   const head = ['ok', wrong].filter(Boolean).join(' ')
@@ -91,6 +92,14 @@ export function dayEvent (day, outcomes, night = null) {
     places[place ?? 'here'] = { ...places[place ?? 'here'], [action]: outcomeText(outcome) }
   }
   return { day, places, ...(night ? { night } : {}) }
+}
+
+// a step ended with fewer of a kind than it began (src/kit.mjs toolsLost) and the kit step ran again: which kinds are
+// back in the pockets and which are not, in the words the day line carries ("hoe replaced", "hoe broke, no spare")
+export function rekitVerdict (lost, items) {
+  const replaced = lost.filter(kind => carriedOfKind(items, kind) > 0)
+  const missing = lost.filter(kind => !replaced.includes(kind))
+  return { replaced, missing, text: [...replaced.map(k => `${k} replaced`), ...missing.map(k => `${k} broke, no spare`)].join(', ') }
 }
 
 // the routine_bed_walk event for one leg, and the day summary's line on the night

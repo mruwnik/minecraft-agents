@@ -1,4 +1,5 @@
 [
-  { "action": "farm.tidy", "place": "$place" },
-  { "action": "farm.maintain", "place": "$place", "deposit": "$store", "compost": "$compost", "reserve_for": "$places" }
+  {"action": "kit", "tools": "stone_hoe", "food": 12, "place": "$place"},
+  {"action": "farm.tidy", "place": "$place"},
+  {"action": "farm.maintain", "place": "$place", "deposit": "$store", "compost": "$compost", "reserve_for": "$places"}
 ]

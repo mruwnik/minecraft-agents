@@ -2,7 +2,8 @@
 // `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
 import fs from 'node:fs'
 import path from 'node:path'
-import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine } from '../src/routine.mjs'
+import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict } from '../src/routine.mjs'
+import { toolsLost, toolList } from '../src/kit.mjs'
 import { ownBed, nightPlan, BED_RANGE } from '../src/lib/sleep.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
@@ -12,7 +13,7 @@ const readRole = name => {
 }
 
 export default {
-  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [store=<place|x,y,z>] [bed=<place>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, $store from store= (where the produce goes), any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
+  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [store=<place|x,y,z>] [bed=<place>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day (a kit step first, when the role ships one: its tools are watched through the day, and a step that wears one out gets the kit again and one more try), sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, $store from store= (where the produce goes), any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
   stops: 'days= done (a step that fails is noted, and the next one still runs); every stop writes a routine_stopped event with its reason and advice, every day a routine_day one',
   args: { steps: 'any', name: 'string', place: 'string', store: 'string', vars: 'any', days: 'number', until: 'number', bed: 'string', bed_range: 'number', dry: 'boolean' },
 
@@ -33,6 +34,21 @@ export default {
     const forever = a.days === 0
     if (forever) delete a.days
     const summary = { days: 0, ran: 0 }
+    // the day's kit step (roles ship one first): the tools it lists are watched through every other step, and when a
+    // step ends with fewer of a kind than it began, a tool wore out under it. The kit runs again, and a step that
+    // failed is tried once more when the kit put the tool back; the day line says "hoe replaced" or "hoe broke, no
+    // spare" either way (card 6cf481c0: a hoe broke mid-routine, and the side craft for it superseded the routine)
+    const kitStep = steps.find(step => step.action === 'kit') ?? null
+    const tools = kitStep ? toolList(kitStep.tools) : []
+    const attempt = (action, args) => api.act(action, args).then(r => r, e => ({ failed: e.message }))
+    const rekit = async (action, args, outcome, lost) => {
+      const { action: kitAction, ...kitArgs } = kitStep
+      api.note(`${lost.join(', ')} wore out during ${action}: running the kit again`)
+      await attempt(kitAction, kitArgs)
+      const verdict = rekitVerdict(lost, api.inv())
+      const again = outcome.failed && !verdict.missing.length ? await attempt(action, args) : outcome
+      return { ...again, rekit: verdict.text }
+    }
     // what the stuck watch is told (src/stuck.mjs): when the day began, which steps failed on which day, which days
     // ended with a full store (the harvest carried round: an alert after two), and whether the routine is stepping or
     // waiting for dusk or dawn (a wait stands still by design)
@@ -97,7 +113,10 @@ export default {
       for (const { action, ...args } of steps) {
         current = { step: stepLabel(action, args), place: args.place ?? null }
         await checkpoint()
-        const outcome = await api.act(action, args).then(r => r, e => ({ failed: e.message }))
+        const before = { ...api.inv() }
+        const first = await attempt(action, args)
+        const lost = action === 'kit' ? [] : toolsLost(before, api.inv(), tools)
+        const outcome = lost.length && kitStep ? await rekit(action, args, first, lost) : first
         summary.ran++
         if (outcome.failed) {
           summary.failed = summary.failed ?? `${action}: ${outcome.failed}`

@@ -2,12 +2,12 @@
 // The pure half lives in src/routine.mjs; library/routine.mjs only calls it. Nothing here touches src/lib.mjs.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeList, routinePlan, placesRefusal, stopAdvice } from '../src/routine.mjs'
+import { placeList, routinePlan, placesRefusal, stopAdvice, rekitVerdict } from '../src/routine.mjs'
 import routine from '../library/routine.mjs'
 import { fakeApi } from './helpers.mjs'
 
 const ROLE_FILES = {
-  'farmer/homestead': '[{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":"$store","compost":"$compost"}]',
+  'farmer/homestead': '[{"action":"kit","tools":"stone_hoe","food":12,"place":"$place"},{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":"$store","compost":"$compost"}]',
   'farmer/chores': '[{"action":"farm.compost"}]'
 }
 const readRole = name => ROLE_FILES[name] ?? null
@@ -16,6 +16,7 @@ const readRole = name => ROLE_FILES[name] ?? null
 // the shipped roles/farmer/homestead.json also carries reserve_for=$places (the whole place= list) and deposit=$store
 // (dropped when no store= is given, so farm.maintain's default, the plan's chests, holds); the fake here does not
 const homestead = (place, compost, places) => [
+  { action: 'kit', tools: 'stone_hoe', food: 12, place },
   { action: 'farm.tidy', place },
   { action: 'farm.maintain', place, ...(compost !== undefined ? { compost } : {}), ...(places !== undefined ? { reserve_for: places } : {}) }
 ]
@@ -75,16 +76,16 @@ test('routine: place=a,b runs the routine over both fields, a before b', async (
   const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a,b' })
   assert.deepEqual([calls.filter(c => !c.startsWith('note')), summary.days, summary.ran], [
-    ['farm.tidy place=a', 'farm.maintain place=a reserve_for=a,b',
-      'farm.tidy place=b', 'farm.maintain place=b reserve_for=a,b'], 1, 4])
+    ['kit tools=stone_hoe food=12 place=a', 'farm.tidy place=a', 'farm.maintain place=a reserve_for=a,b',
+      'kit tools=stone_hoe food=12 place=b', 'farm.tidy place=b', 'farm.maintain place=b reserve_for=a,b'], 1, 6])
 })
 
 test('routine: vars=compost reaches farm.maintain for every plot, one shared composter', async () => {
   const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
   await routine.run(api, { name: 'farmer/homestead', place: 'a,b', vars: { compost: 'shared-composter' } })
   assert.deepEqual(calls.filter(c => !c.startsWith('note')), [
-    'farm.tidy place=a', 'farm.maintain place=a compost=shared-composter reserve_for=a,b',
-    'farm.tidy place=b', 'farm.maintain place=b compost=shared-composter reserve_for=a,b'
+    'kit tools=stone_hoe food=12 place=a', 'farm.tidy place=a', 'farm.maintain place=a compost=shared-composter reserve_for=a,b',
+    'kit tools=stone_hoe food=12 place=b', 'farm.tidy place=b', 'farm.maintain place=b compost=shared-composter reserve_for=a,b'
   ])
 })
 
@@ -122,7 +123,7 @@ const answers = { 'farm.tidy': {}, 'farm.maintain': { harvested: { wheat: 12 } }
 
 test('routine: days=0 runs day after day until the runner hands back, and says why it stopped', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
-  stopAt(api, 6, handBack('health 6'))
+  stopAt(api, 8, handBack('health 6'))
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }), /health 6/)
   assert.deepEqual(events.map(e => e.type), ['routine_day', 'routine_stopped'])
   assert.deepEqual(events[1], { type: 'routine_stopped', reason: 'health 6', step: 'farm.maintain place=a', place: 'a', advice: 'the body is hurt: eat to food 18 and rest until health is back, then start the routine again' })
@@ -139,7 +140,7 @@ test('routine: days=0 takes days off the args it shares with the runner, whose d
 test('routine: days=2 stops after its two days with reason days, one routine_day per day', async () => {
   const { api, events } = fakeApi({ places: marked, answers })
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2 })
-  assert.deepEqual([summary.days, summary.ran], [2, 4])
+  assert.deepEqual([summary.days, summary.ran], [2, 6])
   assert.deepEqual(events.map(e => [e.type, e.day ?? e.reason]), [['routine_day', 1], ['routine_day', 2], ['routine_stopped', 'days']])
   assert.deepEqual(events[2], { type: 'routine_stopped', reason: 'days', step: null, place: null, advice: 'the routine ran its 2 days: start it again (days=0 runs until stopped) or move on' })
 })
@@ -157,8 +158,8 @@ test('routine: routine_day says what each step reported per place, failures incl
     type: 'routine_day',
     day: 1,
     places: {
-      a: { 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' },
-      b: { 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' }
+      a: { kit: 'ok', 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' },
+      b: { kit: 'ok', 'farm.tidy': 'ok', 'farm.maintain': 'FAILED farm.maintain: no composter within 24' }
     }
   })
 })
@@ -208,4 +209,64 @@ for (const [reason, advice] of [
   ['something nobody foresaw', /read the error, fix what it names/]
 ]) {
   test(`stopAdvice: ${reason}`, () => assert.match(stopAdvice(reason, 1), advice))
+}
+
+// ---------------------------------------------------------------- the kit step and a tool that wears out (card 6cf481c0)
+const KITTED = [{ action: 'kit', tools: 'stone_hoe', place: '$place' }, { action: 'farm.maintain', place: '$place' }]
+// a farm.maintain whose hoe breaks under it: the fake takes the hoe out of the pockets, and fails the first time
+const kittedApi = ({ items, kitLeaves, maintainFails = true }) => {
+  let maintains = 0
+  const made = fakeApi({
+    places: marked, items,
+    answers: {
+      // the kit tops the hoes up to what the chest allows, and never takes one away
+      kit: () => { items.stone_hoe = Math.max(items.stone_hoe ?? 0, kitLeaves); return { kit: `hoe:${items.stone_hoe} food:0` } },
+      'farm.maintain': () => {
+        maintains++
+        if (maintains > 1) return { harvested: 3 }
+        items.stone_hoe = Math.max(0, (items.stone_hoe ?? 1) - 1)
+        if (maintainFails) throw new Error('farm.maintain: no hoe')
+        return { harvested: 1 }
+      }
+    }
+  })
+  return made
+}
+
+test('routine: a step that fails as its hoe breaks gets the kit again and one more try, and the day says so', async () => {
+  const { api, calls, events } = kittedApi({ items: { stone_hoe: 1 }, kitLeaves: 2 })
+  const summary = await routine.run(api, { steps: KITTED, place: 'a' })
+  assert.deepEqual([calls.filter(c => !c.startsWith('note')), events[0].places.a['farm.maintain'], summary.failed], [
+    ['kit tools=stone_hoe place=a', 'farm.maintain place=a', 'kit tools=stone_hoe place=a', 'farm.maintain place=a'],
+    'ok rekit=hoe replaced harvested=3', undefined
+  ])
+})
+
+test('routine: when the kit cannot replace the hoe the step is not tried again, and the failure says why', async () => {
+  const { api, calls, events } = kittedApi({ items: { stone_hoe: 1 }, kitLeaves: 0 })
+  await routine.run(api, { steps: KITTED, place: 'a' })
+  assert.deepEqual([calls.filter(c => c.startsWith('farm.maintain')).length, events[0].places.a['farm.maintain']],
+    [1, 'FAILED farm.maintain: no hoe (hoe broke, no spare)'])
+})
+
+test('routine: a spare that took over still means the kit runs again, without a retry of a step that worked', async () => {
+  const { api, calls, events } = kittedApi({ items: { stone_hoe: 2 }, kitLeaves: 2, maintainFails: false })
+  await routine.run(api, { steps: KITTED, place: 'a' })
+  assert.deepEqual([calls.filter(c => !c.startsWith('note')), events[0].places.a['farm.maintain']],
+    [['kit tools=stone_hoe place=a', 'farm.maintain place=a', 'kit tools=stone_hoe place=a'], 'ok rekit=hoe replaced harvested=1'])
+})
+
+test('routine: a routine with no kit step watches no tools', async () => {
+  const items = { stone_hoe: 1 }
+  const { api, calls } = fakeApi({ places: marked, items, answers: { 'farm.maintain': () => { delete items.stone_hoe; return { harvested: 1 } } } })
+  await routine.run(api, { steps: [{ action: 'farm.maintain', place: 'a' }] })
+  assert.deepEqual(calls.filter(c => !c.startsWith('note')), ['farm.maintain place=a'])
+})
+
+for (const [name, lost, items, expected] of [
+  ['back in the pockets', ['hoe'], { iron_hoe: 1 }, { replaced: ['hoe'], missing: [], text: 'hoe replaced' }],
+  ['still gone', ['hoe'], {}, { replaced: [], missing: ['hoe'], text: 'hoe broke, no spare' }],
+  ['one of each', ['hoe', 'shears'], { shears: 1 }, { replaced: ['shears'], missing: ['hoe'], text: 'shears replaced, hoe broke, no spare' }]
+]) {
+  test(`rekitVerdict: ${name}`, () => assert.deepEqual(rekitVerdict(lost, items), expected))
 }

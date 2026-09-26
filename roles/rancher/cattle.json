@@ -1,3 +1,4 @@
 [
-  { "action": "flock.maintain", "mob": "cow", "place": "$place", "size": 6, "deposit": "$store" }
+  {"action": "kit", "food": 16, "place": "$place"},
+  {"action": "flock.maintain", "mob": "cow", "place": "$place", "size": 6, "deposit": "$store"}
 ]
