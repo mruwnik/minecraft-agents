@@ -135,6 +135,10 @@ table above with the rest of the work they belong to: `farm.harvest`, `mine.get`
 **hands the body back to you** rather than pushing on: every one of them stops for `stop`, for a timeout (`timeout=`
 seconds, default 60), for hurt (health <= 8), for hunger with no food, for a full inventory with nowhere to put things,
 and when you speak to it in chat. The reply always says `stopped=<why>`, so read it before starting the next thing.
+One that does not get to stop by itself (`stop`, a death, a step that threw, another `./mc` action superseding it) still
+answers with everything it had reported so far (`built=`, `stage=`, `dug=`, `notes=`) on its `FAIL` line, so the world
+never has to be read to learn what a stopped composite did. A death while it ran ends it with `error: cancelled: died
+at x,y,z (cause)` and `carried=<kit> lies at x,y,z`: `collect` there first, within five minutes, then start it again.
 Night is not a stop: with a bed within 32 blocks a composite goes to bed at its next step, sleeps and carries on at dawn
 by itself (`task_paused`, then `task_resumed`; `state` shows `doing=<name> <n>s, paused: asleep for the night`). While
 anyone stays awake a night lasts about nine minutes, so a composite lying in bed that long is not wedged. `stop` takes the
