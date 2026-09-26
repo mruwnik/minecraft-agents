@@ -26,38 +26,13 @@ export * from './lib/ferry.mjs'
 export * from './lib/composite.mjs'
 export * from './lib/patches.mjs'
 export * from './lib/jar.mjs'
+export * from './lib/scan.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
   if (!Object.keys(ate).length) return { gained, lost }
   const left = Object.fromEntries(Object.entries(lost).map(([k, n]) => [k, n - (ate[k] ?? 0)]).filter(([, n]) => n > 0))
   return { gained, lost: left, ate }
-}
-
-const FALLBACK_SYMBOLS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#%&*+='
-
-// ASCII slices of a box of the world, top layer first; air is '.', everything else gets a letter and a legend.
-export function renderScan (nameAt, { x1, y1, z1, x2, y2, z2 }) {
-  const symbols = new Map()
-  const symbolFor = name => {
-    if (name === 'air') return '.'
-    if (symbols.has(name)) return symbols.get(name)
-    const taken = new Set(symbols.values())
-    const symbol = [...name.replaceAll('_', ''), ...FALLBACK_SYMBOLS].find(c => !taken.has(c)) ?? '?'
-    symbols.set(name, symbol)
-    return symbol
-  }
-  const xs = range(x1, x2)
-  const zs = range(z1, z2)
-  // labels padded to one width, or rows like -9 and -10 shift against each other and columns get misread
-  const labelWidth = Math.max(...zs.map(z => String(z).length))
-  const layers = range(y1, y2).reverse().flatMap(y => {
-    const rows = zs.map(z => `${String(z).padStart(labelWidth)} ${xs.map(x => symbolFor(nameAt(x, y, z))).join('')}`)
-    return rows.every(r => /^ *-?\d+ \.+$/.test(r)) ? [`y=${y} all air`] : [`y=${y}`, ...rows]
-  })
-  const ruler = `${' '.repeat(labelWidth)} ${xs.map(x => Math.abs(x) % 10).join('')}`
-  const legend = [...symbols].map(([name, s]) => `${s}=${name}`).join(' ')
-  return [`x ${xs[0]}..${xs.at(-1)} across (ruler: last digit of x), z down`, ruler, ...layers, legend].join('\n')
 }
 
 const awayFrom = from => p => Math.round(Math.hypot(p.x - from.x, p.y - from.y, p.z - from.z))
@@ -545,8 +520,6 @@ export function didYouMean (typed, actions) {
   const like = [...new Set([...meant, ...actions.filter(a => words.some(w => a.split(/[_.]/).some(part => part.startsWith(w) || w.startsWith(part))))])]
   return `unknown action ${typed}: ${like.length ? `did you mean ${like.slice(0, 4).join(', ')}?` : './mc help lists them all'}`
 }
-// how many cells a scan may cover: a map is read cell by cell, where= comes back as one line of coordinates
-export const scanCap = where => where ? 60000 : 1500
 
 // auto-eat starts below this food level: health only comes back at food 18 and up, so a hurt body eats sooner than a whole one
 export const eatBelow = health => health < 20 ? 18 : 15
@@ -719,15 +692,6 @@ export function coordsError (a, withY = true) {
   const axes = withY ? ['x', 'y', 'z'] : ['x', 'z']
   if (!axes.every(k => typeof a[k] === 'number' && Number.isFinite(a[k]))) return `${withY ? 'x, y and z' : 'x and z'} must be numbers (got ${axes.map(k => `${k}=${a[k]}`).join(' ')})`
   return withY && (a.y < -64 || a.y > 319) ? `y=${a.y} is outside the world (-64 to 319): x and y swapped?` : null
-}
-
-// scan where=<name, * wildcards>: the cells themselves, x then z then y ascending, so nobody has to count columns in the picture
-export function scanWhere (nameAt, { x1, y1, z1, x2, y2, z2 }, where, limit = 20) {
-  const wanted = new RegExp('^' + String(where).replace(/\*/g, '.*') + '$')
-  const range = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => Math.min(a, b) + i)
-  const hits = range(y1, y2).flatMap(y => range(z1, z2).flatMap(z => range(x1, x2).filter(x => wanted.test(nameAt(x, y, z))).map(x => `${String(where).includes('*') ? nameAt(x, y, z) + '@' : ''}${x},${y},${z}`)))
-  if (!hits.length) return `${where} 0`
-  return `${where} ${hits.length}: ${hits.slice(0, limit).join(' ')}${hits.length > limit ? ` (+${hits.length - limit} more)` : ''}`
 }
 
 // floor: the "x,y,z" cells pen.check walked; animals: {name,x,y,z}. In = standing in a column of the pen, whatever the height
