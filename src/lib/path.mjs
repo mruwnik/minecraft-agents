@@ -31,6 +31,8 @@ export function doorwayNode (node, door) {
 
 // walks are walk-only (no digging, no scaffold: they used to tunnel through hills and leave pillars) unless asked; mining must dig
 export const mayDig = (name, args) => args.dig === true
+// and they step round crops (blocksToAvoid) unless asked: trample=true is the explicit last resort out of a crop pocket
+export const mayTrample = (name, args) => args.trample === true
 
 // Standing on a partial block, the pathfinder plans from the cell ABOVE it. Right for farmland and slabs, wrong for a bed: you wake up on
 // it, and in a small hut with a low roof the cell above has no way out (no headroom, the door is one level down). Plan from the bed's cell
@@ -64,11 +66,40 @@ export const boxedIn = passable => {
   return !STEPS.some(d => across(d) || up(d))
 }
 
+// A crop pocket: a sweep left the body deep in its own rows with live crops on all four sides (jizo-melon-patch, 09-26:
+// 5,63,-86 in wheat). A walk steps round crops, so no step leads anywhere and the search dies at once (noPath,
+// visited=12); the generic line sent the farmer looking for a way round that harvesting any ONE neighbour opens.
+// boxedIn says nothing here, a crop being no block. `cellAt(x, y, z)` answers { name, solid, crop } or null (not
+// loaded), as src/walk.mjs reads cells; `feet` is the body's feet cell; `towards` the walk's goal, so the crop named
+// is the one on the way. Null unless every side is shut and at least one is shut by a crop that can be stepped into once cut.
+const TALL = /_fence$|_wall$|_fence_gate$/
+export function cropPocket (cellAt, feet, towards = null) {
+  const at = (dx, dy, dz) => cellAt(feet.x + dx, feet.y + dy, feet.z + dz)
+  const open = cell => Boolean(cell) && !cell.solid && !cell.crop && cell.name !== 'lava'
+  // a ledge to step up onto is a block, not a fence (a block and a half tall) and not a crop
+  const ledge = cell => Boolean(cell?.solid) && !TALL.test(cell.name)
+  const across = ([dx, dz]) => open(at(dx, 0, dz)) && open(at(dx, 1, dz))
+  const up = ([dx, dz]) => open(at(0, 2, 0)) && ledge(at(dx, 0, dz)) && open(at(dx, 1, dz)) && open(at(dx, 2, dz))
+  if (STEPS.some(side => across(side) || up(side))) return null
+  const sides = STEPS.map(([dx, dz]) => ({ x: feet.x + dx, y: feet.y, z: feet.z + dz, name: at(dx, 0, dz)?.name ?? 'unloaded', crop: Boolean(at(dx, 0, dz)?.crop), headClear: open(at(dx, 1, dz)) }))
+  const crops = sides.filter(side => side.crop && side.headClear)
+  if (!crops.length) return null
+  const away = side => typeof towards?.x === 'number' && typeof towards?.z === 'number' ? Math.hypot(side.x - towards.x, side.z - towards.z) : 0
+  const cut = crops.reduce((best, side) => away(side) < away(best) ? side : best)
+  const what = sides.every(side => side.crop) ? 'the only cells beside you are crops' : 'walled in by crops'
+  return `${what} (${tally(sides.map(side => side.name))}): a walk steps round crops, so nothing can be walked to from here. Harvest one with \`dig x=${cut.x} y=${cut.y} z=${cut.z}\` and step into its cell, or goto again with trample=true`
+}
+// name:count pairs, most first, in one line
+const tally = names => Object.entries(names.reduce((n, name) => ({ ...n, [name]: (n[name] ?? 0) + 1 }), {}))
+  .sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name}:${n}`).join(' ')
+
 const SHAFT_NOTE = 'you are standing in a 1-wide shaft with its walls at head height: nothing at all can be walked to from here, however near it is. The answer is about the block you are ON, not the one you asked for. `goto` the same place again with dig=true and the body digs itself out, or place a block at your feet and step up on it'
 const SEARCH_TIMEOUT = 'the search ran out of time (5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
-export function explainNoPath (error, dig, boxed = false) {
+// `pocket` is cropPocket's text, read off the body's own cell: said in place of the generic line, after the shaft's
+export function explainNoPath (error, dig, boxed = false, pocket = null) {
   if (dig || !/no path to the goal|took to long to decide/i.test(error)) return error
   if (boxed) return SHAFT_NOTE
+  if (pocket) return pocket
   // the search gave up on time, not for want of a way: a dead end near the goal (the fenced alley by Perrin's sheep pen gate) draws it in
   if (/took to long to decide/i.test(error)) return SEARCH_TIMEOUT
   return 'no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
