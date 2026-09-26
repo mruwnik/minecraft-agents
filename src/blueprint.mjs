@@ -599,7 +599,7 @@ export function lint (bp, registry = REGISTRY) {
   // an enclosed room with a cell a mob could stand in at light 0
   const room = enclosure(bp, registry)
   if (room.dark.length) {
-    const line = `the room at ${room.room} has ${room.dark.length} cells at light 0: add a light source`
+    const line = `the room at ${room.room} has ${room.dark.length} ${room.dark.length === 1 ? 'cell' : 'cells'} at light 0: add a light source`
     if (bp.tags.includes('shelter')) errors.push(`${line} (a shelter must be spawn-safe)`)
     else warnings.push(line)
   }
@@ -868,7 +868,8 @@ export function stages (jobs, carry, registry = REGISTRY, scaffoldItem = DEFAULT
     close()
   }
   close()
-  return out.map((list, i) => ({ n: i + 1, of: out.length, from: list[0].y, to: list.at(-1).y, jobs: list, bill: jobsBill(list, scaffoldItem) }))
+  // from/to are the blueprint's layer numbers (y-1..y1), the way the file and the stage table name them
+  return out.map((list, i) => ({ n: i + 1, of: out.length, from: list[0].layer ?? list[0].y, to: list.at(-1).layer ?? list.at(-1).y, jobs: list, bill: jobsBill(list, scaffoldItem) }))
 }
 
 const billLine = items => Object.entries(items).map(([k, n]) => `${k}:${n}`).join(' ')

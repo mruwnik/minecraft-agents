@@ -462,12 +462,12 @@ test('stages: a layer bigger than the carry is split inside its own order', () =
   const { jobs } = orderJobs(jobsFor(bp, AT, flatGround(64)), bp, AT, flatGround(64))
   const cut = stages(jobs, 1)
   assert.deepEqual(cut.map(s => s.jobs.length), [64, 64, 64])
-  assert.deepEqual(cut.map(s => [s.from, s.to]), [[65, 65], [65, 65], [65, 65]])
+  assert.deepEqual(cut.map(s => [s.from, s.to]), [[0, 0], [0, 0], [0, 0]])
 })
 
 test('stageLine: the table check prints', () => {
   const rows = [
-    [{ n: 1, of: 3, from: 64, to: 66, bill: { cobblestone: 64, oak_planks: 40 } }, { cobblestone: 64, oak_planks: 40 }, 'stage 1/3 y64..y66 carry=cobblestone:64 oak_planks:40 have=all'],
+    [{ n: 1, of: 3, from: -1, to: 1, bill: { cobblestone: 64, oak_planks: 40 } }, { cobblestone: 64, oak_planks: 40 }, 'stage 1/3 y-1..y1 carry=cobblestone:64 oak_planks:40 have=all'],
     [{ n: 2, of: 3, from: 67, to: 67, bill: { cobblestone: 120 } }, { cobblestone: 64 }, 'stage 2/3 y67 carry=cobblestone:120 short=cobblestone:56']
   ]
   for (const [stage, have, want] of rows) assert.equal(stageLine(stage, have), want)
