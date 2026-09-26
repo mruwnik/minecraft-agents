@@ -110,7 +110,7 @@ function ferryApi ({ boatUuid = uuid, leashHolderId = 12, attach = false, loseLe
       }
       if (name === 'boat_leash') { leash = 12; return { leashed: 8 } }
       if (name === 'goto') {
-        position = { x: args.x + 0.5, y: args.y, z: args.z + 0.5 }
+        position = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }
         if (loseLeashAfterGoto) lose = true
         return {}
       }
@@ -136,11 +136,48 @@ test('villager.ferry attaches a lead if needed and tows the same UUID in short w
   assert.equal(calls.filter(c => c.name === 'boat_leash').length, 1)
   const steps = calls.filter(c => c.name === 'goto')
   assert.ok(steps.length >= 2)
-  assert.ok(steps.every(c => c.args.range === 1))
-  assert.deepEqual(steps.at(-1).args, { x: 7.5, y: 64, z: 0, range: 1 })
+  assert.ok(steps.every(c => c.args.range === 0))
+  assert.deepEqual(steps.at(-1).args, { x: 7.5, y: 64, z: 0, range: 0 })
   assert.equal(calls.some(c => c.name === 'boat_move' || c.name === 'boat_mount'), false)
   assert.ok(reports.at(-1).tow.includes('/'))
   assert.equal(reports.at(-1).boatAt, result.at)
+})
+
+test('villager.ferry alignment is a read-only plan check and refuses a misaligned boat before attachment or movement', async () => {
+  const planned = ferryApi({ attach: true })
+  const plan = await ferry.run(planned.api, { uuid, boat: 8, x: 7, y: 64, z: 0, alignZ: 1, plan: true })
+  assert.equal(plan.aligned, false)
+  assert.equal(planned.calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false)
+
+  const misaligned = ferryApi({ attach: true })
+  await assert.rejects(ferry.run(misaligned.api, { uuid, boat: 8, x: 7, y: 64, z: 0, alignZ: 1 }), /needs water staging.*no towing started/)
+  assert.equal(misaligned.calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false, 'misalignment refuses before attaching the lead or walking')
+
+  const aligned = ferryApi()
+  await ferry.run(aligned.api, { uuid, boat: 8, x: 7, y: 64, z: 0, alignZ: 0 })
+  assert.ok(aligned.calls.some(c => c.name === 'goto'), 'a boat within the requested z tolerance can proceed')
+})
+
+test('villager.ferry accepts dry arrival at the requested block cell despite fractional waypoint distance', async () => {
+  const { api, calls } = ferryApi()
+  const ordinaryPos = api.pos
+  const ordinaryAct = api.act
+  let cellPosition = null
+  api.pos = () => cellPosition ?? ordinaryPos()
+  api.act = async (name, args) => {
+    const result = await ordinaryAct(name, args)
+    if (name === 'goto' && Math.floor(args.x) === 7 && args.y === 64 && Math.floor(args.z) === 0) {
+      cellPosition = { x: 7.99, y: 64.99, z: 0.99 }
+    }
+    return result
+  }
+  const result = await ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 })
+  const lastGoto = calls.filter(c => c.name === 'goto').at(-1)
+  assert.ok(lastGoto)
+  assert.equal(lastGoto.args.range, 0)
+  assert.deepEqual([Math.floor(api.pos().x), Math.floor(api.pos().y), Math.floor(api.pos().z)], [7, 64, 0])
+  assert.ok(Math.hypot(api.pos().x - lastGoto.args.x, api.pos().y - lastGoto.args.y, api.pos().z - lastGoto.args.z) > 1, 'the body can be more than one block from a fractional waypoint while inside its requested dry cell')
+  assert.equal(result.at, '7.5,64,0.5', 'the boat itself still reaches the requested landing')
 })
 
 test('villager.ferry never substitutes a nearby villager for the requested UUID', async () => {
@@ -246,6 +283,124 @@ test('villager.ferry stops before another waypoint while the boat remains near l
   assert.equal(calls.filter(c => c.name === 'goto').length, 1)
 })
 
+function dryCatchupApi ({ loseLeashDuringWait = false } = {}) {
+  const calls = []
+  let position = { x: 0, y: 64, z: 0 }
+  let boatX = -6.5
+  let gotoCount = 0
+  let postGotoStates = 0
+  let waitReads = 0
+  let leash = 12
+  const api = {
+    pos: () => ({ ...position }),
+    block: (x, y) => ({ name: y <= 63 ? 'stone' : 'air', solid: y <= 63 }),
+    act: async (name, args = {}) => {
+      calls.push({ name, args })
+      if (name === 'state') return { inWater: false }
+      if (name === 'boat_state') {
+        if (gotoCount === 1) {
+          postGotoStates++
+          if (loseLeashDuringWait && postGotoStates >= 2) leash = null
+        }
+        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boatX},64,0`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+      }
+      if (name === 'goto') {
+        gotoCount++
+        if (gotoCount > 1) throw new Error('observed next waypoint after catch-up')
+        position = { x: args.x + 0.5, y: args.y, z: args.z + 0.5 }
+        return {}
+      }
+      throw new Error(`unexpected action ${name}`)
+    },
+    until: async (predicate, options) => {
+      assert.equal(options.timeout, 12)
+      assert.equal(options.every, 0.25)
+      for (let i = 0; i < 12; i++) {
+        if (await predicate()) return
+        waitReads++
+        if (!loseLeashDuringWait && waitReads === 3) boatX = position.x - 6
+      }
+      throw new Error(options.what)
+    },
+    report: () => {}
+  }
+  return { api, calls, get waitReads () { return waitReads }, get gotoCount () { return gotoCount } }
+}
+
+test('villager.ferry waits for a lagging dry tow boat before issuing the next goto waypoint', async () => {
+  const run = dryCatchupApi()
+  await assert.rejects(ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /observed next waypoint after catch-up/)
+  assert.ok(run.waitReads >= 3, 'the dry leg holds and checks boat state while the lead catches up')
+  assert.equal(run.gotoCount, 2, 'the second goto starts only after the lagging boat enters the safe gap')
+  const gotos = run.calls.map((c, i) => c.name === 'goto' ? i : -1).filter(i => i >= 0)
+  assert.ok(run.calls.slice(gotos[0] + 1, gotos[1]).some(c => c.name === 'boat_state'), 'fresh boat observations happen between the two walking legs')
+})
+
+test('villager.ferry stops during dry catch-up if the leash breaks before the next goto', async () => {
+  const run = dryCatchupApi({ loseLeashDuringWait: true })
+  await assert.rejects(ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /leash broke during tow/)
+  assert.equal(run.gotoCount, 1, 'no new walking step follows a leash loss during catch-up')
+  assert.ok(run.waitReads <= 1)
+})
+
+function landingSettleApi (mode = 'delayed') {
+  const calls = []
+  let position = { x: 0, y: 64, z: 0 }
+  let boatOffset = 0
+  let leash = 12
+  let settling = false
+  let settleReads = 0
+  const api = {
+    pos: () => ({ ...position }),
+    block: (x, y) => ({ name: y <= 63 ? 'stone' : 'air', solid: y <= 63 }),
+    act: async (name, args = {}) => {
+      calls.push({ name, args })
+      if (name === 'state') return { inWater: false }
+      if (name === 'boat_state') {
+        if (settling) {
+          settleReads++
+          if (mode === 'leash') leash = null
+          if (mode === 'delayed' && settleReads >= 3) boatOffset = 0
+        }
+        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${position.x - boatOffset},${position.y},${position.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+      }
+      if (name === 'goto') {
+        position = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }
+        if (Math.floor(args.x) === 7 && Math.floor(args.z) === 0) boatOffset = 2
+        return {}
+      }
+      throw new Error(`unexpected action ${name}`)
+    },
+    until: async (predicate, options) => {
+      assert.equal(options.timeout, 12)
+      assert.equal(options.every, 0.25)
+      if (options.what.includes('stayed outside the landing')) settling = true
+      for (let i = 0; i < 8; i++) if (await predicate()) return
+      throw new Error(options.what)
+    },
+    report: () => {}
+  }
+  return { api, calls, get settleReads () { return settleReads } }
+}
+
+test('villager.ferry waits for a delayed boat arrival inside the final landing radius', async () => {
+  const run = landingSettleApi('delayed')
+  const result = await ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 })
+  assert.ok(run.settleReads >= 3, 'final arrival requires fresh boat position feedback after the last walking step')
+  const [x, y, z] = result.at.split(',').map(Number)
+  assert.ok(Math.hypot(x - 7.5, y - 64, z - 0.5) <= 1, 'success reports the boat inside the landing radius')
+})
+
+test('villager.ferry refuses a stationary outside-radius landing and a leash loss while settling', async () => {
+  const outside = landingSettleApi('never')
+  await assert.rejects(ferry.run(outside.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /stayed outside the landing/)
+  assert.ok(outside.settleReads >= 2, 'the command waits for actual boat arrival instead of trusting the operator position')
+
+  const lost = landingSettleApi('leash')
+  await assert.rejects(ferry.run(lost.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /leash broke while settling at the landing/)
+  assert.equal(lost.settleReads, 1)
+})
+
 function routeTerrain (floorYAt = () => 63, obstructed = () => false, unloaded = () => false) {
   return (x, y, z) => {
     if (unloaded(x, y, z)) return null
@@ -317,6 +472,47 @@ test('villager.ferry rejects the complete uphill boat route before attaching a l
   const { api, calls } = ferryApi({ terrainAt: routeTerrain(x => x < 2 ? 63 : 64) })
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 65, z: 0 }), /boat route blocked.*upward|boat route blocked.*nonascending/)
   assert.equal(calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false)
+})
+
+test('villager.ferry refuses a direct pull that cuts a corner even when the hull route can detour around it', async () => {
+  const blockAt = (x, y, z) => {
+    if (y <= 63) return { name: 'stone', solid: true }
+    if (x === 2 && z === 0 && y === 64) return { name: 'stone', solid: true }
+    return { name: 'air', solid: false }
+  }
+  const from = { x: 0.5, y: 64, z: 0.5 }
+  const landing = { x: 7.5, y: 64, z: 0.5 }
+  const planned = villagerBoatRoute({ from, to: landing, blockAt })
+  assert.ok(planned.points?.length > 2, 'the full planner can route around the obstacle')
+  const direct = villagerBoatRoute({ from, to: landing, direct: true, blockAt })
+  assert.match(direct.error, /hull blocked|upward boat step/, 'the straight hull sweep through the same corner is blocked')
+
+  const calls = []
+  let body = { x: 0, y: 64, z: 0 }
+  const boat = { ...from }
+  let leash = 12
+  let leads = 0
+  const api = {
+    pos: () => ({ ...body }),
+    block: blockAt,
+    inv: () => ({ lead: leads }),
+    act: async (name, args = {}) => {
+      calls.push({ name, args })
+      if (name === 'state') return { inWater: false }
+      if (name === 'boat_state') return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boat.x},${boat.y},${boat.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+      if (name === 'goto') { body = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }; return {} }
+      if (name === 'boat_unleash') { leash = null; leads++; return { unleashed: true } }
+      throw new Error(`unexpected action ${name}`)
+    },
+    until: async predicate => { if (!(await predicate())) throw new Error('boat did not follow') },
+    report: () => {}
+  }
+  await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /actual boat pull blocked.*lead detached.*recover the dropped lead/)
+  const lastGoto = calls.findLastIndex(c => c.name === 'goto')
+  assert.ok(lastGoto >= 0, 'the walker may follow the surveyed detour')
+  assert.equal(calls.slice(lastGoto + 1).some(c => c.name === 'goto'), false, 'the blocked direct hull pull is refused before any following walking step')
+  assert.equal(calls.filter(c => c.name === 'boat_unleash').length, 1, 'release only the exact verified boat after the unsafe pull is found')
+  assert.equal(leads, 1, 'the fake records recovery of the detached lead')
 })
 
 test('boat route rejects a sheer drop that would strand or break the hull', () => {
@@ -393,6 +589,7 @@ function waterFerryApi (mode = 'progress') {
         return { name, solid: false }
       }
       if (mode === 'emerge' && position.x >= 2.5 && y === 62) return { name: 'stone', solid: true }
+      if (mode === 'source-water' && x >= 6 && y === 62) return { name: 'stone', solid: true }
       return y === 62
         ? { name: 'water', solid: false }
       : y === 61
@@ -414,7 +611,7 @@ function waterFerryApi (mode = 'progress') {
       if (name === 'boat_swim') {
         if (mode !== 'stalled') {
           position = {
-            x: mode === 'emerge' ? Math.min(args.x, position.x + 2) : args.x,
+            x: ['emerge', 'source-water'].includes(mode) ? Math.min(args.x, position.x + 2) : args.x,
             y: 62.52,
             z: args.z
           }
@@ -424,9 +621,9 @@ function waterFerryApi (mode = 'progress') {
         if (mode === 'leash-loss') leashHolderId = null
         return { from: '0,62.52,0', to: `${position.x},${position.y},${position.z}` }
       }
-      if (name === 'goto' && mode === 'emerge') {
+      if (name === 'goto' && ['emerge', 'source-water'].includes(mode)) {
         position = { x: args.x, y: args.y, z: args.z }
-        boatAt = { x: args.x, y: 62.52, z: args.z }
+        if (mode === 'emerge') boatAt = { x: args.x, y: 62.52, z: args.z }
         return {}
       }
       if (name === 'goto') throw new Error('water crossing should use boat_swim')
@@ -487,6 +684,15 @@ test('villager.ferry switches from swimming to walking when the bot reaches dry 
   assert.ok(calls.filter(c => c.name === 'boat_swim').every(c => calls.indexOf(c) < calls.findIndex(d => d.name === 'goto')), 'after emerging, continue the crossing on foot')
 })
 
+test('villager.ferry walks to verified dry support even while the body still reports in water', async () => {
+  const { api, calls } = waterFerryApi('source-water')
+  await ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0, pullX: 6, pullY: 63, pullZ: 0 })
+  const lastSwim = calls.findLastIndex(c => c.name === 'boat_swim')
+  const firstDryWalk = calls.findIndex((c, i) => i > lastSwim && c.name === 'goto')
+  assert.ok(lastSwim >= 0 && firstDryWalk > lastSwim, 'swim on the water route, then walk the verified dry column')
+  assert.ok(calls.slice(0, firstDryWalk).some(c => c.name === 'state'), 'state.inWater remains true during this fixture; the dry support check selects goto')
+})
+
 test('villager.ferry follows pullVia waypoints in order after reaching the boat landing', async () => {
   const calls = []
   let position = { x: 0.5, y: 64, z: 0.5 }
@@ -522,6 +728,79 @@ test('villager.ferry follows pullVia waypoints in order after reaching the boat 
   assert.deepEqual(waypoints.slice(-3), [[5, 64, -1], [7, 64, -1], [9, 64, -1]])
   assert.ok(calls.filter(c => c.name === 'goto').slice(-3).every(c => c.args.range === 0), 'explicit pull points must reach the exact side of a narrow shore doorway')
   assert.equal(result.at, '4.5,64,0.5')
+})
+
+test('villager.ferry selects supported dry-bank and shallow-water foot cells, but no invented floor', async () => {
+  async function runHandoff ({ supported = false, unknown = false, dryBank = false }) {
+    let position = { x: 0.5, y: 64, z: 0.5 }
+    let boatAt = { ...position }
+    let leashHolderId = null
+    let inWater = false
+    const calls = []
+    const block = (x, y, z) => {
+      if (dryBank && x >= 7 && x <= 9) {
+        if (y === 63) return { name: 'grass_block', solid: true }
+        if (y === 64 || y === 65) return { name: 'air', solid: false }
+      }
+      if (x === 7) {
+        if (unknown && y <= 63) return null
+        if (!dryBank && y === 62) return { name: 'water', solid: false }
+        if (y === 61) return supported ? { name: 'sand', solid: true } : { name: 'air', solid: false }
+        if (y === 60) return { name: 'air', solid: false }
+        if (y === 63 || y === 64 || y === 65) return { name: 'air', solid: false }
+      }
+      return y <= 63 ? { name: 'stone', solid: true } : { name: 'air', solid: false }
+    }
+    const api = {
+      pos: () => ({ ...position }), block,
+      act: async (name, args = {}) => {
+        calls.push({ name, args })
+        if (name === 'state') return { inWater }
+        if (name === 'boat_state') return {
+          selfId: 12, mounted: null,
+          boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+        }
+        if (name === 'boat_leash') { leashHolderId = 12; return { leashed: 8 } }
+        if (name === 'goto') {
+          position = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }
+          if (Math.floor(args.x) <= 4) boatAt = { ...position }
+          inWater = supported && Math.floor(position.x) === 7 && position.y === 62
+          return {}
+        }
+        if (name === 'boat_swim') {
+          inWater = true
+          position = { x: Math.floor(args.x) + 0.5, y: 62.52, z: Math.floor(args.z) + 0.5 }
+          return { to: `${position.x},${position.y},${position.z}` }
+        }
+        throw new Error(`unexpected action ${name}`)
+      },
+      until: async predicate => { if (!(await predicate())) throw new Error('boat did not follow') },
+      report: () => {}
+    }
+    await ferry.run(api, {
+      uuid, boat: 8, x: 4, y: 64, z: 0,
+      pullX: 9, pullY: dryBank ? 65 : 63, pullZ: 0,
+      pullVia: dryBank ? '7:65:0' : '7:63:0'
+    })
+    return calls
+  }
+
+  const dry = await runHandoff({ dryBank: true })
+  assert.equal(dry.find(c => c.name === 'goto' && Math.floor(c.args.x) === 7).args.y, 64, 'a two-block-high dry bank uses its supported feet cell')
+
+  const supported = await runHandoff({ supported: true })
+  const shallowGoto = supported.find(c => c.name === 'goto' && Math.floor(c.args.x) === 7)
+  assert.equal(shallowGoto.args.y, 62, 'the supported shallow-water column uses its sand-supported foot cell')
+  assert.ok(supported.some(c => c.name === 'boat_swim' && c.args.x === 9), 'the next waypoint switches to a swim after the bot enters water')
+  assert.ok(supported.findIndex(c => c.name === 'goto' && Math.floor(c.args.x) === 7) < supported.findIndex(c => c.name === 'boat_swim'))
+
+  const unsupported = await runHandoff({ supported: false })
+  assert.ok(unsupported.some(c => c.name === 'goto' && Math.floor(c.args.x) === 7 && c.args.y === 63), 'without solid support, keep the boat-height waypoint')
+  assert.equal(unsupported.some(c => c.name === 'goto' && Math.floor(c.args.x) === 7 && c.args.y === 62), false, 'an unsupported water column does not create a lower walking floor')
+
+  const unloaded = await runHandoff({ unknown: true })
+  assert.ok(unloaded.some(c => c.name === 'goto' && Math.floor(c.args.x) === 7 && c.args.y === 63), 'unknown support keeps the original waypoint height')
+  assert.equal(unloaded.some(c => c.name === 'goto' && Math.floor(c.args.x) === 7 && c.args.y < 63), false, 'unknown blocks cannot justify lowering the walk target')
 })
 
 test('villager.route rejects an uphill route before boat capture and accepts a clear descent with a turn', async () => {
@@ -726,7 +1005,7 @@ test('temporary water-level service slot contains adults from riverbed, water su
   }
 })
 
-function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap = false, staleReleaseOutside = false, deepWater = false, deepStandUnsupported = false, dryAirOverSolid = false, siteVillagers = [], prepBoats = [], releasedVillager = true } = {}) {
+function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap = false, staleReleaseOutside = false, deepWater = false, deepStandUnsupported = false, dryAirOverSolid = false, siteVillagers = [], prepBoats = [], releasedVillager = true, deferredCap = null } = {}) {
   const cell = { x: cellX, y: cellY, z: cellZ }
   const river = { x: 1, z: 0 }
   const plan = villagerDockPlan(cell, river)
@@ -793,7 +1072,7 @@ function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap =
       if (name === 'place') { put(args, args.item); return { placed: 1 } }
       if (name === 'dig') { blockMap.delete(key(args.x, args.y, args.z)); return { dug: 1 } }
       if (name === 'boat_release') {
-        const gap = [...plan.gate.filter(p => key(p.x, p.y, p.z) !== key(plan.service)), ...plan.walls, plan.serviceFoundation].find(p => !api.block(p.x, p.y, p.z)?.solid)
+        const gap = [...plan.gate.filter(p => key(p.x, p.y, p.z) !== key(plan.service)), ...plan.walls.filter(p => !deferredCap || key(p) !== key(deferredCap)), plan.serviceFoundation].find(p => !api.block(p.x, p.y, p.z)?.solid)
         assert.equal(gap, undefined, 'gate and walls must be sealed before releasing the passenger')
         if (deepWater) {
           assert.ok(plan.gateBase.every(p => api.block(p.x, p.y - 2, p.z)?.solid), 'both deep gate beds must be filled before release')
@@ -807,7 +1086,7 @@ function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap =
       throw new Error(`unexpected action ${name}`)
     }
   }
-  return { api, calls, reports, plan, inventory }
+  return { api, calls, reports, plan, inventory, setBlock: (p, name) => put(p, name) }
 }
 
 test('villager.dock checks full block inventory before making world edits', async () => {
@@ -884,6 +1163,55 @@ test('villager.dock closes the gate before releasing the exact passenger and sea
   assert.equal(api.block(plan.serviceFoundation.x, plan.serviceFoundation.y, plan.serviceFoundation.z).solid, true)
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
   assert.deepEqual(reports.at(-1), { dock: 'secured', villagerUuid: uuid })
+})
+
+test('villager.dock permits one deferred rear cap only for the freshly observed adult passenger', async () => {
+  const cell = { x: -132, y: 63, z: -168 }
+  const cap = { x: cell.x - 2, y: cell.y + 3, z: cell.z }
+  const insideStand = { x: cell.x, y: cell.y + 1, z: cell.z }
+  const adult = { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), baby: false, adult: true }
+  const run = dockApi({ cellX: cell.x, cellY: cell.y, cellZ: cell.z, siteVillagers: [adult], deferredCap: cap })
+  run.setBlock({ x: cap.x, y: cap.y + 1, z: cap.z }, 'oak_planks')
+  const originalAct = run.api.act
+  run.api.act = async (name, args) => {
+    if (name === 'boat_release') {
+      for (const p of run.plan.gate) assert.equal(run.api.block(p.x, p.y, p.z).solid, true, `boat gate remains closed at ${key(p)}`)
+      for (const y of [cap.y - 1, cap.y - 2, cap.y + 1]) assert.equal(run.api.block(cap.x, y, cap.z).solid, true, `adult barrier/roof is full at ${cap.x},${y},${cap.z}`)
+      assert.equal(run.api.block(cap.x, cap.y, cap.z).name, 'air', 'the deferred opening is exactly one high')
+      return originalAct(name, args)
+    }
+    return originalAct(name, args)
+  }
+  const result = await dock.run(run.api, {
+    uuid, boat: 8, ...cell, riverX: 1, riverZ: 0,
+    insideX: insideStand.x, insideY: insideStand.y, insideZ: insideStand.z,
+    deferCapX: cap.x, deferCapZ: cap.z
+  })
+  assert.equal(result.adultOnly, true)
+  assert.equal(result.fullySealed, false)
+  assert.equal(result.deferredCap, key(cap))
+  assert.equal(run.plan.walls.filter(p => !run.api.block(p.x, p.y, p.z).solid).length, 1)
+  assert.equal(run.api.block(cap.x, cap.y, cap.z).name, 'air')
+  assert.equal(run.calls.some(c => c.name === 'boat_release'), true)
+})
+
+test('villager.dock refuses a deferred adult cap for baby/unknown age and for a missing roof before edits', async () => {
+  const cell = { x: -132, y: 63, z: -168 }
+  const cap = { x: cell.x - 2, y: cell.y + 3, z: cell.z }
+  const insideStand = { x: cell.x, y: cell.y + 1, z: cell.z }
+  const args = { uuid, boat: 8, ...cell, riverX: 1, riverZ: 0, insideX: insideStand.x, insideY: insideStand.y, insideZ: insideStand.z, deferCapX: cap.x, deferCapZ: cap.z }
+  for (const resident of [
+    { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), baby: true, adult: false },
+    villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`)
+  ]) {
+    const run = dockApi({ cellX: cell.x, cellY: cell.y, cellZ: cell.z, siteVillagers: [resident], deferredCap: cap })
+    run.setBlock({ x: cap.x, y: cap.y + 1, z: cap.z }, 'oak_planks')
+    await assert.rejects(dock.run(run.api, args), /exact passenger freshly observed as an adult/)
+    assert.equal(run.calls.some(c => ['goto', 'place', 'dig', 'boat_release'].includes(c.name)), false)
+  }
+  const noRoof = dockApi({ cellX: cell.x, cellY: cell.y, cellZ: cell.z })
+  await assert.rejects(dock.run(noRoof.api, args), /full roof over one upper rear wall cell/)
+  assert.equal(noRoof.calls.length, 0, 'the roof must be preflighted before any boat or world action')
 })
 
 test('villager.dock repairs a two-block rear wall gap before releasing the passenger', async () => {

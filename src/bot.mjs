@@ -18,6 +18,8 @@ import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { dropGoal } from './drop.mjs'
 import { isGreeting } from './chatter.mjs'
+import { breedPlan } from './villager-breed.mjs'
+import { inventoryCompactPair, compatibleInventoryStacks } from './inventory-compact.mjs'
 import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
@@ -165,7 +167,7 @@ const eatOnce = async opts => {
 const EAT_SAFE_RANGE = 6
 let eatFails = 0
 const eatTick = async () => {
-  if (!ready || !bot?.autoEat || bot.autoEat.isEating) return
+  if (!ready || !bot?.autoEat || bot.autoEat.isEating || compactingInventory) return
   if (bot.food >= bot.autoEat.opts.minHunger && bot.health >= bot.autoEat.opts.minHealth) return
   // #149: a hurt body is usually a body in a fight, and minHunger rises as health drops, so this reflex used to walk
   // into the melee with bread in its hand. Mariel died that way at food 17 with a sword in her pack. Silently: 42 eat
@@ -300,6 +302,18 @@ function connect () {
   bot.loadPlugin(armorManager)
   bot.loadPlugin(autoEat)
   boatLeashHolder = new Map()
+  bot._client.on('set_passengers', ({ entityId, passengers }) => {
+    const vehicle = bot.entities[entityId]
+    if (!vehicle) return
+    // The packet replaces the complete passenger list. Mineflayer only
+    // updates the listed riders, leaving omitted former riders behind.
+    const wanted = new Set(passengers)
+    for (const old of vehicle.passengers ?? []) {
+      if (!wanted.has(old.id) && old.vehicle === vehicle) old.vehicle = null
+    }
+    vehicle.passengers = passengers.map(id => bot.entities[id]).filter(Boolean)
+    for (const rider of vehicle.passengers) rider.vehicle = vehicle
+  })
   bot._client.on('attach_entity', packet => {
     const entity = bot.entities[packet.entityId]
     if (!isBoat(entity)) return
@@ -802,6 +816,7 @@ let leading = false // animals are following me: doors and gates stay open behin
 let following = [] // the animals a lead is bringing along: a gate stays open until they are through it (herdPassed), then shuts at once
 let luring = false // a lead is on, from its first step towards the animal: the food stays in my hand, gates or no gates
 let feeding = false // feed is holding food out to an animal: it stays in my hand
+let compactingInventory = false
 // open wooden doors as we walk up to them, and shut the ones we opened once we're through
 async function doorTick () {
   if (doorBusy) return
@@ -1295,9 +1310,10 @@ async function digDown (start, stopped) {
   }
 }
 // up instead of down: jump, and click the block under the feet while the body is in the air above it
-async function pillarUp (stopped) {
-  for (const _ of [1, 2, 3]) {
-    const item = capBlock()
+async function pillarUp (stopped, steps = 3, explicitItem = null) {
+  for (let step = 0; step < steps; step++) {
+    if (stopped()) return
+    const item = explicitItem ? findItem(explicitItem) : capBlock()
     const feet = bot.entity.position.floored()
     const under = bot.blockAt(feet.offset(0, -1, 0))
     if (!item || !under || under.boundingBox !== 'block') return
@@ -1305,6 +1321,7 @@ async function pillarUp (stopped) {
     await bot.lookAt(feet.offset(0.5, -1, 0.5), true).catch(() => {})
     bot.setControlState('jump', true)
     for (let t = 0; t < 8 && bot.entity.position.y - feet.y < 0.9; t++) await bot.waitForTicks(1)
+    if (stopped()) { bot.setControlState('jump', false); return }
     const placed = await bot.placeBlock(under, new Vec3(0, 1, 0)).then(() => true, () => false)
     bot.setControlState('jump', false)
     await bot.waitForTicks(6)
@@ -2092,7 +2109,9 @@ const long = {
     const water = at?.name === 'water'
     if (!water && !(isAir(at?.name) && below?.boundingBox === 'block')) throw new Error(`boat_place needs water at ${p} or air over solid ground (found ${at?.name ?? 'unloaded'})`)
     if (a.aimY !== undefined && (!water || !Number.isFinite(a.aimY) || a.aimY < p.y + 0.5 || a.aimY > p.y + 1)) throw new Error('boat_place aimY= needs a water height within the launch cell')
-    const aimY = a.aimY ?? p.y + (water ? 1 : 0.5)
+    // For land, aim just inside the support's top surface. A ray aimed half a
+    // block above it continues past the requested center before hitting ground.
+    const aimY = a.aimY ?? (water ? p.y + 1 : p.y - 0.01)
     if (Object.values(bot.entities).some(e => isBoat(e) && e.position.distanceTo(center) < 2)) throw new Error('a boat already occupies this launch cell')
     await goNear(p, 3)
     await bot.equip(findItem(item), 'hand')
@@ -2375,7 +2394,26 @@ const long = {
       const merge = slabMergeRefusal({ x: p.x, y: p.y, z: p.z }, existing, b.item)
       if (merge) throw new Skip(merge)
       const state = occupiedBy(existing, b.item)
-      if (state === 'skip') { already.add(`${b.x},${b.y},${b.z}`); return }
+      const verifyDirection = () => {
+        const stood = bot.blockAt(p)
+        if (stood?.name !== b.item) return false
+        const props = stood.getProperties?.() ?? {}
+        if (b.facing && props.facing !== b.facing) return false
+        if (b.item.endsWith('_bed')) {
+          if (props.part !== 'foot') return false
+          const offsets = { north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0] }
+          const direction = offsets[props.facing]
+          if (!direction) return false
+          const head = bot.blockAt(p.offset(...direction))
+          const headProps = head?.getProperties?.() ?? {}
+          return head?.name === b.item && headProps.part === 'head' && headProps.facing === props.facing
+        }
+        return true
+      }
+      if (state === 'skip') {
+        if ((b.item.endsWith('_bed') || b.item.endsWith('_fence_gate')) && !verifyDirection()) throw new Skip('existing bed halves or gate facing do not match the requested placement')
+        already.add(`${b.x},${b.y},${b.z}`); return
+      }
       // on lumpy ground part of a wall is often terrain already: skip that cell and build the rest (Aviendha's pen, 09-19)
       if (state === 'blocked') throw new Skip(`${existing.name} is already there`)
       if (state === 'clear') { await goNear(p, 3); await bot.dig(existing) }
@@ -2415,7 +2453,8 @@ const long = {
         handPlacing++
         await bot._genericPlace(bot.blockAt(p.plus(face)), face.scaled(-1), { forceLook: 'ignore', half: b.half ?? 'bottom' }).finally(() => { handPlacing-- })
         await bot.waitForTicks(4)
-        if (bot.blockAt(p)?.boundingBox !== 'block') throw new Error(`placing ${b.item ?? a.item} at ${p} did not take`)
+        const directionalPartial = b.item.endsWith('_bed') || b.item.endsWith('_fence_gate')
+        if (directionalPartial ? !verifyDirection() : bot.blockAt(p)?.boundingBox !== 'block') throw new Error(`placing ${b.item ?? a.item} at ${p} did not take with the requested facing and parts`)
       } else {
         // "the block is still air": out of the server's reach, or our own body is in the cell
         handPlacing++
@@ -2569,6 +2608,93 @@ const long = {
       if (furnace.outputItem()) await furnace.takeOutput()
       return furnaceReport({ input: furnace.inputItem(), fuel: furnace.fuelItem(), burning: furnace.fuel > 0 })
     } finally { furnace.close() }
+  },
+
+  async pillar_up (a) {
+    const steps = a.steps ?? 1
+    if (!Number.isInteger(steps) || steps < 1 || steps > 4) throw new Error('pillar_up steps must be 1..4')
+    if (bot.vehicle || !bot.entity.onGround) throw new Error('pillar_up requires grounded feet and no vehicle')
+    const start = bot.entity.position.clone()
+    const cell = start.floored()
+    const support = bot.blockAt(cell.offset(0, -1, 0))
+    if (support?.boundingBox !== 'block') throw new Error('pillar_up requires a full solid support')
+    const item = a.item ? findItem(a.item) : capBlock()
+    if (!item || bot.registry.blocksByName[item.name]?.boundingBox !== 'block' || item.count < steps) throw new Error('pillar_up needs enough carried full building blocks')
+    for (let y = cell.y; y <= cell.y + steps + 2; y++) {
+      const b = bot.blockAt(new Vec3(cell.x, y, cell.z))
+      if (!b || !isAir(b.name)) throw new Error(`pillar_up needs clear loaded headroom at ${cell.x},${y},${cell.z}`)
+    }
+    const occupied = Object.values(bot.entities).find(e => e !== bot.entity && e.name !== 'item' && e.position && Math.abs(e.position.x - start.x) < 0.8 && Math.abs(e.position.z - start.z) < 0.8 && Math.abs(e.position.y - start.y) < steps + 2)
+    if (occupied) throw new Error(`pillar_up column is near entity ${occupied.id}`)
+    // These are ordinary placements, checked before the first jump as well as
+    // on each fresh cancellation check; the emergency helper keeps its defaults.
+    const checkColumn = () => {
+      for (let n = 0; n < steps; n++) {
+        const placement = { x: cell.x, y: cell.y + n, z: cell.z, item: item.name }
+        const refusal = refusalFor('place', placement)
+        if (refusal) throw new Error(refusal)
+      }
+    }
+    checkColumn()
+    const alive = cancelGuard()
+    bot.pathfinder.setGoal(null)
+    try {
+      await pillarUp(() => { alive(); checkColumn(); return false }, steps, item.name)
+    } finally { bot.setControlState('jump', false) }
+    for (let tick = 0; tick < 20 && !bot.entity.onGround; tick++) {
+      alive()
+      await bot.waitForTicks(1)
+    }
+    alive()
+    const raised = bot.entity.position.y - start.y
+    const completed = Array.from({ length: steps }, (_, n) => bot.blockAt(cell.offset(0, n, 0)))
+    const finalFeet = bot.entity.position.floored()
+    if (raised < steps - 0.2 || !bot.entity.onGround || finalFeet.x !== cell.x || finalFeet.z !== cell.z || finalFeet.y !== cell.y + steps || completed.some(b => b?.name !== item.name || b.boundingBox !== 'block')) throw new Error(`pillar_up stopped after ${raised.toFixed(2)} blocks without a confirmed complete grounded pillar; inspect footing before retry`)
+    return { from: roundVec(start), to: pos(), raised: Math.round(raised * 100) / 100, item: item.name }
+  },
+
+  async inventory_compact (a) {
+    if (!mcData.itemsByName[a.item]) throw new Error('inventory_compact needs a known item=')
+    const maxMoves = a.maxMoves ?? 72
+    if (!Number.isInteger(maxMoves) || maxMoves < 1 || maxMoves > 72) throw new Error('maxMoves= must be 1..72')
+    if (bot.currentWindow || bot.inventory.selectedItem) throw new Error('close the current window and empty the cursor before inventory_compact')
+    if (bot.autoEat?.isEating) throw new Error('inventory_compact must wait for the bot to finish its meal')
+    bot.pathfinder.setGoal(null)
+    const total = () => inventoryCounts()[a.item] ?? 0
+    const stacks = () => bot.inventory.items().filter(i => i.name === a.item).length
+    const before = { count: total(), stacks: stacks(), freeSlots: bot.inventory.emptySlotCount() }
+    let moves = 0, source = null
+    compactingInventory = true
+    try {
+      while (moves < maxMoves) {
+        if (!ready || bot.health <= 0 || flee || fighting || holingUp) throw new Error('inventory_compact interrupted by body safety')
+        if (bot.currentWindow || bot.inventory.selectedItem) throw new Error('inventory window or cursor changed during compaction')
+        const pair = inventoryCompactPair(bot.inventory.items(), a.item)
+        if (!pair) break
+        source = pair.source
+        const sourceCount = bot.inventory.slots[source].count
+        const destinationCount = bot.inventory.slots[pair.destination].count
+        await bot.moveSlotItem(source, pair.destination)
+        await bot.waitForTicks(3)
+        if (bot.inventory.selectedItem || total() !== before.count ||
+            (bot.inventory.slots[source]?.count ?? 0) !== sourceCount - pair.moved ||
+            (bot.inventory.slots[pair.destination]?.count ?? 0) !== destinationCount + pair.moved) {
+          throw new Error('inventory merge was not confirmed; inspect inventory before retrying')
+        }
+        source = null
+        moves++
+      }
+      return { item: a.item, moves, count: total(), beforeStacks: before.stacks, afterStacks: stacks(), freedSlots: bot.inventory.emptySlotCount() - before.freeSlots }
+    } finally {
+      try {
+        const cursor = bot.inventory.selectedItem
+        if (cursor && source !== null && !bot.currentWindow) {
+          const current = bot.inventory.slots[source]
+          if (!current || (compatibleInventoryStacks(current, cursor) && current.count + cursor.count <= current.stackSize)) await bot.clickWindow(source, 0, 0)
+        }
+        if (bot.inventory.selectedItem) throw new Error('inventory_compact cursor restoration pending; inspect inventory before another action')
+      } finally { compactingInventory = false }
+    }
   },
 
   async deposit (a) {
@@ -3116,9 +3242,9 @@ const quick = {
   },
   // debugging aid: the raw metadata of the nearest entities with this name (how does the server mark a shorn sheep?)
   entity: (a) => ({
-    found: Object.values(bot.entities).filter(e => e !== bot.entity && matcher(a.name)(e.name ?? ''))
+    found: Object.values(bot.entities).filter(e => e !== bot.entity && matcher(a.name)(e.name ?? '') && (a.hostile !== true || isHostile(e)))
       .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position)).slice(0, a.count ?? 2)
-      .map(e => ({ id: e.id, ...(a.uuid ? { uuid: e.uuid, vehicleId: currentVehicleId(e) } : {}), dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata) }))
+      .map(e => ({ id: e.id, name: e.name, hostile: isHostile(e), ...(a.uuid ? { uuid: e.uuid, vehicleId: currentVehicleId(e) } : {}), ...(e.name === 'villager' ? { baby: isBaby(e.metadata), adult: !isBaby(e.metadata) } : {}), dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata) }))
   }),
   watch: (a) => {
     if (!a.name || [a.block, a.mob, a.item].filter(Boolean).length !== 1) throw new Error('watch needs name= and exactly one of block=, mob=, item=')
@@ -3385,6 +3511,108 @@ const quick = {
     return { on: destination }
   },
   async toss (a) { const i = findItem(a.item); await bot.toss(i.type, null, Math.min(a.count ?? i.count, i.count)); return {} },
+  async villager_food (a) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(a.uuid ?? '')) throw new Error('villager_food needs an exact villager uuid=')
+    if (a.otherUuid !== undefined && (a.otherUuid === a.uuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(a.otherUuid))) throw new Error('villager_food otherUuid must name a distinct exact parent')
+    if (!['bread', 'carrot', 'potato', 'beetroot'].includes(a.item) || !Number.isInteger(a.count) || a.count < 1 || a.count > 64) throw new Error('villager_food needs bread/carrot/potato/beetroot and count=1..64')
+    const villager = Object.values(bot.entities).find(e => e.uuid === a.uuid && e.name === 'villager' && e.isValid !== false)
+    if (!villager || !villagerData(villager).adult || currentVehicleId(villager) !== null) throw new Error('villager_food needs the exact visible adult on foot')
+    const alive = cancelGuard()
+    const dryFooting = () => bot.entity.onGround && !bot.entity.isInWater && bot.blockAt(bot.entity.position.offset(0, -0.1, 0))?.boundingBox === 'block'
+    for (let tick = 0; tick < 20 && !dryFooting(); tick++) { alive(); await bot.waitForTicks(1) }
+    alive()
+    const me = bot.entity.position.clone()
+    if (me.distanceTo(villager.position) > 3) throw new Error('villager_food needs the bot within three blocks of the target; approach from a dry stance first')
+    if (!dryFooting()) throw new Error('villager_food needs solid dry footing')
+    const before = inventoryCounts()[a.item] ?? 0
+    if (before < a.count) throw new Error(`villager_food needs ${a.count} carried ${a.item}; have ${before}`)
+    if (bot.autoEat?.isEating) throw new Error('villager_food must wait for the bot to finish its own meal')
+    if (Object.values(bot.entities).some(e => {
+      if (e.name !== 'item' || e.position.distanceTo(me) >= 3) return false
+      const item = e.getDroppedItem?.()
+      return !item || item.name === a.item
+    })) throw new Error('villager_food needs nearby matching or unidentified food drops cleared first so pickup can be attributed')
+    bot.pathfinder.setGoal(null)
+    await bot.lookAt(villager.position.offset(0, 1.5, 0), true)
+    // Forced look changes local angles; physics sends the server rotation on its next tick.
+    await bot.waitForTicks(2)
+    alive()
+    const obstruction = bot.blockAtCursor(3)
+    if (obstruction && obstruction.position.offset(0.5, 0.5, 0.5).distanceTo(me.offset(0, bot.entity.eyeHeight, 0)) < me.distanceTo(villager.position) - 0.5) throw new Error(`villager_food ray is blocked by ${obstruction.name}`)
+    const spawned = new Set(), drops = new Set()
+    const dropTrace = new Map()
+    const aim = { from: me.toArray(), target: villager.position.toArray(), yaw: bot.entity.yaw, pitch: bot.entity.pitch }
+    let pickedUp = 0, collectorUuid = null, observedDropCount = 0, ambiguous = false, wrongCollector = false, totalCollected = 0, selfCollected = 0
+    const collectedBy = {}
+    const spawn = e => {
+      if (e.name === 'item' && Math.hypot(e.position.x - me.x, e.position.z - me.z) <= 0.75 && e.position.y >= me.y + 0.8 && e.position.y <= me.y + 1.9) { spawned.add(e.id); dropTrace.set(e.id, { id: e.id, spawn: e.position.toArray(), velocity: e.velocity?.toArray() }) }
+    }
+    const itemDrop = e => {
+      if (!spawned.has(e.id) || drops.has(e.id)) return
+      const item = e.getDroppedItem?.()
+      if (item?.name !== a.item || !Number.isInteger(item.count) || item.count < 1 || item.count > a.count) return
+      observedDropCount += item.count
+      if (observedDropCount > a.count) { ambiguous = true; return }
+      drops.add(e.id)
+    }
+    const collect = packet => {
+      if (!drops.has(packet.collectedEntityId)) return
+      const collector = packet.collectorEntityId === bot.entity.id ? bot.entity : bot.entities[packet.collectorEntityId]
+      collectorUuid = collector?.uuid ?? (packet.collectorEntityId === bot.entity.id ? bot._client.uuid : null) ?? null
+      const count = packet.pickupItemCount ?? 0
+      const trace = dropTrace.get(packet.collectedEntityId)
+      if (trace) { trace.collectedAt = bot.entities[packet.collectedEntityId]?.position?.toArray(); trace.collectorId = packet.collectorEntityId; trace.collectorUuid = collectorUuid; trace.count = count }
+      if (packet.collectorEntityId === bot.entity.id) selfCollected += count
+      totalCollected += count
+      if (collectorUuid) collectedBy[collectorUuid] = (collectedBy[collectorUuid] ?? 0) + count
+      else ambiguous = true
+      if (totalCollected > a.count) ambiguous = true
+      if (collectorUuid === a.uuid) pickedUp += count
+      else wrongCollector = true
+    }
+    const wasFeeding = feeding
+    const priorHeld = bot.heldItem
+    feeding = true
+    bot.on('entitySpawn', spawn)
+    bot.on('itemDrop', itemDrop)
+    bot._client.on('collect', collect)
+    try {
+      alive()
+      const item = findItem(a.item)
+      await bot.equip(item, 'hand')
+      if (a.otherUuid !== undefined) {
+        const freshTarget = Object.values(bot.entities).find(e => e.uuid === a.uuid && e.name === 'villager' && e.isValid !== false)
+        const other = Object.values(bot.entities).find(e => e.uuid === a.otherUuid && e.name === 'villager' && e.isValid !== false)
+        const here = bot.entity.position.clone()
+        if (!freshTarget || !other || !villagerData(freshTarget).adult || !villagerData(other).adult || currentVehicleId(freshTarget) !== null || currentVehicleId(other) !== null || freshTarget.metadata?.[6] === 2 || other.metadata?.[6] === 2 || here.distanceTo(freshTarget.position) > 3 || here.distanceTo(other.position) < Math.max(4, here.distanceTo(freshTarget.position) + 0.8)) return { uuid: a.uuid, item: a.item, count: a.count, tossed: 0, notTossed: true, inventoryUnchanged: (inventoryCounts()[a.item] ?? 0) === before, error: 'parents moved or crowded before offering' }
+        await bot.lookAt(freshTarget.position.offset(0, 1.5, 0), true)
+        await bot.waitForTicks(2)
+        alive()
+        const now = bot.entity.position.clone()
+        Object.assign(aim, { from: now.toArray(), target: freshTarget.position.toArray(), other: other.position.toArray(), yaw: bot.entity.yaw, pitch: bot.entity.pitch })
+        const targetSupport = bot.blockAt(freshTarget.position.offset(0, -0.1, 0))
+        if (Math.abs(freshTarget.position.y - Math.round(freshTarget.position.y)) > 0.05 || targetSupport?.boundingBox !== 'block' || /(?:bed|slab|stairs|fence|wall|trapdoor)$/.test(targetSupport.name)) return { uuid: a.uuid, item: a.item, count: a.count, tossed: 0, notTossed: true, inventoryUnchanged: (inventoryCounts()[a.item] ?? 0) === before, error: 'target must step off partial bed footing before offering' }
+        if (now.distanceTo(freshTarget.position) < 1.5 || now.distanceTo(freshTarget.position) > 2.25 || freshTarget.metadata?.[6] === 2 || other.metadata?.[6] === 2 || now.distanceTo(other.position) < Math.max(4, now.distanceTo(freshTarget.position) + 0.8)) return { uuid: a.uuid, item: a.item, count: a.count, tossed: 0, notTossed: true, inventoryUnchanged: (inventoryCounts()[a.item] ?? 0) === before, error: 'parents moved or crowded before offering' }
+        const hit = bot.blockAtCursor(3)
+        if (hit && hit.position.offset(0.5, 0.5, 0.5).distanceTo(now.offset(0, bot.entity.eyeHeight, 0)) < now.distanceTo(freshTarget.position) - 0.5) return { uuid: a.uuid, item: a.item, count: a.count, tossed: 0, notTossed: true, inventoryUnchanged: (inventoryCounts()[a.item] ?? 0) === before, error: 'target ray became blocked before offering' }
+      }
+      await bot.toss(item.type, null, a.count)
+      await bot.waitForTicks(3)
+      const tossed = before - (inventoryCounts()[a.item] ?? 0)
+      if (tossed !== a.count) throw new Error(`villager_food inventory delta was ${tossed}, expected ${a.count}; inspect before retrying`)
+      for (let tick = 0; tick < 200 && totalCollected < a.count && !ambiguous; tick++) { alive(); await bot.waitForTicks(1) }
+      const returnedToInventory = !ambiguous && selfCollected === a.count && inventoryCounts()[a.item] === before
+      const receipt = { uuid: a.uuid, item: a.item, count: a.count, tossed, collectorUuid, collectedBy, totalCollected, ambiguous, selfCollected, returnedToInventory, aim, drops: [...drops].map(id => dropTrace.get(id)), pickedUp: ambiguous ? 0 : Math.min(pickedUp, a.count), confirmed: !ambiguous && !wrongCollector && pickedUp === a.count, ...(ambiguous || wrongCollector ? { error: ambiguous ? 'ambiguous matching item drops; inspect before feeding again' : 'another entity collected the offered food' } : {}) }
+      emit('villager_food_receipt', receipt)
+      return receipt
+    } finally {
+      bot.off('entitySpawn', spawn)
+      bot.off('itemDrop', itemDrop)
+      bot._client.off('collect', collect)
+      feeding = wasFeeding
+      if (priorHeld) { try { alive(); const restore = bot.inventory.items().find(i => compatibleInventoryStacks(i, priorHeld)); if (restore) await bot.equip(restore, 'hand') } catch {} }
+    }
+  },
   async look_at (a) { await bot.lookAt(new Vec3(a.x, a.y, a.z)); return {} },
   // The reflex should beat you to this (see eat_failed when it cannot), and a body that will not eat has to be drivable
   // by hand. It is also the only way to read what mineflayer-auto-eat really answers: its own reflex swallowed every word.
@@ -3914,6 +4142,12 @@ function makeApi (composite, a, alive) {
       })
   }
   const cleanupAct = async (name, args = {}) => {
+    const breedGates = ['villager.breed', 'villager.prepare', 'villager.receive'].includes(composite) ? breedPlan(a).gates : []
+    const closeBreedGate = name === 'toggle' && args.open === false && breedGates.some(gate => {
+      if (!['x', 'y', 'z'].every(k => args[k] === gate[k])) return false
+      const gateBlock = bot.blockAt(new Vec3(gate.x, gate.y, gate.z))
+      return gateBlock?.name === (a.gate ?? 'oak_fence_gate') && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
+    })
     const lectern = name === 'place' && args.blocks === undefined && args.item === (a.block ?? 'lectern') && ['x', 'y', 'z'].every(k => args[k] === a[k])
     const dx = args.x - a.x, dz = args.z - a.z
     const serviceStand = name === 'goto' && args.y === a.y && args.range === 0 &&
@@ -3921,13 +4155,14 @@ function makeApi (composite, a, alive) {
     const serviceSill = name === 'place' && args.blocks === undefined && args.item === (a.penBlock ?? 'cobblestone') &&
       args.y === a.y && cleanupServiceDirection && [1, 2].some(n =>
         dx === cleanupServiceDirection.x * n && dz === cleanupServiceDirection.z * n)
-    if (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill)) throw new Error(`${composite}: cleanup may only restore its own job block and service route`)
+    if (!closeBreedGate && (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill))) throw new Error(`${composite}: cleanup may only restore its own job block/service route or close its own breeder doorway`)
     const cell = `${a.x},${a.y},${a.z}`
     if (!ready || !bot.entity || bot.health <= 0 || bot.isSleeping) throw new Error(`${composite}: restoration pending at ${cell}: body is offline, dead, or sleeping`)
     if (flee || holingUp || fighting) throw new Error(`${composite}: restoration pending at ${cell}: emergency reflex owns the body`)
     if (task && task !== ownerTask) throw new Error(`${composite}: restoration pending at ${cell}: another task owns the body`)
     const refusal = refusalFor(name, args)
     if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
+    if (closeBreedGate) { useMoves(false); return long.toggle(args) }
     if (serviceStand) {
       cleanupServiceDirection = { x: dx / 3, z: dz / 3 }
       useMoves(false)

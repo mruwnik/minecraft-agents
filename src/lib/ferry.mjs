@@ -26,7 +26,7 @@ export function villagerTowWaypoints (from, to, stride = 4) {
 // Plan the boat's hull, not the driver's walking route. Half-block centers
 // permit the boat to line up with a two-block opening; its 1.375-block hull
 // still has to clear every cell swept between centers, including corners.
-export function villagerBoatRoute ({ from, to, blockAt, margin = 8 }) {
+export function villagerBoatRoute ({ from, to, blockAt, margin = 8, direct = false }) {
   const half = 1.375 / 2
   const step = 0.5
   const minX = Math.floor(Math.min(from.x, to.x) - margin)
@@ -77,7 +77,7 @@ export function villagerBoatRoute ({ from, to, blockAt, margin = 8 }) {
   }
   const quantize = p => ({ x: Math.round(p.x / step) * step, z: Math.round(p.z / step) * step })
   let start = quantize(from)
-  const goal = quantize(to)
+  const goal = direct ? { x: to.x, z: to.z } : quantize(to)
   const id = p => `${p.x},${p.z}`
   const first = inspect(from.x, from.z)
   if (first.error) return first
@@ -101,6 +101,10 @@ export function villagerBoatRoute ({ from, to, blockAt, margin = 8 }) {
       y = check.y
     }
     return { y }
+  }
+  if (direct) {
+    const checked = sweep(from, goal, first.y)
+    return checked.error ? checked : { points: [{ ...from, y: first.y }, { ...goal, y: checked.y }] }
   }
   let startCheck = sweep(from, start, first.y)
   if (startCheck.error) {

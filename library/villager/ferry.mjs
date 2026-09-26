@@ -7,9 +7,9 @@ const at = boat => {
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 
 export default {
-  doc: 'villager.ferry uuid= boat= x= y= z= [centerX= centerZ=] [pullX= pullY= pullZ=] [pullVia=x:y:z,x:y:z] [radius=0.8] [plan=true]: precheck the full 1.375-wide nonascending boat route, then tow with a lead; centerX/Z set an exact boat landing within 0.8 block of the named cell center; pullVia names short bot waypoints beyond it; plan=true only reads terrain',
+  doc: 'villager.ferry uuid= boat= x= y= z= [centerX= centerZ=] [pullX= pullY= pullZ=] [pullVia=x:y:z,x:y:z] [alignZ= alignTolerance=0.3] [radius=0.8] [plan=true]: precheck the full 1.375-wide nonascending boat route, then tow with a lead; centerX/Z set an exact boat landing within 0.8 block of the named cell center; pullVia names short bot waypoints beyond it; alignZ requires the actual boat to be staged laterally before a narrow dock approach; plan=true only reads terrain',
   stops: 'the boat reaches the named bank with its villager and lead intact, or the tow stalls',
-  args: { uuid: 'string!', boat: 'number!', x: 'number!', y: 'number!', z: 'number!', centerX: 'number', centerZ: 'number', pullX: 'number', pullY: 'number', pullZ: 'number', pullVia: 'string', radius: 'number', plan: 'boolean' },
+  args: { uuid: 'string!', boat: 'number!', x: 'number!', y: 'number!', z: 'number!', centerX: 'number', centerZ: 'number', pullX: 'number', pullY: 'number', pullZ: 'number', pullVia: 'string', pullInto: 'boolean', alignZ: 'number', alignTolerance: 'number', radius: 'number', plan: 'boolean' },
 
   async run (api, a) {
     if (!villagerUuid(a.uuid)) throw new Error('uuid= must be the observed villager UUID')
@@ -19,6 +19,8 @@ export default {
     const landing = { x: centerGiven ? a.centerX : a.x + 0.5, y: a.y, z: centerGiven ? a.centerZ : a.z + 0.5 }
     const radius = a.radius ?? 0.8
     if (!Number.isFinite(radius) || radius < 0.5 || radius > 4) throw new Error('radius= must be 0.5..4 blocks')
+    const alignTolerance = a.alignTolerance ?? 0.3
+    if ((a.alignZ !== undefined && !Number.isFinite(a.alignZ)) || !Number.isFinite(alignTolerance) || alignTolerance < 0.1 || alignTolerance > 0.3) throw new Error('alignZ= must be finite; alignTolerance= must be 0.1..0.3')
     const pullGiven = [a.pullX, a.pullY, a.pullZ].some(v => v !== undefined)
     if (pullGiven && ![a.pullX, a.pullY, a.pullZ].every(Number.isInteger)) throw new Error('pullX= pullY= pullZ= must all be integers')
     const pull = pullGiven ? { x: a.pullX, y: a.pullY, z: a.pullZ } : a
@@ -50,12 +52,46 @@ export default {
       blockAt: (x, y, z) => api.block(x, y, z)
     })
     if (route.error) throw new Error(`boat route blocked at ${route.at.x},${route.at.y},${route.at.z}: ${route.error}`)
-    if (a.plan === true) return { boat: a.boat, villagerUuid: a.uuid, route: route.points, planned: true, secure: false }
+    const alignment = () => a.alignZ === undefined || Math.abs(at(boat).z - a.alignZ) <= alignTolerance
+    if (a.plan === true) return { boat: a.boat, villagerUuid: a.uuid, route: route.points, aligned: alignment(), planned: true, secure: false }
+    if (!alignment()) throw new Error(`boat ${a.boat} needs water staging before this dock approach: actual z=${at(boat).z}, required ${a.alignZ} +/- ${alignTolerance}; no towing started`)
     if (boat.leashHolderId === null) {
       await api.act('boat_leash', { id: a.boat })
       ;({ s, boat } = await checked())
     }
     if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} was not leashed to this bot`)
+    const checkPull = async leader => {
+      const current = at(boat)
+      const gap = distance(current, leader)
+      // A taut lead draws the hull along the actual boat-to-leader ray. Its
+      // trailing position can cut a planned turn even while the walker fits.
+      const travel = Math.max(0, gap - 5.5)
+      if (travel < 0.05) return
+      const endpoint = { x: current.x + (leader.x - current.x) * travel / gap, y: current.y, z: current.z + (leader.z - current.z) * travel / gap }
+      const swept = villagerBoatRoute({ from: current, to: endpoint, direct: true, blockAt: (x, y, z) => api.block(x, y, z) })
+      if (swept.error) {
+        const reason = `actual boat pull blocked at ${swept.at.x},${swept.at.y},${swept.at.z}: ${swept.error}`
+        ;({ s, boat } = await checked())
+        if (boat.passengers.length !== 1 || boat.leashHolderId !== s.selfId) throw new Error(`${reason}; exact owned sole-passenger leash no longer confirmed; no detach attempted`)
+        const leadsBefore = api.inv().lead ?? 0
+        try {
+          await api.act('boat_unleash', { id: a.boat })
+          ;({ s, boat } = await checked())
+          if (boat.leashHolderId !== null) throw new Error('detachment was not observed')
+        } catch (error) { throw new Error(`${reason}; safe lead detachment pending: ${error.message}`) }
+        const recovered = Math.max(0, (api.inv().lead ?? 0) - leadsBefore)
+        api.report({ stopped: true, boat: a.boat, boatAt: boat.exact, leadDetached: true, leadRecovered: recovered, leadRecoveryNear: boat.exact })
+        throw new Error(`${reason}; exact boat lead detached at ${boat.exact}, recovered ${recovered}; recover the dropped lead before pausing and stage before this turn`)
+      }
+    }
+    const catchUp = async () => api.until(async () => {
+      ;({ s, boat } = await checked())
+      if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} leash broke during tow`)
+      await checkPull(api.pos())
+      const gap = distance(api.pos(), at(boat))
+      if (gap > 11) throw new Error(`boat ${a.boat} fell too far behind during tow; stopped at ${boat.exact}`)
+      return gap <= 7
+    }, { timeout: 12, every: 0.25, what: `boat ${a.boat} did not follow this tow step` })
 
     const from = api.pos()
     if (distance(from, at(boat)) > 7) throw new Error(`boat ${a.boat} is ${distance(from, at(boat)).toFixed(1)} blocks from the bot before towing; approach it before starting`)
@@ -71,7 +107,7 @@ export default {
       if (heading && nextHeading !== heading && last) turns.push(last)
       // The boat settles roughly six blocks behind the bot on a taut lead.
       // Two-block legs leave room for that slack at bends before the 11-block
-      // safety stop, including the one-block goto arrival range.
+      // safety stop, including ordinary walking offsets within a block cell.
       if (distance(turns.at(-1) ?? route.points[nearest], p) >= 2) turns.push(p)
       heading = nextHeading
       last = p
@@ -82,39 +118,68 @@ export default {
     if (!points.length) throw new Error('destination is already at this bank; give a different shore waypoint')
     api.report({ boat: a.boat, villagerUuid: a.uuid, tow: `0/${points.length}` })
     for (let i = 0; i < points.length; i++) {
+      if (i === turns.length && !alignment()) throw new Error(`boat ${a.boat} lost dock alignment before the dry pull: actual z=${at(boat).z}, required ${a.alignZ} +/- ${alignTolerance}; stop and stage in open water`)
       const next = { x: points[i].x, y: points[i].y, z: points[i].z }
+      const walkTarget = { ...next, y: Math.floor(next.y) }
+      let dryTarget = false
+      // Hull support can come from a neighboring bank cell. A pedestrian
+      // needs support in its own column, which may be up to two cells lower.
+      for (let down = 0; down <= 2; down++) {
+        const y = Math.floor(next.y) - down
+        const support = api.block(Math.floor(next.x), y - 1, Math.floor(next.z))
+        const feet = api.block(Math.floor(next.x), y, Math.floor(next.z))
+        const head = api.block(Math.floor(next.x), y + 1, Math.floor(next.z))
+        const safeSupport = support?.solid && !/(?:_slab|_stairs|_fence|_fence_gate|_wall|_bed|_trapdoor|_leaves)$|^(?:magma_block|cactus|campfire|soul_campfire|powder_snow|soul_sand|farmland|dirt_path)$/.test(support.name)
+        const clear = b => b && !b.solid && !['lava', 'fire', 'soul_fire', 'cobweb', 'sweet_berry_bush', 'powder_snow'].includes(b.name)
+        if (safeSupport && clear(feet) && clear(head)) {
+          walkTarget.y = y
+          dryTarget = !['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(feet.name)
+          break
+        }
+      }
       if (Math.hypot(next.x - at(boat).x, next.y - at(boat).y, next.z - at(boat).z) > 11) throw new Error(`boat ${a.boat} is too far behind for the next tow step; stop before the lead snaps`)
       let stalled = 0
-      for (let stroke = 0; distance(api.pos(), next) > 1 && stroke < 12; stroke++) {
+      let reachedDryCell = false
+      const inTargetCell = () => {
+        const body = api.pos()
+        return Math.floor(body.x) === Math.floor(walkTarget.x) && Math.floor(body.y) === walkTarget.y && Math.floor(body.z) === Math.floor(walkTarget.z)
+      }
+      for (let stroke = 0; distance(api.pos(), next) > 1 && !reachedDryCell && stroke < 12; stroke++) {
         const before = distance(api.pos(), next)
         const body = api.pos()
         const belowFeet = api.block(Math.floor(body.x), Math.floor(body.y - 0.5), Math.floor(body.z))
-        const swimming = (await api.act('state')).inWater === true || ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(belowFeet?.name)
+        const inWater = (await api.act('state')).inWater === true || ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(belowFeet?.name)
+        const swimming = inWater && !dryTarget
+        await checkPull(swimming ? next : { x: Math.floor(walkTarget.x) + 0.5, y: walkTarget.y, z: Math.floor(walkTarget.z) + 0.5 })
         if (swimming) await api.act('boat_swim', { ...next, ms: 700 })
-        // Explicit pull waypoints may be a one-cell pedestrian doorway. A
-        // one-cell arrival radius can accept the adjacent wall-side cell and
-        // leave the body motionless before it passes through that doorway.
-        else await api.act('goto', { x: next.x, y: Math.floor(next.y), z: next.z, range: pullVia.length && i >= turns.length ? 0 : 1 })
+        // GoalNear rounds coordinates to a block cell. Range one can accept
+        // its neighbor without moving; require the exact dry target cell.
+        else await api.act('goto', { ...walkTarget, range: 0, ...(a.pullInto === true && i >= turns.length ? { into: true } : {}) })
         ;({ s, boat } = await checked())
+        await checkPull(api.pos())
+        reachedDryCell = !swimming && inTargetCell()
         if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} leash broke during tow; stopped at ${boat.exact}`)
-        if (!swimming && distance(api.pos(), next) > 1 && distance(api.pos(), next) >= before - 0.05) throw new Error(`goto did not advance toward tow waypoint ${next.x},${next.y},${next.z}; boat remains at ${boat.exact}`)
-        if (distance(api.pos(), next) < before - 0.05) stalled = 0
+        if (!swimming && !inTargetCell() && distance(api.pos(), next) > 1 && distance(api.pos(), next) >= before - 0.05) throw new Error(`goto did not advance toward tow waypoint ${next.x},${next.y},${next.z}; boat remains at ${boat.exact}`)
+        if ((!swimming && inTargetCell()) || distance(api.pos(), next) < before - 0.05) stalled = 0
         else if (++stalled >= 2) throw new Error(`tow toward ${next.x},${next.y},${next.z} made no progress; boat remains at ${boat.exact}`)
-        if (distance(api.pos(), at(boat)) > 8) throw new Error(`boat ${a.boat} fell too far behind during tow; stopped at ${boat.exact}`)
+        if (distance(api.pos(), at(boat)) > (swimming ? 8 : 11)) throw new Error(`boat ${a.boat} fell too far behind during tow; stopped at ${boat.exact}`)
+        if (!swimming && distance(api.pos(), at(boat)) > 7) await catchUp()
       }
-      if (distance(api.pos(), next) > 1) throw new Error(`tow toward ${next.x},${next.y},${next.z} did not reach the waypoint; boat remains at ${boat.exact}`)
+      if (distance(api.pos(), next) > 1 && !reachedDryCell) throw new Error(`tow toward ${next.x},${next.y},${next.z} did not reach the waypoint; boat remains at ${boat.exact}`)
       ;({ s, boat } = await checked())
       if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} leash broke during tow; stopped at ${boat.exact}`)
       // The lead starts pulling at six blocks and snaps at twelve. Give the
       // server time to draw the boat in before the next short walking leg.
-      await api.until(async () => {
-        ;({ s, boat } = await checked())
-        if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} leash broke during tow`)
-        return distance(api.pos(), at(boat)) <= 7
-      }, { timeout: 12, every: 0.25, what: `boat ${a.boat} did not follow this tow step` })
+      await catchUp()
       api.report({ tow: `${i + 1}/${points.length}`, boatAt: boat.exact })
     }
-    if (distance(at(boat), landing) > radius) throw new Error(`boat ${a.boat} stayed at ${boat.exact}; it did not reach the landing near ${landing.x},${landing.y},${landing.z}`)
+    if (distance(at(boat), landing) > radius) await api.until(async () => {
+      ;({ s, boat } = await checked())
+      if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} leash broke while settling at the landing`)
+      await checkPull(api.pos())
+      if (distance(api.pos(), at(boat)) > 11) throw new Error(`boat ${a.boat} fell too far behind while settling; stopped at ${boat.exact}`)
+      return distance(at(boat), landing) <= radius
+    }, { timeout: 12, every: 0.25, what: `boat ${a.boat} stayed outside the landing near ${landing.x},${landing.y},${landing.z}` })
     return { boat: a.boat, villagerUuid: a.uuid, from: `${from.x},${from.y},${from.z}`, at: boat.exact, pullAt: `${pull.x},${pull.y},${pull.z}`, passengerSeated: true, leashHeld: true, secure: false }
   }
 }
