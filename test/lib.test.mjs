@@ -2152,10 +2152,11 @@ for (const [name, meal, expected] of [
 }
 
 // a helper wired into bot.mjs without its import only blows up when that line runs: 214 "foodAway is not defined" in 20 s on a live body
-const unimported = (source, lib, module = 'lib') => {
-  const from = new RegExp(`import \\{([^}]*)\\} from '[^']*${module}\\.mjs'`)
-  const imported = new Set(source.match(from)[1].split(',').map(n => n.trim()))
-  const body = source.replace(from, '')
+// a helper counts as imported whichever local module it comes from (chatter.mjs, stuck.mjs, ... beside lib.mjs)
+const unimported = (source, lib) => {
+  const imports = [...source.matchAll(/import \{([^}]*)\} from '\.[^']*\.mjs'/g)]
+  const imported = new Set(imports.flatMap(m => m[1].split(',').map(n => n.trim())))
+  const body = imports.reduce((rest, m) => rest.replace(m[0], ''), source)
   return [...lib.matchAll(/export (?:const|function|async function) (\w+)/g)].map(m => m[1]).filter(n => !imported.has(n) && new RegExp(`\\b${n}\\(`).test(body))
 }
 const CLI_SOURCE = fs.readFileSync(new URL('../src/cli.mjs', import.meta.url), 'utf8')
@@ -2168,7 +2169,7 @@ const LIB_MODULE_SOURCE = fs.existsSync(LIB_DIR)
 const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8') + LIB_MODULE_SOURCE + CLI_SOURCE
 test('unimported: spots a lib helper that is called but not imported', () => assert.deepEqual(unimported("import { terse } from './lib.mjs'\nfoodAway({})", LIB_SOURCE), ['foodAway']))
 for (const [file, module, source] of [['../src/bot.mjs', 'lib', LIB_SOURCE], ['../tools/mc.mjs', 'cli', CLI_SOURCE], ['../tools/check-code.mjs', 'cli', CLI_SOURCE]]) {
-  test(`${file} imports every ${module} helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), source, module), []))
+  test(`${file} imports every ${module} helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), source), []))
 }
 
 // the body ate below food 15, but health only comes back at food 18+: Ganesha sat at hp=8 food=15 for 35 minutes, unable to heal
