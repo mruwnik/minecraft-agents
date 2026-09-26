@@ -12,9 +12,9 @@ const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) in
 const seedReserve = plan => Object.fromEntries(Object.entries(planBill(plan.parsed)).filter(([item]) => SEED_ITEMS.has(item)).map(([item, n]) => [item, n * 2]))
 
 export default {
-  doc: 'farm.maintain place= [days=] [within=] [compost=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest)',
+  doc: 'farm.maintain place= [days=] [within=] [compost=] [trample=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). trample=true lets its walks step on crop cells: the last resort out of a crop pocket',
   stops: 'days= done, a step that failed twice, or nothing left it can do',
-  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any' },
+  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any', trample: 'boolean' },
 
   async run (api, a) {
     const plan = api.plan(a.place)
@@ -54,10 +54,14 @@ export default {
     // the middle at a range that reaches the rim (half the plan's diagonal, and 2 at least) loads it, and the edge is read again
     const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
     const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height) / 2))
+    // trample=true: a walk steps round crops, so a body a sweep left deep in its own rows (a crop pocket, card 68f4e331)
+    // can walk nowhere; asked for by name, every walk of this sweep may step on crop cells instead. Only when asked:
+    // the sweep's calls read the same as ever otherwise
+    const tread = a.trample === true ? { trample: true } : {}
     const walkToEdge = async () => {
       const edge = () => fieldEdge(cellAt, plan.cells, api.pos())
-      const spot = edge() ?? await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: approach }).then(edge)
-      if (spot) await api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 1 })
+      const spot = edge() ?? await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: approach, ...tread }).then(edge)
+      if (spot) await api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 1, ...tread })
     }
 
     const sweep = async () => {
@@ -70,7 +74,7 @@ export default {
       const rubble = clutterBlocks(plan.cells, api.block)
       if (rubble.length) summary.clutter = `${clutterLine(rubble)} standing over the plan: ./mc farm.tidy place=${a.place}`
       await api.checkpoint({ canDeposit: Boolean(chest) })
-      const cut = await api.act('farm.harvest', { within }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
+      const cut = await api.act('farm.harvest', { within, ...tread }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
       add(summary.harvested, cut.harvested)
       summary.replanted += cut.replanted ?? 0
       await api.checkpoint({ canDeposit: Boolean(chest) })

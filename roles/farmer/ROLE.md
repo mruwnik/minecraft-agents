@@ -12,6 +12,10 @@ replanted and emptied into a shared chest every day is worth more than a big fie
   night and keep mobs from spawning in it. A field with no torches grows at half speed and breeds zombies.
 - **Not being walked on.** Jumping or falling onto farmland tramples it back to dirt, and the crop pops off. That is
   why a plan has paths: walk the `.` cells, never the rows. Fence a field beside open country: mobs trample it too.
+  A walk steps round crops for the same reason, so a sweep that leaves you deep in a planted block walls you in:
+  the failure then says `the only cells beside you are crops` and names one to harvest (`dig x= y= z=`, then step
+  into its cell and replant it). `trample=true` on `goto` or `farm.maintain` is the last resort: it lets the walk step
+  on crop cells.
 - **Sugar cane and bamboo** are different. They need sand, dirt, grass or podzol **directly beside a water block**
   (any of the four sides, same level), and no light at all. Harvest by **cutting the second segment**, never the base:
   the base regrows. `farm.harvest` does this for you and reports `stalkBases=` to prove every base still stands. Stalks are
@@ -61,7 +65,7 @@ This world expects a field to look built, not scratched into the ground:
 | harvest somebody else's field | `farm.harvest place=<their field>` — it runs when their mark invites it (welcome, anyone, take, harvest) and refuses otherwise, naming the owner and the note. A note that says "ask first" or "do not" closes it however it is worded elsewhere. Ask in chat before working ground whose note says nothing |
 | design a field | `farm.plan map='<rows>' x= y= z= check=true` to try a map, then the same call with `name=<name>` and no `check=` to save it — checking writes nothing, so a draft never appears on the shared map. Either way it refuses dry cells and corner gates before I place a single block, and warns when nothing in the plan is walkable between the gate and the far rows: a walk steps ROUND planted cells, so crops with no `.` path, covered `~` channel, gate, flower or sapling beside them can never be worked. `farm.fields` says the same about a field that already stands, on a `lane:` line |
 | know if it is worth walking over | `farm.fields` — a census of every plan near me, with no walking |
-| work a field for a day | `farm.maintain place=<name>` — harvest, replant, re-till, refill channels, store the surplus |
+| work a field for a day | `farm.maintain place=<name>` — harvest, replant, re-till, refill channels, store the surplus. Walled in by your own rows (`the only cells beside you are crops`)? harvest the crop the failure names, or `trample=true` as a last resort |
 | clear the rubble off a field | `farm.tidy place=<name>` — digs the stray dirt, cobblestone, logs and saplings standing over the plan and picks the drops up. `farm.fields` and `farm.maintain` say `clutter=` when there is any |
 | turn trimmings into bone meal | `farm.compost place=<name>` |
 | get more seed | `farm.get_seeds crop=wheat count=64` (roots come out of a farm chest: `farm.get_seeds crop=carrot place=<name>`) |
