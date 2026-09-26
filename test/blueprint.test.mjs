@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
-  parseBlueprint, resolve, turnsFor, rotate, blueprintCells, bill, stackSlots, counts, enclosure, lint, placement, placeGap,
+  parseBlueprint, resolve, turnsFor, rotate, blueprintCells, bill, stackSlots, counts, enclosure, lint, placement,
   jobsFor, orderJobs, stages, siteCheck, farmPlanToBlueprint, blueprintHash, buildNote, parseNote, renderLayer, stageLine,
   matchesCell, flatGround, REGISTRY
 } from '../src/blueprint.mjs'
@@ -307,7 +307,6 @@ test('lint: warnings', () => {
   const rows = [
     ['a torch whose support is _', parse({ legend: 'i  torch\nS  cobblestone', layers: [[0, '_S'], [1, 'iS']] }), 'the torch at y1 0,0 stands on 0,0 below it, which is _: whatever is there must hold it'],
     ['unlit room without the shelter tag', parseBlueprint(read('starter-hut').replace('ST.iS', 'ST..S').replace('tags: shelter, storage', 'tags: storage')), 'the room at y0 1..3,1..3 has 5 cells at light 0: add a light source'],
-    ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] is clicked onto its neighbour along the axis, and build cannot yet put that one first: build refuses this blueprint until it can'],
     ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)']
   ]
   for (const [label, bp, want] of rows) {
@@ -324,25 +323,11 @@ test('lint: a torch over a crafting table is no gap', () => {
   assert.deepEqual(out.warnings.filter(w => /torch/.test(w)), [])
 })
 
-// place against= clicks the one neighbour a wall-hung, wall-faced or hanging block hangs on, and orderJobs puts that
-// neighbour first (supportOf); a log on its side needs a neighbour along its axis that nothing orders, so it stays a gap
-test('placeGap: which tokens place cannot do yet', () => {
-  const rows = [
-    [{ name: 'wall_torch', states: { facing: 'south' } }, false],
-    [{ name: 'ladder', states: { facing: 'south' } }, false],
-    [{ name: 'oak_wall_sign', states: { facing: 'south' } }, false],
-    [{ name: 'oak_button', states: { face: 'wall', facing: 'south' } }, false],
-    [{ name: 'lever', states: { face: 'floor' } }, false],
-    [{ name: 'oak_log', states: { axis: 'x' } }, true],
-    [{ name: 'oak_log', states: { axis: 'y' } }, false],
-    [{ name: 'oak_log', states: {} }, false],
-    [{ name: 'torch', states: {} }, false],
-    [{ name: 'oak_stairs', states: { facing: 'east', half: 'top' } }, false],
-    [{ name: 'oak_door', states: { facing: 'north', half: 'lower', hinge: 'left' } }, false],
-    [{ name: 'lantern', states: { hanging: 'true' } }, false],
-    [{ name: 'lantern', states: {} }, false]
-  ]
-  for (const [alt, want] of rows) assert.equal(Boolean(placeGap(alt)), want, `${alt.name} ${JSON.stringify(alt.states)}`)
+// a log on its side takes its axis from the face it is clicked onto: whichever neighbour along the axis stands when it
+// is placed (build picks), so it is no gap and lint says nothing
+test('lint: a log on its side is no gap', () => {
+  const out = lint(resolve(parse({ legend: 'L  oak_log[axis=x]\nP  oak_planks', layers: [[0, 'PLP']] })))
+  assert.deepEqual(out.warnings.filter(w => /oak_log/.test(w)), [])
 })
 
 test('placement: what to hand place for a state', () => {
@@ -360,7 +345,9 @@ test('placement: what to hand place for a state', () => {
     [{ name: 'cobblestone', states: {} }, {}],
     [{ name: 'wall_torch', states: { facing: 'south' } }, { against: { dx: 0, dy: 0, dz: -1 } }],
     [{ name: 'ladder', states: { facing: 'east' } }, { against: { dx: -1, dy: 0, dz: 0 } }],
-    [{ name: 'oak_log', states: { axis: 'x' } }, { against: { dx: 1, dy: 0, dz: 0 } }],
+    [{ name: 'oak_log', states: { axis: 'x' } }, { along: 'x' }],
+    [{ name: 'oak_log', states: { axis: 'z' } }, { along: 'z' }],
+    [{ name: 'oak_log', states: { axis: 'y' } }, {}],
     [{ name: 'torch', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],
     [{ name: 'soul_torch', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],
     [{ name: 'lantern', states: {} }, { against: { dx: 0, dy: -1, dz: 0 } }],

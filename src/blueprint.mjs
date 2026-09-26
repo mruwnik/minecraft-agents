@@ -149,8 +149,9 @@ export const placement = alt => {
   if (states.face === 'wall' && STEP[states.facing]) return { against: { ...STEP[OPPOSITE[states.facing]], dy: 0 } }
   if (states.hanging === 'true' || states.face === 'ceiling' || /_hanging_sign$/.test(name)) return { against: { dx: 0, dy: 1, dz: 0 } }
   if (states.face === 'floor' || FLOOR_STANDING.test(name)) return { against: { dx: 0, dy: -1, dz: 0 } }
-  if (states.axis === 'x') return { against: { dx: 1, dy: 0, dz: 0 } }
-  if (states.axis === 'z') return { against: { dx: 0, dy: 0, dz: 1 } }
+  // a log on its side takes its axis from the face it is clicked onto: either neighbour along it, whichever stands
+  // when it is placed (build picks, alongFace)
+  if (states.axis === 'x' || states.axis === 'z') return { along: states.axis }
   const out = {}
   if (LOOK_TOWARD.test(name) && states.facing) out.facing = states.facing
   else if (FRONT_FACING.test(name) && OPPOSITE[states.facing]) out.facing = OPPOSITE[states.facing]
@@ -158,17 +159,15 @@ export const placement = alt => {
   if (/_slab$/.test(name) && states.type && states.type !== 'double') out.half = states.type
   return out
 }
-// the label lint uses for a token place cannot do yet. place against= clicks the neighbour a wall-hung, wall-faced or
-// hanging block hangs on, and orderJobs puts that one first (supportOf); a log on its side needs a neighbour along its
-// axis that nothing orders, so that alone is still a gap
-export const placeGap = alt => placement(alt).against && alt.states.axis ? `${alt.name}[axis=${alt.states.axis}]` : null
 // place's against= word for a neighbour's offset
 const FACE_WORD = { '0,0,-1': 'north', '0,0,1': 'south', '1,0,0': 'east', '-1,0,0': 'west', '0,1,0': 'up', '0,-1,0': 'down' }
 export const faceWord = ({ dx, dy, dz }) => FACE_WORD[`${dx},${dy},${dz}`]
-export const gapWarning = (token, alt) => `${token}: ${placeGap(alt)} is clicked onto its neighbour along the axis, and build cannot yet put that one first: build refuses this blueprint until it can`
-// the tokens lint flagged as gaps, with their sentences: what build refuses a blueprint over
-export const GAP = /build refuses this blueprint until/
-export const gapTokens = ({ warnings }) => warnings.filter(w => GAP.test(w)).map(w => ({ token: w.split(':')[0], warning: w }))
+// the side a log on its side is clicked onto: the first neighbour along its axis holding a block (not air, not a fluid)
+const ALONG = { x: [{ dx: 1, dy: 0, dz: 0 }, { dx: -1, dy: 0, dz: 0 }], z: [{ dx: 0, dy: 0, dz: 1 }, { dx: 0, dy: 0, dz: -1 }] }
+export const alongFace = (job, worldAt) => ALONG[job.along].find(d => {
+  const name = worldAt(job.x + d.dx, job.y + d.dy, job.z + d.dz)?.name
+  return Boolean(name) && !isAir(name) && !FLUIDS.has(name)
+}) ?? null
 
 // ---------------------------------------------------------------- parsing
 
@@ -593,7 +592,6 @@ export function lint (bp, registry = REGISTRY) {
       if (!soil) errors.push(`the ${alt.name} at ${at(dy, dx, dz)} needs farmland under it; ${at(dy - 1, dx, dz)} is ${floor === undefined ? 'outside the blueprint (the ground)' : describeToken(bp, dx, dy - 1, dz)}`)
     }
   }
-  for (const { token, alts } of Object.values(bp.legend)) if (placeGap(alts[0])) warnings.push(gapWarning(token, alts[0]))
   // farmland stays wet within 4 of water level with it or one above
   const waters = cells.filter(c => holdsWaterAlt(primary(c.spec)))
   const dry = cells.filter(c => primary(c.spec).name === 'farmland' && !waters.some(w => Math.abs(w.dx - c.dx) <= 4 && Math.abs(w.dz - c.dz) <= 4 && (w.dy === c.dy || w.dy === c.dy + 1)))
@@ -830,7 +828,8 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
   for (const y of layers) {
     const ofLayer = jobs.filter(j => layerOf(j) === y)
     const classes = CLASS_ORDER.map(cls => ofLayer.filter(j => j.class === cls).sort(byCell))
-    const full = supportOrder(classes[1], world, registry)
+    // a log on its side goes after the rest of the layer's full blocks, so the neighbour it is clicked onto stands
+    const full = [...supportOrder(classes[1].filter(j => !j.along), world, registry), ...classes[1].filter(j => j.along)]
     const attach = attachAfter(classes[3])
     let pending = [...classes[0], ...full, ...classes[2], ...attach, ...classes[4]]
     let deferred = []

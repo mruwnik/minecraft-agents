@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, gapTokens, GAP, faceWord, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
@@ -40,7 +40,7 @@ export function prepare ({ name, facing, params = {} }, read = readBlueprint) {
   if (!DIRS.includes(way)) throw new Error(`facing=${way} is not a direction: ${DIRS.join(', ')}`)
   const bp = rotate(resolve(parsed, params), turnsFor(parsed.front, way))
   const checked = lint(bp)
-  return { bp, text, hash, front: parsed.front, facing: way, params, lint: checked, gaps: gapTokens(checked) }
+  return { bp, text, hash, front: parsed.front, facing: way, params, lint: checked }
 }
 
 // the supply chest: x,y,z or the name of a marked place
@@ -187,7 +187,6 @@ export async function checkBlueprint (api, a, io = {}) {
   const table = stagesOf(jobs, api, bp).map(stage => stageLine(stage, have))
   const verdict = site.refusal ? `refusal: ${site.refusal}`
     : found.lint.errors.length ? `refusal: ${bp.name} does not lint: ${found.lint.errors[0]}`
-    : found.gaps.length ? `refusal: ${found.gaps[0].warning}`
     : jobs.length ? 'ok: build would start' : `already: everything ${bp.name} asks for stands at ${cellText(at)}`
   const lines = [
     head,
@@ -195,7 +194,7 @@ export async function checkBlueprint (api, a, io = {}) {
     siteLine(site),
     ...(unreachable.length ? [`unreachable=${unreachable.length} (${unreachable.slice(0, 3).map(cellText).join('; ')})`] : []),
     ...found.lint.errors.map(e => `error: ${e}`),
-    ...found.lint.warnings.filter(w => !GAP.test(w)).map(w => `warning: ${w}`),
+    ...found.lint.warnings.map(w => `warning: ${w}`),
     verdict
   ]
   return { text: lines.join('\n') }
@@ -217,7 +216,6 @@ export async function buildBlueprint (api, a, io = {}) {
   const found = siteOf(api, a, read)
   const { bp, at, hash, facing, params, saved, resume } = found
   if (found.lint.errors.length) throw new Error(`${bp.name} does not lint: ${found.lint.errors[0]}`)
-  if (found.gaps.length) throw new Error(`${bp.name}: ${found.gaps[0].warning}`)
   const supply = supplyOf(api, a.supply)
   const note = buildNote({ blueprint: bp.name, facing, params, hash })
   // the site has to be in sight before it can be judged: a body far from it walks up first, and only then decides
@@ -292,6 +290,8 @@ export async function buildBlueprint (api, a, io = {}) {
     if (job.tool && !hasTool(api.inv(), job.tool)) { missing[job.tool] = 1; return }
     // a cover is only real over a settled source (src/builder.mjs): held back, tried again next run
     if (job.do === 'cover' && !hasWaterSource(api.block(job.x, job.y, job.z))) { stuck = stuck ?? `cover ${cell}: not holding water yet, so the cover was held back`; return }
+    const side = job.along ? alongFace(job, api.block) : null
+    if (job.along && !side) { stuck = stuck ?? `${job.do} ${cell}: ${job.item} on its side (axis=${job.along}) is clicked onto a block beside it along ${job.along}, and neither side holds one yet: run blueprint.build place=${place} again once one stands`; return }
     const stand = job.stand
     const walked = await api.act('goto', { x: stand.x, y: stand.y, z: stand.z, range: 0, ...(stand.scaffold ? { dig: true } : {}) }).then(r => ({ r }), e => ({ e }))
     if (walked.e) { stuck = stuck ?? `${job.do} ${cell}: ${walked.e.message}`; return }
@@ -299,7 +299,7 @@ export async function buildBlueprint (api, a, io = {}) {
     const call = job.do === 'dig' ? ['dig', { x: job.x, y: job.y, z: job.z }]
       : job.do === 'till' ? ['till', { x: job.x, y: job.y, z: job.z }]
       : job.do === 'pour' ? ['pour', { x: job.x, y: job.y - 1, z: job.z }]
-      : ['place', placeArgs(job)]
+      : ['place', placeArgs(side ? { ...job, against: side } : job)]
     const failed = await api.act(...call).then(() => null, e => e.message)
     if (failed) { stuck = stuck ?? `${job.do} ${cell}: ${failed}${mateBlocked(job)}`; return }
     if (job.do === 'dig') { counts.dug++; return }

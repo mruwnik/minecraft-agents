@@ -315,6 +315,43 @@ test("the hut's floor torch is clicked onto the floor under it, never a wall bes
   assert.deepEqual(calls.filter(c => c.startsWith('place item=torch ')), [`place item=torch x=${AT.x + 3} y=${AT.y} z=${AT.z + 3} against=down`])
 })
 
+// a beam: a log on its side between two plank posts is clicked onto whichever post stands along its axis, after them
+const BEAM = `---
+name: beam
+title: Beam
+description: a log beam between two posts
+tags: decorative
+front: south
+foundation: flat
+---
+
+\`\`\`legend
+L  oak_log[axis=x]
+P  oak_planks
+\`\`\`
+
+## y0
+
+\`\`\`layer
+PLP
+\`\`\`
+`
+const beamIo = { read: name => ({ name, text: BEAM, hash: blueprintHash(BEAM) }) }
+test('a log on its side is clicked onto the block beside it along its axis, placed after it', async () => {
+  const world = worldOf()
+  const { api, calls } = body({ world, items: { oak_log: 4, oak_planks: 4 } })
+  await buildBlueprint(api, { name: 'beam', place: 'beam', ...AT }, beamIo)
+  const log = calls.findIndex(c => c.startsWith('place item=oak_log '))
+  assert.deepEqual([calls[log], log > calls.findLastIndex(c => c.startsWith('place item=oak_planks '))], [`place item=oak_log x=${AT.x + 1} y=${AT.y} z=${AT.z} against=east`, true])
+})
+
+test('a log on its side with nothing along its axis is named, not placed the wrong way', async () => {
+  const world = worldOf()
+  const { api, calls } = body({ world, items: { oak_log: 4 } })
+  const r = await buildBlueprint(api, { name: 'beam', place: 'beam', partial: true, ...AT }, beamIo)
+  assert.deepEqual([calls.filter(c => c.startsWith('place item=oak_log ')), r.stuck], [[], `place ${AT.x + 1},${AT.y},${AT.z}: oak_log on its side (axis=x) is clicked onto a block beside it along x, and neither side holds one yet: run blueprint.build place=beam again once one stands`])
+})
+
 // the shaft's ladder hangs on the wall north of it: place is told which neighbour to click (against=), and the ladder
 // takes its facing from that face (Hollis, 09-26: the watchtower was refused on every facing)
 test('the watchtower builds, its ladder placed against the wall behind it', async () => {
