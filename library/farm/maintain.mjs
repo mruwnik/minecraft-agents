@@ -3,7 +3,7 @@
 import { waterShortfall } from '../../src/builder.mjs'
 import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
-import { cellOf, fieldEdge } from '../../src/field.mjs'
+import { cellOf, fieldEdge, parkSpot } from '../../src/field.mjs'
 import { fieldLeg, footprintOf, spareCells } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
 import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
@@ -187,6 +187,14 @@ export default {
       const surplus = farmSurplus(api.inv(), keep)
       for (const name of composted ? Object.keys(waste) : []) delete surplus[name]
       storeInto(summary, await storeSurplus(api, { surplus, target: store, cells: plan.cells }))
+      // the last walk of a sweep: off the beds, onto the plan's lane (or the field's edge, at the range the sweep's
+      // first walk uses for it), so the body is never left in the middle of a planted pocket for the night or the next
+      // step (src/field.mjs parkSpot). A plain walk, no dig retry: a parking walk that fails is said, not stuck
+      const park = parkSpot(cellAt, plan.cells, api.pos())
+      if (park) {
+        await api.act('goto', { x: park.x, y: park.y, z: park.z, range: park.why === 'lane' ? 0 : 1 })
+          .then(() => { summary.parked = `${park.x},${park.y},${park.z} (${park.why})` }, e => api.note(`could not end the sweep on the ${park.why} cell at ${park.x},${park.y},${park.z}: ${e.message}`))
+      }
       summary.sweeps++
       api.report(ordered(summary))
     }

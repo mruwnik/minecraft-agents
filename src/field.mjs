@@ -10,6 +10,7 @@
 // the body backs out of the field as it plants.
 import { WORK_RANGE, dryStandable, cellsWithin, noStanding } from './walk.mjs'
 import { breaksUnderfoot, FLUIDS } from './lib.mjs'
+import { PLAN_LEGEND } from './lib/plan.mjs'
 
 // what api.block answers, read as the cell walk.mjs judges: solid is what a walk cannot enter, crop is what it steps round
 export const cellOf = block => block && { name: block.name, solid: Boolean(block.solid), liquid: FLUIDS.has(block.name), crop: breaksUnderfoot(block.name) }
@@ -33,6 +34,24 @@ export const fieldEdge = (cellAt, cells, from) => {
   const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
   const spot = spots.reduce((best, c) => distance(c) < distance(best) ? c : best)
   return { ...spot, span: Math.ceil(Math.max(...cells.map(c => across(c, spot)))) + 2 }
+}
+
+// Where a sweep ends (card 46614365). A days=0 routine parks the body wherever the last job left it, and a body left in
+// the middle of a planted pocket starts its next leg through the crops (walkable, at a cost: the slowest cell to start
+// from). From over a crop cell the nearest cell of the plan's `.` lane the body can stand on is the place to end, the
+// field's edge when the plan has no lane; already on a lane, or off the plan (at the chest), there is nowhere to go
+const overCell = (cells, from) => cells.find(c => c.x === Math.floor(from.x) && c.z === Math.floor(from.z))
+export const parkSpot = (cellAt, cells, from) => {
+  const over = overCell(cells, from)
+  if (!over || PLAN_LEGEND[over.ch]?.kind === 'path') return null
+  const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
+  const lanes = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path').map(c => ({ x: c.x, y: c.y + 1, z: c.z })).filter(c => dryStandable(cellAt, c))
+  if (lanes.length) {
+    const lane = lanes.reduce((best, c) => distance(c) < distance(best) ? c : best)
+    return { ...lane, why: 'lane' }
+  }
+  const edge = fieldEdge(cellAt, cells, from)
+  return edge ? { x: edge.x, y: edge.y, z: edge.z, why: 'edge' } : null
 }
 
 export const standingLine = spot => `standing at ${spot.x},${spot.y},${spot.z}, plan's edge`
