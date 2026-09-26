@@ -55,7 +55,7 @@ for (const [name, passable, expected] of [
 ]) {
   test(`inHole: ${name}`, () => assert.equal(inHole(passable), expected))
 }
-const HOLE = 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block), and a walk out of it did not go. pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true; then walk on'
+const HOLE = 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block). If the hole is what stops the walk, pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true, then walk on; if not, the goal is what has no way to it: path_to x= y= z= from up there names the gap'
 for (const [name, given, expected] of [
   ['no path from a one-deep hole: the hole is named and what lifts out', { text: NO_PATH, dig: false, ...dry, holed: true }, HOLE],
   ['a raw no-path from the hole too', { text: RAW, dig: false, ...dry, holed: true }, HOLE],

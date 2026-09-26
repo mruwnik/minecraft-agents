@@ -20,7 +20,7 @@ export const inHole = passable =>
 
 export function noPathAdvice ({ text, dig, underground = false, goalDy = null, wet = false, zoned = false, boxed = false, holed = false }) {
   if (!NO_PATH.test(text)) return text
-  if (holed) return 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block), and a walk out of it did not go. pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true; then walk on'
+  if (holed) return 'no path: you stand in a hole one block deep (every cell beside you at feet height is a block). If the hole is what stops the walk, pillar_up steps=1 (a block placed under your feet) lifts you out, or goto the same spot with dig=true, then walk on; if not, the goal is what has no way to it: path_to x= y= z= from up there names the gap'
   if (dig && wet) return `no path even with dig=true: ${WATER_RULE} (the way would flood), so from a pool nothing can be dug. Swim to the pool's edge, walk two blocks clear of the water, then goto dig=true again; or ${PILLAR}`
   if (dig && zoned) return 'no path even with dig=true: a dig walk breaks nothing inside a protected zone or that looks built (cobblestone, planks, fences...). Dig by hand: dig x= y= z= the wall at head height, step up, again (a staircase), or pillar up: place a block at your feet'
   if (dig && boxed) return `no path even with dig=true: you stand in a 1-wide shaft. Pillar up: place a block at your feet, again and again (dirt or cobblestone in the pocket also lets the walk tower by itself), or dig a staircase by hand: dig the wall at head height, step up, again`
