@@ -22,7 +22,7 @@ import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote,
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { readConfig } from './config.mjs'
-import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS } from './walk.mjs'
+import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { facesForHalf } from './cover.mjs'
@@ -1623,10 +1623,14 @@ const cellAt = (x, y, z) => {
 async function goNear (v, range = 2) {
   // already there: don't ask the pathfinder, which can fail from a perch (pillar top, ledge) even though nothing needs walking
   if (bot.entity.position.distanceTo(new Vec3(v.x + 0.5, v.y, v.z + 0.5)) <= range) return
+  // a cell on the floor of a pit is worked from the pit's rim (src/walk.mjs rimGoal, card 3fe30fb4): a dig of a pit's own floor jumped
+  // in when the rim was 3.16 off with range 3, and the walk that takes a scaffold pillar back stood on the pillar and dug it from under itself
+  const rim = rimGoal(cellAt, v, range, { from: feetCell(bot.entity.position, bot.entity.onGround) })
+  const aim = rim ?? { x: v.x, y: v.y, z: v.z, range }
   // no cell to stand in within range (a farmland cell walled in by crops): refused now, not after a 5 s search of 16k nodes (card 1ccb0ea1)
-  const nowhere = noStanding(cellAt, v, range)
+  const nowhere = noStanding(cellAt, aim, aim.range)
   if (nowhere) throw new Error(nowhere)
-  await bot.pathfinder.goto(new goals.GoalNear(v.x, v.y, v.z, range))
+  await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
 }
 function findBlockByName (names, maxDistance = 48, count = 1) {
   const m = matcher(names)
@@ -1831,11 +1835,11 @@ const long = {
     } finally { closeOriginal() }
   },
   async goto (a) {
-    let legs = 1
+    let walked = { legs: 1 }
     if (a.place) {
       const p = readPlaces().find(q => q.name === a.place)
       if (!p) throw new Error(`no place called ${a.place}; see ./mc places`)
-      legs = await walkLegs({ x: p.x, y: p.y, z: p.z }, a.range ?? 2)
+      walked = await walkLegs({ x: p.x, y: p.y, z: p.z }, a.range ?? 2, a.into === true)
     } else if (a.player) {
       const e = bot.players[a.player]?.entity
       if (!e) throw new Error(`can't see ${a.player}`)
@@ -1847,9 +1851,9 @@ const long = {
       // an x/z goal is met at any depth, and a walk that may not dig likes caves: say so rather than let the driver assume the surface
       if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
     } else {
-      legs = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1)
+      walked = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1, a.into === true)
     }
-    return { pos: pos(), ...(legs > 1 && { legs }) }
+    return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
   },
 
   async dig (a) {
@@ -2609,16 +2613,18 @@ const quick = {
     const moves = a.live ? bot.pathfinder.movements : fresh
     const differs = a.live ? Object.keys(fresh).filter(k => ['number', 'boolean', 'string'].includes(typeof fresh[k]) && fresh[k] !== moves[k]).map(k => `${k}:${moves[k]}`).join(' ') : ''
     if (a.stroll) { moves.allowSprinting = false; moves.allowParkour = false }
-    // the same judgement a walk makes before it searches: range 0 at a ground block, or a cell walled in by crops, is a refusal, not a 5 s timeout
-    const nowhere = noStanding(cellAt, a, a.range ?? 0)
+    // the same judgement a walk makes before it searches: a goal on the floor of a pit walks to its rim; range 0 at a ground block, or a cell walled in by crops, is a refusal, not a 5 s timeout
+    const rim = rimGoal(cellAt, a, a.range ?? 0, { into: a.into === true, from: feetCell(bot.entity.position, bot.entity.onGround) })
+    const aim = rim ?? { x: a.x, y: a.y, z: a.z, range: a.range ?? 0 }
+    const nowhere = noStanding(cellAt, aim, aim.range)
     if (nowhere) return { status: 'refused', ms: 0, why: nowhere }
     const began = Date.now()
-    const budget = thinkBudget(goalDistance(a, bot.entity.position))
-    let r = bot.pathfinder.getPathTo(moves, new goals.GoalNear(a.x, a.y, a.z, a.range ?? 0), budget)
+    const budget = thinkBudget(goalDistance(aim, bot.entity.position))
+    let r = bot.pathfinder.getPathTo(moves, new goals.GoalNear(aim.x, aim.y, aim.z, aim.range), budget)
     // one call searches for a single 40 ms slice: go on the way a walk does, until it is done or the time a walk this long gets is over
     while (r.status === 'partial' && r.context && Date.now() - began < budget) r = Object.assign(r.context.compute(), { context: r.context })
     const last = r.path[r.path.length - 1]
-    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
+    return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', ...(rim && { note: rim.note }), gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
   },
   // debugging aid: the raw metadata of the nearest entities with this name (how does the server mark a shorn sheep?)
   entity: (a) => ({
@@ -2996,14 +3002,19 @@ const explainFailure = message => {
 }
 // a dig walk goes in legs of 6 (src/diglegs.mjs): a straight line of 20 through rock is more search than the 5 s budget
 // holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
-async function walkLegs (to, range) {
+async function walkLegs (to, range, into = false) {
   const legs = digging ? digLegs(bot.entity.position, to) : [to]
+  const notes = []
   for (const [i, leg] of legs.entries()) {
     const last = i === legs.length - 1
-    await bot.pathfinder.goto(new goals.GoalNear(leg.x, leg.y, leg.z, last ? range : 1))
-      .catch(e => { throw new Error(last && legs.length === 1 ? e.message : `leg ${i + 1} of ${legs.length}, to ${leg.x},${leg.y},${leg.z}: ${e.message}`) })
+    // a leg on (or in mid-air over) the floor of a pit walks to the pit's rim instead (src/walk.mjs rimGoal, card 3fe30fb4)
+    const rim = rimGoal(cellAt, leg, last ? range : 1, { into, from: feetCell(bot.entity.position, bot.entity.onGround) })
+    if (rim) notes.push(rim.note)
+    const aim = rim ?? { x: leg.x, y: leg.y, z: leg.z, range: last ? range : 1 }
+    await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
+      .catch(e => { throw new Error(last && legs.length === 1 ? e.message : `leg ${i + 1} of ${legs.length}, to ${aim.x},${aim.y},${aim.z}: ${e.message}`) })
   }
-  return legs.length
+  return { legs: legs.length, ...(notes.length && { note: notes.join('; ') }) }
 }
 // given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 // the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
@@ -3160,8 +3171,10 @@ async function runLong (name, args, given = args) {
     // what it built and what is still there differ: a later leg of the same walk digs its own steps away again
     const standing = scaffoldBuilt(scaffolded, c => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name ?? null)
     const taken = []
-    // a walk that failed leaves its pillars too, and must still say so; only one that still has the body may dig them back
-    for (const c of task === mine ? scaffoldTakeBack(standing, bot.entity.position) : []) {
+    // a walk that failed leaves its pillars too, and must still say so; only one that still has the body may dig them back, and only
+    // from where it stands: a dig that walked to a pillar out of reach stood on the pillar and dug it from under itself (card 3fe30fb4)
+    const feet = bot.entity.position
+    for (const c of task === mine ? scaffoldTakeBack(standing, feet).filter(c => digFromHere(feet, c)) : []) {
       const dug = await long.dig({ x: c.x, y: c.y, z: c.z }).then(() => true, () => false)
       if (dug) taken.push(c)
     }
