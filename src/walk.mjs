@@ -20,6 +20,9 @@ export const standable = (cellAt, { x, y, z }) => {
   return Boolean(feet.liquid) || Boolean(cellAt(x, y - 1, z)?.solid)
 }
 
+// where a JOB stands: the body swims through water but works from dry footing (a pour from a pond cell drifts, drops float off)
+export const dryStandable = (cellAt, cell) => standable(cellAt, cell) && !cellAt(cell.x, cell.y, cell.z).liquid
+
 // every cell the pathfinder's GoalNear would accept: integer offsets with dx²+dy²+dz² <= range², round a floored target
 export const cellsWithin = (target, range) => {
   const at = { x: Math.floor(target.x), y: Math.floor(target.y), z: Math.floor(target.z) }
@@ -29,6 +32,10 @@ export const cellsWithin = (target, range) => {
     .filter(({ dx, dy, dz }) => dx * dx + dy * dy + dz * dz <= range * range)
     .map(({ dx, dy, dz }) => ({ x: at.x + dx, y: at.y + dy, z: at.z + dz }))
 }
+
+// is every cell a GoalNear of this range could end in loaded? A judgement of a goal's cells is only worth making over cells
+// the body can see: a far goal is walked towards and judged by the pathfinder as its chunks arrive
+export const loadedAround = (cellAt, target, range) => cellsWithin(target, range).every(cell => Boolean(cellAt(cell.x, cell.y, cell.z)))
 
 // what stops the body standing in a cell that is not underground: a crop in it, a block over it, or a chunk not loaded
 const blocker = (cellAt, { x, y, z }) => {

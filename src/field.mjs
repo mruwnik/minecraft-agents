@@ -8,7 +8,7 @@
 // order the last cells of a row lost theirs (14 of 108 came back notReplanted on jizo-melon-patch). Far end first, the
 // cells still bare are always the ones nearer the standing cell: there is one to stand in within reach of the next, and
 // the body backs out of the field as it plants.
-import { WORK_RANGE, standable, cellsWithin, noStanding } from './walk.mjs'
+import { WORK_RANGE, dryStandable, cellsWithin, noStanding } from './walk.mjs'
 import { breaksUnderfoot, FLUIDS } from './lib.mjs'
 
 // what api.block answers, read as the cell walk.mjs judges: solid is what a walk cannot enter, crop is what it steps round
@@ -24,10 +24,11 @@ const candidates = cells => {
   return [...seen.values()]
 }
 
-// the nearest cell to `from` the body can stand in within work range of the plan, and how far it must reach from there to
-// cover every cell of the plan; null when the plan is empty or nothing within reach of it can be stood in (not loaded, all planted)
+// the nearest cell to `from` the body can stand in, dry, within work range of the plan, and how far it must reach from there
+// to cover every cell of the plan; null when the plan is empty or nothing within reach of it can be stood in (not loaded, all
+// planted). Dry: a pond beside the field is where a walk can end and drops float off, not where a harvest stands
 export const fieldEdge = (cellAt, cells, from) => {
-  const spots = candidates(cells).filter(c => standable(cellAt, c))
+  const spots = candidates(cells).filter(c => dryStandable(cellAt, c))
   if (!spots.length) return null
   const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
   const spot = spots.reduce((best, c) => distance(c) < distance(best) ? c : best)

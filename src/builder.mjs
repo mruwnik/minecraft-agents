@@ -1,6 +1,7 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobCall, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
+import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
+import { workFrom } from './stand.mjs'
 
 const WATER_RANGE = 32
 const WATER_CANDIDATES = 32
@@ -81,8 +82,9 @@ export async function buildFromPlan (api, a) {
       counts.stuck = counts.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
       return
     }
-    const [action, args] = jobCall(job)
-    const failed = await api.act(action, args).then(() => null, e => e.message)
+    // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
+    // next slab or a crop instead, twice on jizo-melon-patch (09-26)
+    const failed = await workFrom(api, job).then(() => null, e => e.message)
     if (failed) { counts.stuck = counts.stuck ?? failed; return }
     counts[COUNT_OF[job.do]] = (counts[COUNT_OF[job.do]] ?? 0) + 1
   }

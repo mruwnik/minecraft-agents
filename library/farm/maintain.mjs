@@ -1,8 +1,10 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fetchWaterBucket } from '../../src/builder.mjs'
-import { farmJobs, farmSurplus, hasWaterSource, jobCall, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
+import { farmJobs, farmSurplus, hasWaterSource, planAnchor, planBill, planStructure, shortLine, SEED_ITEMS } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
+import { cellOf, fieldEdge } from '../../src/field.mjs'
+import { workFrom } from '../../src/stand.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
@@ -32,8 +34,9 @@ export default {
         summary.stuck = summary.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
         return
       }
-      const [action, args] = jobCall(job)
-      const failed = await api.act(action, args).then(() => null, e => e.message)
+      // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
+      // next slab or a crop instead, twice on jizo-melon-patch (09-26)
+      const failed = await workFrom(api, job).then(() => null, e => e.message)
       if (failed) { summary.stuck = summary.stuck ?? failed; return }
       if (job.do === 'plant') summary.replanted++
       if (job.do === 'till') summary.tilled++
@@ -42,8 +45,22 @@ export default {
       if (job.do === 'place') summary.built++
     }
 
+    // Where the sweep starts. This used to walk to within 2 of the plan's middle: in a finished field that is a bed
+    // walled in by crops on every side, and a walk steps round crops, so the pathfinder had no node to end in and ran
+    // its time out, or its search radius ("no walkable path"), where farm.harvest right after it walks to the field's
+    // EDGE and works (Jizo, 09-26). The edge is the nearest cell the body can stand in, dry, within work range of the
+    // plan (src/field.mjs fieldEdge). With nothing loaded round the plan there is no edge to read yet: then a walk to
+    // the middle at a range that reaches the rim (half the plan's diagonal, and 2 at least) loads it, and the edge is read again
+    const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
+    const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height) / 2))
+    const walkToEdge = async () => {
+      const edge = () => fieldEdge(cellAt, plan.cells, api.pos())
+      const spot = edge() ?? await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: approach }).then(edge)
+      if (spot) await api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 1 })
+    }
+
     const sweep = async () => {
-      await api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range: 2 })
+      await walkToEdge()
       // the plan is only worth following once the ground is in sight and it points at the right level: a plan anchored
       // one block low would have me till the dirt UNDER somebody's farm and plant seed inside their farmland
       const anchor = planAnchor(plan.cells, api.block)
