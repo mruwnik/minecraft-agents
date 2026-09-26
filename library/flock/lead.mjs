@@ -1,13 +1,13 @@
 // Walk animals to a spot with their food in my hand. The walk itself is `escort`; what this decides is where the spot is,
 // whether it is a spot at all, whether a gate stands open that would let the pen empty while I am away, and who is inside at the end.
-import { BREEDING_FOOD, breedingFood, leadTargetError, gateLeak, placeTarget, placeRefusal } from '../../src/lib.mjs'
+import { BREEDING_FOOD, breedingFood, leadTargetError, gateLeak, placeTarget, placeRefusal, leadsChest, leadBorrow, leadReturn } from '../../src/lib.mjs'
 
 const given = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
 
 export default {
-  doc: 'flock.lead mob= place=|x= y= z= [count=2] [within=32] [penned=] [range=]: walk animals to a spot, into a pen if the goal is inside one',
+  doc: 'flock.lead mob= place=|x= y= z= [count=2] [within=32] [penned=] [range=] [leads=x,y,z]: walk animals to a spot, into a pen if the goal is inside one; on leads when you carry them (or borrow them from the chest leads= names, and put them back)',
   stops: 'the animals are in, they will not follow, or there is no way there on foot',
-  args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number' },
+  args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number', leads: 'string' },
 
   async run (api, a) {
     // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
@@ -15,8 +15,12 @@ export default {
     const refusal = placeRefusal(api.places(), a.place, api.me?.())
     if (refusal) throw new Error(refusal)
     if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot lead ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
+    // on leads (card 43a32481) nothing has to see food: leads carried, or borrowed from the chest leads= names
+    const chest = leadsChest(a.leads)
+    if (chest?.error) throw new Error(chest.error)
+    const leadsCarried = () => api.inv().lead ?? 0
     const food = breedingFood(a.mob, Object.keys(api.inv()))
-    if (!food) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)
+    if (!food && !leadsCarried() && !chest) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none (or carry leads, or pass leads=x,y,z, a chest to borrow them from)`)
 
     const aim = placeTarget(api.places(), a, 'flock.lead')
     if (aim.error) throw new Error(aim.error)
@@ -40,9 +44,27 @@ export default {
     const shutFirst = gate ? `the gate at ${gate.join(',')} stood open: shut it before fetching them` : undefined
     if (gate) await check()
 
-    // escort counts the pen from the cells it walked, before the gate we came through is shut behind us
-    const walked = await api.act('escort', { mob: a.mob, ...at, ...given({ count: a.count, within: a.within, penned: a.penned, range: a.range }) })
-    api.report({ ...walked, shutFirst })
-    return { ...walked, shutFirst }
+    // leads borrowed for this walk go back into the same chest whatever happens, and the line says so
+    const carriedBefore = leadsCarried()
+    const borrow = chest ? leadBorrow({ carried: carriedBefore, want: Math.min(a.count ?? 2, 2) }) : 0
+    if (borrow) await api.act('withdraw', { item: 'lead', count: borrow, ...chest }).catch(e => api.note(`leads: ${e.message}`))
+    const borrowed = Math.max(0, leadsCarried() - carriedBefore)
+    const returnLeads = async () => {
+      const back = leadReturn({ borrowed, carried: leadsCarried(), chest })
+      if (back?.deposit) await api.act('deposit', { item: 'lead', count: back.deposit, ...chest })
+      return back?.line
+    }
+    let walked
+    try {
+      // escort counts the pen from the cells it walked, before the gate we came through is shut behind us
+      walked = await api.act('escort', { mob: a.mob, ...at, ...given({ count: a.count, within: a.within, penned: a.penned, range: a.range }) })
+    } catch (error) {
+      await returnLeads().catch(() => {})
+      throw error
+    }
+    const leads = await returnLeads()
+    const summary = { ...walked, shutFirst, ...(leads ? { leads } : {}) }
+    api.report(summary)
+    return summary
   }
 }

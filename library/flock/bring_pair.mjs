@@ -6,9 +6,9 @@ import { penHolds } from '../../src/pens.mjs'
 const given = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
 
 export default {
-  doc: 'flock.bring_pair mob= place=|x= y= z= [count=2] [within=32] [penned=]: fetch enough grown animals to breed in a pen, shut the gate and count them in',
+  doc: 'flock.bring_pair mob= place=|x= y= z= [count=2] [within=32] [penned=] [leads=x,y,z]: fetch enough grown animals to breed in a pen, shut the gate and count them in; on leads when carried or borrowed from the chest leads= names',
   stops: 'the pen holds the pair, there are not enough within reach, or they will not follow',
-  args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number', until: 'number' },
+  args: { mob: 'string!', place: 'string', x: 'number', y: 'number', z: 'number', count: 'number', within: 'number', penned: 'boolean', range: 'number', until: 'number', leads: 'string' },
 
   async run (api, a) {
     // whose ground this is, first: an agent told "you carry no wheat" fixes that and comes back to find the pen was
@@ -17,7 +17,7 @@ export default {
     if (refusal) throw new Error(refusal)
     // empty-handed is worth knowing before the walk, not after it: nothing follows a bare hand
     if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot lead ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
-    if (!breedingFood(a.mob, Object.keys(api.inv()))) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)
+    if (!breedingFood(a.mob, Object.keys(api.inv())) && !(api.inv().lead > 0) && !a.leads) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none (or carry leads, or pass leads=x,y,z)`)
     const aim = placeTarget(api.places(), a, 'flock.bring_pair')
     if (aim.error) throw new Error(aim.error)
     const at = aim.at
@@ -39,11 +39,11 @@ export default {
     if (!plan.fetch) return { ...before, already: plan.note, walked }
 
     await api.checkpoint()
-    const led = await api.act('flock.lead', { mob: a.mob, count: plan.fetch, ...at, ...given({ within: a.within, penned: a.penned, range: a.range }) })
+    const led = await api.act('flock.lead', { mob: a.mob, count: plan.fetch, ...at, ...given({ within: a.within, penned: a.penned, range: a.range, leads: a.leads }) })
     await api.checkpoint()
     const held = (await penHolds(api, at)).held
     const now = insideCount(held.inside, a.mob)
-    const summary = { ...held, walked, fetched: now - inside, stuck: led.stuck, short: now < (a.count ?? 2) ? `${now} grown ${a.mob} in the pen, not ${a.count ?? 2}: ${led.why ?? 'lead them again, or look further afield'}` : undefined }
+    const summary = { ...held, walked, fetched: now - inside, stuck: led.stuck, leads: led.leads, short: now < (a.count ?? 2) ? `${now} grown ${a.mob} in the pen, not ${a.count ?? 2}: ${led.why ?? 'lead them again, or look further afield'}` : undefined }
     api.report(summary)
     return summary
   }
