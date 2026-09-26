@@ -2661,7 +2661,7 @@ const quick = {
       food: bot.food,
       xp: bot.experience.level,
       oxygen: bot.oxygenLevel,
-      // where the server last put the body, when that is off the client's position or older than a minute (card 962beec2)
+      // where the server last put the body, when that is off the client's position (card 962beec2)
       ...serverPosNote({ client: bot.entity.position, server: lastServerPos, now: Date.now() }),
       time: `${isNight(bot.time.timeOfDay) ? 'night' : 'day'} ${bot.time.timeOfDay}`,
       pos: pos(),
