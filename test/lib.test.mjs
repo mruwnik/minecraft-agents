@@ -1019,7 +1019,8 @@ test('every module that uses a lib.mjs helper imports it', async () => {
     return exported
       .filter(name => !imported.has(name))
       .filter(name => new RegExp(`(^|[^\\w.$])${name}(?![\\w$])`).test(body))
-      .filter(name => !new RegExp(`(const|let|var|function|class)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*=>|${name}\\s*:`).test(body))
+      // a parameter with a default (dropsNear (range = 16)) is declared, not used
+      .filter(name => !new RegExp(`(const|let|var|function|class)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*=>|${name}\\s*:|[(,]\\s*${name}\\s*=[^=>]`).test(body))
       .map(name => `${file}: uses ${name} without importing it`)
   })
   assert.deepEqual(unimported, [])

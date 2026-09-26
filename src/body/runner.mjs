@@ -7,7 +7,8 @@ import { eatAllowed, workRefusal, parsePlan, planCells, planBill, isNight, mayDi
 import { carryReport } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
-import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, bedsNear, inventoryCounts, penAround, censusOf, pos, dropsNear, cancelGuard } from '../bot.mjs'
+import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard } from '../bot.mjs'
+import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 
 // ---------------------------------------------------------------- the composite runner ("autopilot")
 // src/bot.mjs holds primitives; a composite is one file in library/, `export default { doc, args, run }`. The runner loads

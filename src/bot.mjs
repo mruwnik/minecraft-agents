@@ -16,10 +16,9 @@ import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { dropGoal } from './drop.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair, compatibleInventoryStacks } from './inventory-compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
@@ -29,7 +28,6 @@ import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, froze
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
-import { searchSections, enough } from './blocksearch.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
@@ -45,6 +43,7 @@ import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } fr
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, setLastSpoken, edibleCarried, runComposite } from './body/runner.mjs'
+import { matcher, countsOf, chestTransfer, carried, inventoryCounts, inventoryQuiet, diffCounts, findItem, vecOf, dropsNear, sweepDrops, walkToDig, cellAt, goNear, findBlocksNear, findBlockByName, bedsNear, craftBatch, containerAt, leashHolderOf, onMyLeads, leadsCarried, leashCandidate, leashOne, unleashOne, leadWalk } from './body/helpers.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -52,13 +51,13 @@ for (const [axis, method] of ['computeOffsetX', 'computeOffsetY', 'computeOffset
   AABB.prototype[method] = function (other, offset) { return clampedOffset(corners(this), corners(other), axis, offset) }
 }
 
-const { pathfinder, Movements, goals } = pf
+export const { pathfinder, Movements, goals } = pf
 export const { Vec3 } = vec3
 const armorManager = armorManagerMod.default ?? armorManagerMod
 
 // ---------------------------------------------------------------- bot lifecycle
 export let bot = null
-let boatLeashHolder = new Map()
+export let boatLeashHolder = new Map()
 let eatTimer = null
 // item 13 (#109): what a death line needs and cannot work out after the fact. The server's own words, the last wound,
 // and the last place the body stood: the respawn point is the world spawn, which tells nobody where the kit fell.
@@ -69,7 +68,7 @@ let lastCarried = null
 // the last death: when, where the body fell and what fell with it, for the result of the task it ended (src/composite.mjs)
 let lastDeath = null
 let diedAt = 0
-let mcData = null
+export let mcData = null
 export let ready = false
 let reflexes = true
 let eyes = null
@@ -152,7 +151,7 @@ function dropMeal (why) {
 let mealInFlight = null
 // every meal this body has finished, by item. A chest transfer reads it before and after: a hungry body eats the bread
 // as it arrives, and without this the withdraw could only say the inventory was short, not WHERE it went (#146)
-const mealsEaten = {}
+export const mealsEaten = {}
 const ateOne = name => { mealsEaten[name] = (mealsEaten[name] ?? 0) + 1 }
 const watchTheMeal = (food, timeoutMs) => {
   const meal = new Promise((resolve, reject) => {
@@ -192,7 +191,7 @@ let handPlacing = 0
 const NONE_SPARED = () => false
 let spared = NONE_SPARED
 const FarmMovements = farmWalk(Movements)
-function makeMoves (dig) {
+export function makeMoves (dig) {
   const moves = new FarmMovements(bot)
   moves.allowParkour = true
   moves.canOpenDoors = true
@@ -708,7 +707,7 @@ function nearbyHostiles (range) {
   return Object.values(bot.entities).filter(e => e !== bot.entity && isHostile(e) && e.position.distanceTo(bot.entity.position) <= range)
 }
 
-const isWoodDoor = b => Boolean(b?.name?.endsWith('_door')) && b.name !== 'iron_door'
+export const isWoodDoor = b => Boolean(b?.name?.endsWith('_door')) && b.name !== 'iron_door'
 const doorsIOpened = new Set()
 const heldOpen = new Set() // gates opened with `toggle`: they stay open until toggled shut
 const myClicks = new Map() // block -> when my own hand last clicked it
@@ -754,6 +753,8 @@ let lastSteppedOff = 0
 const gatesPassed = new Set() // fence gates this task walked through: their pens get a look for strays when it ends
 let leading = false // animals are following me: doors and gates stay open behind me until they have caught up
 let following = [] // the animals a lead is bringing along: a gate stays open until they are through it (herdPassed), then shuts at once
+export const setLeading = v => { leading = v }
+export const setFollowing = v => { following = v }
 let luring = false // a lead is on, from its first step towards the animal: the food stays in my hand, gates or no gates
 let feeding = false // feed is holding food out to an animal: it stays in my hand
 let compactingInventory = false
@@ -972,7 +973,7 @@ function watchStuck () {
 let kickedFor = null // the stand-still (a stillFrom) whose walk I already restarted once
 // bot.controlState has no enumerable keys (getters): Object.entries on it is always empty, which made every stall report say keys=[] until 09-19
 const keysDown = () => ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak'].filter(k => bot.getControlState(k))
-let lastPath = null
+export let lastPath = null
 let lastServerPos = null // where the server last PUT the body (it only speaks up when it disagrees with the client)
 let frozenFor = null // the stillFrom a frozen walk was already reported for
 let lastFrozen = null // the last frozen walk: when, where and what the evidence blamed, for a task to own the failure (escort)
@@ -1528,370 +1529,6 @@ function resumeFollow () {
   if (!followTarget) return
   const p = bot.players[followTarget]?.entity
   if (p) bot.pathfinder.setGoal(new goals.GoalFollow(p, 3), true)
-}
-
-// ---------------------------------------------------------------- helpers
-function matcher (names) {
-  const list = (Array.isArray(names) ? names : [names]).map(n => new RegExp('^' + String(n).replace(/\*/g, '.*') + '$'))
-  return name => list.some(r => r.test(name))
-}
-const countsOf = items => items.reduce((out, i) => ({ ...out, [i.name]: (out[i.name] ?? 0) + i.count }), {})
-
-// Move items between me and a chest and make sure it really happened. Through ViaBackwards a transfer is sometimes lost, lands late, or
-// takes a whole stack along (asked 8 wheat, got 24; asked to deposit 30 planks, 36 went), and my own counts only tell the truth right
-// after a window opens, when the server sends every slot afresh. So: move, shut, open again, compare with the plan, put right; 3 rounds at most
-async function chestTransfer (a, way, planFor) {
-  const undo = way === 'withdraw' ? 'deposit' : 'withdraw'
-  const run = async (chest, dir, list) => {
-    for (const t of list) {
-      await chest[dir](mcData.itemsByName[t.name].id, null, t.count)
-      await bot.waitForTicks(6)
-    }
-  }
-  const first = await bot.openContainer(await containerAt(a))
-  // the chest is the world and the verdict: an inventory delta judged a withdraw that WORKED to be a failure three
-  // rounds running, because auto-eat ate three of the eight loaves as they arrived (#146). The inventory is still
-  // read, but only to say where the difference went
-  const before = countsOf(first.items())
-  const chestBefore = countsOf(first.containerItems())
-  const mealsBefore = { ...mealsEaten }
-  const corrections = []
-  let settled = false
-  let outcome = null
-  let plan
-  try {
-    plan = planFor(first)
-    await run(first, way, plan.take).catch(e => { throw new Error(fullSide(e.message, way)) })
-  } finally { first.close() }
-  for (let round = 0; round < 3; round++) {
-    await bot.waitForTicks(10)
-    const chest = await bot.openContainer(await containerAt(a))
-    try {
-      outcome = transferOutcome({
-        way,
-        take: plan.take,
-        chestBefore,
-        chestAfter: countsOf(chest.containerItems()),
-        invBefore: before,
-        invAfter: countsOf(chest.items()),
-        eaten: diffCounts(mealsBefore, mealsEaten).gained
-      })
-      settled = outcome.settled
-      if (settled) break
-      corrections.push(...[...outcome.back, ...outcome.more].map(t => `${t.name}:${t.count}`))
-      await run(chest, undo, outcome.back)
-      await run(chest, way, outcome.more)
-    } finally { chest.close() }
-  }
-  if (!settled) throw new Error(`the ${way} keeps going wrong (off by ${corrections.join(' ')}): compare chest_contents and inventory before you go on`)
-  return { plan, eaten: outcome?.eaten && compact(outcome.eaten), corrected: corrections.length ? `the first try was off by ${corrections.join(' ')}: put right` : undefined }
-}
-
-// everything that drops: what inventoryCounts sees plus the armour being worn and the off hand, which live in window
-// slots of their own. A died line that leaves out the helmet you were wearing is the line that loses it.
-const WORN = [5, 6, 7, 8, 45]
-const carried = () => WORN.reduce((out, slot) => {
-  const item = bot.inventory?.slots?.[slot]
-  return item ? { ...out, [item.name]: (out[item.name] || 0) + item.count } : out
-}, bot.inventory ? inventoryCounts() : {})
-
-export function inventoryCounts () {
-  const out = {}
-  for (const i of bot.inventory.items()) out[i.name] = (out[i.name] || 0) + i.count
-  return out
-}
-// the pockets are still moving after a crafting window closes (the grid and the cursor come back one set_slot at a
-// time): a count read the moment a batch resolves showed the whole wheat stack spent (card c13b704d). Wait for the
-// slots to go quiet before counting anything; the verdict is 'settled' or 'timeout' (src/lib/settle.mjs)
-async function inventoryQuiet () {
-  const startedAt = Date.now()
-  let lastChangeAt = null
-  const moved = () => { lastChangeAt = Date.now() }
-  bot.inventory.on('updateSlot', moved)
-  try {
-    for (;;) {
-      const verdict = settleVerdict({ lastChangeAt, startedAt, now: Date.now() })
-      if (verdict !== 'wait') return verdict
-      await bot.waitForTicks(1)
-    }
-  } finally { bot.inventory.off('updateSlot', moved) }
-}
-function diffCounts (before, after) {
-  const gained = {}; const lost = {}
-  for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    const d = (after[k] || 0) - (before[k] || 0)
-    if (d > 0) gained[k] = d
-    if (d < 0) lost[k] = -d
-  }
-  return { gained, lost }
-}
-function findItem (name) {
-  const m = matcher(name)
-  const item = bot.inventory.items().find(i => m(i.name))
-  if (!item) throw new Error(`no ${name} in inventory`)
-  return item
-}
-const vecOf = a => {
-  const error = coordsError(a)
-  if (error) throw new Error(error)
-  return new Vec3(Math.floor(a.x), Math.floor(a.y), Math.floor(a.z))
-}
-// Every dropped item lying about: what it is, where it lies, whether it is deep in water and whether it is outside the
-// pen I stand in. Entity tracking is the body's own knowledge, so this is what the collect action is built on (through
-// api.drops) and what dig and shear use to fetch what they just knocked loose.
-export function dropsNear (range = 16) {
-  const me = bot.entity.position
-  const pen = penAround(me.floored())
-  const inPen = e => !pen?.fenced || unpenned(pen.floor, [e], x => x.position).length === 0
-  const water = p => bot.blockAt(p)?.name === 'water'
-  return Object.values(bot.entities)
-    .filter(e => e.name === 'item' && e.position && e.position.distanceTo(me) <= range)
-    .map(e => ({
-      id: e.id,
-      item: mcData.items[e.getDroppedItem?.()?.type]?.name ?? 'item',
-      x: Math.floor(e.position.x),
-      y: Math.floor(e.position.y),
-      z: Math.floor(e.position.z),
-      dist: e.position.distanceTo(me),
-      deep: water(e.position) && water(e.position.offset(0, -1, 0)),
-      outsidePen: !inPen(e)
-    }))
-    .sort((p, q) => p.dist - q.dist)
-}
-
-// what dig, harvest and shear do with what they knocked loose: a few steps and no fuss. The collect ACTION is the
-// composite in library/collect.mjs; this is the reflex that belongs to digging something up in the first place.
-async function sweepDrops (range = 8) {
-  const tried = new Set()
-  for (let i = 0; i < 8; i++) {
-    const drop = nextDrop(dropsNear(range).filter(d => !d.outsidePen), tried, false)
-    if (!drop) break
-    tried.add(drop.id)
-    const goal = dropGoal(drop)
-    // a drop on the floor of a pit is left lying (the result names it), not followed down: a dig of a pit's own wall from the rim
-    // dropped its dirt on the floor and this sweep jumped in after it (src/walk.mjs rimGoal, card 3fe30fb4)
-    if (rimGoal(cellAt, goal, goal.range, { from: feetCell(bot.entity.position, bot.entity.onGround) })) continue
-    await bot.pathfinder.goto(new goals.GoalNear(goal.x, goal.y, goal.z, goal.range)).catch(() => {})
-    await bot.waitForTicks(10)
-    if (!bot.inventory.emptySlotCount()) break
-  }
-  const left = dropsNear(range).filter(d => !d.outsidePen)
-  return leftLying(bot.inventory.emptySlotCount(), left.map(d => d.item), left.filter(d => d.deep).map(d => d.item))
-}
-
-// a dig's walk: one that has not arrived in DIG_WALK_MS is stopped and fails naming the cell, instead of wandering (148 s, card 150b3ee1)
-async function walkToDig (p) {
-  let late = false
-  const timer = setTimeout(() => { late = true; bot.pathfinder.setGoal(null) }, DIG_WALK_MS)
-  const walked = await goNear(p, 3).then(() => null, error => error).finally(() => clearTimeout(timer))
-  if (late) throw new Error(digUnreached(p))
-  if (walked) throw walked
-}
-// a cell the way walk.mjs judges it: solid is what the pathfinder cannot walk into (a door and an open gate it can), crop is what it steps round
-const cellAt = (x, y, z) => {
-  const b = bot.blockAt(new Vec3(x, y, z), false)
-  if (!b) return null
-  const walkable = isWoodDoor(b) || (b.name.endsWith('_fence_gate') && b.getProperties().open)
-  return { name: b.name, solid: b.boundingBox === 'block' && !walkable, liquid: FLUIDS.has(b.name), crop: breaksUnderfoot(b.name) }
-}
-async function goNear (v, range = 2) {
-  // already there: don't ask the pathfinder, which can fail from a perch (pillar top, ledge) even though nothing needs walking
-  if (bot.entity.position.distanceTo(new Vec3(v.x + 0.5, v.y, v.z + 0.5)) <= range) return
-  // a cell on the floor of a pit is worked from the pit's rim (src/walk.mjs rimGoal, card 3fe30fb4): a dig of a pit's own floor jumped
-  // in when the rim was 3.16 off with range 3, and the walk that takes a scaffold pillar back stood on the pillar and dug it from under itself
-  const rim = rimGoal(cellAt, v, range, { from: feetCell(bot.entity.position, bot.entity.onGround) })
-  const aim = rim ?? { x: v.x, y: v.y, z: v.z, range }
-  // no cell to stand in within range (a farmland cell walled in by crops): refused now, not after a 5 s search of 16k nodes (card 1ccb0ea1)
-  const nowhere = noStanding(cellAt, aim, aim.range)
-  if (nowhere) throw new Error(nowhere)
-  await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
-}
-// Every matching block within maxDistance of point (where I stand, by default), nearest first. Not bot.findBlocks: that
-// walks chunk sections in an octahedron of apothem ceil((range + 8) / 16), which at range 16 never reads the section one
-// over, one down and one across, so a body two blocks across a chunk line from what it looks for got one campfire in
-// four (mariel-apiary, 2026-09-26 21:00Z; card 4552230d). searchSections lists every section the range touches; the
-// palette short cut (skip a section whose palette holds none of the ids) is mineflayer's own.
-function findBlocksNear ({ matching, maxDistance = 16, count = 1, point = bot.entity.position, useExtraInfo = false }) {
-  const ids = new Set([].concat(matching))
-  const at = vec3(point).floored()
-  const inPalette = section => !section.palette || section.palette.some(id => ids.has(bot.registry.blocksByStateId[id]?.id))
-  const found = []
-  for (const s of searchSections(at, maxDistance, { minY: bot.game.minY, height: bot.game.height })) {
-    if (enough(found.map(f => f.dist), count, s.near)) break
-    const section = bot.world.getColumn(s.x, s.z)?.sections[s.y - (bot.game.minY >> 4)]
-    if (!section || (useExtraInfo !== true && !inPalette(section))) continue
-    const corner = vec3(s.x * 16, s.y * 16, s.z * 16)
-    for (let x = 0; x < 16; x++) {
-      for (let y = 0; y < 16; y++) {
-        for (let z = 0; z < 16; z++) {
-          const p = corner.offset(x, y, z)
-          const dist = p.distanceTo(at)
-          if (dist > maxDistance) continue
-          const block = bot.blockAt(p, Boolean(useExtraInfo))
-          if (!block || !ids.has(block.type)) continue
-          if (typeof useExtraInfo === 'function' && !useExtraInfo(block)) continue
-          found.push({ p, dist })
-        }
-      }
-    }
-  }
-  return found.sort((a, b) => a.dist - b.dist).slice(0, count).map(f => f.p)
-}
-function findBlockByName (names, maxDistance = 48, count = 1, point = bot.entity.position) {
-  const m = matcher(names)
-  const ids = Object.values(mcData.blocksByName).filter(b => m(b.name)).map(b => b.id)
-  if (!ids.length) throw new Error(`unknown block name: ${names}`)
-  return findBlocksNear({ matching: ids, maxDistance, count, point })
-}
-export const bedsNear = () => findBlockByName('*_bed', 32, 16).sort((p, q) => p.distanceTo(bot.entity.position) - q.distanceTo(bot.entity.position))
-// One batch of a recipe. bot.craft clicks the table itself and starts filling the grid as soon as anything answers, so
-// after a walk in the click's own look could still be turning while the recipe ran against no window at all and the
-// server rejected every batch (bug #91, and #74's "12/15 made"). Open the window here, wait for it, then craft into it.
-async function craftBatch (recipe, table) {
-  if (!table) return craftInPockets(recipe)
-  await goNear(table.position, 2)
-  bot.pathfinder.setGoal(null)
-  await bot.lookAt(table.position.offset(0.5, 0.5, 0.5), true)
-  const window = await within(6000, bot.openBlock(table), 'opening the crafting table').catch(() => null)
-  if (!window) return
-  if (!String(window.type ?? '').startsWith('minecraft:crafting')) {
-    bot.closeWindow(window)
-    throw new Error(`${table.name} at ${table.position.x},${table.position.y},${table.position.z} opened a ${window.type}, not a crafting grid`)
-  }
-  // the plugin opens the table itself, and a second click with the window already open reopens it under a new id
-  // mid-recipe: stub that click out and hand its `once('windowOpen')` the window we are already holding
-  const activate = bot.activateBlock
-  bot.activateBlock = async () => {}
-  try {
-    const crafting = bot.craft(recipe, 1, table)
-    bot.emit('windowOpen', window)
-    await within(15000, crafting, 'crafting').catch(() => {})
-  } finally {
-    bot.activateBlock = activate
-    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-  }
-}
-
-// The 2x2 grid is the inventory window itself, and mineflayer neither syncs nor closes it after a craft (it does both
-// for a table). A put-back click the server rejected left my 26 bamboo on the cursor for one stick, and the tally called
-// them lost. Read the grid back from the server; if anything is stuck there, closing the inventory makes the server
-// return the grid and the cursor to the pockets
-async function craftInPockets (recipe) {
-  await within(15000, bot.craft(recipe, 1, null), 'crafting').catch(() => {})
-  const readBack = () => within(3000, bot._syncWindow(bot.inventory), 'reading the crafting grid back').catch(() => {})
-  await readBack()
-  const stuck = gridLeftovers({ grid: bot.inventory.slots.slice(1, 5), cursor: bot.inventory.selectedItem })
-  if (!Object.keys(stuck).length) return
-  console.log(`[craft] handed back from the 2x2 grid and the cursor: ${JSON.stringify(stuck)}`)
-  bot.closeWindow(bot.inventory)
-  await readBack()
-}
-
-async function containerAt (a, names = ['chest', 'barrel', 'trapped_chest']) {
-  const p = a.x !== undefined ? vecOf(a) : findBlockByName(names, 32)[0]
-  if (!p) throw new Error('no container found nearby')
-  await goNear(p, 2)
-  return bot.blockAt(p)
-}
-
-// ---- leads (card 43a32481). attach_entity is the leash packet too, so boatLeashHolder maps every leashed entity,
-// animal or boat, to its holder. A lead in the hand used on an animal ties it to me; from then on it is pulled after
-// me, needs to see no food, and a gate only has to open. A lead breaks at 10 blocks, so the walk holds when one is
-// pulled tight. Right-clicking an animal on my lead with an empty hand drops its lead as an item, to pick up.
-const leashHolderOf = e => boatLeashHolder.get(e.id)
-const onMyLeads = () => Object.values(bot.entities).filter(e => e.isValid && e !== bot.entity && leashHolderOf(e) === bot.entity.id)
-const cellOf = e => `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`
-const leadsCarried = () => inventoryCounts().lead ?? 0
-const leashCandidate = e => ({ id: e.id, dist: e.position.distanceTo(bot.entity.position), grown: !isBaby(e.metadata), penned: Boolean(penAround(e.position.floored())?.enclosed) })
-async function leashOne (e) {
-  await goNear(e.position.floored(), 2)
-  await bot.equip(findItem('lead'), 'hand')
-  await bot.activateEntity(e)
-  for (let i = 0; i < 20 && leashHolderOf(e) !== bot.entity.id; i++) await bot.waitForTicks(1)
-  if (leashHolderOf(e) !== bot.entity.id) throw new Error(`the ${e.name} at ${cellOf(e)} took no lead (leads carried: ${leadsCarried()}): stand beside it and try again`)
-  Object.assign(e, { grown: !isBaby(e.metadata) })
-}
-async function unleashOne (e) {
-  await goNear(e.position.floored(), 2)
-  // an empty hand: wheat in it would feed the cow instead
-  await bot.unequip('hand')
-  await bot.activateEntity(e)
-  for (let i = 0; i < 20 && leashHolderOf(e) === bot.entity.id; i++) await bot.waitForTicks(1)
-  return leashHolderOf(e) !== bot.entity.id
-}
-// escort on leads: leash the plan's animals, walk with them pulled along, hold when a lead is tight, take the leads
-// off at the goal (into a pen: on its far cell) and pick them up
-async function leadWalk (a) {
-  const to = a
-  if (to.x === undefined || to.y === undefined || to.z === undefined) throw new Error('escort needs x= y= z= (flock.lead takes place= too)')
-  const near = e => e.position.distanceTo(bot.entity.position)
-  const toVec = new Vec3(to.x, to.y, to.z)
-  const pen = penAround(toVec.floored())
-  const floor = pen?.enclosed ? pen.floor : null
-  const inPen = e => floor ? unpenned(floor, [e], x => x.position).length === 0 : near(e) <= 4
-  // the ones already at the goal are not fetched, and one that stands in another pen only with penned=true
-  const candidates = Object.values(bot.entities)
-    .filter(e => e.name === a.mob && e.isValid && !leashHolderOf(e) && near(e) <= (a.within ?? 32) && !inPen(e))
-    .map(leashCandidate)
-  const plan = leashPlan({ mob: a.mob, leads: leadsCarried(), count: a.count ?? 2, candidates, allowPenned: a.penned === true })
-  if (plan.error) throw new Error(plan.error)
-  const alive = cancelGuard()
-  const held = []
-  const mine = () => held.filter(e => e.isValid && leashHolderOf(e) === bot.entity.id)
-  leading = true
-  try {
-    for (const id of plan.take) { alive(); const e = bot.entities[id]; await leashOne(e); held.push(e) }
-    following = held
-    const stroll = makeMoves(false)
-    stroll.allowSprinting = false
-    stroll.allowParkour = false
-    bot.pathfinder.setMovements(stroll)
-    const goal = new goals.GoalNear(to.x, to.y, to.z, a.range ?? 1)
-    let walking = false
-    let walkingSince = 0
-    let heldSince = 0
-    while (!goal.isEnd(bot.entity.position.floored())) {
-      alive()
-      const noPath = walking && lastPath?.status === 'noPath' && lastPath.at > walkingSince
-      const verdict = leashVerdict({ distances: mine().map(near), held: held.length, noPath })
-      if (verdict === 'broke' || verdict === 'lost') {
-        bot.pathfinder.setGoal(null)
-        const loose = held.filter(e => e.isValid && leashHolderOf(e) !== bot.entity.id).map(e => e.position.floored())
-        await sweepDrops(8).catch(() => {})
-        return { arrived: false, with: mine().length, why: leadBroke(a.mob, loose), leads: leadsCarried(), pos: pos() }
-      }
-      if (verdict === 'noway') { bot.pathfinder.setGoal(null); return { arrived: false, with: mine().length, toGo: Math.round(bot.entity.position.distanceTo(toVec)), why: `no route on foot from here to ${to.x},${to.y},${to.z} with them on leads. One of: the spot is not free floor to stand on; the gate is in a corner or something stands outside it (pen.check names such gates: blindGates=); a gap, drop or fence somewhere between here and there. Walk the way yourself (goto), fix what blocks it, then lead again`, pos: pos() } }
-      // a lead pulled tight: stand and let the pull bring them in; one held tight for 20 s is stuck behind something, so go and get it
-      if (verdict === 'hold') {
-        if (walking) { bot.pathfinder.setGoal(null); walking = false; heldSince = Date.now() }
-        if (heldSince && Date.now() - heldSince > 20000) { await goNear(mine().sort((x, y) => near(y) - near(x))[0].position.floored(), 2).catch(() => {}); heldSince = Date.now() }
-      }
-      if (verdict === 'go' && !walking) { bot.pathfinder.setGoal(goal); walking = true; walkingSince = Date.now(); heldSince = 0 }
-      await bot.waitForTicks(5)
-    }
-    bot.pathfinder.setGoal(null)
-    // into a pen: on to the cell furthest from the gate, so the pull brings them right in before the leads come off
-    const deepest = floor ? new Vec3(...deepestCell(floor, held.find(e => e.isValid)?.position ?? bot.entity.position)) : null
-    if (deepest) await goNear(deepest, 0).catch(() => {})
-    const until = Date.now() + 8000
-    while (Date.now() < until && mine().some(e => !inPen(e))) { alive(); await bot.waitForTicks(5) }
-    // the leads come off here and drop as items: picked up at once, they may be what the walk borrowed
-    const before = leadsCarried()
-    for (const e of mine()) await unleashOne(e)
-    await sweepDrops(8).catch(() => {})
-    const lying = before + held.length - leadsCarried()
-    const arrivals = held.filter(e => e.isValid && inPen(e))
-    const census = floor ? censusOf(floor) : {}
-    const animals = held.filter(e => e.isValid).map(e => `${a.mob}@${cellOf(e)}`).join(' ')
-    return { arrived: true, with: arrivals.length, brought: ledReport(a.mob, arrivals), byLead: held.length, animals, leads: leadsCarried(), ...(lying > 0 ? { leadsLying: `${lying} lead${lying === 1 ? '' : 's'} dropped and not picked up: collect` } : {}), ...(plan.note ? { note: plan.note } : {}), ...census, pos: pos() }
-  } finally {
-    leading = false
-    following = []
-    // cancelled or given up: a lead still on an animal drags it after me wherever I go next
-    const still = mine()
-    for (const e of still) await unleashOne(e).catch(() => {})
-    if (still.length) await sweepDrops(8).catch(() => {})
-  }
 }
 
 // ---------------------------------------------------------------- actions
