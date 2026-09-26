@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import collectBlock from 'mineflayer-collectblock'
@@ -20,12 +20,11 @@ import { dropGoal } from './drop.mjs'
 import { isGreeting } from './chatter.mjs'
 import { breedPlan } from './villager-breed.mjs'
 import { inventoryCompactPair, compatibleInventoryStacks } from './inventory-compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers, settleVerdict, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashVerdict, leadBroke, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
-import { readConfig } from './config.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
@@ -44,6 +43,8 @@ import { carryReport, failedResult, deathLine, deathCancel } from './composite.m
 import { facesForHalf } from './cover.mjs'
 import { slabMergeRefusal } from './slabmerge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
+import { ROOT, HOME, cfg } from './body/home.mjs'
+import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -54,69 +55,6 @@ for (const [axis, method] of ['computeOffsetX', 'computeOffsetY', 'computeOffset
 const { pathfinder, Movements, goals } = pf
 const { Vec3 } = vec3
 const armorManager = armorManagerMod.default ?? armorManagerMod
-
-const DIR = path.dirname(fileURLToPath(import.meta.url))
-// the bot folder itself: src/ is the code, and library/ state/ textures/ beside it are shared by every body
-const ROOT = path.resolve(DIR, '..')
-fs.mkdirSync(path.join(ROOT, 'state'), { recursive: true })
-// `node src/bot.mjs <home>` runs the body whose config.json, events.jsonl and snapshots/ live in <home> (default: the
-// working directory), while state/zones.json and textures/ stay here, shared by every body. No config.json, no body:
-// a default name here once logged a stray `node src/bot.mjs` in as another agent and kicked that agent's real body.
-const HOME = path.resolve(process.argv[2] ?? process.cwd())
-const cfg = readConfig(HOME)
-
-// ---------------------------------------------------------------- events
-const EVENTS_FILE = path.join(HOME, 'events.jsonl')
-// Boxes the pathfinder must not dig through or scaffold in (it happily tunnels through walls otherwise).
-const ZONES_FILE = path.join(ROOT, 'state', 'zones.json')
-const readZones = () => fs.existsSync(ZONES_FILE) ? JSON.parse(fs.readFileSync(ZONES_FILE, 'utf8')) : []
-const zones = readZones()
-// another bot may protect something while we run
-fs.watchFile(ZONES_FILE, { interval: 2000 }, () => zones.splice(0, zones.length, ...readZones()))
-const saveZones = () => fs.writeFileSync(ZONES_FILE, JSON.stringify(zones, null, 1))
-// Points of interest shared by every agent (./mc mark / places / unmark, and goto place=<name>).
-const PLACES_FILE = path.join(ROOT, 'state', 'places.json')
-const GATES_FILE = path.join(ROOT, 'state', 'gates.log')
-const readPlaces = () => fs.existsSync(PLACES_FILE) ? JSON.parse(fs.readFileSync(PLACES_FILE, 'utf8')) : []
-// every body shares this file: write beside it and rename, so a reader never catches it half written
-const savePlaces = places => {
-  const tmp = `${PLACES_FILE}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(places, null, 1))
-  fs.renameSync(tmp, PLACES_FILE)
-}
-// what `events` shows: starts from the tail of the file, so a restart does not wipe the history
-function readEventTail () {
-  if (!fs.existsSync(EVENTS_FILE)) return []
-  const size = fs.statSync(EVENTS_FILE).size
-  const tail = Buffer.alloc(Math.min(size, 200000))
-  const file = fs.openSync(EVENTS_FILE, 'r')
-  fs.readSync(file, tail, 0, tail.length, size - tail.length)
-  fs.closeSync(file)
-  return parseEventTail(tail.toString('utf8'), 500)
-}
-const recent = readEventTail()
-let seq = 0
-function emit (type, data = {}) {
-  const ev = { seq: ++seq, t: new Date().toISOString(), type, ...data }
-  recent.push(ev)
-  if (recent.length > 500) recent.shift()
-  fs.appendFileSync(EVENTS_FILE, JSON.stringify(ev) + '\n')
-  console.log(`[${type}]`, JSON.stringify(data))
-}
-// Errors go through here rather than straight to emit: a fault that repeats (a timer left running over a reconnect,
-// above all) writes the same line every few seconds until the events file is a wall. See errorRepeat.
-// one window per KIND of message: a single shared slot let two faults taking turns reset each other's window, so
-// neither was ever suppressed (#119)
-let errorSeen = null
-function sayOnce (type, message) {
-  const { say, seen } = repeatByType(errorSeen, type, message, Date.now())
-  errorSeen = seen
-  return say
-}
-function sayError (message, extra = {}, type = 'error') {
-  const say = sayOnce(type, message)
-  if (say) emit(type, { ...extra, message: say })
-}
 
 // ---------------------------------------------------------------- bot lifecycle
 let bot = null
