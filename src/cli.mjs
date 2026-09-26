@@ -73,6 +73,49 @@ const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_dow
 export const wakeWorthy = (event, me) => WAKE_TYPES.has(event.type) ||
   (event.type === 'chat' && event.from !== me) || (event.type === 'hurt' && event.health <= 8)
 
+// Chattiness (card 2e032c4a): how much a chat/whisper line asks ME for an answer, in [0,1], and whether it is loud
+// enough for chattiness to end a wait over. Canonically this belongs with the rest of src/chatter.mjs, but tools/mc.mjs
+// and this file are both restricted (#148, see the top of this file) to importing none of our other files, so it
+// lives here and chatter.mjs re-exports it instead of holding a second copy.
+const GREETINGS = new Set(['morning', 'good morning', 'hi', 'hello', 'hey', 'thanks', 'thank you', 'ok', 'okay', 'gg', 'nice', 'bye', 'night', 'goodnight'])
+const DANGER_WORDS = ['help', 'dying', 'creeper', 'fire', 'lost', 'stuck']
+const QUESTION_STARTS = /^(who|what|where|when|why|how|can|could|anyone)\b/i
+const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const norm = message => String(message ?? '').trim()
+
+export const isGreeting = message => GREETINGS.has(norm(message).toLowerCase().replace(/[!.?]+$/, ''))
+export const isQuestion = message => { const text = norm(message); return /\?\s*$/.test(text) || QUESTION_STARTS.test(text) }
+export const isDanger = message => DANGER_WORDS.some(word => new RegExp(`\\b${word}\\b`, 'i').test(norm(message)))
+export const namesMe = (message, me) => !!me && new RegExp(`\\b${escapeRegExp(me)}\\b`, 'i').test(norm(message))
+
+// A whisper (to === me) always tops out at 1. Otherwise the weight starts at a greeting's quiet 0.1 or the default
+// 0.3, and is only ever raised (never lowered) by danger, a question, my own name, or a human sender - independent
+// signals combined with max, not a priority order, so "Chani: good morning" and "Steve: good morning" differ (only
+// the second is a human) but neither is silenced by being a greeting once something else has raised it.
+export function messageWeight ({ from, message, to, me, humans = [] } = {}) {
+  if (to && me && to === me) return 1
+  let weight = isGreeting(message) ? 0.1 : 0.3
+  if (isDanger(message)) weight = Math.max(weight, 0.7)
+  if (isQuestion(message)) weight = Math.max(weight, 0.6)
+  if (namesMe(message, me)) weight = Math.max(weight, 0.9)
+  if (humans.includes(from)) weight = Math.max(weight, 0.8)
+  return weight
+}
+
+// The allow/deny/threshold decision: deny wins outright (even a whisper - that is what deny is for), a non-empty
+// allow list is the only door in, and otherwise a line is heard when chattiness plus its weight reaches 1 (chattiness
+// 1 hears everything since the lowest weight is 0.1; chattiness 0 hears only a whisper, since nothing else weighs 1).
+export function hears ({ event, chat = {}, me, humans = [] }) {
+  const { chattiness = 1, allow = [], deny = [] } = chat
+  if (deny.includes(event.from)) return false
+  if (allow.length && !allow.includes(event.from)) return false
+  const to = event.type === 'whisper' ? me : event.to
+  return chattiness + messageWeight({ from: event.from, message: event.message, to, me, humans }) >= 1
+}
+
+// Nothing is hidden, only quiet: the skipped lines are still in events.jsonl, and this says how many and how to read them.
+export const skippedLine = (count, chattiness) => `skipped ${count} chat line${count === 1 ? '' : 's'} below your chattiness (${chattiness}): ./mc events type=chat n=${count}`
+
 const eventLine = ({ seq, t, type, ...rest }) => [type, ...Object.entries(rest).map(([k, v]) => v === true ? k : `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)].join(' ')
 
 // text: what was appended to events.jsonl since the last look. consumed: how many bytes of it were whole lines (the rest is read next time)
@@ -82,10 +125,22 @@ const aged = (event, now) => {
   const minutes = Math.floor((now - Date.parse(event.t)) / 60000)
   return minutes >= 1 ? `(${minutes}m ago) ` : ''
 }
-export function waitReport (text, me, now = Date.now()) {
+// chat= is the agent's config.chat ({chattiness, allow, deny}, default = today's behaviour: chattiness 1, no lists);
+// agents= is the roster of agent body names (src/players.mjs agentNames) so a sender not in it counts as a human for
+// messageWeight's human bonus. A chat/whisper event that wakeWorthy would report but hears() would not is left out
+// and counted instead: nothing is hidden, `skippedLine` says how many and how to read them.
+export function waitReport (text, me, now = Date.now(), chat = {}, agents = []) {
   const whole = text.slice(0, text.lastIndexOf('\n') + 1)
   const events = whole.split('\n').filter(Boolean).map(line => JSON.parse(line))
-  return { lines: events.filter(e => wakeWorthy(e, me)).map(e => aged(e, now) + eventLine(e)), consumed: Buffer.byteLength(whole) }
+  const candidates = events.filter(e => wakeWorthy(e, me))
+  // an empty (unprovided) roster means "unknown", not "everyone is human": only flag a sender human when there IS a
+  // roster and it leaves them out, so a caller that skips agents= gets today's behaviour, not a surprise 0.8 floor
+  const chatty = e => (e.type !== 'chat' && e.type !== 'whisper') ||
+    hears({ event: e, chat, me, humans: agents.length && !agents.includes(e.from) ? [e.from] : [] })
+  const heard = candidates.filter(chatty)
+  const skipped = candidates.length - heard.length
+  const lines = heard.map(e => aged(e, now) + eventLine(e))
+  return { lines: skipped ? [...lines, skippedLine(skipped, chat.chattiness ?? 1)] : lines, consumed: Buffer.byteLength(whole) }
 }
 
 // bedtime reflex: a body whose driver is away (monitor expired, waiting, asleep itself) still goes to bed, so one absent driver does not
