@@ -1485,7 +1485,7 @@ function reflexTick () {
   const inTheRoom = chaser && chaser.position.distanceTo(me) <= 2.5
   // an archer that just hit me counts like a chaser: mid-charge rangedThreat is silent, and a patrol shot Jizo from 20 to 0 that way
   if (((chaser || (archer && Date.now() - lastHurt < 5000)) && outmatched) || ranged === 'flee') {
-    if (sheltered && !inTheRoom) { holdAgainst(chaser ?? archer, me); return }
+    if (sheltered && !inTheRoom) { holdAgainst(chaser ?? archer, me, Boolean(chaser)); return }
     if (startFlee(chaser ?? archer, me, undefined, { health: Math.round(bot.health), armed })) return
   }
   if (fighting && (!fighting.isValid || fighting.position.distanceTo(me) > (ARCHERS.has(fighting.name) ? 28 : 12))) {
@@ -1546,13 +1546,14 @@ function swingAt (entity, me) {
   const swing = () => bot.lookAt(entity.position.offset(0, (entity.height ?? 1.8) * 0.8, 0), true).catch(() => {}).then(() => bot.attack(entity))
   if (/_sword$|_axe$/.test(bot.heldItem?.name ?? '')) swing(); else equipBestWeapon().finally(swing)
 }
-async function holdAgainst (entity, me) {
+// door: the mob is a chaser outside the room, not an archer (the note says which; a spider was called a shooter, 09-26)
+async function holdAgainst (entity, me, door = false) {
   if (!entity || Date.now() - heldAt < 10000) return
   heldAt = Date.now()
   bot.pathfinder.setGoal(null)
   const cell = plugCells(me, entity.position).map(({ dx, dy, dz }) => me.floored().offset(dx, dy, dz)).find(p => bot.blockAt(p)?.boundingBox !== 'block')
   const plugged = cell ? await fillCell(cell, capBlock()?.name) : false
-  emit('holding', { mob: entity.name, health: Math.round(bot.health), ...(plugged ? { plugged: `${cell.x},${cell.y},${cell.z}` } : {}), note: holdNote({ mob: entity.name, plugged }) })
+  emit('holding', { mob: entity.name, health: Math.round(bot.health), ...(plugged ? { plugged: `${cell.x},${cell.y},${cell.z}` } : {}), note: holdNote({ mob: entity.name, plugged, door }) })
 }
 
 async function equipBestWeapon () {
