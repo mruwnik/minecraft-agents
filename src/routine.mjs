@@ -1,7 +1,7 @@
 // A routine over several places. A farmstead is several fields 40 blocks apart (a crop field, a melon patch, a cane
 // stand), and `routine name=farmer/homestead place=a,b,c` is the whole day: the role's routine expanded once per
 // place, in the order given. The one-place call is the routine exactly as it was.
-import { routineSteps, placeRefusal } from './lib.mjs'
+import { routineSteps, placeRefusal, compact } from './lib.mjs'
 
 // place=a,b,c as the CLI hands it over (one string), or a list already
 export const placeList = place => (Array.isArray(place) ? place : String(place ?? '').split(','))
@@ -43,4 +43,38 @@ export function placesRefusal (places, names, me) {
     if (refusal) return refusal
   }
   return null
+}
+
+// ---------------------------------------------------------------- autopilot (autopilot card)
+// A routine on autopilot (days=0) runs with no driver reading its results, so every stop writes a routine_stopped
+// event and every day a routine_day one: the driver that is spawned for it reads those, not the log.
+
+// the step as the events name it: the action and the place it worked on
+export const stepLabel = (action, args = {}) => `${action}${args.place ? ` place=${args.place}` : ''}`
+
+// one sentence a driver can act on, for each way the runner ends a routine (handBackReason's words, `cancelled` from
+// ./mc stop or a stall cancel, `days` from the routine itself)
+export function stopAdvice (reason, days) {
+  if (reason === 'days') return `the routine ran its ${days} day${days === 1 ? '' : 's'}: start it again (days=0 runs until stopped) or move on`
+  if (reason === 'cancelled') return 'stopped from outside (./mc stop, or a stall or circling cancel: events type=task_cancelled last=1 says which): fix what it names and start the routine again'
+  if (reason === 'until') return 'its until= minutes are up: start it again when there is time for another'
+  if (/^health /.test(reason)) return 'the body is hurt: eat to food 18 and rest until health is back, then start the routine again'
+  if (/^food /.test(reason)) return 'nothing edible carried: fetch or grow food (WORLD.md says where the shared food is), then start the routine again'
+  if (/^twice in a row/.test(reason)) return 'the same step failed twice: run it by hand and read its FAIL, fix what it names, then start the routine again'
+  if (/^night and no bed/.test(reason)) return 'put a bed within 32 blocks of the places (or carry one), or quit for the night (./mc quit, then ./mc dawn), then start the routine again'
+  if (/^spoken to/.test(reason)) return 'answer them in chat, then start the routine again'
+  if (/^inventory full/.test(reason)) return 'deposit into a chest near the places (deposit=true in the farm steps does it), then start the routine again'
+  return 'read the error, fix what it names, then start the routine again'
+}
+
+export const stopEvent = ({ reason, step = null, place = null, days }) => ({ reason, step, place, advice: stopAdvice(reason, days) })
+
+// what each step reported, per place ("here" for a step with no place), short enough for one event line
+const outcomeText = outcome => outcome.failed ? `FAILED ${outcome.failed}` : `ok ${compact(outcome, false)}`.trim().slice(0, 120)
+export function dayEvent (day, outcomes) {
+  const places = {}
+  for (const { action, place, outcome } of outcomes) {
+    places[place ?? 'here'] = { ...places[place ?? 'here'], [action]: outcomeText(outcome) }
+  }
+  return { day, places }
 }

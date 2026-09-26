@@ -5,6 +5,8 @@ export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = []
   const calls = []
   const report = {}
   const checkpoints = []
+  const events = []
+  const progress = {}
   const api = {
     act: async (name, args = {}) => {
       calls.push(`${name} ${compact(args, false)}`.trim())
@@ -44,7 +46,10 @@ export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = []
     pen: () => null,
     pause: async () => {},
     note: line => calls.push(`note ${line}`),
-    report: partial => Object.assign(report, partial)
+    report: partial => Object.assign(report, partial),
+    // an event of the composite's own (routine_day, routine_stopped), and what it tells the stuck watch about itself
+    emit: (type, data = {}) => events.push({ type, ...data }),
+    progress: data => Object.assign(progress, data)
   }
-  return { api, calls, report, checkpoints }
+  return { api, calls, report, checkpoints, events, progress }
 }
