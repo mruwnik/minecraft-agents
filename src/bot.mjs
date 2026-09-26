@@ -37,7 +37,7 @@ import { spareTest } from './fieldleg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
-import { facesForHalf } from './cover.mjs'
+import { placeFaces } from './cover.mjs'
 import { slabMergeRefusal } from './slabmerge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
@@ -2015,7 +2015,8 @@ export const long = {
       const before = bot.blockAt(p)?.name
       // the neighbour to click decides a slab's half before the cursor does: the top of the block below always gives a
       // bottom slab, so a top slab (a channel cover) is placed against a side or the block above (see cover.mjs)
-      const faces = facesForHalf(b.half).map(f => new Vec3(...f))
+      // against= is the one neighbour to click: a ladder or a wall torch takes its facing from the face it goes on
+      const faces = placeFaces(b).map(f => new Vec3(...f))
       const against = placeAgainst(faces.map(f => bot.blockAt(p.plus(f))))
       if (!against) throw new Skip('nothing to place against')
       const face = faces[against.index]
