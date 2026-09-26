@@ -1,6 +1,7 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
+import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { workFrom } from './stand.mjs'
 
 const WATER_RANGE = 32
@@ -58,9 +59,14 @@ export async function buildFromPlan (api, a) {
   // a cell that was SKIPPED for want of what it needs is still something the field is short of: a dry channel the body
   // carries no water for never becomes a job, so nothing would otherwise say why the plan is not finished
   const shortOfSkipped = () => drowned().reduce((m, j) => !j.item || j.have ? m : { ...m, [j.item]: j.item === 'water_bucket' ? 1 : (m[j.item] ?? 0) + 1 }, { ...missing })
+  // channels capped the old way, with a bottom slab, still hold their water and are left alone: no churn on a working
+  // field. But they walk worse than a top slab would, so they are named, once per report, with how to raise them -
+  // farm.build ran this same job list all along but never said so, unlike farm.maintain (jizo-melon-patch, 09-26)
+  const low = () => lowSlabs(plan.cells, api.block)
   const summary = () => {
     const short = shortOfSkipped()
-    return { ...counts, ...(Object.keys(short).length ? { missing: shortLine(short) } : {}), ...(drowned().length ? { skipped: skipLine() } : {}) }
+    const slabs = low()
+    return { ...counts, ...(Object.keys(short).length ? { missing: shortLine(short) } : {}), ...(drowned().length ? { skipped: skipLine() } : {}), ...(slabs.length ? { lowSlabs: lowSlabLine(slabs.length) } : {}) }
   }
 
   const tryJob = async job => {
@@ -128,7 +134,7 @@ export async function buildFromPlan (api, a) {
   if (Object.keys(short).length && a.partial !== true) {
     throw new Error(`${a.place} still needs ${shortLine(short)} more than I carry: fetch them, or partial=true to build what I can now`)
   }
-  if (!todo.length) return drowned().length ? summary() : { already: 'everything the plan asks for is already there' }
+  if (!todo.length) return (drowned().length || low().length) ? summary() : { already: 'everything the plan asks for is already there' }
   // the ground first: nothing can be tilled, planted or stood on until the cell has a floor and open air. The plan's own
   // jobs are read again afterwards, because a cell buried under stone has no job to show until the stone is gone
   for (const job of ground()) { await tryJob(job); await api.checkpoint() }

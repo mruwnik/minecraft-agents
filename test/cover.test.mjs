@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { farmJobs, jobCall, planCells, parsePlan, planBill } from '../src/lib.mjs'
-import { lowSlabs, lowSlabLine, facesForHalf, FLOW_REASON } from '../src/cover.mjs'
+import { lowSlabs, lowSlabLine, facesForHalf, FLOW_REASON, channelCovered } from '../src/cover.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
@@ -88,6 +88,21 @@ test('lowSlabLine: the count, and how to raise them', () => {
   assert.equal(lowSlabLine(3), '3 (bottom slabs: top slabs walk better; dig and cover again to raise)')
 })
 
+// ---------------------------------------------------------------- the farmJobs gate: a covered cell is finished
+// jizo-melon-patch, 09-26: a cover job aimed at a channel cell that still held an old bottom slab from before the
+// top-slab cards merged the two into a double slab (a full block, no water under it), sealing the channel. farmJobs
+// must never even try: named here so the rule farmJobs relies on reads as what it is, not a boolean buried in the
+// water branch (see src/lib.mjs farmJobs, and src/slabmerge.mjs for the belt-and-braces check inside `place` itself).
+for (const [name, block, expected] of [
+  ['a waterlogged bottom slab is a finished channel', { name: 'oak_slab', properties: { type: 'bottom', waterlogged: 'true' } }, true],
+  ['a waterlogged top slab is a finished channel too', { name: 'oak_slab', properties: { type: 'top', waterlogged: 'true' } }, true],
+  ['open water is not covered: nothing there yet but the source itself', { name: 'water', properties: { level: 0 } }, false],
+  ['a dry bottom slab is not covered: it is a broken channel, repaired by digging and repouring', { name: 'oak_slab', properties: { type: 'bottom' } }, false],
+  ['no block at all', null, false]
+]) {
+  test(`channelCovered: ${name}`, () => assert.equal(channelCovered(block), expected))
+}
+
 // ---------------------------------------------------------------- the composites
 test('maintain_farm: old bottom-slab channels are left alone and counted once as lowSlabs', async () => {
   const world = { '0,63,0': 'oak_slab~', '1,63,0': 'oak_slab~#top', '0,62,0': 'stone', '1,62,0': 'stone' }
@@ -131,4 +146,22 @@ test('farm.build: a flowing cell with a bucket is poured into first, and the cov
   assert.deepEqual(calls.filter(c => c.startsWith('pour') || c.startsWith('place')), ['pour 0,62,0', 'place item=oak_slab x=0 y=63 z=0 half=top'])
   assert.equal(summary.poured, 1)
   assert.equal(summary.covered, 1)
+})
+
+// farm.maintain already said so (see the maintain_farm test above); farm.build ran the same jobs but never told the
+// driver a cell was left alone on purpose, so a build over jizo-melon-patch's three old covers looked no different
+// from one over three cells it had simply not gotten to yet. Both composites read the same channel, so both report it.
+test('farm.build: old bottom-slab channels are left alone and counted once as lowSlabs, same as maintain', async () => {
+  const world = { '0,63,0': 'oak_slab~', '1,63,0': 'oak_slab~#top', '0,62,0': 'stone', '1,62,0': 'stone' }
+  const { api, calls } = fakeApi({ place: fakePlace('~~'), world, items: { oak_slab: 4, water_bucket: 1 } })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.deepEqual(calls.filter(c => c.startsWith('place') || c.startsWith('dig')), [], 'nothing is dug or placed: no churn')
+  assert.equal(summary.lowSlabs, '1 (bottom slabs: top slabs walk better; dig and cover again to raise)')
+})
+
+test('farm.build: a field with no bottom slabs says nothing about them', async () => {
+  const world = { '0,63,0': 'oak_slab~#top', '0,62,0': 'stone' }
+  const { api } = fakeApi({ place: fakePlace('~'), world, items: { oak_slab: 4 } })
+  const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.equal(summary.lowSlabs, undefined)
 })

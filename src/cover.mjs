@@ -27,3 +27,10 @@ const isLowSlab = block => Boolean(block) && /_slab$/.test(block.name) && holdsW
 export const lowSlabs = (cells, worldAt) =>
   cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'water' && isLowSlab(worldAt(c.x, c.y, c.z)))
 export const lowSlabLine = n => `${n} (bottom slabs: top slabs walk better; dig and cover again to raise)`
+
+// A cell already covered - a waterlogged slab, top half or bottom - is a finished channel: farmJobs must never touch
+// it again. A cover job aimed at one anyway is exactly how a channel cell still holding an old bottom slab (from
+// before the top-slab cards) merged into a double slab and sealed for good (jizo-melon-patch, 09-26). Named here so
+// farmJobs needs only call it, not carry the boolean itself; a DRY slab is not covered by this - it is a broken
+// channel, dug and repoured (see farmJobs's own tests in test/lib.test.mjs for that path).
+export const channelCovered = block => Boolean(block) && holdsWater(block) && block.name !== 'water'
