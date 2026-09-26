@@ -281,27 +281,73 @@ test('farm.tidy: a place with no plan of its own is refused by name', async () =
   await assert.rejects(farmTidy.run(api, { place: 'nowhere' }), /no plan called nowhere/)
 })
 
-// ---------------------------------------------------------------- farm.maintain says a sweep is worth it
-const maintainApi = world => {
+// ---------------------------------------------------------------- farm.maintain clears the rubble in its own sweep
+// It used to count the clutter and leave it to farm.tidy: a log left standing in the melon rows was the block a sweep
+// parked Jizo on, one above the field with no way down (09-26 23:24Z), and the human watching said maintain fills the
+// holes but never takes the extra blocks away. The strays are farm.tidy's own (clearJobs), dug before the harvest,
+// the drops picked up and kept; lights, chests and blocks in somebody else's zone are named and left
+const maintainApi = ({ world = littered(), zones = [], digs = () => null } = {}) => {
   const made = fakeApi({
     place: PLACE,
     items: { wheat_seeds: 64, carrot: 64, oak_slab: 8, water_bucket: 1 },
-    answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, 'farm.compost': { fed: 0 } }
+    answers: {
+      'farm.harvest': { harvested: {}, replanted: 0 },
+      'farm.compost': { fed: 0 },
+      zones: { zones },
+      collect: { picked: 3 },
+      dig: ({ x, y, z }) => {
+        const refused = digs({ x, y, z })
+        if (refused) throw new Error(refused)
+        world[`${x},${y},${z}`] = block('air')
+        return { dug: 'ok' }
+      }
+    }
   })
   made.api.block = blockAt(world)
   return made
 }
+const digsIn = calls => calls.filter(c => c.startsWith('dig '))
 
-test('farm.maintain: a sweep over a littered field names the clutter and the tool for it', async () => {
-  const { api } = maintainApi(littered())
+test('farm.maintain: the strays over the field are dug top down, counted in cleared= and their drops picked up', async () => {
+  const { api, calls } = maintainApi()
   const out = await farmMaintain.run(api, { place: 'test-field' })
-  assert.match(out.clutter, /^3\(cobblestone,dirt,oak_log\).*farm\.tidy place=test-field$/)
+  assert.deepEqual([out.cleared, out.clutter, digsIn(calls), calls.filter(c => c.startsWith('collect'))],
+    ['3(cobblestone,dirt,oak_log)', undefined, ['dig 100,72,200', 'dig 101,72,200', 'dig 100,71,201'], ['collect range=8']])
 })
 
-test('farm.maintain: a clean field says nothing about clutter', async () => {
-  const { api } = maintainApi(built())
+test('farm.maintain: the rubble comes off before the harvest, the till and the plant', async () => {
+  const { api, calls } = maintainApi()
+  await farmMaintain.run(api, { place: 'test-field' })
+  const lastDig = calls.lastIndexOf(digsIn(calls).at(-1))
+  const firstWork = calls.findIndex(c => /^(farm\.harvest|till|place) /.test(c))
+  assert.deepEqual([lastDig >= 0, lastDig < firstWork], [true, true])
+})
+
+test('farm.maintain: a clean field digs nothing, asks for no zones and says nothing of clutter', async () => {
+  const { api, calls } = maintainApi({ world: built() })
   const out = await farmMaintain.run(api, { place: 'test-field' })
-  assert.equal(out.clutter, undefined)
+  assert.deepEqual([out.cleared, out.clutter, digsIn(calls), calls.filter(c => c === 'zones')], [undefined, undefined, [], []])
+})
+
+test('farm.maintain: the plan\'s own fences, gate, torch and chest are never dug, a stray light and a chest are named', async () => {
+  const { api, calls } = maintainApi({ world: { ...littered(), '102,72,202': block('chest') } })
+  const out = await farmMaintain.run(api, { place: 'test-field' })
+  const planOwn = ['102,71,201', '102,72,201', '100,71,202', '101,71,202', '102,71,202']
+  assert.deepEqual([digsIn(calls).filter(c => planOwn.some(at => c === `dig ${at}`)), out.leftAlone], [[], 'torch@102,72,200 chest@102,72,202'])
+})
+
+test('farm.maintain: strays inside somebody else\'s zone are named, not dug, and the rest cleared', async () => {
+  const zones = [{ name: 'chani-farm', x1: 100, y1: 60, z1: 199, x2: 100, y2: 80, z2: 203 }]
+  const { api, calls } = maintainApi({ zones })
+  const out = await farmMaintain.run(api, { place: 'test-field' })
+  assert.deepEqual([out.cleared, out.inZone, digsIn(calls)], ['1(cobblestone)', 'chani-farm:2', ['dig 101,72,200']])
+})
+
+test('farm.maintain: a stray it cannot dig is the stuck= line, what still stands is clutter=, and the sweep goes on', async () => {
+  const { api, calls } = maintainApi({ digs: ({ x, y }) => x === 101 && y === 72 ? 'too far to reach' : null })
+  const out = await farmMaintain.run(api, { place: 'test-field' })
+  assert.deepEqual([out.cleared, out.clutter, out.stuck, calls.some(c => c.startsWith('farm.harvest'))],
+    ['1(oak_log)', '2(cobblestone,dirt) still standing over the plan', 'clear cobblestone at 101,72,200: too far to reach', true])
 })
 
 // farm.maintain composts its own spare seed since 6198e2c, so the homestead's day is farm.tidy then farm.maintain:

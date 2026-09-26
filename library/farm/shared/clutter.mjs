@@ -12,7 +12,7 @@
 // And two that are somebody's block, so they are reported (`keep`) and left standing: a light, because digging the
 // torch out of a field is how it starts spawning mobs at night, and a container or workstation, because breaking a
 // chest scatters whatever was inside it over the ground.
-import { PLAN_LEGEND, cropNames, STALKS, isAir, isGroundCover, inAnyZone } from '../../../src/lib.mjs'
+import { PLAN_LEGEND, cropNames, STALKS, isAir, isGroundCover, inAnyZone, harvestOrder } from '../../../src/lib.mjs'
 
 const LEVELS = [1, 2]
 // every crop block, not just the ones with a ripeness: a stem, its fruit and the stalks that stand over their own cell
@@ -84,3 +84,40 @@ export const clutterLine = blocks => blocks.length ? `${blocks.length}(${clutter
 // body picks a bed by: a zone that is not mine is one I do not dig in, whatever is lying in it.
 export const foreignZone = (zones, me, pos) => (zones ?? []).find(z =>
   inAnyZone([z], pos) && !new RegExp(`^(${String(me ?? '').toLowerCase()}|starter)-`).test(String(z.name).toLowerCase()))
+
+// top down, then row by row across the field, so the body sweeps it once instead of criss-crossing it and a stack of
+// rubble comes off from the top (gravel and sand under a dug block would otherwise fall into the cell below)
+const sweepOrder = blocks => harvestOrder([...blocks].sort((a, b) => b.y - a.y))
+
+// the clearing jobs over these cells, farm.tidy's and farm.maintain's alike: `todo` the strays to dig in sweep order,
+// `guarded` those inside a zone that is not `me`'s (with the zone's name), `aside` the lights and somebody's blocks
+export const clearJobs = (cells, worldAt, zones, me) => {
+  const found = strays(cells, worldAt)
+  const loose = found.filter(b => !b.keep).map(b => ({ block: b, zone: foreignZone(zones, me, b) }))
+  return {
+    todo: sweepOrder(loose.filter(l => !l.zone).map(l => l.block)),
+    guarded: loose.filter(l => l.zone).map(l => ({ ...l.block, zone: l.zone.name })),
+    aside: found.filter(b => b.keep)
+  }
+}
+
+// how the left-standing are said: `inZone=chani-farm:2`, `leftAlone=torch@102,72,200 chest@102,72,202`
+export const zoneLine = guarded => [...new Set(guarded.map(b => b.zone))].map(z => `${z}:${guarded.filter(b => b.zone === z).length}`).join(' ') || undefined
+export const asideLine = aside => aside.map(b => `${b.name}@${b.x},${b.y},${b.z}`).join(' ') || undefined
+
+// walk to each job (`walk(cell)`), dig it, and believe the world, not the click: a dig the server quietly dropped leaves
+// the block standing and is not counted. The first job that cannot be walked to or dug stops the round, and is said.
+// `pause` is the caller's checkpoint between blocks
+export async function clearStrays (api, todo, walk, pause = () => api.checkpoint()) {
+  const cleared = []
+  for (const block of todo) {
+    const where = { x: block.x, y: block.y, z: block.z }
+    const failed = await walk(where).then(() => null, e => e.message) ??
+      await api.act('dig', where).then(() => null, e => e.message)
+    if (failed) return { cleared, stopped: `${block.name} at ${block.x},${block.y},${block.z}: ${failed}` }
+    if (api.block(block.x, block.y, block.z)?.name !== block.name) cleared.push(block)
+    api.report({ cleared: cleared.length })
+    await pause()
+  }
+  return { cleared }
+}

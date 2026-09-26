@@ -10,7 +10,7 @@ import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
 import { depositTarget } from '../../src/lib/storage.mjs'
 import { fillShortfall, holeJobs } from '../../src/lib/fill.mjs'
 import { loadedAround } from '../../src/walk.mjs'
-import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
+import { clutterBlocks, clutterLine, clearJobs, clearStrays, strays, zoneLine, asideLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
 // the plans whose seed stays in my pockets (src/lib/farm.mjs seedReserve): this one, and every other reserve_for=
@@ -34,7 +34,7 @@ const fetchFloor = async (api, short, chest) => {
 }
 
 export default {
-  doc: 'farm.maintain place= [days=] [within=] [deposit=] [compost=] [reserve_for=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. deposit= is where the harvest goes: the plan\'s C chests (the default), a chest cell x,y,z, or a marked storage place; a full chest spills into the next and what nothing takes is storage_full=. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
+  doc: 'farm.maintain place= [days=] [within=] [deposit=] [compost=] [reserve_for=]: clear the stray blocks over the plan, harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. deposit= is where the harvest goes: the plan\'s C chests (the default), a chest cell x,y,z, or a marked storage place; a full chest spills into the next and what nothing takes is storage_full=. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
   stops: 'days= done, a step that failed twice, or nothing left it can do',
   args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'any', compost: 'any', reserve_for: 'string' },
 
@@ -113,9 +113,24 @@ export default {
       // one block low would have me till the dirt UNDER somebody's farm and plant seed inside their farmland
       const anchor = planAnchor(plan.cells, api.block)
       if (anchor.off) throw new Error(`${plan.name} is not where its plan says: ${anchor.note}`)
-      // rubble over the beds is nobody's job here (maintain only puts back what the plan asks for), but the driver should be told
-      const rubble = clutterBlocks(plan.cells, api.block)
-      if (rubble.length) summary.clutter = `${clutterLine(rubble)} standing over the plan: ./mc farm.tidy place=${a.place}`
+      // the rubble over the plan comes off first, farm.tidy's jobs dug from this sweep's legs: it used to be counted and
+      // left, and a log standing in the melon rows was where a sweep parked Jizo, one above the field (09-26 23:24Z). A
+      // light, somebody's chest and a block in a zone that is not mine are named and left; the drops stay in the pockets
+      // (farmSurplus stores farm goods only). The zones are asked for only when there is something to dig
+      if (strays(plan.cells, api.block).length) {
+        const zones = (await api.act('zones').catch(() => ({}))).zones ?? []
+        const { todo, guarded, aside } = clearJobs(plan.cells, api.block, zones, api.me?.())
+        const { cleared, stopped } = await clearStrays(api, todo, to => leg({ ...to, range: 3 }), () => api.checkpoint({ canDeposit }))
+        if (cleared.length) {
+          summary.cleared = clutterLine(cleared)
+          await api.act('collect', { range: 8 }).catch(e => api.note(`the cleared blocks' drops were not picked up: ${e.message}`))
+        }
+        if (stopped) summary.stuck = summary.stuck ?? `clear ${stopped}`
+        const standing = clutterBlocks(plan.cells, api.block).filter(b => !guarded.some(g => g.x === b.x && g.y === b.y && g.z === b.z))
+        if (standing.length) summary.clutter = `${clutterLine(standing)} still standing over the plan`
+        if (guarded.length) summary.inZone = zoneLine(guarded)
+        if (aside.length) summary.leftAlone = asideLine(aside)
+      }
       await api.checkpoint({ canDeposit })
       const cut = await api.act('farm.harvest', { within }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
       add(summary.harvested, cut.harvested)
