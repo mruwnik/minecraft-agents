@@ -3,6 +3,8 @@
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from './lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { workFrom } from './stand.mjs'
+import { fieldLeg, footprintOf, spareCells } from './fieldleg.mjs'
+import { drainJobs, reopenJobs, shoreOrder, wetFooting } from './wetplan.mjs'
 
 const WATER_RANGE = 32
 const WATER_CANDIDATES = 32
@@ -39,6 +41,8 @@ export async function waterShortfall (api, range = WATER_RANGE) {
 export const fetchWaterBucket = async (api, range = WATER_RANGE) => (await waterShortfall(api, range)) === null
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
+// a dam (src/wetplan.mjs) is a fill into standing water, counted apart: it is dug out again before the plan's own jobs
+const countOf = job => job.dam ? 'dammed' : COUNT_OF[job.do]
 
 // The pen the plan's cells lie in, if one stands there with animals in it: pen.check from over the plan's own floor
 // cells and from one level down (see penProbes). A cell that is no spot to stand on is no pen, and pen.check says so
@@ -59,9 +63,24 @@ export async function buildFromPlan (api, a) {
   const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
   const counts = {}
   const missing = {}
-  const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid })
+  // a walk to a standing cell that finds no path is walked once more with dig=true inside the plan's own footprint,
+  // sparing every cell the plan lists (src/fieldleg.mjs), as farm.maintain's sweep does. What it dug is reported
+  const box = footprintOf(plan.cells)
+  const spare = spareCells(plan.cells)
+  const dug = []
+  const leg = to => fieldLeg(api, to, box, spare).then(r => { if (r?.dug) dug.push(r.dug); return r })
+  // water standing in a plan cell is dammed with dirt and the dam dug out again once nothing can flow back into it. A
+  // dam that has to stay (water from outside the plan against it) is named on kept=, and its column is left as it is:
+  // the plan's own jobs there would dig the dam and flood the cell again (src/wetplan.mjs)
+  const dams = []
+  const kept = []
+  const keptColumns = new Set()
+  const notKept = job => !keptColumns.has(`${job.x},${job.z}`)
+  // a job with no dry cell in reach to work from is left for the driver, named with the water in the way
+  const blocked = []
+  const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
   // a cell the plan's own water stands over is never dug (dig refuses it, rightly): it is reported as skipped= instead
-  const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip')
+  const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip').filter(notKept)
   const drowned = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do === 'skip')
   const left = () => [...ground(), ...field()].filter(j => !j.item || (api.inv()[j.item] ?? 0) > 0)
   const skipLine = () => drowned().map(j => `${j.x},${j.y},${j.z} (${j.why})`).join('; ')
@@ -75,7 +94,15 @@ export async function buildFromPlan (api, a) {
   const summary = () => {
     const short = shortOfSkipped()
     const slabs = low()
-    return { ...counts, ...(Object.keys(short).length ? { missing: shortLine(short) } : {}), ...(drowned().length ? { skipped: skipLine() } : {}), ...(slabs.length ? { lowSlabs: lowSlabLine(slabs.length) } : {}) }
+    return {
+      ...counts,
+      ...(Object.keys(short).length ? { missing: shortLine(short) } : {}),
+      ...(drowned().length ? { skipped: skipLine() } : {}),
+      ...(slabs.length ? { lowSlabs: lowSlabLine(slabs.length) } : {}),
+      ...(kept.length ? { kept: kept.join('; ') } : {}),
+      ...(blocked.length ? { blocked: blocked.join('; ') } : {}),
+      ...(dug.length ? { dug: dug.join('; ') } : {})
+    }
   }
 
   const tryJob = async job => {
@@ -99,9 +126,17 @@ export async function buildFromPlan (api, a) {
     }
     // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
     // next slab or a crop instead, twice on jizo-melon-patch (09-26)
-    const failed = await workFrom(api, job).then(() => null, e => e.message)
-    if (failed) { counts.stuck = counts.stuck ?? failed; return }
-    counts[COUNT_OF[job.do]] = (counts[COUNT_OF[job.do]] ?? 0) + 1
+    const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, e => e.message)
+    if (failed) { counts.stuck = counts.stuck ?? failed; return false }
+    counts[countOf(job)] = (counts[countOf(job)] ?? 0) + 1
+    return true
+  }
+  // a levelling job (a fill, a dam) is worked only from dry footing that sees it: the shore order puts such jobs
+  // first and makes the ones behind them workable, and a job still without footing when its turn comes is named
+  const tryLevelling = async job => {
+    const wet = wetFooting(job, api.block)
+    if (wet) { blocked.push(wet); return }
+    if (await tryJob(job) && job.dam) dams.push(job)
   }
 
   // The ground has to be in sight before any of this can be judged, so the walk comes before the preflight. But the
@@ -128,7 +163,7 @@ export async function buildFromPlan (api, a) {
   // reaches a job list that never named the cell. So this is tried once up front, before that list is built, not
   // down in tryJob - the one there is only a fallback for a bucket a pour used up earlier in the same run
   await fetchWaterBucket(api)
-  const todo = [...ground(), ...field()]
+  const todo = [...ground(), ...drainJobs(plan.cells, api.block), ...field()]
   // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while
   // nothing has been touched and say how to get out of it (Chani's 4 sheep). A build that only places is safe
   if (openingJobs(todo).length) {
@@ -146,6 +181,14 @@ export async function buildFromPlan (api, a) {
   if (!todo.length) return (drowned().length || low().length) ? summary() : { already: 'everything the plan asks for is already there' }
   // the ground first: nothing can be tilled, planted or stood on until the cell has a floor and open air. The plan's own
   // jobs are read again afterwards, because a cell buried under stone has no job to show until the stone is gone
+  // ...and the ground in the order it can be stood on: from the shore in, when the plan lies in water (src/wetplan.mjs).
+  // A plan whose levelling could not even start for water in the way is refused, naming the water
+  for (const job of shoreOrder([...ground(), ...drainJobs(plan.cells, api.block)], api.block)) { await tryLevelling(job); await api.checkpoint() }
+  if (blocked.length && !counts.levelled && !counts.dammed) throw new Error(`${plan.name}: ${blocked[0]}`)
+  const reopen = reopenJobs(dams, api.block)
+  kept.push(...reopen.kept)
+  reopen.kept.forEach(line => keptColumns.add(line.replace(/^(-?\d+),-?\d+,(-?\d+).*/, '$1,$2')))
+  for (const job of reopen.open) { await tryJob(job); await api.checkpoint() }
   for (const job of ground()) { await tryJob(job); await api.checkpoint() }
   for (const job of field()) { await tryJob(job); await api.checkpoint() }
   const unfinished = left()
