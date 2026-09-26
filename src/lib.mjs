@@ -8,6 +8,7 @@ export * from './lib/world.mjs'
 export * from './lib/agents.mjs'
 export * from './lib/code.mjs'
 export * from './lib/events.mjs'
+export * from './lib/chests.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -155,18 +156,6 @@ export const describePlace = (places, name, from) => {
   }
 }
 
-// items smelted per unit of fuel, best first
-const FUELS = [[/^(coal|charcoal)$/, 8], [/_(planks|log|wood)$/, 1.5], [/^stick$/, 0.5]]
-
-// Which fuel to put in a furnace to smelt `count` items, from inventory `items` [{name,count}]: {name,count} or null
-export function pickFuel (items, count) {
-  for (const [re, perUnit] of FUELS) {
-    const item = items.find(i => re.test(i.name))
-    if (item) return { name: item.name, count: Math.min(item.count, Math.ceil(count / perUnit)) }
-  }
-  return null
-}
-
 // The server silently puts the body back every tick when its hitbox touches a block just so (see the hitbox
 // note in README). One window of {resets, moved blocks}: many resets and no progress means it is wedged.
 export const isWedged = ({ resets, moved }) => resets >= 30 && moved < 0.5
@@ -276,9 +265,6 @@ export function placeAgainst (neighbours) {
 // a healthy body sits near 200 MB and start-body caps the heap at 1536 MB; a runaway path search gets there within half a minute
 export const overMemory = heapMb => heapMb >= 800
 
-// items= comes as [{name, count}] or, shorter, as {name: count}
-const itemList = wanted => Array.isArray(wanted) ? wanted : Object.entries(wanted).map(([name, count]) => ({ name, count }))
-
 // `picked` used to count the drops the body WALKED TO, and walking to a drop is not picking it up: at a carrot no cell
 // could stand beside, collect answered picked=1 twice over while the carrot lay in the dirt the whole time, and
 // farm.harvest counted the same carrot as harvested because it had dug it (backlog #142). A drop is picked when it is
@@ -304,19 +290,6 @@ export const leftLying = (freeSlots, left, inDeepWater = []) => ({
   ...(freeSlots > 0 || !left.length ? {} : { inventoryFull: `left lying: ${[...new Set(left)].join(' ')}. Deposit or toss something first` }),
   ...(inDeepWater.length ? { inWater: `left in deep water: ${[...new Set(inDeepWater)].join(' ')}. Fetch it from a boat or the shore, or collect wet=true and watch your air` } : {})
 })
-
-// the chests' items= or, as every other action says it, item= (count=)
-export const itemsArg = a => a.items ?? (a.item ? [{ name: a.item, count: a.count }] : undefined)
-
-export function withdrawPlan (wanted, inChest) {
-  if (!wanted) throw new Error(`withdraw needs items='{"coal":4}' or item=coal count=4`)
-  // count 'all': whatever is there, and none of it is no shortfall
-  const rows = itemList(wanted).map(w => ({ name: w.name, want: w.count === 'all' ? inChest[w.name] ?? 0 : w.count ?? inChest[w.name] ?? 1, have: inChest[w.name] ?? 0 }))
-  return {
-    take: rows.filter(r => r.have > 0).map(r => ({ name: r.name, count: Math.min(r.want, r.have) })),
-    short: rows.filter(r => r.have < r.want).map(r => `${r.name}:${r.have}/${r.want}`)
-  }
-}
 
 // night is when beds work; state, the shared clock, night_fell and the reflexes must all agree on it
 export const isNight = tick => tick > 12542 && tick < 23460
@@ -645,13 +618,6 @@ export const fleeUnwinnable = (mobs, range = ENDERMAN_RANGE) =>
 const isWeapon = name => /_sword$|^trident$|^mace$/.test(name ?? '')
 export const peacefulTool = tools => tools.filter(t => !isWeapon(t.name) && t.harvests).sort((a, b) => a.time - b.time)[0]
 
-// what a deposit puts in: the named items, or everything only when asked for outright
-export function depositWanted (a, carried) {
-  if (itemsArg(a)) return itemsArg(a)
-  if (a.all) return carried
-  return { error: `deposit needs items='{"dirt":4}' (or all=true for everything you carry, tools included)` }
-}
-
 // wraps an action's arguments and remembers which were read, so a reply can name the ones that were not (a misspelt name, mostly)
 export function trackReads (given) {
   const read = new Set()
@@ -662,14 +628,6 @@ export function trackReads (given) {
 export function ignoredParams (unread, ok, source) {
   const ignored = unread.filter(key => ok || !new RegExp(`\\b${key}\\b`).test(source))
   return ignored.length ? `${ignored.join(' ')} (not a parameter here, or not used this time: check the name in the guide)` : null
-}
-
-// what furnace_take says about what is left inside: a furnace with input and no fire never finishes, and used to look just like one that cooks
-export function furnaceReport ({ input, fuel, burning }) {
-  const stillCooking = input?.count ?? 0
-  if (!stillCooking || burning) return { stillCooking }
-  if (!fuel) return { stillCooking, stuck: `${input.name} is waiting but the fire is out and the fuel slot is empty: smelt fuel=coal count=${stillCooking} x= y= z= adds fuel only (no item= needed; charcoal, planks or logs work too)` }
-  return { stillCooking, stuck: `${input.name} is waiting and ${fuel.name} is in the fuel slot, but nothing burns: that input cannot be smelted here, or the output slot holds something else. chest_contents shows the slots` }
 }
 
 // running out of air. 'start' takes the body away from its task (a task that keeps steering drowned Jizo), 'hold' keeps swimming up.
@@ -878,9 +836,6 @@ export const withDefaultItem = (blocks, item) => blocks.map(b => b.item || item 
 // eating: a meal is running. The food in my hand is going into my mouth: taking it out cancelled every meal by a gate (Chani, food 7, 1743 [food away] lines)
 export const foodAway = ({ held, luring, feeding, gateNear, eating = false }) => gateNear && !luring && !feeding && !eating && Object.values(BREEDING_FOOD).some(foods => foods.includes(held))
 
-// a smelt that waits by the furnace: 'night' = stop watching it, everybody else is waiting for me to go to bed
-export const smeltWait = ({ got, wanted, night, timedOut }) => got >= wanted || timedOut ? 'done' : night ? 'night' : 'wait'
-
 // lying: where what I tossed still lies 5 s later ('x,y,z'); a thrown item can be picked up after 2 s
 export const giveReport = (player, lying, cameBack = 0) => cameBack > 0
   ? { cameBack: `${cameBack} came back to you: NOT given. Something stands between you (a fence, a wall, a gate): go and stand on the same side as ${player}, within 2 blocks, and give again` }
@@ -932,32 +887,6 @@ export const wakeStep = ({ oversleeping, forMs }) => !oversleeping ? null : forM
 
 // gates (keyed by String(Vec3)) that I walked through and that still stand open, as [x, y, z]: the gate reflex only reaches 5 blocks, so after leading animals in, the gate behind us needs shutting by hand
 export const gatesLeftOpen = (opened, held, isOpen) => [...opened].filter(key => !held.has(key) && isOpen(key)).map(key => key.match(/-?\d+/g).map(Number))
-
-// chest transfers go wrong through ViaBackwards: one is lost, or a whole stack comes along (asked 8 wheat, got 24). Compare what arrived
-// with the plan: `back` is what to return, `more` what to ask for once again
-export function transferFix (plan, before, after) {
-  const rows = plan.map(t => ({ name: t.name, off: (after[t.name] ?? 0) - (before[t.name] ?? 0) - t.count }))
-  return {
-    back: rows.filter(r => r.off > 0).map(r => ({ name: r.name, count: r.off })),
-    more: rows.filter(r => r.off < 0).map(r => ({ name: r.name, count: -r.off }))
-  }
-}
-
-// What a transfer actually did. The CHEST is the world, and what left it (or landed in it) is the verdict - never the
-// inventory delta. A hungry body ate three of the eight loaves as they arrived, so the inventory was short by three
-// through no fault of the transfer, and `withdraw` reported FAIL three rounds running while the chest had already
-// given up all eight (#146). The meal is worth SAYING, so an agent that reads `eaten=bread:3` knows where its food
-// went and does not withdraw again - but only where it explains the gap, and never for more than the meal took.
-export function transferOutcome ({ way, take, chestBefore, chestAfter, invBefore = {}, invAfter = {}, eaten = {} }) {
-  const fix = way === 'withdraw' ? transferFix(take, chestAfter, chestBefore) : transferFix(take, chestBefore, chestAfter)
-  // what the inventory SHOULD have done: up by what was asked on the way in, down by it on the way out
-  const wanted = way === 'withdraw' ? 1 : -1
-  const missed = take
-    .map(t => ({ name: t.name, short: (wanted * t.count) - ((invAfter[t.name] ?? 0) - (invBefore[t.name] ?? 0)) }))
-    .filter(r => r.short > 0 && (eaten[r.name] ?? 0) > 0)
-    .map(r => [r.name, Math.min(r.short, eaten[r.name])])
-  return { ...fix, settled: !fix.back.length && !fix.more.length, eaten: missed.length ? Object.fromEntries(missed) : undefined }
-}
 
 // Can an animal walk out of this pen? Flood-fill the way a cow moves from `start` [x, y, z]: to a neighbouring column whose surface is at
 // most 1 higher (a fence or wall top counts 1.5 above its foot, so it holds from level ground but not from a block beside it) or any
@@ -1855,13 +1784,6 @@ export function bedExit (exits) {
   const [x, y, z] = low.at.split(',').map(Number)
   return `this bed is a trap: you wake up standing ON it (0.56 high) and the only free cell beside it (${low.at}) has a block 2 above its floor, which leaves 1.44: nobody fits and no walk will start. Dig the block at ${x},${y + 2},${z} (or move the bed next to a cell with 3 of headroom). In the morning, if stuck: dig the bed, walk out, place it back`
 }
-
-// mineflayer says "destination full" for a full chest AND for full pockets: say which side
-export const fullSide = (message, way) => !/destination full|inventory is full/i.test(message)
-  ? message
-  : way === 'withdraw'
-    ? 'YOUR INVENTORY is full: what fitted was taken (the + above). deposit or toss something, then withdraw the rest'
-    : 'the CHEST is full: what fitted went in (the - above). Put the rest in another chest, or take out what does not belong here'
 
 // mine started inside a stocked pen: it digs down from where the body stands and the shaft stays (mine in the starter pen, 09-19)
 export const penShaftRefusal = (inside, force) => inside && !force
