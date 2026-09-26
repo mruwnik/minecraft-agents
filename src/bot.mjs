@@ -22,7 +22,7 @@ import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote,
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { readConfig } from './config.mjs'
-import { WORK_RANGE, noStanding, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
+import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
 import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
 import { airSample, freshAir, serverPosNote } from './airlog.mjs'
 import { facesForHalf } from './cover.mjs'
@@ -3023,6 +3023,12 @@ async function walkLegs (to, range, into = false) {
     const rim = rimGoal(cellAt, leg, last ? range : 1, { into, from: feetCell(bot.entity.position, bot.entity.onGround) })
     if (rim) notes.push(rim.note)
     const aim = rim ?? { x: leg.x, y: leg.y, z: leg.z, range: last ? range : 1 }
+    // the judgement path_to and goNear make before the search, which this walk alone did not: a goal with no cell to stand in
+    // within its range (the middle of a planted field: farm.maintain's first walk, card 29167296) is refused in a millisecond
+    // with the reason, not after A* has run its budget out ("ran out of time") or its radius ("no walkable path"). Only over
+    // loaded cells: a far goal is walked towards and judged by the pathfinder as its chunks arrive; a dig walk makes its own room
+    const nowhere = !digging && loadedAround(cellAt, aim, aim.range) ? noStanding(cellAt, aim, aim.range) : null
+    if (nowhere) throw new Error(nowhere)
     await bot.pathfinder.goto(new goals.GoalNear(aim.x, aim.y, aim.z, aim.range))
       .catch(e => { throw new Error(last && legs.length === 1 ? e.message : `leg ${i + 1} of ${legs.length}, to ${aim.x},${aim.y},${aim.z}: ${e.message}`) })
   }
