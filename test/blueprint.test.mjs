@@ -310,7 +310,7 @@ test('lint: warnings', () => {
     ['a wall torch', parse({ legend: 't  wall_torch[facing=south]\nS  cobblestone', layers: [[0, 'S\nt']] }), 't: wall_torch needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a torch over a crafting table', parse({ legend: 'i  torch\nT  crafting_table\nS  cobblestone', layers: [[0, 'TS'], [1, 'iS']] }), 'i: torch over a crafting_table is placed against a plainer block beside it and comes out as a wall block: needs place against=, not available yet: build refuses this blueprint until it is'],
     ['a log on its side', parse({ legend: 'L  oak_log[axis=x]', layers: [[0, 'L']] }), 'L: oak_log[axis=x] needs place against=, not available yet: build refuses this blueprint until it is'],
-    ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand']
+    ['a crop with no lane', parse({ legend: 'f  farmland\nw  wheat[age=0]', layers: [[-1, Array(11).fill('f'.repeat(11)).join('\n')], [0, Array(11).fill('w'.repeat(11)).join('\n')]] }), '9 crop cells have nothing to stand on within 4 of them (4,4 5,4 6,4 4,5 and 5 more): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)']
   ]
   for (const [label, bp, want] of rows) {
     const out = lint(resolve(bp))

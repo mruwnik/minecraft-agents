@@ -2,9 +2,9 @@
 // "nothing walkable beside them", and a sweep of that same field had just harvested and replanted the lot. The census
 // counted only the cells a body could stand NEXT TO, but a job stands within WORK_RANGE of its cell: from a lane four
 // across (one up and four over is 4.12) the arm reaches every bed, so a covered channel every eight rows serves a whole
-// field, as walk.mjs says. This census judges reach: a crop is stranded when no walkable cell (path, covered channel,
-// gate, flower, sapling, or the ground round the plan) lies within four blocks of it with nothing taller than a crop
-// between. A fence, a gate seen from outside, a torch post or a chest on the line blocks the arm as it blocks the walk.
+// field, as walk.mjs says. This census judges footing, not the walk: a walk crosses planted cells where it must, but
+// a job never stands in one, so a crop is stranded when no dry cell (path, covered channel, gate, flower, sapling, or
+// the ground round the plan) lies within four blocks of it with nothing taller than a crop between. A fence, a gate seen from outside, a torch post or a chest on the line blocks the arm as it blocks the walk.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { planLane, parsePlan } from '../src/lib.mjs'
@@ -12,7 +12,7 @@ import { planLane, parsePlan } from '../src/lib.mjs'
 const laneOf = (...rows) => planLane(parsePlan(rows.join('\n')).cells)
 const band = (rows, width) => Array.from({ length: rows }, () => 'w'.repeat(width))
 const jizo = ['C' + 'w'.repeat(15), ...band(3, 16), '~'.repeat(16), ...band(8, 16), '~'.repeat(16), ...band(4, 16)]
-const advice = 'lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand'
+const advice = 'lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)'
 
 for (const [name, cells, expected] of [
   ['the melon patch: eight rows between two covered channels are all within reach of one', laneOf(...jizo), {}],

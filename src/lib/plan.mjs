@@ -76,17 +76,18 @@ export function planErrors (parsed) {
   ]
 }
 
-// A walk into a field crosses planted cells only where it must (at ten steps a cell), and a job stands within WORK_RANGE of the
-// cell it works: one up and four across is 4.12, so a lane four blocks from a bed serves it and a covered channel every
-// eight rows serves a whole field. A crop with nothing to stand on within that reach is a crop no job can be done on:
-// `goto` beside it answers "nowhere to stand" and so does every till, plant and pour there. Chani's carrot patch
-// sandwiched its water row between two carrot rows and left nothing but crops between the gate and the far row, and she
-// took her own plan's fault for a tool bug (BUGS.md 09-23); jizo-melon-patch's census called 140 cells stranded for want
-// of a cell BESIDE them, on a field a sweep had just harvested end to end from its channels (09-26). A plan can be told
-// this before it is built, and a field that already stands can be asked. Stood on: a path, a covered channel, a gate, a
-// flower, a sapling - the ones a body passes without breaking - and anything outside the plan, because the plan says
-// nothing about it and the ground around a farm is where a walk starts from. Reached over: crops, which are seen over
-// and walked round. In the way of the arm as of the walk: fences, gate panels seen from outside, torch posts, chests,
+// A walk into a field crosses planted cells only where it must (at ten steps a cell, at a walking pace), so every crop
+// a walk can get beside is reachable; but a job stands on dry footing within WORK_RANGE of the cell it works and never
+// in a planted cell (noStanding refuses those): one up and four across is 4.12, so a lane four blocks from a bed serves
+// it and a covered channel every eight rows serves a whole field. A crop with nothing to stand on within that reach is
+// a crop no job can be done on, however the walk went: every till, plant and pour there answers "nowhere to stand".
+// Chani's carrot patch sandwiched its water row between two carrot rows and left nothing but crops between the gate
+// and the far row, and she took her own plan's fault for a tool bug (BUGS.md 09-23); jizo-melon-patch's census called
+// 140 cells stranded for want of a cell BESIDE them, on a field a sweep had just harvested end to end from its channels
+// (09-26). A plan can be told this before it is built, and a field that already stands can be asked. Stood on: a path,
+// a covered channel, a gate, a flower, a sapling - the ones a body passes without breaking - and anything outside the
+// plan, because the plan says nothing about it and the ground around a farm is where a walk starts from. Reached over:
+// crops, which are seen over and walked through but never stood in. In the way of the arm: fences, gate panels seen from outside, torch posts, chests,
 // composters, tables - anything taller than a crop on the straight line between the lane cell and the bed.
 const LANE_KINDS = new Set(['path', 'water', 'gate', 'flower', 'sapling'])
 // the arm works a bed from a lane cell one up and beside it: dx²+dz²+1 <= WORK_RANGE², four across at most
@@ -138,7 +139,7 @@ export function planLane (cells) {
   const subject = stranded.length === 1
     ? `1 crop cell has nothing to stand on within ${LANE_REACH} of it`
     : `${stranded.length} crop cells have nothing to stand on within ${LANE_REACH} of them`
-  return { noLane: `${subject} (${named(stranded)}): lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand` }
+  return { noLane: `${subject} (${named(stranded)}): lay a . path or a ~ channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)` }
 }
 
 // what it takes to build this plan from nothing: one water bucket does the whole field, a torch cell needs its post too

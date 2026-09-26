@@ -603,7 +603,7 @@ export function lint (bp, registry = REGISTRY) {
     const stranded = crops.filter(c => !served(c))
     if (stranded.length) {
       const subject = stranded.length === 1 ? '1 crop cell has nothing to stand on within 4 of it' : `${stranded.length} crop cells have nothing to stand on within 4 of them`
-      warnings.push(`${subject} (${few(stranded)}): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand`)
+      warnings.push(`${subject} (${few(stranded)}): lay a . path or a covered channel through the rows, eight rows apart at most, or every job there answers nowhere to stand (a walk crosses the rows where it must, but a job never stands in one)`)
     }
   }
   // an enclosed room with a cell a mob could stand in at light 0
