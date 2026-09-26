@@ -17,6 +17,7 @@ import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { dropGoal } from './drop.mjs'
+import { isGreeting } from './chatter.mjs'
 import { HOLE_HURT_MS, openGateWalk, offerCost, tradeLine, markMove, planStands, doingText, PAUSES, tillWarning, parsePlan, planCells, planErrors, planBill, RENAMED, helpText, argsUsage, docText, PRIMITIVES, checkArgs, handBackReason, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, repeatByType, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, gridLeftovers, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, nextDrop, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, transferOutcome, gatesLeftOpen, oversleeping, staleCode, codeVersion, workRefusal, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, leftLying, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, makeUntil, agentNames, splitPlayers } from './lib.mjs'
 import { makeEyes, YAWS } from './eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
@@ -2854,6 +2855,7 @@ const quick = {
     const others = Object.values(bot.players).filter(p => p.username !== bot.username)
     const playersSeen = Object.fromEntries(others.map(p => [p.username, p.entity ? roundVec(p.entity.position) : 'out of sight']))
     const { humans } = splitPlayers(playersSeen, agentNames(path.join(ROOT, 'state')))
+    const chattiness = cfg.chat?.chattiness ?? 1
     return {
       hp: Math.round(bot.health),
       food: bot.food,
@@ -2877,7 +2879,9 @@ const quick = {
       dirty: codeHere.dirty,
       players: playersSeen,
       // only the humans some body can currently see right now (not agent bodies, and not 'out of sight' ones)
-      humans: humans.filter(name => playersSeen[name] !== 'out of sight').join(',')
+      humans: humans.filter(name => playersSeen[name] !== 'out of sight').join(','),
+      // only shown below 1 (today's behaviour, unfiltered): card 2e032c4a
+      ...(chattiness < 1 && { chattiness })
     }
   },
 
@@ -3073,6 +3077,8 @@ const quick = {
   chat (a) {
     const said = chatText(a, Infinity)
     if (said.error) throw new Error(said.error)
+    const chattiness = cfg.chat?.chattiness ?? 1
+    if (chattiness < 0.2 && isGreeting(said.text)) throw new Error(`chattiness ${chattiness}: greetings and acks are not sent; whisper if it matters`)
     const parts = splitSay(said.text, sayLimit())
     for (const part of parts) bot.chat(part)
     const to = addressedTo(said.text, onlinePlayers())
