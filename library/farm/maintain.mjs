@@ -6,6 +6,8 @@ import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
 import { cellOf, fieldEdge } from '../../src/field.mjs'
 import { fieldLeg, footprintOf, spareCells } from '../../src/fieldleg.mjs'
 import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
+import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
+import { depositTarget } from '../../src/lib/storage.mjs'
 import { loadedAround } from '../../src/walk.mjs'
 import { clutterBlocks, clutterLine } from './shared/clutter.mjs'
 
@@ -25,16 +27,18 @@ const ordered = summary => Object.fromEntries([
 const bedKey = job => `${job.x},${job.z}`
 
 export default {
-  doc: 'farm.maintain place= [days=] [within=] [compost=] [reserve_for=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
+  doc: 'farm.maintain place= [days=] [within=] [deposit=] [compost=] [reserve_for=]: harvest, replant, re-till, refill the channels, compost the spare seed and store the surplus of one saved farm plan. deposit= is where the harvest goes: the plan\'s C chests (the default), a chest cell x,y,z, or a marked storage place; a full chest spills into the next and what nothing takes is storage_full=. compost= is a composter or chest-like block, as x,y,z or a marked place (default: the plan\'s K cell; false keeps the seed with the harvest). reserve_for=a,b names the other plans whose seed is kept out of the compost too (a routine fills it with $places)',
   stops: 'days= done, a step that failed twice, or nothing left it can do',
-  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'boolean', compost: 'any', reserve_for: 'string' },
+  args: { place: 'string!', days: 'number', until: 'number', within: 'number', deposit: 'any', compost: 'any', reserve_for: 'string' },
 
   async run (api, a) {
     const plan = api.plan(a.place)
     const within = a.within ?? Math.max(8, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height)) + 2)
     // the plan's y is the ground block; the body stands one above it, and so do the chest and composter the plan marks
     const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
-    const chest = planStructure(plan.cells, 'C')
+    const store = depositTarget(a.deposit, api.places())
+    if (store?.error) throw new Error(store.error)
+    const canDeposit = canStore(store, plan.cells)
     const composter = seedTarget(planStructure(plan.cells, 'K'), api.places(), a.compost)
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
@@ -102,11 +106,11 @@ export default {
       // rubble over the beds is nobody's job here (maintain only puts back what the plan asks for), but the driver should be told
       const rubble = clutterBlocks(plan.cells, api.block)
       if (rubble.length) summary.clutter = `${clutterLine(rubble)} standing over the plan: ./mc farm.tidy place=${a.place}`
-      await api.checkpoint({ canDeposit: Boolean(chest) })
+      await api.checkpoint({ canDeposit })
       const cut = await api.act('farm.harvest', { within }).catch(e => { summary.stuck = summary.stuck ?? e.message; return {} })
       add(summary.harvested, cut.harvested)
       summary.replanted += cut.replanted ?? 0
-      await api.checkpoint({ canDeposit: Boolean(chest) })
+      await api.checkpoint({ canDeposit })
 
       // ONE pass over the job list. This used to run twice, because a plant could report ok and leave the bed bare: the
       // place primitive counted a click the server quietly dropped as a block placed. It now reads the cell back and skips
@@ -158,7 +162,7 @@ export default {
         const failed = await tryJob(job)
         if (failed && job.do === 'till') { untilled.add(bedKey(job)); leave(job, 'untilled', failed) }
         if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
-        await api.checkpoint({ canDeposit: Boolean(chest) })
+        await api.checkpoint({ canDeposit })
       }
       if (dry.length) summary.skipped = dry.join('; ')
       if (dug.length) summary.dug = dug.join('; ')
@@ -178,15 +182,11 @@ export default {
       if (Object.keys(waste).length && !drop) summary.compost = `${api.block(composter.x, composter.y, composter.z)?.name ?? 'nothing'} at ${composter.x},${composter.y},${composter.z} is neither a composter nor a chest, so the seed stays with the harvest`
       const composted = drop ? await api.act(drop, { items: waste, x: composter.x, y: composter.y, z: composter.z }).then(done => done?.fed ?? Object.entries(waste).map(([k, n]) => `${k}:${n}`).join(' '), e => { summary.compost = e.message; return null }) : null
       if (composted) summary.composted = composted
-      if (chest && a.deposit !== false) {
-        const surplus = farmSurplus(api.inv(), keep)
-        for (const name of composted ? Object.keys(waste) : []) delete surplus[name]
-        if (Object.keys(surplus).length) {
-          const failed = await api.act('deposit', { items: surplus, x: chest.x, y: chest.y, z: chest.z }).then(() => null, e => e.message)
-          if (failed) summary.stuck = summary.stuck ?? failed
-          else summary.deposited = { ...(summary.deposited ?? {}), ...surplus }
-        }
-      }
+      // the harvest goes where deposit= says (src/storage.mjs): the plan's chests in order, a chest cell, or a storage
+      // place; a chest that fills spills into the next, and what nothing takes is storage_full=, never stuck
+      const surplus = farmSurplus(api.inv(), keep)
+      for (const name of composted ? Object.keys(waste) : []) delete surplus[name]
+      storeInto(summary, await storeSurplus(api, { surplus, target: store, cells: plan.cells }))
       summary.sweeps++
       api.report(ordered(summary))
     }
@@ -194,13 +194,13 @@ export default {
     // one sweep a day: wait out the daylight, let the runner put me to bed, then go again at dawn
     const nextDay = async () => {
       await api.until(() => api.clock().night, { timeout: 1200, every: 10, what: 'the day never ended' })
-      await api.checkpoint({ canDeposit: Boolean(chest) })
+      await api.checkpoint({ canDeposit })
       await api.until(() => api.clock().day, { timeout: 1200, every: 10, what: 'the night never ended' })
     }
 
     for (;;) {
       await sweep()
-      await api.checkpoint({ canDeposit: Boolean(chest) })
+      await api.checkpoint({ canDeposit })
       if (!(a.days > 0)) return ordered(summary)
       await nextDay()
     }

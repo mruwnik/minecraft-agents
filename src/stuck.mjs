@@ -1,7 +1,7 @@
 // The stuck watch (autopilot card): a role on autopilot runs for days with no driver reading its results, so the body
 // itself must say when it is going nowhere. bot.mjs takes one sample a second and keeps the last WINDOW_MS of them:
 //   { t, pos, taskId, taskName, taskProgress, sleeping, night, health, food, edible, oxygen, holedUp, buried, boxed,
-//     frozenWalks (a running count), routine: { lastDayStartedAt, day, failedSteps: [{ day, step }], phase } | null }
+//     frozenWalks (a running count), routine: { lastDayStartedAt, day, failedSteps: [{ day, step }], storageFull: [day], phase } | null }
 // stuckVerdict reads the window and names the most urgent condition that holds; nextEpisode turns a run of verdicts
 // into one episode, said once (the `stuck` event and the chat line) and shown by `state` while it lasts. Pure.
 
@@ -106,6 +106,14 @@ const failingStep = ({ last }) => {
   return { kind: 'step', reason: `${step} failed 3 days running`, advice: `run ${step} by hand and read its FAIL: the routine keeps failing it every day until what it names is fixed`, pos: last.pos }
 }
 
+// the store full two routine days running: the harvest is being carried round until somebody builds or empties a chest
+const STORAGE_DAYS = 2
+const fullStore = ({ last }) => {
+  const days = [...new Set(last.routine?.storageFull ?? [])].sort((a, b) => a - b)
+  if (!days.some((day, i) => days[i + 1] === day + 1)) return null
+  return { kind: 'storage', reason: `the store was full ${STORAGE_DAYS} days running`, advice: 'the harvest is being carried round: build or empty a chest at the place (or point the routine at another with store=), and the next day stores it', pos: last.pos }
+}
+
 const hungDay = ({ last }) => {
   if (!last.routine || last.t - last.routine.lastDayStartedAt < DAY_MS) return null
   return { kind: 'day', reason: `no routine day started in ${minutes(DAY_MS)}`, advice: 'the routine is hung between days (a dusk or dawn that never came, or a step that never returned): stop and start it again', pos: last.pos }
@@ -115,7 +123,7 @@ const hungDay = ({ last }) => {
 export function stuckVerdict (samples) {
   if (!samples.length) return null
   const last = samples[samples.length - 1]
-  return drowning(samples) ?? starving({ last }) ?? entombed(samples) ?? frozen(samples) ?? still(samples) ?? failingStep({ last }) ?? hungDay({ last })
+  return drowning(samples) ?? starving({ last }) ?? entombed(samples) ?? frozen(samples) ?? still(samples) ?? failingStep({ last }) ?? fullStore({ last }) ?? hungDay({ last })
 }
 
 // One episode per kind of condition. `started` is the moment to write the event and say the chat line, once; `ended` the

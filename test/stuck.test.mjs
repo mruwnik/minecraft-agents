@@ -174,3 +174,21 @@ for (const [name, samples, sample, expectedTs] of [
 ]) {
   test(`addSample: ${name}`, () => assert.deepEqual(addSample(samples, sample).map(s => s.t), expectedTs))
 }
+
+// a store that was full two routine days running: the harvest is being carried round, somebody must build a chest
+for (const [name, storageFull, expected] of [
+  ['one full day is not yet an alert', [3], null],
+  ['two days running', [3, 4], 'storage'],
+  ['two days with a gap between them', [2, 4], null],
+  ['nothing said', undefined, null]
+]) {
+  test(`stuckVerdict: storage_full ${name}`, () => {
+    const samples = series(10, () => ({ ...routineAt(4), routine: { ...routineAt(4).routine, storageFull } }))
+    assert.equal(kinds(samples), expected)
+  })
+}
+test('stuckVerdict: the storage alert says what to do', () => {
+  const samples = series(10, () => ({ ...routineAt(4), routine: { ...routineAt(4).routine, storageFull: [3, 4] } }))
+  assert.deepEqual([stuckVerdict(samples).reason, stuckVerdict(samples).advice],
+    ['the store was full 2 days running', 'the harvest is being carried round: build or empty a chest at the place (or point the routine at another with store=), and the next day stores it'])
+})

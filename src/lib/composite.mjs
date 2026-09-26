@@ -71,7 +71,8 @@ const parseSteps = text => {
 
 // a routine a role ships cannot know which farm it will be run on, so it writes $place and routine place= fills it in
 // $place is filled from place=; $places with EVERY place the routine runs over (a,b,c as given: farm.maintain's
-// reserve_for= keeps the seed of the whole homestead); any other $name from vars= (a JSON object on the command
+// reserve_for= keeps the seed of the whole homestead); $store from store= (where the produce goes: a chest cell or a
+// marked storage place, deposit= in the steps); any other $name from vars= (a JSON object on the command
 // line), and one nobody gave is left out of the step so the action's own default holds (farm.maintain's compost=
 // falls back to the plan's K cell)
 const varName = v => typeof v === 'string' && /^\$\w+$/.test(v) ? v.slice(1) : null
@@ -84,7 +85,7 @@ const readVars = vars => {
   return ok ? parsed.list : { error: 'vars= must be an object like {"compost":"shared-composter"}' }
 }
 
-export function routineSteps ({ steps, name, place, places, vars }, readRole) {
+export function routineSteps ({ steps, name, place, places, store, vars }, readRole) {
   if (!steps && !name) return { error: 'routine needs steps= or name= (a routine shipped in roles/<role>/<name>.json)' }
   const where = steps ? 'steps= must be a list of {"action":...} objects' : `roles/${name}.json is not a list of steps`
   const raw = steps ?? readRole(name)
@@ -97,7 +98,7 @@ export function routineSteps ({ steps, name, place, places, vars }, readRole) {
   if (wantsPlace(read.list) && !place) return { error: `routine name=${name} needs place=<the name of a marked farm> to work on` }
   const given = readVars(vars)
   if (given.error) return { error: given.error }
-  return { steps: read.list.map(step => fillVars(step, { ...given, place, places })) }
+  return { steps: read.list.map(step => fillVars(step, { ...given, place, places, ...(store !== undefined ? { store } : {}) })) }
 }
 
 // A composite's `until`: look, wait `every` seconds of ticks, look again, give up after `timeout` seconds OF WAITING.

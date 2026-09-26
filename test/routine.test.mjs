@@ -7,16 +7,17 @@ import routine from '../library/routine.mjs'
 import { fakeApi } from './helpers.mjs'
 
 const ROLE_FILES = {
-  'farmer/homestead': '[{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":true,"compost":"$compost"}]',
+  'farmer/homestead': '[{"action":"farm.tidy","place":"$place"},{"action":"farm.maintain","place":"$place","deposit":"$store","compost":"$compost"}]',
   'farmer/chores': '[{"action":"farm.compost"}]'
 }
 const readRole = name => ROLE_FILES[name] ?? null
 // farm.maintain feeds the composter itself now (compost=), so the day's own routine has no separate farm.compost step;
 // a $compost nobody gave in vars= is dropped, so farm.maintain falls back to the plan's own K cell
-// the shipped roles/farmer/homestead.json also carries reserve_for=$places (the whole place= list), the fake here does not
+// the shipped roles/farmer/homestead.json also carries reserve_for=$places (the whole place= list) and deposit=$store
+// (dropped when no store= is given, so farm.maintain's default, the plan's chests, holds); the fake here does not
 const homestead = (place, compost, places) => [
   { action: 'farm.tidy', place },
-  { action: 'farm.maintain', place, deposit: true, ...(compost !== undefined ? { compost } : {}), ...(places !== undefined ? { reserve_for: places } : {}) }
+  { action: 'farm.maintain', place, ...(compost !== undefined ? { compost } : {}), ...(places !== undefined ? { reserve_for: places } : {}) }
 ]
 
 for (const [name, place, expected] of [
@@ -74,16 +75,16 @@ test('routine: place=a,b runs the routine over both fields, a before b', async (
   const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a,b' })
   assert.deepEqual([calls.filter(c => !c.startsWith('note')), summary.days, summary.ran], [
-    ['farm.tidy place=a', 'farm.maintain place=a deposit reserve_for=a,b',
-      'farm.tidy place=b', 'farm.maintain place=b deposit reserve_for=a,b'], 1, 4])
+    ['farm.tidy place=a', 'farm.maintain place=a reserve_for=a,b',
+      'farm.tidy place=b', 'farm.maintain place=b reserve_for=a,b'], 1, 4])
 })
 
 test('routine: vars=compost reaches farm.maintain for every plot, one shared composter', async () => {
   const { api, calls } = fakeApi({ places: marked, answers: { 'farm.tidy': {}, 'farm.maintain': {} } })
   await routine.run(api, { name: 'farmer/homestead', place: 'a,b', vars: { compost: 'shared-composter' } })
   assert.deepEqual(calls.filter(c => !c.startsWith('note')), [
-    'farm.tidy place=a', 'farm.maintain place=a deposit compost=shared-composter reserve_for=a,b',
-    'farm.tidy place=b', 'farm.maintain place=b deposit compost=shared-composter reserve_for=a,b'
+    'farm.tidy place=a', 'farm.maintain place=a compost=shared-composter reserve_for=a,b',
+    'farm.tidy place=b', 'farm.maintain place=b compost=shared-composter reserve_for=a,b'
   ])
 })
 

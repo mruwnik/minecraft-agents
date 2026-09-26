@@ -4,11 +4,13 @@ import { apiaryGoods } from '../../src/lib.mjs'
 import { carpetCarried } from './shared/common.mjs'
 import { campfireCarried, replaceCensus } from './shared/hive.mjs'
 import { placeRefusal } from '../../src/lib.mjs'
+import { storeInto, storeSurplus } from '../../src/storage.mjs'
+import { depositTarget } from '../../src/lib/storage.mjs'
 
 export default {
-  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary; without shears (or bottles) the harvest alone is skipped and missing= says which',
+  doc: 'apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]: inspect, sink and carpet fires, safely harvest and tend one apiary; deposit=true stores the produce in the nearest chest, deposit=x,y,z or a marked storage place in that one (a full chest spills into the place\'s next, what nothing takes is storage_full=); without shears (or bottles) the harvest alone is skipped and missing= says which',
   stops: 'one round is complete, a ripe hive is unsafe, or a step fails twice',
-  args: { place: 'string!', size: 'number', mode: 'string', breed: 'boolean', deposit: 'boolean', range: 'number', until: 'number' },
+  args: { place: 'string!', size: 'number', mode: 'string', breed: 'boolean', deposit: 'any', range: 'number', until: 'number' },
 
   async run (api, a) {
     // its own steps would each refuse, but a round that stops after reading somebody's hives has already walked there:
@@ -65,13 +67,10 @@ export default {
       summary.bred += bred.fed >= 2 ? 1 : 0
       summary.breedSkipped = bred.skipped
     }
-    if (a.deposit) {
-      const goods = apiaryGoods(api.inv())
-      if (Object.keys(goods).length) {
-        await api.act('deposit', { items: goods })
-        summary.deposited = goods
-      }
-    }
+    // deposit=true is the nearest chest (an apiary has no plan chest); a chest cell or a storage place is deposit='s word
+    const store = a.deposit === true ? { kind: 'nearest' } : a.deposit ? depositTarget(a.deposit, api.places()) : null
+    if (store?.error) throw new Error(store.error)
+    storeInto(summary, await storeSurplus(api, { surplus: apiaryGoods(api.inv()), target: store }))
     api.report(summary)
     return summary
   }

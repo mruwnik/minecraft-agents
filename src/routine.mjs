@@ -74,7 +74,7 @@ export const stopEvent = ({ reason, step = null, place = null, days, bed = null 
 // what each step reported, per place ("here" for a step with no place), short enough for one event line. What went
 // wrong comes first and is never cut: on 09-26 a farm's stuck= and missing= stood behind lowSlabs= and clutter=, past
 // the cut, and the day line read as a field maintained while its summary said otherwise
-const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare']
+const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare', 'storage_full']
 const OUTCOME_MAX = 120
 export function outcomeText (outcome) {
   if (outcome.failed) return `FAILED ${outcome.failed}`

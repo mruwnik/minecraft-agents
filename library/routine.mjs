@@ -12,9 +12,9 @@ const readRole = name => {
 }
 
 export default {
-  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [bed=<place>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
+  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [store=<place|x,y,z>] [bed=<place>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day, sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, $store from store= (where the produce goes), any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
   stops: 'days= done (a step that fails is noted, and the next one still runs); every stop writes a routine_stopped event with its reason and advice, every day a routine_day one',
-  args: { steps: 'any', name: 'string', place: 'string', vars: 'any', days: 'number', until: 'number', bed: 'string', bed_range: 'number', dry: 'boolean' },
+  args: { steps: 'any', name: 'string', place: 'string', store: 'string', vars: 'any', days: 'number', until: 'number', bed: 'string', bed_range: 'number', dry: 'boolean' },
 
   async run (api, a) {
     const { steps, places, error } = routinePlan(a, readRole)
@@ -33,11 +33,13 @@ export default {
     const forever = a.days === 0
     if (forever) delete a.days
     const summary = { days: 0, ran: 0 }
-    // what the stuck watch is told (src/stuck.mjs): when the day began, which steps failed on which day, and whether
-    // the routine is stepping or waiting for dusk or dawn (a wait stands still by design)
+    // what the stuck watch is told (src/stuck.mjs): when the day began, which steps failed on which day, which days
+    // ended with a full store (the harvest carried round: an alert after two), and whether the routine is stepping or
+    // waiting for dusk or dawn (a wait stands still by design)
     const failedSteps = []
+    const storageFull = []
     let lastDayStartedAt = Date.now()
-    const progress = phase => api.progress({ routine: { lastDayStartedAt, day: summary.days, failedSteps, phase } })
+    const progress = phase => api.progress({ routine: { lastDayStartedAt, day: summary.days, failedSteps, storageFull, phase } })
     let current = null // the step in flight, for routine_stopped; null between days
 
     // ---- nightfall with no bed within 32 blocks (card bebf3a5f). The runner's checkpoint sleeps when a bed is near
@@ -101,6 +103,7 @@ export default {
           summary.failed = summary.failed ?? `${action}: ${outcome.failed}`
           failedSteps.push({ day: dayNo, step: current.step })
         }
+        if (outcome.storage_full && !storageFull.includes(dayNo)) storageFull.push(dayNo)
         api.note(`${action}${outcome.failed ? ` FAILED ${outcome.failed}` : ' ok'}`)
         outcomes.push({ action, place: current.place, outcome })
       }
