@@ -90,6 +90,15 @@ export const isStalled = ({ hasGoal, moved, digging, seconds }) => hasGoal && !d
 export const CIRCLING_MS = 40000
 export const circling = ({ dist, best, bestAgeMs }) => dist > 2 && bestAgeMs >= CIRCLING_MS
 
+// mineflayer-pathfinder's goto rejects on a search timeout or a no-path and keeps the goal it set, and the pathfinder walks
+// the best partial path of every new search for as long as a goal stands: a failed goto walked on with no task running
+// (Jizo, 09-26 23:18Z: failed at 19.7,65,-96.5, found 25 s later at 19.5,65,-91.5, no forcedMove). `run(goal)` is the
+// walk; on its failure the goal is cleared when it is still the walk's own (a flee's or a follow's goal is theirs)
+export const clearGoalOnFailure = (pathfinder, run) => goal => run(goal).catch(e => {
+  if (pathfinder.goal === goal) pathfinder.setGoal(null)
+  throw e
+})
+
 // ---------------------------------------------------------------- walking over farmland (card fcd996fe)
 // Farmland turns to dirt only when something LANDS on it (a fall of more than half a block: a jump, a drop), never
 // from plain walking, and the crop on it pops off with it. The pathfinder sprints and jumps by default, which is why
