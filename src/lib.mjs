@@ -1,8 +1,10 @@
 // Pure helpers, kept apart from bot.mjs so they can be tested without a server.
 import { compact, between } from './cli.mjs'
 import { WORK_RANGE } from './walk.mjs'
+import { range, inAnyZone, within, isGroundCover, looksBuilt, FLUIDS, isAir, holdsWater, hasWaterSource, STEPS } from './lib/world.mjs'
 export * from './cli.mjs'
 export * from './players.mjs'
+export * from './lib/world.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -12,7 +14,6 @@ export function mealTally ({ gained, lost, ate }) {
 }
 
 const FALLBACK_SYMBOLS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#%&*+='
-const range = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => Math.min(a, b) + i)
 
 // ASCII slices of a box of the world, top layer first; air is '.', everything else gets a letter and a legend.
 export function renderScan (nameAt, { x1, y1, z1, x2, y2, z2 }) {
@@ -37,10 +38,6 @@ export function renderScan (nameAt, { x1, y1, z1, x2, y2, z2 }) {
   const legend = [...symbols].map(([name, s]) => `${s}=${name}`).join(' ')
   return [`x ${xs[0]}..${xs.at(-1)} across (ruler: last digit of x), z down`, ruler, ...layers, legend].join('\n')
 }
-
-// Is pos inside any of the protected boxes ({x1,y1,z1,x2,y2,z2}, corners in any order, inclusive)?
-export const inAnyZone = (zones, pos) =>
-  zones.some(z => between(pos.x, z.x1, z.x2) && between(pos.y, z.y1, z.y2) && between(pos.z, z.z1, z.z2))
 
 // A Minecraft username is 3-16 of [A-Za-z0-9_]; squeeze a character's name into that, or null if it can't be done.
 export function minecraftName (raw) {
@@ -244,22 +241,12 @@ export async function retryUntilCount (attempt, count, maxRounds = 6) {
   return { got, rounds: maxRounds, gaveUp: 'round limit' }
 }
 
-// Does a block's properties object satisfy a `where` condition such as {age: 7}? Values compare as strings.
-export const matchesProps = (props, where) => Object.entries(where ?? {}).every(([k, v]) => String(props?.[k]) === String(v))
-
 // One check of a watch against how many matching things are there now. Fires on the edge (condition just became
 // true), so a standing condition doesn't repeat itself. {count=1, atMost=false, met} -> {fire, met}
 export function checkWatch (watch, seen) {
   const wanted = watch.count ?? 1
   const met = watch.atMost ? seen <= wanted : seen >= wanted
   return { fire: met && !watch.met, met }
-}
-
-// Some server replies never come (window opens through the version bridge, mostly); never wait forever for one.
-export function within (ms, promise, what) {
-  let timer
-  const late = new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} took longer than ${ms / 1000}s`)), ms) })
-  return Promise.race([promise, late]).finally(() => clearTimeout(timer))
 }
 
 // why a long action may not start now, or null. Moving while the server has us in bed desyncs the body.
@@ -622,13 +609,6 @@ export function stepOffChoice (cells) {
   // a wooden door is a way out (the reflex opens it): a bed whose only free neighbour was the door sent the body up and down the bed for ever
   const door = cells.findIndex(c => c.door)
   return door >= 0 ? door : cells.findIndex(c => c.low && c.head === 'empty')
-}
-
-// the cell the pathfinder counts me in: standing on a block that is not a full one high (farmland, a slab, a dirt path) my feet are
-// inside that block's cell, and the pathfinder plans from the cell above. Judging arrival from the floored cell fails by one block
-export function feetCell (position, onGround) {
-  const sunk = onGround && position.y - Math.floor(position.y) > 0.001
-  return { x: Math.floor(position.x), y: Math.floor(position.y) + (sunk ? 1 : 0), z: Math.floor(position.z) }
 }
 
 // mineflayer-pathfinder's goto resolves as a success when the search comes back with an empty path (boxed in, in a shaft):
@@ -1043,17 +1023,6 @@ export function fencePush (pressed, inFence, nudge, pos) {
   const there = Math.abs(pos.x - target.x - 0.5) <= 0.3 && Math.abs(pos.z - target.z - 0.5) <= 0.3
   return there ? { target: null, replan: true } : { target, replan: false }
 }
-export function realCell (position, free) {
-  const [x, y, z] = [Math.floor(position.x), Math.floor(position.y), Math.floor(position.z)]
-  const [fx, fz] = [position.x - x, position.z - z]
-  // how far my centre is from each of the eight cells around; more than my half width (0.3) away and no part of me stands there
-  const gapTo = { '-1': f => f, 0: () => 0, 1: f => 1 - f }
-  const sides = [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => ({ d: Math.hypot(gapTo[dx](fx), gapTo[dz](fz)), x: x + dx, z: z + dz }))).filter(s => s.x !== x || s.z !== z)
-  const side = sides.sort((a, b) => a.d - b.d).find(s => s.d <= 0.3 && free(s.x, y, s.z))
-  return side ? { x: side.x, y, z: side.z } : null
-}
-// the names of the four cells beside a cell; none for the position-less block the pathfinder makes up for an unloaded cell
-export const besideNames = (position, nameAt) => position ? [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => nameAt(position.x + dx, position.y, position.z + dz)) : []
 export const thicketCost = neighbours => neighbours.includes('bamboo') ? 25 : 0
 
 // in bed in broad daylight: 'ask' the server to let me up; when that changes nothing for 6 s the server has me up already and only my own flag is stale: 'declare' myself awake
@@ -1582,11 +1551,6 @@ export function isTreeLog (p, nameAt) {
   return leaves && !built
 }
 
-// blocks that somebody put there: a walk with dig=true must go round them, zone or no zone (Aviendha's goto dig=true tunnelled through
-// her own cobble pen wall day after day, and the cows walked out of the hole). Logs and leaves stay diggable: forests are in the way a lot
-const BUILT = /(^|_)(cobblestone|planks|fence|gate|wall|door|trapdoor|bed|stairs|slab|glass|pane|wool|carpet|torch|lantern|chest|barrel|furnace|smoker|table|farmland|bricks|ladder|sign|banner|rail|hopper|composter|campfire|anvil|bookshelf|concrete|terracotta)$|^(wheat|carrots|potatoes|beetroots|melon_stem|pumpkin_stem|cocoa|sugar_cane|bamboo|hay_block)$/
-export const looksBuilt = name => BUILT.test(name)
-
 // Which gates a planned route opens and where it goes, a waypoint every six steps and the last: path_to said gates=3 and
 // nothing else while the walk circled a birch pen 15 blocks off Perrin's cow pen (13:58Z)
 export function routeSummary (path) {
@@ -1595,9 +1559,6 @@ export function routeSummary (path) {
   const through = path.filter((_, i) => i % 6 === 5 || i === path.length - 1).map(cell)
   return { gatesAt: [...new Set(gatesAt)].join(' '), through: [...new Set(through)].join(' ') }
 }
-
-// weeds on top of a block keep a hoe or shovel from working it: till and path clear these by themselves (not flowers or crops: someone may want those)
-export const isGroundCover = name => /^(short_grass|tall_grass|fern|large_fern|dead_bush|snow|leaf_litter)$/.test(name)
 
 // the pathfinder previews each step with a physics simulation, and when that says "can't" it presses no key at all: it then throws the
 // path away as 'stuck' every 3.5 s and finds the same one again, for ever. After 1.5 s of that, walk at the next node by hand
@@ -1630,9 +1591,6 @@ export function bedChoice (beds, zones, me, any = false, occupied = new Set()) {
 export const bedtimeReport = error => /^cancelled: superseded/.test(error)
   ? null
   : /monsters nearby/.test(error) ? `${error}: the server lets nobody sleep with a monster within 8 blocks of the bed. Kill it (attack mob=<its name>) and sleep again, or wait it out indoors; walls and light around the bed keep them off` : error
-
-// a fluid is not a block: the server never sends a break for one, so bot.dig on water sat at doing=dig for 167 seconds (#110)
-export const FLUIDS = new Set(['water', 'lava', 'flowing_water', 'flowing_lava', 'bubble_column'])
 const fluidCure = 'Scoop the source with fill x= y= z= (an empty bucket), or fill the cell in with place item=dirt'
 
 // target: the block to dig. above: the names of the 3 blocks over it. Water beside it is fine (a trench by a pond); water over it means a dive
@@ -1749,14 +1707,6 @@ export function hurtCause ({ lost, nearby, sinceCreeperMs, fell, food, oxygen, f
   if (food <= 0) return 'starving: eat'
   return fledFrom && sinceFledMs < 30000 ? `hit while the body fled from a ${fledFrom} by itself: that run is why you have moved` : null
 }
-
-// Item 14 (Perrin, BUGS.md 09-23). A block that comes back null is not air and not stone: it is a chunk this body has
-// never been sent, which is every chunk more than a view away. `pen.check` on a pen 200 blocks off answered "not a spot
-// to stand on", blaming his coordinates for a world his client had never seen, and the role's own case (fetch from the
-// shared stock to your own pen) starts exactly there. Nothing may be guessed from an unloaded chunk: say so, or go.
-export const outOfSight = (block, at, from) => block
-  ? null
-  : `${at.x},${at.y},${at.z} is too far to see: ${from ? `it is ${Math.round(Math.hypot(at.x - from.x, at.y - from.y, at.z - from.z))} blocks off and ` : ''}that chunk is not loaded, so nothing there can be read. goto it first, then ask again`
 
 // Item 13 (#109). A death has to leave a line that says where the body fell and what did it: Claude's body died
 // unattended on 09-22 and all the file holds is the jump to the world spawn, so nobody could go and fetch the iron kit.
@@ -2206,7 +2156,6 @@ export function planErrors (parsed) {
 // and walked round. In the way of the arm as of the walk: fences, gate panels seen from outside, torch posts, chests,
 // composters, tables - anything taller than a crop on the straight line between the lane cell and the bed.
 const LANE_KINDS = new Set(['path', 'water', 'gate', 'flower', 'sapling'])
-const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 // the arm works a bed from a lane cell one up and beside it: dx²+dz²+1 <= WORK_RANGE², four across at most
 const LANE_REACH2 = WORK_RANGE * WORK_RANGE - 1
 const LANE_REACH = Math.floor(Math.sqrt(LANE_REACH2))
@@ -2344,16 +2293,6 @@ const anchorHit = (spec, here) => {
   return sameFamily(spec.item, here.name)
 }
 const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
-export const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
-// water still stands in a cell whose block was waterlogged (a slab or stairs laid into the source): the farmland beside
-// it stays wet, so a covered channel is a full channel
-export const holdsWater = block => Boolean(block) && (block.name === 'water' || String(block.properties?.waterlogged) === 'true')
-// stricter than holdsWater, for the one place wetness alone is not enough: capping a cell with a slab. holdsWater is
-// right for census - the farmland beside a cell does not care whether its water is a source or a neighbour's flow
-// passing through. But flow (properties.level 1-7) has no source of its own in that cell; it can recede a tick after
-// this is read, before the cover lands, leaving a slab capping ground that is not really wet. Only a settled source
-// (level 0, or already waterlogged) is safe to cap
-export const hasWaterSource = block => Boolean(block) && (block.name === 'water' ? Number(block.properties?.level ?? 0) === 0 : String(block.properties?.waterlogged) === 'true')
 // what you can stand in: air, or the grass and flowers that grow on open ground
 const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
 // what you can stand on
