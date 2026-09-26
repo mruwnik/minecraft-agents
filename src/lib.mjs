@@ -2461,6 +2461,8 @@ const sowAsTilled = jobs => {
 export const tillWarning = (dry, total) => dry
   ? `${dry} of ${total} have no water within 4 blocks (level with them or one up): plant them AT ONCE or they turn back to dirt within minutes; to keep a field, pour water beside it`
   : 'plant them now: bare farmland turns back to dirt the moment anything jumps on it, and a field tilled in one pass and sown in the next loses the beds it walked back over'
+// slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/cover.mjs)
+import { channelCovered } from './cover.mjs'
 export function farmJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
   const push = (job, item) => jobs.push({ ...job, ...(item ? { item, have: (items[item] ?? 0) > 0 } : {}) })
@@ -2480,7 +2482,7 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     const standing = here && here.name !== 'air' ? here.name : null
     if (spec.kind === 'water') {
       // a cell nobody can see is nobody's job; a slab already laid in the source is a finished channel, water and floor both
-      if (!ground || (holdsWater(ground) && ground.name !== 'water')) continue
+      if (!ground || channelCovered(ground)) continue
       // nothing of a dry channel is worth starting without the water: the dig leaves a pit and the cover lays a slab
       // on bare ground. One bucket does the whole field, so this asks only whether any water is carried at all
       const dry = !holdsWater(ground)

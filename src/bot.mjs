@@ -31,6 +31,7 @@ import { noPathAdvice } from './caveexit.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { facesForHalf } from './cover.mjs'
+import { slabMergeRefusal } from './slabmerge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -2148,6 +2149,11 @@ const long = {
     const placeOne = async b => {
       const p = vecOf(b)
       const existing = bot.blockAt(p)
+      // a slab placed against a cell that already holds a bottom slab merges into a double block, no gap for water
+      // left underneath: check before occupiedBy even, since the merge risk is real whatever occupiedBy would say
+      // (jizo-melon-patch, 09-26; see src/slabmerge.mjs for the full story)
+      const merge = slabMergeRefusal({ x: p.x, y: p.y, z: p.z }, existing, b.item)
+      if (merge) throw new Skip(merge)
       const state = occupiedBy(existing, b.item)
       if (state === 'skip') { already.add(`${b.x},${b.y},${b.z}`); return }
       // on lumpy ground part of a wall is often terrain already: skip that cell and build the rest (Aviendha's pen, 09-19)
