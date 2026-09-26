@@ -6,6 +6,7 @@ export * from './cli.mjs'
 export * from './players.mjs'
 export * from './lib/world.mjs'
 export * from './lib/agents.mjs'
+export * from './lib/code.mjs'
 
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
@@ -803,35 +804,6 @@ export function leadVerdict ({ distances, holding, heldFor = 0, fetchesSinceProg
   if (fetch) return fetchesSinceProgress >= 3 ? 'giveup' : 'fetch'
   if (farthest > (holding ? 4 : 6)) return 'hold'
   return noPath ? 'noway' : 'go'
-}
-
-// a body loads the shared code once, at start: which files have changed since then (null: none), so the driver knows a restart brings fixes
-// While any file is under 3 minutes old the change may be half made (a body started then might not even load): say nothing yet
-export function staleCode (started, mtimes, now) {
-  const newer = Object.entries(mtimes).filter(([, mtime]) => mtime > started)
-  // quiet for 15 minutes, or for 2 when this body is already 45 minutes behind: waiting for a lull starved the long-running bodies of every fix
-  const quiet = now - started >= 2700000 ? 120000 : 900000
-  if (newer.some(([, mtime]) => now - mtime < quiet)) return null
-  return newer.length ? newer.map(([file]) => file) : null
-}
-
-// Which code this body is ACTUALLY running, for the line it says when it joins. Two implementers share this tree, so a
-// body started between two saves loads the new helper with the old caller and throws something that is in nobody's
-// diff: mine threw `Cannot destructure property 'edible'` against a tree that was mid-commit, not broken, and the
-// twenty minutes I spent on it were spent on a ghost (#140). Only files a body LOADS count as dirty - an edited guide
-// or a note in state/ changes nothing it runs, and a join line that cried wolf would stop being read.
-export const CODE_PATH = /^(src|library|tools)\/.*\.mjs$/
-const SHOWN = 4
-export function codeVersion ({ head, changed = [] }) {
-  if (!head) return { code: 'unknown', advice: 'this body could not read its own git HEAD, so it cannot tell you which code it is running: it may be running anything' }
-  const code = changed.filter(file => CODE_PATH.test(file)).sort()
-  if (!code.length) return { code: head }
-  const shown = [...code.slice(0, SHOWN), ...(code.length > SHOWN ? [`and ${code.length - SHOWN} more`] : [])].join(' ')
-  return {
-    code: `${head}+${code.length}`,
-    dirty: shown,
-    advice: `this body is NOT running ${head} as committed: ${code.length} code file${code.length > 1 ? 's were' : ' was'} edited and uncommitted when it started, so it may hold half of somebody's change. A tool that misbehaves here is worth a \`git status\` and a restart before it is worth debugging`
-  }
 }
 
 // where a harvested crop is planted again, relative to the crop: the block to place against and the face of it. Field crops stand on the
@@ -1926,9 +1898,6 @@ export function bedExit (exits) {
   const [x, y, z] = low.at.split(',').map(Number)
   return `this bed is a trap: you wake up standing ON it (0.56 high) and the only free cell beside it (${low.at}) has a block 2 above its floor, which leaves 1.44: nobody fits and no walk will start. Dig the block at ${x},${y + 2},${z} (or move the bed next to a cell with 3 of headroom). In the morning, if stuck: dig the bed, walk out, place it back`
 }
-
-// what a code_updated notice was about: the same files edited AGAIN are news again (a body told once was never told of the later batches)
-export const staleKey = (stale, mtimes) => `${stale.join()}@${Math.max(...stale.map(f => mtimes[f]))}`
 
 // mineflayer says "destination full" for a full chest AND for full pockets: say which side
 export const fullSide = (message, way) => !/destination full|inventory is full/i.test(message)
