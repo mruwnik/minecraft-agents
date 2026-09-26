@@ -30,6 +30,7 @@ import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } fr
 import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
 import { digLegs } from './diglegs.mjs'
 import { noPathAdvice } from './caveexit.mjs'
+import { resultEvent } from './taskresult.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
@@ -3200,9 +3201,12 @@ async function runLong (name, args, given = args) {
   const timeout = (args.timeout ?? 60) * 1000
   const timedOut = Symbol('timeout')
   const first = await Promise.race([work, new Promise(r => setTimeout(() => r(timedOut), timeout))])
-  if (first !== timedOut) return first
+  // every result is written once, to events.jsonl and bot.log: a fast one as task_result (the caller holds it already, so no
+  // wait wakes for it), a slow one as task_done, which is how the wait stream hands it over (src/taskresult.mjs)
+  const record = (finished, r) => { const { type, data } = resultEvent(finished, r); emit(type, data) }
+  if (first !== timedOut) { record(true, first); return first }
   // still going: report completion through the event stream instead
-  work.then(r => { if (mine.gen === gen) emit('task_done', r) })
+  work.then(r => { if (mine.gen === gen) record(false, r) })
   return { ok: true, status: 'running', task: mine.id, note: 'still going: run ./mc wait (blocking, Bash timeout 600000 ms) to get its task_done. Do not end your turn to wait' }
 }
 
