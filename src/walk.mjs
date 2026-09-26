@@ -81,7 +81,11 @@ export const goalDistance = (goal, from) => {
 // A pit: a floor walled in by rises of two or more on every side, which a walk can jump into and not out of. Eight dig walks
 // aimed at the mouth of the 1-wide, 3-deep test pit by spawn jumped in (card 3fe30fb4): the pathfinder's nearest node it
 // could stand on was the pit floor. So the cell a walk would land on is judged before the search, like noStanding: on a pit
-// floor, the goal moves to the pit's rim, unless the floor is meant (into=true, or the body is already down there)
+// floor, the goal moves to the pit's rim, unless the floor is meant (into=true, or the body is already down there).
+// A rise is measured up the column beside the floor, to the first cell that is not a block: one high is a step the walk
+// takes, crop or not (a crop step has its price, src/farmwalk.mjs), and the rim is that wall's own top. A one-deep hole in
+// Jizo's beds, wheat all round it, used to read as a one-cell pit (a crop is no floor cell) with its rim wherever the first
+// standable cell up a column beside it was: a tree's canopy five above, and two walks timed out on the detour (card e384fb28)
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 // how far round the landing cell the way out is looked for: a floor that reaches this far is open ground (or a trench longer
 // than the look), and the pathfinder is trusted with it
@@ -124,12 +128,29 @@ const floorAround = (cellAt, start) => {
   return [...seen.values()]
 }
 
-// the tops of a floor's walls: the lowest standable cell two or more above a floor cell, in a column beside it, off the floor
+// the top of the wall on one side of a floor cell: the first cell up that column, from the floor's own level, that is not a
+// block; null when it is blocks all the way up. An unloaded cell counts as no block: what cannot be seen is not a wall
+const wallTop = (cellAt, cell, [dx, dz]) => Array.from({ length: DEPTH + 1 }, (_, i) => ({ x: cell.x + dx, y: cell.y + i, z: cell.z + dz }))
+  .find(top => !cellAt(top.x, top.y, top.z)?.solid) ?? null
+// a cell the walk crosses on its way out: not a block and not lava (a crop is crossed, at a price)
+const crossable = cell => !cell?.solid && cell?.name !== 'lava'
+// a side the walk steps out over: a wall at most one high, with the room to stand on it (or in it, when it is a crop).
+// The next cell of the floor itself is no way out
+const stepOut = (cellAt, cell, side, inside) => {
+  const top = wallTop(cellAt, cell, side)
+  return Boolean(top) && !inside.has(key(top)) && top.y - cell.y <= 1 && crossable(cellAt(top.x, top.y, top.z)) && crossable(cellAt(top.x, top.y + 1, top.z))
+}
+// walled in: no floor cell has a side to step out over
+const walledIn = (cellAt, floor) => {
+  const inside = new Set(floor.map(key))
+  return !floor.some(cell => SIDES.some(side => stepOut(cellAt, cell, side, inside)))
+}
+
+// the tops of a floor's walls: each wall's own top, two or more above the floor cell beside it, when it can be stood on
 const rimOf = (cellAt, floor) => {
   const inside = new Set(floor.map(key))
-  const tops = floor.flatMap(cell => SIDES.map(([dx, dz]) =>
-    Array.from({ length: DEPTH }, (_, i) => ({ x: cell.x + dx, y: cell.y + 2 + i, z: cell.z + dz })).find(top => standable(cellAt, top))))
-  return [...new Map(tops.filter(top => top && !inside.has(key(top))).map(top => [key(top), top])).values()]
+  const tops = floor.flatMap(cell => SIDES.map(side => wallTop(cellAt, cell, side)))
+  return [...new Map(tops.filter(top => top && !inside.has(key(top)) && standable(cellAt, top)).map(top => [key(top), top])).values()]
 }
 
 // null when the goal may stand, else the rim cell to walk to instead (range 0) with the note for the driver. `from` is the
@@ -138,7 +159,7 @@ export const rimGoal = (cellAt, goal, range, { into = false, from = null } = {})
   if (into) return null
   const floor = landing(cellAt, goal, range)
   const pit = floor && floorAround(cellAt, floor)
-  if (!pit || (from && pit.some(cell => key(cell) === key(floored(from))))) return null
+  if (!pit || !walledIn(cellAt, pit) || (from && pit.some(cell => key(cell) === key(floored(from))))) return null
   const at = floored(goal)
   const rim = rimOf(cellAt, pit).sort((a, b) => dist(a, at) - dist(b, at) || (from ? dist(a, from) - dist(b, from) : 0))[0]
   if (!rim) return null

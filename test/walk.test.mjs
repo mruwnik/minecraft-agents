@@ -100,6 +100,10 @@ import { rimGoal } from '../src/walk.mjs'
 const hole = (x, z, depth) => Object.fromEntries(Array.from({ length: depth }, (_, i) => [`${x},${62 - i},${z}`, AIR]))
 const site = (...holes) => world(Object.assign({}, ...holes), 62)
 const pit = site(hole(-11, -1, 3))
+// the hole at -11,-1 dug `depth` deep with farmland (planted, unless told bare) in the eight cells round it
+const ringed = (depth, planted = true) => Object.assign(hole(-11, -1, depth), ...[-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => dx || dz ? farmland(-11 + dx, -1 + dz, planted) : {})))
+// a tree's canopy a few blocks off: leaves at y=67 beside the hole, the kind of block the old rim search climbed to
+const canopy = { '-11,67,-2': { name: 'oak_leaves', solid: true } }
 const trench = site(...[-13, -12, -11, -10, -9].map(x => hole(x, -1, 3)))
 const longTrench = site(...span(10).map(dx => hole(-11 + dx, -1, 3)))
 const RIM = (x, y, z) => ({ x, y, z, range: 0, note: `the goal is the floor of a pit: standing at the rim ${x},${y},${z} instead` })
@@ -118,6 +122,15 @@ for (const [name, at, goal, range, options, expected] of [
   ['the body in the pit, aiming at the rim: climbing out is the walk\'s business', pit, { x: -10, y: 63, z: -1 }, 0, { from: inside }, null],
   ['a hole one deep is a step, not a pit', site(hole(-11, -1, 1)), { x: -11, y: 62, z: -1 }, 0, { from: outside }, null],
   ['a hole two deep is a pit', site(hole(-11, -1, 2)), { x: -11, y: 61, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  // Jizo, jizo-melon-patch, 09-26: a one-deep hole in the beds, wheat all round it, and a tree's canopy a few blocks off.
+  // A crop cell is no floor cell, so the hole read as a one-cell pit, and the rim search went up the columns beside it
+  // until it found the canopy: "standing at the rim 4,68,-87 instead", two walks timed out on the detour. A side one
+  // high is a step out, crop or not (the walk prices it as a crop step), and a rim is the top of a wall, never a canopy
+  ['a one-deep hole ringed by wheat is a step out through the crops, not a pit', site(ringed(1)), { x: -11, y: 62, z: -1 }, 0, { from: outside }, null],
+  ['the same, aimed one above it (a walk to the bed), with a canopy beside: no rim up there', site(ringed(1), canopy), { x: -11, y: 63, z: -1 }, 0, { from: outside }, null],
+  ['the same hole two deep, bare farmland round it: a pit, its rim the farmland', site(ringed(2, false)), { x: -11, y: 61, z: -1 }, 0, { from: outside }, RIM(-10, 63, -1)],
+  ['two deep and ringed by wheat: a pit with no rim to stand on, left to the pathfinder', site(ringed(2), canopy), { x: -11, y: 61, z: -1 }, 0, { from: outside }, null],
+  ['a wall top that cannot be stood on is no rim: the next side is', site(hole(-11, -1, 3), { '-10,63,-1': STONE, '-10,64,-1': STONE }), { x: -11, y: 60, z: -1 }, 0, { from: { x: -5, y: 63, z: -1 } }, RIM(-11, 63, 0)],
   ['a trench: the rim beside the goal, on the body\'s side', trench, { x: -11, y: 60, z: -1 }, 0, { from: outside }, RIM(-11, 63, 0)],
   ['a trench, aimed at its end: the end rim is as near as the sides, and nearer the body', trench, { x: -9, y: 60, z: -1 }, 0, { from: { x: -5, y: 63, z: -1 } }, RIM(-8, 63, -1)],
   ['a trench longer than the look round is left to the pathfinder', longTrench, { x: -11, y: 60, z: -1 }, 0, { from: outside }, null],
