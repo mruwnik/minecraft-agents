@@ -1,4 +1,4 @@
-import { createTerrainGeometry, terrainProfile } from './terrain.mjs'
+import { createTerrainGeometry, terrainProfile, PLAYER_HALF, PLAYER_HEIGHT } from './terrain.mjs'
 
 export const equine = name => ['horse', 'donkey', 'mule', 'skeleton_horse', 'zombie_horse'].includes(name)
 export const escortAtDestination = (position, destination, range = 4) => Math.hypot(position.x - destination.x, position.y - destination.y, position.z - destination.z) <= range
@@ -79,7 +79,13 @@ export function createEscortCorridor (blockAt, { from, to, width = 1.4, height =
       }
       return null
     }
-    const from = landing(a), to = landing(b)
+    // `a` is the horse's observed body; `b` is the leader, whose narrower
+    // body may still stand below an adjacent terrace. Check the player there,
+    // then use the horse's planned support envelope at that endpoint. Requiring
+    // the horse to occupy the player's lower Y wrongly forbids early stepping.
+    if (!geometry.clearBox([b.x - PLAYER_HALF, b.y, b.z - PLAYER_HALF, b.x + PLAYER_HALF, b.y + PLAYER_HEIGHT, b.z + PLAYER_HALF])) return false
+    const from = landing(a), target = stance(b)
+    const to = target ? { x: b.x, y: target.height, z: b.z } : null
     return !!from && !!to && edge(from, to)
   }
   return { stance, edge, followingEdge, reads: () => cache.size }

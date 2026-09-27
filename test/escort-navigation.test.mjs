@@ -160,3 +160,49 @@ test('production leadWalk resumes an attached horse with no carried leads and do
   assert.equal(started, 1)
   assert.ok(stopped >= 1)
 })
+
+test('observed offset leader beside a terrace can be followed by a horse which steps up early', () => {
+  // Synthetic loaded completion of the observed local terrace; exact live
+  // actor positions are retained, without claiming an entire captured chunk.
+  const horse=point(-15.812969676457474,67,-148.62891168590812), leader=point(-17.5,67,-149.5)
+  const at=world((x,y,z)=>y<67?'grass_block':y===67&&x<=-19&&(z===-150||z===-149)?'grass_block':'air')
+  for(const goal of [point(-28,67,-148),point(-16,67,-140)]) {
+    const g=createEscortCorridor(at,{from:leader,to:goal,maxY:75})
+    assert.equal(g.stance(leader).height,68,'wide horse must step before the narrower player does')
+    assert.ok(g.edge(horse,leader),'planned support envelope already accepts this natural step')
+    assert.ok(g.followingEdge(horse,leader),'live tether check must agree with that supported approach')
+  }
+})
+
+test('early-step tether allowance retains horse headroom, cliff and current-body collision checks', () => {
+  const horse=point(-15.812969676457474,67,-148.62891168590812), leader=point(-17.5,67,-149.5)
+  for(const obstacle of ['ceiling','two-high','cliff','horse-collision']) {
+    const at=world((x,y,z)=>{
+      if(obstacle==='ceiling'&&y===69&&x===-18&&z===-150)return'oak_leaves'
+      if(obstacle==='cliff'&&x===-17&&z===-150&&y<=66)return'air'
+      if(obstacle==='horse-collision'&&y===67&&x===-16&&z===-149)return'oak_leaves'
+      if(y<67)return'grass_block'
+      if(x<=-19&&(z===-150||z===-149)&&y<=(obstacle==='two-high'?68:67))return'grass_block'
+      return'air'
+    })
+    const g=createEscortCorridor(at,{from:leader,to:point(-16,67,-140),maxY:75})
+    assert.equal(g.followingEdge(horse,leader),false,obstacle)
+  }
+})
+test('native horse-sized physics executes the diagonal early step beside the live leader position', () => {
+  const at=world((x,y,z)=>y<67?'grass_block':y===67&&x<=-19&&(z===-150||z===-149)?'grass_block':'air')
+  const physicalWorld={getBlock:p=>at(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))}
+  const physics=Physics(registry,physicalWorld)
+  physics.playerHalfWidth=1.3964844/2;physics.playerHeight=1.6;physics.stepHeight=1
+  const horse=point(-15.812969676457474,67,-148.62891168590812), leader=point(-17.5,67,-149.5)
+  const control={forward:true,back:false,left:false,right:false,jump:false,sprint:false,sneak:false}
+  const shadow={version:'26.1',entity:{position:horse,velocity:point(0,0,0),onGround:true,effects:{},attributes:{},yaw:Math.atan2(horse.x-leader.x,horse.z-leader.z),pitch:0},inventory:{slots:[]},jumpTicks:0,jumpQueued:false,fireworkRocketDuration:0}
+  const state=new PlayerState(shadow,control)
+  for(let tick=0;tick<60;tick++) {
+    if(Math.hypot(state.pos.x-leader.x,state.pos.z-leader.z)<0.2)control.forward=false
+    physics.simulatePlayer(state,physicalWorld)
+  }
+  assert.equal(state.pos.y,68)
+  assert.ok(Math.hypot(state.pos.x-leader.x,state.pos.z-leader.z)<0.4)
+  assert.equal(control.jump,false)
+})
