@@ -550,3 +550,38 @@ test('a fresh traded-target guard prevents removing its station even when offer 
   await assert.rejects(roll.run(api,{...cell,id:1,pen:false,want:'mending',tries:2}),/trade-locked/)
   assert.equal(digs,0)
 })
+
+function longRollApi ({ matchAt=45, cancelAt, failAt }={}) {
+ const cell={x:1,y:64,z:2}, uuid='11111111-1111-4111-8111-111111111111'
+ let placed=true,round=1,stopped=false
+ const calls=[]
+ const entity={id:7,uuid,exact:'2,64,2',metadata:JSON.stringify(Object.assign(Array(21).fill(null),{19:{villagerProfession:0}}))}
+ const api={places:()=>[],zones:()=>[],me:()=> 'Probe',clock:()=>({day:true}),inv:()=>({lectern:2}),block:()=>({name:placed?'lectern':'air'}),report:()=>{},note:()=>{},
+  checkpoint:async()=>{if(round===cancelAt){stopped=true;throw new Error('cancelled: stop requested')}},
+  until:async f=>assert.ok(await f()),act:async(name,a)=>{
+   assert.equal(stopped,false,'no actions after cancellation')
+   calls.push(name)
+   if(name==='goto')return {}
+   if(name==='entity')return {found:[entity]}
+   if(name==='find_blocks')return {positions:[]}
+   if(name==='trades'){if(round===failAt)throw new Error('merchant window failed');return {profession:placed?'librarian':'unemployed',level:1,offers:[book(round>=matchAt?'mending':'sharpness',1)]}}
+   if(name==='dig'){placed=false;round++;return {}}
+   if(name==='place'){placed=true;return {}}
+   throw new Error(name)
+  }}
+ return {api,cell,uuid,calls}
+}
+test('reroll default continues beyond forty offer sets until matching',async()=>{
+ const h=longRollApi();const result=await roll.run(h.api,{...h.cell,uuid:h.uuid,want:'mending',pen:false})
+ assert.equal(result.rounds,45);assert.equal(result.found,'mending 1');assert.equal(h.calls.filter(n=>n==='dig').length,44)
+})
+test('explicit reroll quota stops with the workstation left placed',async()=>{
+ const h=longRollApi();const result=await roll.run(h.api,{...h.cell,uuid:h.uuid,want:'mending',pen:false,tries:3})
+ assert.equal(result.rounds,3);assert.equal(result.found,'none');assert.equal(h.calls.filter(n=>n==='dig').length,2);assert.equal(h.api.block().name,'lectern')
+})
+test('unlimited reroll aborts on cancellation or merchant failure without more dig or trade',async()=>{
+ for(const options of [{cancelAt:3},{failAt:3}]){
+  const h=longRollApi(options);await assert.rejects(roll.run(h.api,{...h.cell,uuid:h.uuid,want:'mending',pen:false}),/cancelled|merchant window failed/)
+  assert.equal(h.calls.filter(n=>n==='dig').length,2);assert.equal(h.calls.filter(n=>n==='trade').length,0);assert.equal(h.api.block().name,'lectern')
+ }
+})

@@ -154,7 +154,7 @@ export async function maintainVillage(api,a,io={}) {
     if(!role.workstation){blocked.push(`role ${role.id} needs an explicit local workstation coordinate in population.roles`);break}
     const cell=plan.world(role.workstation),block=Object.keys(JOB_BLOCK_PROFESSION).find(b=>JOB_BLOCK_PROFESSION[b]===role.profession)
     try {
-      const args={...cell,uuid:candidate.uuid,block,pen:false,buy:true,...(workspace||role.workstation?{proveStation:true,claimHabitat:{at:plan.at,width:plan.bp.width,depth:plan.bp.depth,height:plan.ir.height,gates:plan.entrances}}:{}),tries:a.tries ?? 40,...role.trade}
+      const args={...cell,uuid:candidate.uuid,block,pen:false,buy:true,...(workspace||role.workstation?{proveStation:true,claimHabitat:{at:plan.at,width:plan.bp.width,depth:plan.bp.depth,height:plan.ir.height,gates:plan.entrances}}:{}),...(a.tries!==undefined?{tries:a.tries}:{}),...role.trade}
       const result=childFinished(await (io.roll ? io.roll(api,args):api.act('villager.roll',args)))
       if(result.workstationClaim){const input={uuid:candidate.uuid,at:time(),by:api.me(),workstationClaim:result.workstationClaim};(io.saveObservation ?? (input=>saveVillagerObservation(VILLAGER_ROSTER_FILE,input)))(input)}
       actions.push({action:'villager.roll',uuid:candidate.uuid,role:role.id,result})

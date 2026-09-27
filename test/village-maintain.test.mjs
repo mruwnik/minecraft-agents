@@ -104,3 +104,14 @@ test('workstation-bound maintenance persists causal claim evidence and does not 
  const locked=fixture({target:1,rows:[A],workspaces:[workspace]});locked.entities[0].metadata=JSON.stringify({19:{profession:'fletcher',level:1}});locked.setRoster(mergeVillagerObservation(locked.io.readRoster(),{uuid:A,at:new Date().toISOString(),by:'Tester',profession:'fletcher',purchase:{offer:1,bought:'arrow'}}))
  const unknown=await maintainVillage(locked.api,locked.a,locked.io);assert.equal(unknown.status,'blocked');assert.equal(unknown.workspaces[0].status,'unknown');assert.ok(!locked.calls.some(c=>['dig','place','trade','villager.roll'].includes(c.action)))
 })
+
+test('maintenance leaves reroll attempts unlimited unless caller supplies a quota',async()=>{
+ for(const tries of [undefined,7]){
+  const f=fixture({target:1,rows:[A],locked:false,roles:[{id:'arrows',profession:'fletcher',trade:{output:'arrow'},workstation:[3,0,6]}]})
+  f.entities[0].metadata=JSON.stringify({19:{profession:'unemployed',level:1}})
+  let supplied
+  const a={...f.a,...(tries===undefined?{}:{tries})}
+  await assert.rejects(maintainVillage(f.api,a,{...f.io,roll:async(_api,args)=>{supplied=args;return {stopped:'test operation stop'}}}),/test operation stop/)
+  assert.ok(supplied);assert.equal(supplied.tries,tries);assert.equal(Object.hasOwn(supplied,'tries'),tries!==undefined)
+ }
+})

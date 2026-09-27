@@ -8,8 +8,8 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const professionOf = raw => villagerObservation({ metadata: raw }).profession
 
 export default {
-  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow [enchant=sharpness level=3]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=40] [buy=false]: reroll one villager at a workstation until its offers match; optionally buy the cheapest affordable offer to lock the job; proveStation=true requires an observed unemployed target and records a sole-station causal claim',
-  stops: 'a matching offer is found, tries run out, night falls, or the villager leaves',
+  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow [enchant=sharpness level=3]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=] [buy=false]: reroll one villager at a workstation until its offers match (no attempt limit unless tries= is supplied); optionally buy the cheapest affordable offer to lock the job; proveStation=true requires an observed unemployed target and records a sole-station causal claim',
+  stops: 'a matching offer is found, an explicit tries limit runs out, night falls, or the villager leaves',
   args: { want: 'string', output: 'string', enchant: 'string', level: 'number', atLeast: 'boolean', uuid: 'string', id: 'number', block: 'string', pen: 'boolean', penBlock: 'string', maxPrice: 'number', tries: 'number', buy: 'boolean', proveStation:'boolean',claimHabitat:'any', x: 'number!', y: 'number!', z: 'number!' },
 
   async run (api, a) {
@@ -27,8 +27,8 @@ export default {
     if (typeof enchant === 'string') throw new Error(enchant)
     const selector = { wants, output: a.output, enchant: enchant[0]?.enchant, level: enchant[0]?.level, atLeast: Boolean(enchant[0]?.atLeast) }
     const maxPrice = a.maxPrice ?? 64
-    const tries = a.tries ?? 40
-    if (!Number.isInteger(tries) || tries < 1 || tries > 200 || !Number.isInteger(maxPrice) || maxPrice < 1 || maxPrice > 64) throw new Error('tries= must be 1..200 and maxPrice= must be 1..64')
+    const tries = a.tries ?? Infinity
+    if ((a.tries !== undefined && (!Number.isInteger(tries) || tries < 1 || tries > 200)) || !Number.isInteger(maxPrice) || maxPrice < 1 || maxPrice > 64) throw new Error('tries= must be 1..200 and maxPrice= must be 1..64')
     if (a.id !== undefined && a.uuid) throw new Error('use either uuid= or id=, not both')
     const cell = { x: a.x, y: a.y, z: a.z }
     const owner = api.places().filter(p => distance(p, cell) <= (p.radius ?? 8)).map(p => workRefusal(p, api.me())).find(Boolean)
