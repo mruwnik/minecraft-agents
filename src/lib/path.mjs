@@ -65,7 +65,7 @@ export const boxedIn = passable => {
 }
 
 const SHAFT_NOTE = 'you are standing in a 1-wide shaft with its walls at head height: nothing at all can be walked to from here, however near it is. The answer is about the block you are ON, not the one you asked for. `goto` the same place again with dig=true and the body digs itself out, or place a block at your feet and step up on it'
-const SEARCH_TIMEOUT = 'the search ran out of time (5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
+const SEARCH_TIMEOUT = 'the search ran out of time (up to 5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
 export function explainNoPath (error, dig, boxed = false) {
   if (dig || !/no path to the goal|took to long to decide/i.test(error)) return error
   if (boxed) return SHAFT_NOTE
@@ -140,10 +140,29 @@ export const legFlags = (nodes, nameAt) => ({
 // only straight steps (diagonals and jumps skip it), so the pricing and the filter sit on getNeighbors instead
 export const farmWalk = Base => class extends Base {
   getNeighbors (node) {
-    const floor = move => this.getBlock(move, 0, -1, 0)?.name
-    return super.getNeighbors(node)
-      .filter(move => keepMove(node, move, floor(move)))
-      .map(move => Object.assign(move, { cost: move.cost + cropStepCost(this.getBlock(move, 0, 0, 0)?.name) + trampleCost(node, move, floor(move)) }))
+    // One expansion reads the same feet/head/floor cells for straight, diagonal and jump moves.
+    // Cache only synchronously inside this expansion: the next node sees world and door updates.
+    const read = this.getBlock
+    const cells = new Map()
+    this.getBlock = (pos, dx, dy, dz) => {
+      // Native jump-up planning changes block.height while considering a placed
+      // support. Sharing that speculative object changes later neighbor choices.
+      if (!pos || node.remainingBlocks > 0) return read.call(this, pos, dx, dy, dz)
+      const key = `${pos.x + dx},${pos.y + dy},${pos.z + dz}`
+      if (cells.has(key)) return cells.get(key)
+      const block = read.call(this, pos, dx, dy, dz)
+      // Unloaded fallback height is relative to dy, so it cannot be shared by absolute cell.
+      if (block?.position) cells.set(key, block)
+      return block
+    }
+    try {
+      const floor = move => this.getBlock(move, 0, -1, 0)?.name
+      return super.getNeighbors(node)
+        .filter(move => keepMove(node, move, floor(move)))
+        .map(move => Object.assign(move, { cost: move.cost + cropStepCost(this.getBlock(move, 0, 0, 0)?.name) + trampleCost(node, move, floor(move)) }))
+    } finally {
+      this.getBlock = read
+    }
   }
 
   // how many moves the pathfinder makes off `node`, and how many of them the farmland rule keeps (see noFirstMove)

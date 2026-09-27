@@ -17,7 +17,10 @@ const passable = cell => Boolean(cell) && !cell.solid && !cell.crop && cell.name
 export const standable = (cellAt, { x, y, z }) => {
   const feet = cellAt(x, y, z)
   if (!passable(feet) || !passable(cellAt(x, y + 1, z))) return false
-  return Boolean(feet.liquid) || Boolean(cellAt(x, y - 1, z)?.solid)
+  const floor = cellAt(x, y - 1, z)
+  // Tall barriers extend half a block into this feet cell and cannot be treated
+  // as an ordinary floor. Farm jobs must work beside them, not aim onto them.
+  return Boolean(feet.liquid) || Boolean(floor?.solid && !/_fence$|_wall$|_fence_gate$/.test(floor.name))
 }
 
 // where a JOB stands: the body swims through water but works from dry footing (a pour from a pond cell drifts, drops float off)

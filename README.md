@@ -36,12 +36,42 @@ THIS world is under `state/`, `WORLD.md` and `BUGS.md` included, so an agent sti
 
 ## Keeping the driver's context small
 
+For gathering errands, have the driver read [the forager role](roles/forager/ROLE.md), then ask naturally:
+"Please go and find me 12 roses", "seeds of all crops", "a pair of sheep", "bamboo shoots", or "15 iron".
+The role selects existing gathering and delivery commands and checks the result. Its `forage.search` command
+adds outward expeditions plus spiral and sweep searches for blocks or farm animals, for example
+`./mc forage.search block=bamboo heading=east radius=512 steps=64` or `./mc forage.search mob=sheep count=2`.
+Outward search advances in short legs, tries alternative routes after ordinary path failures, and reports how
+to resume. The role continues into fresh country after nearby misses and retains errands across rest and resupply.
+For known destinations, `./mc travel x= y= z= plan=true` compares complete travel itineraries. It supports walking
+and validated powered-rail trips when an authorized cart, straight track corridor and safe exit are supplied.
+Prepared horses can also be compared with `horse=<id>` on clear, flat, dry routes up to 128 blocks.
+Use `horse_state`, `tame id=<id>`, `horse_saddle id=<id>` and `ride id=<id> x= y= z=` to prepare and ride
+an authorized horse, donkey or mule; `horse_dismount` confirms a safe server-reported landing.
+Boat self-travel remains unavailable.
+Natural-language interpretation belongs to the driver; the CLI takes these structured commands.
+New composites load when a body starts, so an already-running body needs a normal restart before using this command.
+
 The planning side is an LLM that pays for every token it reads, so:
 
 - `./mc` prints one terse line per result (`ok goto 14s +mutton:1 @61,69,-107`); add `-v` for the full JSON.
 - `./mc scan x1= y1= z1= x2= y2= z2=` draws ASCII slices of a box in one call (all-air layers are collapsed). Use it instead of looping `block_at`.
 - `./mc run steps='[{"action":"dig",...},{"action":"place",...}]'` runs several actions in one call and stops at the first failure.
 - Pure helpers live in `src/lib.mjs`; run every test with `npm test` (`node --test test/*.test.mjs`).
+
+`node tools/profile-pathfinding.mjs` compares the original and cached pathfinder on open ground, a fence detour
+and an unreachable goal, reporting search time, world reads and path equivalence. The cache lasts for one
+node expansion; the next expansion reads the world again, including changed blocks and gates.
+One second is a scan performance target, not a cutoff. Slow resource scans, frontier scans and route searches
+record rate-limited `performance_bug` events with timing and workload details while keeping their results and
+continuing normal work. Inspect them with `./mc events type=performance_bug last=10`.
+
+Terrain routing uses block-state collision geometry for body clearance and footing, plus explicit rules for
+hazards, fluids, crops, doors and climbing. Harmless decorations do not need a plant whitelist. The local
+foraging scan selects connected dry routes; ordinary walking can also use its swimming routes. A route through
+partial blocks must fit the body along the transition, not just at its destination. Scaffolding requires the
+physics and movement patches installed by `tools/patch-deps.mjs`; its decks behave differently when entering,
+climbing, standing above them or sneaking down. This does not make hazardous terrain safe or authorize digging.
 
 ## Protected zones and doors
 

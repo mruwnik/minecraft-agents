@@ -6,10 +6,10 @@ import { breedPlan } from '../villager/breed.mjs'
 import { woodenGate } from '../enclosure/blocks.mjs'
 import { boatHabitatPlan } from '../boat/habitat.mjs'
 import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
-import { carryReport, compositeResult } from '../composite.mjs'
+import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverableNavigationTarget, navigationTargetKey } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
-import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard } from '../bot.mjs'
+import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance } from '../bot.mjs'
 import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 
 // ---------------------------------------------------------------- the composite runner ("autopilot")
@@ -39,10 +39,6 @@ export { BANNED_FOOD }
 let lastSpoken = null
 export const setLastSpoken = v => { lastSpoken = v }
 
-class HandBack extends Error {
-  constructor (reason) { super(reason); this.reason = reason }
-}
-
 const worldDay = () => Math.floor(Number(bot.time.age ?? 0) / 24000)
 // a body below the hunger floor carrying rotten flesh is not a body with nothing edible: it has a meal it is now
 // allowed to eat, and a composite that stopped for "nothing edible carried" was stopping over its own dinner (#139)
@@ -69,13 +65,14 @@ function makeApi (composite, a, alive) {
   const notes = []
   const report = {}
   const failures = new Map()
+  let pendingNavigationFailure = null
   const startedDay = worldDay()
   const startedAt = Date.now()
   let sleptTonight = false
   const night = () => isNight(bot.time.timeOfDay)
   const blockAt = (x, y, z) => {
     const b = bot.blockAt(new Vec3(Math.floor(x), Math.floor(y), Math.floor(z)))
-    return b ? { name: b.name, properties: b.getProperties?.() ?? {}, solid: b.boundingBox === 'block' } : null
+    return b ? { name: b.name, properties: b.getProperties?.() ?? {}, solid: b.boundingBox === 'block', shapes: b.shapes } : null
   }
   const failedTwice = () => [...failures.values()].find(f => f.count >= 2)?.why
   const noteFailure = (name, why) => {
@@ -83,6 +80,7 @@ function makeApi (composite, a, alive) {
     failures.set(name, { why, count: seen?.why === why ? seen.count + 1 : 1 })
   }
   const act = async (name, args = {}) => {
+    pendingNavigationFailure = null
     alive()
     const fn = long[name] ?? quick[name]
     if (!fn) throw new Error(`${composite}: no action called ${name}`)
@@ -92,10 +90,26 @@ function makeApi (composite, a, alive) {
     return Promise.resolve().then(() => fn(args)).then(
       r => { failures.delete(name); setStepsDone(stepsDone + 1); return r ?? {} },
       e => {
+        if (e instanceof HandBack || e?.reason) throw e
         const why = `${name}: ${explainFailure(e.message)}`
         noteFailure(name, why)
+        const target = name === 'goto' ? recoverableNavigationTarget(e, args) : null
+        if (composite === 'forage.search' && target) {
+          pendingNavigationFailure = { target, why }
+        }
         throw new Error(`${composite}/${why}`)
       })
+  }
+  const recoverNavigationFailure = target => {
+    alive()
+    const pending = pendingNavigationFailure
+    pendingNavigationFailure = null
+    if (composite !== 'forage.search' || !pending || !pending.target ||
+        navigationTargetKey(target) !== pending.target) return false
+    const recorded = failures.get('goto')
+    if (recorded?.why !== pending.why) return false
+    failures.delete('goto')
+    return true
   }
   const cleanupAct = async (name, args = {}) => {
     const protectedGates = composite === 'villager.breed'
@@ -131,6 +145,7 @@ function makeApi (composite, a, alive) {
   const until = makeUntil({ waitTicks: n => bot.waitForTicks(n), alive, composite })
   // between steps: night with a bed is slept through and the composite never sees it; anything else that needs a person stops the task
   const checkpoint = async (extra = {}) => {
+    pendingNavigationFailure = null
     alive()
     if (!night()) sleptTonight = false
     if (night() && !sleptTonight && bedsNear().length) {
@@ -176,6 +191,12 @@ function makeApi (composite, a, alive) {
       cleanupAct,
       until,
       checkpoint,
+      performance: reportPerformance,
+      navigationCapabilities: () => ({
+        scaffolding: bot.pathfinder?.movements?.scaffoldingSupported === true,
+        climbableVines: bot.pathfinder?.movements?.climbableVinesSupported === true
+      }),
+      recoverNavigationFailure,
       block: blockAt,
       clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), raining: bot.isRaining, elapsedDays: worldDay() - startedDay }),
       inv: () => inventoryCounts(),

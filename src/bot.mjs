@@ -16,6 +16,7 @@ import { loader as autoEat } from 'mineflayer-auto-eat'
 import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
+import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
 import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
@@ -24,7 +25,8 @@ import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote,
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
-import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
+import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
+import { walkStandstill, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './navigation/stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
@@ -42,6 +44,9 @@ import { slabMergeRefusal } from './build/slab-merge.mjs'
 import { executeFlow, parseFlowEDN, resolveFlowAction } from './flow.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
+import { makeTravelRuntime } from './body/travel.mjs'
+import { makeRidingRuntime, horseState } from './body/riding.mjs'
+import { driveHorse } from './navigation/horse.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
@@ -56,6 +61,7 @@ for (const [axis, method] of ['computeOffsetX', 'computeOffsetY', 'computeOffset
 
 export const { pathfinder, Movements, goals } = pf
 export const { Vec3 } = vec3
+export const reportPerformance = createSlowScanReporter({ emit })
 const armorManager = armorManagerMod.default ?? armorManagerMod
 
 // ---------------------------------------------------------------- bot lifecycle
@@ -226,6 +232,7 @@ export function makeMoves (dig) {
   moves.exclusionAreasStep.push(block => thicketCost(besideNames(block.position, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name)))
   // collectBlock switches both of these off on the movements it is given; with them off a tunnel under gravel buried and killed me
   for (const guard of ['dontMineUnderFallingBlock', 'dontCreateFlow']) Object.defineProperty(moves, guard, { get: () => true, set () {} })
+  configureTerrainMoves(moves, { blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)), scaffolding: scaffoldingAvailable(), climbableVines: climbableVinesAvailable() })
   return moves
 }
 export function useMoves (dig) {
@@ -350,14 +357,19 @@ function connect () {
     }
     // path_update hands out the live path before the pathfinder starts walking it: fix doorway waypoints in place (see doorwayNode)
     bot.on('path_update', r => r.path.forEach(n => Object.assign(n, doorwayNode(n, doorAt(n)))))
-    bot.on('goal_updated', () => { goalSetAt = Date.now() })
+    bot.on('goal_updated', goal => {
+      goalSetAt = Date.now()
+      // A fresh walk starts a new clock; setGoal(theSameGoal) is the watchdog's
+      // one retry, so it must keep the original episode and eventual timeout.
+      if (!goal || stillFrom?.goal !== goal) stillFrom = null
+    })
     bot.on('path_reset', reason => { pathResets.push({ reason, at: Date.now() }); if (pathResets.length > 200) pathResets.shift() })
     bot.on('path_update', r => { livePath = r.path })
     // a leg with a crop or farmland node in it walks without sprinting: the executor sprint-jumps a straight line it cannot
     // walk in one go, and a landing is what tramples farmland (card fcd996fe). Read per tick off the movements in use
     const sprintFor = leg => { for (const moves of [walkMoves, digMoves]) moves.allowSprinting = legFlags(leg, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name).allowSprinting }
     bot.on('path_update', r => sprintFor(r.path))
-    bot.on('goal_reached', () => sprintFor([]))
+    bot.on('goal_reached', () => { stillFrom = null; sprintFor([]) })
     // registered after the pathfinder's own tick, so a key pressed here survives until the next physics step (see idleNudge)
     // ...and released here, before it: what is pressed when my turn comes is then the pathfinder's own choice for this tick
     bot.prependListener('physicsTick', () => {
@@ -382,7 +394,14 @@ function connect () {
       bot.setControlState('forward', true)
       bot.setControlState('jump', push.jump)
     })
-    bot.on('path_update', r => { lastPath = { status: r.status, at: Date.now(), nodes: r.path.slice(0, 4).map(n => `${n.x},${n.y},${n.z}`), visited: r.visitedNodes, searchMs: Math.round(r.time) } })
+    const reportedSlowPaths = new WeakSet()
+    bot.on('path_update', r => {
+      lastPath = { status: r.status, at: Date.now(), nodes: r.path.slice(0, 4).map(n => `${n.x},${n.y},${n.z}`), visited: r.visitedNodes, searchMs: Math.round(r.time) }
+      if (r.time > 1000 && (!r.context || !reportedSlowPaths.has(r.context))) {
+        if (r.context) reportedSlowPaths.add(r.context)
+        reportPerformance('pathfinding', r.time, { status: r.status, visited: r.visitedNodes, generated: r.generatedNodes, pathNodes: r.path.length, at: pos(), task: task?.name })
+      }
+    })
     // The server silently resets us every tick if our hitbox touches a block exactly, so keep a hair's gap.
     bot.physics.playerHalfWidth = cfg.halfWidth ?? 0.3001
     // remember my last few outgoing positions: printed with each server reset, they show what the server refused
@@ -997,7 +1016,7 @@ setInterval(() => {
   if (!ready) return
   watchStuck()
   const here = bot.entity.position.clone()
-  if (!task || !stillFrom || progressed(stillFrom.pos, here) || stillFrom.task !== task.id) stillFrom = { pos: here, at: Date.now(), task: task?.id }
+  stillFrom = walkStandstill(stillFrom, { pos: here, now: Date.now(), task: task?.id, goal: bot.pathfinder.goal })
   const sample = { hasGoal: Boolean(task && bot.pathfinder.goal), moved: Math.hypot(here.x - stillFrom.pos.x, here.z - stillFrom.pos.z), digging: Boolean(bot.targetDigBlock), seconds: (Date.now() - stillFrom.at) / 1000, path: lastPath && lastPath.at >= goalSetAt ? lastPath : null }
   // forward held and the body not moving for 2 s: said once per standstill, with the evidence that names the cause, long
   // before the 12 s alarm cancels the task (the alarm still does)
@@ -1589,6 +1608,13 @@ const boatRuntime = makeBoatRuntime({
   Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove,
   getSwimStepTarget: () => swimStepTarget, setSwimStepTarget: value => { swimStepTarget = value }
 })
+const travelRuntime = makeTravelRuntime({ getBot: () => bot, Vec3, cancelGuard, edibleCarried, reportPerformance: (...args) => reportPerformance(...args) })
+const ridingRuntime = makeRidingRuntime({
+  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveHorse,
+  reportPerformance: (...args) => reportPerformance(...args),
+  goNear: async (entity, check) => { check(); await goNear(entity.position, 2.5); check() },
+  report: progress => emit('riding_progress', progress)
+})
 const villagerRuntime = makeVillagerRuntime({
   getBot: () => bot, Vec3, goNear, findItem, inventoryCounts, cancelGuard, emit,
   getFeeding: () => feeding, setFeeding: value => { feeding = value },
@@ -1597,6 +1623,8 @@ const villagerRuntime = makeVillagerRuntime({
 
 export const long = {
   ...boatRuntime.long,
+  ...travelRuntime.long,
+  ...ridingRuntime.long,
   ...villagerRuntime.long,
   async goto (a) {
     spared = spareTest(a)
@@ -2543,6 +2571,8 @@ setInterval(() => {
 
 export const quick = {
   ...boatRuntime.quick,
+  ...travelRuntime.quick,
+  ...ridingRuntime.quick,
   ...villagerRuntime.quick,
   // the catalogue every driver starts from: each action with its arguments, and for a composite what hands the body back.
   // It is built from the dispatch tables themselves, so it cannot drift from what this body can actually do.
@@ -2579,6 +2609,7 @@ export const quick = {
     // one call searches for a single 40 ms slice: go on the way a walk does, until it is done or the time a walk this long gets is over
     while (r.status === 'partial' && r.context && Date.now() - began < budget) r = Object.assign(r.context.compute(), { context: r.context })
     const last = r.path[r.path.length - 1]
+    reportPerformance('path_to', Date.now() - began, { status: r.status, visited: r.visitedNodes, generated: r.generatedNodes, goal: aim, budget_ms: budget })
     const stuckHere = r.status === 'noPath' && r.visitedNodes <= 1 ? firstMoveNote(moves) : null
     return { status: r.status, ms: Date.now() - began, nodes: r.path.length, cost: Math.round(r.cost), visited: r.visitedNodes, ends: last ? `${last.x},${last.y},${last.z}` : 'here', ...(stuckHere && { why: stuckHere }), ...(rim && { note: rim.note }), gates: r.path.filter(n => n.toPlace?.some(t => t.useOne)).length, ...(a.route ? routeSummary(r.path) : {}), ...(a.live ? { differs: differs || 'nothing' } : {}) }
   },
@@ -2696,14 +2727,14 @@ export const quick = {
     const near = e => e.position.distanceTo(me)
     return {
       found: Object.values(bot.entities)
-        .filter(e => e.name && CREATURE_FOOD[e.name] && wanted(e.name) && near(e) <= (a.within ?? 24))
+        .filter(e => e.name && (CREATURE_FOOD[e.name] || ['horse', 'donkey', 'mule'].includes(e.name)) && wanted(e.name) && near(e) <= (a.within ?? 24))
         .sort((x, y) => near(x) - near(y))
         .map(e => ({
           mob: e.name,
           id: e.id,
           at: `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`,
           dist: Math.round(near(e)),
-          grown: !isBaby(e.metadata),
+          grown: ['horse', 'donkey', 'mule'].includes(e.name) ? horseState(bot, e)?.baby === false : !isBaby(e.metadata),
           inMyPen: Boolean(floor) && unpenned(floor, [e], x => x.position).length === 0
         }))
     }
@@ -2712,7 +2743,9 @@ export const quick = {
   // x= y= z= anchors the search on a cell instead of on me: a place's hives are the same list from wherever I stand
   find_blocks (a) {
     const point = a.x === undefined ? bot.entity.position : vecOf(a)
-    return { positions: findBlockByName(a.block, a.maxDistance ?? 64, a.count ?? 10, point) }
+    const positions = timedScan(reportPerformance, 'find_blocks', () => findBlockByName(a.block, a.maxDistance ?? 64, a.count ?? 10, point),
+      { block: a.block, range: a.maxDistance ?? 64, count: a.count ?? 10, at: { x: point.x, y: point.y, z: point.z } })
+    return { positions }
   },
 
   // will this pen hold? Walks the way an animal can from a spot inside (default: where I stand) and says where it gets out

@@ -2,7 +2,7 @@
 // stopped, cancelled or killed rides on its FAIL line, and a death during it names where the kit lies
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { carryReport, failedResult, deathLine, deathCancel, compositeResult } from '../src/composite.mjs'
+import { carryReport, failedResult, deathLine, deathCancel, compositeResult, CompositeHandBack, recoverableGotoFailure, navigationTargetKey, recoverableNavigationTarget } from '../src/composite.mjs'
 
 const progress = { built: 12, stage: 'walls 2 of 3', dug: '3,64,1' }
 
@@ -85,3 +85,24 @@ for (const [name, report, outcome, notes, expected] of [
 ]) {
   test(`compositeResult: ${name}`, () => assert.deepEqual(Object.entries(compositeResult(report, outcome, notes)), expected))
 }
+
+// ---------------------------------------------------------------- recoverable navigation acknowledgement
+test('only a raw ordinary goto no-route or timeout error can be acknowledged', () => {
+  assert.equal(recoverableGotoFailure(new Error('No path to the goal!')), true)
+  assert.equal(recoverableGotoFailure(new Error('no path to the goal: the search found nothing to walk from here')), true)
+  assert.equal(recoverableGotoFailure(new Error('Took to long to decide path to goal!')), true)
+  assert.equal(recoverableGotoFailure(new Error('the search ran out of time (5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end near a protected pen')), true)
+  assert.equal(recoverableGotoFailure(new Error('cancelled: superseded by stop')), false)
+  assert.equal(recoverableGotoFailure(new CompositeHandBack('spoken to by player')), false)
+  assert.equal(recoverableGotoFailure(new TypeError('No path to the goal!')), false)
+  assert.equal(recoverableGotoFailure(new Error('inside protected zone: cannot walk through')), false)
+  assert.equal(recoverableGotoFailure(new Error('No path to the goal! inside protected zone')), false)
+})
+
+test('a navigation acknowledgement is tied to finite coordinates of the failed waypoint', () => {
+  const target = { x: 16, y: 64, z: -8 }
+  assert.equal(navigationTargetKey(target), '16,64,-8')
+  assert.equal(navigationTargetKey({ ...target, x: Infinity }), null)
+  assert.equal(recoverableNavigationTarget(new Error('No path to the goal!'), target), '16,64,-8')
+  assert.equal(recoverableNavigationTarget(new Error('cancelled: stop'), target), null)
+})

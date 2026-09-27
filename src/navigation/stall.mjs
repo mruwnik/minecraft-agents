@@ -4,6 +4,18 @@
 // head faces against where the path goes, what the legs push into, who is pressed against the body, and where the
 // SERVER last put it. Pure: bot.mjs reads the body and hands the numbers in.
 
+import { progressed } from '../lib/path.mjs'
+
+// Time only the current walk. A routine can spend minutes in place between
+// walks, while replanning the same goal must retain its original stall clock.
+// Preserve object identity while still: kickedFor/frozenFor refer to this episode.
+export function walkStandstill (previous, { task, goal, pos, now }) {
+  if (task == null || !goal || !previous || previous.task !== task || previous.goal !== goal || progressed(previous.pos, pos)) {
+    return { pos: { x: pos.x, y: pos.y, z: pos.z }, at: now, task, goal }
+  }
+  return previous
+}
+
 // The client's registry is one protocol behind the server (26.1 speaking to 26.2 through a bridge): a block state past
 // the registry comes back with no name at all, and a nameless block must never be reported as ground.
 export const blockName = block => (block === null || block === undefined) ? 'unloaded' : (block.name || `unknown(state ${block.stateId})`)

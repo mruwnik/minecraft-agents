@@ -1,10 +1,18 @@
 // fixes to node_modules that cannot be made from outside: run at every body start (start-body), so an npm install cannot quietly undo them
 import fs from 'node:fs'
 import path from 'node:path'
-import { patchPathfinder, patchGotoPartial, patchParkourFences, patchItemEnchants } from '../src/lib.mjs'
+import { patchPathfinder, patchGotoPartial, patchParkourFences, patchItemEnchants, patchGateWaypoints } from '../src/lib.mjs'
+import { patchScaffoldingPhysics, patchScaffoldingPreview, patchScaffoldingDriver } from '../src/navigation/scaffolding.mjs'
 import { patchOwnBreath } from '../src/survival/airlog.mjs'
+import { patchTerrainWaypoints, patchTerrainStart } from '../src/navigation/terrain.mjs'
 
 const PATCHES = [
+  ['node_modules/mineflayer-pathfinder/lib/physics.js', patchScaffoldingPreview, 'mineflayer-pathfinder scaffold descent preview', 'scaffold sneak descent preview anchor changed'],
+  ['node_modules/mineflayer-pathfinder/index.js', patchScaffoldingDriver, 'mineflayer-pathfinder scaffold descent controls', 'scaffold sneak descent driver anchor changed'],
+  ['node_modules/prismarine-physics/index.js', patchScaffoldingPhysics, 'prismarine-physics scaffold collision', 'read src/navigation/scaffolding.mjs: scaffolding climb simulation may treat its outline as solid'],
+  ['node_modules/mineflayer-pathfinder/index.js', patchGateWaypoints, 'mineflayer-pathfinder centred gate waypoints', 'read patchGateWaypoints in src/lib.mjs: gate paths may aim into adjacent fences'],
+  ['node_modules/mineflayer-pathfinder/index.js', patchTerrainWaypoints, 'mineflayer-pathfinder terrain waypoints', 'read patchTerrainWaypoints in src/navigation/terrain.mjs: partial blocks and climbing need matching route heights'],
+  ['node_modules/mineflayer-pathfinder/index.js', patchTerrainStart, 'mineflayer-pathfinder terrain start', 'read patchTerrainStart in src/navigation/terrain.mjs: fractional block states need matching starting feet height'],
   ['node_modules/mineflayer-pathfinder/index.js', patchPathfinder, 'mineflayer-pathfinder gate fix', 'read patchPathfinder in src/lib.mjs: walks through gates may crash every tick'],
   ['node_modules/mineflayer-pathfinder/lib/movements.js', patchParkourFences, 'mineflayer-pathfinder no parkour over fences', 'read patchParkourFences in src/lib.mjs: a walk replanned mid-jump beside a fence row may try to jump along it and stall'],
   ['node_modules/mineflayer-pathfinder/lib/goto.js', patchGotoPartial, 'mineflayer-pathfinder goto waits out a partial search', 'read patchGotoPartial in src/lib.mjs: a goto from a dead end may fail at once and the body walk on after'],

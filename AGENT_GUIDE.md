@@ -220,7 +220,45 @@ campfire and a carpet. Bees stay inside at night and in rain, so `beesVisible=0`
 | `apiary.maintain place= [size=6] [mode=comb] [breed=true] [deposit=false]` | one beekeeper round: inspect, sink any raised fire (when you carry a campfire) and carpet any open one (it stops if you carry no carpet), safely harvest, then breed. With no shears (or no bottles for `mode=bottle`) the round still inspects, guards and breeds, skips the harvest alone and answers `missing=shears`; carry the tool and run it again when enough grown bees are visible and the colony is below `size`. `deposit=true` uses the nearest chest within 32, so use it only where that chest is unambiguous; `deposit=x,y,z` or `deposit=<a marked storage place>` says which (the place's chests within 12 of the mark, nearest first, a full one spilling into the next); what no chest takes is `storage_full=honeycomb:6 carried`, not a failure | one round is done, a ripe hive is unsafe, or a step fails twice |
 
 Roles: `roles/<role>/ROLE.md` is the trade's handbook (what the job needs to know, which composites and marks it uses)
-and `roles/<role>/*.json` are the routines it ships. The current roles are `farmer`, `rancher` and `beekeeper`.
+and `roles/<role>/*.json` are the routines it ships. The current roles are `farmer`, `rancher`, `beekeeper` and `forager`.
+For requests such as "find me 12 roses", crop planting stock, a live sheep pair, bamboo or iron, read
+`roles/forager/ROLE.md`. It routes gathering and delivery through existing commands. Its discover-only
+`forage.search block=<name>|mob=<kind> [count=1] [pattern=outward|spiral|sweep] [heading=north|east|south|west] [radius=512] [spacing=16] [steps=64] [minutes=10] [range=24] [origin=x,y,z]`
+defaults to an outward expedition in short loaded legs, trying alternate routes after ordinary path failures;
+`steps=0` only scans here. Outward searches report resume arguments; increase `radius=` or continue from a new
+origin to cover fresh country. Radius can be up to 4096, steps up to 512 and minutes up to 60 per command.
+A command budget is a progress checkpoint, not abandonment of the request. Keep searching while equipped and
+making progress; sleep/resupply then resume as needed. Results are observations, not item yields or permission
+to harvest. Verify inventory or the destination pen after collection.
+
+For a known destination, `travel x= y= z= [plan=true] [mode=auto|walk|rail|boat|horse]` compares whole itineraries,
+including approach, boarding, riding and the final walk. Add `cart=<id> track=x:y:z,x:y:z exit=x:y:z` for an
+explicit authorized straight, loaded rail route; the command verifies its launch, power, braking station and
+dry exit before boarding. No infrastructure is built. `return=true` prices a walked return without executing it.
+Add `horse=<id>` to compare an already tamed, saddled, unoccupied adult horse, donkey or mule. Horse
+routes currently require a loaded, straight, flat, dry corridor up to 128 blocks with full-block footing
+and enough clearance for horse and rider. Slopes, jumping and swimming are not supported yet.
+Boat self-travel remains unavailable; passenger boat towing is not faster self-travel.
+A failed or interrupted vehicle ride stays mounted and must be inspected before any new walk.
+
+Use `horse_state [id=]` to inspect nearby equines. For an authorized adult animal, `tame id=<id>`
+retries mounting after bucking and verifies the server tame flag. Its default budget is 12 attempts or
+120 seconds; a partial result means it has not confirmed taming. `horse_saddle id=<id>` fits one carried
+saddle through the horse inventory. `ride id=<id>` mounts, fitting a carried saddle if necessary;
+add `x= y= z=` to travel along a supported corridor. These commands leave you mounted.
+Use `horse_dismount [id=]` on stationary, inspected dry ground; it waits for passenger removal and the
+server's actual landing position. `travel` handles this dismount before its final walking leg.
+Choose permitted animals explicitly; the commands do not determine ownership for you.
+
+Scan speed targets milliseconds; a scan over one second records a `performance_bug` diagnostic, not a stop.
+`events type=performance_bug last=10` shows timings and workload context. Keep using successful results and
+continue the errand; normal cancellation, health and pathfinder limits remain separate.
+
+Routing checks actual block-state collision shapes and body clearance. Leaf litter, flowers, sugar cane and
+other harmless decorations do not require clearing. Bamboo stalks still obstruct the body. Partial floors,
+door panels and climbable blocks have distinct movement rules; do not treat every non-full block as air.
+Foraging frontiers prefer connected dry ground. Scaffolding climbing is enabled only when the installed
+physics and route-controller patches support it; ordinary digging and building permissions still apply.
 
 ## House rules
 

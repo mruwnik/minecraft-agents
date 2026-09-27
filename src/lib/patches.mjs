@@ -38,3 +38,26 @@ const ENCHANTS_LIST = "        const raw = this.componentMap.get('enchantments')
 export const patchItemEnchants = source => source.includes(ENCHANTS_LIST)
   ? { status: 'already', source }
   : source.includes(ENCHANTS_RAW) ? { status: 'patched', source: source.replace(ENCHANTS_RAW, ENCHANTS_LIST) } : { status: 'anchor missing', source }
+
+// postProcessPath stopped at a gate-opening action, leaving that node and every
+// following node at integer corners. The body then aimed into the neighbouring
+// fence. A gate interaction changes no floor: centre it and continue the normal
+// floor-height processing, while real digging/scaffolding still stops the pass.
+const GATE_PATH_START = "      if (curPoint.toBreak.length > 0 || curPoint.toPlace.length > 0) break\n      const b = bot.blockAt(new Vec3(curPoint.x, curPoint.y, curPoint.z))\n"
+const GATE_PATH_FIXED = `      if (curPoint.toBreak.length > 0 || curPoint.toPlace.some(p => !p.useOne)) break
+      const b = bot.blockAt(new Vec3(curPoint.x, curPoint.y, curPoint.z))
+      if (curPoint.toPlace.length > 0) { // patched by bot/patch-deps.mjs: centre gate interaction waypoints
+        if (!b?.name?.endsWith('_fence_gate')) break
+        curPoint.x = Math.floor(curPoint.x) + 0.5
+        curPoint.y = Math.floor(curPoint.y)
+        curPoint.z = Math.floor(curPoint.z) + 0.5
+        continue
+      }
+`
+// The terrain adapter may insert its hook before the block read; the gate
+// guard and interaction branch remain intact and should still be recognised.
+export const patchGateWaypoints = source => source.includes(GATE_PATH_FIXED) ||
+  source.includes('      if (curPoint.toBreak.length > 0 || curPoint.toPlace.some(p => !p.useOne)) break') &&
+  source.includes(GATE_PATH_FIXED.slice(GATE_PATH_FIXED.indexOf('      if (curPoint.toPlace.length > 0)')))
+  ? { status: 'already', source }
+  : source.includes(GATE_PATH_START) ? { status: 'patched', source: source.replace(GATE_PATH_START, GATE_PATH_FIXED) } : { status: 'anchor missing', source }

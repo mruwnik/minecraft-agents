@@ -7,6 +7,30 @@
 
 // the report the composite built so far rides on whatever error ends it (a cancel, a death, a step that threw).
 // What the error already carries wins: a composite mid-restoration says so in its own words
+// Nested composites must preserve a safety hand-back instead of treating a
+// partial child result as a completed step and continuing to change the world.
+export class CompositeHandBack extends Error {
+  constructor (reason) { super(reason); this.reason = reason }
+}
+
+// A composite may skip one failed waypoint only when the underlying goto produced an ordinary path failure.
+// Keep this classifier on the raw error, before explainFailure adds contextual advice such as a protected zone
+// or dead end. The standard timeout's leading sentence is also accepted on its own; later advice cannot change it.
+export function recoverableGotoFailure (error) {
+  if (!error || error instanceof CompositeHandBack || error instanceof TypeError || error instanceof SyntaxError || error instanceof ReferenceError || error.reason) return false
+  const message = String(error.message ?? error).trim()
+  return /^(?:no path to the goal!?|no path to the goal: the search found nothing to walk from here|took to long to decide path to goal!?)$/i.test(message) ||
+    /^the search ran out of time \((?:up to )?\d+ s\) before it found a way, which is not the same as there being none\./i.test(message)
+}
+
+export function navigationTargetKey (target) {
+  if (!target || !['x', 'y', 'z'].every(k => Number.isFinite(target[k]))) return null
+  return ['x', 'y', 'z'].map(k => Object.is(target[k], -0) ? '0' : String(target[k])).join(',')
+}
+
+export const recoverableNavigationTarget = (error, target) =>
+  recoverableGotoFailure(error) ? navigationTargetKey(target) : null
+
 export const carryReport = (error, report = {}, notes = []) =>
   Object.assign(error, { report: { ...report, ...(notes.length ? { notes: notes.join('; ') } : {}), ...error.report } })
 
