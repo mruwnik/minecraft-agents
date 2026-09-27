@@ -105,6 +105,14 @@ export function resolveFlowAction (name, long = {}, quick = {}) {
   return name === 'run' ? null : long[name] ?? quick[name] ?? null
 }
 
+// The original object-list API remains a separate syntax, normalized into the
+// same sequential executor. It deliberately does not receive EDN's limits or
+// grammar; callers keep its historical unbounded list behavior.
+export function normalizeLegacySteps (steps) {
+  if (!Array.isArray(steps)) fail('legacy steps must be a list')
+  return ['seq', ...steps.map(({ action, ...args }) => ['action', action, args])]
+}
+
 function validateCondition (expr, env, depth, seen, counter) {
   counter.nodes++
   if (counter.nodes > env.limits.nodes) fail(`program exceeds ${env.limits.nodes} nodes`)
@@ -258,24 +266,26 @@ export async function evaluateFlowCondition (condition, { observe, cache = new M
 // branch from one cached observation sample and picks the first ready branch.
 export async function executeFlow (program, {
   act, observe, waitTicks, alive = () => {}, actions = [], observations = [],
-  limits = {}, pollSeconds = DEFAULT_LIMITS.pollSeconds, now = () => performance.now()
+  limits = {}, pollSeconds = DEFAULT_LIMITS.pollSeconds, now = () => performance.now(), legacy = false
 } = {}) {
-  const validated = validateFlow(program, { actions, observations, limits })
+  const validated = legacy
+    ? { program, limits: { ...DEFAULT_LIMITS, ...limits } }
+    : validateFlow(program, { actions, observations, limits })
   if (typeof act !== 'function' || typeof observe !== 'function' || typeof waitTicks !== 'function' || typeof now !== 'function') fail('host needs act, observe, waitTicks and now callbacks')
   if (!Number.isFinite(pollSeconds) || pollSeconds <= 0 || pollSeconds > 5) fail('pollSeconds must be between 0 and 5')
-  const maxActions = limits.actions ?? DEFAULT_LIMITS.actions
-  const maxWait = limits.waitSeconds ?? DEFAULT_LIMITS.waitSeconds
+  const maxActions = legacy ? Infinity : limits.actions ?? DEFAULT_LIMITS.actions
+  const maxWait = legacy ? Infinity : limits.waitSeconds ?? DEFAULT_LIMITS.waitSeconds
   const flowStartedAt = now()
   let actionCount = 0, waitedTotal = 0
   const globalExpired = () => (now() - flowStartedAt) / 1000 > maxWait
-  const runAction = async ([, name, args]) => {
+  const runAction = async ([, name, args], legacyStep) => {
     alive()
-    if (globalExpired()) fail(`total flow time limit ${maxWait}s reached; no later action ran`)
+    if (!legacy && globalExpired()) fail(`total flow time limit ${maxWait}s reached; no later action ran`)
     if (actionCount >= maxActions) fail(`action limit ${maxActions} reached`)
     actionCount++
-    const result = await act(name, structuredClone(args))
+    const result = await act(name, structuredClone(args), legacyStep)
     alive()
-    return { action: name, result }
+    return legacy ? { action: name, ...(result ?? {}) } : { action: name, result }
   }
   const awaitBranch = async branches => {
     const branchStartedAt = now(), expired = branches.map(() => false)
@@ -332,20 +342,31 @@ export async function executeFlow (program, {
       waitedTotal += Math.max(ticks / 20, Math.max(0, afterWait - beforeWait) / 1000)
     }
   }
-  const run = async node => {
+  const run = async (node, legacyStep) => {
     alive()
     const [op, ...args] = node
     if (op === 'seq') {
       const results = []
-      for (const child of args) results.push(await run(child))
+      for (let i = 0; i < args.length; i++) {
+        const childContext = legacy ? { index: i + 1, total: args.length, action: args[i][1] } : undefined
+        results.push(await run(args[i], childContext))
+      }
       return results
     }
-    if (op === 'action') return runAction(node)
+    if (op === 'action') return runAction(node, legacyStep)
     if (op === 'when') return awaitBranch([node])
     if (op === 'any') return awaitBranch(args)
   }
   const result = await run(validated.program)
   return { result, actions: actionCount, waited: waitedTotal }
+}
+
+export async function executeLegacySteps (steps, host = {}) {
+  if (!Array.isArray(steps)) fail('legacy steps must be a list')
+  if (!steps.length) return { results: [] }
+  const program = normalizeLegacySteps(steps)
+  const { result } = await executeFlow(program, { ...host, legacy: true })
+  return { results: result }
 }
 
 export const FLOW_LIMITS = DEFAULT_LIMITS

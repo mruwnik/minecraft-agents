@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { executeFlow, evaluateFlowCondition, parseFlowEDN, resolveFlowAction, validateFlow } from '../src/flow.mjs'
+import { executeFlow, executeLegacySteps, evaluateFlowCondition, parseFlowEDN, resolveFlowAction, validateFlow } from '../src/flow.mjs'
 import { parseCliArgs } from '../src/cli.mjs'
 
 const actionNames = ['goto', 'toggle', 'say']
@@ -80,6 +80,45 @@ test('flow dispatch invokes existing long composites and quick leaves without re
     observe: async () => undefined, waitTicks: async () => {}
   })
   assert.deepEqual(calls, [['farm.harvest', { crop: 'wheat' }], ['block_at', { x: 2, y: 64, z: 3 }]])
+})
+
+test('legacy object lists share action execution but preserve their response shape, empty list, and unbounded length', async () => {
+  const calls = []
+  const host = {
+    actions: actionNames, observations: observationNames,
+    act: async (name, args) => { calls.push([name, args]); return name === 'say' ? { text: 'said' } : { name: 'grass_block', properties: {} } },
+    observe: async () => undefined, waitTicks: async () => {}
+  }
+  const result = await executeLegacySteps([
+    { action: 'say', message: 'hello' },
+    { action: 'block_at', x: 2, y: 64, z: 3 }
+  ], host)
+  assert.deepEqual(calls, [['say', { message: 'hello' }], ['block_at', { x: 2, y: 64, z: 3 }]])
+  assert.deepEqual(result, { results: [
+    { action: 'say', text: 'said' },
+    { action: 'block_at', name: 'grass_block', properties: {} }
+  ] })
+  assert.deepEqual(await executeLegacySteps([], host), { results: [] })
+  calls.length = 0
+  const longList = Array.from({ length: 70 }, (_, i) => ({ action: 'say', message: String(i) }))
+  assert.equal((await executeLegacySteps(longList, host)).results.length, 70, 'legacy lists do not inherit EDN action limits')
+  assert.equal(calls.length, 70)
+})
+
+test('legacy errors retain step number/action text and stop later actions', async () => {
+  const calls = []
+  await assert.rejects(executeLegacySteps([
+    { action: 'say', message: 'before' },
+    { action: 'missing' },
+    { action: 'say', message: 'must not run' }
+  ], {
+    act: async (name, args, step) => {
+      calls.push([name, args, step])
+      if (name === 'missing') throw new Error(`step ${step.index}/${step.total} (${name}): unknown action`)
+      return { text: 'ok' }
+    }, observe: async () => undefined, waitTicks: async () => {}
+  }), /step 2\/3 \(missing\): unknown action/)
+  assert.deepEqual(calls.map(([name]) => name), ['say', 'missing'])
 })
 
 test('condition operators preserve unknown observations through negation', async () => {
