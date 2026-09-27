@@ -8,5 +8,5 @@ export default {
   instant: true,
   args: { plan: 'any', origin: 'string', file: 'string', name: 'string', facing: 'string', layer: 'number' },
 
-  run: showBlueprintV2
+  run: async (api, args) => showBlueprintV2(api, args)
 }

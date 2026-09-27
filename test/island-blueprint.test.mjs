@@ -20,3 +20,9 @@ test('island cottage has two atomic bed footprints under its protective ceiling'
  assert.equal(ir.objects.filter(o=>o.block==='torch').length,2)
  assert.equal(cottage.materials.shell.kind,'full_cube');assert.equal(cottage.materials.shell.requires.contactHazard,false)
 })
+
+test("blueprint.show returns the Promise required by the composite runner", async()=>{
+ const result=show.run({}, {name:"island-cottage"})
+ assert.equal(typeof result.then,"function")
+ assert.ok(await result)
+})
