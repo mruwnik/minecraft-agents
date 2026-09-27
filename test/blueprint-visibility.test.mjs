@@ -78,3 +78,40 @@ test('a complete roof does not prevent resumed interior bed placement', () => {
   assert.equal(ordered.jobs.filter(j => j.item === 'white_bed').length, 1)
   assert.ok(ordered.jobs.find(j => j.item === 'white_bed').against)
 })
+
+test('a gate stays walkable for routing but is never chosen as a feet or head work stance', () => {
+  const at = { x: -74, y: 69, z: -40 }
+  const target = { x: -73, y: 70, z: -39 }
+  const gate = { x: -73, y: 69, z: -38 }
+  const base = flatGround(68)
+  const plan = (anchor, width, depth, workAt) => {
+    const w = (x, y, z) => {
+      const inside = x >= anchor.x && x < anchor.x + width && z >= anchor.z && z < anchor.z + depth
+      const border = x === anchor.x || x === anchor.x + width - 1 || z === anchor.z || z === anchor.z + depth - 1
+      if (x === gate.x && y === gate.y && z === gate.z) return block('oak_fence_gate', { open: true, facing: 'north' })
+      if (x === gate.x && y === gate.y + 1 && z === gate.z) return block('air')
+      if (inside && y === 69) return block('stone')
+      if (inside && y === 70 && border) return block('stone')
+      return base(x, y, z)
+    }
+    const bp = { width, depth, layers: [{ y: 1 }], params: {} }
+    const work = job({ ...workAt, block: { name: 'oak_planks' }, item: 'oak_planks', class: 'full' })
+    return orderJobs([work], bp, anchor, w, REGISTRY)
+  }
+  const adjacent = plan(at, 3, 3, target)
+  assert.equal(adjacent.unreachable.length, 0)
+  assert.equal(adjacent.jobs.length, 1)
+  const stance = adjacent.jobs[0].stand
+  assert.notDeepEqual([stance.x, stance.y, stance.z], [gate.x, gate.y, gate.z])
+  assert.notDeepEqual([stance.x, stance.y + 1, stance.z], [gate.x, gate.y, gate.z])
+
+  // This deeper cell is beyond click reach from outside. The planner can only
+  // reach it by treating the open gate as passable, then chooses a different
+  // interior stance rather than the gate cell itself.
+  const deepAnchor = { x: -74, y: 69, z: -46 }
+  const deep = plan(deepAnchor, 3, 9, { x: -73, y: 70, z: -42 })
+  assert.equal(deep.unreachable.length, 0)
+  assert.equal(deep.jobs.length, 1)
+  assert.ok(deep.jobs[0].stand.z <= -39, 'the reachable work stance is behind the gate')
+  assert.notDeepEqual([deep.jobs[0].stand.x, deep.jobs[0].stand.y, deep.jobs[0].stand.z], [gate.x, gate.y, gate.z])
+})

@@ -815,6 +815,9 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
   }
   const chooseStand = (job, reachable, fromOutside) => {
     const candidates = withinReach(job).filter(c => standableAt(world, c.x, c.y, c.z, registry) && reachable.has(key(c.x, c.y, c.z)))
+      // The route may pass a gate that pathfinding can open, but goto range=0
+      // rejects a gate as its exact destination. Work beside it, not in it.
+      .filter(c => ![world.get(c.x, c.y, c.z), world.get(c.x, c.y + 1, c.z)].some(b => /_fence_gate$/.test(b?.name ?? '')))
       .filter(c => !fromOutside || outsideFootprint(bp, at, c))
       .map(c => {
         if (['dig', 'till', 'pour'].includes(job.do)) return c
