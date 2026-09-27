@@ -114,6 +114,13 @@ test('arrival requires horse and leader, not just a successful player goal', asy
   assert.equal((await runSurfaceEscort(f.args)).arrived, true)
   assert.equal(f.state().active, false)
 })
+test('losing one lead stops the whole escort instead of reporting success with the remaining horse', async () => {
+  const f = runtime()
+  const herd = [{ position: point(0.5) }, { position: point(0.5) }]
+  f.args.animals = () => f.state().time ? herd.slice(0,1) : herd
+  assert.match((await runSurfaceEscort(f.args)).why, /lead broke/)
+  assert.equal(f.state().active, false)
+})
 
 test('runtime tether checks tolerate bounded horse bobbing while static unsupported nodes remain blocked', () => {
   const g = corridor(world())

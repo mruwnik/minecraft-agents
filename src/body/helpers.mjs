@@ -291,6 +291,7 @@ export async function leashOne (e, { approach = true, check = () => {} } = {}) {
   check()
   await bot.activateEntity(e)
   for (let i = 0; i < 20 && leashHolderOf(e) !== bot.entity.id; i++) { check(); await bot.waitForTicks(1) }
+  check()
   if (leashHolderOf(e) !== bot.entity.id) throw new Error(`the ${e.name} at ${cellOf(e)} took no lead (leads carried: ${leadsCarried()}): stand beside it and try again`)
   Object.assign(e, { grown: !isBaby(e.metadata) })
 }

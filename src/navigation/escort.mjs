@@ -116,13 +116,14 @@ export function configureEscortMoves (moves, options) {
 // bounded waiting and absence of an unsafe fetch walk are exercised together.
 export async function runSurfaceEscort ({ position, animals, destination, check, pause, start, stop, refresh, corridor, now = Date.now, health, threatened = () => false, pathFailed = () => false, grounded = () => true, arrived = e => escortAtDestination(e.position, destination), leaderArrived = p => escortAtDestination(p, destination, 1.5) }) {
   const initialHealth = health(), started = now()
+  const expectedAnimals = animals().length
   let lastProgress = started, best = Infinity, walking = false, tautSince = null
   const finish = why => ({ arrived: !why, why, leadsAttached: animals().length })
   try {
     while (true) {
       check()
       const herd = animals(), p = position(), time = now()
-      if (!herd.length) return finish('the led horse was lost or its lead broke')
+      if (!herd.length || herd.length !== expectedAnimals) return finish('a led horse was lost or its lead broke')
       if (health() < initialHealth || health() < 16 || threatened()) return finish('escort stopped for nearby danger or damage; leads remain attached')
       if (herd.every(arrived) && leaderArrived(p)) return finish(null)
       const distance = Math.hypot(p.x - destination.x, p.y - destination.y, p.z - destination.z)
