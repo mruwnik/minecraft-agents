@@ -58,6 +58,7 @@ test('state exposes numeric observed boat position and controller availability',
   const f = fixture()
   const state = f.runtime.quick.boat_state({})
   assert.equal(state.goalTravel, true)
+  assert.equal(state.boats[0].name, 'oak_boat')
   assert.deepEqual(state.boats[0].position, { x: 1, y: 64, z: 0 })
   assert.equal(state.boats[0].exact, '1,64,0')
 })

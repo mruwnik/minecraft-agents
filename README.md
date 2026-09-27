@@ -48,7 +48,8 @@ and validated powered-rail trips when an authorized cart, straight track corrido
 Prepared horses can also be compared with `horse=<id>` on clear, flat, dry routes up to 128 blocks.
 Use `horse_state`, `tame id=<id>`, `horse_saddle id=<id>` and `ride id=<id> x= y= z=` to prepare and ride
 an authorized horse, donkey or mule; `horse_dismount` confirms a safe server-reported landing.
-Boat self-travel remains unavailable.
+For a checked water itinerary, add `boat=<id> shore=<dry feet x:y:z>`; the planner derives the boarding and landing approach.
+Ordinary wooden boats require a loaded, level source-water corridor. See [checked travel itineraries](docs/travel.md) for supported routes and arrival safeguards.
 Natural-language interpretation belongs to the driver; the CLI takes these structured commands.
 New composites load when a body starts, so an already-running body needs a normal restart before using this command.
 

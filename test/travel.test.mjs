@@ -176,7 +176,7 @@ test('travel plan is read-only, actual rail includes approach and final walk, or
 test('travel excludes stale assets, refuses forced unsupported modes, never walks after failed ride or handback', async () => {
   const api = fakeApi(name => name === 'rail_state' ? { mounted: null, cart: null } : null)
   assert.equal((await travel.run(api, tripArgs)).mode, 'walk')
-  await assert.rejects(travel.run(fakeApi(), { x: 1, y: 64, z: 0, mode: 'boat' }), /physics/)
+  await assert.rejects(travel.run(fakeApi(), { x: 1, y: 64, z: 0, mode: 'boat' }), /checked authorized boat/)
   for (const failure of [new Error('no progress'), new CompositeHandBack('health')]) {
     const failed = fakeApi(name => { if (name === 'rail_ride') throw failure })
     await assert.rejects(travel.run(failed, tripArgs), error => error === failure)
@@ -240,4 +240,65 @@ test('horse itineraries price approach and speed, validate the full corridor, an
   assert.equal(blocked.calls.at(-1).name, 'horse_dismount')
   const cliff = build(); cliff.block = () => null
   assert.equal((await travel.run(cliff, { ...args, plan: true })).selected, 'walk')
+})
+
+function boatTrip (options = {}) {
+  let mounted = options.mounted ? 42 : null
+  const from = { x: 0.5, y: 63 + Math.fround(8 / 9) - 0.5625 * 0.65, z: 0.5 }
+  const calls = [], metrics = []
+  const api = {
+    calls, metrics, pos: () => ({ x: -1.5, y: 64, z: 0.5 }), report: () => {}, checkpoint: async () => {},
+    performance: (...args) => metrics.push(args),
+    block: (x, y, z) => {
+      const solid = y < 63 || y === 63 && (x <= -2 || z >= 120)
+      return { name: solid ? 'stone' : y === 63 ? 'water' : 'air', solid, shapes: solid ? [[0, 0, 0, 1, 1, 1]] : [], properties: y === 63 && !solid ? { level: 0 } : {} }
+    },
+    async act (name, args) {
+      calls.push({ name, args })
+      if (name === 'rail_state') return { mounted, cart: null }
+      if (name === 'boat_state') return { mounted, selfId: 1, goalTravel: true, boats: [{ id: 42, name: 'oak_boat', position: from, yaw: Math.PI, width: 1.375, height: 0.5625, leashHolderId: null, passengers: mounted ? [{ id: 1 }] : [], controller: mounted ? { id: 1 } : null }] }
+      if (name === 'boat_drive') { mounted = 42; if (options.driveError) throw options.driveError; return { mounted: true } }
+      if (name === 'boat_land') {
+        if (options.landError) throw options.landError
+        if (!options.unconfirmed) mounted = null
+        return { serverConfirmed: !options.unconfirmed }
+      }
+      if (name === 'goto') { assert.equal(mounted, null, 'never start walking aboard'); return {} }
+      throw new Error(`unexpected action ${name}`)
+    }
+  }
+  return api
+}
+const boatArgs = { x: 0.5, y: 64, z: 127.5, boat: 42, shore: '0:64:120' }
+test('unified boat planning prices checked boarding, water route, shore, final walk and return', async () => {
+  const api = boatTrip(), plan = await travel.run(api, { ...boatArgs, plan: true, return: true })
+  assert.equal(plan.selected, 'boat')
+  assert.deepEqual(api.calls.map(c => c.name), ['rail_state', 'boat_state'])
+  const option = plan.options.find(o => o.mode === 'boat')
+  assert.ok(option.approachSeconds >= 0 && option.rideSeconds > 0 && option.finalWalkSeconds > 0 && option.returnSeconds > 0)
+  assert.equal(option.seconds, option.approachSeconds + option.boardingAndExitSeconds + option.rideSeconds + option.finalWalkSeconds + option.returnSeconds)
+  assert.match(plan.resume, /boat=42 shore=0:64:120/)
+  assert.ok(api.metrics.some(m => m[0] === 'travel.boat'))
+})
+test('boat execution walks to dry boarding and confirms shore dismount before final walking', async () => {
+  const api = boatTrip(), result = await travel.run(api, boatArgs)
+  assert.equal(result.mode, 'boat')
+  assert.deepEqual(api.calls.map(c => c.name), ['rail_state', 'boat_state', 'rail_state', 'goto', 'boat_drive', 'boat_land', 'rail_state', 'goto'])
+  assert.equal(api.calls.find(c => c.name === 'goto').args.x, -2)
+  const aboard = boatTrip({ mounted: true })
+  assert.equal((await travel.run(aboard, boatArgs)).mode, 'boat')
+  assert.deepEqual(aboard.calls.map(c => c.name), ['rail_state', 'boat_state', 'boat_drive', 'boat_land', 'rail_state', 'goto'])
+})
+test('failed or unconfirmed boat travel retains its handback and never starts final walking', async () => {
+  for (const options of [{ driveError: new CompositeHandBack('night') }, { landError: new Error('unsafe landing') }, { unconfirmed: true }]) {
+    const api = boatTrip(options)
+    await assert.rejects(travel.run(api, boatArgs))
+    assert.equal(api.calls.filter(c => c.name === 'goto').length, 1)
+    assert.ok(['boat_drive', 'boat_land'].includes(api.calls.at(-1).name))
+  }
+  const blocked = boatTrip(); blocked.block = () => null
+  assert.equal((await travel.run(blocked, { ...boatArgs, plan: true })).selected, 'walk')
+  await assert.rejects(travel.run(blocked, { ...boatArgs, mode: 'boat' }), /boarding/)
+  const failure = new Error('cancelled terrain scan'), broken = boatTrip(); broken.block = () => { throw failure }
+  await assert.rejects(travel.run(broken, boatArgs), error => error === failure)
 })

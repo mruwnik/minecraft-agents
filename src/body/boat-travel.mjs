@@ -52,7 +52,7 @@ export function makeBoatTravelRuntime ({ getBot, cancelGuard, readBoatState, get
         const bot = getBot(), state = readBoatState(a)
         return { ...state, goalTravel: Boolean(driveBoat), boats: state.boats.map(view => {
           const entity = bot.entities[view.id]
-          return { ...view, ...(entity?.position ? { position: point(entity.position), yaw: entity.yaw, width: entity.width, height: entity.height } : {}) }
+          return { ...view, ...(entity?.position ? { name: entity.name, position: point(entity.position), yaw: entity.yaw, width: entity.width, height: entity.height } : {}) }
         }) }
       }
     },
