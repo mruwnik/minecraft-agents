@@ -35,6 +35,9 @@ const POINT = ['x', 'y', 'z']
 
 // the given arguments with every alias folded into its key, and the line naming what is still missing (or null)
 export function neededArgs (action, given, needs = NEEDS) {
+  // Unleash without a point detaches animals from this player; a point
+  // instead names a fence knot and still needs all three coordinates.
+  if (action === 'unleash' && !POINT.some(key => Object.hasOwn(given, key))) return { args: given, error: null }
   const wanted = needs[action]
   if (!wanted) return { args: given, error: null }
   const args = Object.entries(wanted).reduce((acc, [key, aliases]) => {

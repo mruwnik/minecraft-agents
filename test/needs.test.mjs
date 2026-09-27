@@ -37,3 +37,9 @@ test('NEEDS: every alias names a key of its own action', () => {
     Object.entries(needs).flatMap(([key, aliases]) => aliases.filter(alias => alias in needs).map(alias => `${action} ${key}<-${alias}`)))
   assert.deepEqual(stray, [])
 })
+test('unleash detaches without coordinates but a fence-knot point must be complete', () => {
+  assert.equal(neededArgs('unleash', {}).error, null)
+  assert.match(neededArgs('unleash', { x: 0 }).error, /unleash needs x= y= z=/)
+  assert.match(neededArgs('unleash', { x: null }).error, /unleash needs x= y= z=/)
+  assert.equal(neededArgs('unleash', { x: 0, y: 64, z: 0 }).error, null)
+})
