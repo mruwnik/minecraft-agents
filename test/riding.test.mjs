@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { makeRidingRuntime, horseState, horseInventoryAction } from '../src/body/riding.mjs'
+import { makeRidingRuntime, horseState, horseInventoryAction, repairHorseWindowInventory } from '../src/body/riding.mjs'
 
 function fixture (options = {}) {
   const horse = { id: 9, name: options.name ?? 'horse', isValid: true, position: { x: 1, y: 64, z: 0 }, metadata: [false, options.flags ?? 0], passengers: [] }
@@ -19,7 +19,10 @@ function fixture (options = {}) {
     writes.push({ name, packet })
     if (name === 'entity_action') {
       client.emit('open_horse_window', { entityId: 9, windowId: 2 })
-      bot.currentWindow = { id: 2, inventoryStart: 2, inventoryEnd: 4, slots: [null, null, { name: 'saddle', type: 99 }] }
+      const slots = Array(38).fill(null)
+      slots[2] = { name: 'saddle', type: 99 }
+      bot.currentWindow = { id: 2, inventoryStart: 0, inventoryEnd: 36, slots }
+      client.emit('window_items', { windowId: 2, items: slots })
     }
   }
   bot._client = client
@@ -59,6 +62,40 @@ test('horse inventory opening uses the actual negotiated protocol action', () =>
     const packet = { name: 'entity_action', params: { entityId: 9, actionId, jumpBoost: 0 } }
     const decoded = deserializer.parsePacketBuffer(serializer.createPacketBuffer(packet)).data.params
     assert.equal(decoded.actionId, version === '26.1' ? 'open_vehicle_inventory' : 6)
+  }
+})
+test('horse inventory uses authoritative equipment offset before native clicks', () => {
+  const registry = createRequire(import.meta.url)('prismarine-registry')('26.1')
+  const windows = createRequire(import.meta.url)('prismarine-windows')(registry)
+  const window = windows.createWindow(2, 'HorseWindow', 'Horse', 0)
+  window.slots.length = 38
+  repairHorseWindowInventory(window, 38)
+  assert.equal(window.inventoryStart, 2)
+  assert.equal(window.inventoryEnd, 38)
+  assert.equal(window.hotbarStart, 29)
+  assert.throws(() => repairHorseWindowInventory(window, 37), /unsupported horse inventory layout/)
+})
+test('modern horse saddle confirmation follows the actual server equipment packet', () => {
+  const require = createRequire(import.meta.url)
+  const protocol = require('minecraft-protocol')
+  for (const version of ['1.21.5', '26.1']) {
+    const registry = require('prismarine-registry')(version)
+    const Item = require('prismarine-item')(registry)
+    const Entity = require('prismarine-entity')(registry)
+    const entity = new Entity(9)
+    entity.name = 'horse'
+    entity.position.set(0, 64, 0)
+    entity.metadata = []
+    entity.metadata[registry.entitiesByName.horse.metadataKeys.indexOf('flags')] = 2
+    const serializer = protocol.createSerializer({ state: 'play', isServer: true, version })
+    const deserializer = protocol.createDeserializer({ state: 'play', version })
+    const saddle = new Item(registry.itemsByName.saddle.id, 1)
+    const packet = { name: 'entity_equipment', params: { entityId: 9, equipments: [{ slot: 7, item: Item.toNotch(saddle) }] } }
+    const decoded = deserializer.parsePacketBuffer(serializer.createPacketBuffer(packet)).data.params
+    for (const equipment of decoded.equipments) entity.setEquipment(equipment.slot, Item.fromNotch(equipment.item))
+    assert.equal(horseState({ registry }, entity).saddled, true)
+    entity.setEquipment(7, null)
+    assert.equal(horseState({ registry }, entity).saddled, false)
   }
 })
 test('tame remounts after server bucking and requires confirmed tame metadata', async () => {

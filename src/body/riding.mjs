@@ -17,6 +17,14 @@ export function horseInventoryAction (bot) {
   }
   return 6
 }
+export function repairHorseWindowInventory (window, slotCount) {
+  const equipmentSlots = slotCount - 36
+  if (!Number.isInteger(slotCount) || equipmentSlots < 2 || equipmentSlots > 17) throw new Error(`unsupported horse inventory layout: ${slotCount} server slots`)
+  if (window.slots.length !== slotCount) throw new Error('horse inventory snapshot has not been applied')
+  window.inventoryStart = equipmentSlots
+  window.inventoryEnd = slotCount
+  window.hotbarStart = slotCount - 9
+}
 const point = p => ({ x: p.x, y: p.y, z: p.z })
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 
@@ -30,9 +38,13 @@ export function horseState (bot, entity) {
   const flags = flagsIndex >= 0 ? entity.metadata?.[flagsIndex] : undefined
   const baby = babyIndex >= 0 ? entity.metadata?.[babyIndex] : undefined
   const movementSpeed = observedHorseSpeed(bot, entity)
+  // Since 1.21.5 saddles are transmitted as actual entity equipment rather
+  // than solely the legacy AbstractHorse saddle bit. Mineflayer preserves the
+  // server equipment array, including the saddle slot beyond humanoid armor.
+  const equippedSaddle = entity.equipment?.some(item => item?.name === 'saddle') ?? false
   return { id: entity.id, name: entity.name, at: point(entity.position),
     tamed: Number.isInteger(flags) ? Boolean(flags & 2) : null,
-    saddled: Number.isInteger(flags) ? Boolean(flags & 4) : null,
+    saddled: equippedSaddle || (Number.isInteger(flags) ? Boolean(flags & 4) : null),
     // Entity metadata is sparse: an adult's false AgeableMob baby value is
     // omitted from the initial server snapshot. A received horse flags byte
     // proves metadata readiness; true baby values are explicitly transmitted.
@@ -103,12 +115,18 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
     await board(bot, entity, check)
     if (bot.currentWindow) throw new Error('close the existing inventory window before saddling')
     let windowId = null
+    const snapshots = new Map()
     const opened = p => { if (p.entityId === entity.id) windowId = p.windowId }
+    const items = p => { if (Array.isArray(p.items)) snapshots.set(p.windowId, p.items.length) }
     bot._client.on('open_horse_window', opened)
+    bot._client.on('window_items', items)
     try {
       bot._client.write('entity_action', { entityId: bot.entity.id, actionId: horseInventoryAction(bot), jumpBoost: 0 })
-      if (!await wait(check, () => windowId !== null && bot.currentWindow?.id === windowId)) throw new Error('horse inventory was not confirmed')
+      if (!await wait(check, () => windowId !== null && bot.currentWindow?.id === windowId && snapshots.has(windowId))) throw new Error('horse inventory was not confirmed')
       const window = bot.currentWindow
+      const slotCount = snapshots.get(windowId)
+      report({ action: 'horse_saddle', id: entity.id, status: 'server inventory snapshot', slots: slotCount, inventoryStart: window.inventoryStart })
+      repairHorseWindowInventory(window, slotCount)
       const slot = window.slots.findIndex((item, i) => i >= window.inventoryStart && item?.name === 'saddle')
       if (slot < 0) throw new Error('server horse inventory contains no carried saddle')
       if (window.slots[0]) throw new Error('horse saddle slot is occupied; inspect before replacing equipment')
@@ -118,6 +136,7 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
       if (!await wait(check, () => horseState(bot, entity).saddled)) throw new Error('saddle transfer was not confirmed by horse metadata')
     } finally {
       bot._client.removeListener('open_horse_window', opened)
+      bot._client.removeListener('window_items', items)
       if (windowId !== null && bot.currentWindow?.id === windowId) bot.closeWindow(bot.currentWindow)
     }
   }
