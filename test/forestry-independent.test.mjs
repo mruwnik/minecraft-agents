@@ -160,6 +160,23 @@ test('independent: interruption after one harvested block reports remainder and 
  assert.equal(f.world.get('0,1,0'),'oak_log')
  assert.ok(f.calls.some(c=>c.name==='collect'))
 })
+test('independent: live path-search timeout reports access attention without cutting the tree',async()=>{
+ const message='tree.harvest/goto: the search ran out of time (up to 5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
+ const f=worldFixture({fail:name=>{if(name==='goto')throw new Error(message)}});smallOak(f)
+ const r=await harvest.run(f.api,{...root,species:'oak',scaffold:false})
+ assert.equal(r.harvested,0)
+ assert.equal(r.remaining.length,4)
+ assert.ok(r.attention.some(s=>s.includes('search ran out of time')))
+ assert.ok(f.events.some(e=>e.type==='forestry_attention'))
+ assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
+ assert.equal(f.world.get('0,1,0'),'oak_log')
+})
+for(const message of ['bot is dead','cancelled: out of air: swimming up to breathe. Work from dry land, then retry']) test(`independent: harvest preserves hard safety handback: ${message}`,async()=>{
+ const error=new Error(message)
+ const f=worldFixture({fail:name=>{if(name==='goto')throw error}});smallOak(f)
+ await assert.rejects(harvest.run(f.api,{...root,species:'oak',scaffold:false}),e=>e===error)
+ assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
+})
 test('independent: standalone days=1 terminates after an elapsed day',async()=>{
  let elapsed=0,waits=0
  const p={name:'trees',by:'Tester',...root,plan:'x',legend:{x:{kind:'tree',species:'oak'}}}
