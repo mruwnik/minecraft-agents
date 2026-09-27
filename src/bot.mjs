@@ -45,6 +45,8 @@ import { slabMergeRefusal } from './build/slab-merge.mjs'
 import { executeFlow, executeLegacySteps, parseFlowEDN, resolveFlowAction } from './flow.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
+import { makeBoatTravelRuntime } from './body/boat-travel.mjs'
+import { driveBoat } from './navigation/boat-travel.mjs'
 import { makeTravelRuntime } from './body/travel.mjs'
 import { makeRidingRuntime, horseState } from './body/riding.mjs'
 import { driveHorse } from './navigation/horse.mjs'
@@ -925,7 +927,7 @@ setInterval(() => {
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   if (!isNight(bot.time.timeOfDay)) holedUp = null
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp), asleep: bot.isSleeping, bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
+    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp) || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
   if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
@@ -1621,6 +1623,13 @@ const boatRuntime = makeBoatRuntime({
   Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove,
   getSwimStepTarget: () => swimStepTarget, setSwimStepTarget: value => { swimStepTarget = value }
 })
+const boatTravelRuntime = makeBoatTravelRuntime({
+  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveBoat,
+  readBoatState: a => boatRuntime.quick.boat_state(a),
+  getLeashHolder: id => boatLeashHolder.get(id),
+  reportPerformance: (...args) => reportPerformance(...args),
+  report: progress => emit('boat_progress', progress)
+})
 const villagerRosterFile = path.join(ROOT, 'state', 'villagers.json')
 const villagerRoster = makeVillagerRosterObserver({ file: villagerRosterFile, by: cfg.username })
 const travelRuntime = makeTravelRuntime({ getBot: () => bot, Vec3, cancelGuard, edibleCarried, reportPerformance: (...args) => reportPerformance(...args) })
@@ -1640,10 +1649,12 @@ const villagerRuntime = makeVillagerRuntime({
 
 export const long = {
   ...boatRuntime.long,
+  ...boatTravelRuntime.long,
   ...travelRuntime.long,
   ...ridingRuntime.long,
   ...villagerRuntime.long,
   async goto (a) {
+    if (bot.vehicle) throw new Error('cannot walk while mounted; use the vehicle controller or confirm a safe dismount first')
     spared = spareTest(a)
     try { return await gotoWalk(a) } finally { spared = NONE_SPARED }
   },
@@ -2554,6 +2565,7 @@ export const long = {
   },
 
   async sleep (a) {
+    if (bot.vehicle) throw new Error('confirm a safe dismount before walking to a bed')
     // a taken bed is passed over for the next one I may use (a shared bedroom: "the bed is occupied" was the end of the night)
     const occupied = new Set()
     // no bed within 32 is not the end of the night when one of my own is on the shared map within bed_range (default 200,
@@ -2618,6 +2630,7 @@ setInterval(() => {
 
 export const quick = {
   ...boatRuntime.quick,
+  ...boatTravelRuntime.quick,
   ...travelRuntime.quick,
   ...ridingRuntime.quick,
   ...villagerRuntime.quick,

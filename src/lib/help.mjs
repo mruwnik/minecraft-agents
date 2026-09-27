@@ -132,6 +132,8 @@ export const PRIMITIVES = {
   boat_unleash: { section: 'move', args: 'id=', doc: 'detach the lead from one boat after its passenger is secured' },
   boat_recover: { section: 'move', args: 'id=', doc: 'break and reclaim a verified empty, unleashed boat for reuse' },
   boat_mount: { section: 'move', args: 'id=', doc: 'board a nearby boat and confirm I am its controlling first passenger' },
+  boat_drive: { section: 'move', args: 'id= x= y= z=', doc: 'board an explicitly chosen nearby ordinary boat and steer to an exact boat-feet position through checked loaded level source water; stays aboard at arrival or interruption' },
+  boat_land: { section: 'move', args: 'id= x= y= z=', doc: 'leave a stationary boat onto a checked adjacent dry full-block landing; integer coordinates name the player feet cell, and server confirmation is required' },
   boat_dismount: { section: 'move', args: '', doc: 'leave the boat and verify that I am on foot' },
   boat_release: { section: 'move', args: 'id= passengerUuid=', doc: 'break a nearby boat after I dismount and verify the named passenger is safely on foot' },
   boat_swim: { section: 'move', args: 'x= y= z= [ms=700]', doc: 'swim toward a checked water waypoint with forward and jump held together for one bounded stroke' },

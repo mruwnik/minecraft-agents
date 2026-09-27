@@ -150,6 +150,7 @@ function makeApi (composite, a, alive) {
     pendingNavigationFailure = null
     alive()
     if (!night()) sleptTonight = false
+    if (night() && bot.vehicle) throw new HandBack('night aboard a vehicle; find a checked landing before walking to a bed')
     if (night() && !sleptTonight && bedsNear().length) {
       sleptTonight = true
       // said out loud: an agent that saw `asleep doing=mine.get 174s` with nothing moving stopped it as wedged (Chani, twice)

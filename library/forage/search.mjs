@@ -1,5 +1,6 @@
 import { searchWaypoints, searchSurface, outwardCandidates, SEARCH_HEADINGS, connectedFrontiers } from '../../src/forage.mjs'
 import { CompositeHandBack } from '../../src/composite.mjs'
+import { forageTransportOptions, createForageTransport } from '../../src/forage-transport.mjs'
 
 // Inspect the leading failure, not safety words in the pathfinder's advisory paragraph.
 function navigationFailure (error) {
@@ -15,11 +16,12 @@ async function act (api, name, args) {
 }
 
 export default {
-  doc: 'forage.search block= | mob= [count=1] [pattern=outward|spiral|sweep] [heading=north|east|south|west] [radius=512] [spacing=16] [steps=64] [minutes=10] [range=24] [origin=x,y,z]: discover targets on a bounded expedition; outward advances in short loaded legs; origin resumes the original radius boundary',
+  doc: 'forage.search block= | mob= [count=1] [pattern=outward|spiral|sweep] [heading=north|east|south|west] [radius=512] [spacing=16] [steps=64] [minutes=10] [range=24] [origin=x,y,z] [transport=walk|auto|boat] [boat=id]: discover targets along short loaded walking or checked water legs; boats require an authorized id and outward pattern; scans continue while mounted',
   stops: 'enough targets, distance/step/time budget, eight rounds without progress, or safety/cancellation hand-back',
-  args: { block: 'string', mob: 'string', count: 'number', pattern: 'string', heading: 'string', radius: 'number', spacing: 'number', steps: 'number', minutes: 'number', range: 'number', origin: 'string' },
+  args: { block: 'string', mob: 'string', count: 'number', pattern: 'string', heading: 'string', radius: 'number', spacing: 'number', steps: 'number', minutes: 'number', range: 'number', origin: 'string', transport: 'string', boat: 'number' },
   async run (api, a) {
     if (!!a.block === !!a.mob) throw new Error('give exactly one of block= or mob=')
+    const transportOptions = forageTransportOptions(a)
     const count = a.count ?? 1
     const pattern = a.pattern ?? 'outward'
     const heading = a.heading ?? 'north'
@@ -49,8 +51,11 @@ export default {
     let rounds = 0
     let stalled = 0
     let reason = 'step budget exhausted'
+    let transportSession = null
+    const transportStatus = () => transportSession?.status() ?? { transport: transportOptions.transport, mounted: 'unchecked', boat: a.boat }
+    const resume = () => `pattern=${pattern} heading=${heading} origin=${origin.x},${origin.y},${origin.z} radius=${radius} transport=${transportOptions.transport}${a.boat !== undefined ? ` boat=${a.boat}` : ''}`
     const distance = () => Math.round(Math.hypot(api.pos().x - origin.x, api.pos().z - origin.z))
-    const progress = () => api.report({ found: found.size, scans: visited.length, travelled: distance(), heading, search: `found ${found.size}/${count}; ${rounds}/${steps} rounds; ${distance()} blocks from origin; ${failures.length} failed waypoints`, resume: `pattern=${pattern} heading=${heading} origin=${origin.x},${origin.y},${origin.z} radius=${radius}`, lastFailure: failures.at(-1)?.reason ?? 'none' })
+    const progress = () => api.report({ found: found.size, scans: visited.length, travelled: distance(), heading, search: `found ${found.size}/${count}; ${rounds}/${steps} rounds; ${distance()} blocks from origin; ${failures.length} failed waypoints`, resume: resume(), ...transportStatus(), lastFailure: failures.at(-1)?.reason ?? 'none' })
     const scan = async () => {
       progress()
       await api.checkpoint()
@@ -70,6 +75,12 @@ export default {
       progress()
     }
     await scan()
+    // Local sightings and steps=0 never board, drive, land, or inspect assets.
+    // Setup, validation, boarding, scans and landing share the same time budget.
+    if (steps > 0 && found.size < count && transportOptions.transport !== 'walk' && Date.now() - started < minutes * 60000) {
+      const navigation = a.boat === undefined ? null : await import('../../src/navigation/boat-travel.mjs')
+      transportSession = await createForageTransport(api, transportOptions, navigation)
+    }
     const waypoints = pattern === 'outward' ? [] : searchWaypoints(origin, { pattern, radius, spacing, steps })
     expedition: for (; rounds < steps && found.size < count; rounds++) {
       if (Date.now() - started >= minutes * 60000) { reason = 'time budget exhausted'; break }
@@ -83,8 +94,24 @@ export default {
           Math.hypot(columns[0].x - origin.x, columns[0].z - origin.z) > radius) {
         reason = 'distance budget exhausted'; break
       }
-      const frontier = pattern === 'outward' ? connectedFrontiers((...args) => api.block(...args), api.pos(), columns, api.navigationCapabilities?.() ?? {}) : null
-      const candidates = frontier ? frontier.goals : columns
+      let water = null
+      if (transportSession) {
+        const began = Date.now()
+        water = await transportSession.frontiers(columns)
+        const ms = Date.now() - began
+        slowScan('forage.search.water_frontier', ms, { candidates: columns.length })
+        api.report({ water_frontier_ms: ms, water_goals: water.routes.length, ...transportStatus() })
+        if (!water.routes.length && !water.fallback) {
+          const landed = await transportSession.land()
+          progress()
+          if (!landed) { reason = 'no checked water frontier or nearby verified landing; traveler remains mounted'; break }
+          if (transportOptions.transport === 'boat') { reason = 'no checked water frontier; safely landed'; break }
+          water.fallback = true
+        }
+      }
+      const onWater = !!water?.routes.length
+      const frontier = !onWater && pattern === 'outward' ? connectedFrontiers((...args) => api.block(...args), api.pos(), columns, api.navigationCapabilities?.() ?? {}) : null
+      const candidates = onWater ? water.routes.map(route => route.goal) : frontier ? frontier.goals : columns
       if (frontier) {
         slowScan('forage.search.frontier', frontier.ms, { expanded: frontier.expanded, reads: frontier.reads, candidates: columns.length })
         api.report({ frontier_ms: frontier.ms, terrain: `${frontier.goals.length}/${columns.length} connected goals; ${frontier.expanded} cells in ${frontier.ms}ms${frontier.capped ? `; incomplete: ${frontier.limited}` : ''}` })
@@ -99,9 +126,16 @@ export default {
         if (attempted.has(key) || seen.has(key)) continue
         attempted.add(key)
         await api.checkpoint()
-        const goal = frontier ? { x: waypoint.x, y: waypoint.y, z: waypoint.z } : searchSurface((...args) => api.block(...args), waypoint.x, waypoint.z, api.pos().y)
+        const goal = onWater || frontier ? { x: waypoint.x, y: waypoint.y, z: waypoint.z } : searchSurface((...args) => api.block(...args), waypoint.x, waypoint.z, api.pos().y)
         if (!goal) { failures.push({ ...waypoint, reason: 'no loaded safe surface' }); progress(); continue }
-        try { await act(api, 'goto', { ...goal, range: 1, dig: false }) } catch (error) {
+        try {
+          if (onWater) await transportSession.move(goal)
+          else await act(api, 'goto', { ...goal, range: 1, dig: false })
+        } catch (error) {
+          progress()
+          // A failed boat controller is a physical/safety failure. Never switch
+          // to a walking goto while the traveler might still be seated.
+          if (onWater) throw error
           const failure = navigationFailure(error)
           failures.push({ ...goal, reason: failure })
           if (api.recoverNavigationFailure && !api.recoverNavigationFailure({ ...goal, reason: failure })) throw error
@@ -123,7 +157,12 @@ export default {
       stalled = moved ? 0 : stalled + 1
       if (stalled >= 8) { reason = 'eight rounds without a reachable new waypoint'; break }
     }
+    if (transportSession && transportSession.status().mounted !== null) {
+      if (Date.now() - started < minutes * 60000) await transportSession.land()
+      // At an exhausted budget retain the braked seat; never extend a trip by
+      // silently walking/swimming ashore or claim an unconfirmed dismount.
+    }
     progress()
-    return { target: a.block ?? a.mob, kind: a.block ? 'block' : 'mob', found: [...found.values()], wanted: count, complete: found.size >= count, reason: found.size >= count ? 'targets observed' : reason, origin, heading, distance: distance(), visited, failures, resume: `pattern=${pattern} heading=${heading} origin=${origin.x},${origin.y},${origin.z} radius=${radius}`, note: 'Targets are observations; recheck before harvesting or leading. Outward can resume from current position using resume arguments; increase radius to continue farther. Spiral and sweep restart their waypoint list.' }
+    return { target: a.block ?? a.mob, kind: a.block ? 'block' : 'mob', found: [...found.values()], wanted: count, complete: found.size >= count, reason: found.size >= count ? 'targets observed' : reason, origin, heading, distance: distance(), visited, failures, ...transportStatus(), resume: resume(), note: 'Targets are observations; recheck before harvesting or leading. A non-null mounted value requires continued safe vehicle attendance; only a confirmed landing permits walking. Outward can resume from current position using resume arguments; increase radius to continue farther. Spiral and sweep restart their waypoint list.' }
   }
 }
