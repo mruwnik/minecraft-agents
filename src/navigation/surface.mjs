@@ -55,3 +55,13 @@ export function swimProgress (track, dist, now) {
   if (dist < track.best - NEARER) return { best: dist, at: now, stalled: false }
   return { best: track.best, at: track.at, stalled: now - track.at >= SWIM_STALL_MS }
 }
+
+// Keep progress for each opening across up/sideways changes. Crossing a cell
+// boundary can briefly report open sky without gaining height; that must not
+// give a blocked opening a fresh two-second allowance on every oscillation.
+export function openingProgress (tracks, way, now) {
+  if (way?.way !== 'sideways') return { tracks, failed: null }
+  const id = key(way.to)
+  const track = swimProgress(tracks[id], way.dist, now)
+  return { tracks: { ...tracks, [id]: track }, failed: track.stalled ? id : null }
+}

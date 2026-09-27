@@ -32,7 +32,7 @@ import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './n
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
 import { airSample, freshAir, serverPosNote } from './survival/airlog.mjs'
-import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './navigation/surface.mjs'
+import { surfaceWay, openingProgress, roofAt, SURFACE_SCAN } from './navigation/surface.mjs'
 import { digLegs } from './navigation/dig-legs.mjs'
 import { noPathAdvice, inHole, perchedOverField } from './navigation/cave-exit.mjs'
 import { farmWalk, legFlags, stepsOff, noFirstMove, clearGoalOnFailure } from './lib/path.mjs'
@@ -820,7 +820,7 @@ let swimStepTarget = null
 let surfaceWayNow = null
 // openings a sideways swim pressed towards for 2 s without getting nearer: walls, not ways
 let surfaceTried = []
-let swimTrack = null
+let swimTracks = {}
 let pocketDigging = false
 // the blocks straight over the head, as names, so the reflex can tell deep water from a roof it must swim out from under
 const columnAbove = (pos, height = 8) =>
@@ -846,14 +846,14 @@ function steerSurfacing (me) {
   const ceiling = ceilingOver(me)
   const way = surfaceWay({ column: columnAbove(me), openings: openingsNear(me), me, ceiling, oxygen: bot.oxygenLevel, health: bot.health, tried: surfaceTried })
   if (wayLabel(way) !== wayLabel(surfaceWayNow)) {
-    swimTrack = null
     emit('surfacing', { oxygen: bot.oxygenLevel, way: way.way, ...(way.to && { to: cellKey(way.to), dist: way.dist }), ...(way.at && { at: cellKey(way.at), ticks: way.ticks }), ...(way.note && { note: way.note }) })
   }
   surfaceWayNow = way
   if (way.way === 'sideways') {
     if (!swimStepTarget) bot.lookAt(new Vec3(way.to.x + 0.5, me.y + 1.62, way.to.z + 0.5), true).catch(() => {})
-    swimTrack = swimProgress(swimTrack, way.dist, Date.now())
-    if (swimTrack.stalled) surfaceTried = [...surfaceTried, cellKey(way.to)]
+    const progress = openingProgress(swimTracks, way, Date.now())
+    swimTracks = progress.tracks
+    if (progress.failed) surfaceTried = [...new Set([...surfaceTried, progress.failed])]
   }
   if (way.way === 'pocket') digPocket(ceiling.block)
 }
@@ -1367,7 +1367,7 @@ function reflexTick () {
     surfacing = true
     surfaceWayNow = null
     surfaceTried = []
-    swimTrack = null
+    swimTracks = {}
     // a running task steers the body every tick and wins over one press of jump: Jizo drowned that way, mid-harvest
     if (task && !swimStepTarget) cancelTask('out of air: swimming up to breathe. Work from dry land, then retry')
     bot.pathfinder.setGoal(null)

@@ -169,3 +169,26 @@ test('native grounded start uses actual snow state support while airborne and ex
     assert.equal(first.y, 64, 'explicit caller start is authoritative')
   }
 })
+
+test('ordinary walking routes around a covered two-deep water hole instead of entering submerged nodes', () => {
+  const water = block('water')
+  const at = world((x, y, z) => {
+    const pool = x >= 0 && x <= 2 && Math.abs(z) <= 1
+    if (pool && (y === 0 || y === 1)) return water
+    if (pool && y === 2 && z === 0) return stone
+    return y < 1 ? stone : air
+  })
+  const moves = movements(at)
+  const route = search(moves, [-2, 1, 0], [4, 1, 0])
+  assert.equal(route.status, 'success')
+  for (const n of route.path) assert.ok(!(at(n.x,n.y,n.z).name === 'water' && at(n.x,n.y+1,n.z).name === 'water'), 'no submerged transit')
+  assert.ok(route.path.some(n => Math.abs(n.z) >= 2), 'route uses the dry bank')
+})
+test('surface swimmer can ascend to an open bank but cannot cross a swept overhang', () => {
+  const water = block('water')
+  const at = world((x,y,z) => y < 0 ? stone : x === 0 && z === 0 && y === 0 ? water : x === 1 && z === 0 && y === 0 ? stone : air)
+  const moves=movements(at)
+  assert.ok(moves.getNeighbors(new Move(0,0,0,0,0)).some(n=>n.x===1&&n.y===1&&n.z===0),'open shore exit')
+  const capped=world((x,y,z)=>x===0&&z===0&&y===2?stone:at(x,y,z))
+  assert.ok(!movements(capped).getNeighbors(new Move(0,0,0,0,0)).some(n=>n.x===1&&n.y===1&&n.z===0),'body cannot lift into the roof while exiting')
+})

@@ -103,7 +103,7 @@ export function createTerrainGeometry (blockAt, { openDoors = true, scaffolding 
     const dx = to.x - from.x, dz = to.z - from.z, rise = to.height - from.height
     if (Math.abs(dx) + Math.abs(dz) > (diagonal ? 2 : 1) || Math.abs(dx) > 1 || Math.abs(dz) > 1 || rise > 1.01 || -rise > maxDrop + 0.01) return false
     if (to.support?.name === 'farmland' && rise < -1.01) return false
-    if (!dx && !dz && !(from.climbable || to.climbable)) return false
+    if (!dx && !dz && !(from.climbable || to.climbable || from.swimming || to.swimming)) return false
     if (rise < 0) for (let y = Math.floor(to.height); y <= Math.floor(from.height); y++) {
       const p = get(to.x, y, to.z)
       if (p.scaffold && p.properties.bottom === true && Number(p.properties.distance) > 0 && from.height >= y + 0.125 && to.height < y + 0.125) return false

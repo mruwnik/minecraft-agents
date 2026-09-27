@@ -88,9 +88,16 @@ export function configureTerrainMoves (moves, { blockAt, scaffolding = false, cl
     const geometry = geometryNow()
     const from = geometry.stand(node.x, node.y, node.z)
     const valid = move => {
+      // Ordinary walking can wade/swim at the surface, but never plans a
+      // submerged transit under a bank. Native water nodes only check collision,
+      // not breathable headroom; the executor then keeps jumping into the roof.
+      const wet = geometry.get(move.x, move.y, move.z).liquid
+      if (wet && geometry.get(move.x, move.y + 1, move.z).liquid) return false
       const to = geometry.stand(move.x, move.y, move.z)
       if (!to) return false
-      if (!from || to.swimming || from.swimming || move.parkour || Math.abs(move.y - node.y) > 1) return true
+      if (!from) return true
+      if (to.swimming || from.swimming) return geometry.edge(from, to, { diagonal: Math.abs(move.x - node.x) + Math.abs(move.z - node.z) > 1 })
+      if (move.parkour || Math.abs(move.y - node.y) > 1) return true
       if (Math.abs(move.x - node.x) + Math.abs(move.z - node.z) <= 1) return geometry.edge(from, to)
       return geometry.edge(from, to, { diagonal: true })
     }
@@ -102,7 +109,7 @@ export function configureTerrainMoves (moves, { blockAt, scaffolding = false, cl
       const key = `${x},${y},${z}`
       if (keys.has(key)) continue
       const to = geometry.stand(x, y, z)
-      if (!to || !geometry.edge(from, to)) continue
+      if (!to || geometry.get(x, y, z).liquid && geometry.get(x, y + 1, z).liquid || !geometry.edge(from, to)) continue
       const foot = moves.getBlock({ x, y, z }, 0, 0, 0)
       const floor = moves.getBlock({ x, y, z }, 0, -1, 0)
       const stepCost = moves.exclusionStep(foot)
