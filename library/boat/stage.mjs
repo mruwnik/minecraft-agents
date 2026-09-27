@@ -1,5 +1,5 @@
 import { villagerBoatRoute } from '../../src/lib.mjs'
-import { boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
+import { boatPassengerStatus, entityUuid } from '../../src/boat/passenger.mjs'
 
 const water = b => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(b?.name)
 const position = boat => {

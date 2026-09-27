@@ -1,6 +1,6 @@
 // Boat interaction, passenger identity and lead/swim transport runtime.
 // The body supplies live bindings; importing this module never starts a client.
-import { boatPassengerProfile } from '../lib/boat-passenger.mjs'
+import { boatPassengerProfile } from '../boat/passenger.mjs'
 import { isAir, isBaby, openAbove } from '../lib.mjs'
 
 export function makeBoatRuntime (deps) {

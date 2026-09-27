@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../src/boat-arrival-step.mjs'
+import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../src/boat/arrival-step.mjs'
 
 const uuid = '87b3392e-ae93-4f51-bf07-2f53add88880'
 const cell = { x: -132, y: 62, z: -169 }

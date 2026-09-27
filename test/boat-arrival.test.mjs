@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { arrivalPlan, arrivalPreflight } from '../src/boat-arrival.mjs'
-import { breedCensus, breedInside, breedPlan } from '../src/villager-breed.mjs'
+import { arrivalPlan, arrivalPreflight } from '../src/boat/arrival.mjs'
+import { breedCensus, breedInside, breedPlan } from '../src/villager/breed.mjs'
 
 import receive from '../library/boat/receive.mjs'
 import breed from '../library/villager/breed.mjs'

@@ -1,5 +1,5 @@
 import { villagerBoatRoute, villagerTowWaypoints } from '../../src/lib.mjs'
-import { boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
+import { boatPassengerStatus, entityUuid } from '../../src/boat/passenger.mjs'
 
 const at = boat => {
   const [x, y, z] = boat.exact.split(',').map(Number)

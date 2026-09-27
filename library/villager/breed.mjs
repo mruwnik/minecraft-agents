@@ -1,6 +1,6 @@
-import { foodReceiptStore } from '../../src/villager-food-receipt.mjs'
-import { habitatOwnership, habitatThreats, habitatSecure, closeHabitatGates } from '../../src/villager-habitat.mjs'
-import { BREED_FOOD, breedPlan, breedPreflight, breedCensus, breedBill, breedKey, breedFeedStance, breedFeedGrounded, breedInside } from '../../src/villager-breed.mjs'
+import { foodReceiptStore } from '../../src/villager/food-receipt.mjs'
+import { habitatOwnership, habitatThreats, habitatSecure, closeHabitatGates } from '../../src/villager/habitat.mjs'
+import { BREED_FOOD, breedPlan, breedPreflight, breedCensus, breedBill, breedKey, breedFeedStance, breedFeedGrounded, breedInside } from '../../src/villager/breed.mjs'
 
 export default {
   doc: 'villager.breed target= x= y= z= [size= block=cobblestone gate=oak_fence_gate bed=white_bed food=bread timeout= plan=true]: verify an existing lit roofed habitat and provision shared food until observed population reaches target; prepare with blueprint.check/build first; x/y/z is the interior foot anchor',

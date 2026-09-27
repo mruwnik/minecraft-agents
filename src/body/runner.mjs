@@ -2,8 +2,8 @@
 // by the hand-back rules.
 import fs from 'node:fs'
 import path from 'node:path'
-import { breedPlan, breedGate } from '../villager-breed.mjs'
-import { boatHabitatPlan } from '../boat-habitat.mjs'
+import { breedPlan, breedGate } from '../villager/breed.mjs'
+import { boatHabitatPlan } from '../boat/habitat.mjs'
 import { eatAllowed, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'

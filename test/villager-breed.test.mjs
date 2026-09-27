@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import breed from '../library/villager/breed.mjs'
-import { breedBill, breedCensus, breedFeedStance, breedPlan, breedPreflight } from '../src/villager-breed.mjs'
+import { breedBill, breedCensus, breedFeedStance, breedPlan, breedPreflight } from '../src/villager/breed.mjs'
 
 const a = 'c071f7d4-8b43-4f01-9c2f-92b648d3d143'
 const b = '87b3392e-ae93-4f51-bf07-2f53add88880'

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { prepare } from '../src/blueprint-build.mjs'
 import { blueprintCells, matchesCell, flatGround, jobsFor, orderJobs, bill, fullBlock } from '../src/blueprint.mjs'
-import { breedPlan, breedPreflight, breedKey } from '../src/villager-breed.mjs'
+import { breedPlan, breedPreflight, breedKey } from '../src/villager/breed.mjs'
 
 const anchor = { x: -144, y: 65, z: -176 }
 const plan = breedPlan({ x: -143, y: 65, z: -175, target: 10, size: 8, airlock: true, entryX: -135, entryZ: -168 })

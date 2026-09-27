@@ -1,5 +1,5 @@
-import { breedFullBlock, breedKey } from './villager-breed.mjs'
-import { entityUuid } from './lib/boat-passenger.mjs'
+import { breedFullBlock, breedKey } from '../villager/breed.mjs'
+import { entityUuid } from './passenger.mjs'
 
 export function boatHabitatPlan (a) {
   const { x, y, z, entryX, entryZ } = a

@@ -1,10 +1,10 @@
-import { boatHabitatPlan, boatHabitatPreflight, boatHabitatCensus, boatHabitatInside, boatHabitatSecure } from '../../src/boat-habitat.mjs'
+import { boatHabitatPlan, boatHabitatPreflight, boatHabitatCensus, boatHabitatInside, boatHabitatSecure } from '../../src/boat/habitat.mjs'
 import dockCommand from './dock.mjs'
-import { entityUuid, boatPassengerStatus, boatPassengerProfile } from '../../src/lib/boat-passenger.mjs'
-import { breedKey, breedMaterial } from '../../src/villager-breed.mjs'
-import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../../src/boat-arrival-step.mjs'
-import { arrivalPlan, arrivalPreflight } from '../../src/boat-arrival.mjs'
-import { habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/villager-habitat.mjs'
+import { entityUuid, boatPassengerStatus, boatPassengerProfile } from '../../src/boat/passenger.mjs'
+import { breedKey, breedMaterial } from '../../src/villager/breed.mjs'
+import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../../src/boat/arrival-step.mjs'
+import { arrivalPlan, arrivalPreflight } from '../../src/boat/arrival.mjs'
+import { habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/villager/habitat.mjs'
 
 export default {
   doc: 'boat.receive x= y= z= entryX= entryZ= dockX= dockY= dockZ= riverX=1 riverZ=0 uuid= boat= [size block gate materials timeout=1200]: secure and release an arrived passenger in an adjacent dock, then observe that exact passenger enter the prepared house before closing its internal gate',

@@ -1,6 +1,6 @@
 import board from './board.mjs'
 import { inAnyZone, villagerBoatRoute, villagerDockPlan, workRefusal } from '../../src/lib.mjs'
-import { boatPassengerProfile, boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
+import { boatPassengerProfile, boatPassengerStatus, entityUuid } from '../../src/boat/passenger.mjs'
 
 const key = p => `${p.x},${p.y},${p.z}`
 const point = e => {

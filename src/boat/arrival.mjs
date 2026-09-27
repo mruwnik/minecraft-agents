@@ -1,5 +1,5 @@
-import { villagerDockPlan } from './lib.mjs'
-import { breedKey, breedMaterial, breedFullBlock } from './villager-breed.mjs'
+import { villagerDockPlan } from '../lib.mjs'
+import { breedKey, breedMaterial, breedFullBlock } from '../villager/breed.mjs'
 
 export function arrivalPlan (house, a) {
   if (!house.entry) throw new Error('dock arrival needs entryX= and entryZ= on the house east wall')

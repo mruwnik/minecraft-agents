@@ -1,5 +1,5 @@
-import { inAnyZone, workRefusal } from './lib.mjs'
-import { breedPreflight, breedKey, breedGate } from './villager-breed.mjs'
+import { inAnyZone, workRefusal } from '../lib.mjs'
+import { breedPreflight, breedKey, breedGate } from './breed.mjs'
 
 export async function habitatThreats (api, plan) {
   const found = (await api.act('entity', { name: '*', hostile: true, uuid: true, count: 1000 })).found ?? []

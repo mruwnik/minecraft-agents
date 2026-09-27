@@ -1,5 +1,5 @@
-import { breedFullBlock, breedKey } from './villager-breed.mjs'
-import { boatPassengerProfile } from './lib/boat-passenger.mjs'
+import { breedFullBlock, breedKey } from '../villager/breed.mjs'
+import { boatPassengerProfile } from './passenger.mjs'
 
 const wet = name => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(name)
 const air = name => ['air', 'cave_air', 'void_air'].includes(name)
