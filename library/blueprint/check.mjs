@@ -7,7 +7,7 @@ import { checkBlueprintV2 } from '../../src/blueprint/v2.mjs'
 export default {
   doc: 'blueprint.check (name=<catalog> | plan=<v2 object> | file=<caller JSON path>) x= y= z= [facing=] [supply=] [clear=true], or place=<a marked build>: the stage table and everything build would refuse over, nothing built',
   stops: 'nothing: it reads the world and the map; declared supply must be within observation reach',
-  args: { plan: 'object', origin: 'string', file: 'string', name: 'string', place: 'string', x: 'number', y: 'number', z: 'number', facing: 'string', supply: 'string', clear: 'boolean' },
+  args: { plan: 'any', origin: 'string', file: 'string', name: 'string', place: 'string', x: 'number', y: 'number', z: 'number', facing: 'string', supply: 'string', clear: 'boolean' },
 
   run: checkBlueprintV2
 }

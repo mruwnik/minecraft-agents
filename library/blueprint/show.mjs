@@ -6,7 +6,7 @@ export default {
   doc: 'blueprint.show (name=<catalog> | plan=<v2 object> | file=<caller JSON path>) [facing=] [layer=]: validated intent, illustrative material palette and layers; check resolves actual carried/declared stock',
   stops: 'nothing: it reads a file and moves nothing',
   instant: true,
-  args: { plan: 'object', origin: 'string', file: 'string', name: 'string', facing: 'string', layer: 'number' },
+  args: { plan: 'any', origin: 'string', file: 'string', name: 'string', facing: 'string', layer: 'number' },
 
   run: showBlueprintV2
 }

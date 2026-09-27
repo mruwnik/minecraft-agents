@@ -445,9 +445,9 @@ test('supplyOf refuses a name nobody marked', () => {
 })
 
 test('the library reads every blueprint file by name and refuses one that is not there', () => {
-  assert.deepEqual(blueprintFiles(), ['starter-hut', 'villager-house-10', 'watchtower', 'wheat-field'])
+  assert.deepEqual(blueprintFiles(), ['island-cottage', 'starter-hut', 'villager-house-10', 'watchtower', 'wheat-field'])
   assert.equal(readBlueprint('starter-hut').document.schemaVersion, 2)
-  assert.throws(() => readBlueprint('castle'), { message: 'no blueprint called castle: blueprint.list shows starter-hut, villager-house-10, watchtower, wheat-field' })
+  assert.throws(() => readBlueprint('castle'), { message: 'no blueprint called castle: blueprint.list shows island-cottage, starter-hut, villager-house-10, watchtower, wheat-field' })
 })
 
 const LIBRARY = [{ name: 'starter-hut', text: HUT }, { name: 'box', text: BOX }, { name: 'broken', text: 'front: south' }]
@@ -528,7 +528,7 @@ for (const name of ['starter-hut', 'watchtower', 'villager-house-10']) {
   })
 }
 
-for (const name of ['starter-hut', 'watchtower', 'wheat-field', 'villager-house-10']) {
+for (const name of ['island-cottage', 'starter-hut', 'watchtower', 'wheat-field', 'villager-house-10']) {
   test(`v2 ${name} constructs with frozen stock allocation, atomic objects and verified initial states`, async () => {
     const { compileBlueprintStructure, concreteBlueprint } = await import('../src/blueprint/compiler.mjs')
     const { materialCandidates } = await import('../src/blueprint/materials.mjs')
