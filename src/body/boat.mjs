@@ -227,10 +227,16 @@ export function makeBoatRuntime (deps) {
       })
       bot._client.on('attach_entity', packet => {
         const entity = bot.entities[packet.entityId]
-        if (!isBoat(entity)) return
+        // The map also backs ordinary animal lead commands. The server's
+        // attachment is authoritative for horses/cows as well as boats.
+        if (!entity) return
         if (packet.vehicleId <= 0) boatLeashHolder.delete(entity.id)
         else boatLeashHolder.set(entity.id, packet.vehicleId)
       })
+      // Entity IDs can be reused after destruction or unload. Do not let a
+      // later entity inherit an earlier animal's attachment. A disappearing
+      // holder alone does not prove that the server detached the animal.
+      bot.on('entityGone', entity => boatLeashHolder.delete(entity.id))
     }
   }
 }
