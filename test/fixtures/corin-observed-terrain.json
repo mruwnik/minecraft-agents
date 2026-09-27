@@ -1,0 +1,237 @@
+{
+  "format": "observed-block-grid-v1",
+  "source": "Corin ./mc scan observations during authorized horse return, 2026-09-27",
+  "interpretation": "Rows advance z from z1; characters advance x from x1; layer keys are integer block y. Only recorded cells are known. Cells outside each grid, including sky above it, must remain unknown. These are geometry observations, not a complete route or a guarantee of current world state.",
+  "horse": {
+    "entityIdAtObservation": 68328,
+    "width": 1.3964844,
+    "height": 1.6,
+    "movementSpeed": 0.29156655073165894
+  },
+  "snapshots": [
+    {
+      "name": "horse_corridor_east_before_leaf_clearance",
+      "x1": 425,
+      "z1": -232,
+      "palette": {
+        ".": "air",
+        "o": "oak_leaves",
+        "l": "leaf_litter",
+        "g": "grass_block",
+        "d": "dirt"
+      },
+      "layers": {
+        "100": [
+          "..o",
+          "...",
+          ".oo",
+          ".oo",
+          ".oo"
+        ],
+        "99": [
+          ".oo",
+          "...",
+          "...",
+          "...",
+          "lll"
+        ],
+        "98": [
+          "ooo",
+          "ooo",
+          "...",
+          ".ll",
+          "ggg"
+        ],
+        "97": [
+          "ooo",
+          ".oo",
+          "lll",
+          "ggg",
+          "ddd"
+        ],
+        "96": [
+          "lll",
+          ".ll",
+          "ggg",
+          "ddd",
+          "ddd"
+        ]
+      }
+    },
+    {
+      "name": "horse_corridor_west_before_leaf_clearance",
+      "x1": 422,
+      "z1": -232,
+      "palette": {
+        ".": "air",
+        "d": "dirt",
+        "g": "grass_block",
+        "s": "stone",
+        "l": "leaf_litter"
+      },
+      "layers": {
+        "101": [
+          "...",
+          "d..",
+          "d..",
+          "d..",
+          "d..",
+          "d.."
+        ],
+        "100": [
+          "...",
+          "d..",
+          "d..",
+          "d..",
+          "dg.",
+          "dg."
+        ],
+        "99": [
+          "...",
+          "s..",
+          "sg.",
+          "sgl",
+          "sd.",
+          "sd."
+        ],
+        "98": [
+          "...",
+          "s..",
+          "sd.",
+          "sdg",
+          "sdg",
+          "sdg"
+        ],
+        "97": [
+          "...",
+          "s..",
+          "sd.",
+          "sdd",
+          "sdd",
+          "sdd"
+        ]
+      }
+    },
+    {
+      "name": "stone_ravine_near_failed_return",
+      "x1": 396,
+      "z1": -170,
+      "palette": {
+        ".": "air",
+        "s": "stone"
+      },
+      "layers": {
+        "85": [
+          "...ss",
+          "....s",
+          ".....",
+          ".....",
+          "....."
+        ],
+        "84": [
+          "...ss",
+          "....s",
+          ".....",
+          ".....",
+          "....."
+        ],
+        "83": [
+          "...ss",
+          "....s",
+          ".....",
+          ".....",
+          "....."
+        ],
+        "82": [
+          "...ss",
+          "....s",
+          ".....",
+          ".....",
+          "....."
+        ],
+        "81": [
+          "..sss",
+          "...ss",
+          "....s",
+          ".....",
+          "....."
+        ],
+        "80": [
+          "..sss",
+          "..sss",
+          "...ss",
+          "....s",
+          "....s"
+        ],
+        "79": [
+          ".ssss",
+          ".ssss",
+          ".ssss",
+          ".ssss",
+          ".ssss"
+        ]
+      }
+    }
+  ],
+  "observedRecovery": {
+    "clearedNonSupportingLeaves": [
+      [
+        425,
+        98,
+        -232
+      ],
+      [
+        425,
+        98,
+        -231
+      ]
+    ],
+    "subsequentHorseProgress": {
+      "from": [
+        424,
+        97,
+        -232
+      ],
+      "to": [
+        425,
+        97,
+        -230
+      ]
+    },
+    "note": "Horse later independently descended after release; do not infer that leaf clearance alone solved every slope."
+  },
+  "returnEvidence": {
+    "safeCheckpoint": [
+      417,
+      81,
+      -158
+    ],
+    "hazardousEscortGoal": [
+      385,
+      83,
+      -150
+    ],
+    "observedDetour": [
+      394,
+      78,
+      -171
+    ],
+    "firstThreatStop": [
+      398,
+      80,
+      -167
+    ],
+    "subsequentEscortGoal": [
+      405,
+      81,
+      -145
+    ],
+    "deathPosition": [
+      406.2,
+      79,
+      -159.4
+    ],
+    "cause": "Zombie",
+    "note": "First ravine encounter caused damage and safe logout; the next encounter caused one death. Earlier Witch death was elsewhere and is not this fixture."
+  }
+}
