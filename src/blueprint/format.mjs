@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto'
 import minecraftData from 'minecraft-data'
 import { familyRefusal, familyBlock, FAMILIES } from '../build/materials.mjs'
+import { itemShortfall } from '../lib/inventory.mjs'
 
 // the client's registry: what this body can name and place (the server is one protocol ahead; see SERVER_ONLY)
 export const REGISTRY = minecraftData('26.1')
@@ -904,7 +905,7 @@ export function stages (jobs, carry, registry = REGISTRY, scaffoldItem = DEFAULT
 }
 
 const billLine = items => Object.entries(items).map(([k, n]) => `${k}:${n}`).join(' ')
-export const shortfall = (bill, have = {}) => Object.fromEntries(Object.entries(bill).map(([k, n]) => [k, n - (have[k] ?? 0)]).filter(([, n]) => n > 0))
+export const shortfall = itemShortfall
 // one row of the stage table check and show print
 export const stageLine = (stage, have = {}) => {
   const short = shortfall(stage.bill, have)

@@ -1,5 +1,5 @@
 import { villagerDockPlan } from '../lib.mjs'
-import { breedKey, breedMaterial, breedFullBlock } from '../villager/breed.mjs'
+import { cellKey, buildingMaterial, safeFullBlock } from '../enclosure/blocks.mjs'
 
 export function arrivalPlan (house, a) {
   if (!house.entry) throw new Error('dock arrival needs entryX= and entryZ= on the house east wall')
@@ -17,15 +17,15 @@ export function arrivalPreflight (arrival, blockAt) {
   const needed = []
   for (const p of [arrival.roof, ...arrival.sides]) {
     const b = blockAt(p.x, p.y, p.z)
-    if (b?.solid && breedMaterial(b.name)) continue
-    if (!['air', 'cave_air', 'void_air'].includes(b?.name)) throw new Error(`arrival boundary ${breedKey(p)} contains ${b?.name ?? 'unloaded'}`)
+    if (b?.solid && buildingMaterial(b.name)) continue
+    if (!['air', 'cave_air', 'void_air'].includes(b?.name)) throw new Error(`arrival boundary ${cellKey(p)} contains ${b?.name ?? 'unloaded'}`)
     needed.push(p)
   }
   for (const p of arrival.opening) {
     const b = blockAt(p.x, p.y, p.z)
-    if (!(b?.solid && breedMaterial(b.name)) && !['air', 'cave_air', 'void_air'].includes(b?.name)) throw new Error(`rear passage ${breedKey(p)} contains ${b?.name ?? 'unloaded'}`)
+    if (!(b?.solid && buildingMaterial(b.name)) && !['air', 'cave_air', 'void_air'].includes(b?.name)) throw new Error(`rear passage ${cellKey(p)} contains ${b?.name ?? 'unloaded'}`)
   }
   const floor = { ...arrival.rear, y: arrival.rear.y - 1 }
-  if (!breedFullBlock(blockAt(floor.x, floor.y, floor.z))) throw new Error(`rear passage lacks dry support at ${breedKey(floor)}`)
+  if (!safeFullBlock(blockAt(floor.x, floor.y, floor.z))) throw new Error(`rear passage lacks dry support at ${cellKey(floor)}`)
   return needed
 }

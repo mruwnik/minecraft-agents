@@ -73,9 +73,7 @@ export const carried = () => WORN.reduce((out, slot) => {
 }, bot.inventory ? inventoryCounts() : {})
 
 export function inventoryCounts () {
-  const out = {}
-  for (const i of bot.inventory.items()) out[i.name] = (out[i.name] || 0) + i.count
-  return out
+  return countsOf(bot.inventory.items())
 }
 // the pockets are still moving after a crafting window closes (the grid and the cursor come back one set_slot at a
 // time): a count read the moment a batch resolves showed the whole wheat stack spent (card c13b704d). Wait for the

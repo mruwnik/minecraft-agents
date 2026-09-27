@@ -1,14 +1,10 @@
+import { cellKey as breedKey, safeFullBlock as safeFull, buildingMaterial as breedMaterial, woodenGate as breedGate } from '../enclosure/blocks.mjs'
+import { roomPlan, roomInside } from '../enclosure/layout.mjs'
+export { cellKey as breedKey, safeFullBlock as breedFullBlock, buildingMaterial as breedMaterial, woodenGate as breedGate } from '../enclosure/blocks.mjs'
 // Geometry and observations for a bounded, roofed Java villager breeder.
 export const BREED_FOOD = { bread: 3, carrot: 12, potato: 12, beetroot: 12 }
-export const breedKey = p => `${p.x},${p.y},${p.z}`
 const air = b => ['air', 'cave_air', 'void_air'].includes(b?.name)
 const vegetation = b => ['short_grass', 'tall_grass', 'leaf_litter', 'fern', 'large_fern', 'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'sunflower', 'lilac', 'rose_bush', 'peony', 'dead_bush'].includes(b?.name)
-// The API's generic solid flag also covers some partial collision boxes.
-// Those cannot serve as a flat floor or a sealed nursery wall.
-const safeFull = b => b?.solid && !/(?:_slab|_stairs|_fence|_fence_gate|_wall|_pane|_bed|_door|_trapdoor|_leaves|_chest|shulker_box)$|^(?:magma_block|cactus|campfire|soul_campfire|farmland|dirt_path|soul_sand|snow|powder_snow|honey_block|scaffolding|lectern|anvil|chipped_anvil|damaged_anvil|enchanting_table|end_portal_frame|stonecutter|lily_pad|cobweb)$/.test(b.name)
-export { safeFull as breedFullBlock }
-export const breedMaterial = name => /^(cobblestone|cobbled_deepslate|stone|(?:oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)_planks)$/.test(name)
-export const breedGate = name => /^(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)_fence_gate$/.test(name)
 export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = false }) {
   if (![x, y, z, target].every(Number.isInteger) || target < 2 || target > 24) throw new Error('integer x= y= z= and target=2..24 required')
   const capacity = n => Math.floor(n / 2) * Math.floor((n + 1) / 3)
@@ -16,25 +12,11 @@ export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = fa
   if (size === undefined) while (capacity(width) < target) width++
   if (!Number.isInteger(width) || width < 5 || width > 15 || capacity(width) < target) throw new Error('size= must be 5..15 with enough two-cell bed slots for target')
   const at = (dx, dy, dz) => ({ x: x + dx, y: y + dy, z: z + dz })
-  const gate = at(-1, 0, Math.floor(width / 2))
   const entryGiven = entryX !== undefined || entryZ !== undefined
   if (entryGiven && (!Number.isInteger(entryX) || !Number.isInteger(entryZ) || entryX !== x + width || entryZ < z || entryZ >= z + width)) throw new Error('entryX/entryZ must name one east wall cell; keep size= fixed for this arrival entry')
   const entry = entryGiven ? { x: entryX, y, z: entryZ } : null
   if (airlock && (!entry || width < 8 || entry.z !== z + width - 1)) throw new Error('airlock=true needs size>=8 and an east entry at the last interior row')
-  const innerGate = airlock ? at(width - 3, 0, width - 1) : null
-  const shell = []
-  for (let dx = -1; dx <= width; dx++) for (let dz = -1; dz <= width; dz++) {
-    if (dx === -1 || dx === width || dz === -1 || dz === width) for (let dy = 0; dy < 3; dy++) {
-      if (dx === -1 && dz === gate.z - z && dy < 2) continue
-      if (entry && dx === width && dz === entry.z - z && dy < 2) continue
-      shell.push(at(dx, dy, dz))
-    }
-    shell.push(at(dx, 3, dz))
-  }
-  if (airlock) {
-    for (const dx of [width - 3, width - 2, width - 1]) for (let dy = 0; dy < 3; dy++) shell.push(at(dx, dy, width - 2))
-    shell.push({ ...innerGate, y: y + 2 })
-  }
+  const room = roomPlan({ x, y, z, width, entry, airlock })
   const bedSlots = []
   // Keep x=0 clear from the gate to every cross aisle; reaching a bed never
   // depends on climbing over another bed or ducking below the gate lintel.
@@ -45,19 +27,9 @@ export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = fa
   }
   if (bedSlots.length < target) throw new Error('size= has insufficient bed slots while preserving the arrival entry aisle; use a larger blueprint')
   const beds = bedSlots.slice(0, target)
-  const lights = []
-  const xs = [...new Set([...Array.from({ length: Math.ceil(width / 4) }, (_, i) => Math.min(width - 1, 1 + i * 4)), width - 1])]
-  // These floor torches cover the unobstructed sleeping room. Exterior roof
-  // lighting needs an actual access route and is not claimed by this plan.
-  for (let dz = 2; dz < width; dz += 3) for (const dx of xs) {
-    const p = at(dx, 0, dz)
-    if (!shell.some(q => breedKey(q) === breedKey(p))) lights.push(p)
-  }
-  return { x, y, z, width, target, gate, entry, airlock, innerGate, gates: [gate, ...(entry ? [entry] : []), ...(innerGate ? [innerGate] : [])], shell, beds, bedSlots, lights, center: at(Math.floor(width / 2), 0, Math.floor(width / 2)) }
+  return { ...room, target, beds, bedSlots }
 }
-export function breedInside (plan, p) {
-  return !(plan.airlock && p.x >= plan.innerGate.x && p.z >= plan.z + plan.width - 2) && p.x >= plan.x && p.x < plan.x + plan.width && p.z >= plan.z && p.z < plan.z + plan.width && p.y >= plan.y - 0.1 && p.y < plan.y + 3
-}
+export const breedInside = roomInside
 export function breedCensus (plan, entities) {
   const seen = new Map()
   for (const e of entities) {

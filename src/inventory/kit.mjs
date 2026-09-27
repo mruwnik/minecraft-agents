@@ -1,10 +1,12 @@
 // The kit a routine day needs, decided from what is carried, what the plot's chest holds and what the crafting grid can
 // make of either (card 6cf481c0): a stone hoe broke mid-routine with no spare, the side craft that would have replaced
 // it superseded the routine, and on autopilot nobody is there to craft. Pure: library/kit.mjs walks and clicks.
+import { BANNED_FOOD } from '../lib/food.mjs'
+
 const TIERS = ['wooden', 'stone', 'iron', 'golden', 'diamond', 'netherite']
 const KINDS = ['hoe', 'axe', 'pickaxe', 'shovel', 'sword']
-// the never-eat list the body keeps (BANNED_FOOD in src/bot.mjs): rations in a chest are counted the same way
-export const NEVER_EAT = ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken']
+// compatibility name for the kit's food filter
+export const NEVER_EAT = BANNED_FOOD
 // heads per tool and sticks per tool, the game's recipes; shears are two ingots and no handle
 const TOOL_RECIPES = { hoe: { head: 2, stick: 2 }, axe: { head: 3, stick: 2 }, pickaxe: { head: 3, stick: 2 }, shovel: { head: 1, stick: 2 }, sword: { head: 2, stick: 1 } }
 const STONE_HEADS = ['cobblestone', 'cobbled_deepslate', 'blackstone']

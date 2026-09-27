@@ -3,13 +3,20 @@
 // autopilot nobody is there to craft. Pure decisions here; library/kit.mjs acts on them.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { kindOf, carriedOfKind, kitPlan, kitLine, toolsLost, toolList } from '../src/inventory/kit.mjs'
+import { kindOf, carriedOfKind, kitPlan, kitLine, toolsLost, toolList, NEVER_EAT } from '../src/inventory/kit.mjs'
+import { BANNED_FOOD } from '../src/lib/food.mjs'
 import kit from '../library/kit.mjs'
 import { fakeApi } from './helpers.mjs'
 
 const isFood = name => ['bread', 'cooked_beef', 'apple', 'carrot', 'rotten_flesh'].includes(name)
 const CHEST = '12,63,-80'
 const plan = (over = {}) => kitPlan({ tools: ['stone_hoe'], spare: 1, food: 12, carried: { bread: 12 }, chest: {}, chestAt: CHEST, isFood, ...over })
+
+test('kit and auto-eat share the same ordinary-food blacklist', () => {
+  assert.equal(NEVER_EAT, BANNED_FOOD)
+  assert.deepEqual(NEVER_EAT, ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken'])
+  assert.equal(Object.isFrozen(NEVER_EAT), true)
+})
 
 for (const [name, kind] of [['stone_hoe', 'hoe'], ['iron_axe', 'axe'], ['netherite_pickaxe', 'pickaxe'], ['shears', 'shears'], ['wooden_sword', 'sword'], ['cobblestone', null], ['stick', null], ['golden_carrot', null]]) {
   test(`kindOf: ${name} is ${kind}`, () => assert.equal(kindOf(name), kind))

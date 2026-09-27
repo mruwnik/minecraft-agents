@@ -7,6 +7,7 @@
 // one-deep hole there is a trap it walks out of only at a cost. Pure judgements only; farm.maintain walks.
 import { PLAN_LEGEND } from './plan.mjs'
 import { isAir } from './world.mjs'
+import { itemShortfall } from './inventory.mjs'
 
 // what the floor of a cell is made of, by the ground its legend asks for: sand under cane, dirt under everything else
 // (a lane's material is its legend's ground too, which is dirt for `.`)
@@ -39,5 +40,5 @@ export function holeJobs ({ cells, worldAt, items = {} }) {
 export function fillShortfall (jobs, items = {}) {
   const want = {}
   for (const { item } of jobs) want[item] = (want[item] ?? 0) + 1
-  return Object.fromEntries(Object.entries(want).map(([item, n]) => [item, n - (items[item] ?? 0)]).filter(([, n]) => n > 0))
+  return itemShortfall(want, items)
 }

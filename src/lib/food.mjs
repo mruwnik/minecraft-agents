@@ -1,6 +1,10 @@
 // Eating: what to eat and when, backing off after a failed meal, and the refusals around a body's hunger.
 
 import { BREEDING_FOOD } from './animals.mjs'
+
+// Shared default blacklist for ordinary inventory and auto-eat decisions. Explicit
+// desperate/anyway paths remain decisions of eatAllowed, not exceptions here.
+export const BANNED_FOOD = Object.freeze(['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken'])
 // A meal on the way is not a loss: whatever the body ate comes off lost= and is said as ate= (my goto said "lost bread:1")
 export function mealTally ({ gained, lost, ate }) {
   if (!Object.keys(ate).length) return { gained, lost }

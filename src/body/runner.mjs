@@ -2,9 +2,10 @@
 // by the hand-back rules.
 import fs from 'node:fs'
 import path from 'node:path'
-import { breedPlan, breedGate } from '../villager/breed.mjs'
+import { breedPlan } from '../villager/breed.mjs'
+import { woodenGate } from '../enclosure/blocks.mjs'
 import { boatHabitatPlan } from '../boat/habitat.mjs'
-import { eatAllowed, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
+import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
@@ -32,8 +33,8 @@ export const compositeName = file => file.replace(/\.mjs$/, '').split('/').join(
 export const composites = new Map()
 // actions the CLI answers by itself, with no body running
 export const CLI_ONLY = ['wait', 'dawn', 'clock']
-// what auto-eat will never touch, and so what does not count as food I carry
-export const BANNED_FOOD = ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken']
+// Preserve the runner export used by bot.mjs; the policy itself lives with food logic.
+export { BANNED_FOOD }
 // the last thing a person said TO me: a whisper always counts, a chat only when it says my name
 let lastSpoken = null
 export const setLastSpoken = v => { lastSpoken = v }
@@ -103,7 +104,7 @@ function makeApi (composite, a, alive) {
     const closeProtectedGate = name === 'toggle' && args.open === false && protectedGates.some(gate => {
       if (!['x', 'y', 'z'].every(k => args[k] === gate[k])) return false
       const gateBlock = bot.blockAt(new Vec3(gate.x, gate.y, gate.z))
-      return breedGate(gateBlock?.name) && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
+      return woodenGate(gateBlock?.name) && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
     })
     const lectern = name === 'place' && args.blocks === undefined && args.item === (a.block ?? 'lectern') && ['x', 'y', 'z'].every(k => args[k] === a[k])
     const dx = args.x - a.x, dz = args.z - a.z

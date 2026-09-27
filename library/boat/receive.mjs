@@ -1,10 +1,10 @@
 import { boatHabitatPlan, boatHabitatPreflight, boatHabitatCensus, boatHabitatInside, boatHabitatSecure } from '../../src/boat/habitat.mjs'
 import dockCommand from './dock.mjs'
 import { entityUuid, boatPassengerStatus, boatPassengerProfile } from '../../src/boat/passenger.mjs'
-import { breedKey, breedMaterial } from '../../src/villager/breed.mjs'
+import { cellKey, buildingMaterial } from '../../src/enclosure/blocks.mjs'
 import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../../src/boat/arrival-step.mjs'
 import { arrivalPlan, arrivalPreflight } from '../../src/boat/arrival.mjs'
-import { habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/villager/habitat.mjs'
+import { habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/enclosure/guards.mjs'
 
 export default {
   doc: 'boat.receive x= y= z= entryX= entryZ= dockX= dockY= dockZ= riverX=1 riverZ=0 uuid= boat= [size block gate materials timeout=1200]: secure and release an arrived passenger in an adjacent dock, then observe that exact passenger enter the prepared house before closing its internal gate',
@@ -16,7 +16,7 @@ export default {
     const plan = boatHabitatPlan(a); const arrival = arrivalPlan(plan, a)
     const material = a.block ?? 'cobblestone'; const gateItem = a.gate ?? 'oak_fence_gate'
     const palette = [...new Set(String(a.materials ?? material).split(',').map(s => s.trim()))]
-    if (palette.some(item => item !== 'dirt' && !breedMaterial(item))) throw new Error('arrival materials must be full solid building blocks')
+    if (palette.some(item => item !== 'dirt' && !buildingMaterial(item))) throw new Error('arrival materials must be full solid building blocks')
     let step = arrivalStepInfo(api, arrival, palette)
     if (a.prepare !== true && step.needed && !step.item) throw new Error('reserve one carried full building block for the temporary arrival step')
     const destinationArgs = { x: a.x, y: a.y, z: a.z, size: plan.width, block: material, gate: gateItem, airlock: plan.airlock, entryX: plan.entry.x, entryZ: plan.entry.z }
@@ -73,7 +73,7 @@ export default {
         let rearAccess = false
         const closeReadyGates = async () => {
           for (const p of plan.gates) {
-            if (rearAccess && breedKey(p) === breedKey(plan.entry)) continue
+            if (rearAccess && cellKey(p) === cellKey(plan.entry)) continue
             if (api.block(p.x, p.y, p.z)?.properties?.open === true) await api.act('toggle', { ...p, open: false })
           }
         }
@@ -97,10 +97,10 @@ export default {
         for (const p of arrival.opening.slice().reverse()) {
           const b = api.block(p.x, p.y, p.z)
           if (b?.solid) {
-            if (!openingPalette.includes(b.name)) throw new Error(`rear passage ${breedKey(p)} is not an authorized dock building block`)
+            if (!openingPalette.includes(b.name)) throw new Error(`rear passage ${cellKey(p)} is not an authorized dock building block`)
             await safeApi.act('dig', p)
           }
-          if (!['air', 'cave_air', 'void_air'].includes(api.block(p.x, p.y, p.z)?.name)) throw new Error(`rear passage did not clear at ${breedKey(p)}`)
+          if (!['air', 'cave_air', 'void_air'].includes(api.block(p.x, p.y, p.z)?.name)) throw new Error(`rear passage did not clear at ${cellKey(p)}`)
         }
         if (fromBooth) await safeApi.act('goto', { x: arrival.rear.x + 1, y: arrival.rear.y, z: arrival.rear.z, range: 0, into: true })
         if (step.record) await clearArrivalStep(safeApi, step, [...known])
@@ -126,8 +126,8 @@ export default {
         const boundary = () => {
       if (arrivalPreflight(arrival, api.block).length) throw new Error('arrival passage boundary is no longer sealed')
       for (const p of [...arrival.dock.walls, ...arrival.dock.gate, arrival.dock.serviceFoundation]) {
-        if (arrival.opening.some(q => breedKey(q) === breedKey(p))) continue
-        if (!api.block(p.x, p.y, p.z)?.solid) throw new Error(`arrival dock boundary open at ${breedKey(p)}`)
+        if (arrival.opening.some(q => cellKey(q) === cellKey(p))) continue
+        if (!api.block(p.x, p.y, p.z)?.solid) throw new Error(`arrival dock boundary open at ${cellKey(p)}`)
       }
       boatHabitatSecure(api, plan, material, gateItem, true)
     }
@@ -170,10 +170,10 @@ export default {
       for (const p of arrival.opening.slice().reverse()) {
         const b = api.block(p.x, p.y, p.z)
         if (b?.solid) {
-          if (!palette.includes(b.name)) throw new Error(`rear passage ${breedKey(p)} is not an authorized dock building block`)
+          if (!palette.includes(b.name)) throw new Error(`rear passage ${cellKey(p)} is not an authorized dock building block`)
           await api.act('dig', p)
         }
-        if (!['air', 'cave_air', 'void_air'].includes(api.block(p.x, p.y, p.z)?.name)) throw new Error(`rear passage did not clear at ${breedKey(p)}`)
+        if (!['air', 'cave_air', 'void_air'].includes(api.block(p.x, p.y, p.z)?.name)) throw new Error(`rear passage did not clear at ${cellKey(p)}`)
       }
       boundary()
       await api.act('toggle', { ...plan.entry, open: true })

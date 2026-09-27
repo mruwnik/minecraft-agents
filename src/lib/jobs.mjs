@@ -4,6 +4,7 @@ import { PLAN_LEGEND } from './plan.mjs'
 import { sameFamily, WEEDS } from './anchor.mjs'
 // slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/build/cover.mjs)
 import { channelCovered } from '../build/cover.mjs'
+import { itemShortfall } from './inventory.mjs'
 
 const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'cover', 'plant', 'place']
 // A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
@@ -162,8 +163,7 @@ export function penOpenRefusal (name, jobs, census) {
 }
 
 // what a plan needs that I do not carry. Counted before a build starts: half a farm is worse than none.
-export const billShortfall = (bill, items = {}) =>
-  Object.fromEntries(Object.entries(bill).map(([item, n]) => [item, n - (items[item] ?? 0)]).filter(([, n]) => n > 0))
+export const billShortfall = itemShortfall
 
 // what to build a floor out of, by the ground the plan's legend asks for
 const FLOOR_ITEM = { sand: 'sand' }

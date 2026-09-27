@@ -1,4 +1,4 @@
-import { breedFullBlock, breedKey } from '../villager/breed.mjs'
+import { safeFullBlock, cellKey } from '../enclosure/blocks.mjs'
 import { boatPassengerProfile } from './passenger.mjs'
 
 const wet = name => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(name)
@@ -19,19 +19,19 @@ export function arrivalStepInfo (api, arrival, palette) {
     if (String(marker.by ?? '').toLowerCase() !== api.me().toLowerCase()) throw new Error('temporary-step marker belongs to another player')
     try {
       const [item, uuid, phase] = JSON.parse(marker.note)
-      record = { cell: breedKey(marker), item, uuid, phase: phase === 'p' ? 'placed' : phase === 'i' ? 'intent' : null }
+      record = { cell: cellKey(marker), item, uuid, phase: phase === 'p' ? 'placed' : phase === 'i' ? 'intent' : null }
     } catch { throw new Error('temporary-step marker is not a recognized placement record') }
-    if (record.cell !== breedKey(cell) || !palette.includes(record.item) || !['intent', 'placed'].includes(record.phase) || !record.uuid) throw new Error('temporary-step marker does not match this arrival site and palette')
+    if (record.cell !== cellKey(cell) || !palette.includes(record.item) || !['intent', 'placed'].includes(record.phase) || !record.uuid) throw new Error('temporary-step marker does not match this arrival site and palette')
   }
   const b = api.block(cell.x, cell.y, cell.z)
-  if (!b) throw new Error(`temporary-step cell is unloaded at ${breedKey(cell)}`)
+  if (!b) throw new Error(`temporary-step cell is unloaded at ${cellKey(cell)}`)
   if (record?.phase === 'placed' && b.name === record.item) return { cell, name, record, owned: true, needed: false, item: record.item }
   if (record && !wet(b.name) && !air(b.name)) throw new Error('recorded temporary step changed or its ownership was not confirmed; do not dig it automatically')
-  if (!record && breedFullBlock(b)) return { cell, name, record: null, owned: false, needed: false }
+  if (!record && safeFullBlock(b)) return { cell, name, record: null, owned: false, needed: false }
   if (!wet(b.name) && !air(b.name)) throw new Error(`temporary step contains ${b.name}, not clear water or air`)
-  if (!breedFullBlock(api.block(cell.x, cell.y - 1, cell.z)) || !air(api.block(cell.x, cell.y + 1, cell.z)?.name) || !air(api.block(cell.x, cell.y + 2, cell.z)?.name)) throw new Error('temporary arrival step needs full support and two clear cells above')
+  if (!safeFullBlock(api.block(cell.x, cell.y - 1, cell.z)) || !air(api.block(cell.x, cell.y + 1, cell.z)?.name) || !air(api.block(cell.x, cell.y + 2, cell.z)?.name)) throw new Error('temporary arrival step needs full support and two clear cells above')
   const dry = { x: arrival.rear.x + 1, y: arrival.rear.y, z: arrival.rear.z }
-  if (!breedFullBlock(api.block(dry.x, dry.y - 1, dry.z)) || !air(api.block(dry.x, dry.y, dry.z)?.name) || !air(api.block(dry.x, dry.y + 1, dry.z)?.name)) throw new Error('temporary step does not join a supported dry rear landing')
+  if (!safeFullBlock(api.block(dry.x, dry.y - 1, dry.z)) || !air(api.block(dry.x, dry.y, dry.z)?.name) || !air(api.block(dry.x, dry.y + 1, dry.z)?.name)) throw new Error('temporary step does not join a supported dry rear landing')
   const item = record?.item ?? palette.find(item => (api.inv()[item] ?? 0) > 0)
   return { cell, name, record, owned: false, needed: true, item }
 }
@@ -50,7 +50,7 @@ export async function placeArrivalStep (api, info, uuid) {
   if (!rows.some(e => e.uuid === uuid && e.vehicleId === null && boatPassengerProfile(e).ok)) throw new Error('temporary step requires the exact supported adult observed on foot after release')
   const boats = (await api.act('boat_state', {})).boats ?? []
   if (boats.some(b => overlaps(info.cell, point(b), 0.6875, 0.5625))) throw new Error('a boat still occupies the temporary-step cell')
-  const record = { cell: breedKey(info.cell), item: info.item, uuid, phase: 'intent' }
+  const record = { cell: cellKey(info.cell), item: info.item, uuid, phase: 'intent' }
   await api.act('mark', { name: info.name, kind: 'work', ...info.cell, note: JSON.stringify([record.item, record.uuid, record.phase === 'placed' ? 'p' : 'i']) })
   const current = api.block(info.cell.x, info.cell.y, info.cell.z)
   if (!wet(current?.name) && !air(current?.name)) throw new Error('temporary-step cell changed before placement')
@@ -59,7 +59,7 @@ export async function placeArrivalStep (api, info, uuid) {
   if (api.block(info.cell.x, info.cell.y, info.cell.z)?.name !== info.item) throw new Error('temporary step placement was not observed; its intent marker remains for inspection')
   record.phase = 'placed'
   await api.act('mark', { name: info.name, note: JSON.stringify([record.item, record.uuid, record.phase === 'placed' ? 'p' : 'i']) })
-  api.report({ temporaryStep: breedKey(info.cell), stepItem: info.item, stepCleanup: 'after resident is secure, before the next boat' })
+  api.report({ temporaryStep: cellKey(info.cell), stepItem: info.item, stepCleanup: 'after resident is secure, before the next boat' })
   return { ...info, record, owned: true, needed: false }
 }
 
@@ -73,6 +73,6 @@ export async function clearArrivalStep (api, info, mainUuids) {
     if (!wet(api.block(info.cell.x, info.cell.y, info.cell.z)?.name) && !air(api.block(info.cell.x, info.cell.y, info.cell.z)?.name)) throw new Error('temporary-step removal was not observed; retain its ownership marker')
   } else if (!wet(b?.name) && !air(b?.name)) throw new Error('temporary-step block changed; refuse to remove an unrelated block')
   await api.act('unmark', { name: info.name })
-  api.report({ stepCleanup: 'removed', temporaryStep: breedKey(info.cell) })
+  api.report({ stepCleanup: 'removed', temporaryStep: cellKey(info.cell) })
   return true
 }

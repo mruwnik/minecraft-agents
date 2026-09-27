@@ -1,5 +1,9 @@
 // Inventory bookkeeping: broken tools, which slot to equip into, and what a hand is missing for a job.
 
+// positive count deficits shared by build bills; existing callers give this the public names billShortfall or shortfall.
+export const itemShortfall = (bill, have = {}) =>
+  Object.fromEntries(Object.entries(bill).map(([item, n]) => [item, n - (have[item] ?? 0)]).filter(([, n]) => n > 0))
+
 // the server tells a player which of its items just broke with an entity status (47 main hand .. 52 boots). Nothing else does: my axe
 // wore out unnoticed and the body, unarmed without knowing it, ran from a zombie it should have fought
 const BROKEN = { 47: 'hand', 48: 'off-hand', 49: 'head', 50: 'torso', 51: 'legs', 52: 'feet' }
