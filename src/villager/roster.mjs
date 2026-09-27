@@ -3,6 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { withMapLock, atomicMapWrite } from '../map-store.mjs'
+import { WORKSTATION_CLAIM_BASIS } from './population.mjs'
 import { entityUuid, villagerObservation } from './observation.mjs'
 
 export const VILLAGER_ROSTER_VERSION = 1
@@ -36,7 +37,7 @@ export function mergeVillagerObservation (roster, input) {
   const prior = roster.villagers[input.uuid] ?? { uuid: input.uuid, firstSeenAt: input.at, purchases: [] }
   const next = { ...prior, uuid: input.uuid, firstSeenAt: prior.firstSeenAt ?? input.at }
 
-  if (newerOrEqual(input.at, prior.lastSeenAt)) {
+  if (!input.invalidateWorkstationClaim && newerOrEqual(input.at, prior.lastSeenAt)) {
     next.lastSeenAt = input.at
     next.lastSeenBy = String(input.by ?? 'unknown')
     if (input.position && [input.position.x, input.position.y, input.position.z].every(Number.isFinite)) {
@@ -77,6 +78,13 @@ export function mergeVillagerObservation (roster, input) {
     }
   }
 
+  if(input.workstationClaim){
+    const c=input.workstationClaim
+    if(c.basis!==WORKSTATION_CLAIM_BASIS||!['x','y','z'].every(k=>Number.isInteger(c[k]))||typeof c.block!=='string'||typeof c.profession!=='string'||!validTime(c.observedAt)||Date.parse(c.observedAt)>Date.parse(input.at))throw new Error('workstation claim requires a causal exact UUID observation with timestamp and block')
+    if(newerOrEqual(c.observedAt,prior.workstationClaim?.observedAt))next.workstationClaim={...plain(c),observedBy:String(input.by ?? 'unknown')}
+  }
+  if(input.invalidateWorkstationClaim&&next.workstationClaim&&newerOrEqual(input.at,next.workstationClaim.observedAt))next.workstationClaim={...next.workstationClaim,invalidatedAt:input.at,invalidationReason:String(input.invalidateWorkstationClaim)}
+
   if (input.purchase && typeof input.purchase === 'object') {
     const purchase = { ...plain(input.purchase), at: input.at, by: String(input.by ?? 'unknown') }
     const id = `${purchase.at}|${purchase.offer ?? ''}|${purchase.bought ?? ''}`
@@ -93,7 +101,10 @@ export function mergeVillagerObservation (roster, input) {
     }
   }
 
-  return { ...roster, villagers: { ...roster.villagers, [input.uuid]: next } }
+  const villagers={...roster.villagers,[input.uuid]:next}
+  if(input.workstationClaim)for(const [uuid,r] of Object.entries(villagers))if(uuid!==input.uuid&&r.workstationClaim&&['x','y','z'].every(k=>r.workstationClaim[k]===next.workstationClaim[k]))villagers[uuid]={...r,workstationClaim:{...r.workstationClaim,invalidatedAt:input.at,invalidationReason:'another exact UUID verified a claim at this station'}}
+  return { ...roster, villagers }
+
 }
 
 export function saveVillagerObservation (file, input) {
@@ -123,6 +134,8 @@ export function saveVillagerObservations (file, inputs) {
 export function makeVillagerRosterObserver ({ file, by, now = () => new Date(), flushMs = 10000, refreshMs = 30000 }) {
   const pending = new Map()
   const signatures = new Map()
+  const invalidations=new Map()
+  let claimRevision=null,claims=[]
   let bot = null
   let timer = null
   let busy = false
@@ -153,12 +166,14 @@ export function makeVillagerRosterObserver ({ file, by, now = () => new Date(), 
   }
 
   const flush = () => {
-    if (busy || pending.size === 0) return 0
+    if (busy || (pending.size === 0&&invalidations.size===0)) return 0
     busy = true
-    const batch = [...pending.values()]
+    const batch = [...pending.values(),...invalidations.values()]
     try {
       const saved = saveVillagerObservations(file, batch)
       for (const item of batch) if (pending.get(item.uuid)?.at === item.at) pending.delete(item.uuid)
+      for(const item of batch)if(invalidations.get(item.uuid)?.at===item.at)invalidations.delete(item.uuid)
+      claimRevision=null
       return Object.keys(saved.villagers).length
     } finally { busy = false }
   }
@@ -170,6 +185,7 @@ export function makeVillagerRosterObserver ({ file, by, now = () => new Date(), 
     client.on('entitySpawn', sample)
     client.on('entityMoved', sample)
     client.on('entityUpdate', sample)
+    client.on('blockUpdate', stationChanged)
     for (const entity of Object.values(client.entities ?? {})) sample(entity)
     // The periodic pass is over Mineflayer's in-memory loaded entities only;
     // it refreshes a stationary villager without scanning chunks or the world.
@@ -191,8 +207,19 @@ export function makeVillagerRosterObserver ({ file, by, now = () => new Date(), 
     client.off('entitySpawn', sample)
     client.off('entityMoved', sample)
     client.off('entityUpdate', sample)
+    client.off('blockUpdate', stationChanged)
     client.off('end', detach)
     try { flush() } catch {}
+  }
+  const stationChanged=(before,after)=>{
+    if(!before?.name||!after?.name||before.name===after.name||!after.position)return
+    try{
+      const revision=fs.existsSync(file)?fs.statSync(file,{bigint:true}).mtimeNs.toString():null
+      if(revision!==claimRevision){claims=Object.values(readVillagerRoster(file).villagers).filter(r=>r.workstationClaim&&!r.workstationClaim.invalidatedAt);claimRevision=revision}
+      for(const r of claims){const c=r.workstationClaim,p=after.position
+        if(c.x===p.x&&c.y===p.y&&c.z===p.z)invalidations.set(r.uuid,{uuid:r.uuid,at:now().toISOString(),by,invalidateWorkstationClaim:'observed workstation block change'})
+      }
+    }catch{ /* passive observation cannot interrupt gameplay */ }
   }
   // The listeners need stable function identity for clean reconnect detach.
   const sample = entity => { try { capture(entity) } catch {} }

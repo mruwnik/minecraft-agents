@@ -7,23 +7,21 @@ import { compileBlueprintStructure, concreteBlueprint } from '../blueprint/compi
 import { materialCandidates } from '../blueprint/materials.mjs'
 import { rotate, turnsFor, blueprintCells, matchesCell, stateOf, REGISTRY } from '../blueprint/format.mjs'
 import { rotateBlueprintPosition } from '../blueprint/transform.mjs'
-import { validatePopulation } from './population.mjs'
+import { validatePopulation, populationWorkspaces } from './population.mjs'
 import { safeFullBlock } from '../enclosure/blocks.mjs'
 import { readVillageInspection } from './inspection.mjs'
 import { canonicalBlueprint } from '../blueprint/schema.mjs'
-import { workRefusal } from '../lib/places.mjs'
 import { existingObjects } from '../blueprint/v2.mjs'
 export const VILLAGER_ROSTER_FILE=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../state/villagers.json')
 export function villagePlan(api,a,io={}) {
   const saved=api.places().find(p=>p.name===a.place), manifest=saved && readBlueprintManifest(saved.note,io.stateDir)
   if (a.place && !saved && a.name===undefined && a.plan===undefined) throw new Error(`no village blueprint place ${a.place}`)
   const supplied=a.name!==undefined||a.plan!==undefined?readBlueprintSource(a,BLUEPRINT_DIR).document:null
-  if(saved&&supplied){const refusal=workRefusal(saved,api.me());if(refusal)throw new Error(refusal)}
-  const prior=manifest && readVillageInspection(saved.name,manifest.at,io.inspectionDir)
+  const prior=saved && readVillageInspection(saved.name,manifest?.at ?? saved,io.inspectionDir)
   const source=supplied ?? (prior?.buildSourceHash===manifest?.sourceHash?prior?.source:null) ?? manifest?.source ?? readBlueprintSource(a,BLUEPRINT_DIR).document
   const ir=compileBlueprintStructure(source), intent=validatePopulation(source.population)
-  if(manifest && supplied){const physical=doc=>{const{population,...rest}=doc;return canonicalBlueprint(rest)};if(physical(supplied)!==physical(manifest.source))throw new Error('village physical source differs from saved blueprint snapshot; review a new blueprint place explicitly')}
-  const at=manifest?.at ?? {x:a.x,y:a.y,z:a.z}, facing=manifest?.facing ?? a.facing ?? source.front ?? 'south'
+  if(manifest && supplied&&!compatibleVillageIntent(manifest.source,supplied))throw new Error('village physical source differs from saved blueprint snapshot; only declared additive workstations in authored air may change')
+  const at=manifest?.at ?? (saved?{x:saved.x,y:saved.y,z:saved.z}:{x:a.x,y:a.y,z:a.z}), facing=manifest?.facing ?? a.facing ?? source.front ?? 'south'
   if (![at.x,at.y,at.z].every(Number.isInteger)) throw new Error('village needs integer blueprint anchor x/y/z')
   const turns=turnsFor(source.front ?? 'south',facing)
   const world=local=>{const [x,y,z]=rotateBlueprintPosition(local,ir.width,ir.depth,turns);return{x:at.x+x,y:at.y+y,z:at.z+z}}
@@ -101,4 +99,24 @@ export function reachableVillageBeds(plan,structure,blockAt,residents=[]) {
   const assigned=new Map(),visit=(n,seen)=>{for(const bed of residentBeds[n].beds){if(seen.has(bed))continue;seen.add(bed);if(!assigned.has(bed)||visit(assigned.get(bed),seen)){assigned.set(bed,n);return true}}return false}
   residentBeds.forEach((_,n)=>visit(n,new Set()))
   return{...structure,beds,residentBeds,residentBedCapacity:assigned.size,usableBeds:beds.filter(b=>b.valid&&b.reachability!=='unknown').length}
+}
+
+// A desired workspace may add its exact functional block to authored empty
+// interior space. This does not alter the saved build allocation or authorize
+// replacement of a wall, bed, light, floor, or another workstation.
+export function compatibleVillageIntent(before,after){
+  const withoutIntent=doc=>{const{population,structure,...rest}=doc;return canonicalBlueprint(rest)}
+  if(withoutIntent(before)!==withoutIntent(after))return false
+  const old=compileBlueprintStructure(before),next=compileBlueprintStructure(after)
+  const stations=new Set(populationWorkspaces(after.population ?? {}).map(w=>w.at.join(',')))
+  const identity=(ir,c)=>c?.objectId?{at:c.at,states:c.states,object:ir.objects.find(o=>o.id===c.objectId)}:c
+  const oldCells=new Map(old.cells.map(c=>[c.at.join(','),c])),newCells=new Map(next.cells.map(c=>[c.at.join(','),c]))
+  if(oldCells.size!==newCells.size)return false
+  for(const [key,c] of oldCells){const n=newCells.get(key)
+    if(canonicalBlueprint(identity(old,c))===canonicalBlueprint(identity(next,n)))continue
+    if(c.require!=='air'||!stations.has(key)||!n?.objectId)return false
+    const obj=next.objects.find(o=>o.id===n.objectId)
+    if(obj?.footprint.length!==1||!obj.block)return false
+  }
+  return true
 }

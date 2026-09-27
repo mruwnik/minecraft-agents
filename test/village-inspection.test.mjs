@@ -34,3 +34,19 @@ test('village file sources use the canonical caller-side blueprint resolver',()=
  assert.equal(a.plan.population.target,5);assert.equal(a.file,undefined);assert.equal(compileBlueprintStructure(a.plan).document.id,'village-five')
  assert.throws(()=>blueprintFileArguments('village.maintain',{file,name:'other'}),/exactly one/)
 })
+test('read-only source attachment uses a legacy saved anchor without borrowing permission to maintain it',async()=>{
+ const source=JSON.parse(fs.readFileSync(new URL('../blueprints/villager-house-10.blueprint.json',import.meta.url)));source.population={target:5,roles:[]}
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'legacy-village-check-'))
+ try{
+ const api={places:()=>[{name:'legacy-village',by:'Other',x:-82,y:69,z:-46,note:'bp=villager-house-10'}],me:()=> 'Observer',block:()=>null}
+ const plan=villagePlan(api,{place:'legacy-village',plan:source},{inspectionDir:dir})
+ assert.deepEqual(plan.at,{x:-82,y:69,z:-46});saveVillageInspection(plan,{status:'unknown'},dir)
+ assert.equal(villagePlan(api,{place:'legacy-village'},{inspectionDir:dir}).intent.target,5)
+ const maintain=(await import('../library/village/maintain.mjs')).default
+ await assert.rejects(maintain.run(api,{place:'legacy-village',planOnly:true}),/Other's ground/)
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+})
+test('village command facades pass the actual runtime library loader contract',async()=>{
+ const {compositeError}=await import('../src/lib/composite.mjs')
+ for(const name of ['check','maintain']){const mod=(await import(`../library/village/${name}.mjs`)).default;assert.equal(compositeError(`village.${name}`,mod),null)}
+})

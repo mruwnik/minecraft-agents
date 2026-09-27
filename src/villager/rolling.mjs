@@ -1,4 +1,5 @@
-import { verifyCrowdedClaimants } from './claim.mjs'
+import { WORKSTATION_CLAIM_BASIS } from './population.mjs'
+import { verifyCrowdedClaimants, verifyWorkstationEnclosure } from './claim.mjs'
 import { chooseVillagerCapture, makeVillagerCapture } from './capture.mjs'
 import { villagerObservation } from './observation.mjs'
 import { parseWant, rollVerdict, rollRefusal, tradeLine, inAnyZone, workRefusal, cheapestLockOffer, matchesVillagerOutput, JOB_BLOCK_PROFESSION } from '../lib.mjs'
@@ -7,9 +8,9 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const professionOf = raw => villagerObservation({ metadata: raw }).profession
 
 export default {
-  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow [enchant=sharpness level=3]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=40] [buy=false]: reroll one villager at a workstation until its offers match; optionally buy the cheapest affordable offer to lock the job',
+  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow [enchant=sharpness level=3]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=40] [buy=false]: reroll one villager at a workstation until its offers match; optionally buy the cheapest affordable offer to lock the job; proveStation=true requires an observed unemployed target and records a sole-station causal claim',
   stops: 'a matching offer is found, tries run out, night falls, or the villager leaves',
-  args: { want: 'string', output: 'string', enchant: 'string', level: 'number', atLeast: 'boolean', uuid: 'string', id: 'number', block: 'string', pen: 'boolean', penBlock: 'string', maxPrice: 'number', tries: 'number', buy: 'boolean', x: 'number!', y: 'number!', z: 'number!' },
+  args: { want: 'string', output: 'string', enchant: 'string', level: 'number', atLeast: 'boolean', uuid: 'string', id: 'number', block: 'string', pen: 'boolean', penBlock: 'string', maxPrice: 'number', tries: 'number', buy: 'boolean', proveStation:'boolean',claimHabitat:'any', x: 'number!', y: 'number!', z: 'number!' },
 
   async run (api, a) {
     if (a.want && (a.output || a.enchant || a.level !== undefined)) throw new Error('use want= for an enchanted book or output= with optional enchant=/level=; do not combine selectors')
@@ -56,6 +57,7 @@ export default {
     const job = JOB_BLOCK_PROFESSION[block]
     const crowded = a.pen === false && nearby.length > 1
     const verifyClaimants = async () => {
+      if(a.proveStation===true)await verifyWorkstationEnclosure(api,{uuid:a.uuid??target.uuid,cell,block,habitat:a.claimHabitat,allowAbsent:api.block(cell.x,cell.y,cell.z)?.name!==block})
       if (a.pen !== false) return
       const rows = (await api.act('entity', { name: 'villager', uuid: true, count: 100 })).found
       if (rows.filter(e => { const p = villagerObservation(e).position; return p && distance(p, cell) <= 16 }).length > 1) await verifyCrowdedClaimants(api, { uuid: a.uuid, cell, block })
@@ -68,6 +70,7 @@ export default {
     const { pen, penBlock } = a.pen !== false ? chooseVillagerCapture(api, { a, cell, target, nearby, tries }) : { pen: null, penBlock: a.penBlock ?? 'cobblestone' }
     let id = target.id
     const trackedUuid = a.uuid ?? target.uuid
+    let claimPending=false, workstationClaim=null
     let rounds = 0
     let best = null
     let lastLevel = null
@@ -103,12 +106,25 @@ export default {
       if (!wantedNow && (Number(current.level ?? 1) > 1 || current.offers.some(o => (o.nbTradeUses ?? 0) > 0))) throw new Error(`villager ${trackedUuid ?? id} has traded as ${job}; its profession is locked and this command will not break ${block}`)
     }
     try {
+      if(a.proveStation===true){
+        const initial=await readTrades()
+        if(Number(initial.level)>1||initial.offers.some(o=>Number(o.nbTradeUses)>0))throw new Error('workstation association is unknown for this locked trader; no workstation will be removed')
+        await verifyClaimants()
+        if(initial.profession!=='unemployed')throw new Error('workstation association cannot be safely confirmed for an already-employed trader; only a positively observed unemployed UUID may claim this workspace')
+        claimPending=true
+      }
       if (capture) id = await capture.capture(ensureBlock)
-      else if (!placed) await ensureBlock()
+      else if (!present()) await ensureBlock()
       for (rounds = 1; rounds <= tries; rounds++) {
         if (!api.clock().day) return { rounds: rounds - 1, found: 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null, stopped: `night fell; ${block} left placed` }
         await refreshTarget()
         await api.until(async () => (await status()) === job, { timeout: 60, every: 2, what: `the villager did not claim the ${block}` })
+        if(claimPending){
+          await verifyClaimants()
+          if(!present()||(await status())!==job)throw new Error('workstation claim changed before confirmation')
+          workstationClaim={...cell,block,profession:job,observedAt:new Date().toISOString(),basis:WORKSTATION_CLAIM_BASIS}
+          claimPending=false
+        }
         const read = await readTrades()
         lastLevel = Number.isFinite(Number(read.level)) ? Number(read.level) : null
         const verdict = wants.length ? rollVerdict(read.offers, wants, maxPrice) : { found: read.offers.map((offer, n) => matchesVillagerOutput(offer, selector) ? { offer, index: offer.index ?? n + 1 } : null).find(Boolean) ?? null, best: null }
@@ -133,7 +149,7 @@ export default {
             locked = after.profession === job && stillMatches
             if (!locked) throw new Error(`trade completed but the requested ${wants.length ? 'book' : 'output'} was not confirmed afterwards for UUID ${trackedUuid ?? 'unknown'}`)
           }
-          return { rounds, uuid: trackedUuid, profession: job, found: wants.length ? `${found.enchant} ${found.level}` : found.offer.outputItem?.name ?? 'matching offer', ...(wants.length ? { price: found.price, offer: found.index } : { offer: found.index }), ...(boughtOffer ? { boughtOffer } : {}), locked }
+          return { rounds, uuid: trackedUuid, profession: job,...(workstationClaim?{workstationClaim}:{}), found: wants.length ? `${found.enchant} ${found.level}` : found.offer.outputItem?.name ?? 'matching offer', ...(wants.length ? { price: found.price, offer: found.index } : { offer: found.index }), ...(boughtOffer ? { boughtOffer } : {}), locked }
         }
         if (rounds === tries) break
         if ((api.inv()[block] ?? 0) < 1) return { rounds, uuid: trackedUuid, profession: job, level: lastLevel, found: 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null, locked: false, stopped: `out of spare ${block}; current job block left placed` }
@@ -155,6 +171,7 @@ export default {
           await capture.sealService()
         }
         await api.until(async () => (await status()) === 'unemployed', { timeout: 20, every: 2, what: `this villager is locked already: it kept ${job} with no ${block}; use a fresh one` })
+        claimPending=a.proveStation===true
         await ensureBlock()
         await api.checkpoint()
       }

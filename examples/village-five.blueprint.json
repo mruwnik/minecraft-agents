@@ -121,6 +121,26 @@
       "T": {
         "type": "block",
         "block": "torch"
+      },
+      "A": {
+        "type": "block",
+        "block": "composter"
+      },
+      "B": {
+        "type": "block",
+        "block": "composter"
+      },
+      "C": {
+        "type": "block",
+        "block": "lectern"
+      },
+      "D": {
+        "type": "block",
+        "block": "lectern"
+      },
+      "E": {
+        "type": "block",
+        "block": "fletching_table"
       }
     },
     "layers": [
@@ -145,10 +165,10 @@
           "WWWWWWWWWW",
           "W.F.F.F.FW",
           "W._._._._W",
-          "W.T...T.TW",
+          "W.TABCT.TW",
           "W.F.F.F.FW",
           "G._._._._W",
-          "W.T...T.TW",
+          "W.TE.DT.TW",
           "W.F.F.WWWW",
           "W._._.G..G",
           "WWWWWWWWWW"
@@ -231,12 +251,7 @@
       {
         "id": "farmers",
         "count": 2,
-        "profession": "farmer",
-        "workstation": [
-          3,
-          0,
-          3
-        ]
+        "profession": "farmer"
       },
       {
         "id": "efficiency",
@@ -245,12 +260,7 @@
           "output": "enchanted_book",
           "enchant": "efficiency",
           "level": 3
-        },
-        "workstation": [
-          5,
-          0,
-          3
-        ]
+        }
       },
       {
         "id": "bane",
@@ -258,24 +268,73 @@
         "trade": {
           "output": "enchanted_book",
           "enchant": "bane_of_arthropods"
-        },
-        "workstation": [
-          5,
-          0,
-          6
-        ]
+        }
       },
       {
         "id": "arrows",
         "profession": "fletcher",
         "trade": {
           "output": "arrow"
-        },
-        "workstation": [
+        }
+      }
+    ],
+    "workspaces": [
+      {
+        "id": "farmer-one",
+        "at": [
+          3,
+          0,
+          3
+        ],
+        "profession": "farmer"
+      },
+      {
+        "id": "farmer-two",
+        "at": [
+          4,
+          0,
+          3
+        ],
+        "profession": "farmer"
+      },
+      {
+        "id": "efficiency",
+        "at": [
+          5,
+          0,
+          3
+        ],
+        "profession": "librarian",
+        "trade": {
+          "output": "enchanted_book",
+          "enchant": "efficiency",
+          "level": 3
+        }
+      },
+      {
+        "id": "bane",
+        "at": [
+          5,
+          0,
+          6
+        ],
+        "profession": "librarian",
+        "trade": {
+          "output": "enchanted_book",
+          "enchant": "bane_of_arthropods"
+        }
+      },
+      {
+        "id": "arrows",
+        "at": [
           3,
           0,
           6
-        ]
+        ],
+        "profession": "fletcher",
+        "trade": {
+          "output": "arrow"
+        }
       }
     ]
   }

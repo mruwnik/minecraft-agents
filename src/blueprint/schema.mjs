@@ -1,6 +1,6 @@
 // Versioned authored structure. Compilation and allocation are separate from execution.
 import { createHash } from 'node:crypto'
-import { validatePopulation } from '../villager/population.mjs'
+import { validatePopulation, populationWorkspaces } from '../villager/population.mjs'
 
 export const BLUEPRINT_SCHEMA_VERSION = 2
 export const BLUEPRINT_LIMITS = Object.freeze({ bytes: 1024 * 1024, side: 64, height: 52, cells: 16384 })
@@ -26,7 +26,7 @@ export function validateBlueprintDocument (input) {
   for (const key of ['title', 'description']) if (input[key] !== undefined && typeof input[key] !== 'string') fail(key, 'must be a string')
   if (input.tags !== undefined && (!Array.isArray(input.tags) || !input.tags.every(t => typeof t === 'string'))) fail('tags', 'must be a string array')
   if (!Array.isArray(input.dimensions) || input.dimensions.length !== 3 || !input.dimensions.every((n, i) => Number.isInteger(n) && n >= 1 && n <= (i === 1 ? 52 : 64))) fail('dimensions', 'must be [width,height,depth] within 64x52x64')
-  for(const role of input.population?.roles ?? [])if(role.workstation?.some((n,i)=>n<0||n>=input.dimensions[i]))fail(`population.roles.${role.id}.workstation`,'must be inside the blueprint dimensions')
+  for(const w of populationWorkspaces(input.population ?? {}))if(w.at.some((n,i)=>n<0||n>=input.dimensions[i]))fail(`population.workspace.${w.id}`,'must be inside the blueprint dimensions')
   if (input.anchor !== undefined && input.anchor !== 'northwest-floor') fail('anchor', 'only northwest-floor is supported')
   if (!['north', 'east', 'south', 'west'].includes(input.front ?? 'south')) fail('front', 'must be a cardinal direction')
   fields(input.materials ?? {}, Object.keys(input.materials ?? {}), 'materials')

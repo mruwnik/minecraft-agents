@@ -1,3 +1,5 @@
+import { populationWorkspaces } from '../villager/population.mjs'
+import { JOB_BLOCK_PROFESSION } from '../villager/trade.mjs'
 import { readStructureLayers } from '../structure/layers.mjs'
 import { validateBlueprintDocument, semanticBlueprintHash, BLUEPRINT_LIMITS } from './schema.mjs'
 import { REGISTRY, derivedState } from './format.mjs'
@@ -84,6 +86,10 @@ export function compileBlueprintStructure (source, registry = REGISTRY) {
       if (existing?.objectId || existing?.require === 'air') continue
       put(at, { require: 'air' }, `structure.spaces[${i}]`)
     }
+  }
+  for(const w of populationWorkspaces(document.population ?? {})){
+    const cell=cells.get(key(w.at)),object=objects.find(o=>o.id===cell?.objectId)
+    if(!object?.block||JOB_BLOCK_PROFESSION[object.block]!==w.profession)fail(`population.workspace.${w.id}`,'must point to an exact authored workstation block for its profession')
   }
   if (!cells.size) fail('structure', 'must constrain at least one world cell')
   return { document, hash: semanticBlueprintHash(document), width, height, depth, objects, cells: [...cells.values()] }

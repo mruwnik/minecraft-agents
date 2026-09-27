@@ -115,3 +115,11 @@ test('fresh trade observations supersede offers, explicit places are labeled as 
   assert.match(record.lockEvidence.basis, /inventory-confirmed/)
   assert.equal(record.workstationObservation, undefined)
 })
+test('an observed remove-and-replace invalidates a claim even when the final workstation looks unchanged',async()=>{
+ const {WORKSTATION_CLAIM_BASIS}=await import('../src/villager/population.mjs'),{saveVillagerObservation}=await import('../src/villager/roster.mjs')
+ const tmp=tempRoster(),bot=new EventEmitter();bot.entities={}
+ const at=new Date(1000).toISOString(),cell={x:1,y:65,z:2}
+ saveVillagerObservation(tmp.file,{uuid,at,by:'Probe',workstationClaim:{...cell,block:'lectern',profession:'librarian',observedAt:at,basis:WORKSTATION_CLAIM_BASIS}})
+ const observer=makeVillagerRosterObserver({file:tmp.file,by:'Probe',now:()=>new Date(2000)})
+ try{observer.attach(bot);bot.emit('blockUpdate',{name:'lectern',position:cell},{name:'air',position:cell});bot.emit('blockUpdate',{name:'air',position:cell},{name:'lectern',position:cell});observer.flush();const r=readVillagerRoster(tmp.file).villagers[uuid];assert.equal(r.workstationClaim.invalidatedAt,new Date(2000).toISOString());assert.equal(r.lastSeenAt,at);observer.detach();assert.equal(bot.listenerCount('blockUpdate'),0)}finally{observer.detach();tmp.cleanup()}
+})

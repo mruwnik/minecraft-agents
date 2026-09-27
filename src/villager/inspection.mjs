@@ -11,6 +11,7 @@ export function listVillageInspections(dir=VILLAGE_INSPECTION_DIR){
   return files.flatMap(name=>{const file=path.join(dir,name);if(fs.statSync(file).size>4*1024*1024)throw new Error('village inspection exceeds 4 MiB');const r=JSON.parse(fs.readFileSync(file,'utf8'));return r.version===1&&typeof r.place==='string'&&r.at&&['x','y','z'].every(k=>Number.isInteger(r.at[k]))?[r]:[]})
 }
 export function readVillageInspection(place,at,dir=VILLAGE_INSPECTION_DIR){
+  at={x:at.x,y:at.y,z:at.z}
   const file=path.join(dir,`${manifestId(place,at)}.json`)
   if(!fs.existsSync(file))return null
   const record=JSON.parse(fs.readFileSync(file,'utf8'))
