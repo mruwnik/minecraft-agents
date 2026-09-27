@@ -1,3 +1,4 @@
+import { farmPlanToBlueprint } from './helpers/blueprint-legacy.mjs'
 import { canonicalFixture } from './plan-fixture.mjs'
 // The blueprint format (docs/superpowers/specs/2026-09-26-blueprint-format-design.md): a Markdown file is parsed into
 // layers of tokens, resolved with material parameters, turned by facing=, costed, staged and judged against a world.
@@ -8,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   parseBlueprint, resolve, turnsFor, rotate, blueprintCells, bill, stackSlots, counts, enclosure, lint, placement,
-  jobsFor, orderJobs, stages, siteCheck as rawSiteCheck, farmPlanToBlueprint, blueprintHash, buildNote, parseNote, renderLayer, stageLine,
+  jobsFor, orderJobs, stages, siteCheck as rawSiteCheck,  blueprintHash, buildNote, parseNote, renderLayer, stageLine,
   matchesCell, flatGround, REGISTRY
 } from '../src/blueprint/format.mjs'
 import { familyName, familyRefusal } from '../src/build/materials.mjs'

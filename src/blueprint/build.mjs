@@ -4,8 +4,8 @@
 // progress record: a run recomputes its jobs from what stands, so a second run after a stop, a death or a restart picks
 // up where the blocks say. In the style of src/build/plan.mjs, and built on the same api.
 import fs from 'node:fs'
-import { compileBlueprintStructure, concreteBlueprint } from './compiler.mjs'
-import { materialCandidates } from './materials.mjs'
+import { representativeBlueprint } from './palette.mjs'
+export { representativeBlueprint } from './palette.mjs'
 import { readBlueprintSource, blueprintDocumentFiles } from './source.mjs'
 import { canonicalBlueprint, semanticBlueprintHash } from './schema.mjs'
 import path from 'node:path'
@@ -27,16 +27,10 @@ export const readBlueprint = (name, dir = BLUEPRINT_DIR) => {
   return { name: String(name), document, text: canonicalBlueprint(document), hash: semanticBlueprintHash(document) }
 }
 export const loadAll = (dir = BLUEPRINT_DIR) => blueprintFiles(dir).map(name => readBlueprint(name, dir))
-// every parameter any blueprint in the library declares, as the composites' key=values (a value is a material name)
-export const paramArgs = (dir = BLUEPRINT_DIR) => Object.fromEntries(loadAll(dir).flatMap(({ text, document }) => document ? [] : Object.keys(parseBlueprint(text).params ?? {})).map(k => [k, 'string']))
 
-export function representativeBlueprint (document) {
-  const ir = compileBlueprintStructure(document)
-  const assignments = Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
-  return concreteBlueprint(ir, assignments)
-}
-
-// ---------------------------------------------------------------- the arguments
+// ---------------------------------------------------------------- concrete-engine compatibility arguments
+// Injected text fixtures still exercise the concrete engine. Public commands
+// exclusively use v2 documents and durable manifests, never this legacy dispatch.
 
 // what the composites take that is not a blueprint parameter: everything else given is one, and resolve refuses it by
 // the blueprint's own list when it is not

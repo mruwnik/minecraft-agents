@@ -1,3 +1,4 @@
+import { representativeAssignments } from '../../src/blueprint/palette.mjs'
 // The node-side pure helpers behind tools/dashboard.mjs: reading the agent folders, deciding which file a look may
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
@@ -5,9 +6,9 @@ import prismarineBlock from 'prismarine-block'
 import minecraftData from 'minecraft-data'
 import { parsePlan, planSpec, parsePlacePlan, planCells, hasPlan } from '../../src/lib/plan.mjs'
 import { compileBlueprintStructure, concreteBlueprint } from '../../src/blueprint/compiler.mjs'
-import { materialCandidates, allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
+import { allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
 import { readBlueprintManifest } from '../../src/blueprint/manifest.mjs'
-import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
+import { bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
 
 const PreviewBlock = prismarineBlock('26.1')
 const previewRegistry = minecraftData('26.1')
@@ -204,26 +205,20 @@ export const blueprintBuilds = (name, hash, places) => places.flatMap(p => {
   return [{ place: p.name, kind: p.kind, x: p.x, y: p.y, z: p.z, by: p.by, facing: note.facing, params: note.params, current: note.hash === hash }]
 })
 const lintOf = bp => {
-  try {
-    return lint(bp)
-  } catch (e) {
-    return { errors: [`lint failed: ${e.message}`], warnings: [] }
-  }
+  try { return lint(bp) } catch (error) { return { errors: [`lint failed: ${error.message}`], warnings: [] } }
 }
 export const blueprintDetail = ({ name, text, hash, document }, places = []) => {
-  if (document) return { ...blueprintDocumentDetail(document), builds: blueprintBuilds(name, hash, places) }
-  const builds = blueprintBuilds(name, hash, places)
-  const parsed = parseBlueprint(text)
-  if (parsed.errors.length) return { name, hash, bp: null, bill: null, lint: null, counts: null, errors: parsed.errors, builds }
-  const bp = resolve(parsed)
-  return { name, hash, bp, preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds }
+  try {
+    const detail = blueprintDocumentDetail(document ?? JSON.parse(text))
+    return { ...detail, builds: blueprintBuilds(name, hash, places) }
+  } catch (error) { return { name, hash, bp: null, errors: [error.message], builds: blueprintBuilds(name, hash, places), palette: 'unresolved' } }
 }
 
 export function blueprintDocumentDetail (document, stock) {
   try {
     const ir = compileBlueprintStructure(document)
     const allocated = stock === undefined ? null : allocateBlueprintMaterials(ir, { stock })
-    const assignments = allocated?.assignments ?? Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
+    const assignments = allocated?.assignments ?? representativeAssignments(ir)
     const bp = concreteBlueprint(ir, assignments)
     return { name: document.id, hash: ir.hash, bp, document, palette: allocated ? 'resolved-declared-stock' : 'representative', allocation: allocated, materialObjects: ir.objects.map(({ id, material, block }) => ({ id, material, block })), materials: document.materials, relationships: document.relationships ?? [], preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds: [] }
   } catch (error) { return { name: document?.id ?? 'draft', hash: null, bp: null, document, errors: [error.message], builds: [], palette: 'unresolved' } }

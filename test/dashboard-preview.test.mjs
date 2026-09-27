@@ -33,7 +33,7 @@ test('rotation changes projected geometry and cutoff removes the roof, preservin
 })
 
 test('real house payload includes every non-air blueprint cell and finite drawable faces', () => {
-  const text = fs.readFileSync(new URL('fixtures/blueprints/villager-house-10.txt', import.meta.url), 'utf8')
+  const text = fs.readFileSync(new URL('../blueprints/villager-house-10.blueprint.json', import.meta.url), 'utf8')
   const detail = blueprintDetail({ name: 'villager-house-10', text, hash: 'preview' })
   const beds = detail.preview.filter(c => /_bed$/.test(c.name))
   assert.equal(beds.length, 20, 'both bed halves are rendered')

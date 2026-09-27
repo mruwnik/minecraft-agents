@@ -1,35 +1,28 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import { representativeAssignments } from './palette.mjs'
+import { rotateBlueprintPosition } from './transform.mjs'
 import { compileBlueprintStructure, concreteBlueprint } from './compiler.mjs'
 import { allocateBlueprintMaterials, materialCandidates } from './materials.mjs'
 import { readBlueprintSource, loadBlueprintDocuments } from './source.mjs'
 import { manifestId, readBlueprintManifest, writeBlueprintManifest } from './manifest.mjs'
 import { BLUEPRINT_DIR, planJobs, buildBlueprint, checkBlueprint, supplyOf } from './build.mjs'
-import { rotate, turnsFor, DIRS, lint, bill, matchesCell, renderLayer, shortfall } from './format.mjs'
+import { rotate, turnsFor, DIRS, lint, bill, matchesCell, renderLayer, shortfall, parseNote } from './format.mjs'
 import { establishBlueprintOperations, verifyBlueprintGuarantees } from './verify.mjs'
 import { workRefusal, mapRefusal } from '../lib.mjs'
 
-export const isV2BlueprintArguments = a => a.plan !== undefined || a.file !== undefined || (a.name !== undefined && fs.existsSync(path.join(BLUEPRINT_DIR, `${a.name}.blueprint.json`)))
-export const isV2BlueprintResume = (api, a) => a.place !== undefined && /^bp2:/.test(api.places().find(p => p.name === a.place)?.note ?? '')
 const validateArguments = a => {
   const allowed = new Set(['name', 'plan', 'file', 'origin', 'place', 'x', 'y', 'z', 'facing', 'supply', 'clear', 'partial', 'until', 'layer'])
   for (const k of Object.keys(a)) if (!allowed.has(k) && a[k] !== undefined) throw new Error(`blueprint v2 does not accept ${k}=; edit material constraints/preferences in plan=`)
-}
-const rotatedAt = (ir, at, turns) => {
-  let [x, y, z] = at, width = ir.width, depth = ir.depth
-  for (let n = 0; n < turns; n++) { [x, z] = [depth - 1 - z, x]; [width, depth] = [depth, width] }
-  return [x, y, z]
 }
 const concrete = (ir, assignments, facing) => rotate(concreteBlueprint(ir, assignments), turnsFor(ir.document.front ?? 'south', facing))
 const existingObjects = (ir, at, facing, blockAt) => {
   const reused = {}, turns = turnsFor(ir.document.front ?? 'south', facing)
   for (const obj of ir.objects) {
-    const [ox, oy, oz] = rotatedAt(ir, obj.footprint[0].at, turns)
+    const [ox, oy, oz] = rotateBlueprintPosition(obj.footprint[0].at, ir.width, ir.depth, turns)
     const name = blockAt(at.x + ox, at.y + oy, at.z + oz)?.name
     const names = obj.block ? [obj.block] : [...materialCandidates(ir.document.materials[obj.material]), ...(ir.document.materials[obj.material].acceptExisting ?? [])]
     if (!names.includes(name)) continue
     const valid = obj.footprint.every(cell => {
-      const [x, y, z] = rotatedAt(ir, cell.at, turns)
+      const [x, y, z] = rotateBlueprintPosition(cell.at, ir.width, ir.depth, turns)
       const alts = [{ name, states: cell.states }]
       if (name.endsWith('_fence_gate')) alts.push({ name, states: { ...cell.states, facing: ({ east: 'west', west: 'east', north: 'south', south: 'north' })[cell.states.facing] } })
       const tiny = rotate({ width: 1, depth: 1, front: 'south', layers: [], legend: { A: { alts } } }, turns)
@@ -75,6 +68,10 @@ const prepareManifest = async (api, a, { write = false, stateDir } = {}) => {
   const old = saved && readBlueprintManifest(saved.note, stateDir)
   const refusal = saved && (old ? workRefusal(saved, api.me()) : mapRefusal(saved, api.me()))
   if (refusal) throw new Error(refusal)
+  const legacy = saved && parseNote(saved.note)
+  if (legacy && (!['x', 'y', 'z'].every(k => a[k] === saved[k]) || a.name !== legacy.blueprint || a.facing !== legacy.facing)) {
+    throw new Error(`legacy build ${saved.name} has no saved source/allocation; its mark is unchanged. Explicitly review and migrate with name=${legacy.blueprint} x=${saved.x} y=${saved.y} z=${saved.z} facing=${legacy.facing} place=${saved.name}; old material parameters are not v2 stock constraints`)
+  }
   if (old) {
     if (old.dimension !== dimension) throw new Error('blueprint resume is in a different world dimension')
     if (old.capabilityVersion !== 'minecraft-26.1-placement-v2-1') throw new Error('blueprint manifest capability version is unsupported')
@@ -125,7 +122,7 @@ export async function buildBlueprintV2 (api, a, io = {}) {
 export function showBlueprintV2 (api, a) {
   validateArguments(a)
   const { document } = readBlueprintSource(a, BLUEPRINT_DIR), ir = compileBlueprintStructure(document)
-  const assignments = Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
+  const assignments = representativeAssignments(ir)
   const facing = a.facing ?? document.front ?? 'south', bp = concrete(ir, assignments, facing)
   return { text: [`${document.title ?? document.id}: ${ir.width}x${ir.depth}`, 'Illustrative material palette; not allocated from inventory.', `sourceHash=${ir.hash}`, ...bp.layers.filter(l => a.layer === undefined || l.y === a.layer).map(l => renderLayer(bp, l.y))].join('\n'), schemaVersion: 2, sourceHash: ir.hash, palette: 'representative', materials: document.materials, relationships: document.relationships ?? [], bill: bill(bp).total }
 }

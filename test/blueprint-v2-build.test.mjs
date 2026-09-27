@@ -1,3 +1,5 @@
+import { representativeBlueprint } from '../src/blueprint/palette.mjs'
+import { bill } from '../src/blueprint/format.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -79,4 +81,26 @@ test('v2 reuses opposite gate-axis facing and refuses dimension changes and buil
   b.api.act=async (action,a)=>action==='state'?{dimension:'the_nether'}:act(action,a)
   await assert.rejects(buildBlueprintV2(b.api,{place:'room'},{stateDir}),/different world dimension/)
   fs.rmSync(stateDir,{recursive:true,force:true})
+})
+
+test('legacy map marks refuse implicit resume without changing the mark or world',async()=>{
+  const b=body(),original={name:'old-room',by:'Tester',kind:'build',x:-2,y:65,z:-3,note:'bp=starter-hut f=west h=09b5894a wood=oak'}
+  b.places.push({...original})
+  await assert.rejects(buildBlueprintV2(b.api,{place:'old-room'}),/legacy build old-room.*name=starter-hut x=-2 y=65 z=-3 facing=west place=old-room/)
+  assert.deepEqual(b.places,[original])
+  assert.ok(b.calls.every(c=>c.action==='state'))
+  await assert.rejects(checkBlueprintV2(b.api,{name:'starter-hut',place:'old-room',x:-1,y:65,z:-3,facing:'west'}),/legacy build/)
+  assert.deepEqual(b.places,[original])
+})
+
+test('explicit legacy migration reviews current v2 stock at the saved anchor without rewriting history during check',async()=>{
+  const b=body(),source=JSON.parse(fs.readFileSync(new URL('../blueprints/starter-hut.blueprint.json',import.meta.url),'utf8'))
+  Object.assign(b.stock,bill(representativeBlueprint(source)).total,{dirt:1000})
+  const saved={name:'old-hut',by:'Tester',kind:'build',x:0,y:65,z:0,note:'bp=starter-hut f=south h=09b5894a wood=oak'}
+  b.places.push({...saved})
+  const result=await checkBlueprintV2(b.api,{name:'starter-hut',place:'old-hut',x:0,y:65,z:0,facing:'south'})
+  assert.equal(result.sourceHash.length,64)
+  assert.ok(result.allocation.assignments)
+  assert.deepEqual(b.places,[saved])
+  assert.ok(b.calls.every(c=>c.action==='state'))
 })
