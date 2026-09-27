@@ -61,3 +61,15 @@ test('scaffolding batch assumption matches installed recipe registry',async()=>{
  const recipe=data.recipes[data.itemsByName.scaffolding.id][0],ingredients=recipe.inShape.flat().filter(n=>n!==null)
  assert.equal(recipe.result.count,6);assert.equal(ingredients.filter(id=>id===data.itemsByName.bamboo.id).length,6);assert.equal(ingredients.filter(id=>id===data.itemsByName.string.id).length,1)
 })
+test('all missing service supports source dirt, independently of flower support',async()=>{
+ const f=fixture({dirt:9});f.plan.cells=[chest,{...table,x:9},{x:10,y:0,z:0,spec:{kind:'flower',item:'dandelion'}},{x:11,y:0,z:0,spec:{kind:'torch',item:'oak_fence'}}]
+ for(const x of[9,10,11])f.world.set(`${x},0,0`,'air')
+ const supply=await treeSupplies(f.api,f.plan,undefined,f.report);await provisionTreeBasics(f.api,f.plan,supply,f.report)
+ assert.equal(f.items.dirt,3)
+})
+test('known partial scaffold craft reports actual gain and continues; cancellation still propagates',async()=>{
+ const f=fixture(),supply=await treeSupplies(f.api,f.plan,false,f.report)
+ f.api.act=async()=>{f.items.scaffolding=18;throw Error('forestry.maintain/craft: the server kept rejecting the craft: only 18 of 36 scaffolding made, and bamboo:18 string:3 went into them')}
+ assert.equal(await supply.craft('scaffolding',36),18);assert.match(f.report.attention.join(' '),/18\/36/)
+ f.api.act=async()=>{throw Error('cancelled')};await assert.rejects(()=>supply.craft('scaffolding',6),/cancelled/)
+})

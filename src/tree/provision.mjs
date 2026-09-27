@@ -47,7 +47,11 @@ export async function treeSupplies(api,plan,source,report){
  const names=()=>[...new Set([...Object.keys(api.inv()),...stocks.flatMap(s=>Object.keys(s.items))])]
  const craft=async(item,count)=>{
   const before=api.inv()[item]??0
-  await api.checkpoint();await attempt('craft',{item,count})
+  await api.checkpoint()
+  await api.act('craft',{item,count}).catch(error=>{
+   if(error?.constructor===Error&&!error.reason&&/the server kept rejecting the craft: only \d+ of \d+ scaffolding made(?:,|$)/.test(error.message)){report.attention.push(error.message);return}
+   return recoverFarm(e=>{report.attention.push(e.message)})(error)
+  })
   const gained=Math.max(0,(api.inv()[item]??0)-before)
   if(gained<count)report.attention.push(`craft ${item} produced ${gained}/${count}; inspect supplied materials`)
   return gained
@@ -63,7 +67,8 @@ export async function provisionTreeBasics(api,plan,supply,report){
   if(t){const p=treeProfile(t.species,t.form);add(p.plant,p.width**2);continue}
   if(s?.item&&api.block(c.x,c.y+1,c.z)?.name!==s.item)add(s.item)
   if(s?.kind==='torch'&&api.block(c.x,c.y+2,c.z)?.name!=='torch')add('torch')
-  if(s?.kind==='flower'&&['dirt_path','air'].includes(api.block(c.x,c.y,c.z)?.name))add('dirt')
+  const floor=api.block(c.x,c.y,c.z)?.name
+  if(['flower','chest','composter','table','fence','gate','block','torch'].includes(s?.kind)&& (floor==='air'||s.kind==='flower'&&floor==='dirt_path'))add('dirt')
  }
  await supply.take(want)
  // Tables fit the inventory grid. Use available planks, or one available log;

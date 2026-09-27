@@ -158,3 +158,22 @@ for(const offset of [-5,4])test(`scaffold access uses resolved tree ground offse
  assert.equal(f.calls.find(c=>c.name==='place'&&c.item==='scaffolding').y,1)
  assert.deepEqual(result.cleanup_left,[])
 })
+test('scaffold work approaches verified exit and base before ascent and disables pit-rim substitution',async()=>{
+ const {reachTreePlatform}=await import('../src/scaffold/access.mjs')
+ const calls=[],report={attention:[]};let pos={x:8.5,y:1,z:.5}
+ const column={x:0,y:1,z:0,top:8,exit:{x:1,y:1,z:0}},spot={x:0,y:9,z:0,scaffold:column}
+ const api={pos:()=>pos,checkpoint:async()=>{},act:async(name,a)=>{calls.push(a);assert.equal(a.into,true);if(a.y>1)assert.equal(Math.floor(pos.x),0,'entered column before climbing');pos={x:a.x+.5,y:a.y,z:a.z+.5}}}
+ assert.equal(await reachTreePlatform(api,[spot],report,[column]),spot)
+ assert.deepEqual(calls.map(p=>[p.x,p.y,p.z]),[[1,1,0],[0,1,0],[0,9,0]])
+})
+test('switching scaffold columns descends recorded current exit first; recoverable alternative and cancellation bounded',async()=>{
+ const {reachTreePlatform}=await import('../src/scaffold/access.mjs')
+ const a={x:0,y:1,z:0,exit:{x:1,y:1,z:0}},b={x:5,y:1,z:0,exit:{x:6,y:1,z:0}}
+ let pos={x:.5,y:8,z:.5};const calls=[],report={attention:[]}
+ const api={pos:()=>pos,checkpoint:async()=>{},act:async(n,p)=>{calls.push(p);pos={x:p.x+.5,y:p.y,z:p.z+.5}}}
+ await reachTreePlatform(api,[{x:5,y:8,z:0,scaffold:b}],report,[a,b]);assert.deepEqual([calls[0].x,calls[0].y,calls[0].z],[1,1,0])
+ pos={x:20,y:1,z:0};api.act=async(n,p)=>{calls.push(p);if(p.x===2)throw Error('no walkable path');pos={x:p.x+.5,y:p.y,z:p.z+.5}}
+ const spot=await reachTreePlatform(api,[{x:2,y:1,z:0},{x:1,y:1,z:0}],report)
+ assert.equal(spot.x,1);assert.deepEqual(report.attention,[])
+ api.checkpoint=async()=>{throw Error('cancelled')};await assert.rejects(()=>reachTreePlatform(api,[{x:4,y:1,z:0}],report),/cancelled/)
+})

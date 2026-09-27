@@ -138,6 +138,32 @@ test('independent: missing mapped storage supply is attention even with no produ
  assert.ok(r.attention.some(s=>/chest|storage/i.test(s)))
  assert.ok(f.events.some(e=>e.type==='forestry_attention'))
 })
+test('independent: supplied planned chest stock becomes complete large and single tree plantings',async()=>{
+ const row='D'+' '.repeat(19)+'S'+' '.repeat(19)+'J'+' '.repeat(22)+'C'
+ const p={name:'trees',by:'Tester',...root,plan:row+'\n'+' '.repeat(64),legend:{D:{kind:'tree',species:'dark_oak',form:'large'},S:{kind:'tree',species:'spruce'},J:{kind:'tree',species:'cherry'}}}
+ const f=worldFixture({plan:p}),base=f.api.act,stock={dark_oak_sapling:4,spruce_sapling:1,cherry_sapling:1},transfers=[]
+ f.world.set('63,1,0','chest')
+ f.world.set('5,1,8','chest') // Nearby unrelated storage must never be searched.
+ f.api.act=async(name,args={})=>{
+  if(name==='chest_contents'||name==='withdraw')assert.equal(coord(args),'63,1,0')
+  if(name==='chest_contents')return {items:{...stock},free:24,slots:27}
+  if(name==='withdraw'){
+   transfers.push({...args.items})
+   for(const [item,n]of Object.entries(args.items)){
+    assert.ok(n<=stock[item]);stock[item]-=n;f.items[item]=(f.items[item]??0)+n
+   }
+   return {}
+  }
+  return base(name,args)
+ }
+ const r=await forestry.run(f.api,{place:'trees',deposit:false})
+ assert.equal(r.planted,6)
+ assert.deepEqual(transfers,[{dark_oak_sapling:4,spruce_sapling:1,cherry_sapling:1}])
+ for(const x of [0,1])for(const z of [0,1])assert.equal(f.world.get(`${x},1,${z}`),'dark_oak_sapling')
+ assert.equal(f.world.get('20,1,0'),'spruce_sapling')
+ assert.equal(f.world.get('40,1,0'),'cherry_sapling')
+ assert.equal(f.items.dark_oak_sapling,0)
+})
 test('independent: maintenance repairs planned flower path support before flower and tree planting',async()=>{
  const p={name:'trees',by:'Tester',...root,plan:'xF',legend:{x:{kind:'tree',species:'oak'}}}
  const f=worldFixture({plan:p,items:{dirt:1,dandelion:1,oak_sapling:1}})
@@ -312,6 +338,27 @@ function enableScaffolds(f,{cancelAt}={}) {
  }
  return records
 }
+test('independent: partial scaffold crafting preserves inaccessible tree and continues to later planting',async()=>{
+ const p={name:'trees',by:'Tester',...root,plan:'x         A         x',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p,items:{oak_sapling:2,bamboo:128,string:32}})
+ smallOak(f,12);f.world.set('10,1,0','crafting_table')
+ enableScaffolds(f)
+ const act=f.api.act
+ f.api.act=async(name,args)=>{
+  if(name==='craft'&&args.item==='scaffolding'){
+   f.calls.push({name,args});f.items.scaffolding=6;f.items.bamboo-=6;f.items.string--
+   throw Error(`forestry.maintain/craft: the server kept rejecting the craft: only 6 of ${args.count} scaffolding made, and bamboo:6 string:1 went into them`)
+  }
+  return act(name,args)
+ }
+ const r=await forestry.run(f.api,{place:'trees',deposit:false})
+ assert.ok(f.calls.some(c=>c.name==='craft'&&c.args.item==='scaffolding'))
+ assert.ok(r.attention.some(s=>/server kept rejecting/.test(s)))
+ assert.equal(f.world.get('0,1,0'),'oak_log')
+ assert.equal(f.world.get('0,12,0'),'oak_log')
+ assert.equal(f.world.get('20,1,0'),'oak_sapling')
+ assert.equal(r.planted,1)
+})
 test('independent: tall tree harvest builds access, removes upper tree, descends and cleans owned scaffold',async()=>{
  const f=worldFixture({items:{scaffolding:64}});smallOak(f,10)
  const records=enableScaffolds(f)

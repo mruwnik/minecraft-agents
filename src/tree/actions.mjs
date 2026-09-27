@@ -1,4 +1,4 @@
-import { planScaffoldAccess, buildScaffoldAccess, addScaffoldAccess, cleanupScaffold, scaffoldId } from '../scaffold/access.mjs'
+import { planScaffoldAccess, buildScaffoldAccess, addScaffoldAccess, cleanupScaffold, scaffoldId, reachTreePlatform } from '../scaffold/access.mjs'
 import { checkTree, inspectTree, harvestStands, key, treeRoot } from './inspect.mjs'
 import { treeProfile } from './profiles.mjs'
 import { farmApi, recoverFarm } from '../farm/attention.mjs'
@@ -86,8 +86,8 @@ export async function runTree (api, a, action) {
       // Reinspect protected blocks that may have appeared since preflight.
       const current = inspectTree(api.block, root, tree.species, tree.form)
       if (current.protected?.length) { report.attention.push('protected nest/hive/heart appeared during harvest; stopped'); break }
-      const spot = access.get(key(b))[0]
-      if (!await attempt(api, 'goto', { ...spot, range: 0, dig: false }, report)) break
+      const spot = await reachTreePlatform(api, access.get(key(b)), report, scaffold?.columns ?? [])
+      if (!spot) break
       const pos = api.pos()
       if (Math.hypot(pos.x - (spot.x + 0.5), pos.z - (spot.z + 0.5)) > 0.8 || Math.abs(pos.y - spot.y) > 0.6) { report.attention.push(`did not reach verified work platform ${key(spot)}`); break }
       if (!await attempt(api, 'dig', { x: b.x, y: b.y, z: b.z, batch: true }, report)) break

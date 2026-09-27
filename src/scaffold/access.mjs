@@ -87,7 +87,7 @@ export async function cleanupScaffold (api,id,report={attention:[]}) {
       if(!ground(api.block(c.exit.x,c.exit.y-1,c.exit.z))||!air(api,c.exit)||!air(api,{...c.exit,y:c.exit.y+1})){report.attention.push(`safe scaffold exit changed at ${key(c.exit)}`);continue}
       await api.checkpoint?.()
       // Descend while every support is intact. No support is dug under a body.
-      if(!await attempt(api,'goto',{...c.exit,range:0,dig:false},report))continue
+      if(!await attempt(api,'goto',{...c.exit,range:0,dig:false,into:true},report))continue
       if(!arrived(api,c.exit)){report.attention.push(`scaffold descent unverified; reach ${key(c.exit)} before cleanup`);continue}
       const base={x:c.x,y:c.y,z:c.z}
       if(!record.verified.includes(key(base))||api.block(base.x,base.y,base.z)?.name!=='scaffolding'){report.attention.push(`scaffold base missing or changed at ${key(base)}; suspended remainder retained`);continue}
@@ -115,7 +115,8 @@ export async function buildScaffoldAccess (api,tree,plan,report) {
   api.scaffolds(id,record)
   try {
     for(const c of plan.columns){
-      if(!await attempt(api,'goto',{...c.exit,range:0,dig:false},report))return record
+      if(!await attempt(api,'goto',{...c.exit,range:0,dig:false,into:true},report))return record
+      if(!arrived(api,c.exit))await api.pause?.(.2)
       if(!arrived(api,c.exit)){report.attention.push(`scaffold starting position unverified at ${key(c.exit)}`);return record}
       for(const p of cellsOf(c)){
         await api.checkpoint?.()
@@ -139,7 +140,41 @@ export function addScaffoldAccess (access,tree,record) {
   if(!record)return access
   for(const b of tree.blocks){
     const decks=record.columns.flatMap(decksOf).filter(d=>record.verified.includes(`${d.x},${d.y-1},${d.z}`)&&digFromHere(center(d),b))
-    access.set(key(b),[...(access.get(key(b))??[]),...decks].sort((a,c)=>Math.hypot(a.x-b.x,a.z-b.z)-Math.hypot(c.x-b.x,c.z-b.z)||c.y-a.y))
+    access.set(key(b),[...(access.get(key(b))??[]),...decks.map(d=>({...d,scaffold:record.columns.find(c=>c.x===d.x&&c.z===d.z)}))].sort((a,c)=>Math.hypot(a.x-b.x,a.z-b.z)-Math.hypot(c.x-b.x,c.z-b.z)||c.y-a.y))
   }
   return access
+}
+
+// A verified scaffold is an intentional destination, not a pit whose rim may
+// silently replace it. Approach its recorded dry exit, enter at ground level,
+// then climb vertically; avoid asking one long search to discover that sequence.
+export async function reachTreePlatform(api,spots,report,columns=[]){
+ const near=(p,q)=>Math.floor(q.x)===p.x&&Math.floor(q.z)===p.z&&Math.hypot(p.x+.5-q.x,p.z+.5-q.z)<=.8&&Math.abs(p.y-q.y)<=.6
+ const current=spots.find(p=>near(p,api.pos()))
+ if(current)return current
+ const ordered=[...spots].sort((a,b)=>{
+  const pos=api.pos(),cost=p=>Math.hypot(p.x+.5-pos.x,p.z+.5-pos.z)+Math.abs(p.y-pos.y)
+  return cost(a)-cost(b)
+ })
+ const failures=[]
+ for(const spot of ordered.slice(0,3)){
+  const local={attention:[]},column=spot.scaffold
+  const goals=[]
+  const from=columns.find(c=>Math.floor(api.pos().x)===c.x&&Math.floor(api.pos().z)===c.z&&api.pos().y>c.y+.6)
+  if(from&&(!column||from.x!==column.x||from.z!==column.z))goals.push(from.exit)
+  if(column&&!(Math.floor(api.pos().x)===column.x&&Math.floor(api.pos().z)===column.z))goals.push(column.exit,{x:column.x,y:column.y,z:column.z})
+  goals.push(spot)
+  let good=true
+  for(const p of goals){
+   await api.checkpoint?.()
+   if(!await attempt(api,'goto',{x:p.x,y:p.y,z:p.z,range:0,dig:false,into:true},local)){good=false;break}
+   // A native goto can finish while the final downward step is settling.
+   if(!near(p,api.pos()))await api.pause?.(.2)
+   if(!near(p,api.pos())){local.attention.push(`did not reach verified work platform ${key(p)} (at ${key(api.pos())})`);good=false;break}
+  }
+  if(good)return spot
+  failures.push(...local.attention)
+ }
+ report.attention.push(...new Set(failures.length?failures:['no verified tree work platform is reachable']))
+ return null
 }
