@@ -42,7 +42,7 @@ export function horseState (bot, entity) {
   // than solely the legacy AbstractHorse saddle bit. Mineflayer preserves the
   // server equipment array, including the saddle slot beyond humanoid armor.
   const equippedSaddle = entity.equipment?.some(item => item?.name === 'saddle') ?? false
-  return { id: entity.id, name: entity.name, at: point(entity.position),
+  return { id: entity.id, uuid: typeof entity.uuid === 'string' ? entity.uuid : null, name: entity.name, at: point(entity.position),
     tamed: Number.isInteger(flags) ? Boolean(flags & 2) : null,
     saddled: equippedSaddle || (Number.isInteger(flags) ? Boolean(flags & 4) : null),
     // Entity metadata is sparse: an adult's false AgeableMob baby value is
