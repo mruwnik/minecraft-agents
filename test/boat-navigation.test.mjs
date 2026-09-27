@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { checkedBoatRoute, boatSurface, stepBoatWater, planBoatLeg, driveBoat, BoatRouteError } from '../src/navigation/boat-travel.mjs'
 import { checkedBoatLanding } from '../src/navigation/boat-landing.mjs'
 const require = createRequire(import.meta.url)
@@ -47,10 +48,10 @@ test('checked controller steers and settles from all headings without teleportin
 })
 
 function fixture () {
-  const entity = boat(), packets = [], metrics = [], client = new EventEmitter()
+  const entity = boat(), packets = [], metrics = [], reports = [], client = new EventEmitter()
   client.write = (name, data) => packets.push({ name, data })
   const bot = { _client: client, vehicle: entity, entities: { 2: entity }, health: 20, entity: { id: 1, position: new Vec3(0.5, 64, 0.5), yaw: 0 }, blockAt: p => pond(p.x, p.y, p.z), supportFeature: () => true }
-  return { bot, entity, packets, metrics, goal: { ...surface, z: 8.5 }, check: () => {}, pause: async () => {}, reportPerformance: (...args) => metrics.push(args) }
+  return { bot, entity, packets, metrics, reports, report: details => reports.push(details), goal: { ...surface, z: 8.5 }, check: () => {}, pause: async () => {}, reportPerformance: (...args) => metrics.push(args) }
 }
 test('drive sends physical positions and paddle input, updates mounted senses and settles before returning', async () => {
   const f = fixture(), result = await driveBoat(f)
@@ -78,6 +79,33 @@ test('server corrections stop prediction and keep the authoritative boat pose', 
   await assert.rejects(driveBoat(f), /corrected/)
   assert.equal(f.entity.position.x, 5); assert.equal(f.entity.position.z, 6)
   assert.equal(f.bot._client.listenerCount('vehicle_move'), 0)
+  const stopped = f.reports.find(r => r.status === 'movement interrupted')
+  assert.equal(stopped.source, 'vehicle_move'); assert.equal(stopped.tick, 5)
+  assert.deepEqual(stopped.actual, { x: 5, y: surface.y, z: 6 })
+})
+
+test('native tracked entity updates are diagnosed separately and still stop prediction', async () => {
+  const f = fixture(); let ticks = 0
+  // Execute the installed Mineflayer handler, whose direct position write is
+  // distinct from the vehicle_move correction/acknowledgement protocol.
+  const source = readFileSync(require.resolve('mineflayer/lib/plugins/entities'), 'utf8')
+  const handler = source.match(/bot\._client\.on\('sync_entity_position', \(packet\) => \{([\s\S]*?)\n  \}\)/)?.[1]
+  assert.ok(handler)
+  const native = new Function('bot', 'fetchEntity', 'conv', 'packet', handler)
+  f.bot.emit = () => {}
+  f.bot._client.on('sync_entity_position', packet => native(f.bot, () => f.entity, { fromNotchianYaw: y => (180 - y) * Math.PI / 180, fromNotchianPitch: p => -p * Math.PI / 180 }, packet))
+  f.pause = async () => {
+    if (++ticks === 5) f.bot._client.emit('sync_entity_position', { entityId: f.entity.id, x: f.entity.position.x + 0.15, y: f.entity.position.y, z: f.entity.position.z, dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, onGround: false })
+  }
+  await assert.rejects(driveBoat(f), /entity_position_changed/)
+  const stopped = f.reports.find(r => r.status === 'movement interrupted')
+  assert.equal(stopped.source, 'entity_position_changed'); assert.equal(stopped.tick, 5)
+  assert.ok(Math.abs(stopped.positionDelta - 0.15) < 1e-6)
+  assert.equal(stopped.recentEntityPackets.at(-1).name, 'sync_entity_position')
+  assert.equal(stopped.mounted, f.entity.id)
+  assert.equal(f.bot._client.listenerCount('sync_entity_position'), 1, 'only the original native handler remains')
+  assert.equal(f.bot._client.listenerCount('entity_teleport'), 0)
+  assert.equal(f.packets.filter(p => p.name === 'vehicle_move').length, 5, 'no acknowledgement or new prediction follows an ordinary tracked update')
 })
 
 test('route changes and other entities stop thrust without walking or dismounting', async () => {

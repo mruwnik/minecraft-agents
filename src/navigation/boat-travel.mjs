@@ -147,7 +147,28 @@ export async function driveBoat ({ bot, entity, goal, check, pause, report = () 
   let plan
   try { plan = planBoatLeg(blockAt, entity, goal) } finally { reportPerformance('boat.route', performance.now() - begun, { id: entity.id, phase: 'departure' }) }
   report({ action: 'boat_drive', status: 'water route checked', distance: plan.distance, ticks: plan.steps.length })
-  let state = initialState(entity), correction = false, completed = false
+  let state = initialState(entity), correction = null, completed = false, sentTicks = 0
+  const incoming = [], watchedPackets = ['sync_entity_position', 'entity_teleport', 'rel_entity_move', 'entity_move_look', 'entity_velocity', 'entity_look']
+  const packetListeners = watchedPackets.map(name => {
+    const listener = packet => {
+      if (packet.entityId !== entity.id) return
+      const fields = Object.fromEntries(['x', 'y', 'z', 'dx', 'dy', 'dz', 'dX', 'dY', 'dZ', 'yaw', 'pitch', 'onGround', 'velocity'].filter(k => packet[k] !== undefined).map(k => [k, packet[k]]))
+      incoming.push({ name, tick: sentTicks, sinceDepartureMs: performance.now() - begun, ...fields })
+      if (incoming.length > 6) incoming.shift()
+    }
+    return [name, listener]
+  })
+  const interrupted = (source, actual, packet = null) => {
+    if (correction) return
+    correction = { source, tick: sentTicks, expected: point(state), actual: point(actual),
+      positionDelta: Math.hypot(actual.x - state.x, actual.y - state.y, actual.z - state.z), mounted: bot.vehicle?.id ?? null,
+      ...(packet ? { packet: { ...point(packet), yaw: packet.yaw, pitch: packet.pitch } } : {}), recentEntityPackets: incoming.slice() }
+    report({ action: 'boat_drive', status: 'movement interrupted', ...correction })
+  }
+  const observeMismatch = () => {
+    if (Math.hypot(entity.position.x - state.x, entity.position.y - state.y, entity.position.z - state.z) > 0.05) interrupted('entity_position_changed', entity.position)
+    if (bot.vehicle?.id !== entity.id) interrupted('controlling_seat_lost', entity.position)
+  }
   const riderPose = () => {
     // Vanilla ordinary boat attachment is height/3, minus the player's .6
     // vehicle attachment. Only predicted mounted pose; dismount needs server
@@ -156,7 +177,7 @@ export async function driveBoat ({ bot, entity, goal, check, pause, report = () 
     bot.entity.yaw = entity.yaw
   }
   const corrected = packet => {
-    correction = true
+    interrupted('vehicle_move', packet, packet)
     if (['x', 'y', 'z'].every(k => Number.isFinite(packet[k]))) {
       entity.position.set(packet.x, packet.y, packet.z)
       if (Number.isFinite(packet.yaw)) entity.yaw = (180 - packet.yaw) * DEG
@@ -169,7 +190,7 @@ export async function driveBoat ({ bot, entity, goal, check, pause, report = () 
     bot._client.write('vehicle_move', { x: next.x, y: next.y, z: next.z, yaw: next.yaw, pitch: 0, onGround: false })
     entity.position.set(next.x, next.y, next.z); entity.velocity?.set(next.vx, next.vy, next.vz)
     entity.yaw = (180 - next.yaw) * DEG
-    riderPose(); state = next
+    riderPose(); state = next; sentTicks++
   }
   const checkStep = next => {
     const start = performance.now()
@@ -185,22 +206,25 @@ export async function driveBoat ({ bot, entity, goal, check, pause, report = () 
     } finally { reportPerformance('boat.route', performance.now() - start, { id: entity.id, phase: 'clearance' }) }
   }
   bot._client.on('vehicle_move', corrected)
+  for (const [name, listener] of packetListeners) bot._client.on(name, listener)
   try {
     for (const step of plan.steps) {
       check()
-      if (Math.hypot(entity.position.x - state.x, entity.position.y - state.y, entity.position.z - state.z) > 0.05) correction = true
-      if (correction || bot.vehicle?.id !== entity.id) throw new BoatRouteError('boat movement was corrected or the controlling seat was lost; inspect the authoritative state')
+      observeMismatch()
+      if (correction) throw new BoatRouteError(`boat movement interrupted: ${correction.source === 'vehicle_move' ? 'server corrected vehicle movement' : correction.source}; inspect the movement-interrupted report before continuing`)
       checkStep(step.state); send(step.state, step.input)
       await pause(50)
     }
     check()
-    if (correction || bot.vehicle?.id !== entity.id) throw new BoatRouteError('boat arrival was not confirmed; inspect state')
+    observeMismatch()
+    if (correction) throw new BoatRouteError(`boat arrival was not confirmed (${correction.source}); inspect the movement-interrupted report`)
     completed = true
     return { arrived: true, mounted: true, at: point(entity.position), distance: plan.distance, ticks: plan.steps.length, prediction: 'vanilla source-water boat physics; no server correction received' }
   } finally {
     // Neutral paddles do not erase momentum. Continue only the already checked
     // natural coast, bounded to 3 seconds, and retain the seat on cancellation.
     if (!completed && !correction) for (let tick = 0; tick < 60 && !still(state); tick++) {
+      observeMismatch()
       if (correction || bot.vehicle?.id !== entity.id || entity.isValid === false || bot.health <= 0) break
       try {
         const next = stepBoatWater(state, {}, plan.waterLevel)
@@ -208,6 +232,7 @@ export async function driveBoat ({ bot, entity, goal, check, pause, report = () 
       } catch { break }
     }
     bot._client.removeListener('vehicle_move', corrected)
+    for (const [name, listener] of packetListeners) bot._client.removeListener(name, listener)
     try { writeInput(bot, {}) } catch { /* Keep the original disconnect/cancellation. */ }
     if (!completed && !still(state)) report({ action: 'boat_drive', status: 'neutral paddles; safe coast could not finish, remain aboard and inspect state' })
   }
