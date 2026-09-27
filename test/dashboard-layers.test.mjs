@@ -38,11 +38,24 @@ test('browser popup opens canonical plan, offers all elevations, redraws and hov
  const context={parsePlacePlan,planLevels,layerDiff,cellColour,cellLabel,cellWorldBlock,planDiff:()=>{},cellExpectation:()=>'',worldColour:()=> '#000000',worldLabel:()=>'',el:node,tag:()=>node('tag'),window:{devicePixelRatio:1},document:{createElement:()=>({})},localStorage:{getItem:()=>null,setItem(){}},clearInterval(){},setInterval(){},snap:{places:plans},fetch(){throw Error('plan view must not fetch')}}
  vm.createContext(context)
  const script=html.slice(start,end>start?end:html.indexOf("el('planClose')",start))
- vm.runInContext(script+'\nglobalThis.openTest=showPlan;',context)
- for(const place of plans){context.openTest(place);assert.equal(node('planOverlay').hidden,false);assert.equal(node('planLayer').children.length,planLevels(place).length);assert.equal(node('planCanvas').width,parsePlacePlan(place).width*22)}
+ vm.runInContext(script+'\nglobalThis.openTest=showPlan; globalThis.currentCells=()=>diffOf().cells;',context)
+ for(const place of plans){context.openTest(place);assert.equal(node('planOverlay').hidden,false);assert.equal(node('planLayer').children.length,planLevels(place).length+1);assert.equal(node('planLayer').value,'birds-eye');assert.equal(node('planCanvas').width,parsePlacePlan(place).width*22)}
  context.openTest(plans[0]);assert.equal(node('planOverlay').hidden,false)
- assert.equal(node('planLayer').children.length,planLevels(plans[0]).length)
+ assert.equal(node('planLayer').children.length,planLevels(plans[0]).length+1)
  const level=planLevels(plans[0]).at(-1);node('planLayer').listeners.change({target:{value:String(level)}})
+ assert.ok(context.currentCells().every(c=>c.y===level))
+ node('planLayer').listeners.change({target:{value:'birds-eye'}})
+ assert.equal(context.currentCells().length,new Set(planCells(plans[0]).map(c=>`${c.x},${c.z}`)).size)
  node('planCanvas').listeners.mousemove({clientX:0,clientY:0})
- assert.ok(node('planMeta').textContent.includes('top-down slice'))
+ assert.ok(node('planMeta').textContent.includes('highest planned block'))
+})
+
+test('bird’s-eye projection combines elevations and reveals blocks beneath air and preserve markers',()=>{
+ const place={x:0,y:60,z:0,structure:{legend:{w:'wheat',c:'carrots','~':'water',r:{require:'preserve'}},layers:[{y:5,rows:['c__']},{y:9,rows:['.r_']},{y:0,rows:['__~']},{y:1,rows:['ww_']}]}}
+ const world=[{x:0,y:64,z:0,name:'farmland'},{x:0,y:65,z:0,name:'carrots'},{x:1,y:60,z:0,name:'farmland'},{x:1,y:61,z:0,name:'wheat'},{x:2,y:60,z:0,name:'water'},{x:2,y:61,z:0,name:'air'}]
+ const overview=layerDiff(place,world)
+ assert.deepEqual(overview.cells.map(c=>[c.x,c.y,c.spec.crop??c.spec.kind]).sort((a,b)=>a[0]-b[0]),[[0,65,'carrots'],[1,61,'wheat'],[2,60,'water']])
+ assert.equal(overview.total,3);assert.equal(overview.differ,0);assert.equal(overview.unseen,0)
+ assert.equal(layerDiff(place,world,61).cells.length,2)
+ assert.equal(layerDiff(place,world,69).cells.length,2)
 })

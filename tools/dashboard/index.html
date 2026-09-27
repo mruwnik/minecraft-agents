@@ -166,7 +166,7 @@
       <button id="planClose">close ×</button>
     </div>
     <div id="planMeta"></div>
-    <label>Block elevation <select id="planLayer" aria-label="Plan block elevation"></select></label>
+    <label>View <select id="planLayer" aria-label="Plan bird’s-eye view or layer"></select></label>
     <div id="planWorld"></div>
     <div id="planGridRow">
       <canvas id="planCanvas"></canvas>
@@ -603,14 +603,18 @@ const showPlan = (place, world = null) => {
   if (parsed.error) return
   planPlace = place
   const levels = planLevels(place)
-  planLevel = levels[0]
-  el('planLayer').replaceChildren(...levels.map(y => { const option = document.createElement('option'); option.value = y; option.textContent = `Y = ${y} (layer ${y - place.y})`; return option }))
+  planLevel = null
+  const birdsEye = document.createElement('option')
+  birdsEye.value = 'birds-eye'
+  birdsEye.textContent = 'Bird’s-eye view (all layers)'
+  el('planLayer').replaceChildren(birdsEye, ...levels.map(y => { const option = document.createElement('option'); option.value = y; option.textContent = `Y = ${y} (layer ${y - place.y})`; return option }))
+  el('planLayer').value = 'birds-eye'
   planWorld = world?.place === place.name || world?.error ? world : null
   el('planTitle').textContent = place.name
   el('planMeta').textContent = [
     `by ${place.by ?? 'unclaimed'}`,
     place.note || null,
-    `${parsed.width}x${parsed.height} footprint, ${levels.length} block elevations; top-down slice selected below. Anchored at ${place.x},${place.y},${place.z} (north-west corner)`
+    `${parsed.width}x${parsed.height} footprint, ${levels.length} block elevations. Bird’s-eye view shows the highest planned block in each column; select a layer to inspect it separately. Anchored at ${place.x},${place.y},${place.z} (north-west corner)`
   ].filter(Boolean).join('\n')
   el('planHover').textContent = ''
   renderPlanCard()
@@ -619,7 +623,7 @@ const showPlan = (place, world = null) => {
   startWorldPoll()
 }
 
-el('planLayer').addEventListener('change', e => { planLevel = Number(e.target.value); renderPlanCard() })
+el('planLayer').addEventListener('change', e => { planLevel = e.target.value === 'birds-eye' ? null : Number(e.target.value); el('planHover').textContent = ''; renderPlanCard() })
 
 const openPlan = name => showPlan(snap.places.find(p => p.name === name))
 

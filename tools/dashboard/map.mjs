@@ -130,9 +130,18 @@ export const cellLabel = (ch, spec) => !spec ? (CELL_LEGEND[ch] ?? UNKNOWN_CELL)
   : (spec.generic ? 'mixed crop' : spec.kind === 'tree' ? `${spec.species} tree (${spec.form ?? 'auto'})` : spec.crop ?? spec.item ?? spec.ground ?? spec.kind).replaceAll('_', ' ')
 export const cellWorldBlock = cell => ['ground', 'water', 'path', 'reserved'].includes(cell.spec?.kind) ? cell.ground : cell.top
 export const planLevels = place => [...new Set(planCells(place).map(c => place.y + c.blockY))].sort((a, b) => a - b)
-export const layerDiff = (place, world, y) => {
+export const layerDiff = (place, world, y = null) => {
   const all = planDiff(place, world)
-  const cells = all.cells.filter(c => c.y === y)
+  // Looking down through air/preserve markers reveals the highest planned block.
+  // Keep a marker only when the column has no block intent at any elevation.
+  const columns = new Map()
+  if (y === null) for (const cell of all.cells) {
+    const key = `${cell.dx},${cell.dz}`
+    const prior = columns.get(key)
+    const visible = c => !['air', 'reserved'].includes(c.spec.kind)
+    if (!prior || (visible(cell) && !visible(prior)) || (visible(cell) === visible(prior) && cell.y > prior.y)) columns.set(key, cell)
+  }
+  const cells = y === null ? [...columns.values()] : all.cells.filter(c => c.y === y)
   return { cells, total: cells.length, differ: cells.filter(c => c.ok === false).length, unseen: cells.filter(c => !c.seen).length, unsure: cells.filter(c => c.seen && c.ok === null).length }
 }
 
