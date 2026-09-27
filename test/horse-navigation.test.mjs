@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
-import { checkedHorseRoute, driveHorse, horseSpeed, HorseRouteError } from '../src/navigation/horse.mjs'
+import { readFileSync } from 'node:fs'
+import { checkedHorseRoute, driveHorse, horseSpeed, observedHorseSpeed, HorseRouteError } from '../src/navigation/horse.mjs'
 const require = createRequire(import.meta.url)
 const { Vec3 } = require('vec3')
 function fixture (choose = () => null, version = '26.1') {
@@ -129,4 +130,32 @@ test('all horse planning phases report duration through the advisory shared repo
   const blocked = fixture(p => p.x === 2 && p.y === 1 ? 'stone' : null)
   assert.throws(() => driveHorse.validate({ ...args, ...blocked }), HorseRouteError)
   assert.equal(timings.at(-1).phase, 'preflight', 'failed scans are timed too')
+})
+
+test('actual decoded horse attribute packets feed both state inspection and native mounted physics without fallback speed', async () => {
+  const protocol = require('minecraft-protocol')
+  const source = readFileSync(require.resolve('mineflayer/lib/plugins/entities'), 'utf8')
+  const start = source.indexOf('  const updateAttributes = (packet) => {')
+  const end = source.indexOf("  bot._client.on('update_attributes'", start)
+  assert.ok(start >= 0 && end > start)
+  for (const version of ['1.21.5', '26.1']) {
+    const wire = fixture(undefined, version), canonical = fixture(undefined, version)
+    const attribute = { value: 0.225, modifiers: [{ uuid: 'test:horse_speed', amount: 0.1, operation: 2 }] }
+    wire.entity.attributes = {}
+    const packet = { name: 'entity_update_attributes', params: { entityId: 2, properties: [{ key: 'generic.movement_speed', ...attribute }] } }
+    const serializer = protocol.createSerializer({ state: 'play', isServer: true, version })
+    const deserializer = protocol.createDeserializer({ state: 'play', version })
+    const decoded = deserializer.parsePacketBuffer(serializer.createPacketBuffer(packet)).data.params
+    const apply = new Function('fetchEntity', 'bot', `${source.slice(start, end)}; return updateAttributes`)(() => wire.entity, { emit: () => {} })
+    apply(decoded)
+    assert.deepEqual(Object.keys(wire.entity.attributes), ['generic.movement_speed'])
+    assert.equal(observedHorseSpeed(wire.bot, wire.entity), 0.2475)
+    canonical.entity.attributes = { [canonical.bot.registry.attributesByName.movementSpeed.resource]: structuredClone(attribute) }
+    const before = structuredClone(wire.entity.attributes)
+    const args = { goal: { x: 24, y: 1, z: 0 }, check: () => {}, pause: async () => {} }
+    const actual = await driveHorse({ ...wire, ...args }), expected = await driveHorse({ ...canonical, ...args })
+    assert.equal(actual.ticks, expected.ticks, version)
+    assert.deepEqual(actual.at, expected.at, 'native simulation consumes the actual horse attribute, not default player speed')
+    assert.deepEqual(wire.entity.attributes, before, 'native physics cannot mutate server attribute records')
+  }
 })

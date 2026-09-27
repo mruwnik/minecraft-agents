@@ -47,12 +47,35 @@ export function checkedHorseRoute (blockAt, from, target, { centerGoal = true } 
   return { from: { ...from }, to, distance, reads: cache.size }
 }
 
-export function horseSpeed (bot, entity) {
-  const key = bot.registry.attributesByName.movementSpeed.resource
-  const attribute = entity.attributes?.[key]
+// minecraft-data's 1.21.5/26.1 protocol mapper emits generic.movement_speed,
+// while its attribute registry calls the SAME attribute minecraft:movement_speed.
+// Mineflayer retains the decoded wire key. Resolve only these verified aliases;
+// absent values must never become an assumed average horse speed.
+export function horseMovementAttribute (bot, entity) {
+  const resource = bot.registry?.attributesByName?.movementSpeed?.resource
+  const attribute = entity.attributes?.[resource] ?? entity.attributes?.['generic.movement_speed']
+  if (!resource || !attribute || !Number.isFinite(attribute.value) || !Array.isArray(attribute.modifiers) ||
+      attribute.modifiers.some(m => !Number.isFinite(m.amount) || ![0, 1, 2].includes(m.operation))) return null
+  return attribute
+}
+
+export function observedHorseSpeed (bot, entity) {
+  const attribute = horseMovementAttribute(bot, entity)
   const value = attribute && getAttributeValue(attribute)
+  return Number.isFinite(value) ? value : null
+}
+
+export function horseSpeed (bot, entity) {
+  const value = observedHorseSpeed(bot, entity)
   if (!Number.isFinite(value) || value <= 0 || value > 0.5) throw new HorseRouteError('horse movement_speed attribute must be confirmed and within the supported range')
   return value
+}
+
+const physicsAttributes = (bot, entity) => {
+  const attribute = horseMovementAttribute(bot, entity)
+  return { ...entity.attributes, [bot.registry.attributesByName.movementSpeed.resource]: {
+    ...attribute, modifiers: attribute.modifiers.map(modifier => ({ ...modifier }))
+  } }
 }
 
 function checkPose (bot, entity) {
@@ -84,7 +107,7 @@ export async function driveHorse ({ bot, entity, goal, check, pause, report = ()
   const world = { getBlock: p => bot.blockAt(p.floored()) }
   const physics = Physics(bot.registry, world)
   physics.playerHalfWidth = HALF; physics.playerHeight = HEIGHT; physics.stepHeight = 0
-  const shadow = { version: bot.version, entity: { ...entity, velocity: entity.velocity?.clone() ?? new Vec3(0, 0, 0), onGround: true, effects: entity.effects ?? {} }, inventory: { slots: [] }, jumpTicks: 0, jumpQueued: false, fireworkRocketDuration: 0 }
+  const shadow = { version: bot.version, entity: { ...entity, attributes: physicsAttributes(bot, entity), velocity: entity.velocity?.clone() ?? new Vec3(0, 0, 0), onGround: true, effects: entity.effects ?? {} }, inventory: { slots: [] }, jumpTicks: 0, jumpQueued: false, fireworkRocketDuration: 0 }
   const state = new PlayerState(shadow, controls(false))
   if (Math.hypot(state.vel.x, state.vel.z) > 0.05 || Math.abs(state.vel.y) > 0.1) throw new HorseRouteError('wait for the horse to stand still before starting a checked ride')
   state.vel.set(0, -physics.gravity * physics.airdrag, 0)
@@ -134,7 +157,7 @@ export async function driveHorse ({ bot, entity, goal, check, pause, report = ()
       if (correction) throw new HorseRouteError('server corrected horse movement; inspect the authoritative position before continuing')
       checkPose(bot, entity)
       horseSpeed(bot, entity)
-      state.attributes = entity.attributes
+      state.attributes = physicsAttributes(bot, entity)
       const remaining = Math.hypot(route.to.x - state.pos.x, route.to.z - state.pos.z)
       const velocity = Math.hypot(state.vel.x, state.vel.z)
       // Ordinary dry ground friction is 0.6 * 0.91. Coast to the goal rather

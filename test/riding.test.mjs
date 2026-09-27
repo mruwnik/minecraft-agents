@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { makeRidingRuntime, horseState } from '../src/body/riding.mjs'
+import { makeRidingRuntime, horseState, horseInventoryAction } from '../src/body/riding.mjs'
 
 function fixture (options = {}) {
   const horse = { id: 9, name: options.name ?? 'horse', isValid: true, position: { x: 1, y: 64, z: 0 }, metadata: [false, options.flags ?? 0], passengers: [] }
@@ -39,6 +39,27 @@ test('horse state follows registry keys and unknown metadata stays unknown', () 
   horse.metadata = []
   assert.equal(horseState(bot, horse).tamed, null)
   assert.equal(horseState(bot, { ...horse, name: 'pig' }), null)
+})
+test('received sparse horse flags retain the server default adult age', () => {
+  const { bot, horse } = fixture()
+  horse.metadata = []
+  assert.equal(horseState(bot, horse).baby, null)
+  horse.metadata[1] = 16
+  assert.equal(horseState(bot, horse).baby, false)
+  assert.equal(horseState(bot, horse).tamed, false)
+  horse.metadata[0] = true
+  assert.equal(horseState(bot, horse).baby, true)
+})
+test('horse inventory opening uses the actual negotiated protocol action', () => {
+  const protocol = createRequire(import.meta.url)('minecraft-protocol')
+  for (const version of ['1.21.5', '26.1']) {
+    const actionId = horseInventoryAction({ version })
+    const serializer = protocol.createSerializer({ state: 'play', version })
+    const deserializer = protocol.createDeserializer({ state: 'play', isServer: true, version })
+    const packet = { name: 'entity_action', params: { entityId: 9, actionId, jumpBoost: 0 } }
+    const decoded = deserializer.parsePacketBuffer(serializer.createPacketBuffer(packet)).data.params
+    assert.equal(decoded.actionId, version === '26.1' ? 'open_vehicle_inventory' : 6)
+  }
 })
 test('tame remounts after server bucking and requires confirmed tame metadata', async () => {
   const f = fixture({ onPause ({ horse, bot, client, ticks }) {

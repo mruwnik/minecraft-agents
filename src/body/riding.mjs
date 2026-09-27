@@ -1,10 +1,22 @@
 import { createRequire } from 'node:module'
 import { CompositeHandBack } from '../composite.mjs'
 import { dryTravelExit } from '../navigation/travel.mjs'
+import { observedHorseSpeed } from '../navigation/horse.mjs'
 import { isNight } from '../lib/sleep.mjs'
 
-const { getAttributeValue } = createRequire(import.meta.url)('prismarine-physics/lib/attribute')
 const HORSES = new Set(['horse', 'donkey', 'mule'])
+const minecraftData = createRequire(import.meta.url)('minecraft-data')
+export function horseInventoryAction (bot) {
+  const fields = bot.version && minecraftData(bot.version)?.protocol?.play?.toServer?.types?.packet_entity_action?.[1]
+  const action = fields?.find(field => field.name === 'actionId')?.type
+  // New protocols removed sneak actions from this enum and shifted inventory
+  // opening. Use the negotiated mapper name instead of its old numeric slot.
+  if (Array.isArray(action) && action[0] === 'mapper') {
+    if (!Object.values(action[1].mappings).includes('open_vehicle_inventory')) throw new Error('protocol does not expose horse inventory opening')
+    return 'open_vehicle_inventory'
+  }
+  return 6
+}
 const point = p => ({ x: p.x, y: p.y, z: p.z })
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 
@@ -17,13 +29,15 @@ export function horseState (bot, entity) {
   const flagsIndex = keys?.indexOf('flags'), babyIndex = keys?.indexOf('baby')
   const flags = flagsIndex >= 0 ? entity.metadata?.[flagsIndex] : undefined
   const baby = babyIndex >= 0 ? entity.metadata?.[babyIndex] : undefined
-  const speedKey = bot.registry?.attributesByName?.movementSpeed?.resource
-  const speedAttribute = speedKey && entity.attributes?.[speedKey]
-  const movementSpeed = speedAttribute && Number.isFinite(speedAttribute.value) && Array.isArray(speedAttribute.modifiers) ? getAttributeValue(speedAttribute) : null
+  const movementSpeed = observedHorseSpeed(bot, entity)
   return { id: entity.id, name: entity.name, at: point(entity.position),
     tamed: Number.isInteger(flags) ? Boolean(flags & 2) : null,
     saddled: Number.isInteger(flags) ? Boolean(flags & 4) : null,
-    baby: typeof baby === 'boolean' ? baby : null,
+    // Entity metadata is sparse: an adult's false AgeableMob baby value is
+    // omitted from the initial server snapshot. A received horse flags byte
+    // proves metadata readiness; true baby values are explicitly transmitted.
+    // Keep entities without that snapshot unknown rather than assuming adult.
+    baby: typeof baby === 'boolean' ? baby : babyIndex >= 0 && Number.isInteger(flags) ? false : null,
     movementSpeed: Number.isFinite(movementSpeed) ? movementSpeed : null,
     mounted: bot.vehicle?.id === entity.id,
     passengers: (entity.passengers ?? []).map(e => e.id) }
@@ -92,7 +106,7 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
     const opened = p => { if (p.entityId === entity.id) windowId = p.windowId }
     bot._client.on('open_horse_window', opened)
     try {
-      bot._client.write('entity_action', { entityId: bot.entity.id, actionId: 6, jumpBoost: 0 })
+      bot._client.write('entity_action', { entityId: bot.entity.id, actionId: horseInventoryAction(bot), jumpBoost: 0 })
       if (!await wait(check, () => windowId !== null && bot.currentWindow?.id === windowId)) throw new Error('horse inventory was not confirmed')
       const window = bot.currentWindow
       const slot = window.slots.findIndex((item, i) => i >= window.inventoryStart && item?.name === 'saddle')
