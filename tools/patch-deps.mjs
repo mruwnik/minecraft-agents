@@ -4,10 +4,11 @@ import path from 'node:path'
 import { patchPathfinder, patchGotoPartial, patchParkourFences, patchItemEnchants, patchGateWaypoints } from '../src/lib.mjs'
 import { patchScaffoldingPhysics, patchScaffoldingPreview, patchScaffoldingDriver } from '../src/navigation/scaffolding.mjs'
 import { patchOwnBreath } from '../src/survival/airlog.mjs'
-import { patchTerrainWaypoints, patchTerrainStart, patchTerrainStop } from '../src/navigation/terrain.mjs'
+import { patchTerrainWaypoints, patchTerrainStart, patchTerrainStop, patchPathNodeCopies } from '../src/navigation/terrain.mjs'
 import { patchAttributeProtocol } from '../src/navigation/attribute-protocol.mjs'
 
 const PATCHES = [
+  ['node_modules/mineflayer-pathfinder/index.js', patchPathNodeCopies, 'mineflayer-pathfinder immutable search nodes', 'path rendering must not mutate an unfinished A* search'],
   ['node_modules/minecraft-data/minecraft-data/data/pc/26.1/protocol.json', patchAttributeProtocol, '26.1 canonical attribute wire IDs', 'attribute schema changed; mounted movement requires verified negotiated IDs'],
   ['node_modules/mineflayer-pathfinder/lib/physics.js', patchScaffoldingPreview, 'mineflayer-pathfinder scaffold descent preview', 'scaffold sneak descent preview anchor changed'],
   ['node_modules/mineflayer-pathfinder/index.js', patchScaffoldingDriver, 'mineflayer-pathfinder scaffold descent controls', 'scaffold sneak descent driver anchor changed'],

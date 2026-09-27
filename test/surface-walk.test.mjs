@@ -1,17 +1,25 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { createRequire } from 'node:module'
+import Module, { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { makeSurfaceWalkRuntime, surfaceRequest } from '../src/navigation/surface-walk.mjs'
 import { configureTerrainMoves } from '../src/navigation/terrain-moves.mjs'
 import { farmWalk } from '../src/lib/path.mjs'
+import { trackReads } from '../src/lib/composite.mjs'
+import { patchPathNodeCopies } from '../src/navigation/terrain.mjs'
 const require = createRequire(import.meta.url)
 const registry = require('minecraft-data')('26.1'), Block = require('prismarine-block')(registry)
-const { Vec3 } = require('vec3'), driver = require('mineflayer-pathfinder')
+const { Vec3 } = require('vec3')
+const driverPath=require.resolve('mineflayer-pathfinder'), driverModule=new Module(driverPath)
+driverModule.filename=driverPath; driverModule.paths=Module._nodeModulePaths(path.dirname(driverPath))
+driverModule._compile(patchPathNodeCopies(readFileSync(driverPath,'utf8')).source,driverPath)
+const driver=driverModule.exports
 const { Physics, PlayerState } = require('prismarine-physics')
 const target = { surface: 'horse', x: 6, y: 1, z: 0, range: 0, route: true }
 const controls = () => ({ forward: false, back: false, left: false, right: false, jump: false, sprint: false, sneak: false })
-function fixture ({ choose = () => undefined, tick = true, onPause = () => {}, dangerous = () => false, check = () => {} } = {}) {
+function fixture ({ choose = () => undefined, tick = true, onPause = () => {}, dangerous = () => false, check = () => {}, go } = {}) {
   let time = 0
   const at = (x,y,z) => {
     const name = choose(x,y,z) ?? (y < 1 ? 'grass_block' : 'air')
@@ -34,6 +42,7 @@ function fixture ({ choose = () => undefined, tick = true, onPause = () => {}, d
   const original = makeMoves(); bot.pathfinder.setMovements(original)
   const reports = [], events = []
   const runtime = makeSurfaceWalkRuntime({ getBot: () => bot, Vec3, goals: driver.goals, makeMoves, cancelGuard: () => check,
+    ...(go ? { go } : {}),
     report: data => events.push(data), dangerous: p => dangerous(p,bot), now: () => time, reportPerformance: (...args) => reports.push(args),
     pause: async ms => {
       if (tick) for (let i=0;i<Math.ceil(ms/50);i++) {
@@ -132,4 +141,52 @@ test('slow completed planning remains usable and is reported rather than discard
   }
   assert.equal(f.runtime.preview(target).status,'success')
   assert.ok(f.reports[0][1]>=1200)
+})
+
+test('partial native searches preserve graph nodes while driving a checked detour', async () => {
+  const f=fixture({choose:(x,y,z)=>x===3&&y>=1&&y<4&&Math.abs(z)<=2?'stone':undefined})
+  f.bot.pathfinder.tickTimeout=0.1
+  let partials=0
+  f.bot.on('path_update',r=>{if(r.status==='partial')partials++})
+  assert.equal(f.runtime.preview(target).status,'success')
+  assert.equal((await f.runtime.walk(target)).arrived,true)
+  assert.ok(partials>0)
+})
+
+test('native jump arrival settles on real ground before reporting success', async () => {
+  const nativeGoto=require('mineflayer-pathfinder/lib/goto')
+  const f=fixture({choose:(x,y)=>y<(x>=3?2:1)?'stone':'air', go:async(bot,goal)=>{
+    await nativeGoto(bot,goal)
+    bot.entity.position.y+=0.01
+    bot.entity.onGround=false
+    bot.entity.velocity.y=-0.0784
+  }})
+  assert.equal((await f.runtime.walk({...target,y:2})).arrived,true)
+  assert.equal(f.bot.entity.onGround,true)
+  assert.equal(f.bot.entity.position.y,2)
+})
+test('a goal which remains airborne fails after bounded settling without another movement goal', async () => {
+  const f=fixture({tick:false, go:async bot=>{
+    bot.entity.position.set(6.5,1.2,0.5);bot.entity.onGround=false
+  }})
+  await assert.rejects(f.runtime.walk(target),/ended before reaching/)
+  assert.ok(f.time()<=1700)
+})
+test('route=true is consumed and emits waypoints; an early refusal does not falsely mark it ignored', () => {
+  for(const choose of [()=>undefined,(x,y)=>x>=3?'unknown':undefined]) {
+    const f=fixture({choose}), tracked=trackReads({...target,route:true})
+    const result=f.runtime.preview(tracked.args)
+    assert.equal(tracked.unread().includes('route'),false)
+    if(result.status==='success')assert.ok(result.waypoints.length>0&&result.reverseWaypoints.length>0)
+  }
+})
+
+test('damage during the final landing frame still aborts arrival', async () => {
+  let settling=false
+  const nativeGoto=require('mineflayer-pathfinder/lib/goto')
+  const f=fixture({go:async(bot,goal)=>{
+    await nativeGoto(bot,goal)
+    bot.entity.position.y+=0.01;bot.entity.onGround=false;bot.entity.velocity.y=-0.0784;settling=true
+  },onPause:({bot})=>{if(settling&&bot.entity.onGround)bot.health=19}})
+  await assert.rejects(f.runtime.walk(target),/damage/)
 })

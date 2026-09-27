@@ -27,6 +27,7 @@ export function makeSurfaceWalkRuntime ({ getBot, Vec3, goals, makeMoves, cancel
     if (bot.health < 16 || bot.health < initialHealth || dangerous()) throw new Error('surface walk stopped for damage, nearby danger or night; inspect the reported retreat before moving')
   }
   const planning = args => {
+    const wantRoute = args.route === true
     const bot = getBot(), from = bot.entity.position.clone(), aim = surfaceRequest(args, from)
     if (bot.vehicle) throw new Error('surface preview requires an unmounted starting stance')
     if (!bot.entity.onGround) throw new Error('surface preview needs a grounded starting stance')
@@ -63,7 +64,7 @@ export function makeSurfaceWalkRuntime ({ getBot, Vec3, goals, makeMoves, cancel
       if (back.points.some(p => dangerous(p))) return { status: 'refused', surface: 'horse', why: 'nearby danger along the checked retreat; no movement started', ms: now() - began }
       const report = { status: 'success', surface: 'horse', ms: now() - began, nodes: out.points.length, visited,
         ends: `${end.x},${end.y},${end.z}`, retreat: { x: from.x, y: from.y, z: from.z }, reverseNodes: back.points.length,
-        ...(args.route ? { waypoints: out.points, reverseWaypoints: back.points } : {}),
+        ...(wantRoute ? { waypoints: out.points, reverseWaypoints: back.points } : {}),
         note: 'Checked loaded geometry in both directions; terrain and threats are checked again before execution. Retreat is reported, never automatic.' }
       return { ...report, internal: { moves, goal, from, points: out.points } }
     } finally { reportPerformance('surface.plan', now() - began, { forward: out?.status, reverse: back?.status, visited, goal: aim }) }
@@ -99,6 +100,17 @@ export function makeSurfaceWalkRuntime ({ getBot, Vec3, goals, makeMoves, cancel
       }
       guard(bot, initialHealth, check)
       if (failure) throw failure
+      // Native waypoint arrival allows nearly a block of vertical tolerance.
+      // A jump may resolve its goal while the feet are still settling; wait
+      // boundedly for real grounded arrival without starting another walk.
+      const settleUntil = now() + 1500
+      while (!bot.entity.onGround && now() < settleUntil) {
+        const p = bot.entity.position, cell = p.floored()
+        if (!goal.isEnd({ x: cell.x, y: goal.y, z: cell.z }) || Math.abs(p.y - goal.y) > 1.25) break
+        guard(bot, initialHealth, check)
+        await pause(50)
+      }
+      guard(bot, initialHealth, check)
       const p = bot.entity.position, cell = moves.resolveTerrainStart?.(p, bot.entity.onGround) ?? p.floored()
       if (!bot.entity.onGround || !goal.isEnd(cell)) throw new Error('surface walk ended before reaching the checked goal')
       result = { ...previewReport, arrived: true, at: { x: p.x, y: p.y, z: p.z } }
