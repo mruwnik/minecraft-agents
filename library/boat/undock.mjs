@@ -1,5 +1,6 @@
 import board from './board.mjs'
-import { inAnyZone, villagerBoatRoute, villagerBoatStatus, villagerDockPlan, villagerUuid, workRefusal } from '../../src/lib.mjs'
+import { inAnyZone, villagerBoatRoute, villagerDockPlan, workRefusal } from '../../src/lib.mjs'
+import { boatPassengerProfile, boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
 
 const key = p => `${p.x},${p.y},${p.z}`
 const point = e => {
@@ -9,12 +10,12 @@ const point = e => {
 const inside = (plan, p) => Math.abs(p.x - (plan.cell.x + 0.5)) < 1.5 && Math.abs(p.z - (plan.cell.z + 0.5)) < 1.5
 
 export default {
-  doc: 'villager.undock uuid= x= y= z= riverX= riverZ= [boat=] [item=oak_boat] [centerX= centerZ= aimY=] [block=cobblestone] [timeout=90]: reboard the same villager inside a closed dock, leash its boat, and open the river gate',
-  stops: 'the exact villager is seated in a leashed boat with the dock gate open, or it remains inside the closed dock',
+  doc: 'boat.undock uuid= x= y= z= riverX= riverZ= [boat=] [item=oak_boat] [centerX= centerZ= aimY=] [block=cobblestone] [timeout=90]: reboard the same supported adult villager, cow or sheep inside a closed boat dock, leash its boat, and open the river gate; pigs are refused because they fit through the temporary one-high service opening',
+  stops: 'the exact supported passenger is seated in a leashed boat with the dock gate open, or it remains inside the closed dock',
   args: { uuid: 'string!', x: 'number!', y: 'number!', z: 'number!', riverX: 'number!', riverZ: 'number!', boat: 'number', item: 'string', centerX: 'number', centerZ: 'number', aimY: 'number', block: 'string', timeout: 'number' },
 
   async run (api, a) {
-    if (!villagerUuid(a.uuid)) throw new Error('uuid= must be the observed villager UUID')
+    if (!entityUuid(a.uuid)) throw new Error('uuid= must be the observed passenger UUID')
     if (![a.x, a.y, a.z, a.riverX, a.riverZ].every(Number.isInteger)) throw new Error('dock coordinates must be integers')
     const plan = villagerDockPlan({ x: a.x, y: a.y, z: a.z }, { x: a.riverX, z: a.riverZ })
     const block = a.block ?? 'cobblestone'
@@ -46,17 +47,20 @@ export default {
     if (a.boat === undefined && (api.inv()[item] ?? 0) < 1) throw new Error(`undocking needs an empty ${item}`)
     if ((api.inv().lead ?? 0) < 1) throw new Error('undocking needs one lead before the gate opens')
     if ((api.inv()[block] ?? 0) < 5) throw new Error(`undocking needs five spare ${block} to reseal the gate if interrupted`)
-    const villagers = (await api.act('entity', { name: 'villager', count: 100, uuid: true })).found
-    const target = villagers.find(e => e.uuid === a.uuid)
-    if (!target || !inside(plan, point(target))) throw new Error(`villager ${a.uuid} is not inside the closed dock`)
-    if (target.vehicleId != null && a.boat === undefined) throw new Error(`villager ${a.uuid} is already riding vehicle ${target.vehicleId}; pass boat= to resume`)
-    const other = villagers.find(e => e.uuid !== a.uuid && inside(plan, point(e)))
-    if (other) throw new Error(`dock holds another villager ${other.uuid ?? other.id}`)
+    const entities = (await api.act('entity', { name: '*', count: 100, uuid: true })).found
+    const target = entities.find(e => e.uuid === a.uuid)
+    if (!target || !inside(plan, point(target))) throw new Error(`passenger ${a.uuid} is not inside the closed dock`)
+    const profile = boatPassengerProfile(target)
+    if (!profile.ok) throw new Error(profile.error)
+    if (profile.height <= 1) throw new Error('this undock path opens a one-high service slot; a passenger that fits that opening could escape')
+    if (target.vehicleId != null && a.boat === undefined) throw new Error(`passenger ${a.uuid} is already riding vehicle ${target.vehicleId}; pass boat= to resume`)
+    const other = entities.find(e => e.uuid !== a.uuid && e.uuid && !['item', 'experience_orb'].includes(e.name) && !/(^|_)boat$/.test(e.name ?? '') && inside(plan, point(e)))
+    if (other) throw new Error(`dock holds another entity ${other.uuid ?? other.id}`)
 
     let boatId = a.boat ?? null
     const check = async () => {
       const s = await api.act('boat_state', { id: boatId })
-      const issue = villagerBoatStatus(s, boatId, a.uuid)
+      const issue = boatPassengerStatus(s, boatId, a.uuid)
       if (issue) throw new Error(issue)
       const boat = s.boats.find(b => b.id === boatId)
       if (boat.passengers.length !== 1) throw new Error(`boat ${boatId} carries another passenger`)
@@ -97,15 +101,16 @@ export default {
       if (stuck) throw new Error(`dock gate did not open at ${key(stuck)}`)
       ;({ s, boat } = await check())
       if (boat.leashHolderId !== s.selfId) throw new Error(`boat ${boatId} lost its lead while opening the gate`)
-      api.report({ dock: 'open', boat: boatId, villagerUuid: a.uuid })
-      return { boat: boatId, villagerUuid: a.uuid, dock: key(plan.cell), passengerSeated: true, leashHeld: true, gateOpen: true, secure: false }
+      const identity = profile.name === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind: profile.name }
+      api.report({ dock: 'open', boat: boatId, ...identity })
+      return { boat: boatId, ...identity, dock: key(plan.cell), passengerSeated: true, leashHeld: true, gateOpen: true, secure: false }
     } catch (error) {
       const closure = [plan.serviceFoundation, ...plan.gate].filter(p => !api.block(p.x, p.y, p.z)?.solid)
       for (const p of closure) {
         try { await api.act('place', { ...p, item: block }) } catch (_) {}
       }
       const pending = [plan.serviceFoundation, ...plan.gate].filter(p => !api.block(p.x, p.y, p.z)?.solid).map(key)
-      api.report({ dock: 'undock pending', boat: boatId, villagerUuid: a.uuid, serviceOpen: openedService, closurePending: pending.join(' '), error: error.message })
+      api.report({ dock: 'undock pending', boat: boatId, ...(profile.name === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind: profile.name }), serviceOpen: openedService, closurePending: pending.join(' '), error: error.message })
       if (pending.length) throw new Error(`${error.message}; dock closure pending at ${pending.join(' ')}`)
       throw error
     }

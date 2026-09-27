@@ -1,40 +1,58 @@
+import { boatHabitatPlan, boatHabitatPreflight, boatHabitatCensus, boatHabitatInside, boatHabitatSecure } from '../../src/boat-habitat.mjs'
 import dockCommand from './dock.mjs'
-import { villagerUuid, villagerBoatStatus } from '../../src/lib.mjs'
-import { breedPlan, breedPreflight, breedCensus, breedInside, breedKey, breedMaterial } from '../../src/villager-breed.mjs'
-import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../../src/villager-arrival-step.mjs'
-import { arrivalPlan, arrivalPreflight } from '../../src/villager-arrival.mjs'
-import { habitatSecure, habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/villager-habitat.mjs'
+import { entityUuid, boatPassengerStatus, boatPassengerProfile } from '../../src/lib/boat-passenger.mjs'
+import { breedKey, breedMaterial } from '../../src/villager-breed.mjs'
+import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../../src/boat-arrival-step.mjs'
+import { arrivalPlan, arrivalPreflight } from '../../src/boat-arrival.mjs'
+import { habitatThreats, habitatOwnership, closeHabitatGates } from '../../src/villager-habitat.mjs'
 
 export default {
-  doc: 'villager.receive target= x= y= z= entryX= entryZ= dockX= dockY= dockZ= riverX=1 riverZ=0 uuid= boat= [size block gate bed materials timeout=1200]: secure and release an arrived passenger in an adjacent dock, then observe that exact villager enter the prepared house before closing its internal gate',
+  doc: 'boat.receive x= y= z= entryX= entryZ= dockX= dockY= dockZ= riverX=1 riverZ=0 uuid= boat= [size block gate materials timeout=1200]: secure and release an arrived passenger in an adjacent dock, then observe that exact passenger enter the prepared house before closing its internal gate',
   stops: 'the exact arrived UUID is on foot inside the closed prepared house; otherwise the internal gate closes and transfer is reported pending',
-  args: { target: 'number!', x: 'number!', y: 'number!', z: 'number!', entryX: 'number!', entryZ: 'number!', airlock: 'boolean', dockX: 'number!', dockY: 'number!', dockZ: 'number!', riverX: 'number!', riverZ: 'number!', uuid: 'string', boat: 'number', prepare: 'boolean', size: 'number', block: 'string', gate: 'string', bed: 'string', materials: 'string', timeout: 'number', plan: 'boolean' },
+  args: { x: 'number!', y: 'number!', z: 'number!', entryX: 'number!', entryZ: 'number!', airlock: 'boolean', dockX: 'number!', dockY: 'number!', dockZ: 'number!', riverX: 'number!', riverZ: 'number!', uuid: 'string', boat: 'number', prepare: 'boolean', size: 'number', block: 'string', gate: 'string', materials: 'string', timeout: 'number', plan: 'boolean' },
   async run (api, a) {
     if (a.prepare !== true && !Number.isInteger(a.boat)) throw new Error('boat= must be the observed arrived boat ID')
-    if (a.prepare !== true && !villagerUuid(a.uuid)) throw new Error('uuid= must be the observed passenger UUID')
-    const plan = breedPlan(a); const arrival = arrivalPlan(plan, a)
+    if (a.prepare !== true && !entityUuid(a.uuid)) throw new Error('uuid= must be the observed passenger UUID')
+    const plan = boatHabitatPlan(a); const arrival = arrivalPlan(plan, a)
     const material = a.block ?? 'cobblestone'; const gateItem = a.gate ?? 'oak_fence_gate'
     const palette = [...new Set(String(a.materials ?? material).split(',').map(s => s.trim()))]
     if (palette.some(item => item !== 'dirt' && !breedMaterial(item))) throw new Error('arrival materials must be full solid building blocks')
     let step = arrivalStepInfo(api, arrival, palette)
     if (a.prepare !== true && step.needed && !step.item) throw new Error('reserve one carried full building block for the temporary arrival step')
-    const breedArgs = { target: a.target, x: a.x, y: a.y, z: a.z, size: plan.width, block: material, gate: gateItem, bed: a.bed ?? 'white_bed', airlock: plan.airlock, entryX: plan.entry.x, entryZ: plan.entry.z }
+    const destinationArgs = { x: a.x, y: a.y, z: a.z, size: plan.width, block: material, gate: gateItem, airlock: plan.airlock, entryX: plan.entry.x, entryZ: plan.entry.z }
     const timeout = a.timeout ?? 1200
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 14400) throw new Error('timeout= must be 1..14400 seconds')
-    const preflight = breedPreflight(plan, api.block, material, gateItem)
+    const preflight = boatHabitatPreflight(plan, api.block, material, gateItem)
     habitatOwnership(api, { ...plan, shell: [...plan.shell, arrival.roof, ...arrival.sides, ...arrival.opening, step.cell] }, preflight)
     if (preflight.needed.length || preflight.missingBeds.length || preflight.clear.length) throw new Error('prepare the complete habitat before receiving a passenger')
     if (arrivalPreflight(arrival, api.block).length) throw new Error('prepare the enclosed dock-to-house passage before receiving')
-    if (a.plan !== true) await closeHabitatGates(api, plan, gateItem)
-    habitatSecure(api, plan, material, gateItem)
-    const observe = async () => (await api.act('entity', { name: 'villager', uuid: true, count: 1000 })).found ?? []
+    const observe = async () => (await api.act('entity', { name: '*', uuid: true, count: 1000 })).found ?? []
     await habitatThreats(api, plan)
     const initial = await observe()
-    if (initial.length >= 1000) throw new Error('villager census reached its observation limit')
-    const insideInitial = breedCensus(plan, initial)
+    if (a.prepare !== true) {
+      const target = initial.find(e => e.uuid === a.uuid)
+      const profile = boatPassengerProfile(target)
+      if (!profile.ok) throw new Error(profile.error)
+      const state = boatHabitatCensus(plan, initial).some(e => e.uuid === a.uuid) ? { boats: [] } : await api.act('boat_state', { id: a.boat })
+      const boat = state.boats?.find(b => b.id === a.boat)
+      if (boat) {
+        const issue = boatPassengerStatus(state, a.boat, a.uuid)
+        if (issue) throw new Error(issue)
+        if (boat.passengers.length !== 1) throw new Error('arrival boat must contain only the exact passenger')
+      }
+    }
+    if (a.plan !== true) await closeHabitatGates(api, plan, gateItem)
+    boatHabitatSecure(api, plan, material, gateItem)
+    if (initial.length >= 1000) throw new Error('resident census reached its observation limit')
+    const insideInitial = boatHabitatCensus(plan, initial)
     const known = new Set(insideInitial.map(e => e.uuid))
-    if (insideInitial.some(e => e.uuid === a.uuid)) return { breedArgs, operatorAt: api.pos(), received: true, secure: true, resumed: true, temporaryStep: step.owned ? step.cell : null, stepCleanupPending: step.owned, uuid: a.uuid, population: insideInitial.length, uuids: insideInitial.map(e => e.uuid) }
-    if (a.prepare !== true && known.size && breedInside(plan, api.pos())) throw new Error('start receive from the dock exterior service stance; crossing an occupied house gate before the boat entrance closes is unsafe')
+    if (a.plan === true && a.prepare !== true) return {
+      plan: true, uuid: a.uuid, boat: a.boat, destinationArgs,
+      population: insideInitial.length, uuids: insideInitial.map(e => e.uuid),
+      alreadyInside: insideInitial.some(e => e.uuid === a.uuid), landing: arrival.landing
+    }
+    if (insideInitial.some(e => e.uuid === a.uuid)) return { destinationArgs, operatorAt: api.pos(), received: true, secure: true, resumed: true, temporaryStep: step.owned ? step.cell : null, stepCleanupPending: step.owned, uuid: a.uuid, population: insideInitial.length, uuids: insideInitial.map(e => e.uuid) }
+    if (a.prepare !== true && known.size && boatHabitatInside(plan, api.pos())) throw new Error('start receive from the dock exterior service stance; crossing an occupied house gate before the boat entrance closes is unsafe')
     await habitatThreats(api, plan)
     const ferryPull = plan.airlock ? { pullInto: true, pullX: plan.innerGate.x + 1, pullY: plan.y, pullZ: plan.entry.z, pullVia: `${arrival.rear.x + 1}:${arrival.rear.y}:${arrival.rear.z},${arrival.rear.x}:${arrival.rear.y}:${arrival.rear.z},${plan.entry.x}:${plan.y}:${plan.entry.z}` } : null
     const approach = plan.airlock ? {
@@ -47,7 +65,7 @@ export default {
       if (a.uuid !== undefined || a.boat !== undefined) throw new Error('prepare=true takes no passenger uuid or boat')
       if (a.plan === true) return { plan: true, ready: true, landing: arrival.landing, ferryPull, ...approach }
       try {
-        if (breedInside(plan, api.pos())) {
+        if (boatHabitatInside(plan, api.pos())) {
           if (known.size && arrival.dock.gate.some(p => !api.block(p.x, p.y, p.z)?.solid)) throw new Error('close dock boat portal before moving from occupied house to service airlock')
           await api.act('goto', { x: ferryPull.pullX, y: ferryPull.pullY, z: ferryPull.pullZ, range: 0, into: true })
           await closeHabitatGates(api, plan, gateItem)
@@ -60,9 +78,9 @@ export default {
           }
         }
         const safeApi = { ...api, act: async (name, args) => {
-          habitatSecure(api, plan, material, gateItem, rearAccess ? 'outer' : false)
+          boatHabitatSecure(api, plan, material, gateItem, rearAccess ? 'outer' : false)
           const rows = await observe()
-          const inside = breedCensus(plan, rows)
+          const inside = boatHabitatCensus(plan, rows)
           if (![...known].every(uuid => inside.some(e => e.uuid === uuid))) throw new Error('resident left main room before opening arrival portal')
           const result = await api.act(name, args)
           await closeReadyGates()
@@ -89,14 +107,14 @@ export default {
         rearAccess = false
         await closeReadyGates()
         if (arrivalPreflight(arrival, api.block).length) throw new Error('arrival passage boundary changed before towing')
-        habitatSecure(api, plan, material, gateItem)
+        boatHabitatSecure(api, plan, material, gateItem)
         await api.act('toggle', { ...plan.entry, open: true })
-        habitatSecure(api, plan, material, gateItem, 'outer')
+        boatHabitatSecure(api, plan, material, gateItem, 'outer')
         // Leave through the verified service floor before starting any swim:
         // swimming from the rear can drive the body into the dock side wall.
         await api.act('goto', { ...arrival.dock.serviceStand, range: 0, into: true })
-        habitatSecure(api, plan, material, gateItem, 'outer')
-        const finalResidents = breedCensus(plan, await observe())
+        boatHabitatSecure(api, plan, material, gateItem, 'outer')
+        const finalResidents = boatHabitatCensus(plan, await observe())
         if (![...known].every(uuid => finalResidents.some(e => e.uuid === uuid))) throw new Error('resident left main room while exiting the ready dock')
         return { exitStand: arrival.dock.serviceStand, operatorAt: api.pos(), ready: true, gateOpen: true, entryOpen: true, innerGateClosed: true, landing: arrival.landing, ferryPull, ...approach, population: known.size }
       } catch (error) {
@@ -111,7 +129,7 @@ export default {
         if (arrival.opening.some(q => breedKey(q) === breedKey(p))) continue
         if (!api.block(p.x, p.y, p.z)?.solid) throw new Error(`arrival dock boundary open at ${breedKey(p)}`)
       }
-      habitatSecure(api, plan, material, gateItem, true)
+      boatHabitatSecure(api, plan, material, gateItem, true)
     }
     try {
       // Existing residents remain behind the closed internal gate while the
@@ -127,7 +145,7 @@ export default {
       } }
       const boatState = await api.act('boat_state', { id: a.boat })
       if (boatState.boats?.some(b => b.id === a.boat)) {
-        const issue = villagerBoatStatus(boatState, a.boat, a.uuid)
+        const issue = boatPassengerStatus(boatState, a.boat, a.uuid)
         if (issue) throw new Error(issue)
         const insideStand = { x: arrival.rear.x + 1, y: arrival.rear.y, z: arrival.rear.z }
         if (plan.airlock) {
@@ -135,11 +153,11 @@ export default {
           // dock before repairing its rear, retaining residents behind the
           // closed inner gate, then release from this dry contained stance.
           await api.act('toggle', { ...plan.entry, open: true })
-          habitatSecure(api, plan, material, gateItem, 'outer')
+          boatHabitatSecure(api, plan, material, gateItem, 'outer')
           await api.act('goto', { ...insideStand, range: 0, into: true })
           await closeHabitatGates(api, plan, gateItem)
         }
-        await dockCommand.run(dockApi, { ...arrival.dockArgs, uuid: a.uuid, boat: a.boat, materials: palette.join(','), ...(plan.airlock ? { insideX: insideStand.x, insideY: insideStand.y, insideZ: insideStand.z, deferCapX: arrival.rear.x, deferCapZ: arrival.rear.z } : {}) })
+        await dockCommand.run(dockApi, { ...arrival.dockArgs, uuid: a.uuid, boat: a.boat, materials: palette.join(','), ...(plan.airlock ? { insideX: insideStand.x, insideY: insideStand.y, insideZ: insideStand.z, ...(initial.find(e => e.uuid === a.uuid)?.name === 'villager' ? { deferCapX: arrival.rear.x, deferCapZ: arrival.rear.z } : {}) } : {}) })
       } else {
         const target = initial.find(e => e.uuid === a.uuid)
         const [x, y, z] = String(target?.exact ?? target?.at).split(',').map(Number)
@@ -165,28 +183,29 @@ export default {
       await api.until(async () => {
         await habitatThreats(api, plan); boundary()
         const rows = await observe()
-        if (rows.length >= 1000) throw new Error('villager census reached its observation limit')
-        const inside = breedCensus(plan, rows)
+        if (rows.length >= 1000) throw new Error('resident census reached its observation limit')
+        const inside = boatHabitatCensus(plan, rows)
         for (const uuid of known) {
           const e = rows.find(e => e.uuid === uuid)
           if (!e) throw new Error(`resident ${uuid} is no longer observed; transfer pending`)
           const [x, y, z] = String(e.exact ?? e.at).split(',').map(Number)
           const inAnnex = Number.isFinite(y) && Math.abs(x - (a.dockX + 0.5)) < 1.5 && Math.abs(z - (a.dockZ + 0.5)) < 1.5 && y >= a.dockY - 1.5 && y <= a.dockY + 4
           const inPassage = x >= plan.entry.x && x < arrival.rear.x + 1 && z >= arrival.rear.z && z < arrival.rear.z + 1 && y >= arrival.rear.y - 0.2 && y <= arrival.roof.y
-          if (!inside.some(e => e.uuid === uuid) && !inAnnex && !inPassage) throw new Error(`resident ${uuid} left the enclosed house and arrival annex; transfer pending`)
+          const inBooth = x >= plan.innerGate.x && x < plan.entry.x && z >= plan.entry.z && z < plan.entry.z + 1 && y >= plan.y - 0.1 && y < plan.y + 3
+          if (!inside.some(e => e.uuid === uuid) && !inAnnex && !inPassage && !inBooth) throw new Error(`resident ${uuid} left the enclosed house and arrival annex; transfer pending`)
         }
         // Residents may enter the secured annex while the internal gate is
         // open. Never close them out of the final sleeping enclosure.
         if (![...known].every(uuid => inside.some(e => e.uuid === uuid))) return false
         const target = inside.find(e => e.uuid === a.uuid)
         api.report({ received: false, uuid: a.uuid, population: inside.length })
-        return !!target && breedInside(plan, target.position)
-      }, { timeout, every: 2, what: `villager ${a.uuid} has not entered the prepared house; transfer pending in the secured annex (beds may lure at night)` })
+        return !!target && boatHabitatInside(plan, target.position)
+      }, { timeout, every: 2, what: `passenger ${a.uuid} has not entered the prepared house; transfer pending in the secured annex (use ordinary species-appropriate food to lure through the enclosed passage)` })
       await closeHabitatGates(api, plan, gateItem)
-      habitatSecure(api, plan, material, gateItem)
-      const inside = breedCensus(plan, await observe())
+      boatHabitatSecure(api, plan, material, gateItem)
+      const inside = boatHabitatCensus(plan, await observe())
       if (![...known, a.uuid].every(uuid => inside.some(e => e.uuid === uuid))) throw new Error('resident moved before final house closure; transfer pending')
-      return { breedArgs, operatorAt: api.pos(), received: true, secure: true, temporaryStep: step.owned ? step.cell : null, stepCleanupPending: step.owned, uuid: a.uuid, population: inside.length, uuids: inside.map(e => e.uuid), house: { x: plan.x, y: plan.y, z: plan.z, size: plan.width } }
+      return { destinationArgs, operatorAt: api.pos(), received: true, secure: true, temporaryStep: step.owned ? step.cell : null, stepCleanupPending: step.owned, uuid: a.uuid, population: inside.length, uuids: inside.map(e => e.uuid), house: { x: plan.x, y: plan.y, z: plan.z, size: plan.width } }
     } catch (error) {
       try { await closeHabitatGates(api, plan, gateItem, true) } catch (closeError) { throw new Error(`${error.message}; internal gate closure pending: ${closeError.message}`) }
       throw error

@@ -1,15 +1,34 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import board from '../library/villager/board.mjs'
-import dock from '../library/villager/dock.mjs'
-import ferry from '../library/villager/ferry.mjs'
-import undock from '../library/villager/undock.mjs'
-import routeCheck from '../library/villager/route.mjs'
+import board from '../library/boat/board.mjs'
+import dock from '../library/boat/dock.mjs'
+import ferry from '../library/boat/ferry.mjs'
+import undock from '../library/boat/undock.mjs'
+import routeCheck from '../library/boat/route.mjs'
+import stage from '../library/boat/stage.mjs'
 import { villagerBoatRoute, villagerDockPlan } from '../src/lib.mjs'
 
 const uuid = 'c071f7d4-8b43-4f01-9c2f-92b648d3d143'
 const otherUuid = '87b3392e-ae93-4f51-bf07-2f53add88880'
-const villager = (id, uuid, exact = '0,64,0', metadata = '{}') => ({ id, uuid, name: 'villager', exact, metadata })
+const villager = (id, uuid, exact = '0,64,0', metadata = '{}') => ({ id, uuid, name: 'villager', exact, metadata, width: 0.6, height: 1.95, baby: JSON.parse(metadata)?.[16] === true, adult: JSON.parse(metadata)?.[16] !== true })
+function observeBoatPassengers (api) {
+  const act = api.act
+  api.act = async (name, args = {}) => {
+    const result = await act(name, args)
+    if (name !== 'boat_state' || !Array.isArray(result?.boats)) return result
+    return { ...result, boats: result.boats.map(boat => ({ ...boat, passengers: boat.passengers?.map(p => ({ width: 0.6, height: 1.95, baby: false, ...p })) })) }
+  }
+  return api
+}
+
+test('boat transport commands are advertised under the boat namespace', () => {
+  const commands = [board, routeCheck, stage, ferry, dock, undock]
+  assert.deepEqual(commands.map(command => command.doc.split(' ')[0]), [
+    'boat.board', 'boat.route', 'boat.stage', 'boat.ferry', 'boat.dock', 'boat.undock'
+  ])
+  assert.ok(board.doc.includes('adult villager'))
+  assert.ok(ferry.doc.includes('supported adult villager'))
+})
 
 function boardApi ({ entities = [villager(41, uuid)], states = [], boatId = 8 } = {}) {
   const calls = []
@@ -31,15 +50,15 @@ function boardApi ({ entities = [villager(41, uuid)], states = [], boatId = 8 } 
     },
     report: value => reports.push(value)
   }
-  return { api, calls, reports }
+  return { api: observeBoatPassengers(api), calls, reports }
 }
 
-test('villager.board places once and waits for the exact UUID before confirming capture', async () => {
+test('boat.board places once and waits for the exact UUID before confirming capture', async () => {
   const { api, calls, reports } = boardApi({
     entities: [villager(41, otherUuid), villager(42, uuid, '4,64,-2')],
     states: [
       { boats: [{ id: 8, passengers: [] }] },
-      { boats: [{ id: 8, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+      { boats: [{ id: 8, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
     ]
   })
 
@@ -52,17 +71,28 @@ test('villager.board places once and waits for the exact UUID before confirming 
   assert.deepEqual(reports.at(-1), { boarding: 'complete' })
 })
 
-test('villager.board reuses an existing boat and refuses another UUID already aboard', async () => {
+test('boat.board captures an explicitly adult pig and returns its generic passenger identity', async () => {
+  const pig = { id: 43, uuid: otherUuid, name: 'pig', exact: '0,64,0', baby: false, width: 0.9, height: 0.9 }
+  const { api } = boardApi({
+    entities: [pig],
+    states: [{ boats: [{ id: 8, passengers: [{ ...pig }] }] }]
+  })
+  assert.deepEqual(await board.run(api, { uuid: otherUuid, boat: 8, timeout: 30 }), {
+    boat: 8, passengerUuid: otherUuid, kind: 'pig', boarded: true
+  })
+})
+
+test('boat.board reuses an existing boat and refuses another UUID already aboard', async () => {
   const { api, calls } = boardApi({
-    states: [{ boats: [{ id: 8, passengers: [{ id: 91, uuid: otherUuid, name: 'villager' }] }] }]
+    states: [{ boats: [{ id: 8, passengers: [{ id: 91, uuid: otherUuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }]
   })
 
-  await assert.rejects(board.run(api, { uuid, boat: 8 }), /already carries somebody other than villager/)
+  await assert.rejects(board.run(api, { uuid, boat: 8 }), /already carries somebody other than passenger/)
   assert.equal(calls.some(c => c.name === 'boat_place'), false)
   assert.equal(calls.filter(c => c.name === 'boat_state').length, 1)
 })
 
-test('villager.board refuses an unobserved or mismatched entity ID before placing a boat', async () => {
+test('boat.board refuses an unobserved or mismatched entity ID before placing a boat', async () => {
   for (const target of [[], [villager(41, uuid)]]) {
     const { api, calls } = boardApi({ entities: target })
     await assert.rejects(board.run(api, { uuid, id: 42, item: 'oak_boat', x: 0, y: 63, z: 0 }), /not observed with the requested ID/)
@@ -70,17 +100,17 @@ test('villager.board refuses an unobserved or mismatched entity ID before placin
   }
 })
 
-test('villager.board refuses a baby before placing a boat', async () => {
+test('boat.board refuses a baby before placing a boat', async () => {
   const { api, calls } = boardApi({ entities: [villager(41, uuid, '0,64,0', '{"16":true}')] })
-  await assert.rejects(board.run(api, { uuid, item: 'oak_boat', x: 0, y: 63, z: 0 }), /is a baby/)
+  await assert.rejects(board.run(api, { uuid, item: 'oak_boat', x: 0, y: 63, z: 0 }), /babies and unknown age are refused/)
   assert.equal(calls.some(c => c.name === 'boat_place'), false)
 })
 
-test('villager.board fails if a second passenger enters during capture', async () => {
+test('boat.board fails if a second passenger enters during capture', async () => {
   const { api } = boardApi({
     states: [
       { boats: [{ id: 8, passengers: [] }] },
-      { boats: [{ id: 8, passengers: [{ id: 41, uuid, name: 'villager' }, { id: 99, uuid: otherUuid, name: 'villager' }] }] }
+      { boats: [{ id: 8, passengers: [{ id: 41, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }, { id: 99, uuid: otherUuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
     ]
   })
   await assert.rejects(board.run(api, { uuid, item: 'oak_boat', x: 0, y: 63, z: 0, timeout: 30 }), /another passenger entered/)
@@ -105,7 +135,7 @@ function ferryApi ({ boatUuid = uuid, leashHolderId = 12, attach = false, loseLe
           id: 8,
           exact: position.x + ',' + position.y + ',' + position.z,
           leashHolderId: lose ? null : leash,
-          passengers: [{ id: 42, uuid: boatUuid, name: 'villager' }]
+          passengers: [{ id: 42, uuid: boatUuid, name: 'villager', width: 0.6, height: 1.95, baby: false }]
         }]
       }
       if (name === 'boat_leash') { leash = 12; return { leashed: 8 } }
@@ -123,10 +153,10 @@ function ferryApi ({ boatUuid = uuid, leashHolderId = 12, attach = false, loseLe
     },
     report: value => reports.push(value)
   }
-  return { api, calls, reports }
+  return { api: observeBoatPassengers(api), calls, reports }
 }
 
-test('villager.ferry attaches a lead if needed and tows the same UUID in short walking steps', async () => {
+test('boat.ferry attaches a lead if needed and tows the same UUID in short walking steps', async () => {
   const { api, calls, reports } = ferryApi({ attach: true })
   const result = await ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 })
 
@@ -143,7 +173,7 @@ test('villager.ferry attaches a lead if needed and tows the same UUID in short w
   assert.equal(reports.at(-1).boatAt, result.at)
 })
 
-test('villager.ferry alignment is a read-only plan check and refuses a misaligned boat before attachment or movement', async () => {
+test('boat.ferry alignment is a read-only plan check and refuses a misaligned boat before attachment or movement', async () => {
   const planned = ferryApi({ attach: true })
   const plan = await ferry.run(planned.api, { uuid, boat: 8, x: 7, y: 64, z: 0, alignZ: 1, plan: true })
   assert.equal(plan.aligned, false)
@@ -158,7 +188,7 @@ test('villager.ferry alignment is a read-only plan check and refuses a misaligne
   assert.ok(aligned.calls.some(c => c.name === 'goto'), 'a boat within the requested z tolerance can proceed')
 })
 
-test('villager.ferry accepts dry arrival at the requested block cell despite fractional waypoint distance', async () => {
+test('boat.ferry accepts dry arrival at the requested block cell despite fractional waypoint distance', async () => {
   const { api, calls } = ferryApi()
   const ordinaryPos = api.pos
   const ordinaryAct = api.act
@@ -180,37 +210,37 @@ test('villager.ferry accepts dry arrival at the requested block cell despite fra
   assert.equal(result.at, '7.5,64,0.5', 'the boat itself still reaches the requested landing')
 })
 
-test('villager.ferry never substitutes a nearby villager for the requested UUID', async () => {
+test('boat.ferry never substitutes a nearby villager for the requested UUID', async () => {
   const { api, calls } = ferryApi({ boatUuid: otherUuid, attach: true })
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /not in boat 8/)
   assert.equal(calls.some(c => c.name === 'goto' || c.name === 'boat_leash'), false)
 })
 
-test('villager.ferry stops at the first step if the leash breaks', async () => {
+test('boat.ferry stops at the first step if the leash breaks', async () => {
   const { api, calls } = ferryApi({ loseLeashAfterGoto: true })
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /leash broke during tow/)
   assert.equal(calls.filter(c => c.name === 'goto').length, 1)
   assert.equal(calls.some(c => c.name === 'boat_move'), false)
 })
 
-test('villager.ferry refuses a boat controlled by this bot', async () => {
+test('boat.ferry refuses a boat controlled by this bot', async () => {
   const { api, calls } = ferryApi()
   const state = api.act
   api.act = async (name, args) => name === 'boat_state'
-    ? { selfId: 12, mounted: 8, boats: [{ id: 8, exact: '0,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+    ? { selfId: 12, mounted: 8, boats: [{ id: 8, exact: '0,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
     : state(name, args)
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /dismount boat 8 before towing/)
   assert.equal(calls.some(c => c.name === 'goto'), false)
 })
 
-test('villager.ferry requires the boat itself, not just the bot, to reach the named landing', async () => {
+test('boat.ferry requires the boat itself, not just the bot, to reach the named landing', async () => {
   const { api, calls } = ferryApi()
   const original = api.act
   api.act = async (name, args) => {
     if (name === 'boat_state') return {
       selfId: 12,
       mounted: null,
-      boats: [{ id: 8, exact: '2,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+      boats: [{ id: 8, exact: '2,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
     }
     return original(name, args)
   }
@@ -219,7 +249,7 @@ test('villager.ferry requires the boat itself, not just the bot, to reach the na
   assert.ok(calls.filter(c => c.name === 'goto').length > 0)
 })
 
-test('villager.ferry walks past the boat landing until the boat follows at natural leash slack', async () => {
+test('boat.ferry walks past the boat landing until the boat follows at natural leash slack', async () => {
   const calls = []
   let position = { x: 0, y: 64, z: 0 }
   let boatX = 0.5
@@ -232,7 +262,7 @@ test('villager.ferry walks past the boat landing until the boat follows at natur
       if (name === 'boat_state') return {
         selfId: 12,
         mounted: null,
-        boats: [{ id: 8, exact: `${boatX},64,0`, leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+        boats: [{ id: 8, exact: `${boatX},64,0`, leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
       }
       if (name === 'goto') {
         position = { x: args.x + 0.5, y: args.y, z: args.z + 0.5 }
@@ -258,7 +288,7 @@ test('villager.ferry walks past the boat landing until the boat follows at natur
   assert.ok(xSteps.every((x, i) => i === 0 || x >= xSteps[i - 1]))
 })
 
-test('villager.ferry stops before another waypoint while the boat remains near leash snap distance', async () => {
+test('boat.ferry stops before another waypoint while the boat remains near leash snap distance', async () => {
   const calls = []
   let position = { x: 0, y: 64, z: 0 }
   const api = {
@@ -270,7 +300,7 @@ test('villager.ferry stops before another waypoint while the boat remains near l
       if (name === 'boat_state') return {
         selfId: 12,
         mounted: null,
-        boats: [{ id: 8, exact: '-6.5,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+        boats: [{ id: 8, exact: '-6.5,64,0', leashHolderId: 12, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
       }
       if (name === 'goto') { position = { x: args.x + 0.5, y: args.y, z: args.z + 0.5 }; return {} }
       throw new Error(`unexpected action ${name}`)
@@ -302,7 +332,7 @@ function dryCatchupApi ({ loseLeashDuringWait = false } = {}) {
           postGotoStates++
           if (loseLeashDuringWait && postGotoStates >= 2) leash = null
         }
-        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boatX},64,0`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boatX},64,0`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
       }
       if (name === 'goto') {
         gotoCount++
@@ -324,10 +354,10 @@ function dryCatchupApi ({ loseLeashDuringWait = false } = {}) {
     },
     report: () => {}
   }
-  return { api, calls, get waitReads () { return waitReads }, get gotoCount () { return gotoCount } }
+  return { api: observeBoatPassengers(api), calls, get waitReads () { return waitReads }, get gotoCount () { return gotoCount } }
 }
 
-test('villager.ferry waits for a lagging dry tow boat before issuing the next goto waypoint', async () => {
+test('boat.ferry waits for a lagging dry tow boat before issuing the next goto waypoint', async () => {
   const run = dryCatchupApi()
   await assert.rejects(ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /observed next waypoint after catch-up/)
   assert.ok(run.waitReads >= 3, 'the dry leg holds and checks boat state while the lead catches up')
@@ -336,7 +366,7 @@ test('villager.ferry waits for a lagging dry tow boat before issuing the next go
   assert.ok(run.calls.slice(gotos[0] + 1, gotos[1]).some(c => c.name === 'boat_state'), 'fresh boat observations happen between the two walking legs')
 })
 
-test('villager.ferry stops during dry catch-up if the leash breaks before the next goto', async () => {
+test('boat.ferry stops during dry catch-up if the leash breaks before the next goto', async () => {
   const run = dryCatchupApi({ loseLeashDuringWait: true })
   await assert.rejects(ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /leash broke during tow/)
   assert.equal(run.gotoCount, 1, 'no new walking step follows a leash loss during catch-up')
@@ -362,7 +392,7 @@ function landingSettleApi (mode = 'delayed') {
           if (mode === 'leash') leash = null
           if (mode === 'delayed' && settleReads >= 3) boatOffset = 0
         }
-        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${position.x - boatOffset},${position.y},${position.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+        return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${position.x - boatOffset},${position.y},${position.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
       }
       if (name === 'goto') {
         position = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }
@@ -380,10 +410,10 @@ function landingSettleApi (mode = 'delayed') {
     },
     report: () => {}
   }
-  return { api, calls, get settleReads () { return settleReads } }
+  return { api: observeBoatPassengers(api), calls, get settleReads () { return settleReads } }
 }
 
-test('villager.ferry waits for a delayed boat arrival inside the final landing radius', async () => {
+test('boat.ferry waits for a delayed boat arrival inside the final landing radius', async () => {
   const run = landingSettleApi('delayed')
   const result = await ferry.run(run.api, { uuid, boat: 8, x: 7, y: 64, z: 0 })
   assert.ok(run.settleReads >= 3, 'final arrival requires fresh boat position feedback after the last walking step')
@@ -391,7 +421,7 @@ test('villager.ferry waits for a delayed boat arrival inside the final landing r
   assert.ok(Math.hypot(x - 7.5, y - 64, z - 0.5) <= 1, 'success reports the boat inside the landing radius')
 })
 
-test('villager.ferry refuses a stationary outside-radius landing and a leash loss while settling', async () => {
+test('boat.ferry refuses a stationary outside-radius landing and a leash loss while settling', async () => {
   const outside = landingSettleApi('never')
   await assert.rejects(ferry.run(outside.api, { uuid, boat: 8, x: 7, y: 64, z: 0 }), /stayed outside the landing/)
   assert.ok(outside.settleReads >= 2, 'the command waits for actual boat arrival instead of trusting the operator position')
@@ -468,13 +498,13 @@ test('boat route rejects a one-cell slit and any unloaded terrain in the hull fo
   assert.match(unknown.error, /unloaded/)
 })
 
-test('villager.ferry rejects the complete uphill boat route before attaching a lead or walking', async () => {
+test('boat.ferry rejects the complete uphill boat route before attaching a lead or walking', async () => {
   const { api, calls } = ferryApi({ terrainAt: routeTerrain(x => x < 2 ? 63 : 64) })
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 7, y: 65, z: 0 }), /boat route blocked.*upward|boat route blocked.*nonascending/)
   assert.equal(calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false)
 })
 
-test('villager.ferry refuses a direct pull that cuts a corner even when the hull route can detour around it', async () => {
+test('boat.ferry refuses a direct pull that cuts a corner even when the hull route can detour around it', async () => {
   const blockAt = (x, y, z) => {
     if (y <= 63) return { name: 'stone', solid: true }
     if (x === 2 && z === 0 && y === 64) return { name: 'stone', solid: true }
@@ -499,7 +529,7 @@ test('villager.ferry refuses a direct pull that cuts a corner even when the hull
     act: async (name, args = {}) => {
       calls.push({ name, args })
       if (name === 'state') return { inWater: false }
-      if (name === 'boat_state') return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boat.x},${boat.y},${boat.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+      if (name === 'boat_state') return { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${boat.x},${boat.y},${boat.z}`, leashHolderId: leash, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }] }
       if (name === 'goto') { body = { x: Math.floor(args.x) + 0.5, y: args.y, z: Math.floor(args.z) + 0.5 }; return {} }
       if (name === 'boat_unleash') { leash = null; leads++; return { unleashed: true } }
       throw new Error(`unexpected action ${name}`)
@@ -526,7 +556,7 @@ test('boat route rejects a sheer drop that would strand or break the hull', () =
   assert.match(route.error, /unsafe boat drop/)
 })
 
-test('villager.ferry plan mode reads the full boat route without attaching a lead or walking', async () => {
+test('boat.ferry plan mode reads the full boat route without attaching a lead or walking', async () => {
   const { api, calls } = ferryApi({ attach: true })
   const result = await ferry.run(api, { uuid, boat: 8, x: 7, y: 64, z: 0, plan: true })
   assert.equal(result.planned, true)
@@ -534,7 +564,7 @@ test('villager.ferry plan mode reads the full boat route without attaching a lea
   assert.equal(calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false)
 })
 
-test('villager.ferry accepts an exact two-wide gate landing center inside its named cell', async () => {
+test('boat.ferry accepts an exact two-wide gate landing center inside its named cell', async () => {
   const { api, calls } = ferryApi()
   const result = await ferry.run(api, {
     uuid, boat: 8, x: 7, y: 64, z: 0,
@@ -545,7 +575,7 @@ test('villager.ferry accepts an exact two-wide gate landing center inside its na
   assert.equal(calls.some(c => c.name === 'boat_leash' || c.name === 'goto'), false)
 })
 
-test('villager.ferry preflights the observed water float height against a water-cell landing', async () => {
+test('boat.ferry preflights the observed water float height against a water-cell landing', async () => {
   const calls = []
   const water = (x, y) => y === 62
     ? { name: 'water', solid: false }
@@ -560,7 +590,7 @@ test('villager.ferry preflights the observed water float height against a water-
       if (name === 'boat_state') return {
         selfId: 12,
         mounted: null,
-        boats: [{ id: 8, exact: '0.5,62.52,0.5', leashHolderId: null, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+        boats: [{ id: 8, exact: '0.5,62.52,0.5', leashHolderId: null, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
       }
       throw new Error(`unexpected action ${name}`)
     },
@@ -605,7 +635,7 @@ function waterFerryApi (mode = 'progress') {
       if (name === 'boat_state') return {
         selfId: 12,
         mounted: null,
-        boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: lostPassenger ? [] : [{ id: 42, uuid, name: 'villager' }] }]
+        boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: lostPassenger ? [] : [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
       }
       if (name === 'boat_leash') { leashHolderId = 12; return { leashed: 8 } }
       if (name === 'boat_swim') {
@@ -635,10 +665,10 @@ function waterFerryApi (mode = 'progress') {
     },
     report: () => {}
   }
-  return { api, calls }
+  return { api: observeBoatPassengers(api), calls }
 }
 
-test('villager.ferry makes water progress with bounded swim strokes and verifies the passenger each stroke', async () => {
+test('boat.ferry makes water progress with bounded swim strokes and verifies the passenger each stroke', async () => {
   const { api, calls } = waterFerryApi()
   const result = await ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 })
   const strokes = calls.filter(c => c.name === 'boat_swim')
@@ -649,7 +679,7 @@ test('villager.ferry makes water progress with bounded swim strokes and verifies
   assert.equal(result.at, '4.5,62.52,0.5')
 })
 
-test('villager.ferry detects water and plants underfoot when state.inWater is false', async () => {
+test('boat.ferry detects water and plants underfoot when state.inWater is false', async () => {
   for (const feet of ['water', 'bubble_column', 'seagrass', 'kelp']) {
     const { api, calls } = waterFerryApi(`feet-${feet}`)
     await ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 })
@@ -657,23 +687,23 @@ test('villager.ferry detects water and plants underfoot when state.inWater is fa
   }
 })
 
-test('villager.ferry stops a water crossing after two swim strokes without progress', async () => {
+test('boat.ferry stops a water crossing after two swim strokes without progress', async () => {
   const { api, calls } = waterFerryApi('stalled')
   await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 }), /made no progress/)
   assert.equal(calls.filter(c => c.name === 'boat_swim').length, 2)
   assert.equal(calls.some(c => c.name === 'goto'), false)
 })
 
-test('villager.ferry stops a water crossing when its passenger UUID or leash is lost', async () => {
+test('boat.ferry stops a water crossing when its passenger UUID or leash is lost', async () => {
   for (const [mode, expected] of [['uuid-loss', /not in boat 8/], ['leash-loss', /leash broke during tow/]]) {
     const { api, calls } = waterFerryApi(mode)
-    await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 }), expected)
+    await assert.rejects(ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 }), mode === 'uuid-loss' ? /exactly one passenger|not in boat 8/ : expected)
     assert.equal(calls.filter(c => c.name === 'boat_swim').length, 1)
     assert.equal(calls.some(c => c.name === 'goto'), false)
   }
 })
 
-test('villager.ferry switches from swimming to walking when the bot reaches dry land', async () => {
+test('boat.ferry switches from swimming to walking when the bot reaches dry land', async () => {
   const { api, calls } = waterFerryApi('emerge')
   await ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0 })
   const swims = calls.filter(c => c.name === 'boat_swim')
@@ -684,7 +714,7 @@ test('villager.ferry switches from swimming to walking when the bot reaches dry 
   assert.ok(calls.filter(c => c.name === 'boat_swim').every(c => calls.indexOf(c) < calls.findIndex(d => d.name === 'goto')), 'after emerging, continue the crossing on foot')
 })
 
-test('villager.ferry walks to verified dry support even while the body still reports in water', async () => {
+test('boat.ferry walks to verified dry support even while the body still reports in water', async () => {
   const { api, calls } = waterFerryApi('source-water')
   await ferry.run(api, { uuid, boat: 8, x: 4, y: 62, z: 0, pullX: 6, pullY: 63, pullZ: 0 })
   const lastSwim = calls.findLastIndex(c => c.name === 'boat_swim')
@@ -693,7 +723,7 @@ test('villager.ferry walks to verified dry support even while the body still rep
   assert.ok(calls.slice(0, firstDryWalk).some(c => c.name === 'state'), 'state.inWater remains true during this fixture; the dry support check selects goto')
 })
 
-test('villager.ferry follows pullVia waypoints in order after reaching the boat landing', async () => {
+test('boat.ferry follows pullVia waypoints in order after reaching the boat landing', async () => {
   const calls = []
   let position = { x: 0.5, y: 64, z: 0.5 }
   let boatAt = { ...position }
@@ -707,7 +737,7 @@ test('villager.ferry follows pullVia waypoints in order after reaching the boat 
       if (name === 'boat_state') return {
         selfId: 12,
         mounted: null,
-        boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+        boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
       }
       if (name === 'boat_leash') { leashHolderId = 12; return { leashed: 8 } }
       if (name === 'goto') {
@@ -730,7 +760,7 @@ test('villager.ferry follows pullVia waypoints in order after reaching the boat 
   assert.equal(result.at, '4.5,64,0.5')
 })
 
-test('villager.ferry selects supported dry-bank and shallow-water foot cells, but no invented floor', async () => {
+test('boat.ferry selects supported dry-bank and shallow-water foot cells, but no invented floor', async () => {
   async function runHandoff ({ supported = false, unknown = false, dryBank = false }) {
     let position = { x: 0.5, y: 64, z: 0.5 }
     let boatAt = { ...position }
@@ -758,7 +788,7 @@ test('villager.ferry selects supported dry-bank and shallow-water foot cells, bu
         if (name === 'state') return { inWater }
         if (name === 'boat_state') return {
           selfId: 12, mounted: null,
-          boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: [{ id: 42, uuid, name: 'villager' }] }]
+          boats: [{ id: 8, exact: `${boatAt.x},${boatAt.y},${boatAt.z}`, leashHolderId, passengers: [{ id: 42, uuid, name: 'villager', width: 0.6, height: 1.95, baby: false }] }]
         }
         if (name === 'boat_leash') { leashHolderId = 12; return { leashed: 8 } }
         if (name === 'goto') {
@@ -803,7 +833,7 @@ test('villager.ferry selects supported dry-bank and shallow-water foot cells, bu
   assert.equal(unloaded.some(c => c.name === 'goto' && Math.floor(c.args.x) === 7 && c.args.y < 63), false, 'unknown blocks cannot justify lowering the walk target')
 })
 
-test('villager.route rejects an uphill route before boat capture and accepts a clear descent with a turn', async () => {
+test('boat.route rejects an uphill route before boat capture and accepts a clear descent with a turn', async () => {
   const calls = []
   const uphill = routeCheck.run({
     block: (x, y) => ({ name: y === (x >= 3 ? 64 : 63) ? 'stone' : 'air', solid: y === (x >= 3 ? 64 : 63) }),
@@ -823,7 +853,7 @@ test('villager.route rejects an uphill route before boat capture and accepts a c
   assert.equal(calls.length, 0)
 })
 
-test('villager.route normalizes water-cell goals to the boat float height in both directions', async () => {
+test('boat.route normalizes water-cell goals to the boat float height in both directions', async () => {
   const water = (x, y) => y === 62
     ? { name: 'water', solid: false }
     : y === 61
@@ -839,7 +869,7 @@ test('villager.route normalizes water-cell goals to the boat float height in bot
   }
 })
 
-test('villager.route accepts a land-to-water descent and reports the water surface center', async () => {
+test('boat.route accepts a land-to-water descent and reports the water surface center', async () => {
   const terrain = (x, y) => {
     if (x <= 0 && y === 62) return { name: 'stone', solid: true }
     if (x > 0 && y === 62) return { name: 'water', solid: false }
@@ -1005,7 +1035,7 @@ test('temporary water-level service slot contains adults from riverbed, water su
   }
 })
 
-function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap = false, staleReleaseOutside = false, deepWater = false, deepStandUnsupported = false, dryAirOverSolid = false, siteVillagers = [], prepBoats = [], releasedVillager = true, deferredCap = null } = {}) {
+function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap = false, staleReleaseOutside = false, deepWater = false, deepStandUnsupported = false, dryAirOverSolid = false, siteVillagers = [], prepBoats = [], releasedVillager = true, deferredCap = null, passengerName = 'villager', passengerWidth = 0.6, passengerHeight = 1.95 } = {}) {
   const cell = { x: cellX, y: cellY, z: cellZ }
   const river = { x: 1, z: 0 }
   const plan = villagerDockPlan(cell, river)
@@ -1061,7 +1091,7 @@ function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap =
       calls.push({ name, args })
       if (name === 'boat_state') return args.id === undefined
         ? { selfId: 12, mounted: null, boats: prepBoats }
-        : { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${cell.x + 0.5},${cellY},${cell.z + 0.5}`, leashHolderId: null, passengers: [{ id: 42, uuid, name: 'villager' }] }] }
+        : { selfId: 12, mounted: null, boats: [{ id: 8, exact: `${cell.x + 0.5},${cellY},${cell.z + 0.5}`, leashHolderId: null, passengers: [{ id: 42, uuid, name: passengerName, width: passengerWidth, height: passengerHeight, baby: false }] }] }
       if (name === 'entity') {
         entityReads++
         if (entityReads === 1 || !released || !releasedVillager) return { found: siteVillagers }
@@ -1086,24 +1116,24 @@ function dockApi ({ blocks = 500, cellX = 40, cellY = 64, cellZ = -20, rearGap =
       throw new Error(`unexpected action ${name}`)
     }
   }
-  return { api, calls, reports, plan, inventory, setBlock: (p, name) => put(p, name) }
+  return { api: observeBoatPassengers(api), calls, reports, plan, inventory, setBlock: (p, name) => put(p, name) }
 }
 
-test('villager.dock checks full block inventory before making world edits', async () => {
+test('boat.dock checks full block inventory before making world edits', async () => {
   const { api, calls } = dockApi({ blocks: 0 })
   await assert.rejects(dock.run(api, { uuid, boat: 8, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /dock needs .* cobblestone/)
   assert.equal(calls.some(c => ['place', 'goto', 'boat_unleash', 'boat_release'].includes(c.name)), false)
 })
 
-test('villager.dock prepare refuses insufficient materials before placing any blocks', async () => {
+test('boat.dock prepare refuses insufficient materials before placing any blocks', async () => {
   const { api, calls } = dockApi({ blocks: 0 })
   await assert.rejects(dock.run(api, { prepare: true, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /dock needs \d+ blocks from cobblestone/)
   assert.equal(calls.some(c => ['place', 'goto', 'boat_release', 'boat_place'].includes(c.name)), false)
 })
 
-test('villager.dock prepare refuses occupied sites without making changes', async () => {
+test('boat.dock prepare refuses occupied sites without making changes', async () => {
   const occupiedByVillager = dockApi({ siteVillagers: [villager(42, uuid, '40.5,65,-19.5')] })
-  await assert.rejects(dock.run(occupiedByVillager.api, { prepare: true, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /already contains another villager/)
+  await assert.rejects(dock.run(occupiedByVillager.api, { prepare: true, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /already contains another entity/)
   assert.equal(occupiedByVillager.calls.some(c => c.name === 'place'), false)
 
   const occupiedByBoat = dockApi({ prepBoats: [{ id: 88, exact: '40.5,64,-19.5', passengers: [] }] })
@@ -1111,7 +1141,7 @@ test('villager.dock prepare refuses occupied sites without making changes', asyn
   assert.equal(occupiedByBoat.calls.some(c => c.name === 'place'), false)
 })
 
-test('villager.dock prepare builds walls and lintel while leaving both boat gate cells and underwater channel open', async () => {
+test('boat.dock prepare builds walls and lintel while leaving both boat gate cells and underwater channel open', async () => {
   const { api, calls, plan, reports } = dockApi()
   const result = await dock.run(api, { prepare: true, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 })
   assert.equal(result.prepared, true)
@@ -1124,7 +1154,7 @@ test('villager.dock prepare builds walls and lintel while leaving both boat gate
   assert.deepEqual(reports.at(-1), { dock: 'prepared', gateOpen: true })
 })
 
-test('villager.dock accepts clear dry standing space above solid shore ground', async () => {
+test('boat.dock accepts clear dry standing space above solid shore ground', async () => {
   const { api, plan } = dockApi({ cellY: 63, dryAirOverSolid: true })
   const dryCell = plan.interior[4]
   assert.equal(api.block(dryCell.x, dryCell.y, dryCell.z).name, 'air')
@@ -1133,7 +1163,7 @@ test('villager.dock accepts clear dry standing space above solid shore ground', 
   assert.equal(result.prepared, true)
 })
 
-test('villager.dock prepare allocates a mixed-material bill before edits and resumes an already built palette dock', async () => {
+test('boat.dock prepare allocates a mixed-material bill before edits and resumes an already built palette dock', async () => {
   const { api, calls, reports } = dockApi({ blocks: { cobbled_deepslate: 2, cherry_planks: 100 }, releasedVillager: false })
   const args = { prepare: true, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0, materials: 'cobbled_deepslate,cherry_planks' }
   const result = await dock.run(api, args)
@@ -1150,7 +1180,7 @@ test('villager.dock prepare allocates a mixed-material bill before edits and res
   assert.ok(calls.filter(c => c.name === 'place').every(c => ['cobbled_deepslate', 'cherry_planks'].includes(api.block(c.args.x, c.args.y, c.args.z)?.name)))
 })
 
-test('villager.dock closes the gate before releasing the exact passenger and sealing its service slot', async () => {
+test('boat.dock closes the gate before releasing the exact passenger and sealing its service slot', async () => {
   const { api, calls, reports, plan } = dockApi()
   const result = await dock.run(api, { uuid, boat: 8, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 })
   assert.equal(result.villagerUuid, uuid)
@@ -1165,7 +1195,13 @@ test('villager.dock closes the gate before releasing the exact passenger and sea
   assert.deepEqual(reports.at(-1), { dock: 'secured', villagerUuid: uuid })
 })
 
-test('villager.dock permits one deferred rear cap only for the freshly observed adult passenger', async () => {
+test('boat.dock refuses a pig release through the one-high service slot before world changes', async () => {
+  const run = dockApi({ passengerName: 'pig', passengerWidth: 0.9, passengerHeight: 0.9 })
+  await assert.rejects(dock.run(run.api, { uuid, boat: 8, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /fits the one-high service opening needs insideX\/Y\/Z/)
+  assert.equal(run.calls.some(c => ['goto', 'place', 'dig', 'boat_release'].includes(c.name)), false)
+})
+
+test('boat.dock permits one deferred rear cap only for the freshly observed adult passenger', async () => {
   const cell = { x: -132, y: 63, z: -168 }
   const cap = { x: cell.x - 2, y: cell.y + 3, z: cell.z }
   const insideStand = { x: cell.x, y: cell.y + 1, z: cell.z }
@@ -1195,14 +1231,14 @@ test('villager.dock permits one deferred rear cap only for the freshly observed 
   assert.equal(run.calls.some(c => c.name === 'boat_release'), true)
 })
 
-test('villager.dock refuses a deferred adult cap for baby/unknown age and for a missing roof before edits', async () => {
+test('boat.dock refuses a deferred adult cap for baby/unknown age and for a missing roof before edits', async () => {
   const cell = { x: -132, y: 63, z: -168 }
   const cap = { x: cell.x - 2, y: cell.y + 3, z: cell.z }
   const insideStand = { x: cell.x, y: cell.y + 1, z: cell.z }
   const args = { uuid, boat: 8, ...cell, riverX: 1, riverZ: 0, insideX: insideStand.x, insideY: insideStand.y, insideZ: insideStand.z, deferCapX: cap.x, deferCapZ: cap.z }
   for (const resident of [
     { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), baby: true, adult: false },
-    villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`)
+    { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), adult: false }
   ]) {
     const run = dockApi({ cellX: cell.x, cellY: cell.y, cellZ: cell.z, siteVillagers: [resident], deferredCap: cap })
     run.setBlock({ x: cap.x, y: cap.y + 1, z: cap.z }, 'oak_planks')
@@ -1214,7 +1250,7 @@ test('villager.dock refuses a deferred adult cap for baby/unknown age and for a 
   assert.equal(noRoof.calls.length, 0, 'the roof must be preflighted before any boat or world action')
 })
 
-test('villager.dock repairs a two-block rear wall gap before releasing the passenger', async () => {
+test('boat.dock repairs a two-block rear wall gap before releasing the passenger', async () => {
   const { api, calls, plan } = dockApi({ cellX: -132, cellY: 63, cellZ: -168, rearGap: true })
   const gap = [{ x: -134, y: 64, z: -168 }, { x: -134, y: 65, z: -168 }]
   for (const p of gap) assert.equal(api.block(p.x, p.y, p.z).name, 'air')
@@ -1231,7 +1267,7 @@ test('villager.dock repairs a two-block rear wall gap before releasing the passe
   assert.ok(plan.walls.some(p => key(p) === key(gap[0])))
 })
 
-test('villager.dock waits for a stale release position to update to the exact villager inside', async () => {
+test('boat.dock waits for a stale release position to update to the exact villager inside', async () => {
   const { api, calls, plan } = dockApi({ staleReleaseOutside: true })
   const result = await dock.run(api, { uuid, boat: 8, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 })
   assert.equal(result.secure, true)
@@ -1240,7 +1276,7 @@ test('villager.dock waits for a stale release position to update to the exact vi
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
 })
 
-test('villager.dock reseals the service slot before returning an unobserved passenger error', async () => {
+test('boat.dock reseals the service slot before returning an unobserved passenger error', async () => {
   const { api, calls, plan } = dockApi({ releasedVillager: false })
   await assert.rejects(dock.run(api, { uuid, boat: 8, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /was not observed inside after release/)
   const releaseAt = calls.findIndex(c => c.name === 'boat_release')
@@ -1249,7 +1285,7 @@ test('villager.dock reseals the service slot before returning an unobserved pass
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
 })
 
-test('villager.dock preflights and fills both deep gate beds before releasing a passenger', async () => {
+test('boat.dock preflights and fills both deep gate beds before releasing a passenger', async () => {
   const preflight = dockApi({ blocks: 0, cellY: 63, deepWater: true })
   const error = await dock.run(preflight.api, { uuid, boat: 8, x: 40, y: 63, z: -20, riverX: 1, riverZ: 0 }).then(() => null, e => e)
   assert.match(error.message, /dock needs \d+ blocks from cobblestone/)
@@ -1270,13 +1306,13 @@ test('villager.dock preflights and fills both deep gate beds before releasing a 
   assert.equal(api.block(secondColumnUnderwater.x, secondColumnUnderwater.y, secondColumnUnderwater.z).name, 'water')
 })
 
-test('villager.dock prepare refuses a service stand deeper than two blocks before edits', async () => {
+test('boat.dock prepare refuses a service stand deeper than two blocks before edits', async () => {
   const { api, calls } = dockApi({ cellY: 63, deepWater: true, deepStandUnsupported: true })
   await assert.rejects(dock.run(api, { prepare: true, x: 40, y: 63, z: -20, riverX: 1, riverZ: 0 }), /service stand is deeper than two blocks/)
   assert.equal(calls.some(c => ['place', 'goto', 'boat_release'].includes(c.name)), false)
 })
 
-function undockApi ({ leads = 1, losePassengerAfterGateDig = false, failBoatPlace = false, cell = { x: 40, y: 64, z: -20 }, dryLaunch = false } = {}) {
+function undockApi ({ leads = 1, losePassengerAfterGateDig = false, failBoatPlace = false, cell = { x: 40, y: 64, z: -20 }, dryLaunch = false, passengerName = 'villager', passengerWidth = 0.6, passengerHeight = 1.95 } = {}) {
   const river = { x: 1, z: 0 }
   const plan = villagerDockPlan(cell, river)
   const blockMap = new Map()
@@ -1299,7 +1335,7 @@ function undockApi ({ leads = 1, losePassengerAfterGateDig = false, failBoatPlac
   let leashHolderId = null
   let states = 0
   let lostPassenger = false
-  const target = { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), vehicleId: null }
+  const target = { ...villager(42, uuid, `${cell.x + 0.5},${cell.y + 1},${cell.z + 0.5}`), name: passengerName, width: passengerWidth, height: passengerHeight, vehicleId: null }
   const boatState = () => ({
     selfId: 12,
     mounted: null,
@@ -1307,7 +1343,7 @@ function undockApi ({ leads = 1, losePassengerAfterGateDig = false, failBoatPlac
       id: boatId,
       exact: `${cell.x + 0.5},${cell.y},${cell.z + 0.5}`,
       leashHolderId,
-      passengers: lostPassenger ? [] : [{ id: target.id, uuid, name: 'villager' }]
+      passengers: lostPassenger ? [] : [{ id: target.id, uuid, name: passengerName, width: passengerWidth, height: passengerHeight, baby: false }]
     }]
   })
   const api = {
@@ -1347,24 +1383,31 @@ function undockApi ({ leads = 1, losePassengerAfterGateDig = false, failBoatPlac
       throw new Error(`unexpected action ${name}`)
     }
   }
-  return { api, calls, reports, plan, blockMap, boatPlaceSnapshot, get states () { return states } }
+  return { api: observeBoatPassengers(api), calls, reports, plan, blockMap, boatPlaceSnapshot, get states () { return states } }
 }
 
-test('villager.undock refuses a missing lead before boarding or opening the service slot', async () => {
+test('boat.undock refuses a missing lead before boarding or opening the service slot', async () => {
   const { api, calls, plan } = undockApi({ leads: 0 })
   await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /needs one lead/)
   assert.equal(calls.some(c => ['boat_place', 'dig', 'boat_leash'].includes(c.name)), false)
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
 })
 
-test('villager.undock refuses an unsupported launch hull before opening the service slot', async () => {
+test('boat.undock refuses a pig before opening its one-high service slot', async () => {
+  const { api, calls, plan } = undockApi({ passengerName: 'pig', passengerWidth: 0.9, passengerHeight: 0.9 })
+  await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /fits that opening could escape/)
+  assert.equal(calls.some(c => ['goto', 'dig', 'boat_place', 'boat_leash'].includes(c.name)), false)
+  assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
+})
+
+test('boat.undock refuses an unsupported launch hull before opening the service slot', async () => {
   const { api, calls, plan } = undockApi({ dryLaunch: true })
   await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /boat launch blocked/)
   assert.equal(calls.some(c => ['goto', 'dig', 'boat_place', 'boat_leash'].includes(c.name)), false)
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
 })
 
-test('villager.undock boards and leashes the requested UUID before opening the river gate', async () => {
+test('boat.undock boards and leashes the requested UUID before opening the river gate', async () => {
   const { api, calls, plan, reports, boatPlaceSnapshot } = undockApi()
   const result = await undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 })
   assert.equal(result.villagerUuid, uuid)
@@ -1386,7 +1429,7 @@ test('villager.undock boards and leashes the requested UUID before opening the r
   assert.deepEqual(reports.at(-1), { dock: 'open', boat: result.boat, villagerUuid: uuid })
 })
 
-test('villager.undock reseals the service slot when boat placement fails', async () => {
+test('boat.undock reseals the service slot when boat placement fails', async () => {
   const { api, calls, plan, reports, boatPlaceSnapshot } = undockApi({ failBoatPlace: true })
   await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /boat placement failed/)
   assert.deepEqual(boatPlaceSnapshot, [{ service: false, sill: true, otherGate: true }])
@@ -1398,7 +1441,7 @@ test('villager.undock reseals the service slot when boat placement fails', async
   assert.equal(reports.at(-1).closurePending, '')
 })
 
-test('villager.undock passes an explicit centered launch into boat placement', async () => {
+test('boat.undock passes an explicit centered launch into boat placement', async () => {
   const cell = { x: -132, y: 63, z: -169 }
   const { api, calls } = undockApi({ cell })
   await undock.run(api, { uuid, ...cell, riverX: 1, riverZ: 0, centerX: -131, centerZ: -168, aimY: 62.85 })
@@ -1406,7 +1449,7 @@ test('villager.undock passes an explicit centered launch into boat placement', a
   assert.deepEqual(place.args, { item: 'oak_boat', x: -132, y: 62, z: -169, centerX: -131, centerZ: -168, aimY: 62.85 })
 })
 
-test('villager.undock rejects aimY outside the water layer before opening the service slot', async () => {
+test('boat.undock rejects aimY outside the water layer before opening the service slot', async () => {
   const cell = { x: -132, y: 63, z: -169 }
   const { api, calls, plan } = undockApi({ cell })
   await assert.rejects(undock.run(api, { uuid, ...cell, riverX: 1, riverZ: 0, centerX: -131, centerZ: -168, aimY: 62.4 }), /aimY=.*water layer/)
@@ -1414,9 +1457,9 @@ test('villager.undock rejects aimY outside the water layer before opening the se
   assert.equal(api.block(plan.service.x, plan.service.y, plan.service.z).solid, true)
 })
 
-test('villager.undock reseals every gate cell and temporary sill if the passenger disappears during opening', async () => {
+test('boat.undock reseals every gate cell and temporary sill if the passenger disappears during opening', async () => {
   const { api, calls, plan, reports } = undockApi({ losePassengerAfterGateDig: true })
-  await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /is not in boat/)
+  await assert.rejects(undock.run(api, { uuid, x: 40, y: 64, z: -20, riverX: 1, riverZ: 0 }), /exactly one passenger|is not in boat/)
   assert.ok(calls.some(c => c.name === 'place' && key(c.args.x, c.args.y, c.args.z) === key(plan.service)))
   for (const p of [...plan.gate, plan.serviceFoundation]) assert.equal(api.block(p.x, p.y, p.z).solid, true)
   assert.equal(reports.at(-1).closurePending, '')

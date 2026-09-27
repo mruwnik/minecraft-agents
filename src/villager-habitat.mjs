@@ -1,5 +1,5 @@
 import { inAnyZone, workRefusal } from './lib.mjs'
-import { breedPreflight, breedKey } from './villager-breed.mjs'
+import { breedPreflight, breedKey, breedGate } from './villager-breed.mjs'
 
 export async function habitatThreats (api, plan) {
   const found = (await api.act('entity', { name: '*', hostile: true, uuid: true, count: 1000 })).found ?? []
@@ -22,7 +22,7 @@ export function habitatOwnership (api, plan, preflight) {
 export async function closeHabitatGates (api, plan, gateItem, cleanup = false) {
   for (const p of plan.gates) {
     const b = api.block(p.x, p.y, p.z)
-    if (b?.name === gateItem && b.properties?.open === true) await (cleanup ? api.cleanupAct : api.act)('toggle', { ...p, open: false })
+    if (breedGate(b?.name) && b.properties?.open === true) await (cleanup ? api.cleanupAct : api.act)('toggle', { ...p, open: false })
   }
 }
 export function habitatSecure (api, plan, material, gateItem, openEntry = false) {
@@ -35,7 +35,7 @@ export function habitatSecure (api, plan, material, gateItem, openEntry = false)
 }
 export async function enterHabitatMain (api, plan, gateItem) {
   const body = plan.innerGate ? api.pos() : null
-  if (plan.innerGate && body.x >= plan.innerGate.x && body.x < plan.entry.x + 1 && body.z >= plan.entry.z && body.z < plan.entry.z + 1 && body.y >= plan.y - 0.1 && body.y < plan.y + 1 && api.block(plan.innerGate.x, plan.innerGate.y, plan.innerGate.z)?.name === gateItem) {
+  if (plan.innerGate && body.x >= plan.innerGate.x && body.x < plan.entry.x + 1 && body.z >= plan.entry.z && body.z < plan.entry.z + 1 && body.y >= plan.y - 0.1 && body.y < plan.y + 1 && breedGate(api.block(plan.innerGate.x, plan.innerGate.y, plan.innerGate.z)?.name)) {
     // The service booth is separated from residents by its inner gate.
     // Close its outer gate before entering; close the inner gate again from
     // the adjacent main-room side before walking farther into the house.
@@ -47,62 +47,6 @@ export async function enterHabitatMain (api, plan, gateItem) {
   }
   await api.act('goto', { ...plan.center, range: 0, into: true })
   await closeHabitatGates(api, plan, gateItem)
-}
-export async function buildHabitat (api, plan, preflight, { material, gateItem, bedItem }, refresh = async () => {}) {
-  try {
-    for (const p of preflight.clear) {
-      await refresh()
-      const b = api.block(p.x, p.y, p.z)
-      if (!['air', 'cave_air', 'void_air'].includes(b?.name)) {
-        if (b?.name !== p.name) throw new Error(`planned vegetation cell changed at ${breedKey(p)}; no digging`)
-        await api.act('dig', { x: p.x, y: p.y, z: p.z })
-      }
-      if (!['air', 'cave_air', 'void_air'].includes(api.block(p.x, p.y, p.z)?.name)) throw new Error(`planned vegetation removal did not clear ${breedKey(p)}`)
-      await closeHabitatGates(api, plan, gateItem)
-    }
-    // Starting outside lets a finished wall column obscure the next floor
-    // face even when the generic placement range check passes. Begin inside
-    // the clear room so wall placement proceeds from its accessible side.
-    await enterHabitatMain(api, plan, gateItem)
-    for (const p of preflight.needed.filter(p => p.item !== 'torch')) {
-      await refresh()
-      if (p.item === gateItem) {
-        // Place from the adjacent dry side, never from the gate's own cell
-        // or the far end of a roofed service booth.
-        const stand = { x: p.x + (breedKey(p) === breedKey(plan.gate) ? 1 : -1), y: p.y, z: p.z }
-        const feet = api.block(stand.x, stand.y, stand.z)
-        const head = api.block(stand.x, stand.y + 1, stand.z)
-        if (!['air', 'cave_air', 'void_air', 'torch'].includes(feet?.name) || !['air', 'cave_air', 'void_air'].includes(head?.name)) throw new Error(`gate placement needs clear adjacent stance at ${breedKey(stand)}`)
-        await api.act('goto', { ...stand, range: 0, into: true })
-        await closeHabitatGates(api, plan, gateItem)
-      }
-      await api.act('place', { ...p })
-      await closeHabitatGates(api, plan, gateItem)
-      if (api.block(p.x, p.y, p.z)?.name !== p.item) throw new Error(`breeder placement not observed at ${breedKey(p)}`)
-    }
-    await enterHabitatMain(api, plan, gateItem)
-    for (const b of preflight.missingBeds) {
-      await refresh()
-      const stand = { ...b.foot, x: b.foot.x - 1 }
-      const feet = api.block(stand.x, stand.y, stand.z)
-      if (!['air', 'cave_air', 'void_air', 'torch'].includes(feet?.name) || !['air', 'cave_air', 'void_air'].includes(api.block(stand.x, stand.y + 1, stand.z)?.name)) throw new Error(`bed placement needs clear adjacent aisle at ${breedKey(stand)}`)
-      await api.act('goto', { ...stand, range: 0, into: true })
-      await closeHabitatGates(api, plan, gateItem)
-      await api.act('place', { ...b.foot, item: bedItem, facing: 'south' })
-      await closeHabitatGates(api, plan, gateItem)
-    }
-    for (const p of preflight.needed.filter(p => p.item === 'torch')) {
-      await refresh()
-      await api.act('place', { ...p })
-      await closeHabitatGates(api, plan, gateItem)
-    }
-    await enterHabitatMain(api, plan, gateItem)
-    habitatSecure(api, plan, material, gateItem)
-    await refresh()
-  } catch (error) {
-    try { await closeHabitatGates(api, plan, gateItem, true) } catch (closeError) { throw new Error(`${error.message}; gate closure pending: ${closeError.message}`) }
-    throw error
-  }
 }
 export function habitatMetadata (plan) {
   return { target: plan.target, size: plan.width, x: plan.x, y: plan.y, z: plan.z, gate: plan.gate, entry: plan.entry, airlock: plan.airlock, innerGate: plan.innerGate, insideEntry: plan.entry ? { ...plan.entry, x: plan.entry.x - 1 } : { ...plan.gate, x: plan.gate.x + 1 }, bedCount: plan.beds.length, roofY: plan.y + 3 }

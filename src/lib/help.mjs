@@ -13,7 +13,14 @@ export const RENAMED = {
   collect_items: 'collect',
   lead: 'flock.lead',
   breed: 'flock.breed',
-  pen_check: 'pen.check'
+  pen_check: 'pen.check',
+  'villager.board': 'boat.board',
+  'villager.route': 'boat.route',
+  'villager.stage': 'boat.stage',
+  'villager.ferry': 'boat.ferry',
+  'villager.dock': 'boat.dock',
+  'villager.undock': 'boat.undock',
+  'villager.receive': 'boat.receive'
 }
 // where to read about the successor: its section is the half before the dot, and a top-level one is its own topic
 export const renamedTo = typed => RENAMED[typed] ? `it is now ${RENAMED[typed]} (./mc help ${RENAMED[typed].split('.')[0]})` : null

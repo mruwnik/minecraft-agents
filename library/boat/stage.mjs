@@ -1,4 +1,5 @@
-import { villagerBoatRoute, villagerBoatStatus, villagerUuid } from '../../src/lib.mjs'
+import { villagerBoatRoute } from '../../src/lib.mjs'
+import { boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
 
 const water = b => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(b?.name)
 const position = boat => {
@@ -8,23 +9,25 @@ const position = boat => {
 const gap = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 
 export default {
-  doc: 'villager.stage uuid= boat= z= [minX= tolerance=0.3 timeout=90 startX= startY= startZ= plan=true]: align an occupied leashed boat in open water before an east-facing dock approach; an optional shallow start stance exits the dock without adding tension; checks actual boat position, reduces lead tension, and requires stable alignment',
+  doc: 'boat.stage uuid= boat= z= [minX= tolerance=0.3 timeout=90 startX= startY= startZ= plan=true]: align a boat carrying a supported adult villager, cow, sheep or pig in open water before an east-facing dock approach; an optional shallow start stance exits the dock without adding tension; checks actual boat position, reduces lead tension, and requires stable alignment',
   stops: 'the exact passenger boat is stably aligned with slack lead in open water, or terrain, leash, progress, or timeout prevents it',
   args: { uuid: 'string!', boat: 'number!', z: 'number!', minX: 'number', tolerance: 'number', timeout: 'number', startX: 'number', startY: 'number', startZ: 'number', plan: 'boolean' },
   async run (api, a) {
     const tolerance = a.tolerance ?? 0.3
     const timeout = a.timeout ?? 90
-    if (!villagerUuid(a.uuid) || !Number.isInteger(a.boat) || !Number.isFinite(a.z)) throw new Error('stage needs an exact uuid=, integer boat= and finite z=')
+    if (!entityUuid(a.uuid) || !Number.isInteger(a.boat) || !Number.isFinite(a.z)) throw new Error('stage needs an exact uuid=, integer boat= and finite z=')
     if (a.minX !== undefined && !Number.isFinite(a.minX)) throw new Error('minX= must be finite')
     if (!Number.isFinite(tolerance) || tolerance < 0.1 || tolerance > 0.3 || !Number.isFinite(timeout) || timeout < 10 || timeout > 180) throw new Error('tolerance= must be 0.1..0.3 and timeout= 10..180')
     const startGiven = [a.startX, a.startY, a.startZ].some(v => v !== undefined)
     const start = startGiven ? { x: a.startX, y: a.startY, z: a.startZ } : null
     if (start && (!Object.values(start).every(Number.isInteger) || !water(api.block(start.x, start.y, start.z)) || !api.block(start.x, start.y - 1, start.z)?.solid || !api.block(start.x, start.y + 1, start.z) || api.block(start.x, start.y + 1, start.z).solid || water(api.block(start.x, start.y + 1, start.z)))) throw new Error('stage startX/Y/Z needs a loaded shallow water stance with solid floor and clear air above')
+    let passengerName
     const checked = async () => {
       const s = await api.act('boat_state', { id: a.boat })
-      const issue = villagerBoatStatus(s, a.boat, a.uuid)
+      const issue = boatPassengerStatus(s, a.boat, a.uuid)
       if (issue) throw new Error(issue)
       const boat = s.boats[0]
+      passengerName = boat.passengers[0].name
       if (boat.passengers.length !== 1 || s.mounted === a.boat || boat.leashHolderId !== s.selfId) throw new Error('staging requires exactly the named passenger and a lead held by this unmounted bot')
       const p = position(boat)
       if (a.minX !== undefined && p.x < a.minX) throw new Error(`boat moved west of the safe staging boundary x=${a.minX}; stop before the dock wall`)
@@ -82,6 +85,6 @@ export default {
       api.report({ boatAt: `${p.x},${p.y},${p.z}`, alignmentError: Math.abs(p.z - a.z) })
       return false
     }, { timeout, every: 0.5, what: `boat ${a.boat} did not settle aligned in open water` })
-    return { boat: a.boat, villagerUuid: a.uuid, at: `${p.x},${p.y},${p.z}`, aligned: true, leashHeld: true, passengerSeated: true, secure: false }
+    return { boat: a.boat, ...(passengerName === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind: passengerName }), at: `${p.x},${p.y},${p.z}`, aligned: true, leashHeld: true, passengerSeated: true, secure: false }
   }
 }

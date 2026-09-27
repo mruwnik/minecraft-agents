@@ -430,9 +430,9 @@ test('supplyOf refuses a name nobody marked', () => {
 })
 
 test('the library reads every blueprint file by name and refuses one that is not there', () => {
-  assert.deepEqual(blueprintFiles(), ['starter-hut', 'watchtower', 'wheat-field'])
+  assert.deepEqual(blueprintFiles(), ['starter-hut', 'villager-house-10', 'watchtower', 'wheat-field'])
   assert.equal(readBlueprint('starter-hut').hash, blueprintHash(HUT))
-  assert.throws(() => readBlueprint('castle'), { message: 'no blueprint called castle: blueprint.list shows starter-hut, watchtower, wheat-field' })
+  assert.throws(() => readBlueprint('castle'), { message: 'no blueprint called castle: blueprint.list shows starter-hut, villager-house-10, watchtower, wheat-field' })
 })
 
 const LIBRARY = [{ name: 'starter-hut', text: HUT }, { name: 'box', text: BOX }, { name: 'broken', text: 'front: south' }]

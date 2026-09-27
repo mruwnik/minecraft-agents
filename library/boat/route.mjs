@@ -1,7 +1,7 @@
 import { villagerBoatRoute } from '../../src/lib.mjs'
 
 export default {
-  doc: 'villager.route fromX= fromY= fromZ= x= y= z= [margin=8]: read-only check from a planned boat launch cell to a landing cell before placing or boarding a boat; reports the full 1.375-wide nonascending hull route or its first blocker',
+  doc: 'boat.route fromX= fromY= fromZ= x= y= z= [margin=8]: read-only check of a planned adult-villager boat launch and landing; reports the full 1.375-wide nonascending hull route or its first blocker',
   stops: 'a boat route is verified through loaded terrain without moving or placing anything, or the blocking step is reported',
   args: { fromX: 'number!', fromY: 'number!', fromZ: 'number!', x: 'number!', y: 'number!', z: 'number!', margin: 'number' },
 

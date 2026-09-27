@@ -1,9 +1,9 @@
 import { foodReceiptStore } from '../../src/villager-food-receipt.mjs'
-import { buildHabitat, habitatOwnership, habitatThreats, habitatSecure, closeHabitatGates } from '../../src/villager-habitat.mjs'
+import { habitatOwnership, habitatThreats, habitatSecure, closeHabitatGates } from '../../src/villager-habitat.mjs'
 import { BREED_FOOD, breedPlan, breedPreflight, breedCensus, breedBill, breedKey, breedFeedStance, breedFeedGrounded, breedInside } from '../../src/villager-breed.mjs'
 
 export default {
-  doc: 'villager.breed target= x= y= z= [size= block=cobblestone gate=oak_fence_gate bed=white_bed food=bread timeout= plan=true]: build/resume a lit roofed breeder on a flat floor around two on-foot adults, then provision shared food batches with extras until the observed population reaches target; x/y/z is its southwest interior foot cell',
+  doc: 'villager.breed target= x= y= z= [size= block=cobblestone gate=oak_fence_gate bed=white_bed food=bread timeout= plan=true]: verify an existing lit roofed habitat and provision shared food until observed population reaches target; prepare with blueprint.check/build first; x/y/z is the interior foot anchor',
   stops: 'target total UUID population is observed inside, or resources, enclosure, pickup evidence or births cannot be confirmed',
   args: { target: 'number!', x: 'number!', y: 'number!', z: 'number!', size: 'number', entryX: 'number', entryZ: 'number', airlock: 'boolean', block: 'string', gate: 'string', bed: 'string', food: 'string', timeout: 'number', plan: 'boolean' },
   async run (api, a) {
@@ -33,12 +33,14 @@ export default {
     const extras = food === 'bread' ? 4 : 16
     const observedBirthsWhilePaused = receipt ? villagers.filter(e => e.baby && !receipt.before.includes(e.uuid)).length : 0
     const foodCredit = Math.max(Object.values(receipt?.held ?? {}).reduce((sum, n) => sum + n, 0), (receipt?.total ?? 0) - observedBirthsWhilePaused * 2 * BREED_FOOD[food])
-    const { bill, shortages } = breedBill(preflight, api.inv(), birthsNeeded, food, bedItem, foodCredit, extras)
+    const habitatReady = !preflight.needed.length && !preflight.missingBeds.length && !preflight.clear.length
+    const { bill, shortages } = breedBill({ needed: [], missingBeds: [] }, api.inv(), birthsNeeded, food, bedItem, foodCredit, extras)
     habitatOwnership(api, plan, preflight)
     const adults = villagers.filter(e => !e.baby)
-    if (a.plan === true) return { ...summary(), plan: true, size: plan.width, bill, shortages, clears: preflight.clear.map(breedKey), ready: !shortages.length && (initial === a.target || adults.length >= 2), needsAdults: initial === a.target ? 0 : Math.max(0, 2 - adults.length), beds: plan.beds.map(b => breedKey(b.foot)) }
-    if (plan.airlock && initial > 0 && !breedInside(plan, api.pos())) throw new Error('start breeding inside the main sleeping room; villager.receive leaves the operator there. Enter through the sealed annex before running, keeping the outer gate closed before opening the inner gate')
+    if (a.plan === true) return { ...summary(), plan: true, size: plan.width, bill, shortages, habitatReady, missingBeds: preflight.missingBeds.length, missingStructure: preflight.needed.map(breedKey), clears: preflight.clear.map(breedKey), ready: habitatReady && !shortages.length && (initial === a.target || adults.length >= 2), needsAdults: initial === a.target ? 0 : Math.max(0, 2 - adults.length), beds: plan.beds.map(b => breedKey(b.foot)) }
+    if (plan.airlock && initial > 0 && !breedInside(plan, api.pos())) throw new Error('start breeding inside the main sleeping room; boat.receive leaves the operator there. Enter through the sealed annex before running, keeping the outer gate closed before opening the inner gate')
     if (initial < a.target && adults.length < 2) throw new Error(`breeder has ${adults.length} observed on-foot adults; bring two inside the planned ${plan.width}x${plan.width} footprint before running`)
+    if (preflight.needed.length || preflight.missingBeds.length || preflight.clear.length) throw new Error('habitat is not complete for the requested population; use blueprint.check and blueprint.build (villager-house-10 supports up to ten beds), then rerun breeding')
     if (shortages.length) throw new Error(`breeder supplies short: ${shortages.join('; ')}`)
     const closeGate = (cleanup = false) => closeHabitatGates(api, plan, gateItem, cleanup)
     const refresh = async () => {
@@ -54,7 +56,9 @@ export default {
       return villagers
     }
     try {
-      await buildHabitat(api, plan, preflight, { material, gateItem, bedItem }, refresh)
+      await closeGate()
+      habitatSecure(api, plan, material, gateItem)
+      await refresh()
       const secure = () => habitatSecure(api, plan, material, gateItem)
       let rounds = 0
       if (receipt && observedBirthsWhilePaused) {

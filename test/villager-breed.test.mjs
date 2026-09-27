@@ -32,11 +32,20 @@ function emptySite (plan) {
   return { blocks, block, put }
 }
 
-function breederApi ({ target = 3, size, airlock = false, population, plants = [], noBirth = false, adultOnlyAfterRound = false, hideAdultAfterFirstFood = false, escapeBaby = false, escapeKnownBabyAfterFirstFood = false, checkpointFailAt = Infinity, openGateAfterFood = false, hostile = false, hostileType = 'zombie', hostileAfterFirstFood = false, foodResult, day = true, wakeOnWait = false, groundOnWait = false, birthCountLimit = Infinity } = {}) {
+function breederApi ({ prepared = true, target = 3, size, airlock = false, population, plants = [], noBirth = false, adultOnlyAfterRound = false, hideAdultAfterFirstFood = false, escapeBaby = false, escapeKnownBabyAfterFirstFood = false, checkpointFailAt = Infinity, openGateAfterFood = false, hostile = false, hostileType = 'zombie', hostileAfterFirstFood = false, foodResult, day = true, wakeOnWait = false, groundOnWait = false, birthCountLimit = Infinity } = {}) {
   const args = { x: 10, y: 64, z: 20, target, ...(size === undefined ? {} : { size }) }
   if (airlock) Object.assign(args, { size: size ?? 8, airlock: true, entryX: args.x + (size ?? 8), entryZ: args.z + (size ?? 8) - 1 })
   const plan = breedPlan(args)
   const site = emptySite(plan)
+  if (prepared) {
+    for (const cell of plan.shell) site.put(cell, 'cobblestone')
+    for (const gate of plan.gates) site.put(gate, 'oak_fence_gate', { facing: 'east', open: false })
+    for (const bed of plan.bedSlots) {
+      site.put(bed.foot, 'white_bed', { part: 'foot', facing: 'south' })
+      site.put(bed.head, 'white_bed', { part: 'head', facing: 'south' })
+    }
+    for (const light of plan.lights) site.put(light, 'torch')
+  }
   for (const plant of plants) site.put(plant, plant.name)
   let residents = population ?? [entity(a, '11.5,64,20.5'), entity(b, '14.5,64,23.5')]
   let foodDrops = 0
@@ -53,6 +62,7 @@ function breederApi ({ target = 3, size, airlock = false, population, plants = [
   const pauses = []
   const groundWaitChecks = []
   const api = {
+    position: { ...plan.center, x: plan.center.x + 0.5, z: plan.center.z + 0.5 },
     block: site.block,
     pos: () => api.position,
     inv: () => ({ cobblestone: 1000, oak_fence_gate: 2, white_bed: 24, torch: 100, bread: 100 }),
@@ -289,23 +299,22 @@ test('villager.breed supports read-only planning and resumes a prepared shelter 
   assert.equal(resumed.population, 4)
   assert.equal(resumed.newborns[0], baby2)
   const additions = run.calls.filter(c => c.name === 'place').slice(placed)
-  assert.equal(additions.length, 1)
-  assert.equal(additions[0].args.item, 'white_bed', 'resume adds only the newly required target bed')
+  assert.equal(additions.length, 0, 'the existing larger blueprint supplies the next bed without construction')
 })
 
-test('villager.breed plans benign plant clears read-only and digs only the planned plant on run', async () => {
+test('villager.breed reports vegetation and incomplete shelter without performing construction', async () => {
   const plant = { x: 10, y: 64, z: 21, name: 'leaf_litter' }
-  const planOnly = breederApi({ target: 2, plants: [plant] })
-  const result = await breed.run(planOnly.api, { ...planOnly.args, plan: true })
-  assert.deepEqual(result.clears, [`${plant.x},${plant.y},${plant.z}`])
-  assert.equal(planOnly.calls.some(c => c.name === 'dig'), false)
-
   const run = breederApi({ target: 2, plants: [plant] })
-  const completed = await breed.run(run.api, run.args)
-  const digs = run.calls.filter(c => c.name === 'dig')
-  assert.deepEqual(digs.map(c => c.args), [{ x: plant.x, y: plant.y, z: plant.z }])
-  assert.equal(run.site.block(plant.x, plant.y, plant.z).name, 'air')
-  assert.equal(completed.reached, true)
+  const result = await breed.run(run.api, { ...run.args, plan: true })
+  assert.deepEqual(result.clears, [key(plant)])
+  assert.equal(result.habitatReady, false)
+  assert.equal(result.ready, false)
+  await assert.rejects(breed.run(run.api, run.args), /blueprint.check and blueprint.build/)
+  assert.equal(run.calls.some(c => ['place', 'dig', 'villager_food'].includes(c.name)), false)
+  assert.equal(run.site.block(plant.x, plant.y, plant.z).name, 'leaf_litter')
+  const empty = breederApi({ prepared: false })
+  await assert.rejects(breed.run(empty.api, empty.args), /habitat is not complete/)
+  assert.equal(empty.calls.some(c => ['place', 'dig', 'villager_food'].includes(c.name)), false)
 })
 
 test('villager.breed requires two adults inside before construction or food delivery', async () => {
@@ -321,16 +330,16 @@ test('villager.breed with airlock refuses an outside start before opening the ho
   assert.equal(run.calls.some(c => ['place', 'dig', 'toggle', 'goto', 'villager_food'].includes(c.name)), false)
 })
 
-test('villager.breed preflights full food and bed inventory before any construction', async () => {
-  for (const [inventory, expected] of [
-    [{ cobblestone: 1000, oak_fence_gate: 2, white_bed: 1, torch: 100, bread: 100 }, /white_bed:/],
-    [{ cobblestone: 1000, oak_fence_gate: 2, white_bed: 24, torch: 100, bread: 5 }, /bread:/]
-  ]) {
-    const run = breederApi({ target: 4 })
-    run.api.inv = () => inventory
-    await assert.rejects(breed.run(run.api, run.args), expected)
-    assert.equal(run.calls.some(c => ['place', 'toggle', 'villager_food'].includes(c.name)), false)
-  }
+test('villager.breed requires carried food but reuses beds already supplied by the blueprint', async () => {
+  const short = breederApi({ target: 4 })
+  short.api.inv = () => ({ bread: 5 })
+  await assert.rejects(breed.run(short.api, short.args), /bread:/)
+  assert.equal(short.calls.some(c => ['place', 'toggle', 'villager_food'].includes(c.name)), false)
+  const ready = breederApi({ target: 3 })
+  ready.api.inv = () => ({ bread: 10 })
+  const result = await breed.run(ready.api, ready.args)
+  assert.equal(result.reached, true)
+  assert.equal(ready.calls.some(c => ['place', 'dig'].includes(c.name)), false)
 })
 
 test('villager.breed refuses entities classified hostile near the shelter before construction or feeding', async () => {

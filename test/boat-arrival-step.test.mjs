@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../src/villager-arrival-step.mjs'
+import { arrivalStepInfo, placeArrivalStep, clearArrivalStep } from '../src/boat-arrival-step.mjs'
 
 const uuid = '87b3392e-ae93-4f51-bf07-2f53add88880'
 const cell = { x: -132, y: 62, z: -169 }
 const arrival = { dock: { cell: { x: cell.x, y: cell.y + 1, z: cell.z } }, rear: { x: -134, y: 64, z: -168 } }
 const key = p => `${p.x},${p.y},${p.z}`
-const adult = (exact = '-130.5,64,-168.5') => ({ uuid, exact, name: 'villager', baby: false, adult: true, vehicleId: null })
+const adult = (exact = '-130.5,64,-168.5') => ({ uuid, exact, name: 'villager', width: 0.6, height: 1.95, baby: false, adult: true, vehicleId: null })
 
 function stepApi ({ rows = [adult()], body = { x: -130.5, y: 64, z: -168.5 }, boats = [] } = {}) {
   const blocks = new Map([

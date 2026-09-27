@@ -1,15 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { arrivalPlan, arrivalPreflight } from '../src/villager-arrival.mjs'
+import { arrivalPlan, arrivalPreflight } from '../src/boat-arrival.mjs'
 import { breedCensus, breedInside, breedPlan } from '../src/villager-breed.mjs'
-import prepare from '../library/villager/prepare.mjs'
-import receive from '../library/villager/receive.mjs'
+
+import receive from '../library/boat/receive.mjs'
 import breed from '../library/villager/breed.mjs'
-import dock from '../library/villager/dock.mjs'
+import dock from '../library/boat/dock.mjs'
 import { villagerDockPlan } from '../src/lib.mjs'
 
 const houseArgs = { target: 10, x: -143, y: 65, z: -175, size: 8, entryX: -135, entryZ: -168, airlock: true }
 const dockArgs = { dockX: -132, dockY: 63, dockZ: -169, riverX: 1, riverZ: 0 }
+
+const prepare = { async run(api, a) {
+  const p = breedPlan(a); const j = arrivalPlan(p, a)
+  for (const q of [...p.shell, j.roof, ...j.sides, ...j.opening]) await api.act('place', { ...q, item: 'cobblestone' })
+  for (const q of p.gates) await api.act('place', { ...q, item: 'oak_fence_gate', facing: 'east' })
+  for (const b of p.beds) await api.act('place', { ...b.foot, item: 'white_bed', facing: 'south' })
+  for (const q of p.lights) await api.act('place', { ...q, item: 'torch' })
+  await api.act('goto', { ...p.center, range: 0, into: true })
+  return { secure: true }
+} }
 const key = p => `${p.x},${p.y},${p.z}`
 
 test('arrival plan joins the prepared east entry to a dry west dock with a sealed 3-high passage', () => {
@@ -55,10 +65,10 @@ test('arrival plan refuses misaligned or too-high house entries and non-east doc
 
 const firstUuid = 'c071f7d4-8b43-4f01-9c2f-92b648d3d143'
 const incomingUuid = '87b3392e-ae93-4f51-bf07-2f53add88880'
-const entity = (uuid, exact, baby = false) => ({ uuid, exact, name: 'villager', baby, adult: !baby, vehicleId: null })
+const entity = (uuid, exact, baby = false) => ({ uuid, exact, name: 'villager', width: 0.6, height: 1.95, baby, adult: !baby, vehicleId: null })
 const arrivalNewborns = Array.from({ length: 8 }, (_, i) => `10000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, '0')}`)
 
-function receiveApi (initialResidents = []) {
+function receiveApi (initialResidents = [], profile = {}) {
   const house = breedPlan(houseArgs)
   const arrival = arrivalPlan(house, dockArgs)
   const dockPlan = villagerDockPlan({ x: dockArgs.dockX, y: dockArgs.dockY, z: dockArgs.dockZ }, { x: 1, z: 0 })
@@ -108,12 +118,12 @@ function receiveApi (initialResidents = []) {
       calls.push({ name, args })
       if (name === 'entity') {
         const aboard = passenger && !passengerReleased ? [entity(passenger, `${dockArgs.dockX + 0.5},${dockArgs.dockY},${dockArgs.dockZ + 0.5}`)] : []
-        return { found: args.hostile === true ? [] : [...residents, ...aboard] }
+        return { found: args.hostile === true ? [] : [...residents, ...aboard].map(e => e.uuid === passenger ? { ...e, ...profile } : e) }
       }
       if (name === 'boat_state') {
         if (args.id === undefined) return { selfId: 12, mounted: null, boats: [] }
         if (!boatPresent) return { selfId: 12, mounted: null, boats: [] }
-        return { selfId: 12, mounted: null, boats: [{ id: args.id, exact: `${dockArgs.dockX + 0.5},${dockArgs.dockY},${dockArgs.dockZ + 0.5}`, leashHolderId: null, passengers: [{ uuid: passenger, id: 90, name: 'villager' }] }] }
+        return { selfId: 12, mounted: null, boats: [{ id: args.id, exact: `${dockArgs.dockX + 0.5},${dockArgs.dockY},${dockArgs.dockZ + 0.5}`, leashHolderId: null, passengers: [{ uuid: passenger, id: 90, name: 'villager', baby: false, width: 0.6, height: 1.95, ...profile }] }] }
       }
       if (name === 'place') {
         if (key(stepCell) === key(args)) {
@@ -197,13 +207,110 @@ function receiveApi (initialResidents = []) {
   return { api, house, arrival, dockPlan, calls, get residents () { return residents } }
 }
 
-test('villager.receive seals the dock before exact UUID release and keeps prior residents inside on a second arrival', async () => {
+for (const [name, width, height] of [['pig', 0.9, 0.9], ['cow', 0.9, 1.4], ['sheep', 0.9, 1.3]]) test(`boat.receive admits exact adult ${name} without beds or target`, async () => {
+  const run = receiveApi([], { name, width, height, baby: false, adult: true })
+  const args = { ...houseArgs, ...dockArgs }
+  await prepare.run(run.api, args)
+  for (const bed of run.house.beds) for (const p of [bed.foot, bed.head]) run.api.setBlock(p, 'air')
+  delete args.target
+  await receive.run(run.api, { ...args, prepare: true })
+  run.api.preparePassenger(incomingUuid)
+  const result = await receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42, timeout: 30 })
+  assert.equal(result.received, true)
+  assert.equal(result.secure, true)
+  assert.equal(result.uuid, incomingUuid)
+  assert.equal(result.destinationArgs.target, undefined)
+  assert.equal(result.destinationArgs.bed, undefined)
+  for (const p of run.house.gates) assert.equal(run.api.block(p.x, p.y, p.z).properties.open, false)
+  const release = run.calls.find(c => c.name === 'boat_release')
+  assert.equal(release.args.passengerUuid, incomingUuid)
+})
+
+for (const [label, profile] of [
+  ['baby', { baby: true }],
+  ['unknown dimensions', { width: undefined }],
+  ['oversize', { width: 1.5 }],
+  ['unsupported entity', { name: 'horse' }]
+]) test(`boat.receive refuses ${label} before opening or releasing`, async () => {
+  const run = receiveApi([], profile)
+  const args = { ...houseArgs, ...dockArgs }
+  await prepare.run(run.api, args)
+  run.api.preparePassenger(incomingUuid)
+  const before = run.calls.length
+  await assert.rejects(receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42 }))
+  assert.equal(run.calls.slice(before).some(c => c.name === 'boat_release' || (c.name === 'toggle' && c.args.open)), false)
+})
+
+test('boat.receive refuses another boat occupant before opening the destination', async () => {
+  const run = receiveApi()
+  const args = { ...houseArgs, ...dockArgs }
+  await prepare.run(run.api, args)
+  run.api.preparePassenger(incomingUuid)
+  const act = run.api.act
+  run.api.act = async (name, a) => {
+    const result = await act(name, a)
+    if (name === 'boat_state' && result.boats?.[0]) result.boats[0].passengers.push({ ...result.boats[0].passengers[0], uuid: firstUuid })
+    return result
+  }
+  const before = run.calls.length
+  await assert.rejects(receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42 }), /exactly one passenger|only the exact passenger/)
+  assert.equal(run.calls.slice(before).some(c => c.name === 'boat_release' || (c.name === 'toggle' && c.args.open)), false)
+})
+
+test('boat.receive plan is read-only on success and failed profile validation', async () => {
+  for (const invalid of [false, true]) {
+    const run = receiveApi([], invalid ? { baby: true } : {})
+    const args = { ...houseArgs, ...dockArgs }
+    await prepare.run(run.api, args)
+    run.api.preparePassenger(incomingUuid)
+    const before = run.calls.length
+    const request = receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42, plan: true })
+    if (invalid) await assert.rejects(request)
+    else assert.equal((await request).plan, true)
+    assert.ok(run.calls.slice(before).every(c => ['entity', 'boat_state'].includes(c.name)), 'planning and refusal must not toggle, dig, release, write markers, or invoke cleanup mutations')
+    assert.equal(run.api.places().length, 0)
+  }
+})
+
+test('boat.receive refuses an unlit enclosure before any transfer action', async () => {
+  const run = receiveApi()
+  const args = { ...houseArgs, ...dockArgs }
+  await prepare.run(run.api, args)
+  run.api.preparePassenger(incomingUuid)
+  run.api.setBlock(run.house.lights[0], 'air')
+  const before = run.calls.length
+  await assert.rejects(receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42 }), /floor light missing/)
+  assert.equal(run.calls.length, before)
+})
+
+test('a known resident may enter the enclosed booth but must return before final closure', async () => {
+  const existing = entity(firstUuid, '-140.5,65,-173.5')
+  const run = receiveApi([existing])
+  run.api.sealDock()
+  const args = { ...houseArgs, ...dockArgs }
+  await prepare.run(run.api, args)
+  await receive.run(run.api, { ...args, prepare: true })
+  run.api.preparePassenger(incomingUuid)
+  const until = run.api.until
+  run.api.until = async (predicate, options) => {
+    const prior = existing.exact
+    existing.exact = '-137.5,65,-167.5'
+    assert.equal(await predicate(), false, 'the enclosed booth is safe but does not count as received main-room housing')
+    existing.exact = prior
+    return until(predicate, options)
+  }
+  const result = await receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42, timeout: 30 })
+  assert.equal(result.secure, true)
+  assert.deepEqual(new Set(result.uuids), new Set([firstUuid, incomingUuid]))
+})
+
+test('boat.receive seals the dock before exact UUID release and keeps prior residents inside on a second arrival', async () => {
   const existing = entity(firstUuid, `${houseArgs.x + 2.5},${houseArgs.y},${houseArgs.z + 1.5}`)
   const run = receiveApi([existing])
   const prepareArgs = { ...houseArgs, ...dockArgs }
   const prepared = await prepare.run(run.api, prepareArgs)
   assert.equal(prepared.secure, true)
-  assert.deepEqual(prepared.receiveArgs, { ...prepared.breedArgs, dockX: dockArgs.dockX, dockY: dockArgs.dockY, dockZ: dockArgs.dockZ, riverX: 1, riverZ: 0, materials: 'cobblestone' })
+
   // The boat portal opens for the incoming boat only after the internal entry is closed.
   run.api.sealDock()
   const beforePortal = run.calls.length
@@ -269,30 +376,7 @@ test('villager.receive seals the dock before exact UUID release and keeps prior 
   assert.ok(removeStepAt >= 0 && unmarkAt > removeStepAt, 'remove the block first, then clear only its ownership marker')
 })
 
-test('villager.receive returns normalized breeding args and leaves the operator inside for two adults to grow to ten', async () => {
-  const existing = entity(firstUuid, `${houseArgs.x + 2.5},${houseArgs.y},${houseArgs.z + 1.5}`)
-  const run = receiveApi([existing])
-  const args = { ...houseArgs, ...dockArgs }
-  await prepare.run(run.api, args)
-  run.api.sealDock()
-  const firstPortal = await receive.run(run.api, { ...args, prepare: true })
-  assert.deepEqual(firstPortal.exitStand, run.dockPlan.serviceStand)
-  run.api.preparePassenger(incomingUuid)
-  const received = await receive.run(run.api, { ...args, uuid: incomingUuid, boat: 42, timeout: 30 })
-  assert.deepEqual(received.breedArgs, {
-    target: 10, x: -143, y: 65, z: -175, size: 8,
-    block: 'cobblestone', gate: 'oak_fence_gate', bed: 'white_bed', airlock: true,
-    entryX: -135, entryZ: -168
-  })
-  assert.ok(breedInside(breedPlan(received.breedArgs), received.operatorAt), 'receive parks the operator in the main sleeping room')
-  const grown = await breed.run(run.api, received.breedArgs)
-  assert.equal(grown.reached, true)
-  assert.equal(grown.population, 10)
-  assert.equal(grown.newborns.length, 8)
-  assert.equal(new Set(grown.newborns).size, 8)
-})
-
-test('villager.receive resumes an exact passenger already on foot in the secured dock without releasing again', async () => {
+test('boat.receive resumes an exact passenger already on foot in the secured dock without releasing again', async () => {
   const existing = entity(firstUuid, `${houseArgs.x + 2.5},${houseArgs.y},${houseArgs.z + 1.5}`)
   const run = receiveApi([existing])
   const args = { ...houseArgs, ...dockArgs }
@@ -313,7 +397,7 @@ test('villager.receive resumes an exact passenger already on foot in the secured
   assert.ok(run.calls.some(c => c.name === 'dig'), 'resume may finish opening the prepared internal passage')
 })
 
-test('villager.receive returns resumed success for the exact UUID already inside the secure house', async () => {
+test('boat.receive returns resumed success for the exact UUID already inside the secure house', async () => {
   const resident = entity(incomingUuid, `${houseArgs.x + 2.5},${houseArgs.y},${houseArgs.z + 1.5}`)
   const run = receiveApi([resident])
   const args = { ...houseArgs, ...dockArgs }

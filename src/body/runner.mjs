@@ -2,7 +2,8 @@
 // by the hand-back rules.
 import fs from 'node:fs'
 import path from 'node:path'
-import { breedPlan } from '../villager-breed.mjs'
+import { breedPlan, breedGate } from '../villager-breed.mjs'
+import { boatHabitatPlan } from '../boat-habitat.mjs'
 import { eatAllowed, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult } from '../composite.mjs'
 import { ROOT, cfg } from './home.mjs'
@@ -96,11 +97,13 @@ function makeApi (composite, a, alive) {
       })
   }
   const cleanupAct = async (name, args = {}) => {
-    const breedGates = ['villager.breed', 'villager.prepare', 'villager.receive'].includes(composite) ? breedPlan(a).gates : []
-    const closeBreedGate = name === 'toggle' && args.open === false && breedGates.some(gate => {
+    const protectedGates = composite === 'villager.breed'
+      ? breedPlan(a).gates
+      : composite === 'boat.receive' ? boatHabitatPlan(a).gates : []
+    const closeProtectedGate = name === 'toggle' && args.open === false && protectedGates.some(gate => {
       if (!['x', 'y', 'z'].every(k => args[k] === gate[k])) return false
       const gateBlock = bot.blockAt(new Vec3(gate.x, gate.y, gate.z))
-      return gateBlock?.name === (a.gate ?? 'oak_fence_gate') && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
+      return breedGate(gateBlock?.name) && ['east', 'west'].includes(gateBlock.getProperties?.().facing)
     })
     const lectern = name === 'place' && args.blocks === undefined && args.item === (a.block ?? 'lectern') && ['x', 'y', 'z'].every(k => args[k] === a[k])
     const dx = args.x - a.x, dz = args.z - a.z
@@ -109,14 +112,14 @@ function makeApi (composite, a, alive) {
     const serviceSill = name === 'place' && args.blocks === undefined && args.item === (a.penBlock ?? 'cobblestone') &&
       args.y === a.y && cleanupServiceDirection && [1, 2].some(n =>
         dx === cleanupServiceDirection.x * n && dz === cleanupServiceDirection.z * n)
-    if (!closeBreedGate && (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill))) throw new Error(`${composite}: cleanup may only restore its own job block/service route or close its own breeder doorway`)
+    if (!closeProtectedGate && (composite !== 'villager.roll' || !(lectern || serviceStand || serviceSill))) throw new Error(`${composite}: cleanup may only restore its own job block/service route or close its own enclosure doorway`)
     const cell = `${a.x},${a.y},${a.z}`
     if (!ready || !bot.entity || bot.health <= 0 || bot.isSleeping) throw new Error(`${composite}: restoration pending at ${cell}: body is offline, dead, or sleeping`)
     if (flee || holingUp || fighting) throw new Error(`${composite}: restoration pending at ${cell}: emergency reflex owns the body`)
     if (task && task !== ownerTask) throw new Error(`${composite}: restoration pending at ${cell}: another task owns the body`)
     const refusal = refusalFor(name, args)
     if (refusal) throw new Error(`${composite}/${name}: ${refusal}`)
-    if (closeBreedGate) { useMoves(false); return long.toggle(args) }
+    if (closeProtectedGate) { useMoves(false); return long.toggle(args) }
     if (serviceStand) {
       cleanupServiceDirection = { x: dx / 3, z: dz / 3 }
       useMoves(false)

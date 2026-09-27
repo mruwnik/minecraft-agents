@@ -2204,8 +2204,11 @@ test('RENAMED: no old name survives as a real one, and none points at itself', (
   const stale = Object.entries(RENAMED).filter(([was, now]) => was === now || PRIMITIVES[was])
   assert.deepEqual(stale, [])
 })
-test('renamedList: one line, every pair, for the foot of the catalogue', () =>
-  assert.match(renamedList(), /^renamed: harvest -> farm\.harvest, .*pen_check -> pen\.check$/))
+test('renamedList: one line, every pair, for the foot of the catalogue', () => {
+  const renamed = renamedList()
+  assert.match(renamed, /^renamed: harvest -> farm\.harvest, /)
+  for (const [was, now] of Object.entries(RENAMED)) assert.ok(renamed.includes(`${was} -> ${now}`))
+})
 
 // a picture of 1500 cells is already a lot to read; where= answers in one line, so it may look much further
 for (const [name, where, expected] of [['a map', undefined, 1500], ['where= only lists coordinates', 'potatoes', 60000]]) {

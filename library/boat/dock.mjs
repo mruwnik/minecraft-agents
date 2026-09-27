@@ -1,4 +1,5 @@
-import { inAnyZone, villagerBoatStatus, villagerDockPlan, villagerUuid, workRefusal } from '../../src/lib.mjs'
+import { inAnyZone, villagerDockPlan, workRefusal } from '../../src/lib.mjs'
+import { boatPassengerProfile, boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
 
 const key = p => `${p.x},${p.y},${p.z}`
 const pos = text => {
@@ -13,13 +14,13 @@ const boatFits = (plan, p) => Math.abs(p.x - (plan.cell.x + 0.5)) <= 0.8 && Math
 const fullBlock = name => /^(cobblestone|cobbled_deepslate|dirt|stone|(?:oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|bamboo|crimson|warped)_planks)$/.test(name)
 
 export default {
-  doc: 'villager.dock x= y= z= riverX= riverZ= [block=cobblestone | materials=cobbled_deepslate,cherry_planks] [prepare=true | uuid= boat=] [insideX= insideY= insideZ=] [deferCapX= deferCapZ=]: prepare a safe dock, or close its entire portal before releasing the exact passenger; a dry interior stance keeps the operator inside; only a freshly verified adult may use a single deferred upper rear cap under a full roof over a two-high solid barrier, reported as adult-only containment',
-  stops: 'the landing is prepared with its boat gate open, or the exact villager is on foot inside the closed landing',
+  doc: 'boat.dock x= y= z= riverX= riverZ= [block=cobblestone | materials=cobbled_deepslate,cherry_planks] [prepare=true | uuid= boat=] [insideX= insideY= insideZ=] [deferCapX= deferCapZ=]: prepare a safe boat dock, or close its entire portal before releasing the exact supported passenger; passengers that fit the one-high service opening require a dry insideX/Y/Z stance; the deferred upper-cap exception remains adult-villager-only under a full roof over a two-high solid barrier',
+  stops: 'the boat landing is prepared, or the exact supported passenger is on foot inside the fully closed dock',
   args: { uuid: 'string', boat: 'number', prepare: 'boolean', x: 'number!', y: 'number!', z: 'number!', riverX: 'number!', riverZ: 'number!', block: 'string', materials: 'string', insideX: 'number', insideY: 'number', insideZ: 'number', deferCapX: 'number', deferCapZ: 'number' },
 
   async run (api, a) {
     const preparing = a.prepare === true
-    if (!preparing && !villagerUuid(a.uuid)) throw new Error('uuid= must be the observed villager UUID')
+    if (!preparing && !entityUuid(a.uuid)) throw new Error('uuid= must be the observed passenger UUID')
     if (!preparing && !Number.isInteger(a.boat)) throw new Error('boat= must be the observed boat ID')
     if (![a.x, a.y, a.z, a.riverX, a.riverZ].every(Number.isInteger)) throw new Error('dock coordinates must be integers')
     if (preparing && (a.uuid !== undefined || a.boat !== undefined)) throw new Error('prepare=true needs an empty dock site, without uuid= or boat=')
@@ -43,16 +44,18 @@ export default {
     const state = () => api.act('boat_state', { id: a.boat })
     const checked = async () => {
       const s = await state()
-      const issue = villagerBoatStatus(s, a.boat, a.uuid)
+      const issue = boatPassengerStatus(s, a.boat, a.uuid)
       if (issue) throw new Error(issue)
       const boat = s.boats.find(b => b.id === a.boat)
-      if (boat.passengers.length !== 1) throw new Error(`boat ${a.boat} must carry only villager ${a.uuid}`)
+      if (boat.passengers.length !== 1) throw new Error(`boat ${a.boat} must carry only passenger ${a.uuid}`)
       if (s.mounted === a.boat) throw new Error(`dismount boat ${a.boat} before building its dock`)
       return { s, boat }
     }
     let s = null; let boat = null
     if (!preparing) {
       ;({ s, boat } = await checked())
+      const passengerProfile = boatPassengerProfile(boat.passengers[0])
+      if (passengerProfile.ok && passengerProfile.height <= 1 && !insideStand) throw new Error('a passenger that fits the one-high service opening needs insideX/Y/Z so the dock remains sealed during release')
       if (!boatFits(plan, pos(boat.exact))) throw new Error(`boat ${a.boat} at ${boat.exact} is too close to the dock wall centered on ${key(cell)}; bring it within 0.8 block of center before building`)
       const center = pos(boat.exact)
       if (center.y < cell.y - 1.5 || center.y > cell.y + 1.5) throw new Error(`boat ${a.boat} is at the wrong height for dock ${key(cell)}`)
@@ -148,10 +151,10 @@ export default {
       bill[item] = (bill[item] ?? 0) + 1
       allocation.set(key(p), item)
     }
-    const residents = (await api.act('entity', { name: 'villager', count: 100, uuid: true })).found
-    const others = residents.filter(e => (preparing || e.uuid !== a.uuid) && inside(plan, pos(e.exact)))
-    if (others.length) throw new Error(`dock interior already contains another villager ${others[0].uuid ?? others[0].id}`)
-    const adultProof = rows => rows.some(e => e.uuid === a.uuid && e.baby === false && e.adult === true)
+    const residents = (await api.act('entity', { name: '*', count: 100, uuid: true })).found
+    const others = residents.filter(e => (preparing || e.uuid !== a.uuid) && e.uuid && !['item', 'experience_orb'].includes(e.name) && !/(^|_)boat$/.test(e.name ?? '') && inside(plan, pos(e.exact)))
+    if (others.length) throw new Error(`dock interior already contains another entity ${others[0].uuid ?? others[0].id}`)
+    const adultProof = rows => rows.some(e => e.uuid === a.uuid && e.name === 'villager' && e.baby === false && e.adult === true)
     if (deferredCap && capGap(deferredCap) && !adultProof(residents)) throw new Error('one-high rear cap gap requires the exact passenger freshly observed as an adult')
     if (preparing) {
       const boats = (await api.act('boat_state', {})).boats ?? []
@@ -163,7 +166,7 @@ export default {
       if (!built(api.block(p.x, p.y, p.z)?.name)) await api.act('place', { ...p, item: allocation.get(key(p)) })
       if (!built(api.block(p.x, p.y, p.z)?.name)) throw new Error(`dock block did not take at ${key(p)}`)
     }
-    api.report({ dock: preparing ? 'preparing' : 'building', ...(preparing ? {} : { boat: a.boat, villagerUuid: a.uuid }), need: changes.length, bill })
+    api.report({ dock: preparing ? 'preparing' : 'building', ...(preparing ? {} : { boat: a.boat, ...(boat?.passengers?.[0]?.name === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind: boat?.passengers?.[0]?.name }) }), need: changes.length, bill })
     try {
       if (insideStand) await api.act('goto', { ...insideStand, range: 0, into: true })
       for (const p of deepFloor) await ensure(p)
@@ -183,7 +186,7 @@ export default {
         const gap = plan.walls.find(p => !api.block(p.x, p.y, p.z)?.solid)
         if (gap) throw new Error(`prepared dock wall remains open at ${key(gap)}`)
         for (const p of reopen.slice().sort((a, b) => b.y - a.y)) {
-          const residents = (await api.act('entity', { name: 'villager', uuid: true, count: 100 })).found ?? []
+          const residents = (await api.act('entity', { name: '*', uuid: true, count: 100 })).found ?? []
           if (residents.some(e => inside(plan, pos(e.exact)))) throw new Error('dock acquired a resident before opening; keep the boat portal closed')
           if (!built(api.block(p.x, p.y, p.z)?.name)) throw new Error(`planned dock portal changed at ${key(p)}`)
           await api.act('dig', p)
@@ -213,17 +216,19 @@ export default {
       if (boat.leashHolderId === s.selfId) await api.act('boat_unleash', { id: a.boat })
       const released = await api.act('boat_release', { id: a.boat, passengerUuid: a.uuid })
       const onFoot = released.onFoot
-      if (released.released !== a.uuid || onFoot?.uuid !== a.uuid || onFoot.vehicleId !== null) throw new Error(`boat release did not verify villager ${a.uuid} on foot`)
+      if (released.released !== a.uuid || onFoot?.uuid !== a.uuid || onFoot.vehicleId !== null) throw new Error(`boat release did not verify passenger ${a.uuid} on foot`)
       let observed = null
       const observe = async () => {
-        observed = (await api.act('entity', { name: 'villager', count: 100, uuid: true })).found.find(e => e.uuid === a.uuid)
-        return observed?.vehicleId === null && inside(plan, pos(observed.exact))
+        observed = (await api.act('entity', { name: '*', count: 100, uuid: true })).found.find(e => e.uuid === a.uuid)
+        return observed?.vehicleId === null && inside(plan, pos(observed.exact)) && boatPassengerProfile(observed).ok
       }
-      if (!(await observe())) await api.until(observe, { timeout: 5, every: 0.25, what: `villager ${a.uuid} was not observed on foot inside the closed dock` })
+      if (!(await observe())) await api.until(observe, { timeout: 5, every: 0.25, what: `passenger ${a.uuid} was not observed on foot inside the closed dock` })
       await ensure(plan.service)
       if (!api.block(plan.service.x, plan.service.y, plan.service.z)?.solid) throw new Error(`dock service slot remains open at ${key(plan.service)}`)
-      api.report({ dock: 'secured', villagerUuid: a.uuid })
-      return { dock: key(cell), villagerUuid: a.uuid, onFoot: observed.exact, gateClosed: true, secure: true, ...(deferredCap && capGap(deferredCap) ? { adultOnly: true, fullySealed: false, deferredCap: key(deferredCap) } : {}) }
+      const kind = boat.passengers[0].name
+      const identity = kind === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind }
+      api.report({ dock: 'secured', ...identity })
+      return { dock: key(cell), ...identity, onFoot: observed.exact, gateClosed: true, secure: true, ...(deferredCap && capGap(deferredCap) ? { adultOnly: true, fullySealed: false, deferredCap: key(deferredCap) } : {}) }
     } catch (error) {
       if (preparing) {
         const missingWall = plan.walls.filter(p => !api.block(p.x, p.y, p.z)?.solid).map(key)
@@ -231,14 +236,14 @@ export default {
         if (missingWall.length) throw new Error(`${error.message}; dock preparation pending at ${missingWall.join(' ')}`)
         throw error
       }
-      // A one-high service slot is safe, but seal it as soon as a release or
-      // observation fails if the rest of the wall and gate already stand.
+      // For tall supported passengers a one-high service slot is contained.
+      // Seal it after any failure if the rest of the wall and gate already stand.
       const enclosed = [...plan.walls, ...plan.gate.filter(p => key(p) !== key(plan.service)), plan.serviceFoundation].every(p => api.block(p.x, p.y, p.z)?.solid)
       if (enclosed && !api.block(plan.service.x, plan.service.y, plan.service.z)?.solid) {
         try { await ensure(plan.service) } catch (_) {}
       }
       const open = [...plan.walls, ...plan.gate].filter(p => !api.block(p.x, p.y, p.z)?.solid).map(key)
-      api.report({ dock: 'pending', boat: a.boat, villagerUuid: a.uuid, open: open.join(' '), service: key(plan.service), error: error.message })
+      api.report({ dock: 'pending', boat: a.boat, passengerUuid: a.uuid, open: open.join(' '), service: key(plan.service), error: error.message })
       if (open.length) throw new Error(`${error.message}; dock closure pending at ${open.join(' ')}`)
       throw error
     }

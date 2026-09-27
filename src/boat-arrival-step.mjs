@@ -1,4 +1,5 @@
 import { breedFullBlock, breedKey } from './villager-breed.mjs'
+import { boatPassengerProfile } from './lib/boat-passenger.mjs'
 
 const wet = name => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(name)
 const air = name => ['air', 'cave_air', 'void_air'].includes(name)
@@ -36,9 +37,9 @@ export function arrivalStepInfo (api, arrival, palette) {
 }
 
 async function clearOccupancy (api, info) {
-  const rows = (await api.act('entity', { name: 'villager', uuid: true, count: 1000 })).found ?? []
+  const rows = (await api.act('entity', { name: '*', uuid: true, count: 1000 })).found ?? []
   if (rows.length >= 1000) throw new Error('temporary-step occupancy census reached its limit')
-  if (rows.some(e => overlaps(info.cell, point(e))) || overlaps(info.cell, api.pos(), 0.3, 1.8)) throw new Error('temporary-step cell is occupied by a villager or this bot; wait for a clear placement stance')
+  if (rows.some(e => overlaps(info.cell, point(e), (e.width ?? 1.375) / 2, e.height ?? 2.75)) || overlaps(info.cell, api.pos(), 0.3, 1.8)) throw new Error('temporary-step cell is occupied by an entity or this bot; wait for a clear placement stance')
   return rows
 }
 
@@ -46,7 +47,7 @@ export async function placeArrivalStep (api, info, uuid) {
   if (!info.needed) return info
   if (!info.item || (api.inv()[info.item] ?? 0) < 1) throw new Error('reserve one carried full building block for the temporary arrival step')
   const rows = await clearOccupancy(api, info)
-  if (!rows.some(e => e.uuid === uuid && e.vehicleId === null && e.baby === false && e.adult === true)) throw new Error('temporary step requires the exact adult observed on foot after release')
+  if (!rows.some(e => e.uuid === uuid && e.vehicleId === null && boatPassengerProfile(e).ok)) throw new Error('temporary step requires the exact supported adult observed on foot after release')
   const boats = (await api.act('boat_state', {})).boats ?? []
   if (boats.some(b => overlaps(info.cell, point(b), 0.6875, 0.5625))) throw new Error('a boat still occupies the temporary-step cell')
   const record = { cell: breedKey(info.cell), item: info.item, uuid, phase: 'intent' }

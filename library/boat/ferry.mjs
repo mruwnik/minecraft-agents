@@ -1,4 +1,5 @@
-import { villagerBoatRoute, villagerBoatStatus, villagerTowWaypoints, villagerUuid } from '../../src/lib.mjs'
+import { villagerBoatRoute, villagerTowWaypoints } from '../../src/lib.mjs'
+import { boatPassengerStatus, entityUuid } from '../../src/lib/boat-passenger.mjs'
 
 const at = boat => {
   const [x, y, z] = boat.exact.split(',').map(Number)
@@ -7,12 +8,12 @@ const at = boat => {
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 
 export default {
-  doc: 'villager.ferry uuid= boat= x= y= z= [centerX= centerZ=] [pullX= pullY= pullZ=] [pullVia=x:y:z,x:y:z] [alignZ= alignTolerance=0.3] [radius=0.8] [plan=true]: precheck the full 1.375-wide nonascending boat route, then tow with a lead; centerX/Z set an exact boat landing within 0.8 block of the named cell center; pullVia names short bot waypoints beyond it; alignZ requires the actual boat to be staged laterally before a narrow dock approach; plan=true only reads terrain',
-  stops: 'the boat reaches the named bank with its villager and lead intact, or the tow stalls',
+  doc: 'boat.ferry uuid= boat= x= y= z= [centerX= centerZ=] [pullX= pullY= pullZ=] [pullVia=x:y:z,x:y:z] [alignZ= alignTolerance=0.3] [radius=0.8] [plan=true]: precheck the full 1.375-wide nonascending route for a supported adult villager, cow, sheep or pig, then tow with a lead; centerX/Z set an exact boat landing within 0.8 block of the named cell center; pullVia names short bot waypoints beyond it; alignZ requires the actual boat to be staged laterally before a narrow dock approach; plan=true only reads terrain',
+  stops: 'the boat reaches the named bank with its supported passenger and lead intact, or the tow stalls',
   args: { uuid: 'string!', boat: 'number!', x: 'number!', y: 'number!', z: 'number!', centerX: 'number', centerZ: 'number', pullX: 'number', pullY: 'number', pullZ: 'number', pullVia: 'string', pullInto: 'boolean', alignZ: 'number', alignTolerance: 'number', radius: 'number', plan: 'boolean' },
 
   async run (api, a) {
-    if (!villagerUuid(a.uuid)) throw new Error('uuid= must be the observed villager UUID')
+    if (!entityUuid(a.uuid)) throw new Error('uuid= must be the observed passenger UUID')
     if (!Number.isInteger(a.boat) || ![a.x, a.y, a.z].every(Number.isInteger)) throw new Error('boat= and x= y= z= must be integers')
     const centerGiven = a.centerX !== undefined || a.centerZ !== undefined
     if (centerGiven && (![a.centerX, a.centerZ].every(Number.isFinite) || Math.abs(a.centerX - (a.x + 0.5)) > 0.8 || Math.abs(a.centerZ - (a.z + 0.5)) > 0.8)) throw new Error('centerX= and centerZ= must both be numbers within 0.8 block of the landing cell center')
@@ -36,13 +37,13 @@ export default {
     const state = async () => api.act('boat_state', { id: a.boat })
     const checked = async () => {
       const s = await state()
-      const issue = villagerBoatStatus(s, a.boat, a.uuid)
+      const issue = boatPassengerStatus(s, a.boat, a.uuid)
       if (issue) throw new Error(issue)
       if (s.mounted === a.boat) throw new Error(`dismount boat ${a.boat} before towing it`)
       return { s, boat: s.boats[0] }
     }
     let { s, boat } = await checked()
-    if (boat.passengers.length !== 1) throw new Error(`boat ${a.boat} must carry only villager ${a.uuid} while being towed`)
+    if (boat.passengers.length !== 1) throw new Error(`boat ${a.boat} must carry only passenger ${a.uuid} while being towed`)
     if (boat.leashHolderId !== null && boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} is leashed to somebody else`)
     // The bot's walk can climb a bank that the lower boat cannot. Check the
     // whole hull route before any leash or walking action.
@@ -53,7 +54,9 @@ export default {
     })
     if (route.error) throw new Error(`boat route blocked at ${route.at.x},${route.at.y},${route.at.z}: ${route.error}`)
     const alignment = () => a.alignZ === undefined || Math.abs(at(boat).z - a.alignZ) <= alignTolerance
-    if (a.plan === true) return { boat: a.boat, villagerUuid: a.uuid, route: route.points, aligned: alignment(), planned: true, secure: false }
+    const kind = boat.passengers[0].name
+    const identity = kind === 'villager' ? { villagerUuid: a.uuid } : { passengerUuid: a.uuid, kind }
+    if (a.plan === true) return { boat: a.boat, ...identity, route: route.points, aligned: alignment(), planned: true, secure: false }
     if (!alignment()) throw new Error(`boat ${a.boat} needs water staging before this dock approach: actual z=${at(boat).z}, required ${a.alignZ} +/- ${alignTolerance}; no towing started`)
     if (boat.leashHolderId === null) {
       await api.act('boat_leash', { id: a.boat })
@@ -116,7 +119,7 @@ export default {
     const beyond = pullVia.length ? beyondPath : pullGiven ? villagerTowWaypoints(route.points.at(-1), pull, 3.5) : []
     const points = [...turns, ...beyond]
     if (!points.length) throw new Error('destination is already at this bank; give a different shore waypoint')
-    api.report({ boat: a.boat, villagerUuid: a.uuid, tow: `0/${points.length}` })
+    api.report({ boat: a.boat, ...identity, tow: `0/${points.length}` })
     for (let i = 0; i < points.length; i++) {
       if (i === turns.length && !alignment()) throw new Error(`boat ${a.boat} lost dock alignment before the dry pull: actual z=${at(boat).z}, required ${a.alignZ} +/- ${alignTolerance}; stop and stage in open water`)
       const next = { x: points[i].x, y: points[i].y, z: points[i].z }
@@ -180,6 +183,6 @@ export default {
       if (distance(api.pos(), at(boat)) > 11) throw new Error(`boat ${a.boat} fell too far behind while settling; stopped at ${boat.exact}`)
       return distance(at(boat), landing) <= radius
     }, { timeout: 12, every: 0.25, what: `boat ${a.boat} stayed outside the landing near ${landing.x},${landing.y},${landing.z}` })
-    return { boat: a.boat, villagerUuid: a.uuid, from: `${from.x},${from.y},${from.z}`, at: boat.exact, pullAt: `${pull.x},${pull.y},${pull.z}`, passengerSeated: true, leashHeld: true, secure: false }
+    return { boat: a.boat, ...identity, from: `${from.x},${from.y},${from.z}`, at: boat.exact, pullAt: `${pull.x},${pull.y},${pull.z}`, passengerSeated: true, leashHeld: true, secure: false }
   }
 }

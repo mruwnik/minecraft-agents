@@ -7,7 +7,8 @@ const vegetation = b => ['short_grass', 'tall_grass', 'leaf_litter', 'fern', 'la
 // Those cannot serve as a flat floor or a sealed nursery wall.
 const safeFull = b => b?.solid && !/(?:_slab|_stairs|_fence|_fence_gate|_wall|_pane|_bed|_door|_trapdoor|_leaves|_chest|shulker_box)$|^(?:magma_block|cactus|campfire|soul_campfire|farmland|dirt_path|soul_sand|snow|powder_snow|honey_block|scaffolding|lectern|anvil|chipped_anvil|damaged_anvil|enchanting_table|end_portal_frame|stonecutter|lily_pad|cobweb)$/.test(b.name)
 export { safeFull as breedFullBlock }
-export const breedMaterial = name => /^(cobblestone|cobbled_deepslate|stone|(?:oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|bamboo|crimson|warped)_planks)$/.test(name)
+export const breedMaterial = name => /^(cobblestone|cobbled_deepslate|stone|(?:oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)_planks)$/.test(name)
+export const breedGate = name => /^(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)_fence_gate$/.test(name)
 export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = false }) {
   if (![x, y, z, target].every(Number.isInteger) || target < 2 || target > 24) throw new Error('integer x= y= z= and target=2..24 required')
   const capacity = n => Math.floor(n / 2) * Math.floor((n + 1) / 3)
@@ -34,15 +35,16 @@ export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = fa
     for (const dx of [width - 3, width - 2, width - 1]) for (let dy = 0; dy < 3; dy++) shell.push(at(dx, dy, width - 2))
     shell.push({ ...innerGate, y: y + 2 })
   }
-  const beds = []
+  const bedSlots = []
   // Keep x=0 clear from the gate to every cross aisle; reaching a bed never
   // depends on climbing over another bed or ducking below the gate lintel.
-  for (let dz = 0; dz + 1 < width && beds.length < target; dz += 3) for (let dx = 1; dx < width && beds.length < target; dx += 2) {
+  for (let dz = 0; dz + 1 < width; dz += 3) for (let dx = 1; dx < width; dx += 2) {
     if (airlock && dx >= width - 3 && dz + 1 >= width - 2) continue
     if (entry && dx === width - 1 && (entry.z === z + dz || entry.z === z + dz + 1)) continue
-    beds.push({ foot: at(dx, 0, dz), head: at(dx, 0, dz + 1) })
+    bedSlots.push({ foot: at(dx, 0, dz), head: at(dx, 0, dz + 1) })
   }
-  if (beds.length < target) throw new Error('size= has insufficient bed slots while preserving the arrival entry aisle')
+  if (bedSlots.length < target) throw new Error('size= has insufficient bed slots while preserving the arrival entry aisle; use a larger blueprint')
+  const beds = bedSlots.slice(0, target)
   const lights = []
   const xs = [...new Set([...Array.from({ length: Math.ceil(width / 4) }, (_, i) => Math.min(width - 1, 1 + i * 4)), width - 1])]
   // These floor torches cover the unobstructed sleeping room. Exterior roof
@@ -51,7 +53,7 @@ export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = fa
     const p = at(dx, 0, dz)
     if (!shell.some(q => breedKey(q) === breedKey(p))) lights.push(p)
   }
-  return { x, y, z, width, target, gate, entry, airlock, innerGate, gates: [gate, ...(entry ? [entry] : []), ...(innerGate ? [innerGate] : [])], shell, beds, lights, center: at(Math.floor(width / 2), 0, Math.floor(width / 2)) }
+  return { x, y, z, width, target, gate, entry, airlock, innerGate, gates: [gate, ...(entry ? [entry] : []), ...(innerGate ? [innerGate] : [])], shell, beds, bedSlots, lights, center: at(Math.floor(width / 2), 0, Math.floor(width / 2)) }
 }
 export function breedInside (plan, p) {
   return !(plan.airlock && p.x >= plan.innerGate.x && p.z >= plan.z + plan.width - 2) && p.x >= plan.x && p.x < plan.x + plan.width && p.z >= plan.z && p.z < plan.z + plan.width && p.y >= plan.y - 0.1 && p.y < plan.y + 3
@@ -74,14 +76,14 @@ export function breedCensus (plan, entities) {
 }
 export function breedPreflight (plan, blockAt, material = 'cobblestone', gateItem = 'oak_fence_gate') {
   if (!breedMaterial(material)) throw new Error('block= must be a full solid building block')
-  if (!/^(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|bamboo|crimson|warped)_fence_gate$/.test(gateItem)) throw new Error('gate= must be a fence gate item')
+  if (!breedGate(gateItem)) throw new Error('gate= must be a fence gate item')
   const read = p => { const b = blockAt(p.x, p.y, p.z); if (!b) throw new Error(`unloaded breeder cell ${breedKey(p)}`); return b }
   const needed = []; const missingBeds = []; const clear = new Map()
   const vacant = (p, b) => {
     if (vegetation(b)) { clear.set(breedKey(p), { ...p, name: b.name }); return true }
     return air(b)
   }
-  const bedCells = new Set(plan.beds.flatMap(b => [breedKey(b.foot), breedKey(b.head)]))
+  const bedCells = new Set((plan.bedSlots ?? plan.beds).flatMap(b => [breedKey(b.foot), breedKey(b.head)]))
   const lights = new Set(plan.lights.filter(p => p.y === plan.y).map(breedKey))
   for (let dx = -1; dx <= plan.width; dx++) for (let dz = -1; dz <= plan.width; dz++) {
     const p = { x: plan.x + dx, y: plan.y - 1, z: plan.z + dz }
@@ -102,26 +104,30 @@ export function breedPreflight (plan, blockAt, material = 'cobblestone', gateIte
   }
   for (const p of plan.gates) {
     const gate = read(p)
-    if (gate.name === gateItem && !['east', 'west'].includes(gate.properties?.facing)) throw new Error('breeder gate must face east or west across its doorway')
-    if (gate.name !== gateItem) {
+    if (breedGate(gate.name) && !['east', 'west'].includes(gate.properties?.facing)) throw new Error('breeder gate must face east or west across its doorway')
+    if (!breedGate(gate.name)) {
       if (!vacant(p, gate)) throw new Error(`breeder gate cell occupied by ${gate.name}`)
       needed.push({ ...p, item: gateItem, facing: 'east' })
     }
     const head = { ...p, y: plan.y + 1 }
     if (!vacant(head, read(head))) throw new Error('breeder gate doorway head cell must be air')
   }
-  for (const bed of plan.beds) {
+  let validBeds = 0
+  const emptyBeds = []
+  for (const bed of plan.bedSlots ?? plan.beds) {
     const f = read(bed.foot); const h = read(bed.head)
-    if (vacant(bed.foot, f) && vacant(bed.head, h)) { missingBeds.push(bed); continue }
+    if (vacant(bed.foot, f) && vacant(bed.head, h)) { emptyBeds.push(bed); continue }
     if (f.name !== h.name || !/_bed$/.test(f.name) || f.properties?.part !== 'foot' || h.properties?.part !== 'head' || f.properties?.facing !== 'south' || h.properties?.facing !== 'south') throw new Error(`bed at ${breedKey(bed.foot)} is partial or has wrong facing; preserve it and repair deliberately`)
+    validBeds++
   }
+  missingBeds.push(...emptyBeds.slice(0, Math.max(0, plan.target - validBeds)))
   for (const p of plan.lights) {
     const b = read(p)
     if (b.name === 'torch') continue
     if (!vacant(p, b)) throw new Error(`breeder torch cell occupied at ${breedKey(p)}`)
     needed.push({ ...p, item: 'torch' })
   }
-  return { needed, missingBeds, clear: [...clear.values()], validBeds: plan.beds.length - missingBeds.length }
+  return { needed, missingBeds, clear: [...clear.values()], validBeds }
 }
 export function breedBill (preflight, inventory, births, food = 'bread', bedItem = 'white_bed', foodCredit = 0, extras = 0) {
   if (!BREED_FOOD[food]) throw new Error('food= must be bread, carrot, potato or beetroot')
