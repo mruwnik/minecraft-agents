@@ -124,6 +124,41 @@ test('independent: planned default F diagonal flower is restored at its exact ce
  assert.equal(f.world.get('1,1,1'),'dandelion')
  assert.deepEqual(f.calls.filter(c=>c.name==='place').map(c=>c.args.item),['dandelion','oak_sapling'])
 })
+test('independent: maintenance provisions mapped storage even before any surplus exists',async()=>{
+ const p={name:'trees',by:'Tester',...root,plan:'x       C',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p,items:{chest:1}})
+ await forestry.run(f.api,{place:'trees'})
+ assert.equal(f.world.get('8,1,0'),'chest')
+ assert.equal(f.items.chest,0)
+})
+test('independent: missing mapped storage supply is attention even with no produce to deposit',async()=>{
+ const p={name:'trees',by:'Tester',...root,plan:'x       C',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p})
+ const r=await forestry.run(f.api,{place:'trees'})
+ assert.ok(r.attention.some(s=>/chest|storage/i.test(s)))
+ assert.ok(f.events.some(e=>e.type==='forestry_attention'))
+})
+test('independent: maintenance repairs planned flower path support before flower and tree planting',async()=>{
+ const p={name:'trees',by:'Tester',...root,plan:'xF',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p,items:{dirt:1,dandelion:1,oak_sapling:1}})
+ f.world.set('1,0,0','dirt_path')
+ const r=await forestry.run(f.api,{place:'trees',deposit:false})
+ assert.equal(r.planted,1)
+ assert.equal(f.world.get('1,0,0'),'dirt')
+ assert.equal(f.world.get('1,1,0'),'dandelion')
+ assert.equal(f.world.get('0,1,0'),'oak_sapling')
+ assert.deepEqual(f.calls.filter(c=>c.name==='place').map(c=>c.args.item),['dirt','dandelion','oak_sapling'])
+})
+test('independent: flower support repair retains an unrelated solid stone floor',async()=>{
+ const p={name:'trees',by:'Tester',...root,plan:'xF',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p,items:{dirt:1,dandelion:1,oak_sapling:1}})
+ f.world.set('1,0,0','stone')
+ const r=await forestry.run(f.api,{place:'trees',deposit:false})
+ assert.ok(r.attention.length)
+ assert.equal(f.world.get('1,0,0'),'stone')
+ assert.equal(f.calls.filter(c=>c.name==='dig'&&coord(c.args)==='1,0,0').length,0)
+ assert.equal(f.items.oak_sapling,1)
+})
 test('independent: an existing flowering azalea is preserved without extra stock',async()=>{
  const f=worldFixture();f.world.set('0,1,0','flowering_azalea')
  const r=await plant.run(f.api,{...root,species:'azalea'})
@@ -186,6 +221,20 @@ test('independent: standalone days=1 terminates after an elapsed day',async()=>{
  const r=await forestry.run(f.api,{place:'trees',deposit:false,days:1})
  assert.ok(r.sweeps<=2)
  assert.ok(waits<=2)
+})
+test('independent: a skipped night releases the daily maintenance wait',async()=>{
+ let elapsed=0,waits=0
+ const p={name:'trees',by:'Tester',...root,plan:'x',legend:{x:{kind:'tree',species:'oak'}}}
+ const f=worldFixture({plan:p,items:{oak_sapling:1}})
+ f.api.clock=()=>({elapsedDays:elapsed,day:true,night:false})
+ f.api.until=async predicate=>{
+  assert.ok(++waits<=2,'maintenance did not finish after its day budget')
+  elapsed=1
+  assert.equal(await predicate(),true,'a skipped night must not strand maintenance waiting for darkness')
+  return true
+ }
+ await forestry.run(f.api,{place:'trees',deposit:false,days:1})
+ assert.ok(waits>=1)
 })
 test('independent: fungi report mandatory growth supply when optional bone meal is disabled',async()=>{
  const p={name:'trees',by:'Tester',...root,plan:'x',legend:{x:{kind:'tree',species:'warped'}}}

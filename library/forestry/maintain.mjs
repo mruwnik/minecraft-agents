@@ -1,4 +1,6 @@
+import { maintainTreeServices } from '../../src/tree/services.mjs'
 import { cleanupScaffold, scaffoldId } from '../../src/scaffold/access.mjs'
+import { workRefusal } from '../../src/lib/places.mjs'
 import { planSpec } from '../../src/lib/plan.mjs'
 import { treeSpec } from '../../src/tree/inspect.mjs'
 import { treeProfile } from '../../src/tree/profiles.mjs'
@@ -15,6 +17,8 @@ export default {
     if (a.bone_meal !== undefined && typeof a.bone_meal !== 'boolean') throw new Error('bone_meal must be true or false')
     api = farmApi(api)
     const plan = api.plan(a.place)
+    const refusal = workRefusal(plan, api.me?.())
+    if (refusal) throw new Error(refusal)
     const trees = plan.cells.filter(c => treeSpec(c))
     if (!trees.length) throw new Error(`${a.place} has no tree planting cells in its plan`)
     const target = depositTarget(a.deposit, api.places())
@@ -24,6 +28,8 @@ export default {
     const checkpoint = () => api.checkpoint({ canDeposit })
     for (;;) {
       summary.attention = []
+      await maintainTreeServices(api, plan.cells, summary)
+      treeAttention(api, 'forestry.maintain', summary)
       for (const cell of trees) {
         await checkpoint()
         const spec = treeSpec(cell)
@@ -79,9 +85,11 @@ export default {
       treeAttention(api, 'forestry.maintain', summary)
       await checkpoint()
       if (!(a.days > 0) || api.clock().elapsedDays >= a.days) return summary
-      await api.until(() => api.clock().night, { timeout: 1200, every: 10, what: 'the day never ended' })
+      const completedDay = api.clock().elapsedDays
+      await api.until(() => api.clock().night || api.clock().elapsedDays > completedDay, { timeout: 1200, every: 10, what: 'the day never ended' })
       await checkpoint()
       await api.until(() => api.clock().day, { timeout: 1200, every: 10, what: 'the night never ended' })
+      if (api.clock().elapsedDays >= a.days) return summary
     }
   }
 }
