@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { CompositeHandBack } from '../composite.mjs'
-import { dryTravelExit } from '../navigation/travel.mjs'
+import { dryHorseLanding } from '../navigation/horse-landing.mjs'
 import { observedHorseSpeed } from '../navigation/horse.mjs'
 import { isNight } from '../lib/sleep.mjs'
 
@@ -181,7 +181,7 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
         if (bot.vehicle?.id !== id) { guard.dispose(); throw new Error('not riding the requested horse') }
         const blockAt = (x, y, z) => {
           const block = bot.blockAt(Vec3 ? new Vec3(x, y, z) : { x, y, z })
-          return block && { name: block.name, solid: block.boundingBox === 'block', properties: block.getProperties?.() ?? {} }
+          return block
         }
         let requested = false, landing = null
         const positioned = () => { if (requested) landing = point(bot.entity.position) }
@@ -192,14 +192,14 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
           await pause(250); guard.check()
           if (distance(before, entity.position) > 0.05 || Math.hypot(entity.velocity?.x ?? 0, entity.velocity?.y ?? 0, entity.velocity?.z ?? 0) > 0.08) throw new Error('wait until the horse is stationary before dismounting')
           const feet = { x: Math.floor(entity.position.x), y: Math.floor(entity.position.y), z: Math.floor(entity.position.z) }
-          const safe = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]].some(([dx,dz]) => dryTravelExit(blockAt, { x: feet.x + dx, y: feet.y, z: feet.z + dz }))
+          const safe = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]].some(([dx,dz]) => dryHorseLanding(blockAt, { x: feet.x + dx + 0.5, y: feet.y, z: feet.z + dz + 0.5 }))
           if (!safe) throw new Error('no checked dry landing beside the horse; remain mounted')
           requested = true
           if (bot.supportFeature?.('newPlayerInputPacket')) bot._client.write('player_input', { inputs: { shift: true } })
           else bot.dismount()
           if (!await wait(guard.check, () => !bot.vehicle && landing !== null)) throw new Error('horse dismount needs both server passenger removal and server landing position')
           const actual = Object.fromEntries(['x','y','z'].map(k => [k, Math.floor(landing[k])]))
-          if (!dryTravelExit(blockAt, actual) || distance(landing, entity.position) > 4) throw new Error('server dismount landing is outside the checked dry area; inspect before walking')
+          if (!dryHorseLanding(blockAt, { ...landing, y: actual.y }) || Math.abs(landing.y - actual.y) > 0.01 || distance(landing, entity.position) > 4) throw new Error('server dismount landing is outside the checked dry area; inspect before walking')
           return { dismounted: id, at: landing }
         } finally {
           bot.removeListener('forcedMove', positioned)
