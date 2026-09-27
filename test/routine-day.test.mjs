@@ -77,7 +77,7 @@ test('every shipped routine that stores its produce takes the store from store='
   assert.deepEqual(stores, [['$store'], ['$store'], ['$store'], ['$store'], ['$store'], ['$store']])
 })
 
-// the stuck watch is told which days ended with a full store (src/stuck.mjs raises the alert after two in a row)
+// the stuck watch is told which days ended with a full store (src/navigation/stuck.mjs raises the alert after two in a row)
 test('a routine day whose step reports storage_full is told to the stuck watch', async () => {
   const { default: routine } = await import('../library/routine.mjs')
   const { fakeApi } = await import('./helpers.mjs')

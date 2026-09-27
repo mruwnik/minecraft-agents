@@ -10,8 +10,8 @@
 // what api.block answers, in the terms test/helpers.mjs uses: a slab by its half, a crop by its age, a fence a block and
 // a half tall, a cell not loaded as a wall (nobody sees through the unknown).
 import { WORK_RANGE, cellsWithin, dryStandable } from './walk.mjs'
-import { cellOf } from './field.mjs'
-import { breaksUnderfoot, isAir, FLUIDS, jobCall } from './lib.mjs'
+import { cellOf } from '../farm/field.mjs'
+import { breaksUnderfoot, isAir, FLUIDS, jobCall } from '../lib.mjs'
 
 // the eyes are 1.62 over the feet; a full bucket reaches 4.5 (bot.mjs's pour looks 5 out, the server 4.5)
 export const EYE = 1.62
@@ -112,7 +112,7 @@ const BLIND = /cannot see the top|did not take/
 // do one job from a cell that sees it: walk there (range 0, the cell itself), call the primitive, and when it still
 // answers blind, once more from the next spot. With no spot to offer (the target's chunks not loaded, or nothing in
 // sight of it) the primitive is left to walk by itself, as before, and a blind answer then carries the reason
-// `walk` is how the spot is reached: the plain goto by default; a farm sweep passes its own leg (src/fieldleg.mjs)
+// `walk` is how the spot is reached: the plain goto by default; a farm sweep passes its own leg (src/farm/leg.mjs)
 export async function workFrom (api, job, walk = spot => api.act('goto', { x: spot.x, y: spot.y, z: spot.z, range: 0 })) {
   const [action, args] = jobCall(job)
   const sight = jobSight(job)

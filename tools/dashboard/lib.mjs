@@ -2,7 +2,7 @@
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
 import { parsePlan } from '../../src/lib/plan.mjs'
-import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint.mjs'
+import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
 
 const parseConfig = text => {
   try {
@@ -43,7 +43,7 @@ const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
 // agent gives lib.mjs a new sibling import (an import a static route list would miss with no visible error at all).
 // lib.mjs's split moved most of it under src/lib/: also match one lib/ segment (never src/body/, which the
 // browser never loads) so /src/lib/plan.mjs etc still resolve.
-const SRCLIB = /^\/src\/((?:lib\/)?[A-Za-z0-9_.-]+\.mjs)$/
+const SRCLIB = /^\/src\/((?:(?:lib|boat|villager|build|navigation)\/)?[A-Za-z0-9_.-]+\.mjs)$/
 
 // the blueprint library: one file by its kebab-case name, the same rule the front matter's name field obeys
 const BLUEPRINT = /^\/api\/blueprint\/([a-z0-9]+(?:-[a-z0-9]+)*)$/
@@ -168,7 +168,7 @@ export const unsureWater = (place, worldCells) => {
 
 // ---------------------------------------------------------------- the blueprint library
 // One library file as the page shows it: parsed and resolved with its own default parameters (never re-implemented
-// here: src/blueprint.mjs does all of it), its bill, what lint says, the counts, and every marked place whose note
+// here: src/blueprint/format.mjs does all of it), its bill, what lint says, the counts, and every marked place whose note
 // says it was built from this blueprint (`current` when the note's hash is this file's, else an older version stands).
 // A file that does not parse keeps its name and the parser's errors, so the list shows the library as it is on disk.
 export const blueprintBuilds = (name, hash, places) => places.flatMap(p => {

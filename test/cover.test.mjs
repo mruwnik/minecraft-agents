@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { farmJobs, jobCall, planCells, parsePlan, planBill } from '../src/lib.mjs'
-import { lowSlabs, lowSlabLine, facesForHalf, placeFaces, FLOW_REASON, channelCovered } from '../src/cover.mjs'
+import { lowSlabs, lowSlabLine, facesForHalf, placeFaces, FLOW_REASON, channelCovered } from '../src/build/cover.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
@@ -110,7 +110,7 @@ test('lowSlabLine: the count, and how to raise them', () => {
 // jizo-melon-patch, 09-26: a cover job aimed at a channel cell that still held an old bottom slab from before the
 // top-slab cards merged the two into a double slab (a full block, no water under it), sealing the channel. farmJobs
 // must never even try: named here so the rule farmJobs relies on reads as what it is, not a boolean buried in the
-// water branch (see src/lib.mjs farmJobs, and src/slabmerge.mjs for the belt-and-braces check inside `place` itself).
+// water branch (see src/lib.mjs farmJobs, and src/build/slab-merge.mjs for the belt-and-braces check inside `place` itself).
 for (const [name, block, expected] of [
   ['a waterlogged bottom slab is a finished channel', { name: 'oak_slab', properties: { type: 'bottom', waterlogged: 'true' } }, true],
   ['a waterlogged top slab is a finished channel too', { name: 'oak_slab', properties: { type: 'top', waterlogged: 'true' } }, true],

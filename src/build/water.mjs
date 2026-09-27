@@ -12,11 +12,11 @@
 // order: fills and dams in an order where each one has a dry cell to stand on that sees it, counting the ones before
 // it as ground, so the work goes from the shore inward. The reopening: the dams the plan wants as air again, dug once
 // nothing beside them can flow back in; a dam with water outside the plan against it stays, named with that cell.
-import { FLUIDS } from './lib.mjs'
-import { cellsWithin } from './walk.mjs'
-import { cellOf } from './field.mjs'
-import { jobSight, standingSpots } from './stand.mjs'
-import { PLAN_LEGEND } from './lib/plan.mjs'
+import { FLUIDS } from '../lib.mjs'
+import { cellsWithin } from '../navigation/walk.mjs'
+import { cellOf } from '../farm/field.mjs'
+import { jobSight, standingSpots } from '../navigation/stand.mjs'
+import { PLAN_LEGEND } from '../lib/plan.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
@@ -30,7 +30,7 @@ export const drainJobs = (cells, worldAt) => cells.filter(cell => PLAN_LEGEND[ce
     .filter(y => fluid(worldAt(cell.x, y, cell.z)))
     .map(y => ({ do: 'fill', dam: true, x: cell.x, y, z: cell.z, why: `${worldAt(cell.x, y, cell.z).name} stands in the cell`, item: 'dirt' })))
 
-// the dry cells a job can be worked from, in src/stand.mjs's terms but without its line of sight to the top face:
+// the dry cells a job can be worked from, in src/navigation/stand.mjs's terms but without its line of sight to the top face:
 // a fill into a row of water is clicked onto the side of the dirt laid before it as readily as onto the floor under
 // it, and from a shore two cells up the floor's top face is behind that dirt. The primitive picks the face; what a
 // levelling job needs is footing in reach. A job with no sight rule (a dig, a till) walks by itself: null

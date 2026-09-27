@@ -4,7 +4,7 @@
 // and heads for lit, known ground; the threat is whatever last hurt me, and what cannot be outrun is fought
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { underRoof, walledIn, nightShelter, NIGHT_FLEE_MAX, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from '../src/night.mjs'
+import { underRoof, walledIn, nightShelter, NIGHT_FLEE_MAX, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from '../src/survival/night.mjs'
 
 for (const [name, above, expected] of [
   ['open sky', ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'], false],

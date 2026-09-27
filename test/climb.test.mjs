@@ -5,7 +5,7 @@
 // climbPlan reads that ladder off the world; descendingLeg refuses the pathfinder's way down. Pure geometry, no body.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { climbPlan, descendingLeg, descentNote, inPocket, climbBlocks, ownCellRefusal } from '../src/climb.mjs'
+import { climbPlan, descendingLeg, descentNote, inPocket, climbBlocks, ownCellRefusal } from '../src/navigation/climb.mjs'
 
 const at = (x, y, z) => ({ x, y, z })
 const FLUID = new Set(['air', 'water', 'lava', 'cave_air'])

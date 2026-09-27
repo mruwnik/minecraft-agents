@@ -8,7 +8,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
-import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, spareCells, digGuard, spareTest, PATH_FAILURE } from '../src/fieldleg.mjs'
+import { RING, footprintOf, inFootprint, digRetryRefusal, fieldLeg, spareCells, digGuard, spareTest, PATH_FAILURE } from '../src/farm/leg.mjs'
 
 const cells = [{ x: 0, y: 63, z: 0 }, { x: 2, y: 63, z: 0 }, { x: 0, y: 63, z: 1 }]
 const NO_PATH = 'goto: no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'

@@ -2,9 +2,9 @@
 // the plot's C chest or made on the grid from what is carried and what the chest holds (card 6cf481c0: a hoe broke
 // mid-routine with no spare and the side craft superseded the routine). What it could not provide is said in
 // kit_short=, and the routine runs it again when a step wears a tool out.
-import { kitPlan, kitLine, toolList } from '../src/kit.mjs'
+import { kitPlan, kitLine, toolList } from '../src/inventory/kit.mjs'
 import { planStructure, placeRefusal } from '../src/lib.mjs'
-import { REGISTRY } from '../src/blueprint.mjs'
+import { REGISTRY } from '../src/blueprint/format.mjs'
 
 const isFood = name => Boolean(REGISTRY.foodsByName[name])
 const cellOf = text => { const [x, y, z] = String(text).split(',').map(Number); return [x, y, z].every(Number.isFinite) ? { x, y, z } : null }

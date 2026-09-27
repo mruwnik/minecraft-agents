@@ -2,8 +2,8 @@
 // at the second segment so the base regrows, then pick the drops up. It works where I STAND: goto the field first.
 // A crop behind a fence or across water must not cost the whole harvest, so what it cannot reach is reported, not thrown.
 import { cropNames, ripeCrop, harvestOrder, isStalkCut, stalkReplant, STALKS, workRefusal, planCells, replantBatch } from '../../src/lib.mjs'
-import { WORK_RANGE } from '../../src/walk.mjs'
-import { cellOf, fieldEdge, standingLine, plantOrder, fieldCrops, bareReason, notReplantedLine } from '../../src/field.mjs'
+import { WORK_RANGE } from '../../src/navigation/walk.mjs'
+import { cellOf, fieldEdge, standingLine, plantOrder, fieldCrops, bareReason, notReplantedLine } from '../../src/farm/field.mjs'
 
 const WITHIN = 24
 const GIVE_UP = 4

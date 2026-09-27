@@ -1,15 +1,15 @@
 // The blueprint format's walking half (docs/superpowers/specs/2026-09-26-blueprint-format-design.md, section 3): the
-// files in blueprints/, the anchor a build is judged at, and the build itself. Every judgement is src/blueprint.mjs's;
+// files in blueprints/, the anchor a build is judged at, and the build itself. Every judgement is src/blueprint/format.mjs's;
 // this walks to each job's standing cell, calls the primitive, and looks at the cell afterwards. The world is the only
 // progress record: a run recomputes its jobs from what stands, so a second run after a stop, a death or a restart picks
-// up where the blocks say. In the style of src/builder.mjs, and built on the same api.
+// up where the blocks say. In the style of src/build/plan.mjs, and built on the same api.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './blueprint.mjs'
-import { hasWaterSource, mapRefusal, workRefusal, shortLine } from './lib.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './format.mjs'
+import { hasWaterSource, mapRefusal, workRefusal, shortLine } from '../lib.mjs'
 
-export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'blueprints')
+export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'blueprints')
 
 // ---------------------------------------------------------------- the library on disk
 
@@ -288,7 +288,7 @@ export async function buildBlueprint (api, a, io = {}) {
     // one bucket does all the water; anything else is one item per cell
     if (job.item && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = job.item.endsWith('_bucket') ? 1 : (missing[job.item] ?? 0) + 1; return }
     if (job.tool && !hasTool(api.inv(), job.tool)) { missing[job.tool] = 1; return }
-    // a cover is only real over a settled source (src/builder.mjs): held back, tried again next run
+    // a cover is only real over a settled source (src/build/plan.mjs): held back, tried again next run
     if (job.do === 'cover' && !hasWaterSource(api.block(job.x, job.y, job.z))) { stuck = stuck ?? `cover ${cell}: not holding water yet, so the cover was held back`; return }
     const side = job.along ? alongFace(job, api.block) : null
     if (job.along && !side) { stuck = stuck ?? `${job.do} ${cell}: ${job.item} on its side (axis=${job.along}) is clicked onto a block beside it along ${job.along}, and neither side holds one yet: run blueprint.build place=${place} again once one stands`; return }

@@ -5,7 +5,7 @@
 // has to run before `place` ever tries, not rely on which neighbour it picked.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { slabMergeRefusal } from '../src/slabmerge.mjs'
+import { slabMergeRefusal } from '../src/build/slab-merge.mjs'
 
 const at = { x: -1, y: 62, z: -84 }
 const bottomSlab = (name = 'oak_slab', waterlogged = false) => ({ name, properties: { type: 'bottom', ...(waterlogged ? { waterlogged: 'true' } : {}) } })

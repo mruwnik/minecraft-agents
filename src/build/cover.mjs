@@ -3,7 +3,7 @@
 // beside it stays wet), where a bottom slab is a half-step down into every channel that bodies float and wedge on;
 // and a slab belongs only over a settled source, since one dropped into flowing water is not waterlogged and cuts the
 // flow. lib.mjs's hasWaterSource decides what is a source; farmJobs decides the jobs; this is the rest.
-import { PLAN_LEGEND, holdsWater } from './lib.mjs'
+import { PLAN_LEGEND, holdsWater } from '../lib.mjs'
 
 // why a flowing cell gets no slab: what farmJobs says when it skips one for want of a bucket
 export const FLOW_REASON = ({ x, y, z }) => `flowing water at ${x},${y},${z}: pour a source first, then cover`

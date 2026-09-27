@@ -5,7 +5,7 @@
 // stand on within range is a refusal in a millisecond, with the reason, not a five-second timeout.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cellsWithin, standable, noStanding, walkRefusal, WORK_RANGE } from '../src/walk.mjs'
+import { cellsWithin, standable, noStanding, walkRefusal, WORK_RANGE } from '../src/navigation/walk.mjs'
 
 // the pathfinder's GoalNear counts integer node distance: dx²+dy²+dz² <= range²
 for (const [range, count] of [[0, 1], [1, 7], [1.5, 19], [2, 33], [3, 123]]) {
@@ -86,7 +86,7 @@ test('WORK_RANGE: four rows of crops from a lane can be worked, five cannot', ()
 // how long a search may think. mineflayer-pathfinder gives every search 5 s; a goal a few blocks off that has not been found
 // after 1.5 s (5k nodes) is walled in (crops, a fence, a pocket under the field the pre-check cannot see), and the job
 // should hear so then. A far goal keeps the full 5 s: a 140-block walk over hills needs it
-import { thinkBudget, goalDistance, THINK_CAP_MS } from '../src/walk.mjs'
+import { thinkBudget, goalDistance, THINK_CAP_MS } from '../src/navigation/walk.mjs'
 for (const [distance, ms] of [[0, 1500], [3, 1575], [20, 2000], [100, 4000], [140, 5000], [400, 5000], [null, 5000]]) {
   test(`thinkBudget: ${distance} blocks off thinks ${ms} ms`, () => assert.equal(thinkBudget(distance), ms))
 }
@@ -105,7 +105,7 @@ for (const [name, goal, expected] of [
 // pit, and the nearest rim cell (ties: nearest the body) is the goal instead, with a note. A goal MEANT for the pit floor
 // (into=true, or the body already down there) is left alone, as is a hole one deep (a step), open ground, or a trench
 // longer than the look round (LOOK), which the pathfinder is trusted with
-import { rimGoal } from '../src/walk.mjs'
+import { rimGoal } from '../src/navigation/walk.mjs'
 // the site by spawn: dirt at and below y=62, surface feet at 63; a pit dug `depth` deep in the column x,z
 const hole = (x, z, depth) => Object.fromEntries(Array.from({ length: depth }, (_, i) => [`${x},${62 - i},${z}`, AIR]))
 const site = (...holes) => world(Object.assign({}, ...holes), 62)

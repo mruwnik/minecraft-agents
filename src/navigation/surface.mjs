@@ -3,7 +3,7 @@
 // then pressed forward as well as jump, and in water forward moves along the yaw whatever the pitch (prismarine-physics
 // applyHeading), so it drifted two blocks sideways under the roof and pushed against stone until it died. Pure: bot.mjs
 // reads the column, the openings and the ceiling off the world and hands them in.
-import { openAbove } from './lib.mjs'
+import { openAbove } from '../lib.mjs'
 
 // water plants and a bubble column are still water: a body swims through them
 const WATERY = new Set(['water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])

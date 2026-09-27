@@ -1,7 +1,7 @@
 // Out of a 1-wide shaft by hand: a niche dug to the side at head height, a block placed under the feet from it, a step up,
 // and again with the columns swapped (card 2b2d1f65: what got a body out when goto dig=true dug further down and place at
-// its own feet found no cell to place from). The ladder is src/climb.mjs; this runs it with dig, place and goto.
-import { climbShaft, climbBlocks, inPocket } from '../src/climb.mjs'
+// its own feet found no cell to place from). The ladder is src/navigation/climb.mjs; this runs it with dig, place and goto.
+import { climbShaft, climbBlocks, inPocket } from '../src/navigation/climb.mjs'
 
 // how far a climb with no y= may go before it stops to ask: a shaft deeper than this is a mine, not a hole
 const MAX_CLIMB = 24

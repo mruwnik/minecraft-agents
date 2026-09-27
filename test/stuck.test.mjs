@@ -2,7 +2,7 @@
 // chat line per episode. Pure: bot.mjs takes the samples and hands them in.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine, WINDOW_MS, END_MS, REPEAT_MS } from '../src/stuck.mjs'
+import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine, WINDOW_MS, END_MS, REPEAT_MS } from '../src/navigation/stuck.mjs'
 
 const T0 = 1_000_000_000
 const sec = n => T0 + n * 1000

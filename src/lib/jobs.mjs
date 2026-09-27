@@ -2,8 +2,8 @@
 import { isAir, holdsWater, hasWaterSource } from './world.mjs'
 import { PLAN_LEGEND } from './plan.mjs'
 import { sameFamily, WEEDS } from './anchor.mjs'
-// slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/cover.mjs)
-import { channelCovered } from '../cover.mjs'
+// slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/build/cover.mjs)
+import { channelCovered } from '../build/cover.mjs'
 
 const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'cover', 'plant', 'place']
 // A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
@@ -72,7 +72,7 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
       // water that is only flowing through the cell (level 1-7) is nobody's source: a slab laid into it is not
       // waterlogged and cuts the flow off (the human, 09-24), and the cell dries the tick the flow recedes. So a flowing
       // cell is made a source first, a bucket poured onto the block under it, and without a bucket it is left alone
-      // and said so; see src/cover.mjs
+      // and said so; see src/build/cover.mjs
       const flowing = ground.name === 'water' && !hasWaterSource(ground)
       if (flowing && !((items.water_bucket ?? 0) > 0)) {
         jobs.push({ do: 'skip', x: cell.x, y: cell.y, z: cell.z, item: 'water_bucket', have: false, why: `flowing water at ${cell.x},${cell.y},${cell.z}: pour a source first, then cover` })
@@ -112,7 +112,7 @@ export const jobCall = job => {
   // a cover is a TOP slab laid into the water: waterlogged, so the source stays and the farmland beside it wet, and
   // flush with the ground, so the body walks over it level. A bottom slab was a half-step down into every channel
   // that bodies floated and wedged on (card 1ccb0ea1; the human, 09-24). `place` picks a side face for it: see
-  // src/cover.mjs facesForHalf
+  // src/build/cover.mjs facesForHalf
   return [action, action === 'place' ? { item: job.item, ...at, ...(job.do === 'cover' ? { half: 'top' } : {}) } : at]
 }
 

@@ -3,7 +3,7 @@
 // for blocks the client's registry does not know. Pure: nothing here touches a body.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { blockName, frozenWalk, facingOff, nextNode, aheadCells, serverSide, nearBy, frozenAdvice } from '../src/stall.mjs'
+import { blockName, frozenWalk, facingOff, nextNode, aheadCells, serverSide, nearBy, frozenAdvice } from '../src/navigation/stall.mjs'
 
 for (const [name, block, expected] of [
   ['a block the registry knows', { name: 'leaf_litter', stateId: 27846 }, 'leaf_litter'],

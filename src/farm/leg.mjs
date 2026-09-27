@@ -9,7 +9,7 @@
 // slabs, fences, gates, chests, composters, torches: looksBuilt in src/lib/world.mjs) wherever it walks, and is handed
 // the plan's cells and its ground as well (digGuard): it clears only what stands above the plan's level. Both walks
 // failing is one line naming the cell, which the sweep reports as stuck=.
-import { WORK_RANGE } from './walk.mjs'
+import { WORK_RANGE } from '../navigation/walk.mjs'
 
 // how far round the plan's cells a sweep stands to work them: the ring a dig retry may cut through
 export const RING = Math.ceil(WORK_RANGE)

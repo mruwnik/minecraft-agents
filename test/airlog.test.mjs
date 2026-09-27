@@ -4,7 +4,7 @@
 // of a body that has no air number yet. Pure: nothing here touches a body.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { airSample, freshAir, serverPosNote, patchOwnBreath } from '../src/airlog.mjs'
+import { airSample, freshAir, serverPosNote, patchOwnBreath } from '../src/survival/airlog.mjs'
 
 const here = { x: 119.52, y: 72, z: -65.5 }
 const reading = { oxygen: 20, health: 20, client: here, server: null, now: 100000, head: 'air', inWater: false }

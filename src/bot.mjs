@@ -17,28 +17,28 @@ import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
 import { isGreeting } from './chatter.mjs'
-import { inventoryCompactPair } from './inventory-compact.mjs'
+import { inventoryCompactPair } from './inventory/compact.mjs'
 import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
-import { makeEyes, YAWS } from './eyes.mjs'
-import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './holeup.mjs'
-import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './night.mjs'
+import { makeEyes, YAWS } from './vision/eyes.mjs'
+import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
+import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
-import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './walk.mjs'
-import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './stall.mjs'
-import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './stuck.mjs'
+import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
+import { blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
+import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './navigation/stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
-import { airSample, freshAir, serverPosNote } from './airlog.mjs'
-import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './surface.mjs'
-import { digLegs } from './diglegs.mjs'
-import { noPathAdvice, inHole, perchedOverField } from './caveexit.mjs'
+import { airSample, freshAir, serverPosNote } from './survival/airlog.mjs'
+import { surfaceWay, swimProgress, roofAt, SURFACE_SCAN } from './navigation/surface.mjs'
+import { digLegs } from './navigation/dig-legs.mjs'
+import { noPathAdvice, inHole, perchedOverField } from './navigation/cave-exit.mjs'
 import { farmWalk, legFlags, stepsOff, noFirstMove, clearGoalOnFailure } from './lib/path.mjs'
-import { spareTest } from './fieldleg.mjs'
-import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './climb.mjs'
+import { spareTest } from './farm/leg.mjs'
+import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './navigation/climb.mjs'
 import { resultEvent } from './taskresult.mjs'
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
-import { placeFaces } from './cover.mjs'
-import { slabMergeRefusal } from './slabmerge.mjs'
+import { placeFaces } from './build/cover.mjs'
+import { slabMergeRefusal } from './build/slab-merge.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
@@ -188,7 +188,7 @@ let scaffolded = []
 // >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
 let handPlacing = 0
 // whether a dig walk must leave a block whole, whatever it is: the cells and the ground of the plan a farm sweep walks
-// inside (goto spare= floor=, src/fieldleg.mjs spareTest). Set for one walk and cleared after it; looksBuilt keeps
+// inside (goto spare= floor=, src/farm/leg.mjs spareTest). Set for one walk and cleared after it; looksBuilt keeps
 // guarding everything else
 const NONE_SPARED = () => false
 let spared = NONE_SPARED
@@ -789,7 +789,7 @@ let chaseHeldUntil = 0
 let chaseLeash = CHASE_LEASH
 let surfacing = false
 let swimStepTarget = null
-// what the surfacing reflex is doing now (src/surface.mjs: up, sideways to an opening, or a pocket dug in the ceiling),
+// what the surfacing reflex is doing now (src/navigation/surface.mjs: up, sideways to an opening, or a pocket dug in the ceiling),
 // judged again every reflex tick as the body moves
 let surfaceWayNow = null
 // openings a sideways swim pressed towards for 2 s without getting nearer: walls, not ways
@@ -920,7 +920,7 @@ setInterval(() => {
 }, 5000)
 // stall watchdog: a task with somewhere to walk that neither moves nor digs is hung; fail it loudly instead of forever
 let stillFrom = null
-// the stuck watch (src/stuck.mjs, autopilot card): one sample a second over a rolling window, one `stuck` event and one
+// the stuck watch (src/navigation/stuck.mjs, autopilot card): one sample a second over a rolling window, one `stuck` event and one
 // chat line per episode, stuck=<reason> in `state` while it lasts
 let stuckSamples = []
 let stuckNow = null
@@ -1341,7 +1341,7 @@ function reflexTick () {
     if (task && !swimStepTarget) cancelTask('out of air: swimming up to breathe. Work from dry land, then retry')
     bot.pathfinder.setGoal(null)
   }
-  // the way out is judged again every half second (src/surface.mjs): a sideways swim ends under open water, where up is
+  // the way out is judged again every half second (src/navigation/surface.mjs): a sideways swim ends under open water, where up is
   // the answer, and an opening not reached in 2 s is given up for the next. Forward is never pressed blind: in water it
   // moves along the yaw whatever the pitch, and that carried a body two blocks under a rock ceiling, where it drowned
   if (air === 'start' || air === 'hold') steerSurfacing(me)
@@ -1708,7 +1708,7 @@ export const long = {
       const existing = bot.blockAt(p)
       // a slab placed against a cell that already holds a bottom slab merges into a double block, no gap for water
       // left underneath: check before occupiedBy even, since the merge risk is real whatever occupiedBy would say
-      // (jizo-melon-patch, 09-26; see src/slabmerge.mjs for the full story)
+      // (jizo-melon-patch, 09-26; see src/build/slab-merge.mjs for the full story)
       const merge = slabMergeRefusal({ x: p.x, y: p.y, z: p.z }, existing, b.item)
       if (merge) throw new Skip(merge)
       const state = occupiedBy(existing, b.item)
@@ -2954,7 +2954,7 @@ const amPerched = () => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
   return perchedOverField((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.name)
 }
-// what the body can read off itself when a walk finds no path (src/caveexit.mjs): no sky over the head and the goal up
+// what the body can read off itself when a walk finds no path (src/navigation/cave-exit.mjs): no sky over the head and the goal up
 // on the surface, water in or beside its cell (a dig walk breaks nothing beside a liquid), a protected zone round it
 const noPathEvidence = () => {
   if (!bot?.entity) return {}
@@ -2973,7 +2973,7 @@ const firstMoveNote = moves => {
 }
 export const explainFailure = message => {
   const boxed = amBoxedIn()
-  // appended, never instead: the sweeps' dig retry and the stuck count read the no-path words (src/fieldleg.mjs PATH_FAILURE)
+  // appended, never instead: the sweeps' dig retry and the stuck count read the no-path words (src/farm/leg.mjs PATH_FAILURE)
   const stuckHere = /no path to the goal|no walkable path/i.test(message) ? firstMoveNote(bot.pathfinder.movements) : null
   const advice = noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, holed: amInHole(), perched: amPerched(), ...noPathEvidence() })
   return stuckHere ? `${advice}. ${stuckHere}` : advice
@@ -3004,7 +3004,7 @@ async function stepUp (cell) {
 }
 // From the bottom of a 1-wide shaft a dig walk aimed at the surface dug or scaffolded further DOWN (card 2b2d1f65): from a cell
 // boxed in on four sides the pathfinder's best partial path goes the one way it can dig. A goal above the body is climbed first
-// when the body is boxed in or the search's path ends lower than the feet: by hand (src/climb.mjs), a niche to the side at
+// when the body is boxed in or the search's path ends lower than the feet: by hand (src/navigation/climb.mjs), a niche to the side at
 // head height, a block under the feet, a step up, until the shaft opens on two sides; the legs take it from there
 async function climbFirst (to) {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
@@ -3026,7 +3026,7 @@ async function climbFirst (to) {
   }).catch(e => { throw new Error(`${why}; ${e.message}`) })
   return `${why}; climbed ${out.climbed} (${out.side} niche, ${out.placed} placed, ${out.dug} dug) to ${out.to.x},${out.to.y},${out.to.z}`
 }
-// a dig walk goes in legs of 6 (src/diglegs.mjs): a straight line of 20 through rock is more search than the 5 s budget
+// a dig walk goes in legs of 6 (src/navigation/dig-legs.mjs): a straight line of 20 through rock is more search than the 5 s budget
 // holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
 async function walkLegs (to, range, into = false) {
   const notes = []
@@ -3035,7 +3035,7 @@ async function walkLegs (to, range, into = false) {
   const legs = digging ? digLegs(bot.entity.position, to) : [to]
   for (const [i, leg] of legs.entries()) {
     const last = i === legs.length - 1
-    // a leg on (or in mid-air over) the floor of a pit walks to the pit's rim instead (src/walk.mjs rimGoal, card 3fe30fb4)
+    // a leg on (or in mid-air over) the floor of a pit walks to the pit's rim instead (src/navigation/walk.mjs rimGoal, card 3fe30fb4)
     const rim = rimGoal(cellAt, leg, last ? range : 1, { into, from: feetCell(bot.entity.position, bot.entity.onGround) })
     if (rim) notes.push(rim.note)
     const aim = rim ?? { x: leg.x, y: leg.y, z: leg.z, range: last ? range : 1 }

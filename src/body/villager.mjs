@@ -1,7 +1,7 @@
 // Villager trading and attributed household food delivery runtime.
 // Live body dependencies are injected, keeping client lifecycle in bot.mjs.
 import { isBaby, within, offerCost, tradeLine } from '../lib.mjs'
-import { compatibleInventoryStacks } from '../inventory-compact.mjs'
+import { compatibleInventoryStacks } from '../inventory/compact.mjs'
 
 export function makeVillagerRuntime (deps) {
   const { Vec3, goNear, findItem, inventoryCounts, cancelGuard, emit,

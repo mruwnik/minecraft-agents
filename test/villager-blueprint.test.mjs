@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { prepare } from '../src/blueprint-build.mjs'
-import { blueprintCells, matchesCell, flatGround, jobsFor, orderJobs, bill, fullBlock } from '../src/blueprint.mjs'
+import { prepare } from '../src/blueprint/build.mjs'
+import { blueprintCells, matchesCell, flatGround, jobsFor, orderJobs, bill, fullBlock } from '../src/blueprint/format.mjs'
 import { breedPlan, breedPreflight, breedKey } from '../src/villager/breed.mjs'
 
 const anchor = { x: -144, y: 65, z: -176 }

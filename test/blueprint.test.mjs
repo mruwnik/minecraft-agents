@@ -9,8 +9,8 @@ import {
   parseBlueprint, resolve, turnsFor, rotate, blueprintCells, bill, stackSlots, counts, enclosure, lint, placement,
   jobsFor, orderJobs, stages, siteCheck, farmPlanToBlueprint, blueprintHash, buildNote, parseNote, renderLayer, stageLine,
   matchesCell, flatGround, REGISTRY
-} from '../src/blueprint.mjs'
-import { familyName, familyRefusal } from '../src/materials.mjs'
+} from '../src/blueprint/format.mjs'
+import { familyName, familyRefusal } from '../src/build/materials.mjs'
 
 const LIBRARY = path.join(import.meta.dirname, '..', 'blueprints')
 const read = name => fs.readFileSync(path.join(LIBRARY, `${name}.md`), 'utf8')

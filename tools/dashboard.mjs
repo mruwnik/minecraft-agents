@@ -14,7 +14,7 @@ import path from 'node:path'
 import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
-import { loadAll } from '../src/blueprint-build.mjs'
+import { loadAll } from '../src/blueprint/build.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')

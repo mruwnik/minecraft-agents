@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import zlib from 'node:zlib'
-import { encodePng, decodePng, textureCandidates, castRay, makeGrid, render, directionFor } from '../src/vision.mjs'
+import { encodePng, decodePng, textureCandidates, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
 test('png: encode then decode round-trips rgba pixels', () => {

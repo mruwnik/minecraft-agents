@@ -2,7 +2,7 @@
 // everything before starting), then obstacles by block and cell, foundation cells that are not solid, the clearance over
 // the roof, zones and other agents' places, unloaded chunks, and what lint says. With supply= the chest's contents count
 // toward what is at hand (that is the one walk it makes).
-import { checkBlueprint, paramArgs } from '../../src/blueprint-build.mjs'
+import { checkBlueprint, paramArgs } from '../../src/blueprint/build.mjs'
 
 export default {
   doc: 'blueprint.check name= x= y= z= [facing=] [<param>=] [supply=] [clear=true], or place=<a marked build>: the stage table and everything build would refuse over, nothing built',

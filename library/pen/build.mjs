@@ -1,6 +1,6 @@
 // Raise a saved pen plan and prove it holds. A pen that looks finished and leaks is worse than no pen: the animals are
 // gone by morning and nobody knows why, so this one fails rather than report done while an animal could walk out.
-import { buildFromPlan } from '../../src/builder.mjs'
+import { buildFromPlan } from '../../src/build/plan.mjs'
 import { penInside } from '../../src/lib.mjs'
 
 export default {

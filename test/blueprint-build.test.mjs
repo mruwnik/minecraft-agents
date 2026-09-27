@@ -1,12 +1,12 @@
-// The walking half of the blueprint format (src/blueprint-build.mjs) over the fake body: what it walks to, what it
+// The walking half of the blueprint format (src/blueprint/build.mjs) over the fake body: what it walks to, what it
 // places, what it refuses before touching a block, and what it says when it stops
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fakeApi } from './helpers.mjs'
-import { buildBlueprint, checkBlueprint, listText, showText, paramsOf, supplyOf, BLUEPRINT_DIR, readBlueprint, blueprintFiles } from '../src/blueprint-build.mjs'
-import { blueprintHash, buildNote, flatGround } from '../src/blueprint.mjs'
+import { buildBlueprint, checkBlueprint, listText, showText, paramsOf, supplyOf, BLUEPRINT_DIR, readBlueprint, blueprintFiles } from '../src/blueprint/build.mjs'
+import { blueprintHash, buildNote, flatGround } from '../src/blueprint/format.mjs'
 
 const HUT = fs.readFileSync(path.join(BLUEPRINT_DIR, 'starter-hut.md'), 'utf8')
 const BOX = `---

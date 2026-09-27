@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict } from '../src/routine.mjs'
-import { toolsLost, toolList } from '../src/kit.mjs'
+import { toolsLost, toolList } from '../src/inventory/kit.mjs'
 import { ownBed, nightPlan, BED_RANGE } from '../src/lib/sleep.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
@@ -49,7 +49,7 @@ export default {
       const again = outcome.failed && !verdict.missing.length ? await attempt(action, args) : outcome
       return { ...again, rekit: verdict.text }
     }
-    // what the stuck watch is told (src/stuck.mjs): when the day began, which steps failed on which day, which days
+    // what the stuck watch is told (src/navigation/stuck.mjs): when the day began, which steps failed on which day, which days
     // ended with a full store (the harvest carried round: an alert after two), and whether the routine is stepping or
     // waiting for dusk or dawn (a wait stands still by design)
     const failedSteps = []

@@ -70,7 +70,7 @@ const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_dow
   'watch_hit', 'night_fell', 'dawn', 'woke_up', 'bedtime_failed', 'code_updated',
   // a run the body gave up on is the agent's problem now, and an agent asleep in ./mc wait cannot take it (#138)
   'flee_stuck', 'flee_held',
-  // a routine on autopilot that ended, and a body its own watch found going nowhere (autopilot card, src/stuck.mjs)
+  // a routine on autopilot that ended, and a body its own watch found going nowhere (autopilot card, src/navigation/stuck.mjs)
   'routine_stopped', 'stuck'])
 export const wakeWorthy = (event, me) => WAKE_TYPES.has(event.type) ||
   (event.type === 'chat' && event.from !== me) || (event.type === 'hurt' && event.health <= 8)

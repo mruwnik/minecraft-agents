@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compatibleInventoryStacks, inventoryCompactPair } from '../src/inventory-compact.mjs'
+import { compatibleInventoryStacks, inventoryCompactPair } from '../src/inventory/compact.mjs'
 
 function stack (slot, count, overrides = {}) {
   return {

@@ -8,9 +8,9 @@
 // order the last cells of a row lost theirs (14 of 108 came back notReplanted on jizo-melon-patch). Far end first, the
 // cells still bare are always the ones nearer the standing cell: there is one to stand in within reach of the next, and
 // the body backs out of the field as it plants.
-import { WORK_RANGE, dryStandable, cellsWithin, noStanding } from './walk.mjs'
-import { breaksUnderfoot, FLUIDS } from './lib.mjs'
-import { PLAN_LEGEND } from './lib/plan.mjs'
+import { WORK_RANGE, dryStandable, cellsWithin, noStanding } from '../navigation/walk.mjs'
+import { breaksUnderfoot, FLUIDS } from '../lib.mjs'
+import { PLAN_LEGEND } from '../lib/plan.mjs'
 
 // what api.block answers, read as the cell walk.mjs judges: solid is what a walk cannot enter, crop is what it steps round
 export const cellOf = block => block && { name: block.name, solid: Boolean(block.solid), liquid: FLUIDS.has(block.name), crop: breaksUnderfoot(block.name) }

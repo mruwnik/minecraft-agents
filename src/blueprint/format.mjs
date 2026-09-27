@@ -1,11 +1,11 @@
 // The blueprint format (docs/superpowers/specs/2026-09-26-blueprint-format-design.md), the pure half: a Markdown file
 // is parsed into layers of one-character tokens over a legend of setblock-style blocks, resolved with material
-// parameters through src/materials.mjs, turned by facing=, costed, cut into stages that fit the inventory, and judged
+// parameters through src/build/materials.mjs, turned by facing=, costed, cut into stages that fit the inventory, and judged
 // against a world (what stands in the way, what is still missing, where the body stands for each job). Nothing here
-// walks, digs, reads a file or writes one: src/blueprint-build.mjs does the walking and library/blueprint/* the I/O.
+// walks, digs, reads a file or writes one: src/blueprint/build.mjs does the walking and library/blueprint/* the I/O.
 import { createHash } from 'node:crypto'
 import minecraftData from 'minecraft-data'
-import { familyRefusal, familyBlock, FAMILIES } from './materials.mjs'
+import { familyRefusal, familyBlock, FAMILIES } from '../build/materials.mjs'
 
 // the client's registry: what this body can name and place (the server is one protocol ahead; see SERVER_ONLY)
 export const REGISTRY = minecraftData('26.1')
@@ -20,7 +20,7 @@ const OPPOSITE = { north: 'south', south: 'north', east: 'west', west: 'east' }
 const FRONT_KEYS = { name: true, title: true, description: true, tags: true, front: true, foundation: true, clearance: false, params: false, source: false, license: false, difficulty: false, notes: false, by: false }
 const FOUNDATIONS = ['flat', 'any', 'dug']
 const LIMITS = { side: 64, minY: -4, maxY: 47, cells: 16384 }
-// the eyes are 1.62 over the feet and the arm reaches 4.5 from them (src/stand.mjs, bot.mjs DIG_REACH)
+// the eyes are 1.62 over the feet and the arm reaches 4.5 from them (src/navigation/stand.mjs, bot.mjs DIG_REACH)
 export const EYE = 1.62
 export const REACH = 4.5
 // the margin of free slots a build never fills: the drops of a dig, a tool swap

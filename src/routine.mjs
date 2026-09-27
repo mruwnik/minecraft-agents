@@ -2,7 +2,7 @@
 // stand), and `routine name=farmer/homestead place=a,b,c` is the whole day: the role's routine expanded once per
 // place, in the order given. The one-place call is the routine exactly as it was.
 import { routineSteps, placeRefusal, compact } from './lib.mjs'
-import { carriedOfKind } from './kit.mjs'
+import { carriedOfKind } from './inventory/kit.mjs'
 
 // place=a,b,c as the CLI hands it over (one string), or a list already
 export const placeList = place => (Array.isArray(place) ? place : String(place ?? '').split(','))
@@ -94,7 +94,7 @@ export function dayEvent (day, outcomes, night = null) {
   return { day, places, ...(night ? { night } : {}) }
 }
 
-// a step ended with fewer of a kind than it began (src/kit.mjs toolsLost) and the kit step ran again: which kinds are
+// a step ended with fewer of a kind than it began (src/inventory/kit.mjs toolsLost) and the kit step ran again: which kinds are
 // back in the pockets and which are not, in the words the day line carries ("hoe replaced", "hoe broke, no spare")
 export function rekitVerdict (lost, items) {
   const replaced = lost.filter(kind => carriedOfKind(items, kind) > 0)

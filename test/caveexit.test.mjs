@@ -5,7 +5,7 @@
 // zone or built blocks round it (exclusionAreasBreak 100); or a 1-wide shaft. Pure: bot.mjs hands the evidence in.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { noPathAdvice } from '../src/caveexit.mjs'
+import { noPathAdvice } from '../src/navigation/cave-exit.mjs'
 
 const NO_PATH = 'no walkable path (walks don\'t dig or bridge): look for a way round, go in shorter legs, or pass dig=true if breaking and placing blocks on the way is fine'
 const RAW = 'No path to the goal!'
@@ -42,7 +42,7 @@ for (const [name, given, expected] of [
 // A body a block low (in a one-deep hole, or sunk into worked ground) fails every walk with the same "no walkable path", and
 // the driver read it as a distant obstacle for five minutes (card 94e6dcb1). Read off the body: the feet cell is open, every
 // cell beside it at feet height is a block, and the cells over those are open (a hole one deep, not a shaft)
-import { inHole, perchedOverField } from '../src/caveexit.mjs'
+import { inHole, perchedOverField } from '../src/navigation/cave-exit.mjs'
 // `passable(dx, dy, dz)` about the cells round the feet; a world as a map of 'dx,dy,dz' -> passable, unnamed cells open
 const round = blocked => (dx, dy, dz) => !blocked.includes(`${dx},${dy},${dz}`)
 const SIDES = ['1,0,0', '-1,0,0', '0,0,1', '0,0,-1']

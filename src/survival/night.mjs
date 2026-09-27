@@ -5,7 +5,7 @@
 // spider while both runs still said "from: zombie". Three rules: under a roof at night nothing is chased or charged; a
 // night run is bounded and heads for lit, known ground; the threat is whatever last hurt me, and what an armed body
 // cannot outrun it fights.
-import { fleeStep, fleeGoal, NEVER_FIGHT } from './lib.mjs'
+import { fleeStep, fleeGoal, NEVER_FIGHT } from '../lib.mjs'
 
 const OPEN = new Set(['air', 'cave_air', 'void_air', 'water', 'flowing_water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])
 const COVER = /^(short_grass|tall_grass|fern|large_fern|dead_bush|snow|leaf_litter)$/

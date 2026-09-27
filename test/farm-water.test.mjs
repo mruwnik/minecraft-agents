@@ -6,7 +6,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
-import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/builder.mjs'
+import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/build/plan.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 

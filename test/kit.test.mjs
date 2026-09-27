@@ -3,7 +3,7 @@
 // autopilot nobody is there to craft. Pure decisions here; library/kit.mjs acts on them.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { kindOf, carriedOfKind, kitPlan, kitLine, toolsLost, toolList } from '../src/kit.mjs'
+import { kindOf, carriedOfKind, kitPlan, kitLine, toolsLost, toolList } from '../src/inventory/kit.mjs'
 import kit from '../library/kit.mjs'
 import { fakeApi } from './helpers.mjs'
 

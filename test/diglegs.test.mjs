@@ -3,7 +3,7 @@
 // of tunnelling). goto dig=true cuts the straight line to its goal into legs of DIG_LEG by itself. Pure geometry.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { digLegs, DIG_LEG } from '../src/diglegs.mjs'
+import { digLegs, DIG_LEG } from '../src/navigation/dig-legs.mjs'
 
 test('DIG_LEG is six blocks', () => assert.equal(DIG_LEG, 6))
 

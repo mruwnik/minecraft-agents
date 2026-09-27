@@ -1,15 +1,15 @@
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
-import { waterShortfall } from '../../src/builder.mjs'
+import { waterShortfall } from '../../src/build/plan.mjs'
 import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planAnchor, planStructure, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
-import { lowSlabs, lowSlabLine } from '../../src/cover.mjs'
-import { cellOf, fieldEdge, parkSpot } from '../../src/field.mjs'
-import { digGuard, fieldLeg, footprintOf } from '../../src/fieldleg.mjs'
-import { jobSight, standingSpots, workFrom } from '../../src/stand.mjs'
+import { lowSlabs, lowSlabLine } from '../../src/build/cover.mjs'
+import { cellOf, fieldEdge, parkSpot } from '../../src/farm/field.mjs'
+import { digGuard, fieldLeg, footprintOf } from '../../src/farm/leg.mjs'
+import { jobSight, standingSpots, workFrom } from '../../src/navigation/stand.mjs'
 import { canStore, storeInto, storeSurplus } from '../../src/storage.mjs'
 import { depositTarget } from '../../src/lib/storage.mjs'
 import { fillShortfall, holeJobs } from '../../src/lib/fill.mjs'
-import { loadedAround } from '../../src/walk.mjs'
+import { loadedAround } from '../../src/navigation/walk.mjs'
 import { clutterBlocks, clutterLine, clearJobs, clearStrays, strays, zoneLine, asideLine } from './shared/clutter.mjs'
 
 const add = (into, from = {}) => { for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n }
@@ -50,8 +50,8 @@ export default {
     const chest = planStructure(plan.cells, 'C')
     if (composter?.error) throw new Error(composter.error)
     const summary = { sweeps: 0, harvested: {}, replanted: 0, tilled: 0, poured: 0, covered: 0, built: 0 }
-    // every walk of the sweep is a leg of src/fieldleg.mjs: plain first, once more with dig=true when the path fails
-    // inside the plan's footprint (never a plan block, never the ground: src/fieldleg.mjs digGuard), and both failing is
+    // every walk of the sweep is a leg of src/farm/leg.mjs: plain first, once more with dig=true when the path fails
+    // inside the plan's footprint (never a plan block, never the ground: src/farm/leg.mjs digGuard), and both failing is
     // one stuck= line naming the cell (card 72e49b3d)
     const box = footprintOf(plan.cells)
     const guard = digGuard(plan.cells)
@@ -61,13 +61,13 @@ export default {
 
     const tryJob = async job => {
       // a cover is only real once the cell it caps is actually holding its OWN water, a settled source, not merely a
-      // neighbour's flow passing through - see src/builder.mjs's tryJob for the full story of the slab that kept
+      // neighbour's flow passing through - see src/build/plan.mjs's tryJob for the full story of the slab that kept
       // getting broken, reflooded by a neighbour's flow and blindly recapped
       if (job.do === 'cover' && !hasWaterSource(api.block(job.x, job.y, job.z))) {
         summary.stuck = summary.stuck ?? `cover ${job.x},${job.y},${job.z}: not holding water yet, so the slab was held back`
         return null
       }
-      // from a cell that sees the target (src/stand.mjs): a pour from wherever "within 3" landed the body looked at the
+      // from a cell that sees the target (src/navigation/stand.mjs): a pour from wherever "within 3" landed the body looked at the
       // next slab or a crop instead, twice on jizo-melon-patch (09-26)
       const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, e => e.message)
       if (failed) { summary.stuck = summary.stuck ?? failed; return failed }
@@ -95,7 +95,7 @@ export default {
     // walled in by crops on every side, and a walk steps round crops, so the pathfinder had no node to end in and ran
     // its time out, or its search radius ("no walkable path"), where farm.harvest right after it walks to the field's
     // EDGE and works (Jizo, 09-26). The edge is the nearest cell the body can stand in, dry, within work range of the
-    // plan (src/field.mjs fieldEdge). With nothing loaded round the plan there is no edge to read yet: then a walk to
+    // plan (src/farm/field.mjs fieldEdge). With nothing loaded round the plan there is no edge to read yet: then a walk to
     // the middle at a range that reaches the rim (half the plan's diagonal, and 2 at least) loads it, and the edge is read again
     const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
     const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height) / 2))
@@ -148,7 +148,7 @@ export default {
       // farmJobs decides pour vs. skip from whether water_bucket is ALREADY carried right here: a dry cell with none
       // becomes 'skip', not 'pour', and fetching water further down never reaches a job list that never named the
       // cell. So when any job wants water and none is carried, a bucket is fetched (the nearest still source within
-      // range: waterShortfall in src/builder.mjs) BEFORE the list is read, and a channel that still stays dry is skipped
+      // range: waterShortfall in src/build/plan.mjs) BEFORE the list is read, and a channel that still stays dry is skipped
       // with the one reason there is: no bucket at all, or no water within range (card 72e49b3d)
       // beds, lanes and chest cells whose ground is gone (air, or water the plan never asked for: src/lib/fill.mjs) are
       // filled before anything else is tried on them, the floor block from the pockets and what those lack from the
@@ -235,7 +235,7 @@ export default {
       storeInto(summary, await storeSurplus(api, { surplus, target: store, cells: plan.cells }))
       // the last walk of a sweep: off the beds, onto the plan's lane (or the field's edge, at the range the sweep's
       // first walk uses for it), so the body is never left in the middle of a planted pocket for the night or the next
-      // step (src/field.mjs parkSpot). A plain walk, no dig retry: a parking walk that fails is said, not stuck
+      // step (src/farm/field.mjs parkSpot). A plain walk, no dig retry: a parking walk that fails is said, not stuck
       const park = parkSpot(cellAt, plan.cells, api.pos())
       if (park) {
         await api.act('goto', { x: park.x, y: park.y, z: park.z, range: park.why === 'lane' ? 0 : 1 })

@@ -5,8 +5,8 @@
 // not climb out. The floor is not only the column: whatever stands beside the shaft flows into it. And a bad site is no
 // reason to wall in on the spot when a dry cell stands a step away, or when the pack holds three blocks for a pillar (a
 // creeper is out-waited from above as well as from below).
-import { HOLE_DEPTH, HOLE_UNSAFE, HOLE_MELEE, HOLE_HURT_MS, holeUpRefusal, holedUpNote, isGroundCover } from './lib.mjs'
-export { HOLE_DEPTH, HOLE_MELEE } from './lib.mjs'
+import { HOLE_DEPTH, HOLE_UNSAFE, HOLE_MELEE, HOLE_HURT_MS, holeUpRefusal, holedUpNote, isGroundCover } from '../lib.mjs'
+export { HOLE_DEPTH, HOLE_MELEE } from '../lib.mjs'
 
 export const HOLE_STEP = 2 // how far out (in cells) a dry site is looked for
 const FLUIDS = new Set(['water', 'flowing_water', 'lava', 'flowing_lava', 'bubble_column'])

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
-import { parseBlueprint, resolve, bill, lint } from '../src/blueprint.mjs'
+import { parseBlueprint, resolve, bill, lint } from '../src/blueprint/format.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -218,6 +218,9 @@ const routes = [
   ['/src/lib.txt', { kind: 'unknown' }],
   // lib.mjs's split: the browser also needs the modules it re-exports, one lib/ segment deep
   ['/src/lib/plan.mjs', { kind: 'srclib', name: 'lib/plan.mjs' }],
+  ['/src/navigation/walk.mjs', { kind: 'srclib', name: 'navigation/walk.mjs' }],
+  ['/src/build/materials.mjs', { kind: 'srclib', name: 'build/materials.mjs' }],
+  ['/src/body/runner.mjs', { kind: 'unknown' }],
   // the blueprint library: its page, its module, the list and one blueprint by its kebab-case file name
   ['/blueprints', { kind: 'blueprints' }],
   ['/blueprint.mjs', { kind: 'bpscript' }],

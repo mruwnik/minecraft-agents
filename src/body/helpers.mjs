@@ -3,7 +3,7 @@
 import vec3 from 'vec3'
 import { dropGoal } from '../drop.mjs'
 import { fullSide, transferOutcome, compact, settleVerdict, coordsError, unpenned, nextDrop, feetCell, leftLying, DIG_WALK_MS, digUnreached, FLUIDS, breaksUnderfoot, within, gridLeftovers, isBaby, leashPlan, leashVerdict, leadBroke, deepestCell, ledReport } from '../lib.mjs'
-import { rimGoal, walkRefusal } from '../walk.mjs'
+import { rimGoal, walkRefusal } from '../navigation/walk.mjs'
 import { searchSections, enough } from '../blocksearch.mjs'
 import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf } from '../bot.mjs'
 
@@ -146,7 +146,7 @@ export async function sweepDrops (range = 8) {
     tried.add(drop.id)
     const goal = dropGoal(drop)
     // a drop on the floor of a pit is left lying (the result names it), not followed down: a dig of a pit's own wall from the rim
-    // dropped its dirt on the floor and this sweep jumped in after it (src/walk.mjs rimGoal, card 3fe30fb4)
+    // dropped its dirt on the floor and this sweep jumped in after it (src/navigation/walk.mjs rimGoal, card 3fe30fb4)
     if (rimGoal(cellAt, goal, goal.range, { from: feetCell(bot.entity.position, bot.entity.onGround) })) continue
     await bot.pathfinder.goto(new goals.GoalNear(goal.x, goal.y, goal.z, goal.range)).catch(() => {})
     await bot.waitForTicks(10)
@@ -174,7 +174,7 @@ export const cellAt = (x, y, z) => {
 export async function goNear (v, range = 2) {
   // already there: don't ask the pathfinder, which can fail from a perch (pillar top, ledge) even though nothing needs walking
   if (bot.entity.position.distanceTo(new Vec3(v.x + 0.5, v.y, v.z + 0.5)) <= range) return
-  // a cell on the floor of a pit is worked from the pit's rim (src/walk.mjs rimGoal, card 3fe30fb4): a dig of a pit's own floor jumped
+  // a cell on the floor of a pit is worked from the pit's rim (src/navigation/walk.mjs rimGoal, card 3fe30fb4): a dig of a pit's own floor jumped
   // in when the rim was 3.16 off with range 3, and the walk that takes a scaffold pillar back stood on the pillar and dug it from under itself
   const rim = rimGoal(cellAt, v, range, { from: feetCell(bot.entity.position, bot.entity.onGround) })
   const aim = rim ?? { x: v.x, y: v.y, z: v.z, range }

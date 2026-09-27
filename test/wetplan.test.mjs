@@ -4,8 +4,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
-import { drainJobs, shoreOrder, reopenJobs, wetFooting } from '../src/wetplan.mjs'
-import { buildFromPlan } from '../src/builder.mjs'
+import { drainJobs, shoreOrder, reopenJobs, wetFooting } from '../src/build/water.mjs'
+import { buildFromPlan } from '../src/build/plan.mjs'
 
 // a row of beds at y=63 from x=0 east, laid in water two deep (water at 63 and 64 over dirt at 62), air above. The land
 // round the water is dry at 63 with air over it; `wet` says which columns hold water

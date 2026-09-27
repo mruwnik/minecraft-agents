@@ -4,8 +4,8 @@
 // to stand in once their neighbours were planted, and 14 of 108 came back notReplanted.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cellOf, fieldEdge, plantOrder, fieldCrops, notReplantedLine, standingLine, bareReason } from '../src/field.mjs'
-import { WORK_RANGE } from '../src/walk.mjs'
+import { cellOf, fieldEdge, plantOrder, fieldCrops, notReplantedLine, standingLine, bareReason } from '../src/farm/field.mjs'
+import { WORK_RANGE } from '../src/navigation/walk.mjs'
 
 // what api.block answers, read as the cell walk.mjs judges
 for (const [name, block, expected] of [

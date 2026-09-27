@@ -4277,7 +4277,7 @@ test('mine.get: a pit it cannot climb out of is named, not hidden', async () => 
 })
 
 // ore under a few blocks of dirt is reached by a dig walk down; the way back up is a dig walk too (it climbs a shaft by a
-// niche ladder, src/climb.mjs), not the plain walk that cannot leave a pit
+// niche ladder, src/navigation/climb.mjs), not the plain walk that cannot leave a pit
 test('mine.get: the way out of the pit it dug down to buried ore is dug when a walk cannot take it', async () => {
   const world = stoneWorld()
   const { api, calls } = stoneApi(world, { path_to: { status: 'noPath' }, goto: args => { if (!args.dig) throw new Error('goto: no walkable path'); return {} } })
@@ -5461,7 +5461,7 @@ test('apiary.maintain: somebody else\u2019s apiary is refused before its hives a
 })
 
 // Every composite that takes place= and CHANGES the world asks the one question, in its own source or in something it
-// imports (farm.build asks through src/builder.mjs, which resolves the plan for it). The read-only two must ask
+// imports (farm.build asks through src/build/plan.mjs, which resolves the plan for it). The read-only two must ask
 // nothing at all: a body that may not look at a farm cannot plan work on it. A new place= writer lands here first.
 const READ_ONLY_COMPOSITES = ['apiary/inspect.mjs', 'farm/fields.mjs']
 const ASKS_OWNERSHIP = /workRefusal|placeRefusal|api\.plan\(/

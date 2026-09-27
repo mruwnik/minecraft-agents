@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
-import { decodePng, encodePng, makeGrid, render, textureCandidates } from './vision.mjs'
+import { decodePng, encodePng, makeGrid, render, textureCandidates } from './renderer.mjs'
 
 const GRASS = [124, 189, 107]
 const FOLIAGE = [89, 174, 48]

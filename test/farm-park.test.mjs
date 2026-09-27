@@ -6,7 +6,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
-import { cellOf, parkSpot } from '../src/field.mjs'
+import { cellOf, parkSpot } from '../src/farm/field.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 

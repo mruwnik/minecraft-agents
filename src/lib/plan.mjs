@@ -1,7 +1,7 @@
 // Plans: the legend, parsing a plan into cells, its errors, lane reachability, bill, and one-line summary.
 
 import { compact } from '../cli.mjs'
-import { WORK_RANGE } from '../walk.mjs'
+import { WORK_RANGE } from '../navigation/walk.mjs'
 import { STEPS } from './world.mjs'
 // ---------------------------------------------------------------- composite actions: plans
 // A plan is an ASCII map of a farm or pen, one character per block, anchored at its NORTH-WEST corner: rows run south (z),

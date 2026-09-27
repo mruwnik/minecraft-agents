@@ -23,7 +23,7 @@ for (const [name, args, expected] of [
 // channel's water one cell to the side poured into the shaft as it went down. It surfaced for air and could not climb out. The floor
 // is not just the column: what stands beside the shaft flows into it. A bad site is not a reason to wall in on the spot either,
 // when a dry cell stands one step away, or three blocks in the pack make a pillar a creeper cannot reach
-import { capChoice, floorVerdict, burrowSite, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP } from '../src/holeup.mjs'
+import { capChoice, floorVerdict, burrowSite, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP } from '../src/survival/holeup.mjs'
 
 const dry = { below: ['dirt', 'dirt', 'stone'], beside: [['dirt', 'dirt', 'dirt', 'dirt'], ['dirt', 'dirt', 'dirt', 'dirt'], ['stone', 'stone', 'stone', 'stone']] }
 const channel = { below: ['dirt', 'dirt', 'stone'], beside: [['dirt', 'water', 'dirt', 'dirt'], ['dirt', 'dirt', 'dirt', 'dirt'], ['stone', 'stone', 'stone', 'stone']] }

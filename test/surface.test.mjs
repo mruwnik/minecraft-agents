@@ -4,7 +4,7 @@
 // head, what open water lies near, and how long the ceiling would take to dig with the air that is left.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { surfaceWay, airBudgetTicks, swimProgress, roofAt, SURFACE_SCAN } from '../src/surface.mjs'
+import { surfaceWay, airBudgetTicks, swimProgress, roofAt, SURFACE_SCAN } from '../src/navigation/surface.mjs'
 
 const me = { x: -130.3, y: 33.2, z: -138.3 }
 const cell = (x, y, z) => ({ x, y, z })

@@ -4,7 +4,7 @@
 // the goal up on the surface (a walk neither digs nor climbs); water touching the cell (mineflayer-pathfinder's
 // safeToBreak refuses any block beside a liquid, dontCreateFlow, so from a pool a dig walk digs nothing); a protected
 // zone or built blocks round it (exclusionAreasBreak 100, never broken); a 1-wide shaft. Pure: bot.mjs hands the evidence in.
-import { breaksUnderfoot } from './lib/path.mjs'
+import { breaksUnderfoot } from '../lib/path.mjs'
 
 const NO_PATH = /no path to the goal|no walkable path|took to long to decide/i
 // a goal fewer blocks up than this is a ledge, not the surface: the plain text serves

@@ -6,7 +6,7 @@
 // columns taking turns. This module reads that ladder off the world; nothing here touches a body.
 //
 // A cell is { name, solid } or null when its chunk is not loaded.
-import { looksBuilt } from './lib.mjs'
+import { looksBuilt } from '../lib.mjs'
 
 const BY_HAND = 'Dig by hand where you can see what stands there'
 export const SIDES = [{ dx: 1, dz: 0, name: 'east' }, { dx: -1, dz: 0, name: 'west' }, { dx: 0, dz: 1, name: 'south' }, { dx: 0, dz: -1, name: 'north' }]

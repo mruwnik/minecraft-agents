@@ -7,9 +7,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
-import { seesTop, standingSpots, standingSpot, workFrom, POUR_RANGE } from '../src/stand.mjs'
-import { WORK_RANGE, dryStandable, loadedAround } from '../src/walk.mjs'
-import { cellOf } from '../src/field.mjs'
+import { seesTop, standingSpots, standingSpot, workFrom, POUR_RANGE } from '../src/navigation/stand.mjs'
+import { WORK_RANGE, dryStandable, loadedAround } from '../src/navigation/walk.mjs'
+import { cellOf } from '../src/farm/field.mjs'
 
 // a field the way jizo-melon-patch is built: farmland at y=62 with ripe wheat on it, a channel of waterlogged TOP slabs
 // along z=4 (dirt under them at 61), a grass rim one cell round it all, air above, dirt below. An edit of null unloads a cell

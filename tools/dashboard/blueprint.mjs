@@ -1,10 +1,10 @@
 // The blueprint library page's pure half, shared by the page and the tests: what a list row says, the cells of one
 // layer with their colours and labels, the legend, the bill as rows with a bar each, and what lint said as lines.
 // Like map.mjs it has no node imports (the browser loads it at /blueprint.mjs): its inputs are the plain data the
-// server hands out from /api/blueprints - a parsed, resolved blueprint (src/blueprint.mjs), its bill and its lint.
+// server hands out from /api/blueprints - a parsed, resolved blueprint (src/blueprint/format.mjs), its bill and its lint.
 // Colours follow the material: every role of one wood or stone is a shade of that material's hue, read off the same
 // family table the parser resolves {wood:planks} through, so a hut's planks, logs, stairs and fence read as one thing.
-import { WOODS, WOOD_ROLES, STONES, STONE_ROLES, familyName } from '../../src/materials.mjs'
+import { WOODS, WOOD_ROLES, STONES, STONE_ROLES, familyName } from '../../src/build/materials.mjs'
 import { worldColour } from './map.mjs'
 
 const isAir = name => /^(air|cave_air|void_air)$/.test(String(name))
@@ -16,7 +16,7 @@ const DYES = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 
 const DYE_ROLES = ['bed', 'wool', 'carpet', 'concrete', 'concrete_powder', 'terracotta', 'glazed_terracotta', 'stained_glass', 'stained_glass_pane', 'banner', 'candle', 'shulker_box']
 const EXTRA_WOOD = { wood: v => `${v}_wood`, stripped_wood: v => `stripped_${v}_wood` }
 
-// block name -> {family, value, role}, built once from the tables src/materials.mjs resolves roles through
+// block name -> {family, value, role}, built once from the tables src/build/materials.mjs resolves roles through
 const FAMILY_OF = new Map()
 WOODS.forEach(value => WOOD_ROLES.forEach(role => FAMILY_OF.set(familyName('wood', value, role), { family: 'wood', value, role })))
 WOODS.forEach(value => Object.entries(EXTRA_WOOD).forEach(([role, name]) => FAMILY_OF.set(name(value), { family: 'wood', value, role })))
