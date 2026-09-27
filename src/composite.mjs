@@ -20,6 +20,7 @@ export function recoverableGotoFailure (error) {
   if (!error || error instanceof CompositeHandBack || error instanceof TypeError || error instanceof SyntaxError || error instanceof ReferenceError || error.reason) return false
   const message = String(error.message ?? error).trim()
   return /^(?:no path to the goal!?|no path to the goal: the search found nothing to walk from here|took to long to decide path to goal!?)$/i.test(message) ||
+    /^no walkable path: no net progress toward this goal for \d+s \(nearest \d+ blocks\); try another checked waypoint$/.test(message) ||
     /^the search ran out of time \((?:up to )?\d+ s\) before it found a way, which is not the same as there being none\./i.test(message)
 }
 

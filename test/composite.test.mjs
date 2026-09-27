@@ -91,6 +91,12 @@ test('only a raw ordinary goto no-route or timeout error can be acknowledged', (
   assert.equal(recoverableGotoFailure(new Error('No path to the goal!')), true)
   assert.equal(recoverableGotoFailure(new Error('no path to the goal: the search found nothing to walk from here')), true)
   assert.equal(recoverableGotoFailure(new Error('Took to long to decide path to goal!')), true)
+  const stalled = 'no walkable path: no net progress toward this goal for 40s (nearest 12 blocks); try another checked waypoint'
+  assert.equal(recoverableGotoFailure(new Error(stalled)), true)
+  assert.equal(recoverableGotoFailure(new Error(`cancelled: ${stalled}`)), false)
+  assert.equal(recoverableGotoFailure(new Error(`${stalled}; protected zone`)), false)
+  assert.equal(recoverableGotoFailure(new TypeError(stalled)), false)
+  assert.equal(recoverableGotoFailure(new CompositeHandBack(stalled)), false)
   assert.equal(recoverableGotoFailure(new Error('the search ran out of time (5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end near a protected pen')), true)
   assert.equal(recoverableGotoFailure(new Error('cancelled: superseded by stop')), false)
   assert.equal(recoverableGotoFailure(new CompositeHandBack('spoken to by player')), false)

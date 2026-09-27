@@ -16,6 +16,23 @@ export function walkStandstill (previous, { task, goal, pos, now }) {
   return previous
 }
 
+export const WALK_PROGRESS_MS = 40000
+// Small swimming oscillations reset the standstill clock, but cannot keep a
+// nearest-goal record improving. This clock belongs to an awaited walking leg,
+// including one inside a composite; it does not cancel the owning expedition.
+export function walkProgress (previous, { leg, goal, pos, now, busy = false }) {
+  if (!leg || goal?.entity || !Number.isFinite(goal?.x) || !Number.isFinite(goal?.z)) return null
+  const target = [goal.constructor?.name, goal.x, goal.y, goal.z, goal.range, goal.rangeSq].join(':')
+  const distance = Math.hypot(goal.x - pos.x, Number.isFinite(goal.y) ? goal.y - pos.y : 0, goal.z - pos.z)
+  if (!previous || previous.leg !== leg || previous.target !== target || distance <= previous.best - 1) {
+    return { leg, target, best: distance, at: now, sampledAt: now, busy, stalled: false }
+  }
+  // Mining and construction legitimately work in place; don't spend their
+  // time allowance on the walk, including the first sample after they finish.
+  const at = previous.at + (busy || previous.busy ? now - previous.sampledAt : 0)
+  return { ...previous, at, sampledAt: now, busy, stalled: !busy && now - at >= WALK_PROGRESS_MS }
+}
+
 // The client's registry is one protocol behind the server (26.1 speaking to 26.2 through a bridge): a block state past
 // the registry comes back with no name at all, and a nameless block must never be reported as ground.
 export const blockName = block => (block === null || block === undefined) ? 'unloaded' : (block.name || `unknown(state ${block.stateId})`)

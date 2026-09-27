@@ -27,7 +27,7 @@ import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarg
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
-import { walkStandstill, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
+import { walkStandstill, walkProgress, WALK_PROGRESS_MS, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './navigation/stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
@@ -310,8 +310,13 @@ function connect () {
     // this walk, replans included, reads thinkTimeout; reflex walks (setGoal) get the default back once the walk is over
     const walk = goal => {
       lastWalkGoal = goal
+      const leg = { goal }
+      activeWalk = leg
       bot.pathfinder.thinkTimeout = thinkBudget(goalDistance(goal, bot.entity.position))
-      return plainWalk(goal).finally(() => { bot.pathfinder.thinkTimeout = THINK_CAP_MS; sprintFor([]) })
+      return plainWalk(goal).finally(() => {
+        if (activeWalk === leg) { activeWalk = null; nearest = null }
+        bot.pathfinder.thinkTimeout = THINK_CAP_MS; sprintFor([])
+      })
     }
     const arrived = goal => {
       const feet = feetCell(bot.entity.position, bot.entity.onGround)
@@ -993,7 +998,8 @@ let walkEndedAt = 0
 let lastWalkGoal = null
 let walkEndedBy = null
 let goalSetAt = 0 // a path result from before this goal says nothing about this walk
-let nearest = null // { task, goal, best, at }: the nearest a goto has come to its goal, and when
+let activeWalk = null // the actual awaited goto promise, including composite sub-actions
+let nearest = null // meaningful nearest-goal progress for that walking leg
 // why the pathfinder threw its path away, lately: a stall with a found path and idle keys looks like a storm of these
 const pathResets = []
 // what the legs were up to when a walk hung: evidence for the doorstep stall nobody has explained yet
@@ -1028,18 +1034,22 @@ setInterval(() => {
     frozenWalks++
     emit('frozen_walk', { pos: lastFrozen.pos, evidence, advice: lastFrozen.advice })
   }
-  // a goto that keeps moving and gets nowhere (Perrin's cow pen gate: 290 s, ended 20 blocks further off)
+  // Every awaited static walk owns this watchdog, including forage.search's
+  // sub-action. Water bobbing and repeated replans cannot renew its allowance.
   const goal = bot.pathfinder.goal
-  if (task?.name === 'goto' && goal?.x !== undefined && goal?.z !== undefined) {
-    const dist = Math.hypot(here.x - goal.x, (goal.y ?? here.y) - here.y, here.z - goal.z)
-    if (!nearest || nearest.task !== task.id || nearest.goal !== goal || dist < nearest.best - 1) nearest = { task: task.id, goal, best: dist, at: Date.now() }
-    if (circling({ dist, best: nearest.best, bestAgeMs: Date.now() - nearest.at })) {
-      const best = Math.round(nearest.best)
-      nearest = null
-      emit('circling', { pos: pos(), best })
-      cancelTask(`circling: ${CIRCLING_MS / 1000} s of walking and never nearer than ${best} blocks to the goal. See the route it wants with path_to x= y= z= route=true: the usual cause is a gate whose outside cell is blocked (pen.check names it in blindGates=), which leaves only a detour over fences it cannot really walk`)
-      return
-    }
+  nearest = walkProgress(nearest, { leg: task && activeWalk?.goal === goal ? activeWalk : null, goal, pos: here, now: Date.now(),
+    busy: Boolean(bot.targetDigBlock) || bot.pathfinder.isMining() || bot.pathfinder.isBuilding() })
+  if (nearest?.stalled) {
+    const best = Math.round(nearest.best)
+    walkEndedAt = Date.now()
+    walkEndedBy = `no walkable path: no net progress toward this goal for ${WALK_PROGRESS_MS / 1000}s (nearest ${best} blocks); try another checked waypoint`
+    emit('walk_no_progress', { pos: pos(), best, seconds: WALK_PROGRESS_MS / 1000, evidence: stallEvidence() })
+    nearest = null
+    stillFrom = null
+    // setGoal settles native goto before its caller can recover and start the
+    // next leg. Never race a detached timeout against a still-running walk.
+    bot.pathfinder.setGoal(null)
+    return
   }
   if (deadWalk(sample) && Date.now() - walkEndedAt > 4000) {
     walkEndedAt = Date.now()
