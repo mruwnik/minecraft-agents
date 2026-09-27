@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseWant, bookOffer, rollVerdict, rollRefusal, tradeLine, offerCost, cheapestLockOffer, villagerPenPlan } from '../src/lib.mjs'
+import { parseWant, bookOffer, rollVerdict, rollRefusal, tradeLine, offerCost, cheapestLockOffer, matchesVillagerOutput, JOB_BLOCK_PROFESSION, villagerPenPlan } from '../src/lib.mjs'
 import roll from '../library/villager/roll.mjs'
 
 const book = (enchant, level, emeralds = 20, index = 1) => ({ index, inputItem1: { name: 'emerald', count: emeralds }, inputItem2: { name: 'book', count: 1 }, outputItem: { name: 'enchanted_book', count: 1, enchants: [{ name: enchant, lvl: level }] }, nbTradeUses: 0, maximumNbTradeUses: 12 })
@@ -80,6 +80,20 @@ test('locking buys affordable paper before spending emeralds or a book', () => {
   const paper = { index: 2, inputItem1: { name: 'paper', count: 24 }, outputItem: { name: 'emerald', count: 1 } }
   assert.equal(cheapestLockOffer([enchanted, paper], { emerald: 64, book: 1, paper: 24 }).index, 2)
   assert.equal(cheapestLockOffer([enchanted, paper], { emerald: 64, book: 1 }).index, 1)
+})
+
+test('workstation map and desired-output matcher keep the lock purchase separate', () => {
+  assert.equal(JOB_BLOCK_PROFESSION.composter, 'farmer')
+  assert.equal(JOB_BLOCK_PROFESSION.fletching_table, 'fletcher')
+  const arrow = { index: 1, inputItem1: { name: 'stick', count: 32 }, outputItem: { name: 'arrow', count: 16 }, nbTradeUses: 0, maximumNbTradeUses: 16 }
+  const paper = { index: 2, inputItem1: { name: 'paper', count: 1 }, outputItem: { name: 'emerald', count: 1 }, nbTradeUses: 0, maximumNbTradeUses: 16 }
+  assert.equal(matchesVillagerOutput(arrow, { output: 'minecraft:arrow' }), true)
+  assert.equal(matchesVillagerOutput(paper, { output: 'arrow' }), false)
+  const enchanted = { outputItem: { name: 'diamond_sword', enchants: [{ name: 'minecraft:sharpness', lvl: 3 }] } }
+  assert.equal(matchesVillagerOutput(enchanted, { output: 'diamond_sword', enchant: 'sharpness', level: 3 }), true)
+  assert.equal(matchesVillagerOutput(enchanted, { output: 'diamond_sword', enchant: 'sharpness', level: 4 }), false)
+  assert.equal(cheapestLockOffer([arrow, paper], { stick: 32, paper: 1 }).index, 2)
+  assert.equal(cheapestLockOffer([{ ...paper, nbTradeUses: 4, maximumNbTradeUses: 4 }, arrow], { stick: 32, paper: 1 }).index, 1)
 })
 
 test('pen geometry blocks every reachable exterior cell within lectern claim range, including raised routes', () => {
@@ -166,6 +180,37 @@ test('roller restores the lectern over three rounds and locks with paper', async
   assert.equal(placed, true)
   assert.equal(notes.length, 3)
   assert.equal(reports.at(-1).rounds, 3)
+})
+
+test('generic workstation roll tracks UUID across changing entity IDs and separately locks the cheapest offer', async () => {
+  const cell = { x: 1, y: 64, z: 2 }
+  const uuid = '0c432c3c-1111-4111-8111-111111111111'
+  const raw = Array(21).fill(null); raw[19] = { villagerProfession: 0 }
+  let query = 0; let lastEntityId = null; let tradeArgs = null; let tradeTimeEntityId = null
+  const villager = () => ({ id: 40 + query++, uuid, exact: '2,64,2', metadata: JSON.stringify(raw) })
+  const arrow = { index: 1, inputItem1: { name: 'stick', count: 32 }, outputItem: { name: 'arrow', count: 16 }, nbTradeUses: 0, maximumNbTradeUses: 16 }
+  const paper = { index: 2, inputItem1: { name: 'paper', count: 1 }, outputItem: { name: 'emerald', count: 1 }, nbTradeUses: 0, maximumNbTradeUses: 16 }
+  const inv = { paper: 1, stick: 32 }
+  const api = {
+    places: () => [], zones: () => [], me: () => 'Probe', clock: () => ({ day: true }), inv: () => inv,
+    block: () => ({ name: 'fletching_table' }), report: () => {}, note: () => {}, checkpoint: async () => {},
+    until: async pred => assert.equal(await pred(), true),
+    act: async (name, args) => {
+      if (name === 'goto' || name === 'find_blocks') return name === 'find_blocks' ? { positions: [] } : {}
+      if (name === 'entity') { const found = villager(); lastEntityId = found.id; return { found: [found] } }
+      if (name === 'trades') { assert.equal(args.id, lastEntityId); return { profession: 'fletcher', offers: [arrow, paper] } }
+      if (name === 'trade') { tradeArgs = args; tradeTimeEntityId = lastEntityId; return {} }
+      throw new Error(name)
+    }
+  }
+  const result = await roll.run(api, { ...cell, block: 'fletching_table', output: 'arrow', uuid, buy: true, tries: 1, pen: false })
+  assert.equal(result.uuid, uuid)
+  assert.equal(result.profession, 'fletcher')
+  assert.equal(result.found, 'arrow')
+  assert.equal(result.locked, true)
+  assert.equal(result.boughtOffer, 2)
+  assert.equal(tradeArgs.offer, 2)
+  assert.equal(tradeArgs.id, tradeTimeEntityId)
 })
 
 test('roller stops with the lectern placed when the last spare has been used', async () => {
@@ -292,7 +337,7 @@ function serviceRecoveryApi ({ interruptAtNook = false } = {}) {
   return { api, pen, cell, blocks, inv, events, getPlaced: () => placed, getLured: () => lured }
 }
 
-function penCaptureApi ({ target = { x: -11, y: 64, z: 0.5 }, id = 94, prebuilt = false, blockedGate = false } = {}) {
+function penCaptureApi ({ target = { x: -11, y: 64, z: 0.5 }, id = 94, uuid = null, rival = false, prebuilt = false, blockedGate = false } = {}) {
   const cell = { x: 0, y: 64, z: 0 }
   const pen = villagerPenPlan(cell, target)
   const blocks = new Map()
@@ -307,7 +352,9 @@ function penCaptureApi ({ target = { x: -11, y: 64, z: 0.5 }, id = 94, prebuilt 
       blocks.set(key({ ...pen.gate, y: pen.gate.y + 1 }), 'cobblestone')
     }
   }
-  const entity = () => ({ id, exact: lured ? `${pen.center.x + 0.5},64,${pen.center.z + 0.5}` : `${target.x},${target.y},${target.z}`, metadata: JSON.stringify(Object.assign(Array(21).fill(null), { 19: { villagerProfession: 0 } })) })
+  const metadata = JSON.stringify(Object.assign(Array(21).fill(null), { 19: { villagerProfession: 0 } }))
+  const entity = () => ({ id, ...(uuid ? { uuid } : {}), exact: lured ? `${pen.center.x + 0.5},64,${pen.center.z + 0.5}` : `${target.x},${target.y},${target.z}`, metadata })
+  const entities = () => rival ? [{ id: id - 1, uuid: 'rival-uuid', exact: `${pen.center.x + 0.5},64,${pen.center.z + 0.5}`, metadata }, entity()] : [entity()]
   const api = {
     places: () => [], zones: () => [], me: () => 'Probe', clock: () => ({ day: true }), inv: () => inv,
     block: (x, y, z) => y === 63 ? { name: 'grass_block', solid: true } : { name: blocks.get(key({ x, y, z })) ?? 'air', solid: false },
@@ -316,7 +363,7 @@ function penCaptureApi ({ target = { x: -11, y: 64, z: 0.5 }, id = 94, prebuilt 
     act: async (name, a) => {
       events.push([name, a])
       if (name === 'goto') return {}
-      if (name === 'entity') return { found: [entity()] }
+      if (name === 'entity') return { found: entities() }
       if (name === 'find_blocks') return { positions: [] }
       if (name === 'place') {
         for (const p of a.blocks ?? [a]) {
@@ -332,6 +379,14 @@ function penCaptureApi ({ target = { x: -11, y: 64, z: 0.5 }, id = 94, prebuilt 
   }
   return { api, cell, pen, blocks, inv, events }
 }
+
+test('UUID-targeted pen capture ignores a different fresh villager already inside', async () => {
+  const uuid = 'f25ef3e5-37cc-4da0-a192-34493cfa0e22'
+  const h = penCaptureApi({ uuid, rival: true })
+  const result = await roll.run(h.api, { want: 'mending', ...h.cell, uuid, tries: 1 })
+  assert.equal(result.uuid, uuid)
+  assert.equal(h.events.some(([name, a]) => name === 'place' && a.x === h.pen.gate.x && a.y === h.pen.gate.y), true)
+})
 
 test('roller opens the service nook to recover the dropped lectern, then reseals it', async () => {
   const h = serviceRecoveryApi()

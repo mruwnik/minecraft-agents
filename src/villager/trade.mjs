@@ -56,9 +56,23 @@ export function rollVerdict (offers, wants, maxPrice = 64) {
 // Spend paper or another cheap input before emeralds or books when one trade will lock the profession.
 export function cheapestLockOffer (offers, carried) {
   const cost = offer => offerCost(offer)
-  const affordable = offer => !offer.tradeDisabled && Object.entries(cost(offer)).every(([item, n]) => (carried[item] ?? 0) >= n)
+  const affordable = offer => !offer.tradeDisabled && !(Number.isFinite(offer.maximumNbTradeUses) && Number(offer.nbTradeUses ?? 0) >= offer.maximumNbTradeUses) && Object.entries(cost(offer)).every(([item, n]) => (carried[item] ?? 0) >= n)
   const score = offer => { const c = cost(offer); return (c.emerald ?? 0) * 10000 + (c.book ?? 0) * 1000 + Object.values(c).reduce((n, x) => n + x, 0) }
   return offers.filter(affordable).sort((a, b) => score(a) - score(b))[0] ?? null
+}
+
+export function matchesVillagerOutput (offer, { output, wants, enchant, level, atLeast = false } = {}, { includeDisabled = false } = {}) {
+  if (!offer || (!includeDisabled && offer.tradeDisabled)) return false
+  if (wants?.length) {
+    const book = bookOffer(offer)
+    return Boolean(book && wants.some(w => w.enchant === book.enchant && (w.level == null || (w.atLeast ? book.level >= w.level : book.level === w.level))))
+  }
+  if (output && offer.outputItem?.name?.replace(/^minecraft:/, '') !== output.replace(/^minecraft:/, '')) return false
+  if (enchant) {
+    const found = (Array.isArray(offer.outputItem?.enchants) ? offer.outputItem.enchants : offer.outputItem?.enchants?.enchantments ?? []).some(e => String(e.name ?? e.id ?? '').replace(/^minecraft:/, '').toLowerCase() === enchant && (level == null || (atLeast ? Number(e.lvl ?? e.level) >= level : Number(e.lvl ?? e.level) === level)))
+    if (!found) return false
+  }
+  return Boolean(offer.outputItem?.name)
 }
 
 export function tradeLine (offer, i) {
@@ -73,8 +87,8 @@ export function rollRefusal ({ villagers, allowCrowd = false, profession, adult,
   if (villagers !== 1 && !(allowCrowd && villagers > 0)) return `${villagers} villagers within 8 blocks: isolate exactly one before rolling, or use pen=true with id= for the one to attract`
   if (!adult) return 'this villager is a baby and cannot take a profession'
   if (nitwit) return 'this villager is a nitwit and cannot take a profession'
-  const job = { lectern: 'librarian' }[block]
-  if (!job) return `unsupported job block ${block}: villager.roll currently uses lectern`
+  const job = JOB_BLOCK_PROFESSION[block]
+  if (!job) return `unsupported job block ${block}`
   if (profession && profession !== 'unemployed' && profession !== job) return `it is a ${profession}: remove its job block or use a fresh villager`
   if (!day) return 'villagers take jobs while awake by day: try again after dawn'
   if (!placed && !carried?.[block]) return `need one ${block} to place the job block`
@@ -82,6 +96,12 @@ export function rollRefusal ({ villagers, allowCrowd = false, profession, adult,
   if (spareBlocks) return `${spareBlocks} other ${block} within 16 blocks: the villager may claim the wrong one`
   return null
 }
+
+export const JOB_BLOCK_PROFESSION = Object.freeze({
+  blast_furnace: 'armorer', smoker: 'butcher', cartography_table: 'cartographer', brewing_stand: 'cleric',
+  composter: 'farmer', barrel: 'fisherman', fletching_table: 'fletcher', cauldron: 'leatherworker',
+  lectern: 'librarian', stonecutter: 'mason', loom: 'shepherd', smithing_table: 'toolsmith', grindstone: 'weaponsmith'
+})
 
 // Two walkable cells lead from the far doorway to the lectern. Paper assigns a job
 // when the villager is within two blocks of the POI center, so every outside cell
