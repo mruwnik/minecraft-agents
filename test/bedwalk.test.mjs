@@ -1,12 +1,14 @@
 // Nightfall with no bed within 32 blocks: walk to the body's own bed when it is within bed_range (default 200) instead
 // of stopping, sleep, and walk back at dawn (card bebf3a5f). The decision is pure (src/lib/sleep.mjs); library/routine.mjs
 // only acts on it. No block fakes here: a bed is known from the shared map, not from the world.
-import { test } from 'node:test'
+import { test as nodeTest } from 'node:test'
 import assert from 'node:assert/strict'
 import { BED_RANGE, ownBed, nightPlan } from '../src/lib/sleep.mjs'
 import { stopAdvice, stopEvent, dayEvent } from '../src/routine.mjs'
 import routine from '../library/routine.mjs'
 import { fakeApi } from './helpers.mjs'
+
+const test = (name, run) => nodeTest(name, { timeout: 2000 }, run)
 
 const FROM = { x: 0, y: 64, z: 0 }
 const myBed = { name: 'tester-bed', kind: 'bed', by: 'Tester', x: 100, y: 64, z: 0 }
@@ -72,21 +74,25 @@ const handBack = reason => Object.assign(new Error(reason), { reason })
 // (returns) on every other, since the routine has walked to a bed by then
 const nightAt = (api, ...nights) => {
   let calls = 0
-  api.checkpoint = async () => { if (nights.includes(++calls)) throw handBack(NIGHT) }
+  api.checkpoint = async () => {
+    // An incorrect night fixture must fail promptly even if an infinite microtask loop starves the test timeout.
+    if (++calls > 100) throw new Error('bedwalk fixture exceeded 100 checkpoints without stopping')
+    if (nights.includes(calls)) throw handBack(NIGHT)
+  }
 }
 const farm = { name: 'a', by: 'Tester', kind: 'farm', note: 'wheat', x: 10, y: 64, z: 10 }
-const answers = { 'farm.tidy': {}, 'farm.maintain': {} }
+const answers = { 'farm.maintain': {} }
 const walks = calls => calls.filter(c => c.startsWith('goto'))
 const noNotes = calls => calls.filter(c => !c.startsWith('note'))
 
 test('routine: at nightfall with my bed within bed_range it walks there, sleeps, walks back to the first place at dawn and runs the next day', async () => {
   const { api, calls, events } = fakeApi({ places: [farm, myBed], answers })
-  nightAt(api, 5) // checkpoints: three steps (the kit first), the day's end, then dusk
+  nightAt(api, 3) // checkpoints: one maintenance step, the day's end, then dusk
   const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2 })
   assert.deepEqual(noNotes(calls), [
-    'kit tools=stone_hoe food=12 place=a', 'farm.tidy place=a', 'farm.maintain place=a reserve_for=a',
+    'farm.maintain place=a reserve_for=a',
     'goto x=100 y=64 z=0 range=2', 'goto x=10 y=64 z=10 range=3',
-    'kit tools=stone_hoe food=12 place=a', 'farm.tidy place=a', 'farm.maintain place=a reserve_for=a'
+    'farm.maintain place=a reserve_for=a'
   ])
   assert.deepEqual([summary.days, summary.bedWalks], [2, 1])
   assert.deepEqual(events.map(e => e.type), ['routine_day', 'routine_bed_walk', 'routine_bed_walk', 'routine_day', 'routine_stopped'])
@@ -108,7 +114,7 @@ test('routine: with no place, dawn walks back to where nightfall found it', asyn
 
 test('routine: bed=<place> walks to that mark, and bed_range= is honoured', async () => {
   const { api, calls } = fakeApi({ places: [farm, hut], answers })
-  nightAt(api, 4)
+  nightAt(api, 2)
   await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2, bed: 'tester-hut', bed_range: 40 })
   assert.deepEqual(walks(calls), ['goto x=20 y=65 z=20 range=2', 'goto x=10 y=64 z=10 range=3'])
 })
@@ -121,7 +127,7 @@ test('routine: bed=<place> nobody marked is refused before day one', async () =>
 
 test('routine: my bed beyond bed_range stops the routine, the stop saying how far and the advice naming bed_range', async () => {
   const { api, calls, events } = fakeApi({ places: [farm, myBed], answers })
-  nightAt(api, 4)
+  nightAt(api, 2)
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0, bed_range: 50 }), /night and no bed within 32 blocks/)
   assert.deepEqual(walks(calls), [])
   assert.deepEqual(events.at(-1), {
@@ -131,7 +137,7 @@ test('routine: my bed beyond bed_range stops the routine, the stop saying how fa
 
 test('routine: no bed of mine on the map stops the routine as before, saying so', async () => {
   const { api, calls, events } = fakeApi({ places: [farm, theirBed], answers })
-  nightAt(api, 4)
+  nightAt(api, 2)
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }), /night and no bed within 32 blocks/)
   assert.deepEqual(walks(calls), [])
   assert.equal(events.at(-1).bed, 'no bed of yours on the shared map: mark yours (mark name=<you>-bed kind=bed, standing on it) or pass bed=<place>')
@@ -139,14 +145,14 @@ test('routine: no bed of mine on the map stops the routine as before, saying so'
 
 test('routine: a walk to the bed that fails stops the routine with the night reason and the walk’s error', async () => {
   const { api, events } = fakeApi({ places: [farm, myBed], answers: { ...answers, goto: new Error('goto: no path to the goal') } })
-  nightAt(api, 4)
+  nightAt(api, 2)
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }), /night and no bed within 32 blocks/)
   assert.deepEqual([events.at(-1).reason, events.at(-1).bed], [NIGHT, 'the walk to tester-bed failed: goto: no path to the goal'])
 })
 
 test('routine: still no bed within 32 after the walk hands back once, not a second walk', async () => {
   const { api, calls, events } = fakeApi({ places: [farm, myBed], answers })
-  nightAt(api, 4, 5)
+  nightAt(api, 2, 3)
   await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', days: 0 }), /night and no bed within 32 blocks/)
   assert.deepEqual(walks(calls), ['goto x=100 y=64 z=0 range=2'])
   assert.equal(events.at(-1).type, 'routine_stopped')
@@ -155,7 +161,7 @@ test('routine: still no bed within 32 after the walk hands back once, not a seco
 test('routine: a failed walk back at dawn is noted and the day still runs', async () => {
   let gotos = 0
   const { api, calls } = fakeApi({ places: [farm, myBed], answers: { ...answers, goto: () => { if (++gotos === 2) throw new Error('goto: no path to the goal') } } })
-  nightAt(api, 4)
+  nightAt(api, 2)
   const got = await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 2 })
   assert.equal(got.days, 2)
   assert.deepEqual(calls.filter(c => /^note .*walk back/.test(c)), ['note the walk back to a failed (goto: no path to the goal): the steps walk to their places themselves'])
@@ -168,7 +174,7 @@ test('routine: where it last woke this run is the bed when nothing is marked', a
   // pos() is first read after the first night's checkpoint returns (where it woke), then at the second nightfall
   const spots = [{ x: 55, y: 64, z: 5 }]
   api.pos = () => spots.shift() ?? { x: 0, y: 64, z: 0 }
-  nightAt(api, 8)
+  nightAt(api, 6)
   await routine.run(api, { name: 'farmer/homestead', place: 'a', days: 3 })
   assert.deepEqual(walks(calls), ['goto x=55 y=64 z=5 range=2', 'goto x=10 y=64 z=10 range=3'])
 })

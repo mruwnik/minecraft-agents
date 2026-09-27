@@ -5,6 +5,8 @@
 import { kitPlan, kitLine, toolList } from '../src/inventory/kit.mjs'
 import { planStructure, placeRefusal } from '../src/lib.mjs'
 import { REGISTRY } from '../src/blueprint/format.mjs'
+import { STORAGE_BLOCKS } from '../src/lib/storage.mjs'
+import { farmApi, recoverFarm } from '../src/farm/attention.mjs'
 
 const isFood = name => Boolean(REGISTRY.foodsByName[name])
 const cellOf = text => { const [x, y, z] = String(text).split(',').map(Number); return [x, y, z].every(Number.isFinite) ? { x, y, z } : null }
@@ -25,19 +27,27 @@ export default {
   args: { tools: 'any', spare: 'number', food: 'number', place: 'string', chest: 'string' },
 
   async run (api, a) {
+    api = farmApi(api)
     const refusal = a.place ? placeRefusal(api.places(), a.place, api.me?.()) : null
     if (refusal) throw new Error(refusal)
     const tools = toolList(a.tools)
     const chest = chestCell(api, a)
-    const contents = chest ? (await api.act('chest_contents', chest)).items ?? {} : null
-    const plan = kitPlan({ tools, spare: a.spare ?? 1, food: a.food ?? 12, carried: api.inv(), chest: contents, chestAt: chest ? key(chest) : null, isFood })
     const notes = []
+    let contents = null
+    if (chest) {
+      const block = api.block(chest.x, chest.y, chest.z)
+      // Plans can mark a chest that has not been built. Do not try to open known air (and poison the failure
+      // counter); a missing or inaccessible chest still leaves the carried supplies available for crafting.
+      if (block && !STORAGE_BLOCKS.includes(block.name)) notes.push(`chest at ${key(chest)} is missing (${block.name} there)`)
+      else contents = await api.act('chest_contents', chest).then(r => r.items ?? {}, recoverFarm(e => { notes.push(`chest at ${key(chest)}: ${e.message}`); return null }))
+    }
+    const plan = kitPlan({ tools, spare: a.spare ?? 1, food: a.food ?? 12, carried: api.inv(), chest: contents, chestAt: chest ? key(chest) : null, isFood })
     if (Object.keys(plan.take).length) {
-      await api.act('withdraw', { items: plan.take, ...chest }).catch(e => notes.push(`withdraw: ${e.message}`))
+      await api.act('withdraw', { items: plan.take, ...chest }).catch(recoverFarm(e => notes.push(`withdraw: ${e.message}`)))
       await api.checkpoint()
     }
     for (const { item, count } of plan.craft) {
-      await api.act('craft', { item, count }).catch(e => notes.push(`craft ${item}: ${e.message}`))
+      await api.act('craft', { item, count }).catch(recoverFarm(e => notes.push(`craft ${item}: ${e.message}`)))
     }
     await api.checkpoint()
     // the world is the verdict: the line is read off what is carried now, not off the plan

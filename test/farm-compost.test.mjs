@@ -25,12 +25,13 @@ test('farm.compost: a plan with no K cell falls back to the nearest real compost
   assert.equal(result.at, '24,64,-86')
 })
 
-test('farm.compost: no K cell and nothing found nearby still refuses by name', async () => {
-  const { api } = fakeApi({ place: NO_COMPOSTER_PLACE, answers: { find_blocks: () => ({ positions: [] }) } })
-  await assert.rejects(
-    farmCompost.run(api, { place: 'jizo-cane' }),
-    /no composter within 32 blocks/
-  )
+test('farm.compost: no K cell and nothing nearby asks for attention without pretending to compost', async () => {
+  const { api, calls, events } = fakeApi({ place: NO_COMPOSTER_PLACE, answers: { find_blocks: () => ({ positions: [] }) } })
+  const result = await farmCompost.run(api, { place: 'jizo-cane' })
+  assert.match(result.attention, /no composter within 32 blocks/)
+  assert.equal(events[0].type, 'farm_attention')
+  assert.equal(result.fed, undefined)
+  assert.ok(!calls.some(c => c.startsWith('use ')))
 })
 
 test('farm.compost: explicit x=/y=/z= always wins, even over a plan with its own K cell', async () => {

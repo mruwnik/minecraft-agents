@@ -10,11 +10,53 @@ import { parsePlan, planCells, planBill } from '../src/lib.mjs'
 import { bareLine, bareWhy, hasHoe, NO_HOE, seedReserve } from '../src/lib/farm.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
+import harvestFarm from '../library/farm/harvest.mjs'
 
 const fakePlace = (plan, x = 0, y = 63, z = 0) => {
   const parsed = parsePlan(plan)
   return { name: 'test-field', kind: 'farm', x, y, z, plan, parsed, cells: planCells({ plan, x, y, z }), bill: planBill(parsed) }
 }
+
+test('a till that leaves dirt unchanged reports the bed and continues independent sowing', async () => {
+  const world = { '0,63,0': 'dirt', '1,63,0': 'farmland' }
+  const items = { stone_hoe: 1, wheat_seeds: 2 }
+  const { api, calls, events } = fakeApi({ place: fakePlace('ww'), world, items, answers: {
+    'farm.harvest': {},
+    till: new Error('till: tilled nothing: 1 still dirt: is there a block on top of it? (first 0,63,0)'),
+    place: p => { world[`${p.x},${p.y},${p.z}`] = 'wheat#0'; items.wheat_seeds-- }
+  } })
+  const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.equal(result.replanted, 1)
+  assert.match(result.bare, /untilled:1/)
+  assert.equal(world['0,63,0'], 'dirt')
+  assert.equal(world['1,64,0'], 'wheat#0')
+  assert.equal(calls.filter(c => c.startsWith('till ')).length, 1)
+  assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.bare))
+})
+
+test('maintenance tills only beds it can seed, then reports the remaining shortage', async () => {
+  const world = Object.fromEntries([0, 1, 2, 3].map(x => [`${x},63,0`, 'dirt']))
+  const items = { stone_hoe: 1, wheat_seeds: 1, carrot: 1 }
+  const { api, calls, events } = fakeApi({ place: fakePlace('wwcc'), world, items, answers: {
+    'farm.harvest': {},
+    till: p => { world[`${p.x},${p.y},${p.z}`] = 'farmland' },
+    place: p => { world[`${p.x},${p.y},${p.z}`] = p.item === 'carrot' ? 'carrots#0' : 'wheat#0'; items[p.item]-- }
+  } })
+  const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.equal(result.tilled, 2)
+  assert.equal(result.replanted, 2)
+  assert.deepEqual(calls.filter(c => c.startsWith('till ')), ['till 0,63,0', 'till 2,63,0'])
+  assert.equal(world['1,63,0'], 'dirt')
+  assert.equal(world['3,63,0'], 'dirt')
+  assert.match(result.missing, /wheat_seeds:1/)
+  assert.match(result.missing, /carrot:1/)
+  assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.missing))
+  // A seedless second pass should spend no hoe durability on empty beds.
+  const before = calls.length
+  const next = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.equal(next.tilled, 0)
+  assert.ok(!calls.slice(before).some(c => c.startsWith('till ')))
+})
 const sweep = async ({ plan, world, items, answers = {} }) => {
   const made = fakeApi({ place: fakePlace(plan), world, items, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, ...answers } })
   const summary = await maintainFarm.run(made.api, { place: 'test-field' })
@@ -28,6 +70,115 @@ const walledBed = () => {
   const world = {}
   for (let x = -5; x <= 5; x++) for (let y = 58; y <= 68; y++) for (let z = -5; z <= 5; z++) world[`${x},${y},${z}`] = 'stone'
   return { ...world, '0,63,0': 'farmland', '0,64,0': 'air', '0,65,0': 'air' }
+}
+
+test('farm.maintain retains harvest loss and access warnings in its result', async () => {
+  const warnings = { lost: 'wheat@4,64,0', unreachable: '1 ripe crop beyond a fence', stalksOutOfReach: '2 stalks too deep', inventoryFull: true }
+  const { summary } = await sweep({ plan: 'w', world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3' }, items: {}, answers: { 'farm.harvest': { harvested: { wheat: 1 }, ...warnings } } })
+  for (const [key, value] of Object.entries(warnings)) assert.equal(summary[key], value)
+})
+
+for (const state of ['missing', 'full', 'healthy', 'disabled']) {
+  test(`farm.maintain storage ${state}: reports attention without stopping or choosing another store`, async () => {
+    const place = fakePlace('wC')
+    const items = { wheat: 40, wheat_seeds: 2 }
+    const world = { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': state === 'missing' ? 'air' : 'chest' }
+    const { api, events, calls } = fakeApi({ place, world, items, answers: {
+      deposit: () => {
+        if (state === 'full') { items.wheat = 15; throw new Error('the CHEST is full') }
+        items.wheat = 0
+        return {}
+      }
+    } })
+    const summary = await maintainFarm.run(api, { place: place.name, ...(state === 'disabled' ? { deposit: false } : {}) })
+    assert.equal(summary.sweeps, 1, 'storage attention must not stop maintenance')
+    const attention = events.filter(e => e.type === 'farm_attention')
+    assert.equal(attention.length, ['missing', 'full'].includes(state) ? 1 : 0)
+    if (attention.length) {
+      assert.equal(attention[0].place, place.name)
+      assert.equal(attention[0].reasons.storage_full, summary.storage_full)
+      assert.deepEqual(attention[0].carried, { wheat: state === 'full' ? 15 : 40 }, 'only remaining surplus, excluding reserved seed')
+      assert.match(attention[0].advice, /Storage needs a decision/)
+      if (state === 'missing') assert.equal(attention[0].reasons.chest_missing, summary.chest_missing)
+    }
+    const deposits = calls.filter(c => c.startsWith('deposit '))
+    assert.equal(deposits.length, ['full', 'healthy'].includes(state) ? 1 : 0)
+    assert.ok(deposits.every(c => c.endsWith('x=1 y=64 z=0')), 'storage destination stays as configured')
+  })
+}
+
+test('farm.maintain reserves generic-bed seed collected during this harvest before composting', async () => {
+  const place = fakePlace('*K')
+  const items = {}
+  const world = { '0,63,0': 'farmland', '0,64,0': 'wheat#3', '1,63,0': 'dirt', '1,64,0': 'composter' }
+  const { api, calls } = fakeApi({ place, world, items, answers: {
+    'farm.harvest': () => { items.wheat_seeds = 10; return { harvested: { wheat: 1 }, replanted: 0 } },
+    'farm.compost': { fed: 'wheat_seeds:8' }
+  } })
+  await maintainFarm.run(api, { place: place.name })
+  assert.deepEqual(calls.filter(c => c.startsWith('farm.compost ')), ['farm.compost items(wheat_seeds:8) x=1 y=64 z=0'])
+})
+
+test('farm.maintain harvests, clears a melon from a wheat bed, then tills and sows both beds', async () => {
+  const place = fakePlace('ww')
+  const world = {}
+  for (let x = -5; x <= 6; x++) for (let z = -5; z <= 5; z++) {
+    world[`${x},63,${z}`] = 'dirt'
+    world[`${x},64,${z}`] = 'air'
+    world[`${x},65,${z}`] = 'air'
+  }
+  Object.assign(world, { '0,63,0': 'farmland', '0,64,0': 'wheat#7', '1,64,0': 'melon', '4,64,0': 'wheat#7' })
+  const items = {}
+  const key = a => `${a.x},${a.y},${a.z}`
+  const { api, calls } = fakeApi({ place, places: [place], world, items, answers: {
+    kit: () => { items.stone_hoe = 1; return { kit: 'hoe:1 food:12' } },
+    'farm.harvest': a => { assert.equal(a.replant, false); return harvestFarm.run(api, a) },
+    find_blocks: a => ({ positions: String(a.block).includes('wheat') ? [{ x: 0, y: 64, z: 0 }, { x: 4, y: 64, z: 0 }] : [] }),
+    dig: a => { world[key(a)] = 'air' },
+    collect: () => { items.wheat_seeds = 4; return {} },
+    till: a => { world[key(a)] = 'farmland' },
+    place: a => { assert.equal(a.item, 'wheat_seeds'); world[key(a)] = 'wheat#0'; items.wheat_seeds-- }
+  } })
+  const out = await maintainFarm.run(api, { place: place.name })
+  const firstCollect = calls.findIndex(c => c.startsWith('collect '))
+  const tidy = calls.findIndex(c => c === 'dig 1,64,0')
+  const firstPlant = calls.findIndex(c => c.startsWith('place '))
+  assert.ok(firstCollect >= 0 && tidy > firstCollect && firstPlant > tidy, calls.join('\n'))
+  assert.deepEqual(out.harvested, { wheat: 1 })
+  assert.equal(out.cleared, '1(melon)')
+  assert.equal(out.tilled, 1)
+  assert.equal(out.replanted, 2)
+  assert.equal(world['0,64,0'], 'wheat#0')
+  assert.equal(world['1,64,0'], 'wheat#0')
+  assert.equal(world['4,64,0'], 'wheat#7', 'neighboring wheat stays intact')
+})
+
+for (const replace of [true, false]) {
+  test(`farm.maintain provisions its own hoe and ${replace ? 'replaces it once' : 'reports a missing replacement'} when it breaks`, async () => {
+    const place = fakePlace('wwww')
+    const world = { '0,63,0': 'dirt', '1,63,0': 'dirt', '2,63,0': 'dirt', '3,63,0': 'farmland' }
+    const items = { wheat_seeds: 10 }
+    let kits = 0
+    const { api, calls } = fakeApi({ place, world, items, answers: {
+      kit: () => {
+        kits++
+        if (kits === 1 || replace) { items.stone_hoe = 1; return { kit: 'hoe:1 food:12' } }
+        return { kit: 'hoe:0 food:12', kit_short: 'stone_hoe: 0 carried, 2 wanted: no cobblestone' }
+      },
+      till: a => { world[`${a.x},${a.y},${a.z}`] = 'farmland'; delete items.stone_hoe },
+      place: a => { world[`${a.x},${a.y},${a.z}`] = 'wheat#0'; items.wheat_seeds-- }
+    } })
+    const out = await maintainFarm.run(api, { place: place.name })
+    assert.equal(kits, 2, 'one initial kit and at most one replacement attempt per sweep')
+    assert.ok(calls.indexOf('kit tools=stone_hoe food=12 place=test-field') < calls.findIndex(c => c.startsWith('farm.harvest ')))
+    assert.ok(calls.some(c => c.startsWith('farm.harvest place=test-field within=')), 'harvest must stay on the named plan')
+    assert.equal(out.tilled, replace ? 2 : 1)
+    assert.equal(out.replanted, replace ? 3 : 2)
+    assert.equal(out.rekit, replace ? 'hoe replaced' : 'hoe broke, no spare')
+    assert.match(out.bare, /untilled:.*no hoe/)
+    assert.equal(world['3,64,0'], 'wheat#0', 'ready farmland is still planted after running out of hoes')
+    if (!replace) assert.match(out.kit_short, /no cobblestone/)
+  })
 }
 
 // ---------------------------------------------------------------- the sweep

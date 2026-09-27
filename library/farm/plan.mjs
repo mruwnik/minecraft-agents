@@ -8,20 +8,22 @@
 // laid into flowing water is not waterlogged and cuts the flow, so a flowing cell is poured into first, or left with the reason.
 // It only reads the map and writes it back, so it never takes the body over.
 import { parsePlan, planAnchor, planCells, planErrors, planLane, planBill, planSummary, compact, mapRefusal } from '../../src/lib.mjs'
+import { farmApi, reportFarmAttention } from '../../src/farm/attention.mjs'
 
 export default {
-  doc: "farm.plan [name=] [map=] [check=true] [kind=] [x= y= z=] [note=]: check a plan and save it on the shared map, or print the one saved under that name. check=true runs every check and saves nothing, so a map can be argued with before every agent sees it",
+  doc: "farm.plan [name=] [map=] [legend=<JSON object>] [check=true] [kind=] [x= y= z=] [note=]: check a plan and save it on the shared map, or print the one saved under that name. check=true runs every check and saves nothing, so a map can be argued with before every agent sees it",
   stops: 'nothing: it reads the map and writes it back, without moving',
   instant: true,
-  args: { name: 'string', map: 'string', kind: 'string', note: 'string', x: 'number', y: 'number', z: 'number', check: 'boolean' },
+  args: { name: 'string', map: 'string', kind: 'string', note: 'string', x: 'number', y: 'number', z: 'number', check: 'boolean', legend: 'any' },
 
   async run (api, a) {
+    api = farmApi(api)
     const saved = a.name ? api.places().find(p => p.name === a.name) : null
     if (a.map === undefined) {
       if (!a.name) throw new Error("nothing to read and nothing to check: pass name= to print a saved plan, or map= with check=true to check a map")
       if (!saved?.plan) throw new Error(`no plan called ${a.name}: save one with ./mc farm.plan name=${a.name} kind=farm x= y= z= map='...'`)
-      const known = parsePlan(saved.plan)
-      return { text: `${saved.name} ${saved.kind} @${saved.x},${saved.y},${saved.z}\n${saved.plan}\n${planSummary(known)} needs ${compact(planBill(known))}` }
+      const known = parsePlan(saved.plan, saved.legend)
+      return { legend: saved.legend, text: `${saved.name} ${saved.kind} @${saved.x},${saved.y},${saved.z}\n${saved.plan}\n${planSummary(known)} needs ${compact(planBill(known))}` }
     }
     // a map without a name has nowhere to be saved, and guessing a name would put it on the shared map under a word
     // nobody chose. Checking one is the other thing the caller might have meant, so the refusal offers it (#137)
@@ -31,10 +33,11 @@ export default {
     // than after it (#144 folded in). A check writes nothing, so it is open on anybody's plan
     const mine = a.check ? null : mapRefusal(saved, api.me?.())
     if (mine) throw new Error(mine)
-    const parsed = parsePlan(a.map)
+    const parsed = parsePlan(a.map, a.legend ?? saved?.legend)
     const errors = planErrors(parsed)
     if (errors.length) throw new Error(errors.join('; '))
     const at = a.x === undefined ? (saved ?? api.pos()) : a
+    if (['x', 'y', 'z'].some(k => a[k] !== undefined) && !['x', 'y', 'z'].every(k => Number.isFinite(a[k]))) throw new Error('give all three finite coordinates: x= y= z=')
     const where = { x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z) }
     if (!a.check) {
       await api.act('mark', {
@@ -42,17 +45,19 @@ export default {
         kind: a.kind ?? saved?.kind ?? 'farm',
         note: String(a.note ?? saved?.note ?? planSummary(parsed)).slice(0, 80),
         map: parsed.rows.join('\n'),
+        legend: a.legend ?? saved?.legend,
         ...where
       })
     }
     // y is the GROUND level: a plan saved at the level you stand on has its whole build laid one block too high, so the
     // world is asked here, while the person who wrote the map is still listening
-    const { note } = planAnchor(planCells({ ...where, plan: parsed.rows.join('\n') }), api.block)
+    const { note } = planAnchor(planCells({ ...where, plan: parsed.rows.join('\n'), legend: a.legend ?? saved?.legend }), api.block)
     // and whether there is anything to walk on between the gate and the rows. A field with none cannot be worked
     // from anywhere - every job in it answers "nowhere to stand", because a job wants dry footing within reach of
     // its cell - but the shape is not a contradiction, so it is saved with the fault named rather than refused
     // (Chani took her own carrot patch's missing lane for a tool bug, BUGS.md 09-23)
     const warn = [planLane(parsed.cells).noLane, note].filter(Boolean).join('; ')
+    if (warn && !a.check) reportFarmAttention(api, { action: 'farm.plan', place: a.name, reasons: { plan_warning: warn } })
     // a check answers everything a save answers, in the same words: an answer that differed from the real one would be
     // worth less than no check at all. It only says `checked` where a save says `saved`, and how to save it
     const said = { at: where, is: planSummary(parsed), needs: planBill(parsed), ...(warn ? { warn } : {}) }

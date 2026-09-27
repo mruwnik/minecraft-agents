@@ -54,6 +54,23 @@ test('clutterBlocks: a farm built exactly to its plan has none', () => {
   assert.deepEqual(clutterBlocks(PLACE.cells, blockAt(built())), [])
 })
 
+test('clutterBlocks: planned attached stems and stacked stalks are kept; wrong crops on crop beds are cleared', () => {
+  const cells = planCells({ x: 0, y: 63, z: 0, plan: 'mksBw.' })
+  const world = {
+    '0,64,0': block('attached_melon_stem'), '1,64,0': block('attached_pumpkin_stem'),
+    '2,64,0': block('sugar_cane'), '2,65,0': block('sugar_cane'),
+    '3,64,0': block('bamboo'), '3,65,0': block('bamboo'),
+    '4,64,0': block('melon'), '5,64,0': block('melon')
+  }
+  assert.deepEqual(clutterBlocks(cells, blockAt(world)), [{ x: 4, y: 64, z: 0, name: 'melon' }])
+})
+
+test('clutterBlocks: generic crop beds retain compatible crops while specific beds enforce their crop', () => {
+  const cells = planCells({ x: 0, y: 63, z: 0, plan: '*w*' })
+  const world = { '0,64,0': block('carrots'), '1,64,0': block('carrots'), '2,64,0': block('attached_melon_stem') }
+  assert.deepEqual(clutterBlocks(cells, blockAt(world)), [{ x: 1, y: 64, z: 0, name: 'carrots' }])
+})
+
 test('clutterBlocks: every stray block over the footprint, at ground+1 and ground+2', () => {
   const found = clutterBlocks(PLACE.cells, blockAt(littered()))
   assert.deepEqual(found.map(b => `${b.name}@${key(b)}`), ['oak_log@100,72,200', 'cobblestone@101,72,200', 'dirt@100,71,201'])
@@ -236,7 +253,7 @@ test('farm.tidy: a block it cannot reach stops the round with the reason and the
   const { api, calls } = tidyApi({ digs: ({ x }) => x === 100 ? 'no path to 100,71,201' : null })
   const out = await farmTidy.run(api, { place: 'test-field' })
   assert.deepEqual([out.cleared, out.left, calls.filter(c => c.startsWith('dig')).length], [0, 3, 1])
-  assert.match(out.stopped, /100,72,200.*no path/)
+  assert.match(out.stuck, /100,72,200.*no path/)
 })
 
 test('farm.tidy: a dig the server dropped is counted as left, not cleared', async () => {
@@ -315,12 +332,13 @@ test('farm.maintain: the strays over the field are dug top down, counted in clea
     ['3(cobblestone,dirt,oak_log)', undefined, ['dig 100,72,200', 'dig 101,72,200', 'dig 100,71,201'], ['collect range=8']])
 })
 
-test('farm.maintain: the rubble comes off before the harvest, the till and the plant', async () => {
+test('farm.maintain: harvest precedes clearing, then the field is tilled and planted', async () => {
   const { api, calls } = maintainApi()
   await farmMaintain.run(api, { place: 'test-field' })
   const lastDig = calls.lastIndexOf(digsIn(calls).at(-1))
-  const firstWork = calls.findIndex(c => /^(farm\.harvest|till|place) /.test(c))
-  assert.deepEqual([lastDig >= 0, lastDig < firstWork], [true, true])
+  const harvest = calls.findIndex(c => c.startsWith('farm.harvest '))
+  const work = calls.map((c, i) => /^(till|place) /.test(c) ? i : -1).filter(i => i >= 0)
+  assert.deepEqual([lastDig >= 0, harvest < calls.indexOf(digsIn(calls)[0]), work.every(i => i > lastDig)], [true, true, true])
 })
 
 test('farm.maintain: a clean field digs nothing, asks for no zones and says nothing of clutter', async () => {
@@ -350,10 +368,9 @@ test('farm.maintain: a stray it cannot dig is the stuck= line, what still stands
     ['1(oak_log)', '2(cobblestone,dirt) still standing over the plan', 'clear cobblestone at 101,72,200: too far to reach', true])
 })
 
-// farm.maintain composts its own spare seed since 6198e2c, so the homestead's day is farm.tidy then farm.maintain:
-// no separate farm.compost step (card bc5dba13)
-test('the farmer routine clears the rubble before it works the field', () => {
+// Maintenance owns clearing, provisioning and composting; the role only schedules each field's maintenance.
+test('the farmer routine delegates the whole field to farm.maintain', () => {
   const steps = JSON.parse(fs.readFileSync(new URL('../roles/farmer/homestead.json', import.meta.url), 'utf8'))
   const read = routineSteps({ steps, place: 'test-field' }, () => null)
-  assert.deepEqual([read.error, read.steps.map(s => s.action)], [undefined, ['kit', 'farm.tidy', 'farm.maintain']])
+  assert.deepEqual([read.error, read.steps.map(s => s.action)], [undefined, ['farm.maintain']])
 })

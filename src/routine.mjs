@@ -3,6 +3,7 @@
 // place, in the order given. The one-place call is the routine exactly as it was.
 import { routineSteps, placeRefusal, compact } from './lib.mjs'
 import { carriedOfKind } from './inventory/kit.mjs'
+import { FARM_ISSUE_FIELDS, farmIssues } from './farm/attention.mjs'
 
 // place=a,b,c as the CLI hands it over (one string), or a list already
 export const placeList = place => (Array.isArray(place) ? place : String(place ?? '').split(','))
@@ -75,13 +76,19 @@ export const stopEvent = ({ reason, step = null, place = null, days, bed = null 
 // what each step reported, per place ("here" for a step with no place), short enough for one event line. What went
 // wrong comes first and is never cut: on 09-26 a farm's stuck= and missing= stood behind lowSlabs= and clutter=, past
 // the cut, and the day line read as a field maintained while its summary said otherwise
-const SAID_FIRST = ['stopped', 'stuck', 'missing', 'bare', 'storage_full', 'rekit', 'kit_short']
+const SAID_FIRST = [...new Set(['stopped', 'stuck', 'missing', 'bare', 'storage_full', 'chest_missing', 'rekit', 'kit_short', 'unfinished', 'skipped', ...FARM_ISSUE_FIELDS])]
 const OUTCOME_MAX = 120
+const stoppedEarly = outcome => Boolean(outcome.stopped && !['done', 'days', 'count', 'until'].includes(outcome.stopped))
+// Missing seed can recover as the remaining crops ripen. Report that work as incomplete without telling the
+// stuck watch it failed. A blocked walk, early hand-back, or bare beds lacking a hoe needs intervention.
+export const outcomeStalled = outcome => Boolean(outcome.failed || outcome.stuck || stoppedEarly(outcome) || /untilled:\d+ no hoe/.test(outcome.bare ?? ''))
+export const outcomeStatus = outcome => outcome.failed ? 'FAILED'
+  : outcomeStalled(outcome) || Object.keys(farmIssues(outcome)).length ? 'incomplete' : 'ok'
 export function outcomeText (outcome) {
   if (outcome.failed) return `FAILED ${outcome.failed}${outcome.rekit ? ` (${outcome.rekit})` : ''}`
   const wrong = compact(Object.fromEntries(SAID_FIRST.filter(k => outcome[k] !== undefined).map(k => [k, outcome[k]])), false)
   const rest = compact(Object.fromEntries(Object.entries(outcome).filter(([k]) => !SAID_FIRST.includes(k))), false)
-  const head = ['ok', wrong].filter(Boolean).join(' ')
+  const head = [outcomeStatus(outcome), wrong].filter(Boolean).join(' ')
   const room = OUTCOME_MAX - head.length - 1
   return rest && room > 0 ? `${head} ${rest.slice(0, room)}` : head
 }

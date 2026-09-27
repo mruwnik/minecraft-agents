@@ -1,7 +1,7 @@
 // Reading a farm's built state against its plan: field census, matching a build convention, and anchoring
 // (finding the y-offset and orientation) a plan against what already stands.
 
-import { PLAN_LEGEND, planLane } from './plan.mjs'
+import { PLAN_LEGEND, planSpec, planItemMatches, planLane, planCropMatches } from './plan.mjs'
 import { holdsWater, isAir, isGroundCover, range } from './world.mjs'
 import { ripeCrop } from './farm.mjs'
 // ---------------------------------------------------------------- composite actions: what a farm needs
@@ -10,7 +10,7 @@ import { ripeCrop } from './farm.mjs'
 export function fieldCensus (cells, worldAt) {
   const out = { crops: {}, cells: cells.length, ripe: 0, growing: 0, empty: 0, untilled: 0, dry: 0 }
   for (const cell of cells) {
-    const spec = PLAN_LEGEND[cell.ch]
+    const spec = planSpec(cell)
     if (!spec) continue
     const ground = worldAt(cell.x, cell.y, cell.z)
     const here = worldAt(cell.x, cell.y + 1, cell.z)
@@ -22,8 +22,9 @@ export function fieldCensus (cells, worldAt) {
     }
     if (spec.kind !== 'crop') continue
     if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') out.untilled++
-    if (here?.name !== spec.crop) { out.empty++; continue }
-    out.crops[spec.crop] = (out.crops[spec.crop] ?? 0) + 1
+    if (!planCropMatches(spec, here?.name)) { out.empty++; continue }
+    const crop = here.name.replace(/^attached_/, '')
+    out.crops[crop] = (out.crops[crop] ?? 0) + 1
     if (ripeCrop(here.name, here.properties?.age)) out.ripe++
     else out.growing++
   }
@@ -58,9 +59,9 @@ export const sameFamily = (want, got) => {
 
 const anchorHit = (spec, here) => {
   if (!here) return false
-  if (spec.kind === 'crop') return here.name === spec.crop
+  if (spec.kind === 'crop') return planCropMatches(spec, here.name)
   if (spec.kind === 'gate') return here.name.endsWith('_fence_gate')
-  return sameFamily(spec.item, here.name)
+  return planItemMatches(spec, here.name, sameFamily)
 }
 const CONVENTION = "a plan's y is the GROUND block (the farmland, pen floor or path itself; crops, fences, gates, chests and a water cover stand at y+1)"
 // what you can stand in: air, or the grass and flowers that grow on open ground
@@ -68,7 +69,7 @@ const isOpenCell = name => isAir(name) || isGroundCover(name) || WEEDS.has(name)
 // what you can stand on
 const isFooting = name => Boolean(name) && !isOpenCell(name) && name !== 'water' && name !== 'lava'
 function freshGround (cells, worldAt, y) {
-  const seen = cells.filter(c => PLAN_LEGEND[c.ch] && worldAt(c.x, c.y, c.z))
+  const seen = cells.filter(c => planSpec(c) && worldAt(c.x, c.y, c.z))
   const standing = seen.filter(c => isOpenCell(worldAt(c.x, c.y, c.z).name) && isFooting(worldAt(c.x, c.y - 1, c.z)?.name))
   if (seen.length < 2 || standing.length !== seen.length) return { off: 0 }
   return {
@@ -86,9 +87,9 @@ function freshGround (cells, worldAt, y) {
 const compassOf = (dx, dz) => [dx && `${Math.abs(dx)} ${dx < 0 ? 'west' : 'east'}`, dz && `${Math.abs(dz)} ${dz < 0 ? 'north' : 'south'}`]
   .filter(Boolean).join(' and ')
 export function planBeside (cells, worldAt, { name = 'the place', reach = 3 } = {}) {
-  const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
+  const solidCells = cells.filter(c => planSpec(c) && planSpec(c).kind !== 'path' && planSpec(c).kind !== 'water')
   if (solidCells.length < 6) return null
-  const score = (dx, dy, dz) => solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x + dx, c.y + 1 + dy, c.z + dz))).length
+  const score = (dx, dy, dz) => solidCells.filter(c => anchorHit(planSpec(c), worldAt(c.x + dx, c.y + 1 + dy, c.z + dz))).length
   // the plan's own spot, judged the way planAnchor judges it: a build that is simply unfinished is not a plan in the
   // wrong place, and a plan that already stands where it says is not searched for at all (the whole of a big farm, every shift)
   const here = Math.max(...[0, -1, 1].map(dy => score(0, dy, 0)))
@@ -108,8 +109,8 @@ export function planBeside (cells, worldAt, { name = 'the place', reach = 3 } = 
 // Does what a plan describes stand at its own anchor? Half its solid cells (fences, gates, crops, chests...) at least,
 // and two: the evidence a mark needs before it moves a place off something built (see markMove)
 export function planStands (cells, worldAt) {
-  const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
-  const found = solidCells.filter(c => [0, -1, 1].some(dy => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z)))).length
+  const solidCells = cells.filter(c => planSpec(c) && planSpec(c).kind !== 'path' && planSpec(c).kind !== 'water')
+  const found = solidCells.filter(c => [0, -1, 1].some(dy => anchorHit(planSpec(c), worldAt(c.x, c.y + 1 + dy, c.z)))).length
   return found >= 2 && found >= solidCells.length / 2
 }
 // The GROUND a plan's cells sit on is evidence its own contents cannot spoil. Chani's carrot patch was stored at y=72
@@ -124,11 +125,11 @@ const groundHit = (spec, here) => {
   return spec.kind === 'water' ? holdsWater(here) : here.name === 'farmland'
 }
 export function planAnchor (cells, worldAt) {
-  const solidCells = cells.filter(c => PLAN_LEGEND[c.ch] && PLAN_LEGEND[c.ch].kind !== 'path' && PLAN_LEGEND[c.ch].kind !== 'water')
-  const groundCells = cells.filter(c => hasGround(PLAN_LEGEND[c.ch]))
+  const solidCells = cells.filter(c => planSpec(c) && planSpec(c).kind !== 'path' && planSpec(c).kind !== 'water')
+  const groundCells = cells.filter(c => hasGround(planSpec(c)))
   const score = dy =>
-    solidCells.filter(c => anchorHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + 1 + dy, c.z))).length +
-    groundCells.filter(c => groundHit(PLAN_LEGEND[c.ch], worldAt(c.x, c.y + dy, c.z))).length
+    solidCells.filter(c => anchorHit(planSpec(c), worldAt(c.x, c.y + 1 + dy, c.z))).length +
+    groundCells.filter(c => groundHit(planSpec(c), worldAt(c.x, c.y + dy, c.z))).length
   const here = score(0)
   const best = [{ dy: 1, n: score(1) }, { dy: -1, n: score(-1) }].sort((a, b) => b.n - a.n)[0]
   const y = cells[0]?.y

@@ -179,7 +179,7 @@ test('farm.maintain: its walks carry no trample flag, and trample= is no argumen
   const made = fakeApi({ place: PLACE, items: { wheat_seeds: 64, carrot: 64, oak_slab: 8, water_bucket: 1 }, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, 'farm.compost': { fed: 0 } } })
   made.api.block = (x, y, z) => built[`${x},${y},${z}`] ?? null
   await farmMaintain.run(made.api, { place: 'test-field' })
-  assert.deepEqual(made.calls.filter(c => /^(goto|farm\.harvest) /.test(c)), ['goto x=101 y=71 z=201 range=3', 'farm.harvest within=8'])
+  assert.deepEqual(made.calls.filter(c => /^(goto|farm\.harvest) /.test(c)), ['goto x=101 y=71 z=201 range=3', 'farm.harvest place=test-field within=8'])
   assert.equal('trample' in farmMaintain.args, false)
   assert.match(checkArgs('farm.maintain', farmMaintain.args, { place: 'f', trample: true }) ?? '', /trample/)
 })

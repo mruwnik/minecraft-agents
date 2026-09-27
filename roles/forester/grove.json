@@ -1,0 +1,3 @@
+[
+  {"action": "forestry.maintain", "place": "$place", "deposit": "$store", "bone_meal": "$bone_meal"}
+]

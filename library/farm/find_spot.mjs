@@ -3,6 +3,7 @@
 // in range for flatness, water, sky and distance (spotScore), refuses ground a zone or a saved plan already claims,
 // then walks to the best one so you can `look` at it and decide. It never digs, tills or marks anything.
 import { spotScore, bestSpots, inAnyZone, planCells } from '../../src/lib.mjs'
+import { farmApi, recoverFarm, reportFarmAttention } from '../../src/farm/attention.mjs'
 
 const RANGE = 48
 const SIZE = 5
@@ -17,9 +18,11 @@ export default {
   args: { w: 'number', h: 'number', near: 'string', range: 'number', limit: 'number' },
 
   async run (api, a) {
+    api = farmApi(api)
     const w = a.w ?? SIZE
     const h = a.h ?? SIZE
     const range = a.range ?? RANGE
+    if (![w, h].every(n => Number.isInteger(n) && n > 0) || !Number.isFinite(range) || range <= 0 || (a.limit !== undefined && (!Number.isInteger(a.limit) || a.limit <= 0))) throw new Error('w= h= and limit= must be positive integers; range= must be positive')
     const at = a.near ? api.places().find(p => p.name === a.near) : api.pos()
     if (!at) throw new Error(`no place called ${a.near}: places q=${a.near} searches the map`)
     const from = { x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z) }
@@ -81,11 +84,17 @@ export default {
     }
 
     const best = bestSpots(scored, a.limit ?? 3)
-    if (!best.length) throw new Error(`no ${w}x${h} patch of open ground within ${range} of ${from.x},${from.y},${from.z}: try a smaller w= h=, a wider range=, or near= somewhere else`)
+    if (!best.length) {
+      const attention = `no ${w}x${h} patch of open ground within ${range} of ${from.x},${from.y},${from.z}: try a smaller w= h=, a wider range=, or near= somewhere else`
+      reportFarmAttention(api, { action: 'farm.find_spot', place: a.near, reasons: { no_site: attention } })
+      return { size: `${w}x${h}`, attention }
+    }
     const pick = best[0]
-    await api.act('goto', { x: pick.x, y: pick.y + 1, z: pick.z, range: 2 }).catch(e => api.note(`could not walk to ${pick.x},${pick.y},${pick.z}: ${e.message}`))
+    const unreachable = await api.act('goto', { x: pick.x, y: pick.y + 1, z: pick.z, range: 2 }).then(() => null, recoverFarm(e => `could not walk to ${pick.x},${pick.y},${pick.z}: ${e.message}; choose another listed spot or open a safe route`))
+    if (unreachable) reportFarmAttention(api, { action: 'farm.find_spot', place: a.near, reasons: { unreachable } })
     return {
       size: `${w}x${h}`,
+      ...(unreachable ? { attention: unreachable } : {}),
       // the anchor a plan would use: the NORTH-WEST corner at GROUND level, ready for farm.plan x= y= z=
       best: `${pick.x},${pick.y},${pick.z}`,
       spots: best.map(s => `${s.x},${s.y},${s.z} score=${s.score} level=${s.level}% work=${s.work}${s.water ? ' water' : ' DRY'}${s.sky ? '' : ' roofed'} ${s.away}m`).join('; '),

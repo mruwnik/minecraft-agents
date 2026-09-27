@@ -1,3 +1,4 @@
+import { planSpec } from './plan.mjs'
 // Where a harvest goes, and what to do when it does not fit. Pure: the composites (farm.maintain, flock.maintain,
 // apiary.maintain) resolve deposit= here and src/storage.mjs walks the chests. Until 09-26 the surplus went to the
 // plan's one C chest, a full chest was a stuck= line and the body carried the harvest round for another day; now the
@@ -27,7 +28,7 @@ export function depositTarget (arg, places) {
 }
 
 // every chest a plan marks, in the plan's own order (row by row), one above the ground the plan's y names
-export const planChests = cells => cells.filter(c => c.ch === 'C').map(c => ({ x: c.x, y: c.y + 1, z: c.z }))
+export const planChests = cells => cells.filter(c => planSpec(c)?.kind === 'chest').map(c => ({ x: c.x, y: c.y + 1, z: c.z }))
 
 // a fixed order for the chests found round a mark: nearest the mark first, ties by x, then z, then y. The same chests
 // are tried in the same order every day, so a reader knows which one fills first

@@ -1,5 +1,6 @@
 // Plans: the legend, parsing a plan into cells, its errors, lane reachability, bill, and one-line summary.
 
+import { treePlantProfile, treeProfile } from '../tree/profiles.mjs'
 import { compact } from '../cli.mjs'
 import { WORK_RANGE } from '../navigation/walk.mjs'
 import { STEPS } from './world.mjs'
@@ -9,6 +10,7 @@ import { STEPS } from './world.mjs'
 // water lies AT y-1, a fence stands at y on dirt. The plan is the truth of what SHOULD be there; the world is what is.
 // `ground` is what must lie at y-1; `seed` is the item a crop is planted from; `item` the block a structure is placed from.
 export const PLAN_LEGEND = {
+  '*': { kind: 'crop', crop: 'crop', ground: 'farmland', generic: true },
   w: { kind: 'crop', crop: 'wheat', seed: 'wheat_seeds', ground: 'farmland' },
   c: { kind: 'crop', crop: 'carrots', seed: 'carrot', ground: 'farmland' },
   p: { kind: 'crop', crop: 'potatoes', seed: 'potato', ground: 'farmland' },
@@ -31,50 +33,116 @@ export const PLAN_LEGEND = {
   t: { kind: 'sapling', item: 'oak_sapling', ground: 'dirt' },
   A: { kind: 'table', item: 'crafting_table', ground: 'dirt' }
 }
+// Custom legends overlay presets, and are resolved once on cells. Strings mean
+// literal block identity; predicates such as generic crop require an explicit spec.
+export const planItemMatches = (spec, name, family) => spec?.literal ? spec.item === name : family(spec?.item, name)
+export const planSpec = cell => cell?.spec ?? PLAN_LEGEND[cell?.ch]
+export function resolveLegend (value = {}) {
+  if (typeof value === 'string') { try { value = JSON.parse(value) } catch { throw new Error('legend must be a JSON object') } }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('legend must be an object')
+  const out = {}
+  const blockId = value => {
+    if (typeof value !== 'string' || !/^(minecraft:)?[a-z][a-z0-9_]*$/.test(value)) throw new Error(`invalid block ID ${JSON.stringify(value)}`)
+    return value.replace(/^minecraft:/, '')
+  }
+  for (const [ch, input] of Object.entries(value)) {
+    if ([...ch].length !== 1 || /\s/.test(ch)) throw new Error('legend keys must be single non-space characters')
+    let spec
+    if (typeof input === 'string') {
+      const item = blockId(input)
+      const tree = treePlantProfile(item)
+      const known = Object.values(PLAN_LEGEND).find(s => s.crop === item || (s.item === item && s.kind !== 'torch'))
+      spec = tree ? { kind: 'tree', species: tree.species, form: 'auto', item, ground: tree.soil[0] }
+        : known ? { ...known } : /_fence_gate$/.test(item) ? { kind: 'gate', item, ground: 'dirt' } : /_fence$/.test(item) ? { kind: 'fence', item, ground: 'dirt' } : ['barrel', 'trapped_chest'].includes(item) ? { kind: 'chest', item, ground: 'dirt' } : item === 'water' ? { ...PLAN_LEGEND['~'] }
+          : { kind: /(?:_flower|_tulip)$/.test(item) || ['poppy', 'dandelion', 'blue_orchid', 'allium', 'azure_bluet', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'torchflower', 'wither_rose'].includes(item) ? 'flower' : 'block', item, ground: 'dirt' }
+    } else {
+      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`invalid legend definition for ${ch}`)
+      spec = { ...input }
+      if (spec.ground_offset !== undefined && (spec.kind !== 'tree' || !Number.isSafeInteger(spec.ground_offset))) throw new Error('ground_offset must be a safe integer on a tree definition')
+      if (spec.kind === 'tree') {
+        const tree = treeProfile(spec.species, spec.form ?? 'auto')
+        spec = { ...spec, species: tree.species, form: spec.form ?? 'auto', item: tree.plant, ground: tree.soil[0] }
+      } else if (spec.kind === 'crop' && spec.generic === true) spec = { ...PLAN_LEGEND['*'] }
+      else if (spec.kind === 'crop') {
+        const known = Object.values(PLAN_LEGEND).find(s => s.kind === 'crop' && !s.generic && s.crop === blockId(spec.crop))
+        if (!known) throw new Error(`unknown crop ${spec.crop}`)
+        spec = { ...known }
+      } else {
+        if (!['block', 'flower', 'sapling', 'fence', 'gate', 'chest', 'composter', 'table', 'path', 'water', 'reserved'].includes(spec.kind)) throw new Error(`invalid legend kind ${spec.kind}`)
+        if (spec.kind === 'path') spec.ground = blockId(spec.ground ?? 'dirt')
+        else if (spec.kind === 'water') spec = { ...PLAN_LEGEND['~'], ...spec }
+        else if (spec.kind !== 'reserved') spec.item = blockId(spec.item)
+        if (spec.ground) spec.ground = blockId(spec.ground)
+      }
+    }
+    out[ch] = { ...spec, literal: true }
+  }
+  return out
+}
+// Generic beds accept crops sown on farmland. Cane and bamboo need their own
+// ground; a fruit is harvested, never mistaken for a planted stem.
+export const FARMLAND_CROPS = Object.values(PLAN_LEGEND).filter(s => s.kind === 'crop' && s.ground === 'farmland' && !s.generic)
+export const planCropMatches = (spec, name) => spec?.kind === 'crop' && (spec.generic
+  ? FARMLAND_CROPS.some(s => planCropMatches(s, name))
+  : name === spec.crop || (spec.crop.endsWith('_stem') && name === `attached_${spec.crop}`))
+export const GENERIC_SEED = 'crop_seed'
 // Block to restore when a planned ground cell is missing. Sand supports cane;
 // all other planned grounds are repaired with dirt.
-const GROUND_ITEM = { sand: 'sand' }
-export const groundItem = spec => GROUND_ITEM[spec.ground] ?? 'dirt'
+const GROUND_ITEM = { farmland: 'dirt', grass_block: 'dirt', water: 'dirt' }
+export const groundItem = spec => GROUND_ITEM[spec.ground] ?? spec.ground ?? 'dirt'
 const PLAN_MAX = 64
 
 // the ASCII map as rows and cells; a space is a hole in the plan, not a cell
-export function parsePlan (map) {
+export function parsePlan (map, legend, callbackArray) {
+  if (Array.isArray(callbackArray) && typeof legend === 'number') legend = undefined
+  let custom
+  try { custom = legend === undefined ? null : resolveLegend(legend) } catch (e) { return { error: e.message } }
   const rows = String(map ?? '').replace(/\t/g, ' ').split('\n')
   const first = rows.findIndex(r => r.trim())
   if (first < 0) return { error: 'the map has no cells: give rows of legend characters, one character per block' }
   const last = rows.length - [...rows].reverse().findIndex(r => r.trim())
   const kept = rows.slice(first, last).map(r => r.replace(/\s+$/, ''))
-  const width = Math.max(...kept.map(r => r.length))
+  const width = Math.max(...kept.map(r => [...r].length))
   if (width > PLAN_MAX || kept.length > PLAN_MAX) return { error: `a plan is at most ${PLAN_MAX}x${PLAN_MAX} blocks (got ${width}x${kept.length})` }
-  return { rows: kept, width, height: kept.length, cells: kept.flatMap((row, dz) => [...row].flatMap((ch, dx) => ch === ' ' ? [] : [{ dx, dz, ch }])) }
+  return { rows: kept, width, height: kept.length, cells: kept.flatMap((row, dz) => [...row].flatMap((ch, dx) => ch === ' ' ? [] : [{ dx, dz, ch, ...(custom?.[ch] ? { spec: custom[ch] } : {}) }])) }
 }
 
 // Every cell in world coordinates: x east of the anchor, z south of it, y the GROUND block — the farmland, pen floor
 // or path the plan describes, the level `till` asks for. What the plan puts on it (crop, fence, gate, torch, chest,
 // composter, flower, sapling) stands at y+1; a water source lies AT y, with its cover at y+1.
-export const planCells = place => (parsePlan(place.plan).cells ?? []).map(c => ({ ...c, x: place.x + c.dx, y: place.y, z: place.z + c.dz }))
+export const planCells = place => (parsePlan(place.plan, place.legend).cells ?? []).map(c => ({ ...c, x: place.x + c.dx, y: place.y + (planSpec(c)?.kind === 'tree' ? planSpec(c).ground_offset ?? 0 : 0), z: place.z + c.dz }))
 
 // farmland stays wet within 4 blocks of a water source, level with it or one above it: a plan that breaks that rule
 // turns back into dirt within minutes of being built. A gate in a corner is one nothing can ever walk through (see blindGates)
 const BARRIER_KINDS = new Set(['fence', 'gate'])
 export function planErrors (parsed) {
   if (parsed.error) return [parsed.error]
-  const unknown = parsed.cells.filter(c => !PLAN_LEGEND[c.ch])
+  const unknown = parsed.cells.filter(c => !planSpec(c))
   if (unknown.length) return unknown.map(c => `${c.ch} at ${c.dx},${c.dz} is not in the legend (${Object.keys(PLAN_LEGEND).join(' ')})`)
-  const waters = parsed.cells.filter(c => PLAN_LEGEND[c.ch].kind === 'water')
-  const dry = parsed.cells.filter(c => PLAN_LEGEND[c.ch].ground === 'farmland' &&
+  const waters = parsed.cells.filter(c => planSpec(c).kind === 'water')
+  const dry = parsed.cells.filter(c => planSpec(c).ground === 'farmland' &&
     !waters.some(w => Math.abs(w.dx - c.dx) <= 4 && Math.abs(w.dz - c.dz) <= 4))
   const at = (dx, dz) => parsed.cells.find(c => c.dx === dx && c.dz === dz)
-  const kindAt = (dx, dz) => PLAN_LEGEND[at(dx, dz)?.ch]?.kind ?? null
+  const kindAt = (dx, dz) => planSpec(at(dx, dz))?.kind ?? null
   const walkable = kind => kind && !BARRIER_KINDS.has(kind)
-  const blind = parsed.cells.filter(c => PLAN_LEGEND[c.ch].kind === 'gate').filter(g =>
+  const blind = parsed.cells.filter(c => planSpec(c).kind === 'gate').filter(g =>
     ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) =>
       walkable(kindAt(g.dx + dx, g.dz + dz)) && !BARRIER_KINDS.has(kindAt(g.dx - dx, g.dz - dz))))
   // one complaint for the whole dry patch: a plan that forgot its channel used to answer with a line per cell
   const dryLine = dry.length
     ? [`${dry.length} cell${dry.length === 1 ? ' is' : 's are'} farmland with no water within 4 blocks (${dry.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')}${dry.length > 4 ? ` and ${dry.length - 4} more` : ''}): move the channel or shorten the row`]
     : []
+  const trees = parsed.cells.filter(c => planSpec(c)?.kind === 'tree')
+  const footprints = trees.flatMap(c => {
+    const p = treeProfile(planSpec(c).species, planSpec(c).form)
+    if (p.width === 1) return []
+    return [[1, 0], [0, 1], [1, 1]].flatMap(([dx, dz]) => {
+      const other = at(c.dx + dx, c.dz + dz)
+      return other && planSpec(other)?.kind !== 'reserved' ? [`tree at ${c.dx},${c.dz} needs reserved or unmapped 2x2 footprint; conflicts with ${other.ch} at ${other.dx},${other.dz}`] : []
+    })
+  })
   return [
+    ...footprints,
     ...dryLine,
     ...blind.map(g => `the gate at ${g.dx},${g.dz} is in a corner: nothing can walk through it. Put it in the middle of a wall`)
   ]
@@ -113,14 +181,14 @@ const planMap = cells => new Map(cells.map(c => [key(c.dx, c.dz), c]))
 // a cell of the plan a body stands on (LANE_KINDS), or ground outside the plan, which the plan says nothing about
 const standableIn = map => (dx, dz) => {
   const cell = map.get(key(dx, dz))
-  return !cell || LANE_KINDS.has(PLAN_LEGEND[cell.ch]?.kind)
+  return !cell || LANE_KINDS.has(planSpec(cell)?.kind)
 }
 const named = cells => `${cells.slice(0, 4).map(c => `${c.dx},${c.dz}`).join(' ')}${cells.length > 4 ? ` and ${cells.length - 4} more` : ''}`
 export function planLane (cells) {
-  const crops = (cells ?? []).filter(c => PLAN_LEGEND[c.ch]?.kind === 'crop')
+  const crops = (cells ?? []).filter(c => planSpec(c)?.kind === 'crop')
   if (!crops.length) return {}
   const map = planMap(cells)
-  const kindAt = (dx, dz) => PLAN_LEGEND[map.get(key(dx, dz))?.ch]?.kind ?? null
+  const kindAt = (dx, dz) => planSpec(map.get(key(dx, dz)))?.kind ?? null
   const bounds = ['dx', 'dz'].map(k => [Math.min(...cells.map(c => c[k])) - 1, Math.max(...cells.map(c => c[k])) + 1])
   const inside = (dx, dz) => dx >= bounds[0][0] && dx <= bounds[0][1] && dz >= bounds[1][0] && dz <= bounds[1][1]
   const standable = standableIn(map)
@@ -150,15 +218,15 @@ export function planLane (cells) {
 export function planBill (parsed) {
   const bill = {}
   const add = (item, n = 1) => { bill[item] = (bill[item] ?? 0) + n }
-  for (const { ch } of parsed.cells ?? []) {
-    const cell = PLAN_LEGEND[ch]
+  for (const entry of parsed.cells ?? []) {
+    const cell = planSpec(entry)
     if (!cell) continue
-    if (cell.kind === 'crop') add(cell.seed)
+    if (cell.kind === 'crop') add(cell.generic ? GENERIC_SEED : cell.seed)
     if (cell.cover) add(cell.cover)
     if (cell.kind === 'torch') add('torch')
-    if (cell.item) add(cell.item)
+    if (cell.item) add(cell.item, cell.kind === 'tree' ? treeProfile(cell.species, cell.form).width ** 2 : 1)
   }
-  if ((parsed.cells ?? []).some(c => PLAN_LEGEND[c.ch]?.kind === 'water')) add('water_bucket')
+  if ((parsed.cells ?? []).some(c => planSpec(c)?.kind === 'water')) add('water_bucket')
   return bill
 }
 
@@ -166,8 +234,9 @@ export function planBill (parsed) {
 export function planSummary (parsed) {
   if (parsed.error) return parsed.error
   const counts = {}
-  for (const { ch } of parsed.cells) {
-    const cell = PLAN_LEGEND[ch]
+  for (const entry of parsed.cells) {
+    const ch = entry.ch
+    const cell = planSpec(entry)
     const label = cell?.kind === 'crop' ? cell.crop.replace(/s$/, '') : cell?.kind ?? ch
     counts[label] = (counts[label] ?? 0) + 1
   }
@@ -177,6 +246,7 @@ export function planSummary (parsed) {
 // Where the block a plan marks with one character really stands: the plan's y is the ground it sits on, so a chest,
 // composter or torch is at y+1. Every composite that walks to one asks for it this way.
 export function planStructure (cells, ch) {
-  const cell = cells.find(c => c.ch === ch)
+  const expected = PLAN_LEGEND[ch]
+  const cell = cells.find(c => expected ? planSpec(c)?.kind === expected.kind : c.ch === ch)
   return cell ? { x: cell.x, y: cell.y + 1, z: cell.z } : null
 }

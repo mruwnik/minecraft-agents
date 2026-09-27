@@ -1,5 +1,5 @@
 // Crop bookkeeping: ripeness, replant order and spots, seed sourcing, and a farm's surplus/compost plan.
-import { planBill } from './plan.mjs'
+import { planBill, FARMLAND_CROPS, GENERIC_SEED } from './plan.mjs'
 
 // farming: the seed to replant a ripe crop with, or null when it is not a crop or not ripe yet
 const CROPS = { wheat: [7, 'wheat_seeds'], carrots: [7, 'carrot'], potatoes: [7, 'potato'], beetroots: [3, 'beetroot_seeds'], cocoa: [2, 'cocoa_beans'] }
@@ -67,11 +67,28 @@ export const SEED_ITEMS = new Set(['wheat_seeds', 'beetroot_seeds', 'melon_seeds
 // is several plans and the body carries one pocket: a reserve read off the plan being swept alone had the crop-field
 // and cane passes compost every wheat seed the melon patch would need (09-26, 44-53 a day). farm.maintain's
 // reserve_for= names the other plans; the routine fills it with $places
-export const seedReserve = parsedPlans => {
+export const STALK_RESERVE_MAX = 64
+export const seedReserve = (parsedPlans, items = {}) => {
   const keep = {}
+  let generic = 0
   for (const parsed of parsedPlans) {
     for (const [item, n] of Object.entries(planBill(parsed))) {
       if (SEED_ITEMS.has(item)) keep[item] = (keep[item] ?? 0) + n * 2
+      if (item === GENERIC_SEED) generic += n * 2
+    }
+  }
+  // Cane and bamboo regrow from retained bases. One shared stack per species is
+  // spare stock for damaged bases; the rest belongs in configured storage, not
+  // sixteen inventory slots kept for sowing an intact 483-cell cane plot twice.
+  for (const stalk of STALKS) if (keep[stalk]) keep[stalk] = Math.min(keep[stalk], STALK_RESERVE_MAX)
+  // Generic beds share one reserve budget. Round-robin among carried species
+  // retains a mix without reserving a whole field's worth of every crop.
+  while (generic > 0) {
+    const available = FARMLAND_CROPS.map(s => s.seed).filter(seed => (items[seed] ?? 0) > (keep[seed] ?? 0))
+    if (!available.length) break
+    for (const seed of available) {
+      keep[seed] = (keep[seed] ?? 0) + 1
+      if (--generic === 0) break
     }
   }
   return keep
@@ -108,7 +125,7 @@ export function seedTarget (planCell, places, arg) {
   return { x: Math.floor(place.x), y: Math.floor(place.y), z: Math.floor(place.z) }
 }
 // what takes the seed at that cell: a composter is fed (farm.compost), a chest-like block is deposited into
-const SEED_BINS = new Set(['chest', 'trapped_chest', 'barrel'])
+const SEED_BINS = new Set(['chest', 'trapped_chest', 'barrel', 'hopper'])
 export const seedDrop = block => block?.name === 'composter' ? 'farm.compost' : SEED_BINS.has(block?.name) || /shulker_box$/.test(block?.name ?? '') ? 'deposit' : null
 
 // ---------------------------------------------------------------- composite actions: composting

@@ -192,7 +192,7 @@ const farmApi = (world, items = {}) => {
 test('farm.maintain: the sweep starts at the nearest cell of the field\'s edge, never its middle', async () => {
   const { api, calls } = farmApi(field(), { wheat_seeds: 8 })
   await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual(calls.slice(0, 2), ['goto x=-1 y=63 z=4 range=1', 'farm.harvest within=15'])
+  assert.deepEqual(calls.slice(0, 3), ['goto x=-1 y=63 z=4 range=1', 'kit tools=stone_hoe food=12 place=test-field', 'farm.harvest place=test-field within=15'])
 })
 
 test('farm.maintain: with nothing loaded round the plan, a walk to its middle at a range that reaches the rim, then the edge', async () => {

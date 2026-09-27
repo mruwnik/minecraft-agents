@@ -5,16 +5,15 @@
 // back before its till and plant, from the pockets or the plan's chest. The same for a `.` lane cell and the ground
 // under a chest or composter: a hole in the lane is the worst kind, since the sweep parks the body ON the lane, and a
 // one-deep hole there is a trap it walks out of only at a cost. Pure judgements only; farm.maintain walks.
-import { PLAN_LEGEND, groundItem } from './plan.mjs'
-import { isAir } from './world.mjs'
+import { PLAN_LEGEND, planSpec, groundItem } from './plan.mjs'
+import { isAir, isGroundCover } from './world.mjs'
 import { itemShortfall } from './inventory.mjs'
 
 // Compatibility export; the ground-material policy lives with the plan legend.
 export const floorItem = groundItem
-export const missingGround = name => isAir(name) || name === 'water'
-// the cells the sweep keeps the ground under: beds, lanes and what the sweep itself opens (its chest, its composter).
-// A channel's own refill is farmJobs's; a fence, gate or torch over a hole is farm.build partial=true's
-const KEPT = new Set(['crop', 'path', 'chest', 'composter'])
+export const missingGround = name => isAir(name) || name === 'water' || isGroundCover(name)
+// Maintain places the plan's structures as well as its crops, so it repairs their
+// supporting ground too. A channel's own refill remains farmJobs's responsibility.
 
 // the fill jobs of a plan: one per kept cell whose ground is missing, in plan order, each carrying the block it wants
 // and whether any is carried (the way farmJobs marks its jobs). A cell with water standing OVER it is flooded, not a
@@ -23,8 +22,9 @@ const KEPT = new Set(['crop', 'path', 'chest', 'composter'])
 export function holeJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
   for (const cell of cells) {
-    const spec = PLAN_LEGEND[cell.ch]
-    if (!KEPT.has(spec?.kind)) continue
+    const spec = planSpec(cell)
+    if (['tree', 'reserved'].includes(spec?.kind)) continue
+    if (!spec || spec.kind === 'water') continue
     const ground = worldAt(cell.x, cell.y, cell.z)
     if (!ground || !missingGround(ground.name)) continue
     if (worldAt(cell.x, cell.y + 1, cell.z)?.name === 'water') continue

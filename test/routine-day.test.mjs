@@ -14,25 +14,53 @@ for (const [name, outcome, expected] of [
   ['a short summary is left as it is', { sweeps: 1, replanted: 3 }, 'ok sweeps=1 replanted=3'],
   ['what went wrong comes first, in a fixed order, whatever order it was said in',
     { sweeps: 1, bare: '2 (untilled:2 no hoe)', replanted: 3, stuck: 'till: no hoe', missing: 'wheat_seeds:2', stopped: 'twice in a row' },
-    'ok stopped=twice in a row stuck=till: no hoe missing=wheat_seeds:2 bare=2 (untilled:2 no hoe) sweeps=1 replanted=3'],
+    'incomplete stopped=twice in a row stuck=till: no hoe missing=wheat_seeds:2 bare=2 (untilled:2 no hoe) sweeps=1 replanted'],
   ['a full store is what went wrong too, after the rest of them',
     { sweeps: 1, storage_full: 'wheat:40 carried', stuck: 'till: no hoe', deposited: 'wheat:64@1,64,0' },
-    'ok stuck=till: no hoe storage_full=wheat:40 carried sweeps=1 deposited=wheat:64@1,64,0'],
+    'incomplete stuck=till: no hoe storage_full=wheat:40 carried sweeps=1 deposited=wheat:64@1,64,0'],
   ['the cut falls on the rest, never on what went wrong',
     { sweeps: 1, lowSlabs: long, bare: '2 (untilled:2 no hoe)' },
-    `ok bare=2 (untilled:2 no hoe) sweeps=1 lowSlabs=${'x'.repeat(120 - 'ok bare=2 (untilled:2 no hoe) sweeps=1 lowSlabs='.length)}`],
+    `incomplete bare=2 (untilled:2 no hoe) sweeps=1 lowSlabs=${'x'.repeat(120 - 'incomplete bare=2 (untilled:2 no hoe) sweeps=1 lowSlabs='.length)}`],
   ['what went wrong is never cut, even past the limit by itself',
     { stuck: long, sweeps: 1 },
-    `ok stuck=${long}`]
+    `incomplete stuck=${long}`],
+  ['a missing chest remains visible even behind a long ordinary summary',
+    { sweeps: 1, lowSlabs: long, chest_missing: `chest at 1,64,0 is missing ${long}` },
+    `incomplete chest_missing=chest at 1,64,0 is missing ${long}`]
 ]) {
   test(`outcomeText: ${name}`, () => assert.equal(outcomeText(outcome), expected))
 }
 
 test('dayEvent: a step summary keeps its failure fields inside the cut', () => {
-  const event = dayEvent(1, [{ action: 'farm.maintain', place: 'f', outcome: { sweeps: 1, clutter: long, bare: '1 (no seed:1 wheat_seeds)' } }])
-  assert.match(event.places.f['farm.maintain'], /^ok bare=1 \(no seed:1 wheat_seeds\) sweeps=1 clutter=x+$/)
+  const event = dayEvent(1, [{ action: 'farm.maintain', place: 'f', outcome: { sweeps: 1, lowSlabs: long, bare: '1 (no seed:1 wheat_seeds)' } }])
+  assert.match(event.places.f['farm.maintain'], /^incomplete bare=1 \(no seed:1 wheat_seeds\) sweeps=1 lowSlabs=x+$/)
   assert.equal(event.places.f['farm.maintain'].length, 120)
 })
+
+for (const [name, outcome, status, stalled] of [
+  ['growing crops are healthy', { stopped: 'done', stillGrowing: 80 }, 'ok', false],
+  ...['days', 'count', 'until'].map(stopped => [`${stopped} is normal completion`, { stopped }, 'ok', false]),
+  ['seed shortage stays visible while crops grow', { stopped: 'done', bare: '15 (no seed:15 wheat_seeds)', missing: 'wheat_seeds:15' }, 'incomplete', false],
+  ['a missing spare is not a failed work day', { kit_short: 'stone_hoe: 1 carried, 2 wanted' }, 'incomplete', false],
+  ['a missing chest needs a storage decision, not a stop', { chest_missing: 'chest at 1,64,0 is missing (air there)' }, 'incomplete', false],
+  ['explicit resource attention is incomplete', { attention: 'no seed source found', gaveUp: 'two empty searches' }, 'incomplete', false],
+  ['a composter finishing short is normal', { short: '3 items did not fill one layer', fed: 3 }, 'ok', false],
+  ['a blocked walk is a stalled step', { stuck: 'no path to 1,64,2' }, 'incomplete', true],
+  ['beds left untilled with no hoe need attention', { bare: '3 (untilled:3 no hoe: craft item=wooden_hoe)' }, 'incomplete', true]
+]) {
+  test(`routine reporting: ${name}`, async () => {
+    const { default: routine } = await import('../library/routine.mjs')
+    const { fakeApi } = await import('./helpers.mjs')
+    const { api, calls, events, progress } = fakeApi({ answers: { 'farm.maintain': outcome } })
+    const result = await routine.run(api, { steps: [{ action: 'farm.maintain' }], days: 3 })
+    assert.equal(result.days, 3, 'reporting must not stop the routine')
+    assert.equal(result.ran, 3)
+    assert.equal(progress.routine.failedSteps.length, stalled ? 3 : 0)
+    assert.ok(events.filter(e => e.type === 'routine_day').every(e => e.places.here['farm.maintain'].startsWith(`${status} `)))
+    assert.ok(calls.filter(c => c.startsWith('note farm.maintain')).every(c => c.startsWith(`note farm.maintain ${status} `)))
+    if (outcome.bare) assert.ok(calls.some(c => c.includes(`bare=${outcome.bare}`)))
+  })
+}
 
 // ---------------------------------------------------------------- $places
 const STEP = { action: 'farm.maintain', place: '$place', reserve_for: '$places' }

@@ -142,7 +142,7 @@ export async function sweepDrops (range = 8) {
     const drop = nextDrop(dropsNear(range).filter(d => !d.outsidePen), tried, false)
     if (!drop) break
     tried.add(drop.id)
-    const goal = dropGoal(drop)
+    const goal = dropGoal(drop, cellAt)
     // a drop on the floor of a pit is left lying (the result names it), not followed down: a dig of a pit's own wall from the rim
     // dropped its dirt on the floor and this sweep jumped in after it (src/navigation/walk.mjs rimGoal, card 3fe30fb4)
     if (rimGoal(cellAt, goal, goal.range, { from: feetCell(bot.entity.position, bot.entity.onGround) })) continue
@@ -166,8 +166,9 @@ export async function walkToDig (p) {
 export const cellAt = (x, y, z) => {
   const b = bot.blockAt(new Vec3(x, y, z), false)
   if (!b) return null
-  const walkable = isWoodDoor(b) || (b.name.endsWith('_fence_gate') && b.getProperties().open)
-  return { name: b.name, solid: b.boundingBox === 'block' && !walkable, liquid: FLUIDS.has(b.name), crop: breaksUnderfoot(b.name) }
+  const scaffold = b.name === 'scaffolding' && bot.pathfinder?.movements?.scaffoldingSupported === true
+  const walkable = scaffold || isWoodDoor(b) || (b.name.endsWith('_fence_gate') && b.getProperties().open)
+  return { name: b.name, solid: b.boundingBox === 'block' && !walkable, liquid: FLUIDS.has(b.name), crop: breaksUnderfoot(b.name), ...(scaffold ? { climbable: true } : {}) }
 }
 export async function goNear (v, range = 2) {
   // already there: don't ask the pathfinder, which can fail from a perch (pillar top, ledge) even though nothing needs walking

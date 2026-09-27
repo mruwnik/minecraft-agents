@@ -60,9 +60,15 @@ test('farm.maintain: a body that ends on the lane already walks nowhere', async 
 test('farm.maintain: a parking walk that fails is a note, never stuck', async () => {
   const { api, calls, report } = fakeApi({
     place: fakePlace('ww\n..'), world: LANED, items: { wheat_seeds: 4, stone_hoe: 1 },
-    answers: { ...HARVEST, goto: args => args.range === 0 ? new Error('goto: cancelled') : {} }
+    answers: { ...HARVEST, goto: args => args.range === 0 ? new Error('goto: no path to the goal') : {} }
   })
   await maintainFarm.run(api, { place: 'test-field' })
   assert.deepEqual([report.stuck, report.parked, calls.filter(c => c.startsWith('note') && /lane/.test(c))],
-    [undefined, undefined, ['note could not end the sweep on the lane cell at 0,64,1: goto: cancelled']])
+    [undefined, undefined, ['note could not end the sweep on the lane cell at 0,64,1: goto: no path to the goal']])
+})
+
+test('farm.maintain: cancellation during parking is never downgraded to a note', async () => {
+  const { api } = fakeApi({ place: fakePlace('ww\n..'), world: LANED, items: { wheat_seeds: 4 },
+    answers: { ...HARVEST, goto: args => args.range === 0 ? new Error('goto: cancelled') : {} } })
+  await assert.rejects(maintainFarm.run(api, { place: 'test-field' }), /cancelled/)
 })

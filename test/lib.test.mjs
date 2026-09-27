@@ -1193,7 +1193,9 @@ test('farm.find_spot never offers ground a saved plan already claims', async () 
 
 test('farm.find_spot says so rather than guessing when there is no open ground', async () => {
   const { api } = fakeApi({ world: {}, answers: { zones: { zones: [] } } })
-  await assert.rejects(farmFindSpot.run(api, { w: 3, h: 3, range: 4 }), /no 3x3 patch of open ground/)
+  const result = await farmFindSpot.run(api, { w: 3, h: 3, range: 4 })
+  assert.match(result.attention, /no 3x3 patch of open ground/)
+  assert.equal(result.best, undefined)
 })
 
 // the tool picker takes whatever digs fastest, and a sword digs melons, pumpkins, leaves and cobwebs fastest: Jizo's sword wore out
@@ -3072,7 +3074,7 @@ test('PLAN_LEGEND: every field crop names the seed that replants it', () => {
 const planRows = (...r) => parsePlan(r.join('\n'))
 for (const [name, parsed, expected] of [
   ['a hydrated field is sound', planRows('wwww~wwww'), []],
-  ['a character nobody knows', planRows('wwXw'), ['X at 2,0 is not in the legend (w c p b s m k B ~ . # G T C K F t A)']],
+  ['a character nobody knows', planRows('wwXw'), ['X at 2,0 is not in the legend (* w c p b s m k B ~ . # G T C K F t A)']],
   ['wheat five blocks from the water', planRows('~wwwww'), ['1 cell is farmland with no water within 4 blocks (5,0): move the channel or shorten the row']],
   ['a whole dry row is one complaint, not eight', planRows('wwwwwwww'), ['8 cells are farmland with no water within 4 blocks (0,0 1,0 2,0 3,0 and 4 more): move the channel or shorten the row']],
   ['a gate in the corner', planRows('G##', '#..', '###'), ['the gate at 0,0 is in a corner: nothing can walk through it. Put it in the middle of a wall']],
@@ -3395,18 +3397,22 @@ const fakePlace = (plan, x = 0, y = 63, z = 0) => {
   return { name: 'test-field', kind: 'farm', x, y, z, plan, parsed, cells: planCells({ plan, x, y, z }), bill: planBill(parsed) }
 }
 
-test('maintain_farm: harvests first, then tills and plants what the plan says is missing', async () => {
+test('maintain_farm: provisions, harvests without replanting, then tills and plants what the plan says is missing', async () => {
   const world = { '0,63,0': 'dirt' }
   const { api, calls } = fakeApi({
     place: fakePlace('w'), world, items: { wheat_seeds: 32, stone_hoe: 1 },
     answers: {
-      'farm.harvest': { harvested: { wheat: 1 }, replanted: 0 },
+      'farm.harvest': a => {
+        assert.equal(a.place, 'test-field')
+        assert.equal(a.replant, false, 'sowing belongs after the maintenance tidy phase')
+        return { harvested: { wheat: 1 }, replanted: 0 }
+      },
       till: () => { world['0,63,0'] = 'farmland'; return {} },
       place: () => { world['0,64,0'] = 'wheat'; return {} }
     }
   })
   const summary = await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'farm.harvest within=8', 'till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
+  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'kit tools=stone_hoe food=12 place=test-field', 'farm.harvest place=test-field within=8', 'till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
   // the field came out as the plan asks: one pass, and nothing left to report
   assert.deepEqual([summary.replanted, summary.unfinished], [1, undefined])
 })
@@ -3414,7 +3420,7 @@ test('maintain_farm: harvests first, then tills and plants what the plan says is
 test('maintain_farm: a bed that is already planted is left alone', async () => {
   const { api, calls } = fakeApi({ place: fakePlace('w'), world: { '0,63,0': 'farmland', '0,64,0': 'wheat#3' }, items: { wheat_seeds: 32 } })
   await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'farm.harvest within=8'])
+  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'kit tools=stone_hoe food=12 place=test-field', 'farm.harvest place=test-field within=8'])
 })
 
 // Chani, 2026-09-22: `farm.maintain days=1` stopped on "twice in a row: dig: that block is under water" — the block it
@@ -3424,7 +3430,7 @@ test('maintain_farm: never digs under its own channel, and says which cells it l
     place: fakePlace('~w'), world: { '0,63,0': 'dirt', '0,64,0': 'water', '1,63,0': 'farmland', '1,64,0': 'wheat#3' }, items: { water_bucket: 1, wheat_seeds: 32 }
   })
   const summary = await maintainFarm.run(api, { place: 'test-field' })
-  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'farm.harvest within=8'])
+  assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2', 'kit tools=stone_hoe food=12 place=test-field', 'farm.harvest place=test-field within=8'])
   assert.match(summary.skipped, /^0,63,0 \(dirt where the channel should be, and water stands over it/)
   assert.equal(summary.unfinished, undefined)
 })
@@ -3635,7 +3641,7 @@ test('compost: feeds the composter and takes the bone meal out when it fills', a
 
 test('compost: with no composter within reach it says how to get one', async () => {
   const { api } = fakeApi({ items: { wheat: 2 }, answers: { find_blocks: { positions: [] } } })
-  await assert.rejects(compost.run(api, {}), /composter/)
+  assert.match((await compost.run(api, {})).attention, /no composter within 32 blocks/)
 })
 
 test('compost: nothing in my pockets a composter would take', async () => {
@@ -4051,7 +4057,7 @@ test('farm.fields: a field with no lane through it says so on a line of its own'
 
 test('farm.fields: a place that is on the map but has no plan is not a field', async () => {
   const { api } = fakeApi({ places: [{ name: 'my-hut', kind: 'base', x: 0, y: 64, z: 0 }] })
-  await assert.rejects(farmFields.run(api, {}), /no farm plan within 48 blocks/)
+  assert.match((await farmFields.run(api, {})).text, /no farm plan within 48 blocks/)
 })
 
 test('argsUsage: the three coordinates read as one thing, not three', () =>
@@ -4227,7 +4233,7 @@ test('farm.harvest: a ripe crop it cannot walk to is named, and the rest is stil
 })
 
 // ---------------------------------------------------------------- mine.get
-const stoneWorld = () => ({ '1,64,0': 'stone', '2,64,0': 'stone', '3,64,0': 'stone', '0,63,0': 'dirt' })
+const stoneWorld = () => ({ '1,64,0': 'stone', '2,64,0': 'stone', '3,64,0': 'stone', '0,63,0': 'dirt', '0,64,0': 'air', '0,65,0': 'air' })
 const stoneApi = (world, extra = {}) => fakeApi({
   world,
   items: { stone_pickaxe: 1, dirt: 4 },
@@ -4271,19 +4277,29 @@ test('mine.get: a build full of the block does not hide the wild ones behind it'
 
 test('mine.get: a pit it cannot climb out of is named, not hidden', async () => {
   const world = stoneWorld()
-  const { api } = stoneApi(world, { path_to: { status: 'noPath' }, goto: new Error('goto: no walkable path') })
+  let pos = { x: 0, y: 64, z: 0 }
+  const { api } = stoneApi(world, {
+    dig: args => { delete world[`${args.x},${args.y},${args.z}`]; pos = { x: 0, y: 60, z: 0 } },
+    goto: new Error('goto: no walkable path')
+  })
+  api.pos = () => pos
   const out = await mineGet.run(api, { block: 'stone', count: 1 })
-  assert.deepEqual([out.got, out.pit], [1, 'you are in the pit you dug and could not get back out, even digging: pillar_up, or climb'])
+  assert.deepEqual([out.got, out.pit], [1, 'you are in the pit you dug and could not get back out, even digging: pillar_up, or climb; no ground was filled'])
 })
 
 // ore under a few blocks of dirt is reached by a dig walk down; the way back up is a dig walk too (it climbs a shaft by a
 // niche ladder, src/navigation/climb.mjs), not the plain walk that cannot leave a pit
 test('mine.get: the way out of the pit it dug down to buried ore is dug when a walk cannot take it', async () => {
   const world = stoneWorld()
-  const { api, calls } = stoneApi(world, { path_to: { status: 'noPath' }, goto: args => { if (!args.dig) throw new Error('goto: no walkable path'); return {} } })
+  let pos = { x: 0, y: 64, z: 0 }
+  const { api, calls } = stoneApi(world, {
+    dig: args => { delete world[`${args.x},${args.y},${args.z}`]; pos = { x: 0, y: 60, z: 0 } },
+    goto: args => { if (!args.dig) throw new Error('goto: no walkable path'); pos = { x: args.x, y: args.y, z: args.z }; return {} }
+  })
+  api.pos = () => pos
   const out = await mineGet.run(api, { block: 'stone', count: 1 })
   assert.deepEqual([out.got, out.pit, out.climbedOut, calls.filter(c => c.startsWith('goto'))],
-    [1, undefined, 'back where you started (dug my way up)', ['goto x=0 y=64 z=0 range=2', 'goto x=0 y=64 z=0 range=2 dig']])
+    [1, undefined, 'verified on safe ground near the start (dug my way up)', ['goto x=0 y=64 z=0 range=0', 'goto x=0 y=64 z=0 range=0 dig']])
 })
 
 test('mine.get: it will not sink a shaft in a pen with animals in it', async () => {
@@ -4301,11 +4317,17 @@ test('mine.get: a full inventory is refused before the first swing, not after it
 })
 
 test('mine.get: the hand-back rules never cut it short of putting the ground back', async () => {
-  const world = stoneWorld()
-  const { api, calls, checkpoints } = stoneApi(world)
-  await mineGet.run(api, { block: 'stone', count: 2 })
+  const world = { ...stoneWorld(), '-1,63,0': 'dirt', '-1,64,0': 'air', '-1,65,0': 'air' }
+  let pos = { x: 0.5, y: 64, z: 0.5 }
+  const { api, calls, checkpoints } = stoneApi(world, {
+    dig: args => { delete world[`${args.x},${args.y},${args.z}`]; world['0,63,0'] = 'air' },
+    goto: args => { pos = { x: args.x + 0.5, y: args.y, z: args.z + 0.5 } },
+    place: args => { world[`${args.x},${args.y},${args.z}`] = args.item; return { placed: 1 } }
+  })
+  api.pos = () => pos
+  const out = await mineGet.run(api, { block: 'stone', count: 2 })
   // count= is this loop's own limit: telling the runner about it would end the task down in the pit it just dug
-  assert.deepEqual([checkpoints.every(c => c.done === undefined), calls.at(-1).startsWith('path_to')], [true, true])
+  assert.deepEqual([checkpoints.every(c => c.done === undefined), calls.at(-1).startsWith('place'), out.mended], [true, true, '1 of 1 blocks of the ground you broke open at the start put back'])
 })
 
 // ---------------------------------------------------------------- flock.breed
@@ -4546,9 +4568,9 @@ test('farm.build: the ground is levelled, then the plan is tilled and planted', 
 })
 
 // the bill is checked before a single block is moved: half a farm is worse than none
-test('farm.build: without the materials it refuses and does nothing but walk there', async () => {
+test('farm.build: without materials it asks for attention and does nothing but walk there', async () => {
   const { api, calls } = fakeApi({ place: fakePlace('ww'), world: { '0,63,0': 'dirt', '1,63,0': 'dirt' }, items: { wheat_seeds: 1 } })
-  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /still needs wheat_seeds:1/)
+  assert.match((await buildFarm.run(api, { place: 'test-field' })).attention, /still needs wheat_seeds:1/)
   assert.deepEqual(calls, ['goto x=0 y=64 z=0 range=2'])
 })
 
@@ -4603,10 +4625,10 @@ test('farm.build: a dry channel on solid ground is left alone, not filled', asyn
   assert.deepEqual(calls.filter(c => c.startsWith('place') || c.startsWith('dig')), [])
 })
 
-test('farm.build: a plan with a dry channel and no bucket is refused before anything is touched', async () => {
+test('farm.build: a dry channel without a bucket asks for attention before anything is touched', async () => {
   const world = { '0,63,0': 'grass_block', '1,63,0': 'grass_block' }
   const { api, calls } = fakeApi({ place: fakePlace('~~'), world, items: { oak_slab: 4 } })
-  await assert.rejects(buildFarm.run(api, { place: 'test-field' }), /still needs water_bucket:1/)
+  assert.match((await buildFarm.run(api, { place: 'test-field' })).attention, /still needs water_bucket:1/)
   assert.deepEqual(calls.filter(c => c.startsWith('dig') || c.startsWith('place')), [])
 })
 
@@ -4667,8 +4689,9 @@ test('maintain_farm: a cover is held back for water that is only a neighbour\'s 
 // A dry channel job carries water_bucket; a body with no water_bucket but an empty bucket in hand used to just report
 // missing=water_bucket and stop there, leaving the driver to notice, walk to a lake and fill it by hand. Now the job
 // itself looks for the nearest water and fills from it first (see library/farm/shared/water.mjs).
+const sourceShore = (x, y, z) => Object.fromEntries([-2, -1, 0, 1, 2].flatMap(dx => [-2, -1, 0, 1, 2].flatMap(dz => [0, 1, 2, 3, 4].map(dy => [`${x + dx},${y + dy},${z + dz}`, dy === 0 ? 'stone' : 'air']))))
 test('farm.build: a dry channel job fetches its own water_bucket from the nearest source, not just report it missing', async () => {
-  const world = { '0,63,0': 'air', '0,62,0': 'stone', '5,62,5': 'water' }
+  const world = { ...sourceShore(5, 62, 5), '0,63,0': 'air', '0,62,0': 'stone', '5,62,5': 'water' }
   const items = { bucket: 1, oak_slab: 4 }
   const { api, calls } = fakeApi({
     place: fakePlace('~'), world, items,
@@ -4700,7 +4723,7 @@ test('farm.build: a dry channel job with no bucket at all still reports it missi
 test('farm.build: a dry channel job does not walk to a flowing candidate once a real source is known further off', async () => {
   const world = {
     '0,63,0': 'air', '0,62,0': 'stone',
-    '2,60,2': 'water#3', '3,60,3': 'water#5', '9,60,9': 'water'
+    ...sourceShore(9, 60, 9), '2,60,2': 'water#3', '3,60,3': 'water#5', '9,60,9': 'water'
   }
   const items = { bucket: 1, oak_slab: 4 }
   const { api, calls } = fakeApi({
@@ -4724,7 +4747,7 @@ test('farm.build: a dry channel job does not walk to a flowing candidate once a 
 })
 
 test('maintain_farm: a dry channel job fetches its own water_bucket from the nearest source, not just report it missing', async () => {
-  const world = { '0,63,0': 'air', '0,62,0': 'stone', '5,62,5': 'water' }
+  const world = { ...sourceShore(5, 62, 5), '0,63,0': 'air', '0,62,0': 'stone', '5,62,5': 'water' }
   const items = { bucket: 1, oak_slab: 4 }
   const { api, calls } = fakeApi({
     place: fakePlace('~'), world, items,

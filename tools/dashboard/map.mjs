@@ -5,7 +5,7 @@
 // tools/dashboard/lib.mjs). Never import the src/lib.mjs barrel here: it re-exports node-only modules (players.mjs
 // reads state/ with fs), and a browser links the whole graph before running any of it, so one `node:` import
 // anywhere below map.mjs leaves the page static. test/dashboard.test.mjs walks the graph to keep this true.
-import { parsePlan, PLAN_LEGEND } from '../../src/lib/plan.mjs'
+import { parsePlan, PLAN_LEGEND, planSpec } from '../../src/lib/plan.mjs'
 export { parsePlan }
 
 // polls: { <agent name>: { ok, state, error, at } }. A port that does not answer is a body that is down, which is
@@ -85,7 +85,7 @@ export const onCanvas = ({ px, py }, width, height, margin = 0) =>
 // (x,z), rows run south, columns east - exactly what parsePlan already knows how to size.
 export const planRects = places => places.flatMap(place => {
   if (!place.plan) return []
-  const parsed = parsePlan(place.plan)
+  const parsed = parsePlan(place.plan, place.legend)
   if (parsed.error) return []
   return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
 })
@@ -167,8 +167,7 @@ const EXPECTATIONS = {
   sapling: 'a sapling, or the tree it grew into',
   table: 'a crafting table'
 }
-export const cellExpectation = ch => {
-  const spec = PLAN_LEGEND[ch]
+export const cellExpectation = (ch, spec = PLAN_LEGEND[ch]) => {
   if (!spec) return 'not in the legend'
   if (spec.kind === 'crop') return `${cellLabel(ch)} on ${spec.ground}`
   return EXPECTATIONS[spec.kind] ?? spec.kind
@@ -179,15 +178,17 @@ const seenBlock = cell => Boolean(cell) && cell.name !== 'unloaded'
 export const planDiff = (place, worldCells) => {
   const world = new Map(worldCells.map(c => [`${c.x},${c.y},${c.z}`, c]))
   const at = (x, y, z) => world.get(`${x},${y},${z}`)
-  const cells = (parsePlan(place.plan).cells ?? []).map(({ dx, dz, ch }) => {
+  const cells = (parsePlan(place.plan, place.legend).cells ?? []).map(cell => {
+    const { dx, dz, ch } = cell
+    const spec = planSpec(cell)
     const x = place.x + dx
     const z = place.z + dz
     const ground = at(x, place.y, z)
     const top = at(x, place.y + 1, z)
     const seen = seenBlock(ground) && seenBlock(top)
-    const judge = JUDGES[PLAN_LEGEND[ch]?.kind]
-    const ok = seen && judge ? judge(PLAN_LEGEND[ch], ground, top) : null
-    return { dx, dz, x, z, ch, expected: cellExpectation(ch), ground: ground?.name ?? 'unloaded', top: top?.name ?? 'unloaded', ok, seen }
+    const judge = JUDGES[spec?.kind]
+    const ok = seen && judge ? judge(spec, ground, top) : null
+    return { dx, dz, x, z, ch, expected: cellExpectation(ch, spec), ground: ground?.name ?? 'unloaded', top: top?.name ?? 'unloaded', ok, seen }
   })
   return {
     cells,

@@ -1,6 +1,6 @@
 // Turning a plan and the world into an ordered job list (till, plant, clear, fill...), and what the jobs cost.
 import { isAir, holdsWater, hasWaterSource } from './world.mjs'
-import { PLAN_LEGEND, groundItem } from './plan.mjs'
+import { PLAN_LEGEND, planSpec, planItemMatches, groundItem, planCropMatches, FARMLAND_CROPS, GENERIC_SEED } from './plan.mjs'
 import { sameFamily, WEEDS } from './anchor.mjs'
 // slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/build/cover.mjs)
 import { channelCovered } from '../build/cover.mjs'
@@ -31,6 +31,15 @@ export const tillWarning = (dry, total) => dry
   : 'plant them now: bare farmland turns back to dirt the moment anything jumps on it, and a field tilled in one pass and sown in the next loses the beds it walked back over'
 export function farmJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
+  // Specific beds get first claim on their seed; generic beds share what remains.
+  const seeds = { ...items }
+  for (const cell of cells) {
+    const spec = planSpec(cell)
+    if (['tree', 'reserved'].includes(spec?.kind)) continue
+    if (spec?.kind !== 'crop' || spec.generic) continue
+    const name = worldAt(cell.x, cell.y + 1, cell.z)?.name
+    if (!planCropMatches(spec, name) && (!name || isAir(name) || WEEDS.has(name))) seeds[spec.seed] = Math.max(0, (seeds[spec.seed] ?? 0) - 1)
+  }
   const push = (job, item) => jobs.push({ ...job, ...(item ? { item, have: (items[item] ?? 0) > 0 } : {}) })
   // A farm's own channel drowns the work beside it: `dig` refuses a block with water in the three above it (the body
   // would dive for it and run out of air), and Chani's farm.maintain gave that up as "twice in a row" on the block
@@ -40,7 +49,8 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     ? (jobs.push({ ...job, do: 'skip', why: `${job.why}, and water stands over it: drain it or dig it from the shore first` }), true)
     : (push(job, item), false)
   for (const cell of cells) {
-    const spec = PLAN_LEGEND[cell.ch]
+    const spec = planSpec(cell)
+    if (['tree', 'reserved'].includes(spec?.kind)) continue
     if (!spec) continue
     // the plan's y is the ground the cell is made of; what the plan puts on it stands one above
     const ground = worldAt(cell.x, cell.y, cell.z)
@@ -86,14 +96,29 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     }
     if (spec.kind === 'path') continue
     if (spec.kind === 'crop') {
-      if (standing === spec.crop) continue
+      if (planCropMatches(spec, standing)) continue
       if (standing && !WEEDS.has(standing)) continue
       if (standing && clear({ do: 'clear', x: cell.x, y: cell.y + 1, z: cell.z, why: `${standing} grew on the bed` })) continue
       if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') push({ do: 'till', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where farmland should be` })
-      push({ do: 'plant', x: cell.x, y: cell.y + 1, z: cell.z, why: 'an empty bed' }, spec.seed)
+      const seed = spec.generic ? FARMLAND_CROPS.find(s => (seeds[s.seed] ?? 0) > 0)?.seed ?? GENERIC_SEED : spec.seed
+      if (spec.generic && seed !== GENERIC_SEED) seeds[seed]--
+      push({ do: 'plant', x: cell.x, y: cell.y + 1, z: cell.z, why: 'an empty bed' }, seed)
       continue
     }
-    if (!spec.item || sameFamily(spec.item, standing) || (spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
+    if (spec.kind === 'torch') {
+      if (!planItemMatches(spec, standing, sameFamily)) {
+        if (standing && !WEEDS.has(standing)) continue
+        if (standing && clear({ do: 'clear', x: cell.x, y: cell.y + 1, z: cell.z, why: `${standing} grew where the torch post goes` })) continue
+        push({ do: 'place', x: cell.x, y: cell.y + 1, z: cell.z, why: 'no torch post there' }, spec.item)
+      }
+      const above = worldAt(cell.x, cell.y + 2, cell.z)?.name
+      // Existing lights or somebody's block on the post are left intact.
+      if (above && !isAir(above) && !WEEDS.has(above)) continue
+      if (above && WEEDS.has(above) && clear({ do: 'clear', x: cell.x, y: cell.y + 2, z: cell.z, why: `${above} grew where the torch goes` })) continue
+      push({ do: 'place', x: cell.x, y: cell.y + 2, z: cell.z, why: 'no torch on the post' }, 'torch')
+      continue
+    }
+    if (!spec.item || planItemMatches(spec, standing, sameFamily) || (!spec.literal && spec.kind === 'gate' && standing?.endsWith('_fence_gate'))) continue
     // a plant in the way of a wall is weeding, not somebody's block: a bush grew into claude-test-pen's west wall and
     // the build walked past it, leaving a pen that looked finished and leaked
     if (standing && !WEEDS.has(standing)) continue
@@ -135,7 +160,7 @@ export const shortLine = short => Object.entries(short).map(([item, n]) => `${it
 // walls, nearest the middle first, and one level lower as well - a pen whose floor is sunk below its plan is the case
 // this guards, and its feet stand at the plan's own y. A wall cell is never a spot to stand on, so only `.` cells count.
 export function penProbes (cells, limit = 2) {
-  const floor = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path')
+  const floor = cells.filter(c => planSpec(c)?.kind === 'path')
   if (!floor.length) return []
   const mid = { x: (Math.min(...floor.map(c => c.x)) + Math.max(...floor.map(c => c.x))) / 2, z: (Math.min(...floor.map(c => c.z)) + Math.max(...floor.map(c => c.z))) / 2 }
   const near = (a, b) => (Math.abs(a.x - mid.x) + Math.abs(a.z - mid.z)) - (Math.abs(b.x - mid.x) + Math.abs(b.z - mid.z))
@@ -166,14 +191,15 @@ export function penOpenRefusal (name, jobs, census) {
 export const billShortfall = itemShortfall
 
 // a cell that already holds what the plan wants there is never dug out (a chest full of seed, a crop halfway grown)
-const planHas = (spec, name) => sameFamily(spec.item, name) || name === spec.crop || (spec.kind === 'gate' && name.endsWith('_fence_gate'))
+const planHas = (spec, name) => planItemMatches(spec, name, sameFamily) || planCropMatches(spec, name) || (!spec.literal && spec.kind === 'gate' && name.endsWith('_fence_gate')) || (spec.kind === 'torch' && ['torch', 'soul_torch'].includes(name))
 // The levelling a plan needs before any of its jobs can be done: a floor under every cell and open air in the cell and
 // over it. Read-only judgement; `solid(name)` answers whether a block stands in the way (grass and flowers do not).
 export function groundJobs ({ cells, worldAt, solid }) {
   const jobs = []
   const fills = []
   for (const cell of cells) {
-    const spec = PLAN_LEGEND[cell.ch]
+    const spec = planSpec(cell)
+    if (['tree', 'reserved'].includes(spec?.kind)) continue
     if (!spec) continue
     // the plan's y IS the floor of a cell, so it is never dug out; a channel holds its source at that level, and the
     // block the water is poured onto is the one below it

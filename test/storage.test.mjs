@@ -6,7 +6,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { chestOrder, depositLine, depositPlan, depositTarget, planChests, storageFullLine, wentIn } from '../src/lib/storage.mjs'
-import { canStore, storeSurplus } from '../src/storage.mjs'
+import { canStore, storeSurplus, storeInto } from '../src/storage.mjs'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
@@ -276,3 +276,39 @@ test('apiary.maintain: deposit=true is still the nearest chest', async () => {
   const summary = await apiaryMaintain.run(api, { place: 'hives', deposit: true })
   assert.deepEqual([calls.filter(c => c.startsWith('deposit')), summary.deposited], [['deposit items(honeycomb:6) x=3 y=64 z=3'], 'honeycomb:6@3,64,3'])
 })
+
+// A chest the target names that is not there is skipped and named, never opened: Jizo's plan marks a C cell where no
+// chest was ever built (farmland at -1,62,-88, nothing above it), and the deposit tried to open the air there:
+// stuck="farm.maintain/deposit: containerToOpen is neither a block nor an entity" (task 12, 09-26 23:51Z). A cell that is
+// not loaded is still tried: the deposit walks there, and a far chest reads as nothing from here
+const MISSING = (at, what, whose = "the plan's") => `${whose} chest at ${at} is missing (${what} there): place one, or pass deposit=false`
+for (const [name, world, target, expected] of [
+  ['the first plan chest missing: the second takes it all, the first is named',
+    { '1,64,0': 'air', '3,64,0': 'chest' }, { kind: 'plan' },
+    [['deposit items(wheat:40) x=3 y=64 z=0'], { deposited: 'wheat:40@3,64,0', chest_missing: MISSING('1,64,0', 'air') }]],
+  ['every plan chest missing: nothing opened, the harvest carried and both named',
+    { '1,64,0': 'air', '3,64,0': 'wheat' }, { kind: 'plan' },
+    [[], { storage_full: 'wheat:40 carried', chest_missing: `${MISSING('1,64,0', 'air')}; ${MISSING('3,64,0', 'wheat')}` }]],
+  ['a deposit= cell with stone in it: named, and the plan\'s chests tried after it',
+    { '9,64,9': 'stone', '1,64,0': 'chest' }, { kind: 'cell', x: 9, y: 64, z: 9 },
+    [['deposit items(wheat:40) x=1 y=64 z=0'], { deposited: 'wheat:40@1,64,0', chest_missing: MISSING('9,64,9', 'stone', 'the deposit=') }]],
+  ['a barrel or a trapped chest is a chest',
+    { '1,64,0': 'barrel', '3,64,0': 'trapped_chest' }, { kind: 'plan' },
+    [['deposit items(wheat:40) x=1 y=64 z=0'], { deposited: 'wheat:40@1,64,0' }]],
+  ['a chest cell not loaded is still tried',
+    {}, { kind: 'plan' },
+    [['deposit items(wheat:40) x=1 y=64 z=0'], { deposited: 'wheat:40@1,64,0' }]]
+]) {
+  test(`storeSurplus: ${name}`, async () => {
+    const { api, calls } = fakeApi({ items: { wheat: 40 }, world })
+    const stored = await storeSurplus(api, { surplus: { wheat: 40 }, target, cells: twoChests })
+    assert.deepEqual([noNotes(calls), stored], expected)
+  })
+}
+
+for (const [name, summary, stored, expected] of [
+  ['a missing chest is carried into the summary', {}, { chest_missing: 'x' }, { chest_missing: 'x' }],
+  ['a second round keeps the first round\'s line', { chest_missing: 'x' }, {}, { chest_missing: 'x' }]
+]) {
+  test(`storeInto: ${name}`, () => assert.deepEqual(storeInto({ ...summary }, stored), expected))
+}

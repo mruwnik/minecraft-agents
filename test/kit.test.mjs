@@ -151,3 +151,24 @@ test('kit: a withdraw that fails is said, and the line still tells the truth', a
   const out = await kit.run(made.api, { tools: 'stone_hoe', place: 'field' })
   assert.deepEqual([out.kit, out.kit_short], ['hoe:0 food:12', 'withdraw: the chest is empty now'])
 })
+
+for (const why of ['missing', 'inaccessible']) {
+  test(`kit: a ${why} chest still permits crafting from carried supplies`, async () => {
+    const { api, calls } = kitApi({ cobblestone: 4, stick: 4, wheat: 36 }, {})
+    if (why === 'missing') api.block = () => ({ name: 'air' })
+    else {
+      const act = api.act
+      api.act = async (name, args) => {
+        if (name === 'chest_contents') throw new Error('cannot reach chest')
+        return act(name, args)
+      }
+    }
+    const out = await kit.run(api, { tools: 'stone_hoe', place: 'field' })
+    assert.equal(out.kit, 'hoe:2 food:12')
+    assert.match(out.kit_short, why === 'missing' ? /chest.*missing \(air there\)/ : /cannot reach chest/)
+    assert.ok(calls.includes('craft item=stone_hoe count=2'))
+    assert.ok(calls.includes('craft item=bread count=12'))
+    assert.ok(!calls.some(c => c.startsWith('withdraw ')))
+    if (why === 'missing') assert.ok(!calls.some(c => c.startsWith('chest_contents ')))
+  })
+}

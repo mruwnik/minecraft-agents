@@ -7,7 +7,8 @@ import { woodenGate } from '../enclosure/blocks.mjs'
 import { boatHabitatPlan } from '../boat/habitat.mjs'
 import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverableNavigationTarget, navigationTargetKey } from '../composite.mjs'
-import { ROOT, cfg } from './home.mjs'
+import { scaffoldJournal } from '../scaffold/journal.mjs'
+import { ROOT, HOME, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
 import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance } from '../bot.mjs'
 import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
@@ -54,7 +55,7 @@ function planOf (name) {
   const refusal = workRefusal(place, cfg.username)
   if (refusal) throw new Error(refusal)
   if (!place.plan) throw new Error(`${name} is on the map but has no plan: save one with ./mc plan name=${name} map='...'`)
-  const parsed = parsePlan(place.plan)
+  const parsed = parsePlan(place.plan, place.legend)
   return { ...place, parsed, cells: planCells(place), bill: planBill(parsed) }
 }
 
@@ -192,6 +193,8 @@ function makeApi (composite, a, alive) {
       until,
       checkpoint,
       performance: reportPerformance,
+      scaffolds: scaffoldJournal(path.join(HOME, 'scaffolds.json')),
+      scaffoldOccupied: column => Object.values(bot.entities).some(e => e !== bot.entity && e.name !== 'item' && e.position && Math.abs(e.position.x - column.x - 0.5) < 0.8 && Math.abs(e.position.z - column.z - 0.5) < 0.8 && e.position.y >= column.y - 1 && e.position.y <= column.top + 2),
       navigationCapabilities: () => ({
         scaffolding: bot.pathfinder?.movements?.scaffoldingSupported === true,
         climbableVines: bot.pathfinder?.movements?.climbableVinesSupported === true

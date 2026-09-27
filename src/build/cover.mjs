@@ -3,7 +3,7 @@
 // beside it stays wet), where a bottom slab is a half-step down into every channel that bodies float and wedge on;
 // and a slab belongs only over a settled source, since one dropped into flowing water is not waterlogged and cuts the
 // flow. lib.mjs's hasWaterSource decides what is a source; farmJobs decides the jobs; this is the rest.
-import { PLAN_LEGEND, holdsWater } from '../lib.mjs'
+import { PLAN_LEGEND, planSpec, holdsWater } from '../lib.mjs'
 
 // why a flowing cell gets no slab: what farmJobs says when it skips one for want of a bucket
 export const FLOW_REASON = ({ x, y, z }) => `flowing water at ${x},${y},${z}: pour a source first, then cover`
@@ -34,7 +34,7 @@ export const placeFaces = ({ half, against }) => {
 // alone (no churn), but they are counted so the driver knows the field walks worse than it could.
 const isLowSlab = block => Boolean(block) && /_slab$/.test(block.name) && holdsWater(block) && block.properties?.type !== 'top'
 export const lowSlabs = (cells, worldAt) =>
-  cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'water' && isLowSlab(worldAt(c.x, c.y, c.z)))
+  cells.filter(c => planSpec(c)?.kind === 'water' && isLowSlab(worldAt(c.x, c.y, c.z)))
 export const lowSlabLine = n => `${n} (bottom slabs: top slabs walk better; dig and cover again to raise)`
 
 // A cell already covered - a waterlogged slab, top half or bottom - is a finished channel: farmJobs must never touch

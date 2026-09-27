@@ -1,3 +1,4 @@
+import { resolveLegend } from './lib/plan.mjs'
 // Claude's Minecraft body.
 // Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
 // small localhost HTTP API (see README.md) and everything notable that happens is
@@ -1958,6 +1959,44 @@ export const long = {
     } finally { furnace.close() }
   },
 
+  // A Java scaffold extends upward when its SIDE is used with scaffolding.
+  // Keep the body on dry ground: clicking the top from a deck instead extends
+  // sideways, and sneaking to override that would start descending mid-click.
+  async scaffold_extend (a) {
+    if (![a.x, a.y, a.z, a.base_y].every(Number.isInteger) || a.y <= a.base_y || a.y - a.base_y > 48) throw new Error('scaffold_extend needs integer x/y/z/base_y with target 1..48 above its base')
+    const target = vecOf(a)
+    const base = new Vec3(a.x, a.base_y, a.z)
+    const validate = () => {
+      for (let y = a.base_y; y < a.y; y++) {
+        const block = bot.blockAt(new Vec3(a.x, y, a.z))
+        if (block?.name !== 'scaffolding' || Number(block.getProperties?.().distance ?? 0) !== 0) throw new Error('scaffold_extend requires a continuous supported vertical column')
+      }
+      if (![0, 1, 2].every(dy => isAir(bot.blockAt(target.offset(0, dy, 0))?.name))) throw new Error('scaffold_extend requires clear loaded target and headroom')
+      const refusal = refusalFor('place', { x: a.x, y: a.y, z: a.z, item: 'scaffolding' })
+      if (refusal) throw new Error(refusal)
+      if (!digFromHere(bot.entity.position, base)) throw new Error('scaffold_extend: stand beside the base within reach')
+      if (bot.entity.position.floored().x === a.x && bot.entity.position.floored().z === a.z) throw new Error('scaffold_extend: stand beside the column, not inside it')
+    }
+    validate()
+    const alive = cancelGuard()
+    const count = () => inventoryCounts().scaffolding ?? 0
+    const before = count()
+    if (!before) throw new Error('no scaffolding carried')
+    await bot.equip(findItem('scaffolding'), 'hand')
+    alive()
+    validate()
+    const dx = bot.entity.position.x - a.x - 0.5
+    const dz = bot.entity.position.z - a.z - 0.5
+    const face = Math.abs(dx) >= Math.abs(dz) ? new Vec3(Math.sign(dx), 0, 0) : new Vec3(0, 0, Math.sign(dz))
+    bot.setControlState('sneak', false)
+    handPlacing++
+    try { await bot.activateBlock(bot.blockAt(base), face) } finally { handPlacing-- }
+    await bot.waitForTicks(5)
+    alive()
+    if (bot.blockAt(target)?.name !== 'scaffolding' || count() >= before) throw new Error(`placing scaffolding did not take at ${a.x},${a.y},${a.z}`)
+    return { placed: 1, at: `${a.x},${a.y},${a.z}` }
+  },
+
   async pillar_up (a) {
     const steps = a.steps ?? 1
     if (!Number.isInteger(steps) || steps < 1 || steps > 4) throw new Error('pillar_up steps must be 1..4')
@@ -2214,10 +2253,15 @@ export const long = {
   // right-click a block with whatever is in my hand: feeding a composter, ringing a bell, using a cake. `toggle` is the
   // one for doors, gates, trapdoors, levers and buttons, which have an open/shut state to aim at
   async use (a) {
+    if (a.empty_hand === true && a.item) throw new Error('use: choose item= or empty_hand=true, not both')
+    const alive = cancelGuard()
     const at = vecOf(a)
     if (!bot.blockAt(at) || bot.blockAt(at).name === 'air') throw new Error(`nothing at ${a.x},${a.y},${a.z} to use`)
     await goNear(at, 3)
-    if (a.item) await bot.equip(findItem(a.item), 'hand')
+    alive()
+    if (a.empty_hand === true) await bot.unequip('hand')
+    else if (a.item) await bot.equip(findItem(a.item), 'hand')
+    alive()
     const block = bot.blockAt(at)
     const was = compact(block.getProperties?.() ?? {})
     await bot.activateBlock(block)
@@ -2789,7 +2833,7 @@ export const quick = {
     const saved = readPlaces().find(p => p.name === a.name)
     // moving somebody else's place, re-planning it or calling it something else overwrites THEIR record of it.
     // Adding to its note is how agents leave each other word and stays open (markFields keeps the owner through it)
-    const rewrites = a.map !== undefined || a.x !== undefined || (a.kind !== undefined && a.kind !== saved?.kind)
+    const rewrites = a.legend !== undefined || a.map !== undefined || a.x !== undefined || (a.kind !== undefined && a.kind !== saved?.kind)
     const refusal = rewrites ? mapRefusal(saved, bot.username) : null
     if (refusal) throw new Error(refusal)
     // a note-only mark used to move the place to my feet (BUGS.md 09-24 12:42Z): markMove keeps the anchor, says a move
@@ -2798,12 +2842,13 @@ export const quick = {
     const where = markMove({ saved, args: a, here: bot.entity.position, stands })
     if (where.error) throw new Error(where.error)
     const at = where.at
-    const plan = a.map === undefined ? saved?.plan : parsePlan(a.map).rows?.join('\n')
-    const errors = a.map === undefined ? [] : planErrors(parsePlan(a.map))
+    const legend = a.legend === undefined ? saved?.legend : resolveLegend(a.legend)
+    const plan = a.map === undefined ? saved?.plan : parsePlan(a.map, legend).rows?.join('\n')
+    const errors = plan ? planErrors(parsePlan(plan, legend)) : []
     if (errors.length) throw new Error(errors.join('; '))
     const fields = markFields({ saved, by: bot.username, note: a.note })
     if (fields.error) throw new Error(fields.error)
-    const place = { ...saved, name: String(a.name), kind: a.kind ?? saved?.kind ?? 'place', x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z), by: fields.by, note: fields.note, plan }
+    const place = { ...saved, name: String(a.name), kind: a.kind ?? saved?.kind ?? 'place', x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z), by: fields.by, note: fields.note, plan, ...(legend ? { legend } : {}) }
     savePlaces([...readPlaces().filter(p => p.name !== place.name), place])
     return { marked: place.name, at: `${place.x},${place.y},${place.z}`, moved: where.moved, plan: plan ? `${plan.split('\n')[0].length}x${plan.split('\n').length}` : undefined }
   },

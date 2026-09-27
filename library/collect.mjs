@@ -2,6 +2,9 @@
 // Inside a pen it takes only what lies inside it: a walk out after a drop beyond the fence takes the herd with you.
 import { nextDrop, leftLying, collectTally } from '../src/lib.mjs'
 import { dropGoal } from '../src/drop.mjs'
+import { cellOf } from '../src/farm/field.mjs'
+import { loadedAround, noStanding } from '../src/navigation/walk.mjs'
+import { farmApi, recoverFarm } from '../src/farm/attention.mjs'
 
 const RANGE = 16
 const ROUNDS = 40
@@ -12,12 +15,14 @@ export default {
   args: { range: 'number', wet: 'boolean' },
 
   async run (api, a) {
+    api = farmApi(api)
     const range = a.range ?? RANGE
     const wet = a.wet === true
     const all = () => api.drops(range)
     const mine = () => all().filter(drop => !drop.outsidePen)
     const seen = new Set()
     const tried = []
+    const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
     let full = false
     for (let round = 0; round < ROUNDS && !full; round++) {
       const drop = nextDrop(mine(), seen, wet)
@@ -25,7 +30,12 @@ export default {
       seen.add(drop.id)
       // whether the walk arrived is the whole difference between "no cell to stand on beside it" and "I stood on it and
       // it would not come to hand", and those want different things from the driver, so it is remembered here (#142)
-      const reached = await api.act('goto', dropGoal(drop)).then(() => true, () => false)
+      const goal = dropGoal(drop, cellAt)
+      // Several entities can lie in the same planted cell. Do not send identical
+      // impossible walks to the runner: those stop the entire farm on its second
+      // failure. Keep the drops in the unreachable tally and collect elsewhere.
+      const blocked = loadedAround(cellAt, goal, goal.range) && noStanding(cellAt, goal, goal.range)
+      const reached = blocked ? false : await api.act('goto', goal).then(() => true, recoverFarm(() => false))
       tried.push({ ...drop, reached })
       await api.pause(0.5)
       // full, and it did not stack either: the rest will not come

@@ -1,7 +1,10 @@
 // Get that many of a block: find them, dig them one at a time (dig picks up its own drop), and leave the place tidy.
 // What it will not touch: anything inside a protected zone (someone's build, mine included), anything in or beside
 // water (bodies drown fetching sand off a lake bed), and the ground it stands on when animals are penned around it.
-import { mineTargets, inAnyZone, holesLeft, penShaftRefusal, isTreeLog } from '../../src/lib.mjs'
+import { mineTargets, inAnyZone, holesLeft, penShaftRefusal, isTreeLog, feetCell, canPlaceFromHere } from '../../src/lib.mjs'
+import { cellOf } from '../../src/farm/field.mjs'
+import { dryStandable } from '../../src/navigation/walk.mjs'
+import { farmApi, recoverFarm } from '../../src/farm/attention.mjs'
 
 const MAX = 48
 const ROUNDS = 6
@@ -14,6 +17,7 @@ export default {
   args: { block: 'string!', count: 'number', maxDistance: 'number', wet: 'boolean', rounds: 'number', force: 'boolean' },
 
   async run (api, a) {
+    api = farmApi(api)
     const want = a.count ?? 1
     const maxDistance = a.maxDistance ?? MAX
     const what = `${a.block} within ${maxDistance} blocks`
@@ -25,7 +29,8 @@ export default {
 
     // the ground around the start, to mend the shaft mouth afterwards: a pit at my own front door is nobody's idea of tidy
     const start = api.pos()
-    const groundCells = AROUND.flatMap(dx => AROUND.flatMap(dz => [-2, -1].map(dy => ({ x: Math.floor(start.x) + dx, y: Math.floor(start.y) + dy, z: Math.floor(start.z) + dz }))))
+    const startFeet = feetCell(start, true)
+    const groundCells = AROUND.flatMap(dx => AROUND.flatMap(dz => [-2, -1].map(dy => ({ x: startFeet.x + dx, y: startFeet.y + dy, z: startFeet.z + dz }))))
     const ground = () => Object.fromEntries(groundCells
       .map(c => [`${c.x},${c.y},${c.z}`, api.block(c.x, c.y, c.z)?.name])
       .filter(([, name]) => name !== a.block))
@@ -56,7 +61,7 @@ export default {
       skippedPlaced = Math.max(skippedPlaced, choice.skippedPlaced ?? 0)
       let dug = 0
       for (const p of choice.found) {
-        const failed = await api.act('dig', { x: p.x, y: p.y, z: p.z, dig: true, ...(a.wet === true ? { wet: true } : {}) }).then(() => null, e => e.message)
+        const failed = await api.act('dig', { x: p.x, y: p.y, z: p.z, dig: true, ...(a.wet === true ? { wet: true } : {}) }).then(() => null, recoverFarm(e => e.message))
         gaveUp = failed ? gaveUp ?? failed : gaveUp
         if (!failed && nameAt(p) !== a.block) { got++; dug++ }
         api.report({ got })
@@ -75,20 +80,45 @@ export default {
       skippedPlaced: skippedPlaced ? `${skippedPlaced} were placed wood (posts and beams in somebody's build), not trees, and were left alone` : undefined
     }
 
-    // mining ends in the pit it dug (buried ore is reached by a dig walk down), and a walk that may not dig cannot leave
-    // one: get back to where I started, digging the way up (a shaft is climbed by a niche ladder) when walking cannot
-    const home = { x: Math.floor(start.x), y: Math.floor(start.y), z: Math.floor(start.z), range: 2 }
-    const { status } = await api.act('path_to', home)
-    if (status !== 'success') {
-      const walked = await api.act('goto', home).then(() => true, () => false)
-      const dug = walked || await api.act('goto', { ...home, dig: true }).then(() => true, () => false)
-      if (!dug) return { ...summary, pit: 'you are in the pit you dug and could not get back out, even digging: pillar_up, or climb' }
-      summary.climbedOut = walked ? 'back where you started' : 'back where you started (dug my way up)'
+    // A path preview saying success is not a walk. Reach a real surface cell
+    // before closing anything: range=2 used to accept the shaft two blocks below
+    // home, and the subsequent batch could wall the miner in while saying mended.
+    const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
+    const sameCell = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z
+    const candidates = Array.from({ length: 7 }, (_, i) => i - 3).flatMap(dx => Array.from({ length: 7 }, (_, i) => i - 3)
+      .map(dz => ({ x: startFeet.x + dx, y: startFeet.y, z: startFeet.z + dz })))
+      .filter(p => dryStandable(cellAt, p))
+      .sort((a, b) => Math.hypot(a.x - startFeet.x, a.z - startFeet.z) - Math.hypot(b.x - startFeet.x, b.z - startFeet.z))
+    const surface = candidates[0]
+    const safelyThere = () => surface && sameCell(feetCell(api.pos(), true), surface) && dryStandable(cellAt, surface)
+    if (!surface) return { ...summary, pit: 'no loaded safe surface cell near the start; no ground was filled: inspect a safe exit or climb first' }
+    if (!safelyThere()) {
+      const home = { ...surface, range: 0 }
+      const walked = await api.act('goto', home).then(safelyThere, recoverFarm(() => false))
+      const escaped = walked || await api.act('goto', { ...home, dig: true }).then(safelyThere, recoverFarm(() => false))
+      if (!escaped) return { ...summary, pit: 'you are in the pit you dug and could not get back out, even digging: pillar_up, or climb; no ground was filled' }
+      summary.climbedOut = walked ? 'verified on safe ground near the start' : 'verified on safe ground near the start (dug my way up)'
     }
 
-    const holes = holesLeft(groundBefore, ground(), Object.keys(api.inv()), api.solid).sort((p, q) => p.y - q.y)
+    // Never give placement a batch that can walk back down for a distant hole.
+    // Only restore below-foot cells already within the primitive's no-walk reach.
+    // The fallback item identifies remaining holes even with no filler carried.
+    const holes = holesLeft(groundBefore, ground(), [...Object.keys(api.inv()), 'dirt'], api.solid).sort((p, q) => p.y - q.y)
     if (!holes.length) return summary
-    const { placed = 0 } = await api.act('place', { blocks: holes }).catch(() => ({ placed: 0 }))
-    return { ...summary, mended: `${placed} of ${holes.length} blocks of the ground you broke open at the start put back${placed < holes.length ? ': fill the rest by hand (scan around the start)' : ''}` }
+    let placed = 0
+    for (const hole of holes) {
+      if (!safelyThere()) break
+      if (hole.y >= surface.y || !canPlaceFromHere(api.pos(), hole) || !(api.inv()[hole.item] > 0)) continue
+      await api.act('place', { item: hole.item, x: hole.x, y: hole.y, z: hole.z }).catch(recoverFarm(() => {}))
+      if (api.block(hole.x, hole.y, hole.z)?.solid) placed++
+      api.report({ ...summary, mended: `${placed} of ${holes.length} blocks of the ground at the start put back` })
+    }
+    const left = holes.filter(hole => !api.block(hole.x, hole.y, hole.z)?.solid)
+    return {
+      ...summary,
+      mended: `${placed} of ${holes.length} blocks of the ground you broke open at the start put back`,
+      ...(!safelyThere() ? { pit: 'left the verified surface position during repairs; further filling stopped: inspect the exit before continuing' } : {}),
+      ...(left.length ? { cleanup_left: `${left.length} ground cells remain open (first ${left[0].x},${left[0].y},${left[0].z}): repair from safe surface footing with filler; mining cleanup never walks back into the excavation` } : {})
+    }
   }
 }

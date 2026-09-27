@@ -26,6 +26,7 @@ const column = (x, z, ground, over = 'air') => ({ [`${x},62,${z}`]: 'dirt', [`${
 for (const [name, plan, world, items, expected] of [
   ['air where farmland should be is filled with dirt', 'w', column(0, 0, 'air'), { dirt: 4 }, ['fill dirt at 0,63,0']],
   ['cave air is air', 'w', column(0, 0, 'cave_air'), { dirt: 4 }, ['fill dirt at 0,63,0']],
+  ['short grass in a terrain dip is not ground', 'w', column(0, 0, 'short_grass'), { dirt: 4 }, ['fill dirt at 0,63,0']],
   ['water the plan never asked for is filled too', 'w', column(0, 0, 'water'), { dirt: 4 }, ['fill dirt at 0,63,0']],
   ['a bed under standing water is flooded, not a hole: the water count says it', 'w', column(0, 0, 'water', 'water'), { dirt: 4 }, []],
   ['a hole with water standing in it is left to the water count too', 'w', column(0, 0, 'air', 'water'), { dirt: 4 }, []],
@@ -37,7 +38,7 @@ for (const [name, plan, world, items, expected] of [
   ['a lane cell with no ground is filled: the sweep parks there', '.', column(0, 0, 'air'), { dirt: 4 }, ['fill dirt at 0,63,0']],
   ['the ground under a chest cell and a composter cell too', 'CK', { ...column(0, 0, 'air', 'chest'), ...column(1, 0, 'water') }, { dirt: 4 }, ['fill dirt at 0,63,0', 'fill dirt at 1,63,0']],
   ['a flooded lane is not a hole either', '.', column(0, 0, 'air', 'water'), { dirt: 4 }, []],
-  ['a channel is farmJobs\'s to refill, and a fence over a hole is farm.build\'s', '~#', { ...column(0, 0, 'air'), ...column(1, 0, 'air', 'oak_fence') }, { dirt: 4 }, []],
+  ['a channel is farmJobs\'s to refill, while a fence over a hole gets support', '~#', { ...column(0, 0, 'air'), ...column(1, 0, 'air', 'oak_fence') }, { dirt: 4 }, ['fill dirt at 1,63,0']],
   ['no dirt carried is said on the job', 'w', column(0, 0, 'air'), {}, ['fill dirt at 0,63,0 (none carried)']],
   ['every hole of a plan, in plan order', 'ww\nww', { ...column(0, 0, 'air'), ...column(1, 0, 'farmland'), ...column(0, 1, 'air'), ...column(1, 1, 'water') }, { dirt: 4 }, ['fill dirt at 0,63,0', 'fill dirt at 0,63,1', 'fill dirt at 1,63,1']]
 ]) {
@@ -85,6 +86,26 @@ const sweepOver = ({ plan = 'ww\nwC', world = { ...HOLED }, items, withdraw, pla
 }
 const dirtFills = calls => calls.filter(c => c.startsWith('place item=dirt'))
 const firstTill = calls => calls.findIndex(c => c.startsWith('till'))
+
+test('farm.maintain reports an unfilled grassy dip without trying to hoe it', async () => {
+  const { api, calls, events } = sweepOver({ plan: 'w', world: column(0, 0, 'short_grass'), items: { wheat_seeds: 1, stone_hoe: 1 } })
+  const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.match(result.missing, /dirt:1/)
+  assert.match(result.bare, /unfilled/)
+  assert.ok(!calls.some(c => /^(till|place) /.test(c)))
+  assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.bare))
+})
+
+test('farm.maintain fills a grassy dip before tilling and sowing', async () => {
+  const world = column(0, 0, 'short_grass')
+  const { api, calls } = sweepOver({ plan: 'w', world, items: { dirt: 1, wheat_seeds: 1, stone_hoe: 1 } })
+  const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.equal(result.filled, 1)
+  assert.equal(result.replanted, 1)
+  assert.ok(calls.indexOf('place item=dirt x=0 y=63 z=0') < firstTill(calls))
+  assert.equal(world['0,63,0'], 'farmland')
+  assert.equal(world['0,64,0'], 'wheat#0')
+})
 
 test('farm.maintain: holes are filled from the pockets before a bed is tilled, and counted', async () => {
   const { api, calls, report } = sweepOver({ items: { dirt: 4, wheat_seeds: 8, stone_hoe: 1 } })

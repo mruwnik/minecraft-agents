@@ -2,9 +2,10 @@
 // `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
 import fs from 'node:fs'
 import path from 'node:path'
-import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict } from '../src/routine.mjs'
+import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict, outcomeText, outcomeStalled } from '../src/routine.mjs'
 import { toolsLost, toolList } from '../src/inventory/kit.mjs'
 import { ownBed, nightPlan, BED_RANGE } from '../src/lib/sleep.mjs'
+import { farmAct } from '../src/farm/attention.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
 const readRole = name => {
@@ -40,7 +41,16 @@ export default {
     // spare" either way (card 6cf481c0: a hoe broke mid-routine, and the side craft for it superseded the routine)
     const kitStep = steps.find(step => step.action === 'kit') ?? null
     const tools = kitStep ? toolList(kitStep.tools) : []
-    const attempt = (action, args) => api.act(action, args).then(r => r, e => ({ failed: e.message }))
+    const attempt = async (action, args) => {
+      if (!action.startsWith('farm.')) return api.act(action, args).then(r => r, e => ({ failed: e.message }))
+      try { return await farmAct(api, action, args) } catch (error) {
+        // Recoverable farm problems return attention summaries. Exceptions must reach the driver. Night is the
+        // one resumable hand-back: use the existing bed commute and retry this same field once at dawn.
+        if (!/^night and no bed/.test(error.reason ?? '')) throw error
+        await nightfall(error)
+        return farmAct(api, action, args)
+      }
+    }
     const rekit = async (action, args, outcome, lost) => {
       const { action: kitAction, ...kitArgs } = kitStep
       api.note(`${lost.join(', ')} wore out during ${action}: running the kit again`)
@@ -120,10 +130,10 @@ export default {
         summary.ran++
         if (outcome.failed) {
           summary.failed = summary.failed ?? `${action}: ${outcome.failed}`
-          failedSteps.push({ day: dayNo, step: current.step })
         }
+        if (outcomeStalled(outcome)) failedSteps.push({ day: dayNo, step: current.step })
         if (outcome.storage_full && !storageFull.includes(dayNo)) storageFull.push(dayNo)
-        api.note(`${action}${outcome.failed ? ` FAILED ${outcome.failed}` : ' ok'}`)
+        api.note(`${current.step} ${outcomeText(outcome)}`)
         outcomes.push({ action, place: current.place, outcome })
       }
       current = null

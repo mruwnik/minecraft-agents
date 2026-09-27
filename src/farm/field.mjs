@@ -10,7 +10,7 @@
 // the body backs out of the field as it plants.
 import { WORK_RANGE, dryStandable, cellsWithin, noStanding } from '../navigation/walk.mjs'
 import { breaksUnderfoot, FLUIDS } from '../lib.mjs'
-import { PLAN_LEGEND } from '../lib/plan.mjs'
+import { PLAN_LEGEND, planSpec } from '../lib/plan.mjs'
 
 // what api.block answers, read as the cell walk.mjs judges: solid is what a walk cannot enter, crop is what it steps round
 export const cellOf = block => block && { name: block.name, solid: Boolean(block.solid), liquid: FLUIDS.has(block.name), crop: breaksUnderfoot(block.name) }
@@ -50,9 +50,9 @@ const offPlan = cells => {
 }
 export const parkSpot = (cellAt, cells, from) => {
   const over = overCell(cells, from)
-  if (!over || PLAN_LEGEND[over.ch]?.kind === 'path') return null
+  if (!over || planSpec(over)?.kind === 'path') return null
   const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
-  const lanes = cells.filter(c => PLAN_LEGEND[c.ch]?.kind === 'path').map(c => ({ x: c.x, y: c.y + 1, z: c.z })).filter(c => dryStandable(cellAt, c))
+  const lanes = cells.filter(c => planSpec(c)?.kind === 'path').map(c => ({ x: c.x, y: c.y + 1, z: c.z })).filter(c => dryStandable(cellAt, c))
   if (lanes.length) {
     const lane = lanes.reduce((best, c) => distance(c) < distance(best) ? c : best)
     return { ...lane, why: 'lane' }

@@ -1,18 +1,22 @@
+import { treeSpec, treePart } from '../../../src/tree/inspect.mjs'
+import { treeProfile } from '../../../src/tree/profiles.mjs'
 // What sits over a farm that its plan never asked for. A plan says what each cell holds: the ground itself at y, and
 // what stands on it at y+1 (a crop, a fence, a gate, a chest, a composter, a sapling; a torch on its post at y+2, a
 // waterlogged slab laid into a `~` source at y). Anything ELSE in those two cells is clutter: the dirt a walk bridged
 // with, the cobblestone a pathfinder towered on, a log from the tree that grew into the field, a stray sapling.
 //
 // Three things that stand over a plan are never clutter, because clearing them would do harm:
-//  - a living crop or its fruit: digging one is harvesting, which is farm.harvest's job. Cane and bamboo stand two and
-//    three blocks over their own cell, and a melon lands on the cell BESIDE its stem, often a path cell.
+//  - the crop planned for its bed, and crops on non-structure cells: cane and bamboo stand two and three blocks over
+//    their own cell, and a melon lands BESIDE its stem, often on a path. A melon on a wheat bed or a crop where a chest belongs is misplaced.
 //  - weeds and flowers: farmJobs already clears those off a bed, and they grow straight back. A census that counted
 //    them would read `clutter=40` on any field cut out of a meadow and say nothing.
 //  - water and lava: `dig` refuses a fluid outright (one such dig ran 167 seconds), and a `~` cell is meant to hold water.
 // And two that are somebody's block, so they are reported (`keep`) and left standing: a light, because digging the
 // torch out of a field is how it starts spawning mobs at night, and a container or workstation, because breaking a
 // chest scatters whatever was inside it over the ground.
-import { PLAN_LEGEND, cropNames, STALKS, isAir, isGroundCover, inAnyZone, harvestOrder } from '../../../src/lib.mjs'
+import { PLAN_LEGEND, planSpec, planItemMatches, cropNames, STALKS, isAir, isGroundCover, inAnyZone, harvestOrder } from '../../../src/lib.mjs'
+import { planCropMatches } from '../../../src/lib/plan.mjs'
+import { recoverFarm } from '../../../src/farm/attention.mjs'
 
 const LEVELS = [1, 2]
 // every crop block, not just the ones with a ripeness: a stem, its fruit and the stalks that stand over their own cell
@@ -33,6 +37,9 @@ const KEPT = /_bed$|_sign$|_banner$|_shulker_box$|_head$|_skull$|^shulker_box$/
 
 const kept = name => LIGHTS.test(name) ? 'a light' : (WORKSTATIONS.has(name) || KEPT.test(name)) ? "somebody's block" : null
 const weed = name => isGroundCover(name) || FLOWERS.has(name)
+// Built structures need their column clear before farmJobs can restore them.
+// Plants, paths and unplanned spaces keep the existing fruit/stalk protection.
+const structure = spec => Boolean(spec.item) && !['flower', 'sapling'].includes(spec.kind)
 
 // A plan names one wood for a fence, a gate, a slab or a sapling and the world is full of the others: Chani's wheat
 // field is fenced in birch, its plan says `#` (oak_fence), and every post of it read as clutter until this.
@@ -41,26 +48,32 @@ const sameKind = (want, got) => want === got || KIN.some(r => r.test(want) && r.
 
 // what the plan itself puts in the cell `dy` blocks over its ground block
 const planHolds = (spec, dy, name) => {
-  if (spec.crop && name === spec.crop) return true
+  if (planCropMatches(spec, name)) return true
   if (spec.cover && sameKind(spec.cover, name)) return true
   if (dy !== 1) return spec.kind === 'torch' && LIGHTS.test(name)
-  if (spec.kind === 'gate') return name.endsWith('_fence_gate')
-  return Boolean(spec.item) && sameKind(spec.item, name)
+  if (!spec.literal && spec.kind === 'gate') return name.endsWith('_fence_gate')
+  return Boolean(spec.item) && planItemMatches(spec, name, sameKind)
 }
 
 // every block standing over the plan's footprint that the plan does not account for, in plan order (row by row).
 // `keep` says why one of them is being left standing rather than cleared.
 export function strays (cells, worldAt) {
   const out = []
+  const trees = cells.flatMap(c => { const spec = treeSpec(c); return spec ? [{ ...c, profile: treeProfile(spec.species, spec.form) }] : [] })
   for (const cell of cells) {
-    const spec = PLAN_LEGEND[cell.ch]
+    const spec = planSpec(cell)
     if (!spec) continue
     for (const dy of LEVELS) {
       const here = worldAt(cell.x, cell.y + dy, cell.z)
       // a cell nobody has loaded is nobody's business: only a block we can actually see is clutter
       if (!here || isAir(here.name)) continue
       const name = here.name
-      if (planHolds(spec, dy, name) || CROP_BLOCKS.has(name) || FLUIDS.has(name) || weed(name)) continue
+      if (treePart(name) && trees.some(t => Math.abs(cell.x - t.x) <= t.profile.radius && Math.abs(cell.z - t.z) <= t.profile.radius && cell.y + dy <= t.y + t.profile.height)) {
+        out.push({ x: cell.x, y: cell.y + dy, z: cell.z, name, keep: 'planned tree: use forestry.maintain or tree.harvest' })
+        continue
+      }
+      if (spec.kind === 'reserved') continue
+      if (planHolds(spec, dy, name) || (CROP_BLOCKS.has(name) && spec.kind !== 'crop' && !structure(spec)) || FLUIDS.has(name) || weed(name)) continue
       const why = kept(name)
       out.push({ x: cell.x, y: cell.y + dy, z: cell.z, name, ...(why ? { keep: why } : {}) })
     }
@@ -112,8 +125,8 @@ export async function clearStrays (api, todo, walk, pause = () => api.checkpoint
   const cleared = []
   for (const block of todo) {
     const where = { x: block.x, y: block.y, z: block.z }
-    const failed = await walk(where).then(() => null, e => e.message) ??
-      await api.act('dig', where).then(() => null, e => e.message)
+    const failed = await walk(where).then(() => null, recoverFarm(e => e.message)) ??
+      await api.act('dig', where).then(() => null, recoverFarm(e => e.message))
     if (failed) return { cleared, stopped: `${block.name} at ${block.x},${block.y},${block.z}: ${failed}` }
     if (api.block(block.x, block.y, block.z)?.name !== block.name) cleared.push(block)
     api.report({ cleared: cleared.length })

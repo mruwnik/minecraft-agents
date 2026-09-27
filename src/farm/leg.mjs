@@ -10,6 +10,7 @@
 // the plan's cells and its ground as well (digGuard): it clears only what stands above the plan's level. Both walks
 // failing is one line naming the cell, which the sweep reports as stuck=.
 import { WORK_RANGE } from '../navigation/walk.mjs'
+import { recoverFarm } from './attention.mjs'
 
 // how far round the plan's cells a sweep stands to work them: the ring a dig retry may cut through
 export const RING = Math.ceil(WORK_RANGE)
@@ -63,12 +64,12 @@ export const spareTest = ({ spare, floor }) => {
 // took the second, digging walk to get there; that walk is handed the guard (digGuard: the cells and the floor to spare)
 export async function fieldLeg (api, to, box, guard = {}) {
   const goal = { x: to.x, y: to.y, z: to.z, range: to.range ?? 0 }
-  const first = await api.act('goto', goal).then(r => ({ r }), e => ({ e: e.message }))
+  const first = await api.act('goto', goal).then(r => ({ r }), recoverFarm(e => ({ e: e.message })))
   if (!first.e) return first.r
   const refusal = digRetryRefusal({ error: first.e, from: api.pos(), to, box })
   if (refusal === undefined) throw new Error(first.e)
   if (refusal) throw new Error(`${at(to)}: ${first.e} (no dig=true retry: ${refusal})`)
-  const second = await api.act('goto', { ...goal, dig: true, ...guard }).then(r => ({ r }), e => ({ e: e.message }))
+  const second = await api.act('goto', { ...goal, dig: true, ...guard }).then(r => ({ r }), recoverFarm(e => ({ e: e.message })))
   if (second.e) throw new Error(`${at(to)}: ${first.e}; with dig=true inside the plan's footprint: ${second.e}`)
   return { ...second.r, dug: at(to) }
 }

@@ -7,7 +7,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parsePlan, planCells, planBill } from '../src/lib.mjs'
 import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/build/plan.mjs'
-import { fakeApi } from './helpers.mjs'
+import { fakeApi as baseFakeApi } from './helpers.mjs'
+const fakeApi = options => {
+  const made = baseFakeApi(options)
+  const read = made.api.block
+  made.api.block = (x, y, z) => read(x, y, z) ?? { name: y <= 63 ? 'dirt' : 'air', solid: y <= 63, properties: {} }
+  return made
+}
+const withoutShoreWalks = calls => calls.filter(c => !c.startsWith('goto '))
 import maintainFarm from '../library/farm/maintain.mjs'
 
 const NO_WATER = 'no water within 32 blocks'
@@ -53,7 +60,7 @@ for (const [name, given, expected] of [
     const fill = () => { if (fails-- > 0) throw new Error('fill: cannot see the source'); return hands.fill() }
     const { api, calls } = fakeApi({ world: given.world, items: given.items, answers: { ...found(given.positions ?? []), fill } })
     assert.equal(await waterShortfall(api), expected.why)
-    assert.deepEqual(calls, expected.calls)
+    assert.deepEqual(withoutShoreWalks(calls), expected.calls)
   })
 }
 
@@ -116,3 +123,64 @@ for (const [name, given, expected] of [
     assert.equal(Boolean(summary.missing?.includes('water_bucket')), false, 'water_bucket is never a missing= item: skipped= says why the channel stays dry')
   })
 }
+
+// Sources are removed by a bucket in the real world. Model that mutation so a
+// pass cannot appear successful while it merely shuffles its own irrigation.
+import buildFarm from '../library/farm/build.mjs'
+for (const command of [maintainFarm, buildFarm]) {
+  for (const external of [false, true]) {
+    test(`${command === maintainFarm ? 'maintain' : 'build'} preserves four separated channels (${external ? 'external pond' : 'no external source'})`, async () => {
+      const plan = fakePlace('w~.~.~.~')
+      const world = field(plan.plan, external ? POND : {})
+      const items = { water_bucket: 1, oak_slab: 4, dirt: 8 }
+      const hands = pockets(items)
+      const key = p => `${p.x},${p.y},${p.z}`
+      const made = fakeApi({ place: plan, world, items, answers: {
+        'farm.harvest': { harvested: {}, replanted: 0 },
+        find_blocks: () => ({ positions: Object.entries(world).filter(([, name]) => name === 'water').map(([at]) => {
+          const [x, y, z] = at.split(',').map(Number)
+          return { x, y, z }
+        }) }),
+        dig: p => { world[key(p)] = 'air' },
+        fill: p => {
+          assert.equal(p.x, 8, 'only the external pond may supply water')
+          // The external pond renews; planned channels would lose their water.
+          return hands.fill()
+        },
+        pour: p => { world[key({ ...p, y: p.y + 1 })] = 'water'; return hands.pour() },
+        place: p => { world[key(p)] = p.item === 'oak_slab' ? 'oak_slab#top~' : p.item; items[p.item]-- }
+      } })
+      const summary = await command.run(made.api, { place: plan.name, partial: true })
+      assert.equal(summary.poured, external ? 4 : 1)
+      assert.equal(summary.covered, external ? 4 : 1)
+      assert.equal([1, 3, 5, 7].filter(x => world[`${x},63,0`] === 'oak_slab#top~').length, external ? 4 : 1)
+      assert.equal(made.calls.filter(c => c.startsWith('fill ')).length, external ? 3 : 0)
+      if (!external) {
+        assert.ok(made.events.some(e => e.type === 'farm_attention'))
+        assert.match(command === maintainFarm ? summary.skipped : summary.stuck, /preserved planned irrigation.*external source/)
+      }
+    })
+  }
+}
+
+test('waterShortfall protects another saved farm, even when it is the closest source', async () => {
+  const neighbour = { name: 'neighbour', kind: 'farm', plan: '~', x: 1, y: 63, z: 0 }
+  const items = { bucket: 1 }
+  const made = fakeApi({ places: [neighbour], items, world: { '1,63,0': 'water', '8,63,0': 'water' }, answers: {
+    ...found([{ x: 1, y: 63, z: 0 }, { x: 8, y: 63, z: 0 }]), fill: pockets(items).fill
+  } })
+  assert.equal(await waterShortfall(made.api), null)
+  assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'fill 8,63,0'])
+})
+
+test('waterShortfall widens a search crowded by protected irrigation to find the external pond', async () => {
+  const cells = planCells({ plan: '~'.repeat(32), x: 0, y: 63, z: 0 })
+  const world = Object.fromEntries([...cells, { x: 0, y: 63, z: 8 }].map(p => [`${p.x},${p.y},${p.z}`, 'water']))
+  const items = { bucket: 1 }
+  const made = fakeApi({ items, world, answers: {
+    find_blocks: ({ count }) => ({ positions: count === 32 ? cells : [...cells, { x: 0, y: 63, z: 8 }] }),
+    fill: pockets(items).fill
+  } })
+  assert.equal(await waterShortfall(made.api, undefined, cells), null)
+  assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'find_blocks block=water maxDistance=32 count=64', 'fill 0,63,8'])
+})

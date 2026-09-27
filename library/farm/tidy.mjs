@@ -1,19 +1,22 @@
 // Clear the rubble off a farm. A walk that bridged a gap, a pathfinder that towered on cobblestone, a tree that grew
 // into the field: they leave blocks standing over the beds and paths that the plan never asked for, shading the crops
 // and breaking the walk. This digs each of them and picks the drops up. It never touches what the plan DOES ask for,
-// never a crop (that is farm.harvest's work), never a light or somebody's chest, and never a block inside a protected
+// never the crop its plan allows, never a light or somebody's chest, and never a block inside a protected
 // zone that is not this body's: that ground belongs to whoever named the zone.
 import { planAnchor, planCells, workRefusal } from '../../src/lib.mjs'
 import { clutterBlocks, clutterKinds, clearJobs, clearStrays, zoneLine, asideLine } from './shared/clutter.mjs'
+import { farmApi, recoverFarm, reportFarmAttention } from '../../src/farm/attention.mjs'
+import { overheadTreeBlocks, overheadTreeLine } from '../../src/farm/overhead.mjs'
 
 const RANGE = 48
 
 export default {
-  doc: 'farm.tidy [place=] [range=48]: dig every stray block standing over a saved farm plan (dirt, cobblestone, logs, a stray sapling) and pick up the drops. It never digs what the plan asks for, a crop, a light, somebody\'s chest, anything inside a zone that is not mine, or a field somebody else marked whose note does not invite the work',
+  doc: 'farm.tidy [place=] [range=48]: dig stray blocks and mismatched crops over a saved farm plan and pick up the drops. It never digs crops allowed by the plan, a light, somebody\'s chest, anything inside a zone that is not mine, or a field whose owner does not invite work. Partial clearing reports farm_attention; invalid plans and safety stops halt the action',
   stops: 'the plan is clear, a block it cannot reach, stop, hurt, hungry, or a full inventory',
   args: { place: 'string', range: 'number' },
 
   async run (api, a) {
+    api = farmApi(api)
     const here = api.pos()
     const range = a.range ?? RANGE
     const named = api.places().filter(p => p.plan && (a.place ? p.name === a.place : Math.hypot(p.x - here.x, p.z - here.z) <= range))
@@ -54,15 +57,26 @@ export default {
       leftAlone: asideLine(aside),
       ...extra
     })
-    if (!todo.length) return report({ already: `${names} has nothing over it that its plan does not ask for` })
+    const finish = extra => {
+      const summary = report(extra)
+      const overhead = overheadTreeLine(overheadTreeBlocks(plans.flatMap(p => planCells(p)), api.block))
+      if (overhead) {
+        summary.overhead_tree = overhead
+        delete summary.already
+      }
+      reportFarmAttention(api, { action: 'farm.tidy', place: names, summary })
+      return summary
+    }
+    if (!todo.length) return finish({ already: `${names} has nothing over it that its plan does not ask for` })
 
     const { cleared, stopped } = await clearStrays(api, todo, where => api.act('goto', { ...where, range: 3 }))
-    const { picked } = await api.act('collect', { range: 8 }).catch(() => ({}))
-    return report({
+    const { picked, lost } = await api.act('collect', { range: 8 }).catch(recoverFarm(e => ({ lost: e.message })))
+    return finish({
       cleared: cleared.length,
       kinds: clutterKinds(cleared) || undefined,
       picked,
-      ...(stopped ? { stopped } : {})
+      ...(lost ? { lost } : {}),
+      ...(stopped ? { stuck: stopped } : {})
     })
   }
 }

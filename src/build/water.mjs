@@ -16,7 +16,7 @@ import { FLUIDS } from '../lib.mjs'
 import { cellsWithin } from '../navigation/walk.mjs'
 import { cellOf } from '../farm/field.mjs'
 import { jobSight, standingSpots } from '../navigation/stand.mjs'
-import { PLAN_LEGEND } from '../lib/plan.mjs'
+import { PLAN_LEGEND, planSpec } from '../lib/plan.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]
@@ -25,7 +25,7 @@ const DIRT = { name: 'dirt', properties: {}, solid: true }
 
 // dirt into every fluid cell over a plan cell (the cell itself and the one over it), as fill jobs flagged dam: true.
 // The floor under a cell is groundJobs' own fill; a channel's water cell is water by design and is never dammed
-export const drainJobs = (cells, worldAt) => cells.filter(cell => PLAN_LEGEND[cell.ch]?.kind !== 'water').flatMap(cell =>
+export const drainJobs = (cells, worldAt) => cells.filter(cell => planSpec(cell)?.kind !== 'water').flatMap(cell =>
   [cell.y + 1, cell.y + 2]
     .filter(y => fluid(worldAt(cell.x, y, cell.z)))
     .map(y => ({ do: 'fill', dam: true, x: cell.x, y, z: cell.z, why: `${worldAt(cell.x, y, cell.z).name} stands in the cell`, item: 'dirt' })))

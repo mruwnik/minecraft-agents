@@ -1,44 +1,66 @@
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, shortLine } from '../lib.mjs'
+import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
-import { workFrom } from '../navigation/stand.mjs'
+import { standingSpots, workFrom } from '../navigation/stand.mjs'
 import { digGuard, fieldLeg, footprintOf } from '../farm/leg.mjs'
 import { drainJobs, reopenJobs, shoreOrder, wetFooting } from './water.mjs'
+import { recoverFarm } from '../farm/attention.mjs'
+import { missingGround } from '../lib/fill.mjs'
 
 const WATER_RANGE = 32
 const WATER_CANDIDATES = 32
 
-// A dry channel cell's job carries water_bucket, and until now a body that reached one empty-handed just reported
-// missing=water_bucket and gave up - the driver had to notice, walk to a lake, fill a bucket by hand and run the
-// build again. `fill` already walks to its target itself (see bot.mjs), so all this adds is finding one: the nearest
-// water within reach, tried in order until one is a settled source, rather than something this body has to work out
-// first. Shared with farm.maintain, which imports it from here rather than duplicate it.
-// find_blocks matches by NAME and returns its matches in no particular order - standing beside an unfinished channel,
-// the nearest water is that channel's own flowing cells, the very thing this build is trying to fix, not the lake
-// further off. `fill` refuses flowing water, but only after walking to it (one field, 09-26: a dozen-odd flowing
-// channel cells all closer than the real lake, each one a wasted walk). So each candidate's OWN level is read first,
-// only a settled source is ever walked to, the nearest of those first, and a generous count keeps a real source in
-// the list past a field's own mess.
-// A channel stays dry for exactly two reasons, and a sweep says which (card 72e49b3d): no bucket at all, or no still
-// water within range
+// A bucket may be refilled from external water, never by borrowing a source the
+// current or another saved plan needs. Otherwise each pour merely moves the same
+// water between channels and a maintenance pass can never finish irrigation.
+const waterKey = p => `${p.x},${p.y},${p.z}`
+const irrigationSources = (api, cells) => new Set([
+  ...cells,
+  ...(api.places?.() ?? []).filter(p => p.plan).flatMap(planCells)
+].filter(c => planSpec(c)?.kind === 'water').map(waterKey))
+
 export const NO_BUCKET = 'no bucket: craft item=bucket (3 iron_ingot)'
 export const noWaterLine = range => `no water within ${range} blocks`
 // why no bucket of water can be had, or null once one is carried: fetched from the nearest still source within range
-export async function waterShortfall (api, range = WATER_RANGE) {
+export async function waterShortfall (api, range = WATER_RANGE, cells = []) {
   if ((api.inv().water_bucket ?? 0) > 0) return null
   if ((api.inv().bucket ?? 0) < 1) return NO_BUCKET
-  const { positions = [] } = await api.act('find_blocks', { block: 'water', maxDistance: range, count: WATER_CANDIDATES }).then(r => r, () => ({}))
+  const protectedSources = irrigationSources(api, cells)
+  const find = count => api.act('find_blocks', { block: 'water', maxDistance: range, count }).then(r => r.positions ?? [], recoverFarm(() => []))
+  let positions = await find(WATER_CANDIDATES)
+  // A large field can occupy the entire first search result. Widen once so its
+  // own sources do not hide an external pond; the search remains bounded.
+  if (positions.length >= WATER_CANDIDATES && positions.some(p => protectedSources.has(waterKey(p)))) {
+    positions = await find(Math.min(512, WATER_CANDIDATES + protectedSources.size))
+  }
+  const preserved = positions.some(p => protectedSources.has(waterKey(p)) && hasWaterSource(api.block(p.x, p.y, p.z)))
   const here = api.pos()
   const away = p => Math.hypot(p.x - here.x, p.y - here.y, p.z - here.z)
-  const sources = positions.filter(p => hasWaterSource(api.block(p.x, p.y, p.z))).sort((p, q) => away(p) - away(q))
+  const sources = positions.filter(p => !protectedSources.has(waterKey(p)) && hasWaterSource(api.block(p.x, p.y, p.z))).sort((p, q) => away(p) - away(q))
+  let inaccessible = null
   for (const p of sources) {
-    const filled = await api.act('fill', { x: p.x, y: p.y, z: p.z }).then(() => true, () => false)
-    if (filled) return null
+    // A range-only fill can stop below a bank and aim into its wall. Work from
+    // close dry shore above the source, with a clear view down onto the water.
+    const shores = standingSpots({ target: p, blockAt: api.block, range: Math.sqrt(5) })
+      .filter(spot => spot.y >= p.y + 1 && spot.y <= p.y + 2)
+      .sort((a, b) => away(a) - away(b)).slice(0, 2)
+    let reached = false
+    for (const shore of shores) {
+      reached = await api.act('goto', { ...shore, range: 0 }).then(() => true, recoverFarm(() => false))
+      if (reached) break
+    }
+    if (!reached) { inaccessible = `no reachable dry shore beside water at ${waterKey(p)}: provide access 1-2 blocks away with a clear view down onto the source`; continue }
+    const failure = await api.act('fill', { x: p.x, y: p.y, z: p.z }).then(() => null, recoverFarm(e => e.message))
+    if (!failure && (api.inv().water_bucket ?? 0) > 0) return null
+    // Do not repeat this exact click failure: the composite correctly hands
+    // back after two identical action failures. Other field work can continue.
+    if (!failure || /bucket is still empty/i.test(failure)) return `water at ${waterKey(p)} could not fill the bucket from shore: ${failure ?? 'bucket still empty'}; supply a filled bucket or repair shore access`
   }
-  return noWaterLine(range)
+  if (inaccessible) return inaccessible
+  return preserved ? `no usable external water within ${range} blocks: preserved planned irrigation; provide an external source or filled bucket` : noWaterLine(range)
 }
-export const fetchWaterBucket = async (api, range = WATER_RANGE) => (await waterShortfall(api, range)) === null
+export const fetchWaterBucket = async (api, range = WATER_RANGE, cells = []) => (await waterShortfall(api, range, cells)) === null
 
 const COUNT_OF = { fill: 'levelled', clear: 'levelled', till: 'tilled', pour: 'poured', cover: 'covered', plant: 'planted', place: 'built' }
 // a dam (src/build/water.mjs) is a fill into standing water, counted apart: it is dug out again before the plan's own jobs
@@ -51,13 +73,14 @@ const countOf = job => job.dam ? 'dammed' : COUNT_OF[job.do]
 // repeats of the SAME message, and each refusal names its own cell.
 const penUnderPlan = async (api, cells) => {
   for (const at of penProbes(cells)) {
-    const found = await api.act('pen.check', at).then(r => r, () => null)
+    const found = await api.act('pen.check', at).then(r => r, recoverFarm(() => null))
     if (found?.inside) return found
   }
   return null
 }
 
-export async function buildFromPlan (api, a) {
+export async function buildFromPlan (api, a, { farm = false } = {}) {
+  const recover = handler => farm ? recoverFarm(handler) : handler
   const plan = api.plan(a.place)
   // the plan's y is the ground block, so the body stands one above it
   const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
@@ -107,8 +130,27 @@ export async function buildFromPlan (api, a) {
   }
 
   const tryJob = async job => {
+    if (job.do === 'place' && job.item === 'torch' && !sameFamily('oak_fence', api.block(job.x, job.y - 1, job.z)?.name)) {
+      counts.stuck = counts.stuck ?? `torch ${job.x},${job.y},${job.z}: support missing; place the fence post first`
+      return false
+    }
+    // Partial builds can run out of floor material. Leave those beds for a later
+    // pass instead of trying to hoe air or the grass growing in a terrain dip.
+    if (farm && (job.do === 'till' || job.do === 'plant')) {
+      const y = job.do === 'plant' ? job.y - 1 : job.y
+      const ground = api.block(job.x, y, job.z)
+      if (ground && missingGround(ground.name)) {
+        const reason = `unfilled bed ${job.x},${y},${job.z}: ${ground.name} where solid ground is needed`
+        if (!blocked.includes(reason)) blocked.push(reason)
+        return false
+      }
+    }
     // a missing water_bucket is fetched, not just reported: see fetchWaterBucket above
-    if (job.item === 'water_bucket' && (api.inv().water_bucket ?? 0) < 1 && !(await fetchWaterBucket(api))) { missing.water_bucket = 1; return }
+    if (job.item === 'water_bucket' && (api.inv().water_bucket ?? 0) < 1) {
+      const why = water ?? await waterShortfall(api, undefined, plan.cells)
+      water = why
+      if (why) { missing.water_bucket = 1; counts.stuck = counts.stuck ?? why; return }
+    }
     // counted the way jobsBill counts: one bucket does a whole field, so a dry channel is short one bucket, not one per cell
     if (job.item && job.item !== 'water_bucket' && (api.inv()[job.item] ?? 0) < 1) { missing[job.item] = (missing[job.item] ?? 0) + 1; return }
     // a cover is only real once the cell it caps is actually holding its own water. farmJobs queues pour and cover
@@ -127,7 +169,7 @@ export async function buildFromPlan (api, a) {
     }
     // from a cell that sees the target (src/navigation/stand.mjs): a pour from wherever "within 3" landed the body looked at the
     // next slab or a crop instead, twice on jizo-melon-patch (09-26)
-    const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, e => e.message)
+    const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, recover(e => e.message))
     if (failed) { counts.stuck = counts.stuck ?? failed; return false }
     counts[countOf(job)] = (counts[countOf(job)] ?? 0) + 1
     return true
@@ -144,13 +186,17 @@ export async function buildFromPlan (api, a) {
   // middle of a FINISHED pen is inside its fence with a shut gate in the way, and the walk there answers "no walkable
   // path": that is how a complete pen came to fail instead of saying already= (Perrin, item 16). Standing beside it is
   // enough to read it, so a walk that cannot get in settles for near, and only a plan that cannot be READ is refused.
-  const reach = async range => api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range }).then(() => true, () => false)
+  const reach = async range => api.act('goto', { x: middle.x, y: middle.y, z: middle.z, range }).then(() => true, recover(() => false))
   if (!await reach(2)) await reach(8)
   // and a plan whose middle reads as nothing at all, floor and ground and the cell above it, is a plan in chunks this
   // body was never sent: judging that would be guessing (item 14). The whole column, because a plan anchored one level
   // off still has a loaded world around it and is a different fault, with its own answer a few lines down
   const seen = [-1, 0, 1].some(dy => api.block(middle.x, middle.y + dy, middle.z))
-  if (!seen) throw new Error(`${plan.name}: ${outOfSight(null, middle, api.pos())}`)
+  if (!seen) {
+    const message = `${plan.name}: ${outOfSight(null, middle, api.pos())}`
+    if (farm) return { unreachable: message }
+    throw new Error(message)
+  }
   // what the plan describes already stands a block away from where the plan puts it: building would lay a second copy
   // of it over or under the first one. Say which y to re-save with and touch nothing
   const anchor = planAnchor(plan.cells, api.block)
@@ -163,7 +209,8 @@ export async function buildFromPlan (api, a) {
   // cell with none becomes a 'skip' job, not a 'pour' one, and no amount of fetching water inside tryJob later
   // reaches a job list that never named the cell. So this is tried once up front, before that list is built, not
   // down in tryJob - the one there is only a fallback for a bucket a pour used up earlier in the same run
-  await fetchWaterBucket(api)
+  let water = await waterShortfall(api, undefined, plan.cells)
+  if (water && drowned().some(j => j.item === 'water_bucket')) counts.stuck = counts.stuck ?? water
   const todo = [...ground(), ...drainJobs(plan.cells, api.block), ...field()]
   // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while
   // nothing has been touched and say how to get out of it (Chani's 4 sheep). A build that only places is safe
@@ -177,6 +224,7 @@ export async function buildFromPlan (api, a) {
   // becomes a job at all, so a plan that is only channel would otherwise report itself finished with no water in it
   const short = billShortfall(jobsBill([...todo, ...drowned()]), api.inv())
   if (Object.keys(short).length && a.partial !== true) {
+    if (farm) return { ...(counts.stuck ? { stuck: counts.stuck } : {}), missing: shortLine(short), attention: `${a.place} still needs ${shortLine(short)} more than I carry: fetch them, or partial=true to build what I can now` }
     throw new Error(`${a.place} still needs ${shortLine(short)} more than I carry: fetch them, or partial=true to build what I can now`)
   }
   if (!todo.length) return (drowned().length || low().length) ? summary() : { already: 'everything the plan asks for is already there' }
@@ -185,7 +233,10 @@ export async function buildFromPlan (api, a) {
   // ...and the ground in the order it can be stood on: from the shore in, when the plan lies in water (src/build/water.mjs).
   // A plan whose levelling could not even start for water in the way is refused, naming the water
   for (const job of shoreOrder([...ground(), ...drainJobs(plan.cells, api.block)], api.block)) { await tryLevelling(job); await api.checkpoint() }
-  if (blocked.length && !counts.levelled && !counts.dammed) throw new Error(`${plan.name}: ${blocked[0]}`)
+  if (blocked.length && !counts.levelled && !counts.dammed) {
+    if (farm) return summary()
+    throw new Error(`${plan.name}: ${blocked[0]}`)
+  }
   const reopen = reopenJobs(dams, api.block)
   kept.push(...reopen.kept)
   reopen.kept.forEach(line => keptColumns.add(line.replace(/^(-?\d+),-?\d+,(-?\d+).*/, '$1,$2')))

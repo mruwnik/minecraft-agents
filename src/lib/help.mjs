@@ -145,7 +145,7 @@ export const PRIMITIVES = {
   fill: { section: 'block', args: 'x= y= z=', doc: 'scoop a water or lava source block into a bucket' },
   pour: { section: 'block', args: 'x= y= z=', doc: 'empty the bucket onto the solid block you name; the water lands one above it' },
   toggle: { section: 'block', args: 'x= y= z= [open=]', doc: 'work a gate, door, trapdoor, lever or button by hand' },
-  use: { section: 'block', args: 'x= y= z= [item=] [ticks=]', doc: 'right-click a block with what I hold: a composter, a lectern, anything toggle refuses' },
+  use: { section: 'block', args: 'x= y= z= [item=] [empty_hand=] [ticks=]', doc: 'right-click a block with what I hold, item=, or empty_hand=true: a composter, a lectern, anything toggle refuses' },
   // ---- item
   craft: { section: 'item', args: 'item= [count=1]', doc: 'craft, using a crafting table within 32 blocks when the recipe needs one. Answers made= (a batch can overshoot what you asked for). It counts its result and what went in once the pockets have settled (a crafting window hands its grid back after it closes), so what it says was consumed is what really left. A failure says whether the ingredients were consumed: if they were not, retry, the second call usually works' },
   smelt: { section: 'item', args: 'item= [count=] [fuel=] [fuelCount=] [wait=] [x= y= z=]', doc: 'cook or melt in the nearest furnace and wait for it, by day' },
@@ -183,6 +183,7 @@ export const PRIMITIVES = {
   watches: { section: 'control', args: '', doc: 'the watches I have set' },
   reflexes: { section: 'control', args: '[on=]', doc: 'switch the body reflexes (eating, fleeing, bedtime, shutting gates) on or off' },
   control: { section: 'control', args: 'state= [ms=]', doc: 'hold one movement key down by hand (a debugging aid)' },
+  scaffold_extend: { section: 'control', args: 'x= y= z= base_y=', doc: 'extend a supported scaffold column by one verified block from beside its base; clicks the side, requires clear loaded headroom and carried scaffolding, and never walks or digs' },
   pillar_up: { section: 'control', args: '[steps=1] [item=]', doc: 'climb 1..4 blocks by normal jumping and placing underfoot; requires full support and a clear jump column, never digs, and verifies actual ascent' },
   wait: { section: 'control', args: '[seconds=100]', doc: 'block until something happens that needs me; reads the event log, so it needs no body' },
   dawn: { section: 'control', args: '', doc: 'block until morning; needs no body, so a bodiless night is spent here' },

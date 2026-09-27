@@ -86,8 +86,10 @@ test('farm.harvest: a seed the pockets ran out of is named beside the walled-in 
 test('farm.harvest place=: nothing to stand in near the plan walks to its anchor first, then gives up out loud', async () => {
   const world = flat()
   Object.keys(world).filter(k => world[k] === 'air').forEach(k => delete world[k])
-  const { api, calls } = harvestApi({ world })
-  await assert.rejects(farmHarvest.run(api, { place: 'dense-field' }), /dense-field: nowhere to stand within 4.2 of any cell of its plan/)
+  const { api, calls, events } = harvestApi({ world })
+  const result = await farmHarvest.run(api, { place: 'dense-field' })
+  assert.match(result.stuck, /dense-field: nowhere to stand within 4.2 of any cell of its plan/)
+  assert.equal(events.filter(e => e.type === 'farm_attention').length, 1)
   assert.deepEqual(calls, ['goto x=96 y=71 z=196 range=4'])
 })
 
@@ -98,4 +100,37 @@ test('farm.harvest without place=: works where I stand, everything found is cut,
   assert.equal(out.harvested.wheat, 82)
   assert.equal(out.standing, undefined)
   assert.deepEqual(batches[0][0], { item: 'wheat_seeds', x: 96, y: 71, z: 196 })
+})
+
+for (const named of [true, false]) {
+  test(`farm.harvest ${named ? 'place= keeps neighboring stalks intact' : 'without place= can cut every nearby stalk'}`, async () => {
+    const world = flat()
+    const segments = [96, 106].flatMap(x => [71, 72].map(y => ({ x, y, z: 200 })))
+    for (const c of segments) world[key(c)] = 'sugar_cane'
+    const { api, calls } = harvestApi({ world })
+    const act = api.act
+    api.act = async (name, args) => {
+      const answer = await act(name, args)
+      return name === 'find_blocks' && String(args.block).includes('bamboo') ? { positions: segments } : answer
+    }
+    const out = await farmHarvest.run(api, named ? { place: PLAN.name } : { within: 24 })
+    assert.equal(out.harvested.sugar_cane, named ? 1 : 2)
+    assert.equal(world['96,71,200'], 'sugar_cane', 'own base stays planted')
+    assert.equal(world['106,71,200'], 'sugar_cane', 'neighbor base stays planted')
+    assert.equal(world['106,72,200'], named ? 'sugar_cane' : 'air')
+    assert.equal(calls.some(c => c.startsWith('dig ') && c.includes('x=106 y=72 z=200')), !named)
+  })
+}
+
+test('farm.harvest replant=false cuts and collects but defers every planting until maintenance tidies', async () => {
+  const { api, calls, world } = harvestApi()
+  const out = await farmHarvest.run(api, { place: PLAN.name, replant: false })
+  assert.equal(out.harvested.wheat, 81)
+  assert.equal(out.replanted, 0)
+  assert.equal(out.deferred, 81)
+  assert.equal(out.notReplanted, null, 'intentional deferral is not a seed or placement failure')
+  assert.ok(calls.some(c => c.startsWith('collect ')))
+  assert.ok(!calls.some(c => c.startsWith('place ')))
+  assert.equal(world['96,71,196'], 'air')
+  assert.equal(world['106,71,200'], 'wheat#7')
 })
