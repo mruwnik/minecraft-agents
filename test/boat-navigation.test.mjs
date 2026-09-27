@@ -113,3 +113,34 @@ test('physical fine paddle approach stops close enough for the checked server sh
     assert.ok(exit.z >= 10.32, 'entire passenger footprint reaches dry bank')
   }
 })
+
+test('short boat legs converge after turns instead of braking on sideways momentum or orbiting', () => {
+  for (let degrees = 0; degrees < 360; degrees += 30) for (const distance of [0.35, 2, 8]) {
+    const entity = boat(degrees * Math.PI / 180), goal = { ...surface, z: surface.z + distance }
+    const plan = planBoatLeg(pond, entity, goal), end = plan.steps.at(-1).state
+    assert.ok(Math.hypot(end.x - goal.x, end.z - goal.z) <= 0.12, `heading=${degrees} distance=${distance}`)
+    assert.ok(Math.hypot(end.vx, end.vz) < 0.003)
+    assert.ok(plan.steps.length < 500)
+  }
+})
+
+test('Fern live pose turns back to the checked shore using real backward packet input', async () => {
+  const y = 62 + Math.fround(8 / 9) - 0.5625 * 0.65
+  const waterAt = (x, by, z) => by < 62 || by === 62 && z <= -89 ? stone : by === 62 ? water : air
+  // Both the previously rejected two-metre departure and the return after the
+  // successful server-verified forward pilot need a heading change.
+  const departure = { ...boat(3.60498), position: new Vec3(-9.5496, y, -86.5979) }
+  assert.ok(planBoatLeg(waterAt, departure, { x: -9.55, y, z: -84.6 }).steps.length < 150)
+  const f = fixture()
+  f.entity.position.set(-8.6264164432, y, -84.8497502611)
+  f.entity.yaw = 3.6021952524
+  f.bot.blockAt = p => waterAt(p.x, p.y, p.z)
+  f.goal = { x: -9.5, y, z: -87.2277 }
+  const result = await driveBoat(f)
+  assert.equal(result.arrived, true)
+  assert.ok(f.packets.some(p => p.name === 'player_input' && p.data.inputs.backward === true))
+  assert.ok(f.packets.every(p => p.name !== 'player_input' || !Object.hasOwn(p.data.inputs, 'back')), 'wire flag is backward, not the internal control name back')
+  const exit = checkedBoatLanding(waterAt, f.entity, { x: -10, y: 63, z: -89 })
+  assert.equal(exit.y, 63)
+  assert.ok(exit.z + 0.32 <= -88, 'entire dismount footprint reaches the actual bank')
+})

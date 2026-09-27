@@ -97,7 +97,10 @@ export function planBoatLeg (blockAt, entity, goal) {
     const remaining = Math.hypot(goal.x - state.x, goal.z - state.z)
     const speed = Math.hypot(state.vx, state.vz)
     const stopping = speed * DRAG / (1 - DRAG)
-    braking ||= remaining <= stopping + 0.025
+    // Turning momentum can point across or away from a nearby goal. Braking
+    // may latch only when the actual neutral-coast endpoint reaches it.
+    const coastError = Math.hypot(goal.x - state.x - state.vx * DRAG / (1 - DRAG), goal.z - state.z - state.vz * DRAG / (1 - DRAG))
+    braking ||= coastError <= 0.06
     precision ||= remaining < 2 && speed < 0.06
     let input = braking ? {} : steering(state, goal)
     if (!braking && remaining <= stopping + 1.25 && speed >= 0.06) input = {}
@@ -107,6 +110,15 @@ export function planBoatLeg (blockAt, entity, goal) {
       // whose eventual coasting distance advances in roughly .4m increments.
       input.forward = false
       if (!input.left && !input.right) { input.left = state.rotation >= 0; input.right = !input.left }
+    }
+    if (!braking) {
+      const headingError = wrap(Math.atan2(state.x - goal.x, goal.z - state.z) / DEG - state.yaw)
+      if (Math.abs(headingError) > 5 || Math.abs(state.rotation) > 1) {
+        input = steering(state, goal); input.forward = false
+        // A turning paddle also adds forward acceleration. Alternate reverse
+        // input while aligning so a short goal does not become an orbit.
+        if ((input.left || input.right) && tick % 2 === 1) input.back = true
+      }
     }
     const next = stepBoatWater(state, input, route.waterLevel)
     checkedBoatRoute(blockAt, state, next)
@@ -124,7 +136,7 @@ export function planBoatLeg (blockAt, entity, goal) {
 }
 
 const writeInput = (bot, input) => {
-  if (bot.supportFeature?.('newPlayerInputPacket')) bot._client.write('player_input', { inputs: { ...input } })
+  if (bot.supportFeature?.('newPlayerInputPacket')) bot._client.write('player_input', { inputs: { forward: Boolean(input.forward), backward: Boolean(input.back), left: Boolean(input.left), right: Boolean(input.right) } })
   else bot._client.write('steer_vehicle', { sideways: input.left ? 1 : input.right ? -1 : 0, forward: input.forward ? 1 : input.back ? -1 : 0, jump: 0 })
   bot._client.write('steer_boat', { leftPaddle: Boolean(input.right && !input.left || input.forward), rightPaddle: Boolean(input.left && !input.right || input.forward) })
 }
