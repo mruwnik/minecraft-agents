@@ -6,7 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
 import { parseBlueprint, resolve, bill, lint } from '../src/blueprint/format.mjs'
 
@@ -208,6 +209,8 @@ const routes = [
   ['/api/state', { kind: 'state' }],
   ['/api/villagers', { kind: 'villagersApi' }],
   ['/villagers', { kind: 'villagers' }],
+  ['/api/villages', { kind: 'villagesApi' }],
+  ['/villages?place=market', { kind: 'villages' }],
   ['/api/state?since=3', { kind: 'state' }],
   ['/api/chat', { kind: 'chat' }],
   ['/api/chat?limit=50', { kind: 'chat' }],
@@ -246,6 +249,44 @@ const routes = [
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
   assert.deepEqual(route(url), expected)
 }))
+
+test('village views: saved plan intent and only fresh saved inspection evidence become current counts', () => {
+  const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'blueprints', 'villager-house-10.blueprint.json'), 'utf8'))
+  source.population = { target: 5, roles: [{ id: 'farm', count: 2, profession: 'farmer' }] }
+  const place = { name: 'market', kind: 'shelter', x: 10, y: 65, z: -5, note: 'bp2:abc' }
+  const manifest = { place: 'market', at: { x: 10, y: 65, z: -5 }, facing: 'south', source: { ...source, population: undefined } }
+  const observedAt = new Date(100000).toISOString(), uuid = '11111111-1111-4111-8111-111111111111'
+  const inspection = { version: 1, place: 'market', at: manifest.at, source, population: source.population, observedAt, report: { satisfied: true, populationStatus: 'satisfied', population: 6, surplus: 1, assigned: [uuid], roles: [{ id: 'farm', status: 'satisfied', uuids: [uuid] }], unknown: [], requiredBeds: 6, structure: { complete: true, usableBeds: 10, missing: [], unknown: [] } } }
+  const roster = { villagers: { [uuid]: { uuid, profession: 'farmer', age: 'adult', offers: { observedAt, items: [] } } } }
+  const fresh = villageViews({ places: [place], manifests: [manifest], inspections: [inspection], roster, now: 110000 })[0]
+  assert.equal(fresh.state, 'satisfied'); assert.equal(fresh.observed, 6); assert.equal(fresh.population.target, 5)
+  assert.deepEqual(fresh.bounds, { x: 10, y: 65, z: -5, width: 10, depth: 10, height: 4 }); assert.equal(fresh.members[0].uuid, uuid)
+  assert.equal(fresh.roles[0].observed, 1); assert.equal(fresh.members[0].sightingFresh, false)
+  const stale = villageViews({ places: [place], manifests: [manifest], inspections: [inspection], roster, now: 500000 })[0]
+  assert.equal(stale.state, 'stale'); assert.equal(stale.observed, null); assert.equal(stale.lastObservedPopulation, 6)
+  assert.equal(stale.roles[0].observed, null); assert.equal(stale.roles[0].lastObserved, 1)
+})
+
+test('village views: explicit villages remain visible without a population plan; unrelated blueprints are not villages', () => {
+  const places = [
+    { name: 'old-village', kind: 'village', x: 1, y: 64, z: 2 },
+    { name: 'plain-hut', kind: 'shelter', x: 4, y: 64, z: 5 }
+  ]
+  const views = villageViews({ places, now: 1000 })
+  assert.equal(views.length, 1); assert.equal(views[0].name, 'old-village'); assert.equal(views[0].state, 'unplanned'); assert.equal(views[0].bounds, null)
+})
+
+test('village inspection without a surviving place keeps its old map anchor, and map hits prefer nearby village markers', () => {
+  const inspection = { version: 1, place: 'lost-village', at: { x: -8, y: 64, z: 3 }, source: null, population: null, observedAt: new Date(1000).toISOString(), report: {} }
+  const [view] = villageViews({ inspections: [inspection], now: 2000 })
+  assert.deepEqual([view.name, view.x, view.z, view.state], ['lost-village', -8, 3, 'unplanned'])
+  assert.deepEqual(attachVillageStatus([], [view]).map(p => [p.name,p.x,p.z,p.village.state]), [['lost-village',-8,3,'unplanned']])
+  const places = [{ name: 'ordinary', x: 0, z: 0 }, { name: 'market', x: 10, z: 10, village: view }, { name: 'near-market', x: 10.2, z: 10.1, village: view }]
+  assert.equal(hitVillagePlace(places, 10.18, 10.09, 1), 'near-market')
+  assert.equal(hitVillagePlace(places, 0, 0, 1), null)
+  assert.deepEqual(rawPlanRects([{ name: 'market', x: -8, z: 3, village: { bounds: { x: -8, z: 3, width: 10, depth: 8 } } }]), [{ name: 'market', x: -8, z: 3, w: 10, h: 8 }])
+  assert.deepEqual(rawPlanRects([{ name: 'market', x: -8, z: 3, structure: { title: 'old geometry', layers: [{ y: 0, grid: ['###'] }] }, village: { bounds: { x: -8, z: 3, width: 10, depth: 8 } } }]), [{ name: 'market', x: -8, z: 3, w: 10, h: 8 }])
+})
 
 // The browser links the page's whole module graph before running any of it, so one module the server cannot serve
 // (404 JSON under a .mjs URL: "corrupted" modules in the console) or one `node:` import anywhere below map.mjs leaves

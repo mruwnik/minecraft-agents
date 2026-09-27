@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>villages</title>
+<style>
+  :root { --bg:#14171c; --panel:#1c2027; --line:#2c333d; --ink:#dfe4ec; --dim:#8b95a5; --ok:#6ee7a8; --warn:#e0a030; --bad:#f0907e; --link:#5b9ad8; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { display:flex; gap:16px; align-items:baseline; padding:10px 16px; border-bottom:1px solid var(--line); } h1 { font-size:14px; margin:0; }
+  a { color:var(--link); text-decoration:none; } a:hover { text-decoration:underline; } .muted,small { color:var(--dim); }
+  #status { margin-left:auto; } main { max-width:1200px; margin:auto; padding:18px; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; } input,button { font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:6px 9px; }
+  input { flex:1; min-width:180px; } button { cursor:pointer; } .card { border:1px solid var(--line); border-radius:5px; background:var(--panel); margin:10px 0; overflow:hidden; }
+  .head { display:grid; grid-template-columns:minmax(160px,1fr) minmax(140px,.7fr) minmax(180px,1fr) auto; gap:14px; align-items:center; padding:12px; }
+  .name { font-weight:600; } .state { font-weight:600; } .satisfied { color:var(--ok); } .below-target,.incomplete { color:var(--bad); } .stale,.unknown,.not-inspected,.unplanned { color:var(--warn); }
+  .detail { border-top:1px solid var(--line); padding:12px 14px; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .box { border:1px solid var(--line); border-radius:4px; padding:9px; } .box h2 { color:var(--dim); font-size:11px; margin:0 0 6px; text-transform:uppercase; letter-spacing:.08em; }
+  .role { display:grid; grid-template-columns:1fr auto auto; gap:12px; border-bottom:1px solid var(--line); padding:5px 0; } .role:last-child { border:0; }
+  .empty { color:var(--dim); text-align:center; padding:32px; border:1px dashed var(--line); } .links { display:flex; gap:14px; margin-top:10px; }
+  @media(max-width:700px) { .head { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<header><h1>villages</h1><a href="/">world map →</a><a href="/villagers">villager roster →</a><span id="status" class="muted">loading…</span></header>
+<main>
+  <div class="toolbar"><input id="filter" type="search" placeholder="filter village, profession or role"><button id="refresh">refresh</button><small>Read-only saved observations. This page does not query or move agents.</small></div>
+  <div id="list"></div>
+</main>
+<script>
+const list=document.querySelector('#list'),status=document.querySelector('#status'),filter=document.querySelector('#filter')
+let villages=[]
+const el=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value??'unknown';if(cls)n.className=cls;return n}
+const age=value=>{const s=Math.max(0,Math.floor((Date.now()-Date.parse(value))/1000));return s<60?`${s}s ago`:s<3600?`${Math.floor(s/60)}m ago`:`${Math.floor(s/3600)}h ago`}
+function render(){
+  const q=filter.value.trim().toLowerCase(),shown=villages.filter(v=>`${v.name} ${v.kind} ${v.population?.roles?.map(r=>`${r.id} ${r.profession}`).join(' ')??''}`.toLowerCase().includes(q));list.replaceChildren()
+  if(!shown.length){list.append(el('div',villages.length?'No villages match this filter.':'No saved villages or village inspections yet.','empty'));return}
+  for(const v of shown){
+    const card=document.createElement('article');card.className='card';const head=document.createElement('div');head.className='head'
+    head.append(el('span',v.name,'name'),el('span',`${v.x}, ${v.y}, ${v.z}`,'muted'))
+    const pop=v.population?(v.fresh?`${v.observed??'unknown'} / ${v.population.target} residents`:v.lastObservedPopulation!==null?`last observed ${v.lastObservedPopulation} / ${v.population.target}`:`unknown / ${v.population.target} residents`):'population plan unknown'
+    head.append(el('span',pop,'state'))
+    head.append(el('span',v.state.replaceAll('-',' '),`state ${v.state}`));card.append(head)
+    const detail=document.createElement('div');detail.className='detail';const grid=document.createElement('div');grid.className='grid'
+    const housing=document.createElement('section');housing.className='box';housing.append(el('h2','housing'),el('div',v.fresh?`${v.housing.usableBeds??'?'} reachable beds / ${v.housing.requiredBeds??'?'} needed · ${v.housing.state}`:'housing unknown until a fresh inspection'))
+    if(v.fresh)housing.append(el('div',`enclosure ${v.housing.shelter.status} · minimum light ${v.housing.shelter.lightMinimum??'unknown'} · beds reachable from residents ${v.housing.residentBedCapacity??'unknown'}`,'muted'))
+    if(v.fresh&&v.housing.residentBeds.length)housing.append(el('small',`last-known resident bed reachability: ${v.housing.residentBeds.map(r=>`${r.uuid.slice(0,8)} ${r.beds.length} bed(s)`).join('; ')}`,'muted'))
+    if(v.fresh&&(v.housing.missingCells||v.housing.unknownCells))housing.append(el('small',`${v.housing.missingCells??0} missing cells · ${v.housing.unknownCells??0} unloaded cells`,'muted'))
+    if(v.fresh&&v.housing.shelter.issues?.length)housing.append(el('small',v.housing.shelter.issues.join('; '),'muted'))
+    const roles=document.createElement('section');roles.className='box';roles.append(el('h2','required roles'))
+    if(!v.roles.length)roles.append(el('div','No distinct role requirements in the saved population intent.','muted'))
+    for(const r of v.roles){const row=document.createElement('div');row.className='role';row.append(el('span',`${r.id} · ${r.profession}`),el('span',`${r.observed??(r.lastObserved!==null?`last ${r.lastObserved}`:'?')} / ${r.required}`),el('span',r.status,`state ${r.status}`));roles.append(row);if(r.workstation)roles.append(el('small',`workstation coordinates ${r.workstation.join(', ')}; villager claim not verified`,'muted'));if(r.stock.length)roles.append(el('small',`merchant stock: ${r.stock.map(s=>`${s.uuid.slice(0,8)} ${s.status}${s.status==='unknown'&&s.lastStatus!=='unknown'?` (last ${s.lastStatus})`:''} · restock ${s.restock}`).join('; ')}`,'muted'))}
+    const evidence=document.createElement('section');evidence.className='box';evidence.append(el('h2','evidence'))
+    if(v.error)evidence.append(el('div',v.error,'state unknown'))
+    evidence.append(el('div',v.observedAt?`${v.fresh?'fresh':'stale'} snapshot · observed ${age(v.observedAt)}`:'not inspected yet','muted'))
+    evidence.append(el('div',v.unknownResidents===null?'current uncertainty unknown':`${v.unknownResidents} residents with stale or unknown identity facts`,'muted'))
+    evidence.append(el('div',v.restock,'muted'))
+    if(v.surplus!==null&&v.surplus!==undefined)evidence.append(el('div',`${v.surplus} observed surplus residents; nobody is removed automatically`,'muted'))
+    grid.append(housing,roles,evidence);detail.append(grid)
+    const people=document.createElement('div');people.className='links'
+    const map=document.createElement('a');map.href='/';map.textContent=v.bounds?`map footprint ${v.bounds.width} × ${v.bounds.depth}`:'show map marker';people.append(map)
+    if(v.population?.blueprintId){const bp=document.createElement('a');bp.href=`/blueprints?name=${encodeURIComponent(v.population.blueprintId)}`;bp.textContent='blueprint';people.append(bp)}
+    for(const m of v.members){const a=document.createElement('a');a.href=`/villagers?uuid=${encodeURIComponent(m.uuid)}`;a.textContent=`${m.profession}: ${m.uuid.slice(0,8)} · ${m.lockVerifiedAt?'trade lock verified':'lock unverified'} · last seen ${m.lastSeenAt?age(m.lastSeenAt):'unknown'} · ${m.offersObservedAt?`offers ${age(m.offersObservedAt)}`:'offers unobserved'}`;people.append(a)}
+    detail.append(people);card.append(detail);list.append(card)
+  }
+}
+async function load(){status.textContent='updating…';try{const r=await fetch('/api/villages'),data=await r.json();if(!r.ok)throw Error(data.error??'village request failed');villages=data.villages??[];render();status.textContent=`${villages.length} places · refreshed ${new Date().toLocaleTimeString()}${data.error?` · ${data.error}`:''}`}catch(e){status.textContent=e.message}}
+filter.addEventListener('input',render);document.querySelector('#refresh').addEventListener('click',load)
+const selected=new URLSearchParams(location.search).get('place');load().then(()=>{if(selected){const card=[...list.querySelectorAll('.card')].find(n=>n.textContent.includes(selected));card?.scrollIntoView({block:'center'})}});setInterval(load,15000)
+</script>
+</body>
+</html>

@@ -25,7 +25,7 @@
 </style>
 </head>
 <body>
-<header><h1>villager roster</h1><a href="/">map and agents →</a><span id="status">loading…</span></header>
+<header><h1>villager roster</h1><a href="/">map and agents →</a><a href="/villages">villages →</a><span id="status">loading…</span></header>
 <main>
   <div class="tools"><input id="filter" type="search" placeholder="filter UUID, profession, place, item or enchantment"><button id="refresh">refresh</button><small>Last sightings age naturally; unobserved does not mean dead.</small></div>
   <div id="list"></div>
@@ -35,6 +35,7 @@ const list = document.querySelector('#list')
 const status = document.querySelector('#status')
 const filter = document.querySelector('#filter')
 let records = []
+filter.value = new URLSearchParams(location.search).get('uuid') ?? ''
 const ago = value => {
   const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000))
   if (seconds < 60) return `${seconds}s ago`

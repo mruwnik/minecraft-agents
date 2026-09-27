@@ -105,6 +105,7 @@
 <header>
   <h1>agent bodies</h1>
   <a href="/blueprints">blueprints →</a>
+  <a href="/villages">villages →</a>
   <a href="/villagers">villagers →</a>
   <span class="muted" id="clock">—</span>
   <span class="muted" id="counts">—</span>
@@ -177,7 +178,7 @@
   </div>
 </div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, hitVillagePlace, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
 const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
@@ -263,8 +264,11 @@ const drawFootprints = () => {
     const a = project(view, rect.x, rect.z)
     const b = project(view, rect.x + rect.w, rect.z + rect.h)
     if (!onCanvas(a, size.w, size.h, 60) && !onCanvas(b, size.w, size.h, 60)) return
-    ctx.fillStyle = 'rgba(217,178,95,0.10)'
-    ctx.strokeStyle = 'rgba(217,178,95,0.65)'
+    const place = snap.places.find(p => p.name === rect.name)
+    const isVillage = Boolean(place?.village)
+    const colour = isVillage ? (place.village.state === 'satisfied' ? '110,231,168' : place.village.state === 'below-target' ? '240,144,126' : '224,160,48') : '217,178,95'
+    ctx.fillStyle = `rgba(${colour},0.10)`
+    ctx.strokeStyle = `rgba(${colour},0.8)`
     ctx.lineWidth = 1
     ctx.fillRect(a.px, a.py, b.px - a.px, b.py - a.py)
     ctx.strokeRect(a.px, a.py, b.px - a.px, b.py - a.py)
@@ -276,13 +280,18 @@ const drawPlaces = () => {
   return snap.places.map(place => {
     const at = project(view, place.x, place.z)
     if (!onCanvas(at, size.w, size.h)) return null
-    ctx.strokeStyle = '#d9b25f'
+    const isVillage = Boolean(place.village)
+    ctx.strokeStyle = isVillage ? (place.village.state === 'satisfied' ? '#6ee7a8' : place.village.state === 'below-target' ? '#f0907e' : '#e0a030') : '#d9b25f'
     ctx.lineWidth = 1.2
     ctx.beginPath()
     ctx.moveTo(at.px - 3, at.py); ctx.lineTo(at.px + 3, at.py)
     ctx.moveTo(at.px, at.py - 3); ctx.lineTo(at.px, at.py + 3)
     ctx.stroke()
-    return labelBox(place.name, at.px + 5, at.py + 3, { colour: 'rgba(217,178,95,0.9)' })
+    const observed = place.village?.population ? (place.village.fresh ? place.village.observed ?? '?' : place.village.lastObservedPopulation === null ? '?' : `last ${place.village.lastObservedPopulation}`) : '?'
+    const target = place.village?.population?.target ?? '?'
+    const status = isVillage ? (place.village.state === 'satisfied' ? `${observed}/${target} ok` : place.village.state === 'stale' ? `${observed}/${target} stale` : place.village.state === 'not-inspected' ? `?/${target} not checked` : place.village.state === 'unplanned' ? 'no population plan' : `${observed}/${target} ?`) : ''
+    const label = isVillage ? `${place.name} · ${status}` : place.name
+    return labelBox(label, at.px + 5, at.py + 3, { colour: isVillage ? '#6ee7a8' : 'rgba(217,178,95,0.9)' })
   }).filter(Boolean)
 }
 
@@ -390,8 +399,14 @@ canvas.addEventListener('click', e => {
   if (!view) return
   const worldX = at.px / view.scale + view.originX
   const worldZ = at.py / view.scale + view.originZ
+  const villageMark = hitVillagePlace(snap.places, worldX, worldZ, 12 / view.scale)
+  if (villageMark) { location.href = `/villages?place=${encodeURIComponent(villageMark)}`; return }
   const farm = hitPlan(planRects(snap.places), worldX, worldZ)
-  if (farm) openPlan(farm)
+  if (farm) {
+    const village = snap.places.find(p => p.name === farm)?.village
+    if (village) location.href = `/villages?place=${encodeURIComponent(farm)}`
+    else openPlan(farm)
+  }
 })
 
 canvas.addEventListener('wheel', e => {
@@ -787,7 +802,7 @@ const applyState = s => {
   snap = s
   const up = s.bodies.filter(b => b.up)
   el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
-  el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones · ${s.humans.length} ${s.humans.length === 1 ? 'human' : 'humans'} in sight`
+  el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones · ${s.humans.length} ${s.humans.length === 1 ? 'human' : 'humans'} in sight${s.villageError ? ` · village data: ${s.villageError}` : ''}`
   el('clock').textContent = up[0]?.state?.time ?? 'no body online'
   renderList()
   renderPlaces()

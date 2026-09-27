@@ -84,10 +84,15 @@ export const onCanvas = ({ px, py }, width, height, margin = 0) =>
 // A place with a plan is not a point, it is a rectangle: the plan is anchored at its own north-west corner
 // (x,z), rows run south, columns east - exactly what parsePlan already knows how to size.
 export const planRects = places => places.flatMap(place => {
-  if (!hasPlan(place)) return []
-  const parsed = parsePlacePlan(place)
-  if (parsed.error) return []
-  return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
+  const bounds = place.village?.bounds
+  if (Number.isFinite(bounds?.width) && bounds.width > 0 && Number.isFinite(bounds?.depth) && bounds.depth > 0) {
+    return [{ name: place.name, x: bounds.x ?? place.x, z: bounds.z ?? place.z, w: bounds.width, h: bounds.depth }]
+  }
+  if (hasPlan(place)) {
+    const parsed = parsePlacePlan(place)
+    if (!parsed.error) return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
+  }
+  return []
 })
 
 // crops get their own colour so two fields are told apart at a glance; everything else is by kind. One table for
@@ -148,6 +153,12 @@ export const layerDiff = (place, world, y = null) => {
 // which footprint, if any, a world x,z lands in - the north-west corner is inside, the far edge (x+w, z+h) is not
 export const hitPlan = (rects, x, z) =>
   rects.find(r => x >= r.x && x < r.x + r.w && z >= r.z && z < r.z + r.h)?.name ?? null
+
+export const hitVillagePlace = (places, x, z, radius = 1) => places
+  .filter(p => p.village && Number.isFinite(p.x) && Number.isFinite(p.z))
+  .map(p => ({ place: p, distance: Math.hypot(x - p.x, z - p.z) }))
+  .filter(v => v.distance <= radius)
+  .sort((a, b) => a.distance - b.distance)[0]?.place.name ?? null
 
 // ---------------------------------------------------------------- the plan against the world
 // A plan's y is the GROUND block; what it puts there (crop, fence, chest, water cover) stands at y+1, and a water

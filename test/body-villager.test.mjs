@@ -6,7 +6,7 @@ import { makeBoatRuntime } from '../src/body/boat.mjs'
 import { makeVillagerRuntime } from '../src/body/villager.mjs'
 const { Vec3 } = vec3
 const entity = (id, name, uuid = `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`) => ({ id, name, uuid, isValid: true, position: new Vec3(0, 64, 0), width: .6, height: 1.95, metadata: { 16: false, 19: { profession: 'farmer' } } })
-const client = () => ({ entity: entity(1, 'player'), entities: {}, _client: new EventEmitter() })
+const client = () => Object.assign(new EventEmitter(), { entity: entity(1, 'player'), entities: {}, _client: new EventEmitter() })
 function boatHarness () {
   let bot = client(), leads = new Map()
   const runtime = makeBoatRuntime({ getBot: () => bot, getBoatLeashHolder: () => leads })
@@ -33,7 +33,7 @@ test('boat reconnect hooks read the new body and reset lead map, with one subscr
   h.runtime.attach()
   first._client.emit('attach_entity', { entityId: 2, vehicleId: 1 })
   first._client.emit('attach_entity', { entityId: 3, vehicleId: 1 })
-  assert.deepEqual([...h.leads], [[2, 1]])
+  assert.deepEqual([...h.leads], [[2, 1], [3, 1]])
   h.reconnect()
   assert.equal(h.leads.size, 0)
   assert.equal(h.bot._client.listenerCount('set_passengers'), 1)
@@ -42,6 +42,9 @@ test('boat reconnect hooks read the new body and reset lead map, with one subscr
   h.bot.entities[5] = entity(5, 'birch_boat')
   h.bot._client.emit('attach_entity', { entityId: 5, vehicleId: 1 })
   assert.equal(h.runtime.quick.boat_state({}).boats[0].leashHolderId, 1)
+  h.bot.emit('entityGone', h.bot.entities[5])
+  assert.equal(h.runtime.quick.boat_state({}).boats[0].leashHolderId, null)
+  h.bot._client.emit('attach_entity', { entityId: 5, vehicleId: 1 })
   h.bot._client.emit('attach_entity', { entityId: 5, vehicleId: -1 })
   assert.equal(h.runtime.quick.boat_state({}).boats[0].leashHolderId, null)
 })

@@ -19,6 +19,9 @@ import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
 import { semanticBlueprintHash } from '../src/blueprint/schema.mjs'
 import { emptyVillagerRoster, readVillagerRoster } from '../src/villager/roster.mjs'
+import { readBlueprintManifest } from '../src/blueprint/manifest.mjs'
+import { listVillageInspections } from '../src/villager/inspection.mjs'
+import { villageViews, attachVillageStatus } from './dashboard/villages.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
@@ -26,6 +29,7 @@ const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
 const BLUEPRINTS_PAGE = path.join(import.meta.dirname, 'dashboard', 'blueprints.html')
 const VILLAGERS_PAGE = path.join(import.meta.dirname, 'dashboard', 'villagers.html')
+const VILLAGES_PAGE = path.join(import.meta.dirname, 'dashboard', 'villages.html')
 const BLUEPRINT_MODULE = path.join(import.meta.dirname, 'dashboard', 'blueprint.mjs')
 const SRC_DIR = path.join(ROOT, 'src')
 const PORT = Number(process.env.PORT ?? 3700)
@@ -95,12 +99,15 @@ const pollOnce = async () => {
 
 const snapshot = () => {
   const bodies = mergeBodies(agents, polls)
+  const villageData = villageSnapshot(), villages = villageData.villages
+  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
   return {
     at: Date.now(),
     agents: agentNames(),
     bodies,
     humans: humanSightings(bodies, agentNames()),
-    places: readJson(path.join(ROOT, 'state', 'places.json'), []),
+    places: attachVillageStatus(places, villages),
+    villageError: villageData.error,
     zones: readJson(path.join(ROOT, 'state', 'zones.json'), [])
   }
 }
@@ -109,6 +116,20 @@ const villagers = () => {
   try { return readVillagerRoster(path.join(ROOT, 'state', 'villagers.json')) } catch (error) {
     return { ...emptyVillagerRoster(), error: `villager roster unavailable: ${error.message}` }
   }
+}
+
+// Village summaries are snapshots written by village.check / village.maintain.
+// The dashboard never polls a body or scans world blocks to manufacture one.
+const villageSnapshot = () => {
+  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
+  const manifests = [], manifestErrors = []
+  for (const place of places) {
+    if (!String(place.note ?? '').startsWith('bp2:')) continue
+    try { const manifest = readBlueprintManifest(place.note); if (manifest) manifests.push(manifest) } catch (error) { manifestErrors.push({ place: place.name, error: `saved blueprint unavailable: ${error.message}` }) }
+  }
+  let inspections = [], inspectionError = null
+  try { inspections = listVillageInspections() } catch (error) { inspectionError = `saved village inspections unavailable: ${error.message}` }
+  return { villages: villageViews({ places, manifests, inspections, manifestErrors, roster: villagers() }), error: inspectionError }
 }
 
 // ---------------------------------------------------------------- the chat log
@@ -247,6 +268,7 @@ const renderPage = async query => {
 // the library is inlined for the same reason: the list and the chosen blueprint (?name=) are drawn on the first paint
 const renderBlueprintsPage = () => fs.readFileSync(BLUEPRINTS_PAGE, 'utf8').replace('</head>', `<script>window.__PRELOAD_LIBRARY__=${inline(library())}</script>\n</head>`)
 const renderVillagersPage = () => fs.readFileSync(VILLAGERS_PAGE, 'utf8')
+const renderVillagesPage = () => fs.readFileSync(VILLAGES_PAGE, 'utf8')
 
 const handlers = {
   page: async (res, query) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query)),
@@ -258,6 +280,8 @@ const handlers = {
   },
   villagers: (res) => send(res, 200, 'text/html; charset=utf-8', renderVillagersPage()),
   villagersApi: (res) => sendJson(res, 200, villagers()),
+  villages: (res) => send(res, 200, 'text/html; charset=utf-8', renderVillagesPage()),
+  villagesApi: (res) => sendJson(res, 200, { ...villageSnapshot(), readOnly: true }),
   state: (res) => sendJson(res, 200, snapshot()),
   blueprints: (res) => send(res, 200, 'text/html; charset=utf-8', renderBlueprintsPage()),
   bplist: (res) => sendJson(res, 200, library()),
@@ -269,7 +293,7 @@ const handlers = {
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /blueprints, /api/state, /api/villagers, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
 }
 
 http.createServer(async (req, res) => {
