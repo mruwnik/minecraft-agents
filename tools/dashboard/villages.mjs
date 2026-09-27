@@ -64,6 +64,17 @@ export function villageViews({ places = [], manifests = [], inspections = [], ma
       const found = report?.roles?.find(r => r.id === role.id)
       return { id: role.id, profession: role.profession, required: role.count ?? 1, observed: fresh ? (found?.uuids?.length ?? null) : null, lastObserved: found?.uuids?.length ?? null, status: fresh ? (found?.status ?? 'unknown') : 'unknown', workstation: role.workstation ?? null, trade: role.trade ?? null, stock: (found?.stock ?? []).map(s => ({ uuid: s.uuid, status: fresh ? s.status : 'unknown', lastStatus: s.status, observedAt: s.observedAt ?? null, restock: s.restock ?? 'not observed' })) }
     })
+    const declaredWorkspaces = [...(population?.workspaces ?? []), ...(population?.roles ?? []).filter(r => r.workstation).map(r => ({ id: r.id, at: r.workstation, profession: r.profession, trade: r.trade }))]
+    const workspaces = declaredWorkspaces.map(workspace => {
+      const found = report?.workspaces?.find(w => w.id === workspace.id)
+      return {
+        id: workspace.id, localAt: workspace.at, profession: workspace.profession, trade: workspace.trade ?? null,
+        at: found?.at ?? null, block: fresh ? (found?.block ?? null) : null,
+        status: fresh ? (found?.status ?? 'unknown') : 'unknown', lastStatus: found?.status ?? 'unknown',
+        uuids: fresh ? (found?.uuids ?? []) : [], lastUuids: found?.uuids ?? [],
+        associations: (found?.associations ?? []).map(a => ({ uuid: a.uuid, status: fresh ? a.status : 'unknown', lastStatus: a.status, reason: a.reason ?? null, source: a.source ?? null, basis: a.basis ?? null, observedAt: a.observedAt ?? null }))
+      }
+    })
     const explicitMemberIds = [...(report?.assigned ?? []), ...roles.flatMap(r => report?.roles?.find(v => v.id === r.id)?.uuids ?? [])]
     const insideLastSeen = bounds ? Object.values(roster.villagers ?? {}).filter(r => {
       const p = r.lastPosition
@@ -84,6 +95,7 @@ export function villageViews({ places = [], manifests = [], inspections = [], ma
       unknownResidents: fresh ? (report?.unknown?.length ?? 0) : null,
       surplus: fresh ? (report?.surplus ?? null) : null,
       roles,
+      workspaces,
       housing: fresh ? { state: report?.structure?.complete ? 'complete' : report?.structure?.unknown?.length ? 'unknown' : 'incomplete', usableBeds: report?.structure?.usableBeds ?? null, residentBedCapacity: report?.structure?.residentBedCapacity ?? null, requiredBeds: report?.requiredBeds ?? null, residentBeds: report?.structure?.residentBeds ?? [], missingCells: report?.structure?.missing?.length ?? null, unknownCells: report?.structure?.unknown?.length ?? null, shelter: report?.shelter ?? { status: 'unknown', issues: ['shelter proof not recorded'] } } : { state: 'unknown', usableBeds: null, residentBedCapacity: null, requiredBeds: null, residentBeds: [], missingCells: null, unknownCells: null, shelter: { status: 'unknown', issues: [] } },
       restock: 'unknown; trade uses are last observed on merchant windows', members
     }

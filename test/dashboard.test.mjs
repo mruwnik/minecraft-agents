@@ -251,20 +251,42 @@ routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
 }))
 
 test('village views: saved plan intent and only fresh saved inspection evidence become current counts', () => {
-  const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'blueprints', 'villager-house-10.blueprint.json'), 'utf8'))
-  source.population = { target: 5, roles: [{ id: 'farm', count: 2, profession: 'farmer' }] }
+  const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'examples', 'village-five.blueprint.json'), 'utf8'))
+  source.population = { target: 5, roles: [{ id: 'east-composter', count: 1, profession: 'farmer', workstation: [3, 0, 3], trade: { output: 'enchanted_book', enchant: 'efficiency', level: 3, atLeast: true } }] }
   const place = { name: 'market', kind: 'shelter', x: 10, y: 65, z: -5, note: 'bp2:abc' }
   const manifest = { place: 'market', at: { x: 10, y: 65, z: -5 }, facing: 'south', source: { ...source, population: undefined } }
   const observedAt = new Date(100000).toISOString(), uuid = '11111111-1111-4111-8111-111111111111'
-  const inspection = { version: 1, place: 'market', at: manifest.at, source, population: source.population, observedAt, report: { satisfied: true, populationStatus: 'satisfied', population: 6, surplus: 1, assigned: [uuid], roles: [{ id: 'farm', status: 'satisfied', uuids: [uuid] }], unknown: [], requiredBeds: 6, structure: { complete: true, usableBeds: 10, missing: [], unknown: [] } } }
+  const inspection = { version: 1, place: 'market', at: manifest.at, source, population: source.population, observedAt, report: { satisfied: true, populationStatus: 'satisfied', population: 6, surplus: 1, assigned: [uuid], roles: [{ id: 'east-composter', status: 'satisfied', uuids: [uuid] }], workspaces: [{ id: 'east-composter', at: { x: 13, y: 65, z: -2 }, block: 'composter', status: 'satisfied', uuids: [uuid], associations: [{ uuid, status: 'verified', reason: 'exact claim observed', source: 'villager.roll', basis: 'workstation event and confirmed profession' }] }], unknown: [], requiredBeds: 6, structure: { complete: true, usableBeds: 10, missing: [], unknown: [] } } }
   const roster = { villagers: { [uuid]: { uuid, profession: 'farmer', age: 'adult', offers: { observedAt, items: [] } } } }
   const fresh = villageViews({ places: [place], manifests: [manifest], inspections: [inspection], roster, now: 110000 })[0]
   assert.equal(fresh.state, 'satisfied'); assert.equal(fresh.observed, 6); assert.equal(fresh.population.target, 5)
   assert.deepEqual(fresh.bounds, { x: 10, y: 65, z: -5, width: 10, depth: 10, height: 4 }); assert.equal(fresh.members[0].uuid, uuid)
   assert.equal(fresh.roles[0].observed, 1); assert.equal(fresh.members[0].sightingFresh, false)
+  assert.deepEqual(fresh.roles[0].trade, { output: 'enchanted_book', enchant: 'efficiency', level: 3, atLeast: true })
+  assert.deepEqual(fresh.workspaces.map(w => [w.id,w.profession,w.at,w.block,w.status,w.uuids]), [['east-composter','farmer',{x:13,y:65,z:-2},'composter','satisfied',[uuid]]])
   const stale = villageViews({ places: [place], manifests: [manifest], inspections: [inspection], roster, now: 500000 })[0]
   assert.equal(stale.state, 'stale'); assert.equal(stale.observed, null); assert.equal(stale.lastObservedPopulation, 6)
   assert.equal(stale.roles[0].observed, null); assert.equal(stale.roles[0].lastObserved, 1)
+  assert.equal(stale.workspaces[0].status, 'unknown'); assert.equal(stale.workspaces[0].lastStatus, 'satisfied'); assert.deepEqual(stale.workspaces[0].uuids, [])
+})
+
+test('village details show trade constraints and workspace evidence instead of an unverified-claim blanket', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'tools', 'dashboard', 'villages.html'), 'utf8')
+  assert.match(html, /desired offer: \$\{tradeLabel\(r\.trade\)\}/)
+  assert.match(html, /trade\.atLeast\?'at least '/)
+  assert.match(html, /workspace \$\{w\.status\}/)
+  assert.doesNotMatch(html, /villager claim not verified/)
+})
+
+test('workspace view keeps missing or unproven station bindings unknown instead of inferring from a global role match', () => {
+  const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'examples', 'village-five.blueprint.json'), 'utf8'))
+  source.population = { target: 1, roles: [{ id: 'farm', profession: 'farmer' }], workspaces: [{ id: 'farmer-east', at: [3,0,3], profession: 'farmer' }] }
+  const inspection = { place: 'ws', at: {x:0,y:64,z:0}, source, population: source.population, observedAt: new Date(100000).toISOString(), report: { satisfied: false, population: 1, roles: [{id:'farm',status:'satisfied',uuids:['u']}], workspaces: [] } }
+  const [view] = villageViews({ places: [{name:'ws',kind:'village',x:0,y:64,z:0}], inspections: [inspection], now: 100001 })
+  assert.equal(view.roles[0].status, 'satisfied')
+  assert.equal(view.workspaces[0].status, 'unknown')
+  assert.equal(view.workspaces[0].at, null)
+  assert.deepEqual(view.workspaces[0].uuids, [])
 })
 
 test('village views: explicit villages remain visible without a population plan; unrelated blueprints are not villages', () => {

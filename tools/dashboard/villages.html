@@ -17,6 +17,7 @@
   .detail { border-top:1px solid var(--line); padding:12px 14px; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
   .box { border:1px solid var(--line); border-radius:4px; padding:9px; } .box h2 { color:var(--dim); font-size:11px; margin:0 0 6px; text-transform:uppercase; letter-spacing:.08em; }
   .role { display:grid; grid-template-columns:1fr auto auto; gap:12px; border-bottom:1px solid var(--line); padding:5px 0; } .role:last-child { border:0; }
+  .workspace { border-bottom:1px solid var(--line); padding:6px 0; } .workspace:last-child { border:0; }
   .empty { color:var(--dim); text-align:center; padding:32px; border:1px dashed var(--line); } .links { display:flex; gap:14px; margin-top:10px; }
   @media(max-width:700px) { .head { grid-template-columns:1fr 1fr; } }
 </style>
@@ -32,8 +33,9 @@ const list=document.querySelector('#list'),status=document.querySelector('#statu
 let villages=[]
 const el=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value??'unknown';if(cls)n.className=cls;return n}
 const age=value=>{const s=Math.max(0,Math.floor((Date.now()-Date.parse(value))/1000));return s<60?`${s}s ago`:s<3600?`${Math.floor(s/60)}m ago`:`${Math.floor(s/3600)}h ago`}
+const tradeLabel=trade=>trade?[trade.output,trade.enchant,trade.level?`${trade.atLeast?'at least ':''}level ${trade.level}`:null].filter(Boolean).join(' · '):''
 function render(){
-  const q=filter.value.trim().toLowerCase(),shown=villages.filter(v=>`${v.name} ${v.kind} ${v.population?.roles?.map(r=>`${r.id} ${r.profession}`).join(' ')??''}`.toLowerCase().includes(q));list.replaceChildren()
+  const q=filter.value.trim().toLowerCase(),shown=villages.filter(v=>`${v.name} ${v.kind} ${v.population?.roles?.map(r=>`${r.id} ${r.profession}`).join(' ')??''} ${v.workspaces?.map(w=>`${w.id} ${w.profession} ${w.trade?.output??''} ${w.trade?.enchant??''}`).join(' ')??''}`.toLowerCase().includes(q));list.replaceChildren()
   if(!shown.length){list.append(el('div',villages.length?'No villages match this filter.':'No saved villages or village inspections yet.','empty'));return}
   for(const v of shown){
     const card=document.createElement('article');card.className='card';const head=document.createElement('div');head.className='head'
@@ -49,14 +51,24 @@ function render(){
     if(v.fresh&&v.housing.shelter.issues?.length)housing.append(el('small',v.housing.shelter.issues.join('; '),'muted'))
     const roles=document.createElement('section');roles.className='box';roles.append(el('h2','required roles'))
     if(!v.roles.length)roles.append(el('div','No distinct role requirements in the saved population intent.','muted'))
-    for(const r of v.roles){const row=document.createElement('div');row.className='role';row.append(el('span',`${r.id} · ${r.profession}`),el('span',`${r.observed??(r.lastObserved!==null?`last ${r.lastObserved}`:'?')} / ${r.required}`),el('span',r.status,`state ${r.status}`));roles.append(row);if(r.workstation)roles.append(el('small',`workstation coordinates ${r.workstation.join(', ')}; villager claim not verified`,'muted'));if(r.stock.length)roles.append(el('small',`merchant stock: ${r.stock.map(s=>`${s.uuid.slice(0,8)} ${s.status}${s.status==='unknown'&&s.lastStatus!=='unknown'?` (last ${s.lastStatus})`:''} · restock ${s.restock}`).join('; ')}`,'muted'))}
+    for(const r of v.roles){const row=document.createElement('div');row.className='role';row.append(el('span',`${r.id} · ${r.profession}`),el('span',`${r.observed??(r.lastObserved!==null?`last ${r.lastObserved}`:'?')} / ${r.required}`),el('span',r.status,`state ${r.status}`));roles.append(row);if(r.trade)roles.append(el('small',`desired offer: ${tradeLabel(r.trade)}`,'muted'));if(r.workstation){const w=v.workspaces.find(x=>x.id===r.id);roles.append(el('small',w?`workspace ${w.status}${w.associations.length?`: ${w.associations.map(a=>`${a.uuid.slice(0,8)} ${a.status}`).join(', ')}`:''}`:`workstation local coordinates ${r.workstation.join(', ')}; association unknown`,'muted'))}if(r.stock.length)roles.append(el('small',`merchant stock: ${r.stock.map(s=>`${s.uuid.slice(0,8)} ${s.status}${s.status==='unknown'&&s.lastStatus!=='unknown'?` (last ${s.lastStatus})`:''} · restock ${s.restock}`).join('; ')}`,'muted'))}
+    const workspaces=document.createElement('section');workspaces.className='box';workspaces.append(el('h2','coordinate-bound workspaces'))
+    if(!v.workspaces.length)workspaces.append(el('div','No station location constraints are in the saved village intent.','muted'))
+    for(const w of v.workspaces){
+      const expected=tradeLabel(w.trade)
+      const at=w.at?`${w.at.x}, ${w.at.y}, ${w.at.z}`:`local ${w.localAt?.join(',')??'unknown'} (world location not observed)`
+      const item=document.createElement('div');item.className='workspace';item.append(el('strong',`${w.id} · ${w.profession}`),el('div',`${at} · ${w.block??'block unknown'} · ${expected||'any offer'}`,'muted'),el('div',w.status==='unknown'&&w.lastStatus!=='unknown'?`unknown now (last ${w.lastStatus})`:w.status,`state ${w.status}`))
+      if(w.associations.length)item.append(el('small',w.associations.map(a=>`${a.uuid.slice(0,8)}: ${a.status}${a.reason?` (${a.reason})`:''}${a.basis?` · ${a.basis}`:''}`).join('; '),'muted'))
+      else item.append(el('small','No exact UUID workstation association was verified.','muted'))
+      workspaces.append(item)
+    }
     const evidence=document.createElement('section');evidence.className='box';evidence.append(el('h2','evidence'))
     if(v.error)evidence.append(el('div',v.error,'state unknown'))
     evidence.append(el('div',v.observedAt?`${v.fresh?'fresh':'stale'} snapshot · observed ${age(v.observedAt)}`:'not inspected yet','muted'))
     evidence.append(el('div',v.unknownResidents===null?'current uncertainty unknown':`${v.unknownResidents} residents with stale or unknown identity facts`,'muted'))
     evidence.append(el('div',v.restock,'muted'))
     if(v.surplus!==null&&v.surplus!==undefined)evidence.append(el('div',`${v.surplus} observed surplus residents; nobody is removed automatically`,'muted'))
-    grid.append(housing,roles,evidence);detail.append(grid)
+    grid.append(housing,roles,workspaces,evidence);detail.append(grid)
     const people=document.createElement('div');people.className='links'
     const map=document.createElement('a');map.href='/';map.textContent=v.bounds?`map footprint ${v.bounds.width} × ${v.bounds.depth}`:'show map marker';people.append(map)
     if(v.population?.blueprintId){const bp=document.createElement('a');bp.href=`/blueprints?name=${encodeURIComponent(v.population.blueprintId)}`;bp.textContent='blueprint';people.append(bp)}
