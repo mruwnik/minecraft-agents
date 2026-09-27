@@ -241,11 +241,12 @@ test('bill: per layer, and a door drawn in both halves is one door', () => {
   assert.equal(b.layers.find(l => l.y === 0).items.oak_door, 1)
 })
 
-test('bill: a platform no floor reaches is budgeted a returned scaffold; the tower is climbed by its ladder', () => {
+test('an unsupported floating platform is unreachable, not promised a pillar that cannot supply its first clicked face', () => {
   const platform = resolve(parse({ legend: 'S  cobblestone', layers: [[6, 'SSS\nSSS\nSSS']] }))
-  assert.deepEqual(bill(platform).scaffold, { dirt: 12 })
-  assert.equal(bill(resolve(tower())).scaffold, undefined)
-  assert.equal(bill(resolve(hut())).scaffold, undefined)
+  assert.equal(bill(platform).scaffold, undefined)
+  assert.equal(orderJobs(jobsFor(platform, AT, flatGround(64)), platform, AT, flatGround(64)).unreachable.length, 9)
+  assert.ok(bill(resolve(tower())).scaffold.dirt > 0, 'the ladder alone does not expose every upper support face')
+  assert.ok(bill(resolve(hut())).scaffold.dirt > 0, 'blocked outer roof clicks need explicit support access')
 })
 
 test('stackSlots: beds, signs and buckets do not stack to 64', () => {

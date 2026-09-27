@@ -1,5 +1,6 @@
+import { observePassengerBoat } from '../../src/boat/observe.mjs'
 import { villagerBoatRoute, villagerTowWaypoints } from '../../src/lib.mjs'
-import { boatPassengerStatus, entityUuid } from '../../src/boat/passenger.mjs'
+import { entityUuid } from '../../src/boat/passenger.mjs'
 
 const at = boat => {
   const [x, y, z] = boat.exact.split(',').map(Number)
@@ -34,17 +35,8 @@ export default {
     if (pullVia.length > 8 || (pullVia.length && !pullGiven)) throw new Error('pullVia= needs pullX= pullY= pullZ= and at most eight waypoints')
     const beyondPath = [...pullVia, ...(pullGiven ? [pull] : [])]
     if (pullVia.length && beyondPath.some((p, i) => distance(p, i ? beyondPath[i - 1] : landing) > 3.5 || distance(p, landing) > 8)) throw new Error('pullVia/pull waypoints must be within 3.5 blocks of each other and eight blocks of the boat landing')
-    const state = async () => api.act('boat_state', { id: a.boat })
-    const checked = async () => {
-      const s = await state()
-      const issue = boatPassengerStatus(s, a.boat, a.uuid)
-      if (issue) throw new Error(issue)
-      if (s.mounted === a.boat) throw new Error(`dismount boat ${a.boat} before towing it`)
-      return { s, boat: s.boats[0] }
-    }
+    const checked = () => observePassengerBoat(api, a.boat, a.uuid, { lead: 'self-or-none' })
     let { s, boat } = await checked()
-    if (boat.passengers.length !== 1) throw new Error(`boat ${a.boat} must carry only passenger ${a.uuid} while being towed`)
-    if (boat.leashHolderId !== null && boat.leashHolderId !== s.selfId) throw new Error(`boat ${a.boat} is leashed to somebody else`)
     // The bot's walk can climb a bank that the lower boat cannot. Check the
     // whole hull route before any leash or walking action.
     const route = villagerBoatRoute({

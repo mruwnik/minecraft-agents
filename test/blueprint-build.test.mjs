@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fakeApi } from './helpers.mjs'
 import { buildBlueprint, checkBlueprint, listText, showText, paramsOf, supplyOf, BLUEPRINT_DIR, readBlueprint, blueprintFiles } from '../src/blueprint/build.mjs'
-import { blueprintHash, buildNote, flatGround } from '../src/blueprint/format.mjs'
+import { blueprintHash, buildNote, flatGround, parseBlueprint, resolve, jobsFor, orderJobs, jobsBill } from '../src/blueprint/format.mjs'
 
 const HUT = fs.readFileSync(path.join(BLUEPRINT_DIR, 'starter-hut.md'), 'utf8')
 const BOX = `---
@@ -73,7 +73,8 @@ const placing = (world, states, items) => args => {
   items[item] = (items[item] ?? 0) - 1
   const state = { ...(args.half ? { half: args.half, type: args.half } : {}) }
   if (args.facing) state.facing = /^(chest|furnace|barrel)$/.test(item) ? OPPOSITE[args.facing] : args.facing
-  if (/_log$/.test(item)) state.axis = 'y'
+  if ((item === 'ladder' || item === 'wall_torch') && OPPOSITE[args.against]) state.facing = OPPOSITE[args.against]
+  if (/_log$/.test(item)) state.axis = /^(east|west)$/.test(args.against) ? 'x' : /^(north|south)$/.test(args.against) ? 'z' : 'y'
   if (/_door$/.test(item)) {
     state.half = 'lower'
     world[key(args.x, args.y + 1, args.z)] = item
@@ -92,7 +93,19 @@ const digging = world => args => { world[key(args.x, args.y, args.z)] = 'air'; r
 
 // a body over a world whose blocks answer with the states the placing fake wrote
 const body = ({ world, states = {}, items = {}, answers = {}, ...rest }) => {
-  const made = fakeApi({ world, items, answers: { place: placing(world, states, items), dig: digging(world), ...answers }, ...rest })
+  let position = { x: 0, y: 64, z: 0 }
+  const walking = args => {
+    position = { x: args.x + .5, y: args.y, z: args.z + .5 }
+    return {}
+  }
+  const pillar = args => {
+    for (let i = 0; i < args.steps; i++) world[key(Math.floor(position.x), position.y + i, Math.floor(position.z))] = args.item
+    position.y += args.steps
+    items[args.item] -= args.steps
+    return {}
+  }
+  const made = fakeApi({ world, items, answers: { place: placing(world, states, items), dig: digging(world), pillar_up: pillar, ...answers, goto: args => { walking(args); return typeof answers.goto === 'function' ? answers.goto(args) : answers.goto ?? {} } }, ...rest })
+  made.api.pos = () => position
   const block = made.api.block
   made.api.block = (x, y, z) => {
     const raw = block(x, y, z)
@@ -111,7 +124,7 @@ const halfBuilt = () => {
   for (const dx of [1, 2]) { cells[key(AT.x + dx, AT.y + 2, AT.z)] = 'cobblestone'; cells[key(AT.x + dx, AT.y + 2, AT.z + 4)] = 'cobblestone' }
   return cells
 }
-const hutKit = () => ({ cobblestone: 64, oak_planks: 64, oak_log: 16, glass_pane: 4, oak_door: 1, white_bed: 1, chest: 1, crafting_table: 1, oak_stairs: 1, torch: 4 })
+const hutKit = () => ({ dirt: 16, cobblestone: 64, oak_planks: 64, oak_log: 16, glass_pane: 4, oak_door: 1, white_bed: 1, chest: 1, crafting_table: 1, oak_stairs: 1, torch: 4 })
 
 test('an obstacle without clear= refuses before any act call', async () => {
   const world = worldOf({ [key(AT.x + 1, AT.y, AT.z)]: 'oak_planks' })
@@ -165,7 +178,7 @@ test('the y-1 floor is dug out of the turf before it is laid', async () => {
   const r = await buildBlueprint(api, { name: 'starter-hut', place: 'hut', ...AT }, io)
   assert.equal(r.dug, 25)
   assert.equal(calls.filter(c => c.startsWith('dig ')).length, 25)
-  assert.equal(calls.indexOf(`dig x=100 y=64 z=-20`) < calls.indexOf('place item=cobblestone x=100 y=64 z=-20'), true)
+  assert.equal(calls.indexOf(`dig x=100 y=64 z=-20`) < calls.findIndex(c => c.startsWith('place item=cobblestone x=100 y=64 z=-20 ')), true)
 })
 
 test('grass left in the bed head cell is dug before the bed goes in, and the bed is built', async () => {
@@ -212,9 +225,9 @@ test('a supply chest short of stage 2 stops with the exact sentence', async () =
   }
   const { api, calls } = body({ world, items, freeSlots: 3, answers: { withdraw } })
   const r = await buildBlueprint(api, { name: 'box', place: 'box', supply: '98,65,-14', ...AT }, io)
-  assert.equal(r.stopped, 'stage 2 of 3 needs stone_bricks:8 more: put it in the supply chest at 98,65,-14 and run blueprint.build place=box again')
+  assert.equal(r.stopped, 'stage 2 of 5 needs stone_bricks:8 more: put it in the supply chest at 98,65,-14 and run blueprint.build place=box again')
   assert.equal(r.built, 8)
-  assert.equal(r.stage, '2/3')
+  assert.equal(r.stage, '2/5')
   assert.equal(calls.filter(c => c.startsWith('withdraw ')).length, 2)
   assert.equal(calls[1], 'goto x=98 y=65 z=-14 range=2')
 })
@@ -222,7 +235,7 @@ test('a supply chest short of stage 2 stops with the exact sentence', async () =
 test('without a supply chest a short first stage is refused before a block moves', async () => {
   const world = worldOf()
   const { api, calls } = body({ world, items: { cobblestone: 3 }, freeSlots: 3 })
-  await assert.rejects(buildBlueprint(api, { name: 'box', place: 'box', ...AT }, io), { message: 'stage 1 of 3 needs cobblestone:5 more: fetch it, or put it in a chest and pass supply=x,y,z, then run blueprint.build place=box again' })
+  await assert.rejects(buildBlueprint(api, { name: 'box', place: 'box', ...AT }, io), { message: 'stage 1 of 5 needs cobblestone:5 more: fetch it, or put it in a chest and pass supply=x,y,z, then run blueprint.build place=box again' })
   assert.equal(calls.filter(c => !c.startsWith('mark ')).length, 0)
 })
 
@@ -232,23 +245,23 @@ test('partial=true builds what the stage can and then stops with the same senten
   const r = await buildBlueprint(api, { name: 'box', place: 'box', partial: true, ...AT }, io)
   assert.equal(r.built, 3)
   assert.equal(r.missing, 'cobblestone:5')
-  assert.equal(r.stopped, 'stage 1 of 3 needs cobblestone:5 more: fetch it, or put it in a chest and pass supply=x,y,z, then run blueprint.build place=box again')
+  assert.equal(r.stopped, 'stage 1 of 5 needs cobblestone:5 more: fetch it, or put it in a chest and pass supply=x,y,z, then run blueprint.build place=box again')
 })
 
 test('the lid of a box without a door is laid from outside its walls', async () => {
   const world = worldOf()
-  const { api, calls } = body({ world, items: { cobblestone: 64, stone_bricks: 64, oak_planks: 64 } })
+  const { api, calls } = body({ world, items: { dirt: 4, cobblestone: 64, stone_bricks: 64, oak_planks: 64 } })
   await buildBlueprint(api, { name: 'box', place: 'box', ...AT }, io)
   // the walk before each plank of the lid
   const stands = calls.filter((c, i) => c.startsWith('goto ') && calls[i + 1]?.startsWith('place item=oak_planks')).map(c => Object.fromEntries(c.split(' ').slice(1).map(kv => kv.split('=')).map(([k, v]) => [k, Number(v)])))
-  const inside = stands.filter(s => s.x >= AT.x && s.x <= AT.x + 2 && s.z >= AT.z && s.z <= AT.z + 2)
+  const inside = stands.filter(s => s.y < AT.y + 3 && s.x >= AT.x && s.x <= AT.x + 2 && s.z >= AT.z && s.z <= AT.z + 2)
   assert.deepEqual(inside, [])
   assert.equal(stands.length, 9)
 })
 
 test('a build stops at dusk with night= before the next job', async () => {
   const world = worldOf()
-  const { api, calls } = body({ world, items: { cobblestone: 64, stone_bricks: 64, oak_planks: 64 } })
+  const { api, calls } = body({ world, items: { dirt: 4, cobblestone: 64, stone_bricks: 64, oak_planks: 64 } })
   let ticks = 0
   api.clock = () => ({ time: 1000, day: ticks < 6, night: ticks++ >= 6, elapsedDays: 0 })
   const r = await buildBlueprint(api, { name: 'box', place: 'box', ...AT }, io)
@@ -378,9 +391,11 @@ test('check prints the stage table, the site and no refusal over clear ground', 
   assert.deepEqual(calls, [])
   assert.deepEqual(r.text.split('\n'), [
     'box at 100,65,-20 facing=south 3x3, y0..y2, 25 items',
-    'stage 1/3 y0 carry=cobblestone:8 have=all',
-    'stage 2/3 y1 carry=stone_bricks:8 short=stone_bricks:8',
-    'stage 3/3 y2 carry=oak_planks:9 short=oak_planks:9',
+    'stage 1/5 y0 carry=cobblestone:8 have=all',
+    'stage 2/5 y1 carry=stone_bricks:8 short=stone_bricks:8',
+    'stage 3/5 y2 carry=oak_planks:1 dirt:1 short=oak_planks:1 dirt:1',
+    'stage 4/5 y2 carry=oak_planks:7 short=oak_planks:7',
+    'stage 5/5 y2 carry=oak_planks:1 dirt:3 short=oak_planks:1 dirt:3',
     'obstacles=0 foundation=ok clearance=ok overlaps=0 unloaded=0',
     'warning: the room at y0 1..1,1..1 has 1 cell at light 0: add a light source',
     'ok: build would start'
@@ -458,8 +473,8 @@ test('show renders the metadata, the bill, the stages for what is carried and th
     'y0: cobblestone:8',
     'y1: stone_bricks:8',
     'y2: oak_planks:9',
-    'total: cobblestone:8 stone_bricks:8 oak_planks:9',
-    'stage 1/1 y0..y2 carry=cobblestone:8 stone_bricks:8 oak_planks:9 short=oak_planks:9',
+    'total: cobblestone:8 stone_bricks:8 oak_planks:9 scaffold=dirt:4 (left outside the build)',
+    'stage 1/1 y0..y2 carry=cobblestone:8 stone_bricks:8 oak_planks:9 dirt:4 short=oak_planks:9 dirt:4',
     'warning: the room at y0 1..1,1..1 has 1 cell at light 0: add a light source',
     'y2',
     'PPP',
@@ -472,3 +487,43 @@ test('show refuses a parameter the blueprint does not declare, by its own list',
   const { api } = fakeApi({})
   assert.throws(() => showText(api, { name: 'starter-hut', metal: 'iron' }, read), { message: 'metal= is not a parameter of starter-hut (it has wood, stone, bed)' })
 })
+
+test('an obstruction appearing after the final walk prevents the placement action', async () => {
+  const world = worldOf()
+  let changed = false
+  const { api, calls } = body({ world, items: { oak_log: 4, oak_planks: 4 }, answers: { goto: () => {
+    if (world[key(100, 65, -20)] === 'oak_planks' && world[key(102, 65, -20)] === 'oak_planks') {
+      changed = true
+      world[key(101, 65, -20)] = 'stone'
+    }
+    return {}
+  } } })
+  const result = await buildBlueprint(api, { name: 'beam', place: 'beam', ...AT }, beamIo)
+  assert.equal(changed, true)
+  assert.equal(calls.some(c => c.startsWith('place item=oak_log ')), false)
+  assert.match(result.stuck, /no longer visible or within reach/)
+})
+
+for (const name of ['starter-hut', 'watchtower', 'villager-house-10']) {
+  test(`complete ${name} constructs every cell from valid clicked faces with its exact scaffold budget`, async () => {
+    const text = fs.readFileSync(path.join(BLUEPRINT_DIR, `${name}.md`), 'utf8')
+    const assetIo = { read: n => ({ name: n, text, hash: blueprintHash(text) }) }
+    const bp = resolve(parseBlueprint(text))
+    const world = worldOf()
+    const { api, calls } = body({ world, items: {} })
+    const initial = orderJobs(jobsFor(bp, AT, api.block), bp, AT, api.block)
+    assert.equal(initial.unreachable.length, 0)
+    const budget = jobsBill(initial.jobs)
+    Object.assign(api.inv(), budget)
+    const beforeDirt = api.inv().dirt ?? 0
+    const result = await buildBlueprint(api, { name, place: name, ...AT }, assetIo)
+    assert.equal(result.stuck, undefined)
+    assert.equal(result.wrong, undefined)
+    assert.equal(result.missing, undefined)
+    assert.equal(jobsFor(bp, AT, api.block).length, 0)
+    const used = calls.filter(c => c.startsWith('pillar_up ')).reduce((n, c) => n + Number(c.match(/steps=(\d+)/)[1]), 0)
+    assert.equal(used, budget.dirt ?? 0)
+    assert.equal(beforeDirt - (api.inv().dirt ?? 0), used)
+    assert.equal(calls.some(c => /^goto .*dig=true/.test(c)), false)
+  })
+}

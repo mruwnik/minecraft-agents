@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto'
 import minecraftData from 'minecraft-data'
 import { familyRefusal, familyBlock, FAMILIES } from '../build/materials.mjs'
 import { itemShortfall } from '../lib/inventory.mjs'
+import { canPlaceFromHere } from '../lib/place.mjs'
+import { placementSight } from './visibility.mjs'
 
 // the client's registry: what this body can name and place (the server is one protocol ahead; see SERVER_ONLY)
 export const REGISTRY = minecraftData('26.1')
@@ -26,8 +28,6 @@ export const EYE = 1.62
 export const REACH = 4.5
 // the margin of free slots a build never fills: the drops of a dig, a tool swap
 export const CARRY_MARGIN = 2
-// a pillar for a layer no floor reaches: one per this much perimeter, of the scaffold= parameter
-export const PILLAR_PER = 8
 export const DEFAULT_SCAFFOLD = 'dirt'
 export const DEFAULT_FILL = 'dirt'
 
@@ -453,14 +453,11 @@ export function bill (bp) {
   return { total, layers, tools: [...tools], ...(scaffold ? { scaffold } : {}) }
 }
 
-// the pillars a build needs for layers no floor reaches (section 4): one per PILLAR_PER cells of perimeter, as tall as
-// the layer, in the scaffold= material. Computed the way lint reaches every cell, over flat ground
+// The actual new scaffold cells selected over flat ground, counted once per column.
 export function scaffoldBill (bp) {
   const { jobs } = orderJobs(jobsFor(bp, ORIGIN, flatGround(-1)), bp, ORIGIN, flatGround(-1))
-  const tallest = Math.max(-1, ...jobs.filter(j => j.stand?.scaffold).map(j => j.y))
-  if (tallest < 0) return null
-  const pillars = Math.ceil(2 * (bp.width + bp.depth) / PILLAR_PER)
-  return { [bp.params.scaffold ?? DEFAULT_SCAFFOLD]: pillars * tallest }
+  const cells = new Set(jobs.flatMap(j => j.stand?.scaffoldCells ?? []).map(c => key(c.x, c.y, c.z)))
+  return cells.size ? { [bp.params.scaffold ?? DEFAULT_SCAFFOLD]: cells.size } : null
 }
 const ORIGIN = { x: 0, y: 0, z: 0 }
 
@@ -707,7 +704,14 @@ const predicted = worldAt => {
     set(job.x, job.y, job.z, job.block.name, job.block.states)
     if (job.second) set(job.x + job.second.dx, job.y + job.second.dy, job.z + job.second.dz, job.block.name, job.second.states)
   }
-  return { get, set, apply }
+  const withJob = (job, fn) => {
+    const cells = [job, ...(job.second ? [{ x: job.x + job.second.dx, y: job.y + job.second.dy, z: job.z + job.second.dz }] : [])]
+    const old = cells.map(c => { const k = key(c.x, c.y, c.z); return { k, had: over.has(k), block: over.get(k) } })
+    try { apply(job); return fn() } finally {
+      for (const { k, had, block } of old) if (had) over.set(k, block); else over.delete(k)
+    }
+  }
+  return { get, set, apply, withJob }
 }
 
 // can a body pass through this cell (feet or head): anything without a box, a door, a gate, a carpet, water
@@ -812,19 +816,39 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
   const chooseStand = (job, reachable, fromOutside) => {
     const candidates = withinReach(job).filter(c => standableAt(world, c.x, c.y, c.z, registry) && reachable.has(key(c.x, c.y, c.z)))
       .filter(c => !fromOutside || outsideFootprint(bp, at, c))
+      .map(c => {
+        if (['dig', 'till', 'pour'].includes(job.do)) return c
+        if (!canPlaceFromHere({ x: c.x + .5, y: c.y, z: c.z + .5 }, job)) return null
+        const against = placementSight(job, c, world.get, name => hasBox(name, registry))
+        return against ? { ...c, against } : null
+      }).filter(Boolean)
     if (job.do === 'dig' || job.class === 'attach' || job.class === 'fluid' || fromOutside) return candidates[0] ?? null
     // a solid block may not cut the body off: the spot must still be reachable once the block stands
     for (const c of candidates.slice(0, 4)) {
-      world.apply(job)
-      const still = reachableFrom(world, ring, box, registry).has(key(c.x, c.y, c.z))
-      world.set(job.x, job.y, job.z, worldAt(job.x, job.y, job.z)?.name ?? 'air')
+      const still = world.withJob(job, () => reachableFrom(world, ring, box, registry).has(key(c.x, c.y, c.z)))
       if (still) return c
     }
     return candidates.length ? undefined : null
   }
   const pillarStand = job => {
-    const spots = withinReach(job).filter(c => outsideFootprint(bp, at, c) && c.x >= box.x1 && c.x <= box.x2 && c.z >= box.z1 && c.z <= box.z2 && c.y <= job.y && c.y > at.y)
-    return spots[0] ? { x: spots[0].x, y: spots[0].y, z: spots[0].z, scaffold: spots[0].y - at.y } : null
+    const spots = withinReach(job).filter(c => outsideFootprint(bp, at, c) && c.x >= box.x1 && c.x <= box.x2 && c.z >= box.z1 && c.z <= box.z2 && c.y <= job.y + 1 && c.y > at.y)
+    for (const c of spots) {
+      if (!fullBlock(world.get(c.x, at.y - 1, c.z)?.name, registry)) continue
+      const column = Array.from({ length: c.y - at.y }, (_, i) => ({ x: c.x, y: at.y + i, z: c.z }))
+      if (column.some(p => !isAir(world.get(p.x, p.y, p.z)?.name)) || !isAir(world.get(c.x, c.y, c.z)?.name) || !isAir(world.get(c.x, c.y + 1, c.z)?.name)) continue
+      if (['dig', 'till', 'pour'].includes(job.do)) return { ...c, scaffold: c.y - at.y, scaffoldCells: column }
+      if (!canPlaceFromHere({ x: c.x + .5, y: c.y, z: c.z + .5 }, job)) continue
+      // The planned pillar supplies its own support but cannot erase an occluding wall.
+      const pillarWorld = (x, y, z) => x === c.x && z === c.z && y >= at.y && y < c.y ? { name: bp.params.scaffold ?? DEFAULT_SCAFFOLD, getProperties: () => ({}) } : world.get(x, y, z)
+      const against = placementSight(job, c, pillarWorld, name => hasBox(name, registry))
+      if (against) return { x: c.x, y: c.y, z: c.z, scaffold: c.y - at.y, scaffoldCells: column, against }
+    }
+    return null
+  }
+  const applyPillar = stand => {
+    if (!stand.scaffold) return
+    for (let y = at.y; y < stand.y; y++) world.set(stand.x, y, stand.z, bp.params.scaffold ?? DEFAULT_SCAFFOLD)
+    ring.push({ x: stand.x, y: stand.y, z: stand.z })
   }
   for (const y of layers) {
     const ofLayer = jobs.filter(j => layerOf(j) === y)
@@ -844,11 +868,12 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
       if (stand === null) {
         const pillar = pillarStand(job)
         if (!pillar) { unreachable.push(job); continue }
-        ordered.push({ ...job, stand: pillar })
+        ordered.push({ ...job, ...(pillar.against ? { against: pillar.against } : {}), stand: pillar })
+        applyPillar(pillar)
         world.apply(job)
         continue
       }
-      ordered.push({ ...job, stand: { x: stand.x, y: stand.y, z: stand.z } })
+      ordered.push({ ...job, ...(stand.against ? { against: stand.against } : {}), stand: { x: stand.x, y: stand.y, z: stand.z } })
       world.apply(job)
       if (!pending.length && deferred.length && !fromOutside) { pending = deferred; deferred = []; fromOutside = true }
     }
@@ -858,7 +883,8 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
         const reachable = reachableFrom(world, ring, box, registry)
         const stand = chooseStand(job, reachable, true) ?? pillarStand(job)
         if (!stand) { unreachable.push(job); continue }
-        ordered.push({ ...job, stand: { x: stand.x, y: stand.y, z: stand.z, ...(stand.scaffold ? { scaffold: stand.scaffold } : {}) } })
+        ordered.push({ ...job, ...(stand.against ? { against: stand.against } : {}), stand: { x: stand.x, y: stand.y, z: stand.z, ...(stand.scaffold ? { scaffold: stand.scaffold, scaffoldCells: stand.scaffoldCells } : {}) } })
+        applyPillar(stand)
         world.apply(job)
       }
     }
@@ -868,7 +894,7 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
 
 // ---------------------------------------------------------------- stages
 
-// what a list of jobs will use up: one bucket for any amount of water, scaffold blocks for the tallest pillar
+// Scaffold columns persist between jobs, so count new cells, not merely the tallest column.
 export function jobsBill (jobs, scaffoldItem = DEFAULT_SCAFFOLD) {
   const bill = {}
   for (const j of jobs) {
@@ -876,8 +902,9 @@ export function jobsBill (jobs, scaffoldItem = DEFAULT_SCAFFOLD) {
     if (j.item === 'water_bucket' || j.item === 'lava_bucket') { bill[j.item] = 1; continue }
     addItem(bill, j.item)
   }
-  const pillar = Math.max(0, ...jobs.map(j => j.stand?.scaffold ?? 0))
-  if (pillar) addItem(bill, scaffoldItem, pillar)
+  const scaffold = new Set(jobs.flatMap(j => j.stand?.scaffoldCells ?? []).map(c => key(c.x, c.y, c.z)))
+  const legacy = Math.max(0, ...jobs.filter(j => !j.stand?.scaffoldCells).map(j => j.stand?.scaffold ?? 0))
+  if (scaffold.size || legacy) addItem(bill, scaffoldItem, scaffold.size + legacy)
   return bill
 }
 

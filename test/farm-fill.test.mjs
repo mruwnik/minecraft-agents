@@ -4,14 +4,22 @@
 // then tills and plants them like any other (card 1ac82851; where the holes came from is card 94e6dcb1).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
-import { fillShortfall, holeJobs } from '../src/lib/fill.mjs'
+import { parsePlan, planCells, planBill, PLAN_LEGEND, groundItem } from '../src/lib.mjs'
+import { fillShortfall, holeJobs, floorItem } from '../src/lib/fill.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 
 const cellsOf = (plan, x = 0, y = 63, z = 0) => planCells({ plan, x, y, z })
 const worldAtIn = world => fakeApi({ world }).api.block
 const jobLine = j => `${j.do} ${j.item} at ${j.x},${j.y},${j.z}${j.have ? '' : ' (none carried)'}`
+
+test('farm ground repair and maintenance share the plan legend material rule', () => {
+  const grounds = [...new Set(Object.values(PLAN_LEGEND).map(spec => spec.ground))]
+  assert.deepEqual(grounds.map(ground => [ground, groundItem({ ground }), floorItem({ ground })]), [
+    ['farmland', 'dirt', 'dirt'], ['sand', 'sand', 'sand'], ['dirt', 'dirt', 'dirt'],
+    ['water', 'dirt', 'dirt'], ['grass_block', 'dirt', 'dirt']
+  ])
+})
 // a plan cell: its ground at y=63, whatever stands on it, air over that, and dirt underneath (the hole's floor)
 const column = (x, z, ground, over = 'air') => ({ [`${x},62,${z}`]: 'dirt', [`${x},63,${z}`]: ground, [`${x},64,${z}`]: over, [`${x},65,${z}`]: 'air' })
 

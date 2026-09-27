@@ -102,7 +102,7 @@ test('boat.stage steers by actual boat feedback, removes residual lead tension, 
 test('boat.stage refuses a missing passenger, a foreign leash, or a westward boundary crossing before swimming', async () => {
   for (const [options, args, expected] of [
     [{ passengerUuid: otherUuid }, { uuid, boat: 8, z: 0 }, /exactly one passenger|not in boat 8/],
-    [{ leashHolderId: 77 }, { uuid, boat: 8, z: 0 }, /staging requires exactly the named passenger/],
+    [{ leashHolderId: 77 }, { uuid, boat: 8, z: 0 }, /needs a lead held by this bot/],
     [{}, { uuid, boat: 8, z: 0, minX: 1 }, /west of the safe staging boundary/]
   ]) {
     const run = stageApi(options)
@@ -140,6 +140,6 @@ test('boat.stage rechecks the exact passenger and leash during a no-stroke endpo
     bodyPosition: { x: 2.5, y: 62.5, z: 0 },
     revokeLeashAfterState: 2
   })
-  await assert.rejects(stage.run(run.api, { uuid, boat: 8, z: 0 }), /staging requires exactly the named passenger and a lead held/)
+  await assert.rejects(stage.run(run.api, { uuid, boat: 8, z: 0 }), /needs a lead held by this bot/)
   assert.equal(run.swims, 0)
 })

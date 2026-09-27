@@ -8,6 +8,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './format.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from '../lib.mjs'
+import { canPlaceFromHere } from '../lib/place.mjs'
+import { placementSight } from './visibility.mjs'
+import { REGISTRY } from './format.mjs'
 
 export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'blueprints')
 
@@ -125,7 +128,7 @@ export function showText (api, a, read = readBlueprint) {
     ...(bp.notes ? [`notes: ${bp.notes}`] : []),
     `doors=${kinds.doors} beds=${kinds.beds} containers=${kinds.containers} workstations=${kinds.workstations} lights=${kinds.lights} enclosed=${room.enclosed} lit=${room.lit} spawnSafe=${room.spawnSafe}`,
     ...cost.layers.map(l => `y${l.y}: ${itemsLine(l.items) || 'nothing'}`),
-    `total: ${itemsLine(cost.total)}${cost.tools.length ? ` tools=${cost.tools.join(',')}` : ''}${cost.scaffold ? ` scaffold=${itemsLine(cost.scaffold)} (returned)` : ''}`,
+    `total: ${itemsLine(cost.total)}${cost.tools.length ? ` tools=${cost.tools.join(',')}` : ''}${cost.scaffold ? ` scaffold=${itemsLine(cost.scaffold)} (left outside the build)` : ''}`,
     ...flatStages(api, bp).map(stage => stageLine(stage, api.inv())),
     ...found.lint.errors.map(e => `error: ${e}`),
     ...found.lint.warnings.map(w => `warning: ${w}`),
@@ -290,12 +293,30 @@ export async function buildBlueprint (api, a, io = {}) {
     if (job.tool && !hasTool(api.inv(), job.tool)) { missing[job.tool] = 1; return }
     // a cover is only real over a settled source (src/build/plan.mjs): held back, tried again next run
     if (job.do === 'cover' && !hasWaterSource(api.block(job.x, job.y, job.z))) { stuck = stuck ?? `cover ${cell}: not holding water yet, so the cover was held back`; return }
-    const side = job.along ? alongFace(job, api.block) : null
-    if (job.along && !side) { stuck = stuck ?? `${job.do} ${cell}: ${job.item} on its side (axis=${job.along}) is clicked onto a block beside it along ${job.along}, and neither side holds one yet: run blueprint.build place=${place} again once one stands`; return }
+    const side = job.against ?? (job.along ? alongFace(job, api.block) : null)
+    if (job.along && (!side || !alongFace(job, api.block))) { stuck = stuck ?? `${job.do} ${cell}: ${job.item} on its side (axis=${job.along}) is clicked onto a block beside it along ${job.along}, and neither side holds one yet: run blueprint.build place=${place} again once one stands`; return }
     const stand = job.stand
-    const walked = await api.act('goto', { x: stand.x, y: stand.y, z: stand.z, range: 0, ...(stand.scaffold ? { dig: true } : {}) }).then(r => ({ r }), e => ({ e }))
+    const walk = async () => {
+      if (stand.scaffoldCells?.length) {
+        // The planner proved this outside column clear. Construct precisely that
+        // column/material; an unrestricted dig=true route may spend other blocks.
+        await api.act('goto', { x: stand.x, y: at.y, z: stand.z, range: 0 })
+        for (let remaining = stand.scaffold; remaining > 0; remaining -= 4) {
+          await api.act('pillar_up', { steps: Math.min(4, remaining), item: scaffoldItem(bp) })
+          await api.checkpoint()
+        }
+        scaffold.push(`${stand.scaffold} ${scaffoldItem(bp)} at ${stand.x},${at.y},${stand.z}`)
+      }
+      return api.act('goto', { x: stand.x, y: stand.y, z: stand.z, range: 0 })
+    }
+    const walked = await walk().then(r => ({ r }), e => ({ e }))
     if (walked.e) { stuck = stuck ?? `${job.do} ${cell}: ${walked.e.message}`; return }
     if (walked.r?.scaffold) scaffold.push(walked.r.scaffold)
+    if (!['dig', 'till', 'pour'].includes(job.do)) {
+      const actual = api.pos()
+      const visible = side && placementSight({ ...job, against: side }, actual, api.block, name => REGISTRY.blocksByName[name]?.boundingBox === 'block', true)
+      if (!canPlaceFromHere(actual, job) || !visible) { stuck = stuck ?? `${job.do} ${cell}: the selected placement face is no longer visible or within reach`; return }
+    }
     const call = job.do === 'dig' ? ['dig', { x: job.x, y: job.y, z: job.z }]
       : job.do === 'till' ? ['till', { x: job.x, y: job.y, z: job.z }]
       : job.do === 'pour' ? ['pour', { x: job.x, y: job.y - 1, z: job.z }]

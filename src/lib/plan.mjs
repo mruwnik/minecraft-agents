@@ -31,6 +31,10 @@ export const PLAN_LEGEND = {
   t: { kind: 'sapling', item: 'oak_sapling', ground: 'dirt' },
   A: { kind: 'table', item: 'crafting_table', ground: 'dirt' }
 }
+// Block to restore when a planned ground cell is missing. Sand supports cane;
+// all other planned grounds are repaired with dirt.
+const GROUND_ITEM = { sand: 'sand' }
+export const groundItem = spec => GROUND_ITEM[spec.ground] ?? 'dirt'
 const PLAN_MAX = 64
 
 // the ASCII map as rows and cells; a space is a hole in the plan, not a cell

@@ -1,5 +1,6 @@
+import { observePassengerBoat } from '../../src/boat/observe.mjs'
 import { villagerBoatRoute } from '../../src/lib.mjs'
-import { boatPassengerStatus, entityUuid } from '../../src/boat/passenger.mjs'
+import { entityUuid } from '../../src/boat/passenger.mjs'
 
 const water = b => ['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(b?.name)
 const position = boat => {
@@ -23,12 +24,8 @@ export default {
     if (start && (!Object.values(start).every(Number.isInteger) || !water(api.block(start.x, start.y, start.z)) || !api.block(start.x, start.y - 1, start.z)?.solid || !api.block(start.x, start.y + 1, start.z) || api.block(start.x, start.y + 1, start.z).solid || water(api.block(start.x, start.y + 1, start.z)))) throw new Error('stage startX/Y/Z needs a loaded shallow water stance with solid floor and clear air above')
     let passengerName
     const checked = async () => {
-      const s = await api.act('boat_state', { id: a.boat })
-      const issue = boatPassengerStatus(s, a.boat, a.uuid)
-      if (issue) throw new Error(issue)
-      const boat = s.boats[0]
+      const { boat } = await observePassengerBoat(api, a.boat, a.uuid, { lead: 'self' })
       passengerName = boat.passengers[0].name
-      if (boat.passengers.length !== 1 || s.mounted === a.boat || boat.leashHolderId !== s.selfId) throw new Error('staging requires exactly the named passenger and a lead held by this unmounted bot')
       const p = position(boat)
       if (a.minX !== undefined && p.x < a.minX) throw new Error(`boat moved west of the safe staging boundary x=${a.minX}; stop before the dock wall`)
       if (!water(api.block(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)))) throw new Error('staging requires the boat afloat in loaded open water')

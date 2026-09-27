@@ -1,6 +1,6 @@
 // Turning a plan and the world into an ordered job list (till, plant, clear, fill...), and what the jobs cost.
 import { isAir, holdsWater, hasWaterSource } from './world.mjs'
-import { PLAN_LEGEND } from './plan.mjs'
+import { PLAN_LEGEND, groundItem } from './plan.mjs'
 import { sameFamily, WEEDS } from './anchor.mjs'
 // slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/build/cover.mjs)
 import { channelCovered } from '../build/cover.mjs'
@@ -165,8 +165,6 @@ export function penOpenRefusal (name, jobs, census) {
 // what a plan needs that I do not carry. Counted before a build starts: half a farm is worse than none.
 export const billShortfall = itemShortfall
 
-// what to build a floor out of, by the ground the plan's legend asks for
-const FLOOR_ITEM = { sand: 'sand' }
 // a cell that already holds what the plan wants there is never dug out (a chest full of seed, a crop halfway grown)
 const planHas = (spec, name) => sameFamily(spec.item, name) || name === spec.crop || (spec.kind === 'gate' && name.endsWith('_fence_gate'))
 // The levelling a plan needs before any of its jobs can be done: a floor under every cell and open air in the cell and
@@ -181,7 +179,7 @@ export function groundJobs ({ cells, worldAt, solid }) {
     // block the water is poured onto is the one below it
     const floorY = spec.kind === 'water' ? cell.y - 1 : cell.y
     const floor = worldAt(cell.x, floorY, cell.z)
-    if (floor && !solid(floor.name)) fills.push({ do: 'fill', x: cell.x, y: floorY, z: cell.z, why: `${floor.name} where the floor should be`, item: FLOOR_ITEM[spec.ground] ?? 'dirt' })
+    if (floor && !solid(floor.name)) fills.push({ do: 'fill', x: cell.x, y: floorY, z: cell.z, why: `${floor.name} where the floor should be`, item: groundItem(spec) })
     for (const y of [cell.y + 1, cell.y + 2]) {
       const here = worldAt(cell.x, y, cell.z)
       if (!here || !solid(here.name) || planHas(spec, here.name)) continue
