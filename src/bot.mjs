@@ -1,5 +1,6 @@
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
+import { settleInventory } from './body/inventory-settle.mjs'
 // Claude's Minecraft body.
 // Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
 // small localhost HTTP API (see README.md) and everything notable that happens is
@@ -3327,14 +3328,7 @@ async function runLong (name, args, given = args, queuedAs = null) {
   // inventory updates trail the action by a few ticks; wait so gained/lost are accurate
   // ...and until two looks 5 ticks apart agree (1 s at most): after a transfer that failed part-way the server's resync came later still, and its
   // -bamboo:64 turned up in the NEXT command's reply
-  const settle = async () => {
-    for (let i = 0, last = null; i < 4; i++) {
-      await bot.waitForTicks(5).catch(() => {})
-      const now = JSON.stringify(inventoryCounts())
-      if (now === last) return
-      last = now
-    }
-  }
+  const settle = () => settleInventory(bot, inventoryCounts)
   // not after toggle (it is the tool for this); not when another task has taken over
   // bamboo bases the wedge reflex dug to free me: plant them again, whether the task worked or not
   const replantBases = async () => {
