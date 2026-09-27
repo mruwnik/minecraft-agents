@@ -133,6 +133,7 @@ export async function maintainVillage(api,a,io={}) {
     }
     if(report.satisfied){const result={...report,status:'satisfied',actions};(io.saveInspection ?? saveVillageInspection)(plan,result,io.inspectionDir);return result}
     const role=plan.intent.roles.find(r=>report.roles.find(x=>x.id===r.id)?.status!=='satisfied')
+    if(!role){blocked.push('population roles are satisfied but the overall village proof is incomplete; inspect the housing/presence report before intervention');break}
     const candidate=s.records.find(r=>r.age==='adult'&&plan.inside(r.lastPosition)&&!report.assigned.includes(r.uuid)&&!r.lockEvidence&&['unemployed',role.profession].includes(r.profession))
     if(!candidate){blocked.push(`no safely eligible observed unlocked adult for ${role.id}; inspect unknowns or wait for a baby to mature; locked traders are preserved`);break}
     if(!role.workstation){blocked.push(`role ${role.id} needs an explicit local workstation coordinate in population.roles`);break}
