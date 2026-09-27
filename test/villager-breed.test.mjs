@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import breed from '../library/villager/breed.mjs'
-import { breedBill, breedCensus, breedFeedStance, breedPlan, breedPreflight } from '../src/villager/breed.mjs'
+import { breedBill, breedFoodReserve, breedCensus, breedFeedStance, breedPlan, breedPreflight } from '../src/villager/breed.mjs'
 
 const a = 'c071f7d4-8b43-4f01-9c2f-92b648d3d143'
 const b = '87b3392e-ae93-4f51-bf07-2f53add88880'
@@ -14,12 +14,13 @@ const adult3 = 'd10427da-91bc-43a1-9c0e-b2b5ef4f7ad9'
 const entity = (uuid, exact, isBaby = false, sleeping = false) => ({ uuid, exact, name: 'villager', metadata: JSON.stringify({ 16: isBaby, 6: sleeping ? 2 : 0 }), vehicleId: null })
 const key = p => `${p.x},${p.y},${p.z}`
 const foodMarkerName = (plan, suffix = '') => `test-bot-villager-food-${plan.x}-${plan.y}-${plan.z}${suffix}`
-function foodMarkers (plan, { credits = {}, total = Object.values(credits).reduce((sum, n) => sum + n, 0), before = [a, b], pending } = {}) {
+function foodMarkers (plan, { credits = {}, total = Object.values(credits).reduce((sum, n) => sum + n, 0), before = [a, b], pending, reserve } = {}) {
   const base = foodMarkerName(plan)
   const rows = [{ name: base, by: 'Test-Bot', kind: 'work', x: plan.x, y: plan.y, z: plan.z, note: 'bread' }]
   for (const uuid of before) rows.push({ name: `${base}-before-${uuid}`, by: 'Test-Bot', note: 'before' })
   for (const uuid of [a, b]) rows.push({ name: `${base}-parent-${uuid}`, by: 'Test-Bot', note: String(credits[uuid] ?? 0) })
   rows.push({ name: `${base}-total`, by: 'Test-Bot', note: String(total) })
+  if (reserve !== undefined) rows.push({ name: `${base}-reserve`, by: 'Test-Bot', note: String(reserve) })
   if (pending) rows.push({ name: `${base}-pending`, by: 'Test-Bot', note: `${pending.uuid}:${pending.count}` })
   return rows
 }
@@ -273,7 +274,7 @@ test('villager.breed confirms both food pickup and a new baby UUID before claimi
   assert.equal(result.population, 3)
   assert.deepEqual(result.newborns, [baby])
   assert.equal(run.foodDrops, 1)
-  assert.deepEqual(run.calls.filter(c => c.name === 'villager_food').map(c => [c.args.uuid, c.args.item, c.args.count]), [[a, 'bread', 10]])
+  assert.deepEqual(run.calls.filter(c => c.name === 'villager_food').map(c => [c.args.uuid, c.args.item, c.args.count]), [[a, 'bread', 33]])
   assert.equal(run.gateOpen, false)
   assert.deepEqual(run.foodGateStates, [false], 'the refuge gate stays observed closed during shared food delivery')
   for (const stance of run.foodStances) {
@@ -336,7 +337,7 @@ test('villager.breed requires carried food but reuses beds already supplied by t
   await assert.rejects(breed.run(short.api, short.args), /bread:/)
   assert.equal(short.calls.some(c => ['place', 'toggle', 'villager_food'].includes(c.name)), false)
   const ready = breederApi({ target: 3 })
-  ready.api.inv = () => ({ bread: 10 })
+  ready.api.inv = () => ({ bread: 33 })
   const result = await breed.run(ready.api, ready.args)
   assert.equal(result.reached, true)
   assert.equal(ready.calls.some(c => ['place', 'dig'].includes(c.name)), false)
@@ -380,10 +381,10 @@ test('villager.breed credits only exact fresh adult-pair collection receipts', a
     const run = breederApi({ target: 3, foodResult: (action) => ({ uuid: action.uuid, item: action.item, count: action.count, tossed: action.count, collectedBy, totalCollected: Object.values(collectedBy).reduce((sum, n) => sum + n, 0) }) })
     await assert.rejects(breed.run(run.api, run.args), /food pickup was not confirmed/)
     assert.equal(run.foodDrops, 1, 'ambiguous or partial pickup stops before another offer')
-    assert.equal(run.markers.length, 7, 'persist compact food, pair, baseline, aggregate, credits, and pending records')
+    assert.equal(run.markers.length, 8, 'persist compact food, pair, baseline, aggregate, reserve, credits, and pending records')
     const base = foodMarkerName(run.plan)
     assert.equal(run.markers.find(p => p.name === base)?.note, 'bread')
-    assert.equal(run.markers.find(p => p.name === `${base}-pending`)?.note, `${a}:10`)
+    assert.equal(run.markers.find(p => p.name === `${base}-pending`)?.note, `${a}:33`)
     assert.ok(run.markers.every(p => (p.note ?? '').length <= 80))
   }
 })
@@ -395,9 +396,9 @@ test('villager.breed resumes an aggregate food credit and requests only the rema
   const result = await breed.run(run.api, run.args)
   const fed = run.calls.filter(c => c.name === 'villager_food')
   assert.equal(fed.length, 1)
-  assert.equal(fed[0].args.count, 7, 'request only the remaining amount after the 3-unit receipt')
+  assert.equal(fed[0].args.count, 30, 'request only the remaining amount after the 3-unit receipt')
   assert.equal(result.reached, true)
-  assert.equal(run.markers.find(p => p.name === `${markerName}-total`)?.note, '10', 'keep aggregate food until its birth is observed')
+  assert.equal(run.markers.find(p => p.name === `${markerName}-total`)?.note, '33', 'keep aggregate food until its birth is observed')
 })
 
 test('villager.breed refuses to repeat a persisted pending toss without inspection', async () => {
@@ -442,7 +443,7 @@ test('villager.breed retries one full self-return and accepts a later exact adul
   const feeds = run.calls.filter(c => c.name === 'villager_food')
   assert.deepEqual(feeds.map(c => c.args.uuid), [a, a])
   assert.deepEqual(run.pauses, [2])
-  assert.equal(run.markers.find(p => p.name === `${foodMarkerName(run.plan)}-total`)?.note, '10')
+  assert.equal(run.markers.find(p => p.name === `${foodMarkerName(run.plan)}-total`)?.note, '33')
 })
 
 test('villager.breed keeps a pending journal after an incomplete self-return receipt', async () => {
@@ -450,7 +451,7 @@ test('villager.breed keeps a pending journal after an incomplete self-return rec
   await assert.rejects(breed.run(run.api, run.args), /food pickup was not confirmed/)
   assert.equal(run.foodDrops, 1)
   const base = foodMarkerName(run.plan)
-  assert.equal(run.markers.find(p => p.name === `${base}-pending`)?.note, `${a}:10`, 'uncertain partial return must block any repeat offer')
+  assert.equal(run.markers.find(p => p.name === `${base}-pending`)?.note, `${a}:33`, 'uncertain partial return must block any repeat offer')
 })
 
 test('villager.breed retries only a confirmed-not-tossed offer after the parents separate', async () => {
@@ -472,9 +473,9 @@ test('villager.breed carries compact aggregate credit and provisions the remaini
   assert.equal(result.population, 4)
   const offers = run.calls.filter(c => c.name === 'villager_food')
   assert.equal(offers.length, 1)
-  assert.equal(offers[0].args.count, 10)
+  assert.equal(offers[0].args.count, 27)
   const base = foodMarkerName(run.plan)
-  assert.equal(run.markers.find(p => p.name === `${base}-total`)?.note, '16', 'retain aggregate food until the two births are observed')
+  assert.equal(run.markers.find(p => p.name === `${base}-total`)?.note, '33', 'retain aggregate food until the two births are observed')
 })
 
 test('villager.breed asks for a 32-unit shared batch with 14 credited for seven missing births', async () => {
@@ -497,7 +498,7 @@ test('villager.breed keeps food collected by a known baby held until that baby g
   await assert.rejects(breed.run(run.api, run.args), /no new baby observed after shared food provisioning/)
   assert.equal(run.foodDrops, 1)
   const base = foodMarkerName(run.plan)
-  assert.equal(run.markers.find(p => p.name === `${base}-held-${baby}`)?.note, '22', 'baby-collected food remains family credit but is not available for another batch')
+  assert.equal(run.markers.find(p => p.name === `${base}-held-${baby}`)?.note, '33', 'baby-collected food remains family credit but is not available for another batch')
   assert.equal(run.markers.some(p => p.name === `${base}-pending`), false)
 })
 
@@ -550,4 +551,36 @@ test('villager.breed closes the gate during cancellation cleanup before returnin
   await assert.rejects(breed.run(run.api, run.args), /cancel requested/)
   assert.equal(run.gateOpen, false)
   assert.equal(run.site.block(run.plan.gate.x, run.plan.gate.y, run.plan.gate.z).properties.open, false)
+})
+
+test('small shared batches cross the Paper half-stack threshold and fund both parents', async () => {
+  // Independent model of TradeWithVillager.throwHalfStack, verified against local Paper 26.2.
+  const shared = count => count > 32 ? Math.floor(count / 2) : count > 24 ? count - 24 : 0
+  assert.equal(shared(22), 0)
+  assert.equal(shared(24), 0)
+  assert.equal(shared(25), 1)
+  assert.equal(shared(32), 8)
+  const run = breederApi({ target: 5 })
+  const result = await breed.run(run.api, run.args)
+  const offers = run.calls.filter(c => c.name === 'villager_food')
+  assert.equal(offers.length, 1, 'one household batch; no forced per-parent feeding')
+  assert.equal(offers[0].args.count, 33)
+  const other = shared(offers[0].args.count), donor = offers[0].args.count - other
+  assert.ok(other >= 9 && donor >= 9, 'both parents can cover three births after normal sharing')
+  assert.equal(result.population, 5)
+  assert.equal(run.markers.find(p => p.name === foodMarkerName(run.plan, '-reserve')).note, '15')
+  assert.equal(breedFoodReserve(7), 4, 'larger already-shareable batches keep their existing extras')
+  assert.equal(breedFoodReserve(1, 'carrot'), 16, 'crop batch is already 40 items and can split')
+})
+
+test('shared reserve survives a birth and resume without topping the household back up to 33', async () => {
+  const run = breederApi({ target: 5, noBirth: true, population: [entity(a, '11.5,64,20.5'), entity(b, '14.5,64,23.5'), entity(baby, '12.5,64,21.5', true)] })
+  run.markers.push(...foodMarkers(run.plan, { total: 27, reserve: 15, before: [a,b,baby] }))
+  const preview = await breed.run(run.api, { ...run.args, plan: true })
+  assert.equal(preview.bill.bread, 0, '27 remaining covers twelve breeding items plus the original fifteen reserve')
+  await assert.rejects(breed.run(run.api,run.args), /no new baby observed/)
+  assert.equal(run.foodDrops,0)
+  const bad = run.markers.find(p=>p.name===foodMarkerName(run.plan,'-reserve'))
+  bad.note='34'
+  await assert.rejects(breed.run(run.api,run.args), /reserve receipt is invalid/)
 })

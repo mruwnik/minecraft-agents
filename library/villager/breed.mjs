@@ -1,6 +1,6 @@
 import { foodReceiptStore } from '../../src/villager/food-receipt.mjs'
 import { habitatOwnership, habitatThreats, habitatSecure, closeHabitatGates } from '../../src/villager/habitat.mjs'
-import { BREED_FOOD, breedPlan, breedPreflight, breedCensus, breedBill, breedKey, breedFeedStance, breedFeedGrounded, breedInside } from '../../src/villager/breed.mjs'
+import { BREED_FOOD, breedFoodReserve, breedPlan, breedPreflight, breedCensus, breedBill, breedKey, breedFeedStance, breedFeedGrounded, breedInside } from '../../src/villager/breed.mjs'
 
 export default {
   doc: 'villager.breed target= x= y= z= [size= block=cobblestone gate=oak_fence_gate bed=white_bed food=bread timeout= plan=true]: verify an existing lit roofed habitat and provision shared food until observed population reaches target; prepare with blueprint.check/build first; x/y/z is the interior foot anchor',
@@ -30,7 +30,7 @@ export default {
     const receiptStore = foodReceiptStore(api, plan, food)
     let receipt = receiptStore.load()
     const birthsNeeded = a.target - initial
-    const extras = food === 'bread' ? 4 : 16
+    const extras = breedFoodReserve(birthsNeeded, food, receipt?.reserve)
     const observedBirthsWhilePaused = receipt ? villagers.filter(e => e.baby && !receipt.before.includes(e.uuid)).length : 0
     const foodCredit = Math.max(Object.values(receipt?.held ?? {}).reduce((sum, n) => sum + n, 0), (receipt?.total ?? 0) - observedBirthsWhilePaused * 2 * BREED_FOOD[food])
     const habitatReady = !preflight.needed.length && !preflight.missingBeds.length && !preflight.clear.length
@@ -74,6 +74,7 @@ export default {
         const adultUuids = villagers.filter(e => !e.baby).map(e => e.uuid)
         if (adultUuids.length < 2) throw new Error('two observed adults are required for the next birth')
         receipt ??= { food, pair: adultUuids.slice(0, 2), before: villagers.map(e => e.uuid), credits: {}, total: 0, held: {} }
+        receipt.reserve ??= extras
         let wanted = (a.target - villagers.length) * 2 * BREED_FOOD[food] + extras
         while (receipt.total < wanted) {
           secure()

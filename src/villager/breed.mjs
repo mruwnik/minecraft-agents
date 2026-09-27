@@ -3,6 +3,18 @@ import { roomPlan, roomInside } from '../enclosure/layout.mjs'
 export { cellKey as breedKey, safeFullBlock as breedFullBlock, buildingMaterial as breedMaterial, woodenGate as breedGate } from '../enclosure/blocks.mjs'
 // Geometry and observations for a bounded, roofed Java villager breeder.
 export const BREED_FOOD = { bread: 3, carrot: 12, potato: 12, beetroot: 12 }
+// Paper 26.2 TradeWithVillager throws half of a stack above 32; at 25..32 it
+// throws only the amount above 24. Provision a shareable batch, then keep its
+// reserve fixed as births consume food rather than topping up to 33 each round.
+export function breedFoodReserve (births, food = 'bread', savedReserve) {
+  if (!BREED_FOOD[food]) throw new Error('food= must be bread, carrot, potato or beetroot')
+  if (!Number.isInteger(births) || births < 0 || births > 24) throw new Error('birth count must be an integer within 0..24')
+  if (savedReserve !== undefined) {
+    if (!Number.isInteger(savedReserve) || savedReserve < 0 || savedReserve > 33) throw new Error('shared food reserve must be a saved plan count within 0..33')
+    return savedReserve
+  }
+  return births ? Math.max(food === 'bread' ? 4 : 16, 33 - births * 2 * BREED_FOOD[food]) : 0
+}
 const air = b => ['air', 'cave_air', 'void_air'].includes(b?.name)
 const vegetation = b => ['short_grass', 'tall_grass', 'leaf_litter', 'fern', 'large_fern', 'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'sunflower', 'lilac', 'rose_bush', 'peony', 'dead_bush'].includes(b?.name)
 export function breedPlan ({ x, y, z, target, size, entryX, entryZ, airlock = false }) {

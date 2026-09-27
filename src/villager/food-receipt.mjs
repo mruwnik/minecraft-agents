@@ -19,15 +19,19 @@ export function foodReceiptStore (api, plan, food) {
     const totalRow = rows.find(p => p.name === `${name}-total`)
     const total = totalRow ? Number(totalRow.note) : Object.values(credits).reduce((sum, n) => sum + n, 0)
     if (!Number.isInteger(total) || total < 0 || totalRow && !/^\d+$/.test(totalRow.note)) throw new Error('aggregate food receipt is invalid')
+    const reserveRow = rows.find(p => p.name === `${name}-reserve`)
+    const reserve = reserveRow ? Number(reserveRow.note) : undefined
+    if (reserveRow && (!/^\d+$/.test(reserveRow.note) || !Number.isInteger(reserve) || reserve < 0 || reserve > 33)) throw new Error('shared food reserve receipt is invalid')
     const held = Object.fromEntries(rows.filter(p => p.name.startsWith(`${name}-held-`)).map(p => [p.name.slice(`${name}-held-`.length), Number(p.note)]))
     if (Object.entries(held).some(([id, n]) => !uuid.test(id) || !Number.isInteger(n) || n < 0) || Object.values(held).reduce((sum, n) => sum + n, 0) > total) throw new Error('food held by young residents exceeds the confirmed household receipt')
-    return { food, pair, before, credits, total, held }
+    return { food, pair, before, credits, total, held, reserve }
   }
   const save = async receipt => {
     await mark('', receipt.food)
     for (const uuid of receipt.before) await mark(`-before-${uuid}`, 'before')
     for (const uuid of receipt.pair) await mark(`-parent-${uuid}`, String(receipt.credits[uuid] ?? 0))
     if (receipt.total !== undefined) await mark('-total', String(receipt.total))
+    if (receipt.reserve !== undefined) await mark('-reserve', String(receipt.reserve))
     for (const [uuid, count] of Object.entries(receipt.held ?? {})) await mark(`-held-${uuid}`, String(count))
     for (const p of records().filter(p => p.name.startsWith(`${name}-held-`))) if (!(p.name.slice(`${name}-held-`.length) in (receipt.held ?? {}))) await api.act('unmark', { name: p.name })
     if (receipt.pending) await mark('-pending', `${receipt.pending.uuid}:${receipt.pending.count}`)
