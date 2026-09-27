@@ -1625,7 +1625,7 @@ async function gotoWalk (a) {
 }
 const boatRuntime = makeBoatRuntime({
   getBot: () => bot, getBoatLeashHolder: () => boatLeashHolder,
-  Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove,
+  Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove, cancelGuard,
   getSwimStepTarget: () => swimStepTarget, setSwimStepTarget: value => { swimStepTarget = value }
 })
 const boatTravelRuntime = makeBoatTravelRuntime({

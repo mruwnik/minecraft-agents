@@ -2,11 +2,21 @@
 // The body supplies live bindings; importing this module never starts a client.
 import { boatPassengerProfile } from '../boat/passenger.mjs'
 import { isAir, isBaby, openAbove } from '../lib.mjs'
+import { setTimeout as pause } from 'node:timers/promises'
 
 export function makeBoatRuntime (deps) {
   const { Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove,
     getSwimStepTarget, setSwimStepTarget } = deps
   let bot, boatLeashHolder
+  const waitPassenger = async predicate => {
+    // Mounted Mineflayer disables player physicsTick. Wait for server passenger
+    // state on wall time, so a successful mount cannot time out waiting a tick.
+    for (let i = 0; i < 20 && !predicate(); i++) {
+      deps.cancelGuard?.()
+      await (deps.pause ?? pause)(50)
+    }
+    deps.cancelGuard?.()
+  }
   const sync = () => { bot = deps.getBot(); boatLeashHolder = deps.getBoatLeashHolder() }
   function isBoat (entity) { return /(^|_)boat$/.test(entity?.name ?? '') }
   const carriedBoatCount = () => Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
@@ -88,7 +98,7 @@ export function makeBoatRuntime (deps) {
       if (bot.vehicle) throw new Error(`already riding vehicle ${bot.vehicle.id}: dismount first`)
       await goNear(boat.position, 2.5)
       bot.mount(boat)
-      for (let i = 0; i < 20 && bot.vehicle?.id !== boat.id; i++) await bot.waitForTicks(1)
+      await waitPassenger(() => bot.vehicle?.id === boat.id)
       if (bot.vehicle?.id !== boat.id) throw new Error(`boat ${boat.id} did not accept the mount`)
       if (boat.passengers?.[0]?.id !== bot.entity.id) throw new Error(`mounted boat ${boat.id} but another passenger controls it; do not steer`)
       return { mounted: boatView(boat) }
@@ -98,7 +108,7 @@ export function makeBoatRuntime (deps) {
       if (a.id !== undefined && bot.vehicle.id !== a.id) throw new Error(`riding boat ${bot.vehicle.id}, not ${a.id}`)
       const id = bot.vehicle.id
       bot.dismount()
-      for (let i = 0; i < 20 && bot.vehicle; i++) await bot.waitForTicks(1)
+      await waitPassenger(() => !bot.vehicle)
       if (bot.vehicle) throw new Error(`still riding boat ${id}: dismount was not confirmed`)
       return { dismounted: id, at: pos() }
     },
