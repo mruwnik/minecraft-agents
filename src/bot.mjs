@@ -2340,7 +2340,7 @@ export const long = {
   // flock.lead decides where this goes, shuts a gate that stands open there and counts the pen afterwards; this is the walk itself
   async escort (a) {
     // on leads when carried (card 43a32481): pulled after me, the animals need see no food and a gate only has to open
-    if (leadsCarried() > 0 && leashable(a.mob)) return leadWalk(a)
+    if (leashable(a.mob) && (leadsCarried() > 0 || ['horse', 'donkey', 'mule'].includes(a.mob) && onMyLeads().some(e => e.name === a.mob))) return leadWalk(a)
     const foodName = breedingFood(a.mob, bot.inventory.items().map(i => i.name))
     if (!BREEDING_FOOD[a.mob]) throw new Error(`cannot lead ${a.mob}: one of ${Object.keys(BREEDING_FOOD).join(', ')}`)
     if (!foodName) throw new Error(`a ${a.mob} follows ${BREEDING_FOOD[a.mob].join(' or ')}: you carry none`)

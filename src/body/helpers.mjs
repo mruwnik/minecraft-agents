@@ -4,8 +4,9 @@ import vec3 from 'vec3'
 import { dropGoal } from '../drop.mjs'
 import { fullSide, transferOutcome, compact, settleVerdict, coordsError, unpenned, nextDrop, feetCell, leftLying, DIG_WALK_MS, digUnreached, FLUIDS, breaksUnderfoot, within, gridLeftovers, isBaby, leashPlan, leashVerdict, leadBroke, deepestCell, ledReport } from '../lib.mjs'
 import { rimGoal, walkRefusal } from '../navigation/walk.mjs'
+import { configureEscortMoves, equine, escortAtDestination, runSurfaceEscort } from '../navigation/escort.mjs'
 import { searchSections, enough } from '../blocksearch.mjs'
-import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf } from '../bot.mjs'
+import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf, reportPerformance } from '../bot.mjs'
 
 // ---------------------------------------------------------------- helpers
 export function matcher (names) {
@@ -281,11 +282,15 @@ export const onMyLeads = () => Object.values(bot.entities).filter(e => e.isValid
 const cellOf = e => `${Math.floor(e.position.x)},${Math.floor(e.position.y)},${Math.floor(e.position.z)}`
 export const leadsCarried = () => inventoryCounts().lead ?? 0
 export const leashCandidate = e => ({ id: e.id, dist: e.position.distanceTo(bot.entity.position), grown: !isBaby(e.metadata), penned: Boolean(penAround(e.position.floored())?.enclosed) })
-export async function leashOne (e) {
-  await goNear(e.position.floored(), 2)
+export async function leashOne (e, { approach = true, check = () => {} } = {}) {
+  check()
+  if (approach) await goNear(e.position.floored(), 2)
+  else if (e.position.distanceTo(bot.entity.position) > 3) throw new Error('stand within three blocks of the horse before attaching its lead')
+  check()
   await bot.equip(findItem('lead'), 'hand')
+  check()
   await bot.activateEntity(e)
-  for (let i = 0; i < 20 && leashHolderOf(e) !== bot.entity.id; i++) await bot.waitForTicks(1)
+  for (let i = 0; i < 20 && leashHolderOf(e) !== bot.entity.id; i++) { check(); await bot.waitForTicks(1) }
   if (leashHolderOf(e) !== bot.entity.id) throw new Error(`the ${e.name} at ${cellOf(e)} took no lead (leads carried: ${leadsCarried()}): stand beside it and try again`)
   Object.assign(e, { grown: !isBaby(e.metadata) })
 }
@@ -306,20 +311,60 @@ export async function leadWalk (a) {
   const toVec = new Vec3(to.x, to.y, to.z)
   const pen = penAround(toVec.floored())
   const floor = pen?.enclosed ? pen.floor : null
-  const inPen = e => floor ? unpenned(floor, [e], x => x.position).length === 0 : near(e) <= 4
+  const inPen = e => floor ? unpenned(floor, [e], x => x.position).length === 0 : escortAtDestination(e.position, toVec)
+  const surfaceEscort = equine(a.mob)
   // the ones already at the goal are not fetched, and one that stands in another pen only with penned=true
   const candidates = Object.values(bot.entities)
     .filter(e => e.name === a.mob && e.isValid && !leashHolderOf(e) && near(e) <= (a.within ?? 32) && !inPen(e))
     .map(leashCandidate)
-  const plan = leashPlan({ mob: a.mob, leads: leadsCarried(), count: a.count ?? 2, candidates, allowPenned: a.penned === true })
+  const resuming = surfaceEscort ? onMyLeads().filter(e => e.name === a.mob && near(e) <= (a.within ?? 32)) : []
+  const plan = resuming.length ? { take: resuming.slice(0, a.count ?? 2).map(e => e.id) }
+    : leashPlan({ mob: a.mob, leads: leadsCarried(), count: a.count ?? 2, candidates, allowPenned: a.penned === true })
   if (plan.error) throw new Error(plan.error)
   const alive = cancelGuard()
+  const initialHealth = bot.health
+  const danger = () => Object.values(bot.entities).some(e => e.isValid && (e.type === 'hostile' || e.kind === 'Hostile mobs') && near(e) < 12)
+  const safeAttachment = () => {
+    alive()
+    if (bot.health < 16 || bot.health < initialHealth || danger()) throw new Error('horse escort refused: nearby danger or damage; reach a safe surface checkpoint first')
+  }
   const held = []
   const mine = () => held.filter(e => e.isValid && leashHolderOf(e) === bot.entity.id)
+  let surfaceMoves
+  if (surfaceEscort) {
+    const selected = plan.take.map(id => bot.entities[id])
+    safeAttachment()
+    if (selected.some(e => leashHolderOf(e) !== bot.entity.id && near(e) > 3)) throw new Error('horse escort requires standing within three blocks before attaching a lead; approach a safe surface checkpoint explicitly')
+    surfaceMoves = configureEscortMoves(makeMoves(false), {
+      blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)), from: bot.entity.position.clone(), to: toVec,
+      width: Math.max(1.4, ...selected.map(e => e.width ?? 1.4)), height: Math.max(1.6, ...selected.map(e => e.height ?? 1.6)),
+      maxY: (bot.game.minY ?? -64) + (bot.game.height ?? 384), reportPerformance
+    })
+    bot.pathfinder.setMovements(surfaceMoves)
+  }
   setLeading(true)
   try {
-    for (const id of plan.take) { alive(); const e = bot.entities[id]; await leashOne(e); held.push(e) }
+    for (const id of plan.take) { alive(); const e = bot.entities[id]; if (leashHolderOf(e) !== bot.entity.id) await leashOne(e, surfaceEscort ? { approach: false, check: safeAttachment } : undefined); held.push(e) }
     setFollowing(held)
+    if (surfaceEscort) {
+      let walkingSince = 0
+      const surfaceGoal = new goals.GoalNear(to.x, to.y, to.z, a.range ?? 1)
+      const result = await runSurfaceEscort({
+        position: () => bot.entity.position, animals: mine, destination: toVec, arrived: inPen, check: alive,
+        leaderArrived: p => surfaceGoal.isEnd(p.floored()),
+        pause: () => bot.waitForTicks(5), health: () => bot.health, grounded: () => bot.entity.onGround,
+        threatened: danger,
+        refresh: () => surfaceMoves.refreshEscortTerrain(), corridor: () => surfaceMoves.escortCorridor(),
+        start: () => { walkingSince = Date.now(); bot.pathfinder.setGoal(surfaceGoal) },
+        stop: () => bot.pathfinder.setGoal(null),
+        pathFailed: () => lastPath?.status === 'noPath' && lastPath.at >= walkingSince
+      })
+      // Leave the tether intact at a handback. Unleashing/collecting used to
+      // start another unrestricted walk, even after damage or cancellation.
+      return { ...result, with: mine().length, animals: held.filter(e => e.isValid).map(e => `${e.name}@${cellOf(e)}`).join(' '),
+        toGo: Math.round(bot.entity.position.distanceTo(toVec)), leads: leadsCarried(), pos: pos(),
+        note: 'Horse-width surface escort; leads remain attached. Release them explicitly when safely beside the animal.' }
+    }
     const stroll = makeMoves(false)
     stroll.allowSprinting = false
     stroll.allowParkour = false
@@ -366,7 +411,8 @@ export async function leadWalk (a) {
     setLeading(false)
     setFollowing([])
     // cancelled or given up: a lead still on an animal drags it after me wherever I go next
-    const still = mine()
+    const still = surfaceEscort ? [] : mine()
+    if (surfaceEscort) bot.pathfinder.setGoal(null)
     for (const e of still) await unleashOne(e).catch(() => {})
     if (still.length) await sweepDrops(8).catch(() => {})
   }
