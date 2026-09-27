@@ -1,0 +1,81 @@
+diff --git a/node_modules/edn-data/dist/index.js b/node_modules/edn-data/dist/index.js
+index 64fef36..ac2027e 100644
+--- a/node_modules/edn-data/dist/index.js
++++ b/node_modules/edn-data/dist/index.js
+@@ -2,6 +2,7 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ var parse_1 = require("./parse");
+ Object.defineProperty(exports, "parseEDNString", { enumerable: true, get: function () { return parse_1.parseEDNString; } });
++Object.defineProperty(exports, "EDNListParser", { enumerable: true, get: function () { return parse_1.EDNListParser; } });
+ var generate_1 = require("./generate");
+ Object.defineProperty(exports, "toEDNString", { enumerable: true, get: function () { return generate_1.toEDNString; } });
+ Object.defineProperty(exports, "toEDNStringFromSimpleObject", { enumerable: true, get: function () { return generate_1.toEDNStringFromSimpleObject; } });
+diff --git a/node_modules/edn-data/dist/parse.js b/node_modules/edn-data/dist/parse.js
+index fda2d6a..3be9995 100644
+--- a/node_modules/edn-data/dist/parse.js
++++ b/node_modules/edn-data/dist/parse.js
+@@ -7,6 +7,7 @@ var ParseMode;
+     ParseMode[ParseMode["string"] = 1] = "string";
+     ParseMode[ParseMode["escape"] = 2] = "escape";
+     ParseMode[ParseMode["comment"] = 3] = "comment";
++    ParseMode[ParseMode["unicode"] = 4] = "unicode";
+ })(ParseMode || (ParseMode = {}));
+ var StackItem;
+ (function (StackItem) {
+@@ -17,6 +18,8 @@ var StackItem;
+     StackItem[StackItem["tag"] = 4] = "tag";
+ })(StackItem || (StackItem = {}));
+ const stringEscapeMap = {
++    b: '\b',
++    f: '\f',
+     t: '\t',
+     r: '\r',
+     n: '\n',
+@@ -233,6 +236,15 @@ class EDNListParser {
+                                 }, {});
+                             }
+                             else if (this.mapAs === 'map') {
++                                const seenKeywords = new Set();
++                                for (const [key] of prevState[0]) {
++                                    if (key && typeof key === 'object' && typeof key.key === 'string') {
++                                        if (seenKeywords.has(key.key)) {
++                                            throw new Error(`Duplicate EDN map key :${key.key}`);
++                                        }
++                                        seenKeywords.add(key.key);
++                                    }
++                                }
+                                 this.result = new Map(prevState[0]);
+                             }
+                             else {
+@@ -340,12 +352,31 @@ class EDNListParser {
+                 this.state += char;
+             }
+             else if (this.mode === ParseMode.escape) {
++                if (char === 'u') {
++                    this.mode = ParseMode.unicode;
++                    this.state = '';
++                    continue;
++                }
+                 // TODO what should happen when escaping other char
+                 const escapedChar = stringEscapeMap[char];
++                if (escapedChar === undefined) {
++                    throw new Error(`Invalid EDN string escape \\${char}`);
++                }
+                 const [stackItem, prevState] = this.stack.pop();
+                 this.mode = stackItem;
+                 this.state = prevState + escapedChar;
+             }
++            else if (this.mode === ParseMode.unicode) {
++                if (!/[0-9a-fA-F]/.test(char)) {
++                    throw new Error(`Invalid EDN unicode escape digit ${char}`);
++                }
++                this.state += char;
++                if (this.state.length === 4) {
++                    const [stackItem, prevState] = this.stack.pop();
++                    this.mode = stackItem;
++                    this.state = prevState + String.fromCharCode(parseInt(this.state, 16));
++                }
++            }
+             else if (this.mode === ParseMode.comment) {
+                 if (char === '\n') {
+                     this.mode = ParseMode.idle;

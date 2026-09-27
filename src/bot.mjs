@@ -39,6 +39,7 @@ import { resultEvent } from './taskresult.mjs'
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
 import { placeFaces } from './build/cover.mjs'
 import { slabMergeRefusal } from './build/slab-merge.mjs'
+import { executeFlow, parseFlowEDN, resolveFlowAction } from './flow.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
@@ -2436,6 +2437,31 @@ export const long = {
 
   // several actions in one call; stops at the first failure and reports how far it got
   async run (a) {
+    const program = typeof a.steps === 'string'
+      ? parseFlowEDN(a.steps)
+      : a.steps
+    if (Array.isArray(program) && ['action', 'seq', 'when', 'any'].includes(program[0])) {
+      const observations = ['state', 'entity', 'block_at', 'boat_state', 'inventory', 'look_around', 'scan', 'animals', 'places', 'zones']
+      return executeFlow(program, {
+        actions: [...new Set([...Object.keys(long), ...Object.keys(quick)])],
+        observations,
+        alive: cancelGuard(),
+        waitTicks: n => bot.waitForTicks(n),
+        observe: async (name, args) => {
+          const read = quick[name]
+          if (!observations.includes(name) || typeof read !== 'function') throw new Error(`run: observation ${name} is unavailable`)
+          return read(args)
+        },
+        act: async (name, args) => {
+          const fn = resolveFlowAction(name, long, quick)
+          if (!fn) throw new Error(`flow: no action called ${name}`)
+          const refusal = refusalFor(name, args)
+          if (refusal) throw new Error(`flow/${name}: ${refusal}`)
+          useMoves(mayDig(name, args))
+          return Promise.resolve().then(() => fn(args)).catch(e => { throw new Error(`flow/${name}: ${explainFailure(e.message)}`) })
+        }
+      })
+    }
     const results = []
     const alive = cancelGuard()
     for (const [i, { action, ...args }] of a.steps.entries()) {
