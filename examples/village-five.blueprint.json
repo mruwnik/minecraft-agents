@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 2,
+  "id": "village-five",
+  "title": "Five-role village",
+  "description": "Ten-bed physical habitat with five minimum adult locked roles; surplus residents are retained.",
+  "dimensions": [
+    10,
+    4,
+    10
+  ],
+  "anchor": "northwest-floor",
+  "front": "south",
+  "tags": [
+    "shelter"
+  ],
+  "materials": {
+    "shell": {
+      "kind": "full_cube",
+      "requires": {
+        "gravity": false,
+        "contactHazard": false,
+        "interactive": false
+      },
+      "preferences": [
+        "cobblestone"
+      ]
+    },
+    "wood_fence_gate": {
+      "kind": "fence_gate",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_fence_gate",
+        "spruce_fence_gate",
+        "birch_fence_gate",
+        "jungle_fence_gate",
+        "acacia_fence_gate",
+        "dark_oak_fence_gate",
+        "mangrove_fence_gate",
+        "cherry_fence_gate",
+        "pale_oak_fence_gate",
+        "bamboo_fence_gate",
+        "crimson_fence_gate",
+        "warped_fence_gate"
+      ],
+      "preferences": [
+        "oak_fence_gate"
+      ]
+    },
+    "sleeping": {
+      "kind": "bed",
+      "candidates": [
+        "white_bed",
+        "orange_bed",
+        "magenta_bed",
+        "light_blue_bed",
+        "yellow_bed",
+        "lime_bed",
+        "pink_bed",
+        "gray_bed",
+        "light_gray_bed",
+        "cyan_bed",
+        "purple_bed",
+        "blue_bed",
+        "brown_bed",
+        "green_bed",
+        "red_bed",
+        "black_bed"
+      ],
+      "preferences": [
+        "white_bed"
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "members": [
+        "shell"
+      ],
+      "relation": "material",
+      "strength": "preferred"
+    },
+    {
+      "members": [
+        "wood_fence_gate"
+      ],
+      "relation": "family",
+      "strength": "preferred"
+    }
+  ],
+  "structure": {
+    "legend": {
+      "S": {
+        "type": "block",
+        "material": "shell"
+      },
+      "W": {
+        "type": "block",
+        "material": "shell"
+      },
+      "G": {
+        "type": "fence_gate",
+        "material": "wood_fence_gate",
+        "constructionState": {
+          "facing": "east"
+        },
+        "initialState": {
+          "open": false
+        },
+        "tags": [
+          "entrance"
+        ]
+      },
+      "F": {
+        "type": "bed",
+        "material": "sleeping",
+        "constructionState": {
+          "facing": "south",
+          "part": "foot"
+        }
+      },
+      "T": {
+        "type": "block",
+        "block": "torch"
+      }
+    },
+    "layers": [
+      {
+        "y": -1,
+        "rows": [
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS",
+          "SSSSSSSSSS"
+        ]
+      },
+      {
+        "y": 0,
+        "rows": [
+          "WWWWWWWWWW",
+          "W.F.F.F.FW",
+          "W._._._._W",
+          "W.T...T.TW",
+          "W.F.F.F.FW",
+          "G._._._._W",
+          "W.T...T.TW",
+          "W.F.F.WWWW",
+          "W._._.G..G",
+          "WWWWWWWWWW"
+        ]
+      },
+      {
+        "y": 1,
+        "rows": [
+          "WWWWWWWWWW",
+          "W........W",
+          "W........W",
+          "W........W",
+          "W........W",
+          ".........W",
+          "W........W",
+          "W.....WWWW",
+          "W.........",
+          "WWWWWWWWWW"
+        ]
+      },
+      {
+        "y": 2,
+        "rows": [
+          "WWWWWWWWWW",
+          "W........W",
+          "W........W",
+          "W........W",
+          "W........W",
+          "W........W",
+          "W........W",
+          "W.....WWWW",
+          "W.....W..W",
+          "WWWWWWWWWW"
+        ]
+      },
+      {
+        "y": 3,
+        "rows": [
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW",
+          "WWWWWWWWWW"
+        ]
+      }
+    ],
+    "objects": []
+  },
+  "site": {
+    "foundation": "flat",
+    "clearance": 1,
+    "existing": "reuse_compatible",
+    "removal": "natural_only"
+  },
+  "guarantees": [
+    "closed_entrances"
+  ],
+  "metadata": {
+    "suggestedAnchor": [
+      -82,
+      69,
+      -46
+    ],
+    "requestedCenter": [
+      -77,
+      69,
+      -41
+    ],
+    "note": "Example intent at the surveyed house anchor; check current world and saved allocation before applying."
+  },
+  "population": {
+    "target": 5,
+    "surplus": "allow",
+    "roles": [
+      {
+        "id": "farmers",
+        "count": 2,
+        "profession": "farmer",
+        "workstation": [
+          3,
+          0,
+          3
+        ]
+      },
+      {
+        "id": "efficiency",
+        "profession": "librarian",
+        "trade": {
+          "output": "enchanted_book",
+          "enchant": "efficiency",
+          "level": 3
+        },
+        "workstation": [
+          5,
+          0,
+          3
+        ]
+      },
+      {
+        "id": "bane",
+        "profession": "librarian",
+        "trade": {
+          "output": "enchanted_book",
+          "enchant": "bane_of_arthropods"
+        },
+        "workstation": [
+          5,
+          0,
+          6
+        ]
+      },
+      {
+        "id": "arrows",
+        "profession": "fletcher",
+        "trade": {
+          "output": "arrow"
+        },
+        "workstation": [
+          3,
+          0,
+          6
+        ]
+      }
+    ]
+  }
+}

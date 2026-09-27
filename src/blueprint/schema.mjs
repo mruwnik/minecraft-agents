@@ -1,5 +1,6 @@
 // Versioned authored structure. Compilation and allocation are separate from execution.
 import { createHash } from 'node:crypto'
+import { validatePopulation } from '../villager/population.mjs'
 
 export const BLUEPRINT_SCHEMA_VERSION = 2
 export const BLUEPRINT_LIMITS = Object.freeze({ bytes: 1024 * 1024, side: 64, height: 52, cells: 16384 })
@@ -18,12 +19,14 @@ export const semanticBlueprintHash = value => {
 export const MATERIAL_KINDS = ['full_cube', 'log', 'slab', 'stairs', 'door', 'bed', 'fence', 'fence_gate', 'trapdoor', 'pane', 'glass_block', 'exact']
 export function validateBlueprintDocument (input) {
   if (Buffer.byteLength(JSON.stringify(input) ?? '') > BLUEPRINT_LIMITS.bytes) fail('$', 'document exceeds 1 MiB')
-  fields(input, ['schemaVersion', 'id', 'title', 'description', 'metadata', 'dimensions', 'anchor', 'front', 'tags', 'materials', 'relationships', 'structure', 'site', 'guarantees'], '$')
+  fields(input, ['schemaVersion', 'id', 'title', 'description', 'metadata', 'dimensions', 'anchor', 'front', 'tags', 'materials', 'relationships', 'structure', 'site', 'guarantees', 'population'], '$')
+  if (input.population !== undefined) validatePopulation(input.population)
   if (input.schemaVersion !== 2) fail('schemaVersion', 'must be 2')
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.id ?? '')) fail('id', 'must be a lowercase catalog identifier')
   for (const key of ['title', 'description']) if (input[key] !== undefined && typeof input[key] !== 'string') fail(key, 'must be a string')
   if (input.tags !== undefined && (!Array.isArray(input.tags) || !input.tags.every(t => typeof t === 'string'))) fail('tags', 'must be a string array')
   if (!Array.isArray(input.dimensions) || input.dimensions.length !== 3 || !input.dimensions.every((n, i) => Number.isInteger(n) && n >= 1 && n <= (i === 1 ? 52 : 64))) fail('dimensions', 'must be [width,height,depth] within 64x52x64')
+  for(const role of input.population?.roles ?? [])if(role.workstation?.some((n,i)=>n<0||n>=input.dimensions[i]))fail(`population.roles.${role.id}.workstation`,'must be inside the blueprint dimensions')
   if (input.anchor !== undefined && input.anchor !== 'northwest-floor') fail('anchor', 'only northwest-floor is supported')
   if (!['north', 'east', 'south', 'west'].includes(input.front ?? 'south')) fail('front', 'must be a cardinal direction')
   fields(input.materials ?? {}, Object.keys(input.materials ?? {}), 'materials')

@@ -14,7 +14,7 @@ const validateArguments = a => {
   for (const k of Object.keys(a)) if (!allowed.has(k) && a[k] !== undefined) throw new Error(`blueprint v2 does not accept ${k}=; edit material constraints/preferences in plan=`)
 }
 const concrete = (ir, assignments, facing) => rotate(concreteBlueprint(ir, assignments), turnsFor(ir.document.front ?? 'south', facing))
-const existingObjects = (ir, at, facing, blockAt) => {
+export const existingObjects = (ir, at, facing, blockAt, { strictMultipart = true } = {}) => {
   const reused = {}, turns = turnsFor(ir.document.front ?? 'south', facing)
   for (const obj of ir.objects) {
     const [ox, oy, oz] = rotateBlueprintPosition(obj.footprint[0].at, ir.width, ir.depth, turns)
@@ -29,7 +29,7 @@ const existingObjects = (ir, at, facing, blockAt) => {
       return matchesCell(blockAt(at.x + x, at.y + y, at.z + z), tiny.legend.A.alts)
     })
     if (valid) reused[obj.id] = name
-    else if (obj.footprint.length > 1) throw new Error(`blueprint ${obj.id}: partial or mismatched multipart object at ${ox},${oy},${oz}; repair/remove it safely before resuming`)
+    else if (strictMultipart && obj.footprint.length > 1) throw new Error(`blueprint ${obj.id}: partial or mismatched multipart object at ${ox},${oy},${oz}; repair/remove it safely before resuming`)
   }
   return reused
 }

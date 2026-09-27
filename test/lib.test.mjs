@@ -5493,7 +5493,7 @@ test('apiary.maintain: somebody else\u2019s apiary is refused before its hives a
 // Every composite that takes place= and CHANGES the world asks the one question, in its own source or in something it
 // imports (farm.build asks through src/build/plan.mjs, which resolves the plan for it). The read-only two must ask
 // nothing at all: a body that may not look at a farm cannot plan work on it. A new place= writer lands here first.
-const READ_ONLY_COMPOSITES = ['apiary/inspect.mjs', 'farm/fields.mjs']
+const READ_ONLY_COMPOSITES = ['apiary/inspect.mjs', 'farm/fields.mjs', 'village/check.mjs']
 const ASKS_OWNERSHIP = /workRefusal|placeRefusal|api\.plan\(/
 const libraryDir = path.join(import.meta.dirname, '..', 'library')
 const everyComposite = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry =>

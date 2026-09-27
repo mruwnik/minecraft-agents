@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { BLUEPRINT_LIMITS, validateBlueprintDocument } from './schema.mjs'
 export function blueprintFileArguments (action, args, cwd = process.cwd()) {
-  if (!/^blueprint\.(show|check|build)$/.test(action) || args.file === undefined) return args
+  if (!/^(blueprint\.(show|check|build)|village\.(check|maintain))$/.test(action) || args.file === undefined) return args
   if (args.name !== undefined || args.plan !== undefined) throw new Error('blueprint needs exactly one of name=, file= or plan=')
   if (typeof args.file !== 'string') throw new Error('blueprint file= must be a path')
   const file = path.resolve(cwd, args.file), stat = fs.statSync(file)
