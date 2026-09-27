@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 2,
+  "id": "wheat-field",
+  "title": "Fenced wheat field",
+  "description": "36 wheat around one covered channel, fenced, with a gate onto the channel lane and a torch on every corner post.",
+  "dimensions": [
+    11,
+    2,
+    7
+  ],
+  "anchor": "northwest-floor",
+  "front": "east",
+  "tags": [
+    "farm"
+  ],
+  "materials": {
+    "variant_114": {
+      "kind": "exact",
+      "candidates": [
+        "dirt",
+        "grass_block"
+      ],
+      "preferences": [
+        "dirt"
+      ]
+    },
+    "wood_slab": {
+      "kind": "slab",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_slab",
+        "spruce_slab",
+        "birch_slab",
+        "jungle_slab",
+        "acacia_slab",
+        "dark_oak_slab",
+        "mangrove_slab",
+        "cherry_slab",
+        "pale_oak_slab",
+        "bamboo_slab",
+        "crimson_slab",
+        "warped_slab"
+      ],
+      "preferences": [
+        "oak_slab"
+      ]
+    },
+    "wood_fence": {
+      "kind": "fence",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_fence",
+        "spruce_fence",
+        "birch_fence",
+        "jungle_fence",
+        "acacia_fence",
+        "dark_oak_fence",
+        "mangrove_fence",
+        "cherry_fence",
+        "pale_oak_fence",
+        "bamboo_fence",
+        "crimson_fence",
+        "warped_fence"
+      ],
+      "preferences": [
+        "oak_fence"
+      ]
+    },
+    "wood_fence_gate": {
+      "kind": "fence_gate",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_fence_gate",
+        "spruce_fence_gate",
+        "birch_fence_gate",
+        "jungle_fence_gate",
+        "acacia_fence_gate",
+        "dark_oak_fence_gate",
+        "mangrove_fence_gate",
+        "cherry_fence_gate",
+        "pale_oak_fence_gate",
+        "bamboo_fence_gate",
+        "crimson_fence_gate",
+        "warped_fence_gate"
+      ],
+      "preferences": [
+        "oak_fence_gate"
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "members": [
+        "wood_slab",
+        "wood_fence",
+        "wood_fence_gate"
+      ],
+      "relation": "family",
+      "strength": "preferred"
+    }
+  ],
+  "structure": {
+    "legend": {
+      "r": {
+        "type": "block",
+        "material": "variant_114",
+        "tags": [
+          "ground"
+        ]
+      },
+      "f": {
+        "type": "farmland",
+        "block": "farmland",
+        "tags": [
+          "ground"
+        ]
+      },
+      "=": {
+        "type": "block",
+        "material": "wood_slab",
+        "constructionState": {
+          "type": "top",
+          "waterlogged": "true"
+        },
+        "tags": [
+          "ground",
+          "cover",
+          "lane"
+        ]
+      },
+      "w": {
+        "type": "crop",
+        "block": "wheat",
+        "tags": [
+          "crop"
+        ]
+      },
+      "#": {
+        "type": "block",
+        "material": "wood_fence"
+      },
+      "G": {
+        "type": "fence_gate",
+        "material": "wood_fence_gate",
+        "constructionState": {
+          "facing": "east"
+        },
+        "initialState": {
+          "open": false
+        }
+      },
+      "i": {
+        "type": "block",
+        "block": "torch"
+      }
+    },
+    "layers": [
+      {
+        "y": -1,
+        "rows": [
+          "rrrrrrrrrrr",
+          "rfffffffffr",
+          "rfffffffffr",
+          "r=========r",
+          "rfffffffffr",
+          "rfffffffffr",
+          "rrrrrrrrrrr"
+        ]
+      },
+      {
+        "y": 0,
+        "rows": [
+          "###########",
+          "#wwwwwwwww#",
+          "#wwwwwwwww#",
+          "#.........G",
+          "#wwwwwwwww#",
+          "#wwwwwwwww#",
+          "###########"
+        ]
+      },
+      {
+        "y": 1,
+        "rows": [
+          "i_________i",
+          "___________",
+          "___________",
+          "___________",
+          "___________",
+          "___________",
+          "i_________i"
+        ]
+      }
+    ],
+    "objects": []
+  },
+  "site": {
+    "foundation": "flat",
+    "clearance": 2,
+    "existing": "reuse_compatible",
+    "removal": "natural_only"
+  },
+  "guarantees": [
+    "closed_entrances",
+    "source_water"
+  ]
+}

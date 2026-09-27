@@ -1,0 +1,341 @@
+{
+  "schemaVersion": 2,
+  "id": "watchtower",
+  "title": "Ladder watchtower",
+  "description": "A 3x3 stone shaft with a ladder, a door at the foot and a fenced 5x5 lookout platform eleven blocks up.",
+  "dimensions": [
+    5,
+    13,
+    5
+  ],
+  "anchor": "northwest-floor",
+  "front": "south",
+  "tags": [
+    "lookout",
+    "decorative"
+  ],
+  "materials": {
+    "shell": {
+      "kind": "full_cube",
+      "requires": {
+        "gravity": false,
+        "contactHazard": false,
+        "interactive": false
+      },
+      "preferences": [
+        "cobblestone"
+      ]
+    },
+    "wood_door": {
+      "kind": "door",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_door",
+        "spruce_door",
+        "birch_door",
+        "jungle_door",
+        "acacia_door",
+        "dark_oak_door",
+        "mangrove_door",
+        "cherry_door",
+        "pale_oak_door",
+        "bamboo_door",
+        "crimson_door",
+        "warped_door"
+      ],
+      "preferences": [
+        "oak_door"
+      ]
+    },
+    "wood_planks": {
+      "kind": "full_cube",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_planks",
+        "spruce_planks",
+        "birch_planks",
+        "jungle_planks",
+        "acacia_planks",
+        "dark_oak_planks",
+        "mangrove_planks",
+        "cherry_planks",
+        "pale_oak_planks",
+        "bamboo_planks",
+        "crimson_planks",
+        "warped_planks"
+      ],
+      "preferences": [
+        "oak_planks"
+      ]
+    },
+    "wood_trapdoor": {
+      "kind": "trapdoor",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_trapdoor",
+        "spruce_trapdoor",
+        "birch_trapdoor",
+        "jungle_trapdoor",
+        "acacia_trapdoor",
+        "dark_oak_trapdoor",
+        "mangrove_trapdoor",
+        "cherry_trapdoor",
+        "pale_oak_trapdoor",
+        "bamboo_trapdoor",
+        "crimson_trapdoor",
+        "warped_trapdoor"
+      ],
+      "preferences": [
+        "oak_trapdoor"
+      ]
+    },
+    "wood_fence": {
+      "kind": "fence",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_fence",
+        "spruce_fence",
+        "birch_fence",
+        "jungle_fence",
+        "acacia_fence",
+        "dark_oak_fence",
+        "mangrove_fence",
+        "cherry_fence",
+        "pale_oak_fence",
+        "bamboo_fence",
+        "crimson_fence",
+        "warped_fence"
+      ],
+      "preferences": [
+        "oak_fence"
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "members": [
+        "shell"
+      ],
+      "relation": "material",
+      "strength": "preferred"
+    },
+    {
+      "members": [
+        "wood_door",
+        "wood_planks",
+        "wood_trapdoor",
+        "wood_fence"
+      ],
+      "relation": "family",
+      "strength": "preferred"
+    }
+  ],
+  "structure": {
+    "legend": {
+      "S": {
+        "type": "block",
+        "material": "shell"
+      },
+      "J": {
+        "type": "block",
+        "block": "jack_o_lantern"
+      },
+      "H": {
+        "type": "block",
+        "block": "ladder",
+        "constructionState": {
+          "facing": "south"
+        }
+      },
+      "D": {
+        "type": "door",
+        "material": "wood_door",
+        "constructionState": {
+          "facing": "north",
+          "half": "lower"
+        },
+        "initialState": {
+          "open": false
+        },
+        "tags": [
+          "entrance"
+        ]
+      },
+      "P": {
+        "type": "block",
+        "material": "wood_planks"
+      },
+      "^": {
+        "type": "trapdoor",
+        "material": "wood_trapdoor",
+        "constructionState": {
+          "facing": "south",
+          "half": "top"
+        },
+        "initialState": {
+          "open": false
+        }
+      },
+      "#": {
+        "type": "block",
+        "material": "wood_fence"
+      },
+      "i": {
+        "type": "block",
+        "block": "torch"
+      }
+    },
+    "layers": [
+      {
+        "y": -1,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SJS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 0,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SDS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 1,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_S_S_",
+          "_____"
+        ]
+      },
+      {
+        "y": 2,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 3,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 4,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 5,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 6,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 7,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 8,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 9,
+        "rows": [
+          "_____",
+          "_SSS_",
+          "_SHS_",
+          "_SSS_",
+          "_____"
+        ]
+      },
+      {
+        "y": 10,
+        "rows": [
+          "PPPPP",
+          "PPPPP",
+          "PP^PP",
+          "PPPPP",
+          "PPPPP"
+        ]
+      },
+      {
+        "y": 11,
+        "rows": [
+          "#####",
+          "#...#",
+          "#...#",
+          "#...#",
+          "#####"
+        ]
+      },
+      {
+        "y": 12,
+        "rows": [
+          "i___i",
+          "_____",
+          "_____",
+          "_____",
+          "i___i"
+        ]
+      }
+    ],
+    "objects": []
+  },
+  "site": {
+    "foundation": "flat",
+    "clearance": 2,
+    "existing": "reuse_compatible",
+    "removal": "natural_only"
+  },
+  "guarantees": [
+    "closed_entrances"
+  ]
+}

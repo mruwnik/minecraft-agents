@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { prepare } from '../src/blueprint/build.mjs'
+import fs from 'node:fs'
+import { prepare as prepareLegacy } from '../src/blueprint/build.mjs'
 import { blueprintCells, matchesCell, flatGround, jobsFor, orderJobs, bill, fullBlock } from '../src/blueprint/format.mjs'
 import { breedPlan, breedPreflight, breedKey } from '../src/villager/breed.mjs'
 
+const prepare = args => prepareLegacy(args, name => ({ text: fs.readFileSync(new URL(`fixtures/blueprints/${name}.txt`, import.meta.url), 'utf8'), hash: 'legacy-fixture' }))
 const anchor = { x: -144, y: 65, z: -176 }
 const plan = breedPlan({ x: -143, y: 65, z: -175, target: 10, size: 8, airlock: true, entryX: -135, entryZ: -168 })
 const worldFor = bp => {
@@ -87,4 +89,16 @@ test('fresh house build has supported placements and reachable jobs on flat terr
   assert.deepEqual(jobs.unreachable, [])
   assert.equal(jobs.jobs.filter(j => j.item === 'white_bed').length, 10)
   assert.equal(jobs.jobs.filter(j => j.item === 'oak_fence_gate').length, 3)
+})
+
+test('v2 atomic house fixture passes the actual breeder safety validation', async () => {
+  const { compileBlueprintStructure, concreteBlueprint } = await import('../src/blueprint/compiler.mjs')
+  const { materialCandidates } = await import('../src/blueprint/materials.mjs')
+  const document=JSON.parse(fs.readFileSync(new URL('../blueprints/villager-house-10.blueprint.json',import.meta.url),'utf8'))
+  const ir=compileBlueprintStructure(document)
+  const assignments=Object.fromEntries(ir.objects.map(o=>[o.id,o.block??materialCandidates(document.materials[o.material])[0]]))
+  const bp=concreteBlueprint(ir,assignments), checked=breedPreflight(plan,worldFor(bp))
+  assert.equal(checked.validBeds,10)
+  assert.deepEqual(checked.needed,[])
+  assert.deepEqual(checked.clear,[])
 })

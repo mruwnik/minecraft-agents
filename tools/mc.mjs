@@ -11,7 +11,14 @@ const { apiPort = 3777 } = fs.existsSync(configFile) ? JSON.parse(fs.readFileSyn
 const [action, ...rest] = process.argv.slice(2)
 if (noHomeError(process.env.MC_HOME, action)) { console.error(`FAIL ${noHomeError(process.env.MC_HOME, action)}`); process.exit(1) }
 const verbose = rest.includes('-v')
-const args = parseCliArgs(rest)
+let args = parseCliArgs(rest)
+// Load blueprint validation only for file input; ordinary status/recovery commands retain the isolated CLI import graph.
+if (/^blueprint\.(show|check|build)$/.test(action) && args.file !== undefined) {
+  try {
+    const { blueprintFileArguments } = await import('../src/blueprint/source.mjs')
+    args = blueprintFileArguments(action, args)
+  } catch (error) { console.error(`FAIL ${error.message}`); process.exit(1) }
+}
 if (mapArgErrors(args)) { console.error(`FAIL ${mapArgErrors(args)}`); process.exit(1) }
 
 const clockFile = path.join(import.meta.dirname, '..', 'state', 'clock.json')

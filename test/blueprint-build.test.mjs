@@ -8,7 +8,7 @@ import { fakeApi } from './helpers.mjs'
 import { buildBlueprint, checkBlueprint, listText, showText, paramsOf, supplyOf, BLUEPRINT_DIR, readBlueprint, blueprintFiles } from '../src/blueprint/build.mjs'
 import { blueprintHash, buildNote, flatGround, parseBlueprint, resolve, jobsFor, orderJobs, jobsBill } from '../src/blueprint/format.mjs'
 
-const HUT = fs.readFileSync(path.join(BLUEPRINT_DIR, 'starter-hut.md'), 'utf8')
+const HUT = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'blueprints', 'starter-hut.txt'), 'utf8')
 const BOX = `---
 name: box
 title: Box
@@ -69,9 +69,9 @@ const STEP = { north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 
 const placing = (world, states, items) => args => {
   const at = key(args.x, args.y, args.z)
   const item = args.item
-  world[at] = item
+  world[at] = item === 'wheat_seeds' ? 'wheat' : item
   items[item] = (items[item] ?? 0) - 1
-  const state = { ...(args.half ? { half: args.half, type: args.half } : {}) }
+  const state = { ...(/_door$|_fence_gate$|_trapdoor$/.test(item) ? { open: false } : {}), ...(args.half ? { half: args.half, type: args.half } : {}) }
   if (args.facing) state.facing = /^(chest|furnace|barrel)$/.test(item) ? OPPOSITE[args.facing] : args.facing
   if ((item === 'ladder' || item === 'wall_torch') && OPPOSITE[args.against]) state.facing = OPPOSITE[args.against]
   if (/_log$/.test(item)) state.axis = /^(east|west)$/.test(args.against) ? 'x' : /^(north|south)$/.test(args.against) ? 'z' : 'y'
@@ -369,7 +369,7 @@ test('a log on its side with nothing along its axis is named, not placed the wro
 // takes its facing from that face (Hollis, 09-26: the watchtower was refused on every facing)
 test('the watchtower builds, its ladder placed against the wall behind it', async () => {
   const world = worldOf()
-  const tower = fs.readFileSync(path.join(BLUEPRINT_DIR, 'watchtower.md'), 'utf8')
+  const tower = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'blueprints', 'watchtower.txt'), 'utf8')
   const files = { watchtower: tower }
   const kit = { cobblestone: 128, jack_o_lantern: 1, ladder: 16, oak_door: 1, oak_planks: 32, oak_trapdoor: 1, oak_fence: 16, torch: 4, dirt: 64 }
   const { api, calls } = body({ world, items: kit })
@@ -446,7 +446,7 @@ test('supplyOf refuses a name nobody marked', () => {
 
 test('the library reads every blueprint file by name and refuses one that is not there', () => {
   assert.deepEqual(blueprintFiles(), ['starter-hut', 'villager-house-10', 'watchtower', 'wheat-field'])
-  assert.equal(readBlueprint('starter-hut').hash, blueprintHash(HUT))
+  assert.equal(readBlueprint('starter-hut').document.schemaVersion, 2)
   assert.throws(() => readBlueprint('castle'), { message: 'no blueprint called castle: blueprint.list shows starter-hut, villager-house-10, watchtower, wheat-field' })
 })
 
@@ -506,7 +506,7 @@ test('an obstruction appearing after the final walk prevents the placement actio
 
 for (const name of ['starter-hut', 'watchtower', 'villager-house-10']) {
   test(`complete ${name} constructs every cell from valid clicked faces with its exact scaffold budget`, async () => {
-    const text = fs.readFileSync(path.join(BLUEPRINT_DIR, `${name}.md`), 'utf8')
+    const text = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'blueprints', `${name}.txt`), 'utf8')
     const assetIo = { read: n => ({ name: n, text, hash: blueprintHash(text) }) }
     const bp = resolve(parseBlueprint(text))
     const world = worldOf()
@@ -525,5 +525,46 @@ for (const name of ['starter-hut', 'watchtower', 'villager-house-10']) {
     assert.equal(used, budget.dirt ?? 0)
     assert.equal(beforeDirt - (api.inv().dirt ?? 0), used)
     assert.equal(calls.some(c => /^goto .*dig=true/.test(c)), false)
+  })
+}
+
+for (const name of ['starter-hut', 'watchtower', 'wheat-field', 'villager-house-10']) {
+  test(`v2 ${name} constructs with frozen stock allocation, atomic objects and verified initial states`, async () => {
+    const { compileBlueprintStructure, concreteBlueprint } = await import('../src/blueprint/compiler.mjs')
+    const { materialCandidates } = await import('../src/blueprint/materials.mjs')
+    const { buildBlueprintV2 } = await import('../src/blueprint/v2.mjs')
+    const { readBlueprintManifest } = await import('../src/blueprint/manifest.mjs')
+    const os = await import('node:os')
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'v2-complete-'))
+    try {
+      const document = JSON.parse(fs.readFileSync(path.join(BLUEPRINT_DIR, `${name}.blueprint.json`)))
+      const ir = compileBlueprintStructure(document)
+      const assignments = Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
+      const bp = concreteBlueprint(ir, assignments), world = worldOf(), states = {}
+      const { api, calls } = body({ world, states, items: { dirt: 512, iron_hoe: 1 }, answers: {
+        till: a => { world[key(a.x,a.y,a.z)]='farmland';return {} },
+        pour: a => { world[key(a.x,a.y+1,a.z)]='water';states[key(a.x,a.y+1,a.z)]={level:0};return {} }
+      } })
+      const rawPlace = api.act
+      api.act = async (action,a) => {
+        const was = action==='place' && api.block(a.x,a.y,a.z)?.name
+        const result = await rawPlace(action,a)
+        if(action==='place' && /_slab$/.test(a.item) && was==='water') states[key(a.x,a.y,a.z)].waterlogged='true'
+        return result
+      }
+      const budget = jobsBill(orderJobs(jobsFor(bp, AT, api.block), bp, AT, api.block).jobs)
+      Object.assign(api.inv(), budget, { dirt: 512, iron_hoe: 1 })
+      const result = await buildBlueprintV2(api, { plan: document, place: name, ...AT }, { stateDir })
+      assert.equal(result.stuck, undefined, JSON.stringify(result))
+      assert.equal(result.wrong, undefined, JSON.stringify(result))
+      assert.equal(result.left, undefined, JSON.stringify(result))
+      assert.equal(result.initialStateVerified, true)
+      const manifest = readBlueprintManifest(`bp2:${(await import('../src/blueprint/manifest.mjs')).manifestId(name,AT)}`, stateDir)
+      const built = concreteBlueprint(ir,manifest.allocation.assignments)
+      assert.equal(jobsFor(built,AT,api.block).length,0)
+      const pillarCount=calls.filter(c=>c.startsWith('pillar_up ')).reduce((n,c)=>n+Number(c.match(/steps=(\d+)/)[1]),0)
+      assert.equal(pillarCount,Object.keys(manifest.construction).length)
+      assert.equal(calls.some(c=>/^goto .*dig=true/.test(c)),false)
+    } finally { fs.rmSync(stateDir,{recursive:true,force:true}) }
   })
 }

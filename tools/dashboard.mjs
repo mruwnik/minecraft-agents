@@ -11,10 +11,12 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
-import { loadAll } from '../src/blueprint/build.mjs'
+import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
+import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
+import { semanticBlueprintHash } from '../src/blueprint/schema.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
@@ -189,7 +191,7 @@ const blueprintFor = file => {
 }
 const library = () => {
   const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
-  return { at: Date.now(), blueprints: loadAll().map(file => ({ ...blueprintFor(file), builds: blueprintBuilds(file.name, file.hash, places) })) }
+  return { at: Date.now(), blueprints: loadBlueprintDocuments(BLUEPRINT_DIR).map(file => ({ ...file, hash: semanticBlueprintHash(file.document) })).map(file => ({ ...blueprintFor(file), builds: blueprintBuilds(file.name, file.hash, places) })) }
 }
 
 const send = (res, code, type, payload, headers = {}) => {
@@ -259,6 +261,13 @@ const handlers = {
 
 http.createServer(async (req, res) => {
   const r = route(req.url)
+  if (r.kind === 'bppreview') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST a structured plan to preview' })
+    let body = '', bytes = 0, tooLarge = false
+    for await (const chunk of req) { bytes += chunk.length; if (bytes > 2 * 1024 * 1024) { tooLarge = true; body = '' } else if (!tooLarge) body += chunk }
+    if (tooLarge) return sendJson(res, 413, { error: 'preview body exceeds 2 MiB' })
+    try { const input = JSON.parse(body); const detail = blueprintDocumentDetail(input.plan, input.stock); return sendJson(res, detail.errors.length ? 400 : 200, detail) } catch (error) { return sendJson(res, 400, { error: error.message }) }
+  }
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
   return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))

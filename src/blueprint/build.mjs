@@ -4,6 +4,10 @@
 // progress record: a run recomputes its jobs from what stands, so a second run after a stop, a death or a restart picks
 // up where the blocks say. In the style of src/build/plan.mjs, and built on the same api.
 import fs from 'node:fs'
+import { compileBlueprintStructure, concreteBlueprint } from './compiler.mjs'
+import { materialCandidates } from './materials.mjs'
+import { readBlueprintSource, blueprintDocumentFiles } from './source.mjs'
+import { canonicalBlueprint, semanticBlueprintHash } from './schema.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './format.mjs'
@@ -16,16 +20,21 @@ export const BLUEPRINT_DIR = path.join(path.dirname(fileURLToPath(import.meta.ur
 
 // ---------------------------------------------------------------- the library on disk
 
-export const blueprintFiles = (dir = BLUEPRINT_DIR) => fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, '')).sort() : []
+export const blueprintFiles = (dir = BLUEPRINT_DIR) => blueprintDocumentFiles(dir)
 export const readBlueprint = (name, dir = BLUEPRINT_DIR) => {
-  const file = /^[\w-]+$/.test(String(name)) ? path.join(dir, `${name}.md`) : null
-  if (!file || !fs.existsSync(file)) throw new Error(`no blueprint called ${name}: blueprint.list shows ${blueprintFiles(dir).join(', ') || 'nothing: blueprints/ is empty'}`)
-  const text = fs.readFileSync(file, 'utf8')
-  return { name: String(name), text, hash: blueprintHash(text) }
+  if (!blueprintFiles(dir).includes(String(name))) throw new Error(`no blueprint called ${name}: blueprint.list shows ${blueprintFiles(dir).join(', ') || 'nothing: blueprints/ is empty'}`)
+  const { document } = readBlueprintSource({ name }, dir)
+  return { name: String(name), document, text: canonicalBlueprint(document), hash: semanticBlueprintHash(document) }
 }
 export const loadAll = (dir = BLUEPRINT_DIR) => blueprintFiles(dir).map(name => readBlueprint(name, dir))
 // every parameter any blueprint in the library declares, as the composites' key=values (a value is a material name)
-export const paramArgs = (dir = BLUEPRINT_DIR) => Object.fromEntries(loadAll(dir).flatMap(({ text }) => Object.keys(parseBlueprint(text).params)).map(k => [k, 'string']))
+export const paramArgs = (dir = BLUEPRINT_DIR) => Object.fromEntries(loadAll(dir).flatMap(({ text, document }) => document ? [] : Object.keys(parseBlueprint(text).params ?? {})).map(k => [k, 'string']))
+
+export function representativeBlueprint (document) {
+  const ir = compileBlueprintStructure(document)
+  const assignments = Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
+  return concreteBlueprint(ir, assignments)
+}
 
 // ---------------------------------------------------------------- the arguments
 
@@ -36,8 +45,9 @@ export const paramsOf = a => Object.fromEntries(Object.entries(a).filter(([k, v]
 
 // the file parsed, resolved with its parameters and turned to face `facing`, with what lint and the placement table say
 export function prepare ({ name, facing, params = {} }, read = readBlueprint) {
-  const { text, hash } = read(name)
-  const parsed = parseBlueprint(text)
+  const { text, hash, document } = read(name)
+  const parsed = document ? representativeBlueprint(document) : parseBlueprint(text)
+  if (document && Object.keys(params).length) throw new Error('blueprint v2 material choices belong in plan.materials, not legacy parameters')
   if (parsed.errors.length) throw new Error(`${name} does not parse: ${parsed.errors[0]}${parsed.errors.length > 1 ? ` (and ${parsed.errors.length - 1} more)` : ''}`)
   const way = facing ?? parsed.front
   if (!DIRS.includes(way)) throw new Error(`facing=${way} is not a direction: ${DIRS.join(', ')}`)
@@ -94,7 +104,7 @@ const height = bp => bp.layers.at(-1).y - bp.layers[0].y + 1
 // title or description say it
 export function listText ({ tag, q } = {}, files = loadAll()) {
   const lines = files.map(({ name, text }) => {
-    const bp = parseBlueprint(text)
+    const bp = (() => { try { return JSON.parse(text).schemaVersion === 2 ? representativeBlueprint(JSON.parse(text)) : parseBlueprint(text) } catch { return parseBlueprint(text) } })()
     if (bp.errors.length) return { name, line: `${name}: does not parse (${bp.errors[0]})`, tags: [], words: name }
     const words = `${name} ${bp.title} ${bp.description}`.toLowerCase()
     return { name, tags: bp.tags, words, line: `${name} ${bp.width}x${bp.depth}x${height(bp)} tags=${bp.tags.join(',')} items=${sum(bill(bp).total)} ${bp.title}` }
@@ -174,7 +184,7 @@ const siteLine = site => [
 // starting, then the site and the lint
 export async function checkBlueprint (api, a, io = {}) {
   const read = io.read ?? readBlueprint
-  const found = siteOf(api, a, read, 'blueprint.check')
+  const found = io.found ?? siteOf(api, a, read, 'blueprint.check')
   const { bp, at, facing, saved } = found
   const supply = supplyOf(api, a.supply)
   const have = { ...api.inv() }
@@ -216,11 +226,11 @@ export async function buildBlueprint (api, a, io = {}) {
   const read = io.read ?? readBlueprint
   if (a.place === undefined) throw new Error('blueprint.build needs place=<a name for this build on the shared map>')
   const place = String(a.place)
-  const found = siteOf(api, a, read)
+  const found = io.found ?? siteOf(api, a, read)
   const { bp, at, hash, facing, params, saved, resume } = found
   if (found.lint.errors.length) throw new Error(`${bp.name} does not lint: ${found.lint.errors[0]}`)
   const supply = supplyOf(api, a.supply)
-  const note = buildNote({ blueprint: bp.name, facing, params, hash })
+  const note = io.note ?? buildNote({ blueprint: bp.name, facing, params, hash })
   // the site has to be in sight before it can be judged: a body far from it walks up first, and only then decides
   if (!api.block(at.x, at.y, at.z)) await api.act('goto', { x: at.x - 1, y: at.y, z: at.z - 1, range: 6 })
   const { site, jobs, unreachable } = planJobs(api, found, { clear: a.clear === true })
@@ -231,7 +241,7 @@ export async function buildBlueprint (api, a, io = {}) {
   // an invitation leaves the kind as it was
   const finished = async () => {
     if (jobsFor(bp, at, api.block).length) return false
-    if (mine && (!saved || saved.kind === 'build' || !resume)) await api.act('mark', { name: place, kind, x: at.x, y: at.y, z: at.z, note })
+    if (!io.deferFinalMark && mine && (!saved || saved.kind === 'build' || !resume)) await api.act('mark', { name: place, kind, x: at.x, y: at.y, z: at.z, note })
     return true
   }
   if (!jobs.length) {

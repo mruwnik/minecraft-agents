@@ -185,3 +185,26 @@ export const lintLines = detail => {
   const lines = [...detail.lint.errors.map(text => ({ level: 'error', text })), ...detail.lint.warnings.map(text => ({ level: 'warning', text }))]
   return lines.length ? lines : [{ level: 'ok', text: 'lint has nothing to say: build accepts it' }]
 }
+
+// Keep required capabilities separate from preferences and from the preview's concrete palette.
+export const materialRoleRows = detail => {
+  const objects = detail.materialObjects ?? [...Object.values(detail.document?.structure?.legend ?? {}), ...(detail.document?.structure?.objects ?? [])]
+  const rows = Object.entries(detail.materials ?? {}).map(([role, slot]) => {
+    const required = [`shape: ${slot.kind.replaceAll('_', ' ')}`]
+    if (slot.familyClass) required.push(`family: ${slot.familyClass}`)
+    for (const [key, value] of Object.entries(slot.requires ?? {})) required.push(`${key.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value ? 'required' : 'excluded'}`)
+    if (slot.candidates) required.push(`allowed: ${slot.candidates.join(', ')}`)
+    if (slot.acceptExisting?.length) required.push(`existing blocks also allowed: ${slot.acceptExisting.join(', ')}`)
+    const preferences = slot.preferences?.length ? [`preferred examples: ${slot.preferences.join(', ')} (other allowed blocks can be selected)`] : []
+    for (const relation of detail.relationships ?? []) if (relation.members.includes(role)) {
+      const label = { material: 'same block', family: 'matching family', color: 'matching color' }[relation.relation] ?? relation.relation
+      const peers = relation.members.filter(r => r !== role)
+      ;(relation.strength === 'required' ? required : preferences).push(`${label}${peers.length ? ` with ${peers.join(', ')}` : ' throughout this role'}${relation.strength === 'required' ? ' required' : ' preferred; mixing allowed'}`)
+    }
+    const palette = [...new Set(objects.filter(o => o.material === role).map(o => detail.allocation?.assignments?.[o.id]).filter(Boolean))]
+    return { role, required, preferences, palette }
+  })
+  const pins = [...new Set(objects.filter(o => o.block).map(o => o.block))]
+  if (pins.length) rows.push({ role: 'exact functional blocks', required: [`must use: ${pins.join(', ')}`], preferences: [], palette: [] })
+  return rows
+}

@@ -777,7 +777,7 @@ test('blockColour: a block nobody listed still gets a stable muted colour of its
 
 // the node side: one file read, parsed, resolved with its defaults, costed and linted, plus the places built from it
 const LIBRARY = path.join(ROOT, 'blueprints')
-const hutFile = { name: 'starter-hut', text: fs.readFileSync(path.join(LIBRARY, 'starter-hut.md'), 'utf8'), hash: 'f00dcafe' }
+const hutFile = { name: 'starter-hut', text: fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'blueprints', 'starter-hut.txt'), 'utf8'), hash: 'f00dcafe' }
 const hutPlaces = [
   { name: 'a-hut', kind: 'shelter', x: 10, y: 64, z: -5, by: 'Someone', note: 'bp=starter-hut f=east h=f00dcafe wood=spruce' },
   { name: 'an-old-hut', kind: 'shelter', x: 1, y: 2, z: 3, by: 'Nobody', note: 'bp=starter-hut f=south h=01234567' },

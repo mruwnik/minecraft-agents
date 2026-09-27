@@ -20,6 +20,9 @@
   main { display: flex; height: calc(100vh - 38px); }
   aside { width: 380px; flex: none; border-right: 1px solid var(--line); overflow-y: auto; background: var(--panel); scrollbar-color: var(--dim) transparent; }
   aside h2, #detail h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  textarea { width: 100%; min-height: 180px; resize: vertical; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 8px; font: inherit; }
+  #draftStock { min-height: 48px; }
+  #draftStatus { color: var(--dim); overflow-wrap: anywhere; }
   aside section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
   .bp { padding: 7px 8px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; }
   .bp:hover { background: #232932; }
@@ -39,6 +42,11 @@
   #detail .desc { color: var(--ink); margin: 6px 0 2px; max-width: 90ch; }
   #meta { color: var(--dim); display: flex; gap: 6px 18px; flex-wrap: wrap; margin: 6px 0 14px; }
   #meta b { color: var(--ink); font-weight: 500; }
+  #materials { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .materialRole { border: 1px solid var(--line); padding: 10px; overflow-wrap: anywhere; }
+  .materialRole h3 { margin-bottom: 7px !important; }
+  .materialRole p { margin: 4px 0; }
+  .materialRole .preference { color: var(--dim); }
   #builds { margin: -6px 0 14px; color: var(--dim); }
   #builds .place { color: var(--place); }
   #builds .stale { color: var(--warn); }
@@ -88,6 +96,14 @@
       <h2>the library</h2>
       <div id="list"></div>
     </section>
+    <section>
+      <h2>draft blueprint</h2>
+      <button id="editBlueprint">copy selected into editor</button>
+      <textarea id="draftPlan" aria-label="Blueprint v2 JSON draft" placeholder="Paste a schemaVersion 2 plan"></textarea>
+      <label>optional declared item stock (JSON counts)<textarea id="draftStock" aria-label="Declared stock" placeholder='{"oak_planks": 64}'></textarea></label>
+      <button id="previewDraft">validate and preview</button><button id="downloadDraft">download JSON</button>
+      <div id="draftStatus">Draft preview never starts or modifies a build.</div>
+    </section>
   </aside>
   <div id="detail">
     <div id="empty">pick a blueprint</div>
@@ -95,6 +111,8 @@
       <div class="titleRow"><h3 id="name"></h3><span id="title"></span><span id="statusPill" class="pill"></span></div>
       <div class="desc" id="desc"></div>
       <div id="meta"></div>
+      <h2>material roles · requirements and preferences</h2>
+      <div id="materials"></div>
       <div id="builds"></div>
       <div class="block" id="previewBlock">
         <h2>building preview</h2>
@@ -102,7 +120,7 @@
         <div class="previewControls">
           <button id="rotateLeft" aria-label="Rotate left">↶</button><button id="rotateRight" aria-label="Rotate right">↷</button>
           <label>show through <input id="previewCut" type="range" aria-label="Highest visible layer"><span id="previewLayer"></span></label>
-          <span>drag to rotate · blueprint default palette, not placed materials</span>
+          <span><span id="paletteLabel">drag to rotate · illustrative palette, not inventory selection</span></span>
         </div>
         <div id="previewHover"></div>
       </div>
@@ -127,7 +145,7 @@
   </div>
 </main>
 <script type="module">
-import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockCount, previewFaces, previewBounds } from './blueprint.mjs'
+import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockCount, previewFaces, previewBounds, materialRoleRows } from './blueprint.mjs'
 
 const CELL_PX = 22
 const POLL_MS = 5000
@@ -135,6 +153,8 @@ const el = id => document.getElementById(id)
 const tag = (name, cls, text) => { const e = document.createElement(name); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e }
 
 let library = { at: 0, blueprints: [] }
+let draftDetail = null
+const currentDetail = () => selected === '__draft__' ? draftDetail : library.blueprints.find(b => b.name === selected)
 let selected = new URLSearchParams(location.search).get('name')
 const drawn = {}   // per layer y: the cells the canvas shows, for the hover
 let previewAngle = Math.PI / 4
@@ -143,7 +163,7 @@ let previewPolygons = []
 let previewDrag = null
 
 const drawPreview = () => {
-  const detail = library.blueprints.find(b => b.name === selected)
+  const detail = currentDetail()
   if (!detail?.bp) return
   const canvas = el('previewCanvas'); const rect = canvas.getBoundingClientRect()
   const w = Math.max(1, rect.width); const h = rect.height; const dpr = devicePixelRatio || 1
@@ -316,6 +336,16 @@ const renderMeta = detail => {
     ['difficulty', bp.difficulty], ['params', Object.entries(bp.params).map(([k, v]) => `${k}=${v}`).join(' ')], ['by', bp.by], ['hash', detail.hash], ['notes', bp.notes]
   ].filter(([, v]) => v)
   facts.forEach(([k, v]) => { const f = tag('span'); f.append(`${k} `, tag('b', '', v)); meta.append(f) })
+  const materials = el('materials')
+  materials.textContent = ''
+  materialRoleRows(detail).forEach(row => {
+    const card = tag('section', 'materialRole')
+    card.append(tag('h3', '', row.role.replaceAll('_', ' ')))
+    row.required.forEach(text => card.append(tag('p', '', `Required · ${text}`)))
+    row.preferences.forEach(text => card.append(tag('p', 'preference', `Preference · ${text}`)))
+    if (row.palette.length) card.append(tag('p', '', `Allocated from declared stock · ${row.palette.join(', ')}`))
+    materials.append(card)
+  })
   const builds = el('builds')
   builds.textContent = ''
   if (!detail.builds.length) { builds.append('not yet built anywhere: mark one with blueprint.build place=<name>'); return }
@@ -327,7 +357,7 @@ const renderMeta = detail => {
 }
 
 const renderDetail = () => {
-  const detail = library.blueprints.find(b => b.name === selected)
+  const detail = currentDetail()
   el('empty').hidden = Boolean(detail)
   el('card').hidden = !detail
   if (!detail) { el('empty').textContent = selected ? `no blueprint called ${selected}` : 'pick a blueprint'; return }
@@ -337,10 +367,11 @@ const renderDetail = () => {
   el('statusPill').textContent = row.status
   el('statusPill').className = `pill ${levelOf(row.status)}`
   el('desc').textContent = detail.bp?.description ?? ''
+  el('paletteLabel').textContent = detail.palette === 'resolved-declared-stock' ? 'drag to rotate · allocated from declared stock; site/scaffolds not checked' : 'drag to rotate · illustrative material palette, not inventory selection'
   el('hover').textContent = ''
   if (!detail.bp) {
     el('previewBlock').hidden = true
-    el('meta').textContent = ''; el('builds').textContent = ''; el('layers').textContent = ''; el('legend').textContent = ''; el('bill').textContent = ''; el('billNote').textContent = ''
+    el('meta').textContent = ''; el('materials').textContent = ''; el('builds').textContent = ''; el('layers').textContent = ''; el('legend').textContent = ''; el('bill').textContent = ''; el('billNote').textContent = ''
     renderLint(detail)
     return
   }
@@ -366,6 +397,32 @@ const select = name => {
   history.replaceState(null, '', url)
   renderList()
   renderDetail()
+}
+
+
+el('editBlueprint').onclick = () => {
+  const detail = currentDetail()
+  if (!detail?.document) { el('draftStatus').textContent = 'No editable v2 source selected'; return }
+  el('draftPlan').value = JSON.stringify(detail.document, null, 2)
+  el('draftStatus').textContent = 'Editable copy. Saved build manifests remain unchanged.'
+}
+el('draftPlan').oninput = () => { el('draftStatus').textContent = 'Edited draft: validate to update the preview. Existing builds are unchanged.' }
+el('previewDraft').onclick = async () => {
+  try {
+    const plan = JSON.parse(el('draftPlan').value)
+    const stock = el('draftStock').value.trim() ? JSON.parse(el('draftStock').value) : undefined
+    const response = await fetch('/api/blueprint-preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan, stock }) })
+    const detail = await response.json()
+    if (detail.error) throw new Error(detail.error)
+    draftDetail = detail; selected = '__draft__'; renderList(); renderDetail()
+    el('draftStatus').textContent = detail.errors.length ? detail.errors.join(' · ') : `Validated ${detail.hash}; ${detail.palette === 'representative' ? 'illustrative palette' : 'declared stock allocation'}. No build started.`
+  } catch (error) { el('draftStatus').textContent = error.message }
+}
+el('downloadDraft').onclick = () => {
+  try {
+    const plan = JSON.parse(el('draftPlan').value), url = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2) + '\n'], { type: 'application/json' }))
+    const link = document.createElement('a'); link.href = url; link.download = `${/^[a-z0-9-]+$/.test(plan.id) ? plan.id : 'draft'}.blueprint.json`; link.click(); URL.revokeObjectURL(url)
+  } catch (error) { el('draftStatus').textContent = error.message }
 }
 
 // ---------------------------------------------------------------- polling: the library is re-read on the server, redrawn here only when a file changed

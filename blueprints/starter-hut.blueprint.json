@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 2,
+  "id": "starter-hut",
+  "title": "Starter hut",
+  "description": "A 5x5 one-room hut with a bed, a chest, a crafting table, a torch on the floor and a closed interior.",
+  "dimensions": [
+    5,
+    4,
+    5
+  ],
+  "anchor": "northwest-floor",
+  "front": "south",
+  "tags": [
+    "shelter",
+    "storage"
+  ],
+  "materials": {
+    "shell": {
+      "kind": "full_cube",
+      "requires": {
+        "gravity": false,
+        "contactHazard": false,
+        "interactive": false
+      },
+      "preferences": [
+        "cobblestone"
+      ]
+    },
+    "wood_log": {
+      "kind": "log",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_log",
+        "spruce_log",
+        "birch_log",
+        "jungle_log",
+        "acacia_log",
+        "dark_oak_log",
+        "mangrove_log",
+        "cherry_log",
+        "pale_oak_log",
+        "bamboo_block",
+        "crimson_stem",
+        "warped_stem"
+      ],
+      "preferences": [
+        "oak_log"
+      ]
+    },
+    "wood_planks": {
+      "kind": "full_cube",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_planks",
+        "spruce_planks",
+        "birch_planks",
+        "jungle_planks",
+        "acacia_planks",
+        "dark_oak_planks",
+        "mangrove_planks",
+        "cherry_planks",
+        "pale_oak_planks",
+        "bamboo_planks",
+        "crimson_planks",
+        "warped_planks"
+      ],
+      "preferences": [
+        "oak_planks"
+      ]
+    },
+    "wood_door": {
+      "kind": "door",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_door",
+        "spruce_door",
+        "birch_door",
+        "jungle_door",
+        "acacia_door",
+        "dark_oak_door",
+        "mangrove_door",
+        "cherry_door",
+        "pale_oak_door",
+        "bamboo_door",
+        "crimson_door",
+        "warped_door"
+      ],
+      "preferences": [
+        "oak_door"
+      ]
+    },
+    "sleeping": {
+      "kind": "bed",
+      "candidates": [
+        "white_bed",
+        "orange_bed",
+        "magenta_bed",
+        "light_blue_bed",
+        "yellow_bed",
+        "lime_bed",
+        "pink_bed",
+        "gray_bed",
+        "light_gray_bed",
+        "cyan_bed",
+        "purple_bed",
+        "blue_bed",
+        "brown_bed",
+        "green_bed",
+        "red_bed",
+        "black_bed"
+      ],
+      "preferences": [
+        "white_bed"
+      ]
+    },
+    "wood_stairs": {
+      "kind": "stairs",
+      "familyClass": "wood",
+      "candidates": [
+        "oak_stairs",
+        "spruce_stairs",
+        "birch_stairs",
+        "jungle_stairs",
+        "acacia_stairs",
+        "dark_oak_stairs",
+        "mangrove_stairs",
+        "cherry_stairs",
+        "pale_oak_stairs",
+        "bamboo_stairs",
+        "crimson_stairs",
+        "warped_stairs"
+      ],
+      "preferences": [
+        "oak_stairs"
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "members": [
+        "shell"
+      ],
+      "relation": "material",
+      "strength": "preferred"
+    },
+    {
+      "members": [
+        "wood_log",
+        "wood_planks",
+        "wood_door",
+        "wood_stairs"
+      ],
+      "relation": "family",
+      "strength": "preferred"
+    }
+  ],
+  "structure": {
+    "legend": {
+      "S": {
+        "type": "block",
+        "material": "shell"
+      },
+      "L": {
+        "type": "block",
+        "material": "wood_log",
+        "constructionState": {
+          "axis": "y"
+        }
+      },
+      "P": {
+        "type": "block",
+        "material": "wood_planks"
+      },
+      "G": {
+        "type": "block",
+        "block": "glass_pane"
+      },
+      "D": {
+        "type": "door",
+        "material": "wood_door",
+        "constructionState": {
+          "facing": "north",
+          "half": "lower"
+        },
+        "initialState": {
+          "open": false
+        },
+        "tags": [
+          "entrance"
+        ]
+      },
+      "F": {
+        "type": "bed",
+        "material": "sleeping",
+        "constructionState": {
+          "facing": "east",
+          "part": "foot"
+        }
+      },
+      "C": {
+        "type": "block",
+        "block": "chest",
+        "constructionState": {
+          "facing": "south"
+        }
+      },
+      "T": {
+        "type": "block",
+        "block": "crafting_table"
+      },
+      "^": {
+        "type": "block",
+        "material": "wood_stairs",
+        "constructionState": {
+          "facing": "west",
+          "half": "bottom"
+        }
+      },
+      "i": {
+        "type": "block",
+        "block": "torch"
+      }
+    },
+    "layers": [
+      {
+        "y": -1,
+        "rows": [
+          "SSSSS",
+          "SPPPS",
+          "SPPPS",
+          "SPPPS",
+          "SSSSS"
+        ]
+      },
+      {
+        "y": 0,
+        "rows": [
+          "LSSSL",
+          "S^.CS",
+          "SF_.S",
+          "ST.iS",
+          "LSDSL"
+        ]
+      },
+      {
+        "y": 1,
+        "rows": [
+          "LSSSL",
+          "S...S",
+          "G...G",
+          "S...S",
+          "LS_SL"
+        ]
+      },
+      {
+        "y": 2,
+        "rows": [
+          "LSSSL",
+          "S...S",
+          "S...S",
+          "S...S",
+          "LSSSL"
+        ]
+      },
+      {
+        "y": 3,
+        "rows": [
+          "PPPPP",
+          "PPPPP",
+          "PPPPP",
+          "PPPPP",
+          "PPPPP"
+        ]
+      }
+    ],
+    "objects": []
+  },
+  "site": {
+    "foundation": "flat",
+    "clearance": 1,
+    "existing": "reuse_compatible",
+    "removal": "natural_only"
+  },
+  "guarantees": [
+    "closed_entrances"
+  ]
+}

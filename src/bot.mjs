@@ -3284,9 +3284,18 @@ if (ghosts.length) console.log(`[help] RENAMED is stale: ${ghosts.map(([was, now
 
 // ---------------------------------------------------------------- HTTP API
 http.createServer((req, res) => {
-  let body = ''
-  req.on('data', c => { body += c })
+  let body = '', bodyBytes = 0, bodyTooLarge = false
+  req.on('data', c => {
+    bodyBytes += c.length
+    if (bodyBytes > 2 * 1024 * 1024) { bodyTooLarge = true; body = ''; return }
+    if (!bodyTooLarge) body += c
+  })
   req.on('end', async () => {
+    if (bodyTooLarge) {
+      res.writeHead(413, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'request body exceeds 2 MiB' }))
+      return
+    }
     const name = new URL(req.url, 'http://x').pathname.slice(1)
     let out
     try {

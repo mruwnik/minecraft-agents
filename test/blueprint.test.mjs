@@ -12,8 +12,8 @@ import {
 } from '../src/blueprint/format.mjs'
 import { familyName, familyRefusal } from '../src/build/materials.mjs'
 
-const LIBRARY = path.join(import.meta.dirname, '..', 'blueprints')
-const read = name => fs.readFileSync(path.join(LIBRARY, `${name}.md`), 'utf8')
+const LIBRARY = path.join(import.meta.dirname, 'fixtures', 'blueprints')
+const read = name => fs.readFileSync(path.join(LIBRARY, `${name}.txt`), 'utf8')
 const hut = () => parseBlueprint(read('starter-hut'))
 const tower = () => parseBlueprint(read('watchtower'))
 const field = () => parseBlueprint(read('wheat-field'))

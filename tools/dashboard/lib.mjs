@@ -4,6 +4,9 @@ import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
 import minecraftData from 'minecraft-data'
 import { parsePlan } from '../../src/lib/plan.mjs'
+import { compileBlueprintStructure, concreteBlueprint } from '../../src/blueprint/compiler.mjs'
+import { materialCandidates, allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
+import { readBlueprintManifest } from '../../src/blueprint/manifest.mjs'
 import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
 
 const PreviewBlock = prismarineBlock('26.1')
@@ -73,6 +76,7 @@ export const route = url => {
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/blueprints') return { kind: 'blueprints' }
   if (pathname === '/blueprint.mjs') return { kind: 'bpscript' }
+  if (pathname === '/api/blueprint-preview') return { kind: 'bppreview' }
   if (pathname === '/api/blueprints') return { kind: 'bplist' }
   const blueprint = BLUEPRINT.exec(pathname)
   if (blueprint) return { kind: 'blueprint', name: blueprint[1] }
@@ -192,7 +196,10 @@ export const unsureWater = (place, worldCells) => {
 // says it was built from this blueprint (`current` when the note's hash is this file's, else an older version stands).
 // A file that does not parse keeps its name and the parser's errors, so the list shows the library as it is on disk.
 export const blueprintBuilds = (name, hash, places) => places.flatMap(p => {
-  const note = parseNote(p.note)
+  let note = parseNote(p.note)
+  if (/^bp2:/.test(p.note ?? '')) {
+    try { const m = readBlueprintManifest(p.note); note = { blueprint: m.source.id, hash: m.sourceHash, facing: m.facing, params: {} } } catch { return [] }
+  }
   if (note?.blueprint !== name) return []
   return [{ place: p.name, kind: p.kind, x: p.x, y: p.y, z: p.z, by: p.by, facing: note.facing, params: note.params, current: note.hash === hash }]
 })
@@ -203,10 +210,21 @@ const lintOf = bp => {
     return { errors: [`lint failed: ${e.message}`], warnings: [] }
   }
 }
-export const blueprintDetail = ({ name, text, hash }, places = []) => {
+export const blueprintDetail = ({ name, text, hash, document }, places = []) => {
+  if (document) return { ...blueprintDocumentDetail(document), builds: blueprintBuilds(name, hash, places) }
   const builds = blueprintBuilds(name, hash, places)
   const parsed = parseBlueprint(text)
   if (parsed.errors.length) return { name, hash, bp: null, bill: null, lint: null, counts: null, errors: parsed.errors, builds }
   const bp = resolve(parsed)
   return { name, hash, bp, preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds }
+}
+
+export function blueprintDocumentDetail (document, stock) {
+  try {
+    const ir = compileBlueprintStructure(document)
+    const allocated = stock === undefined ? null : allocateBlueprintMaterials(ir, { stock })
+    const assignments = allocated?.assignments ?? Object.fromEntries(ir.objects.map(o => [o.id, o.block ?? materialCandidates(document.materials[o.material])[0]]))
+    const bp = concreteBlueprint(ir, assignments)
+    return { name: document.id, hash: ir.hash, bp, document, palette: allocated ? 'resolved-declared-stock' : 'representative', allocation: allocated, materialObjects: ir.objects.map(({ id, material, block }) => ({ id, material, block })), materials: document.materials, relationships: document.relationships ?? [], preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds: [] }
+  } catch (error) { return { name: document?.id ?? 'draft', hash: null, bp: null, document, errors: [error.message], builds: [], palette: 'unresolved' } }
 }
