@@ -1,4 +1,5 @@
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
+import { controlTrace } from './body/control-trace.mjs'
 // Claude's Minecraft body.
 // Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
 // small localhost HTTP API (see README.md) and everything notable that happens is
@@ -3021,10 +3022,15 @@ export const quick = {
   // raw movement for debugging: hold a control (forward/back/left/right/jump/sprint) for ms
   async control (a) {
     const from = pos()
-    bot.setControlState(a.state ?? 'forward', true)
-    await new Promise(r => setTimeout(r, a.ms ?? 1000))
-    bot.setControlState(a.state ?? 'forward', false)
-    return { from, to: pos(), onGround: bot.entity.onGround, velocity: roundVec(bot.entity.velocity) }
+    const finishTrace = a.trace ? controlTrace(bot, { duration: a.ms ?? 1000 }) : null
+    try {
+      bot.setControlState(a.state ?? 'forward', true)
+      await new Promise(r => setTimeout(r, a.ms ?? 1000))
+      return { from, to: pos(), onGround: bot.entity.onGround, velocity: roundVec(bot.entity.velocity), ...(finishTrace ? { trace: finishTrace() } : {}) }
+    } finally {
+      finishTrace?.()
+      bot.setControlState(a.state ?? 'forward', false)
+    }
   },
 
   // the chores waiting behind the task (queue=true) go with it, and the reply names them
