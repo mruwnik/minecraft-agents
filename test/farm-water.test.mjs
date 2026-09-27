@@ -5,7 +5,8 @@
 // says which: no bucket at all (and how to make one), or no water within range.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/build/plan.mjs'
 import { fakeApi as baseFakeApi } from './helpers.mjs'
 const fakeApi = options => {

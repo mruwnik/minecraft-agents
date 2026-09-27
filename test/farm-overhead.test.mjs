@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planCells, parsePlan } from '../src/lib.mjs'
+import { parsePlan } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { farmIssues } from '../src/farm/attention.mjs'
 import { overheadTreeBlocks, overheadTreeLine, OVERHEAD_TREE_HEIGHT } from '../src/farm/overhead.mjs'
 import maintain from '../library/farm/maintain.mjs'
@@ -27,7 +28,7 @@ test('overhead scan is bounded, read-only, and restricted to crop/path columns',
   const { api, calls } = fakeApi({ world })
   const read = []
   const found = overheadTreeBlocks(plan.cells, (x, y, z) => { read.push({ x, y, z }); return api.block(x, y, z) })
-  assert.deepEqual(found.map(b => `${b.name}@${b.x},${b.y},${b.z}`), ['oak_log@0,66,0', 'stripped_oak_wood@0,67,0', 'oak_leaves@0,95,0', 'oak_leaves@1,68,0'])
+  assert.deepEqual(found.map(b => `${b.name}@${b.x},${b.y},${b.z}`).sort(), ['oak_log@0,66,0', 'stripped_oak_wood@0,67,0', 'oak_leaves@0,95,0', 'oak_leaves@1,68,0'].sort())
   assert.ok(read.every(p => p.y >= 66 && p.y <= 95 && p.x !== 2 && p.x < 5))
   const line = overheadTreeLine(found)
   assert.match(line, /2 log\/wood, 2 leaves/)

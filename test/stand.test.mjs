@@ -173,7 +173,8 @@ test('workFrom: a till or a dig is called as before, from wherever the body is',
 })
 
 // ---------------------------------------------------------------- the composites use it
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 import buildFarm from '../library/farm/build.mjs'
 

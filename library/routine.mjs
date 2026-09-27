@@ -42,10 +42,10 @@ export default {
     const kitStep = steps.find(step => step.action === 'kit') ?? null
     const tools = kitStep ? toolList(kitStep.tools) : []
     const attempt = async (action, args) => {
-      if (!action.startsWith('farm.')) return api.act(action, args).then(r => r, e => ({ failed: e.message }))
+      if (!/^(farm|forestry|tree|scaffold)\./.test(action)) return api.act(action, args).then(r => r, e => ({ failed: e.message }))
       try { return await farmAct(api, action, args) } catch (error) {
-        // Recoverable farm problems return attention summaries. Exceptions must reach the driver. Night is the
-        // one resumable hand-back: use the existing bed commute and retry this same field once at dawn.
+        // Farm and forestry resource/access problems return attention summaries. Exceptions reach the driver.
+        // Night is resumable: use the bed commute and retry this same work once at dawn.
         if (!/^night and no bed/.test(error.reason ?? '')) throw error
         await nightfall(error)
         return farmAct(api, action, args)

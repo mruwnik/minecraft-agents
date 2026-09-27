@@ -33,7 +33,7 @@ export async function farmAct (api, name, args) {
 export const farmApi = api => ({ ...api, act: (name, args) => farmAct(api, name, args) })
 
 export const FARM_ISSUE_FIELDS = ['storage_full', 'chest_missing', 'kit_short', 'missing', 'bare', 'stuck', 'unfinished', 'skipped', 'lost', 'unreachable', 'inventoryFull', 'inWater', 'stalksOutOfReach', 'notReplanted', 'left', 'inZone', 'gaveUp', 'blocked', 'kept', 'compost', 'parking', 'leftAlone', 'clutter', 'overhead_tree', 'bone_meal_attention', 'attention']
-export const farmIssues = summary => Object.fromEntries(FARM_ISSUE_FIELDS.filter(key => summary[key]).map(key => [key, summary[key]]))
+export const farmIssues = summary => Object.fromEntries(FARM_ISSUE_FIELDS.filter(key => Array.isArray(summary[key]) ? summary[key].length > 0 : summary[key]).map(key => [key, summary[key]]))
 export function reportFarmAttention (api, { action, place, summary = {}, carried, reasons }) {
   const issues = reasons ?? farmIssues(summary)
   if (!Object.keys(issues).length) return

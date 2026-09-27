@@ -1,7 +1,10 @@
 // The fake body every composite test drives: records each act() call as one rendered line, answers from a table
 import { compact } from '../src/lib.mjs'
+import { canonicalFixture } from './plan-fixture.mjs'
 
 export const fakeApi = ({ world = {}, place, places = [], items = {}, drops = [], freeSlots = 27, answers = {} } = {}) => {
+  place = canonicalFixture(place)
+  places = places.map(canonicalFixture)
   const calls = []
   const report = {}
   const checkpoints = []

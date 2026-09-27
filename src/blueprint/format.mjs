@@ -1,3 +1,4 @@
+import { hasPlan, parsePlacePlan } from '../lib/plan.mjs'
 // The blueprint format (docs/superpowers/specs/2026-09-26-blueprint-format-design.md), the pure half: a Markdown file
 // is parsed into layers of one-character tokens over a legend of setblock-style blocks, resolved with material
 // parameters through src/build/materials.mjs, turned by facing=, costed, cut into stages that fit the inventory, and judged
@@ -948,9 +949,10 @@ export const stageLine = (stage, have = {}) => {
 const possessive = place => `${place.name} (${place.by}'s)`
 // the footprint of a marked place on the map: a plan's rows, a build's recorded size, else its one cell
 const placeBox = place => {
-  if (place.plan) {
-    const rows = place.plan.split('\n')
-    return { x1: place.x, x2: place.x + rows[0].length - 1, z1: place.z, z2: place.z + rows.length - 1 }
+  if (hasPlan(place)) {
+    const parsed = parsePlacePlan(place)
+    if (parsed.error) throw new Error(parsed.error)
+    return { x1: place.x, x2: place.x + parsed.width - 1, z1: place.z, z2: place.z + parsed.height - 1 }
   }
   if (place.w && place.d) return { x1: place.x, x2: place.x + place.w - 1, z1: place.z, z2: place.z + place.d - 1 }
   return { x1: place.x, x2: place.x, z1: place.z, z2: place.z }

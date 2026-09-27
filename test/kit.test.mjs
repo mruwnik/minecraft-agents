@@ -97,7 +97,7 @@ for (const [name, given, expected] of [['a comma list', 'stone_hoe, shears', ['s
 }
 
 // ---------------------------------------------------------------- the composite, against a fake body and chest
-const FIELD = { name: 'field', by: 'Tester', kind: 'farm', plan: 'C', cells: [{ ch: 'C', x: 12, y: 62, z: -80 }] }
+const FIELD = { name: 'field', by: 'Tester', kind: 'farm', x: 12, y: 62, z: -80, plan: 'C', cells: [{ ch: 'C', x: 12, y: 62, z: -80 }] }
 const OTHERS = { name: 'theirs', by: 'Somebody', kind: 'farm', note: 'keep out' }
 // withdraw and craft change what is carried, as the real ones do, so the kit line is read off the result
 const kitApi = (items, chest) => {

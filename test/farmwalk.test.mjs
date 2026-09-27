@@ -163,7 +163,8 @@ for (const [name, error, dig, boxed, expected] of [
 // trample= is gone from farm.maintain: the sweep's walks read as they did before the flag, and the flag is refused
 import { fakeApi } from './helpers.mjs'
 import farmMaintain from '../library/farm/maintain.mjs'
-import { parsePlan, planCells, checkArgs } from '../src/lib.mjs'
+import { parsePlan, checkArgs } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 
 const block = (name, properties = {}) => ({ name, properties, solid: name !== 'air' && name !== 'water' })
 const PLAN = { name: 'test-field', kind: 'farm', x: 100, y: 70, z: 200, plan: '~cc\n.cT\n#CG' }

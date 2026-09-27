@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { farmFruitAt } from '../src/farm/fruit.mjs'
-import { planCells } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import harvest from '../library/farm/harvest.mjs'
 import { fakeApi } from './helpers.mjs'
 
@@ -67,7 +67,7 @@ test('fruit attribution requires the right stem, direction, height and planned c
   assert.equal(farmFruitAt(fruit, cells, api.block), null)
   world['0,64,0'] = 'melon_stem#7'
   assert.equal(farmFruitAt(fruit, cells, api.block), 'melon')
-  assert.equal(farmFruitAt(fruit, cells.map(c => c.ch === 'm' ? { ...c, ch: 'w' } : c), api.block), null)
+  assert.equal(farmFruitAt(fruit, cells.map(c => c.ch === 'm' ? { ...c, ch: 'w', spec: { kind: 'crop', crop: 'wheat' } } : c), api.block), null)
   assert.equal(farmFruitAt(fruit, cells.map(c => ({ ...c, y: 62 })), api.block), null)
   world['0,64,0'] = 'attached_melon_stem'
   const backwards = (x, y, z) => {

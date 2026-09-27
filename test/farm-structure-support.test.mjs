@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, farmJobs, groundJobs } from '../src/lib.mjs'
+import { parsePlan, farmJobs, groundJobs } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { holeJobs } from '../src/lib/fill.mjs'
 import { assertFarmRecoverable } from '../src/farm/attention.mjs'
 import maintain from '../library/farm/maintain.mjs'

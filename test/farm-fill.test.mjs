@@ -4,7 +4,8 @@
 // then tills and plants them like any other (card 1ac82851; where the holes came from is card 94e6dcb1).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill, PLAN_LEGEND, groundItem } from '../src/lib.mjs'
+import { parsePlan, planBill, PLAN_LEGEND, groundItem } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { fillShortfall, holeJobs, floorItem } from '../src/lib/fill.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'

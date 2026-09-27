@@ -14,7 +14,7 @@ import { treeProfile } from '../../../src/tree/profiles.mjs'
 // And two that are somebody's block, so they are reported (`keep`) and left standing: a light, because digging the
 // torch out of a field is how it starts spawning mobs at night, and a container or workstation, because breaking a
 // chest scatters whatever was inside it over the ground.
-import { PLAN_LEGEND, planSpec, planItemMatches, cropNames, STALKS, isAir, isGroundCover, inAnyZone, harvestOrder } from '../../../src/lib.mjs'
+import { PLAN_LEGEND, planSpec, planItemMatches, planClaimAt, cropNames, STALKS, isAir, isGroundCover, inAnyZone, harvestOrder } from '../../../src/lib.mjs'
 import { planCropMatches } from '../../../src/lib/plan.mjs'
 import { recoverFarm } from '../../../src/farm/attention.mjs'
 
@@ -39,7 +39,7 @@ const kept = name => LIGHTS.test(name) ? 'a light' : (WORKSTATIONS.has(name) || 
 const weed = name => isGroundCover(name) || FLOWERS.has(name)
 // Built structures need their column clear before farmJobs can restore them.
 // Plants, paths and unplanned spaces keep the existing fruit/stalk protection.
-const structure = spec => Boolean(spec.item) && !['flower', 'sapling'].includes(spec.kind)
+const structure = spec => spec.kind === 'air' || Boolean(spec.item) && !['flower', 'sapling'].includes(spec.kind)
 
 // A plan names one wood for a fence, a gate, a slab or a sapling and the world is full of the others: Chani's wheat
 // field is fenced in birch, its plan says `#` (oak_fence), and every post of it read as clutter until this.
@@ -63,11 +63,12 @@ export function strays (cells, worldAt) {
   for (const cell of cells) {
     const spec = planSpec(cell)
     if (!spec) continue
-    for (const dy of LEVELS) {
+    for (const dy of spec.kind === 'air' ? [1] : LEVELS) {
       const here = worldAt(cell.x, cell.y + dy, cell.z)
       // a cell nobody has loaded is nobody's business: only a block we can actually see is clutter
       if (!here || isAir(here.name)) continue
       const name = here.name
+      if (planClaimAt(cells, { x: cell.x, y: cell.y + dy, z: cell.z }, cell)) continue
       if (treePart(name) && trees.some(t => Math.abs(cell.x - t.x) <= t.profile.radius && Math.abs(cell.z - t.z) <= t.profile.radius && cell.y + dy <= t.y + t.profile.height)) {
         out.push({ x: cell.x, y: cell.y + dy, z: cell.z, name, keep: 'planned tree: use forestry.maintain or tree.harvest' })
         continue

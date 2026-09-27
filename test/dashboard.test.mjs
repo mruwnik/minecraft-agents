@@ -1,12 +1,17 @@
+import { canonicalFixture } from './plan-fixture.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, planDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater, blueprintDetail } from '../tools/dashboard/lib.mjs'
+import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
 import { parseBlueprint, resolve, bill, lint } from '../src/blueprint/format.mjs'
+
+const planRects = places => rawPlanRects(places.map(canonicalFixture))
+const planDiff = (place, world) => rawPlanDiff(canonicalFixture(place), world)
+const unsureWater = (place, world) => rawUnsureWater(canonicalFixture(place), world)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -529,8 +534,8 @@ test('planDiff: a built plan has no differing cell', () => {
 })
 
 test('planDiff: each cell carries the plan, what should be there and what is', () => {
-  assert.deepEqual(planDiff(tiny, tinyWorld).cells[0], {
-    dx: 0, dz: 0, x: 10, z: 20, ch: 's', expected: 'sugar cane on sand', ground: 'sand', top: 'sugar_cane', ok: true, seen: true
+  assert.deepEqual(planDiff(tiny, tinyWorld).cells.find(c => c.ch === 's'), {
+    dx: 0, dz: 0, x: 10, y: 63, z: 20, ch: 's', spec: { kind: 'crop', crop: 'sugar_cane', seed: 'sugar_cane', ground: 'sand', literal: false }, expected: 'sugar cane on sand', ground: 'sand', top: 'sugar_cane', ok: true, seen: true
   })
 })
 

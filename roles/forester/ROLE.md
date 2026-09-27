@@ -2,23 +2,7 @@
 
 Maintain deliberately planned tree sites through `forestry.maintain`. Use `farm.plan` to save the map and its custom legend; the same saved plan is understood by farming and forestry. No species is tied to an ASCII character.
 
-A legend is a JSON object. Strings identify literal blocks; typed definitions express intent and geometry:
-
-```json
-{
-  "o": "minecraft:oak_sapling",
-  "b": { "kind": "tree", "species": "birch", "form": "single" },
-  "S": { "kind": "tree", "species": "spruce", "form": "large" },
-  "r": { "kind": "reserved" },
-  "f": "dandelion",
-  "x": { "kind": "crop", "generic": true },
-  "H": "chest"
-}
-```
-
-Pass this object as `legend=` with `farm.plan name=... map=... x= y= z=`. Existing preset characters remain defaults; mapping a character overrides its preset. The saved record retains the legend across reloads; printing a plan returns it. Literal custom blocks match their exact identity. The preset fence/sapling family conventions remain unchanged.
-
-Coordinates are ground blocks, matching farm plans. For uneven terrain, a typed tree may set `ground_offset` to a signed integer: `{ "kind": "tree", "species": "oak", "ground_offset": -2 }` places that tree’s ground two blocks below the map anchor. The offset is saved with the legend and applied once when resolving world cells; other cells keep their own normal ground height. Trees sharing a character share its offset, so use separate characters when their surveyed elevations differ. The entire 2×2 footprint of a large tree uses its anchor’s resolved height and must have suitable soil at that height. No terrain is flattened. A large tree character is the northwest anchor of its 2×2 planting. The other three cells must be outside the mapped footprint (spaces) or typed `reserved` cells; planting never overwrites a mapped neighbor. Reserve generous separate growing areas, not a dense row of tree letters. `tree.check` reports overlapping conservative growth envelopes. These envelopes are operating space, not a promise of the game's exact minimum clearance or random growth outcome.
+Use the shared [layered plan format](../../docs/layered-plans.md). A tree legend definition is `{ "kind": "tree", "species": "oak", "form": "single" }`; a string `"oak_sapling"` also infers tree intent. Place that token on the layer of the sapling block, one above its surveyed ground. Adjacent flowers have their own actual block coordinates. Different terrain heights use different layers; no terrain is flattened. A large tree token is the northwest anchor of its 2×2 planting. The other three cells must be unconstrained or reserved; planting never overwrites mapped neighbors. Reserve generous separate growing areas. `tree.check` reports overlapping conservative envelopes, which are operating space rather than promises of the game's exact minimum clearance. Saved records and printing use only `structure.legend` and `structure.layers`; old maps have an explicit one-way importer.
 
 Supported planting profiles: oak, birch, acacia, cherry, mangrove, azalea; single or large spruce/jungle; large dark oak and pale oak; crimson and warped fungi on their corresponding nylium. `form=auto` uses the required form for dark/pale oak and detects an existing 2×2 spruce/jungle; use explicit `large` for an empty large-tree site. Azalea retains existing flowering azalea. Fungi and azalea require bone meal; `forestry.maintain bone_meal=true` uses at most one carried meal attempt per eligible tree per sweep. Default is false and names the growth prerequisite for these profiles.
 

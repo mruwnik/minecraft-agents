@@ -4,7 +4,8 @@
 // (bodies float and wedge on them, card 1ccb0ea1); a slab dropped into flow is not waterlogged and cuts the flow.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { farmJobs, jobCall, planCells, parsePlan, planBill } from '../src/lib.mjs'
+import { farmJobs, jobCall, parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { lowSlabs, lowSlabLine, facesForHalf, placeFaces, FLOW_REASON, channelCovered } from '../src/build/cover.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'

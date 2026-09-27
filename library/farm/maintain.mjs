@@ -1,3 +1,4 @@
+import { jobGroundKey } from '../../src/lib/plan.mjs'
 // Keep one farm going: harvest what is ripe, put back whatever the plan says should be there, store the surplus.
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fertilizePlanned } from '../../src/farm/fertilize.mjs'
@@ -33,7 +34,7 @@ const ordered = summary => Object.fromEntries([
   ...Object.entries(summary).filter(([k]) => !SAID_FIRST.includes(k))
 ])
 // a bed is one cell of the plan whatever its level: the till works the ground, the plant the cell above it
-const bedKey = job => `${job.x},${job.z}`
+const bedKey = jobGroundKey
 // the floor blocks the fills want that the pockets lack, from the plan's chest (its first C cell): withdraw takes
 // what there is and complains of the rest, and the rest is the sweep's missing= line, not its failure
 const fetchFloor = async (api, short, chest) => {
@@ -50,9 +51,9 @@ export default {
     if (a.bone_meal !== undefined && typeof a.bone_meal !== 'boolean') throw new Error('bone_meal must be true or false')
     api = farmApi(api)
     const plan = api.plan(a.place)
-    const within = a.within ?? Math.max(8, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height)) + 2)
+    const within = a.within ?? Math.max(8, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height, Math.max(...plan.cells.map(c => c.y)) - Math.min(...plan.cells.map(c => c.y)))) + 2)
     // the plan's y is the ground block; the body stands one above it, and so do the chest and composter the plan marks
-    const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
+    const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: Math.floor((Math.min(...plan.cells.map(c => c.y)) + Math.max(...plan.cells.map(c => c.y))) / 2) + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
     const store = depositTarget(a.deposit, api.places())
     if (store?.error) throw new Error(store.error)
     const canDeposit = canStore(store, plan.cells)
@@ -117,7 +118,7 @@ export default {
     // plan (src/farm/field.mjs fieldEdge). With nothing loaded round the plan there is no edge to read yet: then a walk to
     // the middle at a range that reaches the rim (half the plan's diagonal, and 2 at least) loads it, and the edge is read again
     const cellAt = (x, y, z) => cellOf(api.block(x, y, z))
-    const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height) / 2))
+    const approach = Math.max(2, Math.ceil(Math.hypot(plan.parsed.width, plan.parsed.height, Math.max(...plan.cells.map(c => c.y)) - Math.min(...plan.cells.map(c => c.y))) / 2))
     const walkToEdge = async () => {
       const edge = () => fieldEdge(cellAt, plan.cells, api.pos())
       const spot = edge() ?? await leg({ x: middle.x, y: middle.y, z: middle.z, range: approach }).then(edge)

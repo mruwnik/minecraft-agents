@@ -5,7 +5,8 @@
 // off the plan (at the storage chest), stays where it is (card 46614365).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { cellOf, parkSpot } from '../src/farm/field.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'

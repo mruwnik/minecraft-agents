@@ -23,7 +23,7 @@ export function holeJobs ({ cells, worldAt, items = {} }) {
   const jobs = []
   for (const cell of cells) {
     const spec = planSpec(cell)
-    if (['tree', 'reserved'].includes(spec?.kind)) continue
+    if (['tree', 'reserved', 'air'].includes(spec?.kind)) continue
     if (!spec || spec.kind === 'water') continue
     const ground = worldAt(cell.x, cell.y, cell.z)
     if (!ground || !missingGround(ground.name)) continue
@@ -31,7 +31,7 @@ export function holeJobs ({ cells, worldAt, items = {} }) {
     const item = floorItem(spec)
     jobs.push({ do: 'fill', x: cell.x, y: cell.y, z: cell.z, item, have: (items[item] ?? 0) > 0, why: `${ground.name} where ${spec.ground} should be` })
   }
-  return jobs
+  return [...new Map(jobs.map(j => [`${j.x},${j.y},${j.z}`, j])).values()]
 }
 
 // what the fills want beyond the pockets, per floor block: what to ask the plan's chest for before the sweep

@@ -1,5 +1,8 @@
 # Role: farmer
 
+
+Saved farms use the shared [3D layered plan format](../../docs/layered-plans.md): `structure.legend` maps tokens to blocks or crop intent, and `structure.layers` gives actual block elevations. A crop at layer 1 has soil at layer 0. Use explicit layer heights for terraces or stacked beds. The preset symbols described below belong to the legacy `map=` importer; it converts immediately to canonical layers. In canonical layers `_` is unconstrained and `.` is explicit air, so declare path intent in the legend.
+
 Feeding the world is the whole job. Bread is what every other agent runs out of first, so a farm that is harvested,
 replanted and emptied into a shared chest every day is worth more than a big field nobody tends.
 

@@ -1,6 +1,6 @@
 // Turning a plan and the world into an ordered job list (till, plant, clear, fill...), and what the jobs cost.
 import { isAir, holdsWater, hasWaterSource } from './world.mjs'
-import { PLAN_LEGEND, planSpec, planItemMatches, groundItem, planCropMatches, FARMLAND_CROPS, GENERIC_SEED } from './plan.mjs'
+import { PLAN_LEGEND, planSpec, planItemMatches, planClaimAt, groundItem, planCropMatches, FARMLAND_CROPS, GENERIC_SEED } from './plan.mjs'
 import { sameFamily, WEEDS } from './anchor.mjs'
 // slab-merge safety (jizo-melon-patch, 09-26): a covered channel cell must never get another cover job (src/build/cover.mjs)
 import { channelCovered } from '../build/cover.mjs'
@@ -40,7 +40,8 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     const name = worldAt(cell.x, cell.y + 1, cell.z)?.name
     if (!planCropMatches(spec, name) && (!name || isAir(name) || WEEDS.has(name))) seeds[spec.seed] = Math.max(0, (seeds[spec.seed] ?? 0) - 1)
   }
-  const push = (job, item) => jobs.push({ ...job, ...(item ? { item, have: (items[item] ?? 0) > 0 } : {}) })
+  let groundY
+  const push = (job, item) => jobs.push(Object.defineProperty({ ...job, ...(item ? { item, have: (items[item] ?? 0) > 0 } : {}) }, 'groundY', { value: groundY }))
   // A farm's own channel drowns the work beside it: `dig` refuses a block with water in the three above it (the body
   // would dive for it and run out of air), and Chani's farm.maintain gave that up as "twice in a row" on the block
   // under her own channel. A cell like that is never dug: it is listed as skipped, with what would have to happen first.
@@ -52,10 +53,19 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     const spec = planSpec(cell)
     if (['tree', 'reserved'].includes(spec?.kind)) continue
     if (!spec) continue
+    groundY = cell.y
     // the plan's y is the ground the cell is made of; what the plan puts on it stands one above
     const ground = worldAt(cell.x, cell.y, cell.z)
     const here = worldAt(cell.x, cell.y + 1, cell.z)
     const standing = here && here.name !== 'air' ? here.name : null
+    if (spec.kind === 'air') {
+      if (here && !isAir(here.name)) jobs.push({ do: 'skip', x: cell.x, y: cell.y + 1, z: cell.z, why: `planned air occupied by ${here.name}; tidy safely before proceeding` })
+      continue
+    }
+    if (spec.kind === 'ground') {
+      if (spec.ground === 'farmland' && ground && ground.name !== 'farmland') push({ do: 'till', x: cell.x, y: cell.y, z: cell.z, why: `${ground.name} where farmland should be` })
+      continue
+    }
     if (spec.kind === 'water') {
       // a cell nobody can see is nobody's job; a slab already laid in the source is a finished channel, water and floor both
       if (!ground || channelCovered(ground)) continue
@@ -91,7 +101,7 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
       }
       if (flowing) push({ do: 'pour', x: cell.x, y: cell.y - 1, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is flowing water, not a source` }, 'water_bucket')
       // and cover it: open water in a field is a hole to fall into and a wall to the pathfinder
-      push({ do: 'cover', x: cell.x, y: cell.y, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is open water` }, spec.cover)
+      if (spec.cover) push({ do: 'cover', x: cell.x, y: cell.y, z: cell.z, why: `the channel at ${cell.x},${cell.y},${cell.z} is open water` }, spec.cover)
       continue
     }
     if (spec.kind === 'path') continue
@@ -125,7 +135,7 @@ export function farmJobs ({ cells, worldAt, items = {} }) {
     if (standing && clear({ do: 'clear', x: cell.x, y: cell.y + 1, z: cell.z, why: `${standing} grew where the ${spec.item} goes` })) continue
     push({ do: 'place', x: cell.x, y: cell.y + 1, z: cell.z, why: `no ${spec.item} there` }, spec.item)
   }
-  return sowAsTilled(jobs.sort((a, b) => JOB_ORDER.indexOf(a.do) - JOB_ORDER.indexOf(b.do)))
+  return sowAsTilled([...new Map(jobs.map(j => [`${j.do},${j.x},${j.y},${j.z},${j.item ?? ''}`, j])).values()].sort((a, b) => JOB_ORDER.indexOf(a.do) - JOB_ORDER.indexOf(b.do)))
 }
 
 // each job a plan asks for, as the primitive that does it. Shared by farm.maintain and farm.build: the same list of
@@ -199,7 +209,7 @@ export function groundJobs ({ cells, worldAt, solid }) {
   const fills = []
   for (const cell of cells) {
     const spec = planSpec(cell)
-    if (['tree', 'reserved'].includes(spec?.kind)) continue
+    if (['tree', 'reserved', 'air'].includes(spec?.kind)) continue
     if (!spec) continue
     // the plan's y IS the floor of a cell, so it is never dug out; a channel holds its source at that level, and the
     // block the water is poured onto is the one below it
@@ -208,7 +218,7 @@ export function groundJobs ({ cells, worldAt, solid }) {
     if (floor && !solid(floor.name)) fills.push({ do: 'fill', x: cell.x, y: floorY, z: cell.z, why: `${floor.name} where the floor should be`, item: groundItem(spec) })
     for (const y of [cell.y + 1, cell.y + 2]) {
       const here = worldAt(cell.x, y, cell.z)
-      if (!here || !solid(here.name) || planHas(spec, here.name)) continue
+      if (!here || !solid(here.name) || planHas(spec, here.name) || planClaimAt(cells, { x: cell.x, y, z: cell.z }, cell)) continue
       jobs.push({ do: 'clear', x: cell.x, y, z: cell.z, why: y === cell.y + 1 ? `${here.name} stands in the cell` : `${here.name} stands where the plan wants open air` })
     }
   }

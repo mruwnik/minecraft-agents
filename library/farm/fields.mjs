@@ -1,3 +1,4 @@
+import { hasPlan } from '../../src/lib/plan.mjs'
 // A cheap census of every saved plan in range, read from the map in memory without walking anywhere: is it worth a sweep?
 // counts=false in the rendering, so a census reads as ripe=0 dry=1 rather than a bare `dry` for every count of one.
 import { fieldCensus, planAnchor, planCells, compact } from '../../src/lib.mjs'
@@ -16,7 +17,7 @@ export default {
     const here = api.pos()
     const range = a.range ?? RANGE
     if (!Number.isFinite(range) || range <= 0) throw new Error('range= must be a positive number')
-    const plans = api.places().filter(p => p.plan && (a.place ? p.name === a.place : Math.hypot(p.x - here.x, p.z - here.z) <= range))
+    const plans = api.places().filter(p => hasPlan(p) && (a.place ? p.name === a.place : Math.hypot(p.x - here.x, p.z - here.z) <= range))
     if (!plans.length) {
       if (a.place) throw new Error(`no plan called ${a.place}: ./mc places kind=farm lists the ones there are`)
       return { text: `no farm plan within ${range} blocks: save one with ./mc farm.plan, or choose a wider range=` }

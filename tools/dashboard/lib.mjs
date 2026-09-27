@@ -3,7 +3,7 @@
 import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
 import minecraftData from 'minecraft-data'
-import { parsePlan, planSpec } from '../../src/lib/plan.mjs'
+import { parsePlan, planSpec, parsePlacePlan, planCells, hasPlan } from '../../src/lib/plan.mjs'
 import { compileBlueprintStructure, concreteBlueprint } from '../../src/blueprint/compiler.mjs'
 import { materialCandidates, allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
 import { readBlueprintManifest } from '../../src/blueprint/manifest.mjs'
@@ -66,7 +66,7 @@ const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
 // agent gives lib.mjs a new sibling import (an import a static route list would miss with no visible error at all).
 // lib.mjs's split moved most of it under src/lib/: also match one lib/ segment (never src/body/, which the
 // browser never loads) so /src/lib/plan.mjs etc still resolve.
-const SRCLIB = /^\/src\/((?:(?:lib|boat|villager|build|navigation|tree)\/)?[A-Za-z0-9_.-]+\.mjs)$/
+const SRCLIB = /^\/src\/((?:(?:lib|boat|villager|build|navigation|tree|structure)\/)?[A-Za-z0-9_.-]+\.mjs)$/
 
 // the blueprint library: one file by its kebab-case name, the same rule the front matter's name field obeys
 const BLUEPRINT = /^\/api\/blueprint\/([a-z0-9]+(?:-[a-z0-9]+)*)$/
@@ -180,12 +180,12 @@ export const nearestBody = (bodies, x, z) => bodies
 
 // scan names a waterlogged slab as a plain slab: the ~ cells whose ground is neither water, air nor unloaded need block_at
 export const unsureWater = (place, worldCells) => {
-  const ground = new Map(worldCells.filter(c => c.y === place.y).map(c => [`${c.x},${c.z}`, c]))
-  return (parsePlan(place.plan, place.legend).cells ?? [])
+  const ground = new Map(worldCells.map(c => [`${c.x},${c.y},${c.z}`, c]))
+  return planCells(place)
     .filter(c => planSpec(c)?.kind === 'water')
-    .map(c => ({ x: place.x + c.dx, y: place.y, z: place.z + c.dz }))
+    .map(c => ({ x: c.x, y: c.y, z: c.z }))
     .filter(c => {
-      const g = ground.get(`${c.x},${c.z}`)
+      const g = ground.get(`${c.x},${c.y},${c.z}`)
       return g && g.waterlogged === undefined && !/^(water|air|cave_air|void_air|unloaded)$/.test(g.name)
     })
 }

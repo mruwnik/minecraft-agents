@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells } from '../src/lib/plan.mjs'
+import { parsePlan} from '../src/lib/plan.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { strays, clutterBlocks } from '../library/farm/shared/clutter.mjs'
 import maintain from '../library/farm/maintain.mjs'
 import { fakeApi } from './helpers.mjs'

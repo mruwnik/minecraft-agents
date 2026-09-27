@@ -1,3 +1,4 @@
+import { hasPlan } from '../../src/lib/plan.mjs'
 // Where to put a farm. This reads the ground rather than walking it: the body's own copy of the world already holds
 // every loaded chunk, so a search that would take ten minutes on foot takes a moment here. It scores every w x h patch
 // in range for flatness, water, sky and distance (spotScore), refuses ground a zone or a saved plan already claims,
@@ -27,7 +28,7 @@ export default {
     if (!at) throw new Error(`no place called ${a.near}: places q=${a.near} searches the map`)
     const from = { x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z) }
     const { zones = [] } = await api.act('zones', {})
-    const claimed = api.places().filter(p => p.plan).flatMap(p => planCells(p)).map(c => `${c.x},${c.z}`)
+    const claimed = api.places().filter(p => hasPlan(p)).flatMap(p => planCells(p)).map(c => `${c.x},${c.z}`)
     const taken = new Set(claimed)
 
     // the surface of one column: the highest solid block with air over it, within DEPTH of where we started looking

@@ -1,0 +1,1263 @@
+[
+  {
+    "name": "chani-wheat-field",
+    "kind": "farm",
+    "x": 110,
+    "y": 71,
+    "z": -70,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "w": {
+          "kind": "crop",
+          "crop": "wheat",
+          "seed": "wheat_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        },
+        "C": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": false
+        },
+        "K": {
+          "kind": "composter",
+          "item": "composter",
+          "ground": "dirt",
+          "literal": false
+        },
+        "T": {
+          "kind": "torch",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "t": {
+          "kind": "sapling",
+          "item": "oak_sapling",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "___________",
+            "__",
+            "_________",
+            "_________",
+            "_~~~~~~~_",
+            "_________",
+            "_________",
+            "__",
+            "______",
+            "___________"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "###########",
+            "#_________#",
+            "#_wwwwwww_#",
+            "#_wwwwwww_#",
+            "#_________#",
+            "#_wwwwwww_#",
+            "#_wwwwwww_#",
+            "#_________#",
+            "#_C_K_T_t_#",
+            "#####G#####"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "perrin-chicken-pen",
+    "kind": "pen",
+    "x": 35,
+    "y": 65,
+    "z": 109,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "______",
+            "__",
+            "__",
+            "__",
+            "__",
+            "______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "######",
+            "#____#",
+            "#____#",
+            "#____#",
+            "#____#",
+            "##G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "perrin-cow-pen",
+    "kind": "pen",
+    "x": 31,
+    "y": 66,
+    "z": 106,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "______",
+            "__",
+            "__",
+            "__",
+            "__",
+            "______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "######",
+            "#____#",
+            "#____#",
+            "#____#",
+            "#____#",
+            "##G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "perrin-pig-pen",
+    "kind": "pen",
+    "x": 38,
+    "y": 66,
+    "z": 106,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "______",
+            "__",
+            "__",
+            "__",
+            "__",
+            "______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "######",
+            "#____#",
+            "#____#",
+            "#____#",
+            "#____#",
+            "##G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "claude-water-test",
+    "kind": "farm",
+    "x": 110,
+    "y": 68,
+    "z": -144,
+    "structure": {
+      "legend": {
+        "w": {
+          "kind": "crop",
+          "crop": "wheat",
+          "seed": "wheat_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "__",
+            "~_"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "ww",
+            "_w"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "perrin-sheep-pen",
+    "kind": "pen",
+    "x": 30,
+    "y": 66,
+    "z": 111,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "______",
+            "__",
+            "__",
+            "__",
+            "__",
+            "______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "######",
+            "#____#",
+            "#____#",
+            "#____#",
+            "#____#",
+            "##G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "claude-test-field",
+    "kind": "farm",
+    "x": 118,
+    "y": 68,
+    "z": -134,
+    "structure": {
+      "legend": {
+        "w": {
+          "kind": "crop",
+          "crop": "wheat",
+          "seed": "wheat_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        },
+        "C": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "K": {
+          "kind": "composter",
+          "item": "composter",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "____",
+            "__~_",
+            "____",
+            "__"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "wwww",
+            "ww_w",
+            "wwww",
+            "C_K_"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "chani-carrot-patch",
+    "kind": "farm",
+    "x": 114,
+    "y": 71,
+    "z": -77,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "c": {
+          "kind": "crop",
+          "crop": "carrots",
+          "seed": "carrot",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "_______",
+            "__",
+            "_______",
+            "_~~~~~_",
+            "_______",
+            "__",
+            "_______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "#######",
+            "#_____#",
+            "#ccccc#",
+            "#_____#",
+            "#ccccc#",
+            "#_____#",
+            "###G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "claude-test-pen",
+    "kind": "pen",
+    "x": 113,
+    "y": 67,
+    "z": -125,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "____",
+            "__",
+            "__",
+            "____"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "#G##",
+            "#__#",
+            "#__#",
+            "####"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "chani-sheep-pen",
+    "kind": "pen",
+    "x": 101,
+    "y": 71,
+    "z": -70,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "______",
+            "__",
+            "__",
+            "__",
+            "__",
+            "______"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "######",
+            "#____#",
+            "#____#",
+            "#____#",
+            "#____#",
+            "##G###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "jizo-crop-field",
+    "kind": "farm",
+    "x": -17,
+    "y": 62,
+    "z": -97,
+    "structure": {
+      "legend": {
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "p": {
+          "kind": "crop",
+          "crop": "potatoes",
+          "seed": "potato",
+          "ground": "farmland",
+          "literal": false
+        },
+        "m": {
+          "kind": "crop",
+          "crop": "melon_stem",
+          "seed": "melon_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "k": {
+          "kind": "crop",
+          "crop": "pumpkin_stem",
+          "seed": "pumpkin_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        },
+        "C": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": false
+        },
+        "A": {
+          "kind": "table",
+          "item": "crafting_table",
+          "ground": "dirt",
+          "literal": false
+        },
+        "c": {
+          "kind": "crop",
+          "crop": "carrots",
+          "seed": "carrot",
+          "ground": "farmland",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "__",
+            "__",
+            "______",
+            "____~",
+            "~_",
+            "___",
+            "____",
+            "____",
+            "___"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "______pp____",
+            "______pp____",
+            "mmmmm___p___",
+            "__kmmm______",
+            "________p___",
+            "m________p_p",
+            "__C_____pp_p",
+            "__Acc____p__",
+            "__cc_c______"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "jizo-cane",
+    "kind": "farm",
+    "x": -55,
+    "y": 62,
+    "z": -140,
+    "structure": {
+      "legend": {
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "s": {
+          "kind": "crop",
+          "crop": "sugar_cane",
+          "seed": "sugar_cane",
+          "ground": "sand",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "____________",
+            "~~~~~~~~~~~~~~",
+            "____________",
+            "____________",
+            "~~~~~~~~~~~~~~_",
+            "_____________",
+            "_____________",
+            "~~~~~~~~~~~~~~_",
+            "_____________",
+            "______________",
+            "~~~~~~~~~~~~~~~_",
+            "______________",
+            "________________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "________________________",
+            "_______________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "________________________",
+            "_______________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "__________________________",
+            "__________________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~_",
+            "__________________________",
+            "__________________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "_________________________",
+            "__________________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "__________________________",
+            "__________________________",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "_________________________",
+            "__________________________"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "_ssssssssssss______________",
+            "___________________________",
+            "_ssssssssssss______________",
+            "_sss_sssssssss_____________",
+            "______________s____________",
+            "_sssssssssssss_____________",
+            "_sssssssssssss_____________",
+            "______________s____________",
+            "_sssssssssssss_____________",
+            "_ssssssssssssss____________",
+            "_______________s___________",
+            "_ssssssssssssss____________",
+            "_ssssssssssssssssssssssss__",
+            "___________________________",
+            "_ssssssssssssssssssssssss__",
+            "_sssssssssssssssssssssss___",
+            "___________________________",
+            "_ssssssssssssssssssssssss__",
+            "_sssssssssssssssssssssss___",
+            "___________________________",
+            "ssssssssssssssssssssssssss_",
+            "ssssssssssssssssssssssssss_",
+            "__________________________s",
+            "ssssssssssssssssssssssssss_",
+            "ssssssssssssssssssssssssss_",
+            "___________________________",
+            "_sssssssssssssssssssssssss_",
+            "_ssssssssssssssssssssssssss",
+            "___________________________",
+            "_ssssssssssssssssssssssssss",
+            "_ssssssssssssssssssssssssss",
+            "___________________________",
+            "_sssssssssssssssssssssssss_",
+            "_ssssssssssssssssssssssssss"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "jizo-melon-patch",
+    "kind": "farm",
+    "x": -1,
+    "y": 62,
+    "z": -88,
+    "structure": {
+      "legend": {
+        "C": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": false
+        },
+        "w": {
+          "kind": "crop",
+          "crop": "wheat",
+          "seed": "wheat_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "~~~~~~~~~~~~~~~~",
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "________________",
+            "~~~~~~~~~~~~~~~~",
+            "________________",
+            "________________",
+            "________________",
+            "________________"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "Cwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "________________",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "________________",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww",
+            "wwwwwwwwwwwwwwww"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "samwise-halves",
+    "kind": "farm",
+    "x": 53,
+    "y": 68,
+    "z": -122,
+    "structure": {
+      "legend": {
+        "#": {
+          "kind": "fence",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "T": {
+          "kind": "torch",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "G": {
+          "kind": "gate",
+          "item": "oak_fence_gate",
+          "ground": "dirt",
+          "literal": false
+        },
+        "C": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": false
+        },
+        "A": {
+          "kind": "table",
+          "item": "crafting_table",
+          "ground": "dirt",
+          "literal": false
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "K": {
+          "kind": "composter",
+          "item": "composter",
+          "ground": "dirt",
+          "literal": false
+        },
+        "w": {
+          "kind": "crop",
+          "crop": "wheat",
+          "seed": "wheat_seeds",
+          "ground": "farmland",
+          "literal": false
+        },
+        "c": {
+          "kind": "crop",
+          "crop": "carrots",
+          "seed": "carrot",
+          "ground": "farmland",
+          "literal": false
+        },
+        "~": {
+          "kind": "water",
+          "ground": "water",
+          "cover": "oak_slab",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": 0,
+          "rows": [
+            "________________",
+            "_____",
+            "______________",
+            "______________",
+            "___~_______~___",
+            "______________",
+            "______________",
+            "__",
+            "______________",
+            "______________",
+            "______________",
+            "___~_______~___",
+            "______________",
+            "______________",
+            "__",
+            "________________"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "###T###G####T###",
+            "#CA___________K#",
+            "#wwwwww__cccccc#",
+            "#wwwwww__cccccc#",
+            "Tww_wwwT_ccc_ccT",
+            "#wwwwww__cccccc#",
+            "#wwwwww__cccccc#",
+            "#______________#",
+            "#wwwwww__cccccc#",
+            "#wwwwww__cccccc#",
+            "#wwwwww__cccccc#",
+            "Tww_wwwT_ccc_ccT",
+            "#wwwwww__cccccc#",
+            "#wwwwww__cccccc#",
+            "#______________#",
+            "###T########T###"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "treebeard-forest",
+    "kind": "forest",
+    "x": -132,
+    "y": 69,
+    "z": -270,
+    "structure": {
+      "legend": {
+        "r": {
+          "kind": "reserved",
+          "literal": true
+        },
+        "J": {
+          "kind": "tree",
+          "species": "cherry",
+          "form": "auto",
+          "item": "cherry_sapling",
+          "ground": "dirt",
+          "literal": true
+        },
+        "S": {
+          "kind": "tree",
+          "species": "spruce",
+          "form": "single",
+          "item": "spruce_sapling",
+          "ground": "dirt",
+          "literal": true
+        },
+        "": {
+          "kind": "path",
+          "ground": "dirt",
+          "literal": false
+        },
+        "D": {
+          "kind": "tree",
+          "species": "dark_oak",
+          "form": "large",
+          "item": "dark_oak_sapling",
+          "ground": "dirt",
+          "literal": true
+        },
+        "B": {
+          "kind": "tree",
+          "species": "birch",
+          "form": "auto",
+          "item": "birch_sapling",
+          "ground": "dirt",
+          "literal": true
+        },
+        "A": {
+          "kind": "table",
+          "item": "crafting_table",
+          "ground": "dirt",
+          "literal": false
+        },
+        "O": {
+          "kind": "tree",
+          "species": "oak",
+          "form": "single",
+          "item": "oak_sapling",
+          "ground": "dirt",
+          "literal": true
+        },
+        "T": {
+          "kind": "torch",
+          "item": "oak_fence",
+          "ground": "dirt",
+          "literal": false
+        },
+        "H": {
+          "kind": "chest",
+          "item": "chest",
+          "ground": "dirt",
+          "literal": true
+        },
+        "F": {
+          "kind": "flower",
+          "item": "dandelion",
+          "ground": "grass_block",
+          "literal": false
+        }
+      },
+      "layers": [
+        {
+          "y": -2,
+          "rows": [
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "____________S___________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "_________________B______________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________"
+          ]
+        },
+        {
+          "y": 0,
+          "rows": [
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrJrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrr__rr_rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+          ]
+        },
+        {
+          "y": 1,
+          "rows": [
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "______________________________D_________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "_____________________________A__________________________________",
+            "________________________________O_______________________________",
+            "___________________________T_H__F_______________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________",
+            "________________________________________________________________"
+          ]
+        }
+      ]
+    }
+  }
+]

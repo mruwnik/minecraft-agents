@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planErrors, planBill, planSpec } from '../src/lib/plan.mjs'
+import { parsePlan, planCells as canonicalCells, migratePlan, planErrors, planBill, planSpec } from '../src/lib/plan.mjs'
 import { planChests } from '../src/lib/storage.mjs'
 import { farmJobs } from '../src/lib/jobs.mjs'
 import { clutterBlocks } from '../library/farm/shared/clutter.mjs'
@@ -8,6 +8,8 @@ import { inspectTree, checkTree } from '../src/tree/inspect.mjs'
 import { TREE_PROFILES, treeProfile } from '../src/tree/profiles.mjs'
 import { runTree } from '../src/tree/actions.mjs'
 import maintain from '../library/forestry/maintain.mjs'
+
+const planCells = place => canonicalCells(migratePlan(place))
 
 function fixture (extra = {}, inventory = {}) {
   const world = new Map(Object.entries(extra))
@@ -108,7 +110,7 @@ test('cancellation and programming errors propagate before subsequent mutation',
 })
 test('forestry maintain harvests then replants same saved custom plan',async()=>{
  const f=fixture(tree,{oak_sapling:1})
- const plan={name:'grove',x:0,y:0,z:0,plan:'o',legend:{o:'oak_sapling'}}
+ const plan=migratePlan({name:'grove',x:0,y:0,z:0,plan:'o',legend:{o:'oak_sapling'}})
  plan.cells=planCells(plan);f.api.plan=()=>plan;f.api.places=()=>[plan]
  const r=await maintain.run(f.api,{place:'grove',deposit:false})
  assert.equal(r.harvested,4);assert.equal(r.planted,1);assert.equal(r.sweeps,1)
@@ -129,7 +131,7 @@ for(const offset of [-3,4])test(`maintain and inspection use surveyed ground off
  const shifted=Object.fromEntries(Object.entries(tree).map(([k,b])=>{const [x,y,z]=k.split(',').map(Number);return [`${x},${y+offset},${z}`,b]}))
  const f=fixture(shifted,{oak_sapling:1}),originalBlock=f.api.block
  f.api.block=(x,y,z)=>f.world.get(`${x},${y},${z}`)??{name:y<=offset?'dirt':'air',solid:y<=offset,properties:{}}
- const plan={name:'slope',x:0,y:0,z:0,plan:'o',legend:{o:{kind:'tree',species:'oak',ground_offset:offset}}}
+ const plan=migratePlan({name:'slope',x:0,y:0,z:0,plan:'o',legend:{o:{kind:'tree',species:'oak',ground_offset:offset}}})
  plan.cells=planCells(JSON.parse(JSON.stringify(plan)));f.api.plan=()=>plan;f.api.places=()=>[plan]
  const cell=plan.cells[0]
  assert.equal(inspectTree(f.api.block,cell,'oak').root.y,offset)
@@ -143,9 +145,9 @@ test('large-tree offset preserves footprint conflict and actual four-ground chec
  assert.match(planErrors(parsePlan('Sf',legend)).join(' '),/footprint/)
  const place={x:0,y:0,z:0,plan:'Sr\nrr',legend},cells=planCells(place)
  const good=(x,y,z)=>({name:y<=2?'dirt':'air',solid:y<=2,properties:{}})
- assert.deepEqual(checkTree(good,cells[0],'dark_oak','large',cells).attention,[])
+ assert.deepEqual(checkTree(good,cells.find(c=>planSpec(c)?.kind==='tree'),'dark_oak','large',cells).attention,[])
  const hole=(x,y,z)=>x===1&&z===1&&y===2?{name:'air',solid:false}:good(x,y,z)
- assert.match(checkTree(hole,cells[0],'dark_oak','large',cells).attention.join(' '),/1,2,1/)
+ assert.match(checkTree(hole,cells.find(c=>planSpec(c)?.kind==='tree'),'dark_oak','large',cells).attention.join(' '),/1,2,1/)
 })
 
 test('harmless flowers on higher terrain do not block growth or make mature trees look built',()=>{

@@ -34,7 +34,7 @@ export const fieldEdge = (cellAt, cells, from, keep = () => true) => {
   if (!spots.length) return null
   const distance = c => Math.hypot(c.x - from.x, c.y - from.y, c.z - from.z)
   const spot = spots.reduce((best, c) => distance(c) < distance(best) ? c : best)
-  return { ...spot, span: Math.ceil(Math.max(...cells.map(c => across(c, spot)))) + 2 }
+  return { ...spot, span: Math.ceil(Math.max(...cells.map(c => Math.hypot(c.x - spot.x, c.y + 1 - spot.y, c.z - spot.z)))) + 2 }
 }
 
 // Where a sweep ends (card 46614365). A days=0 routine parks the body wherever the last job left it, and a body left in
@@ -43,7 +43,7 @@ export const fieldEdge = (cellAt, cells, from, keep = () => true) => {
 // field's edge when the plan has no lane; already on a lane, or off the plan (at the chest), there is nowhere to go.
 // The edge is off the plan: over it, the nearest standable cell was the top of a log left in the rows, one above the
 // field, and the body parked there had no way down (Jizo, 09-26 23:24Z); a bare bed is the planted pocket again
-const overCell = (cells, from) => cells.find(c => c.x === Math.floor(from.x) && c.z === Math.floor(from.z))
+const overCell = (cells, from) => cells.find(c => c.x === Math.floor(from.x) && c.z === Math.floor(from.z) && Math.abs(c.y + 1 - from.y) <= 1)
 const offPlan = cells => {
   const columns = new Set(cells.map(c => `${c.x},${c.z}`))
   return c => !columns.has(`${c.x},${c.z}`)
@@ -70,10 +70,10 @@ export const plantOrder = (cut, stand) => {
 }
 
 // only what stands over a cell of the plan is the field's: the neighbour's rows a few blocks off are theirs
-export const fieldCrops = (cells, positions) => {
+export const fieldCrops = (cells, positions, aboveGround = 1) => {
   if (!cells) return positions
-  const mine = new Set(cells.map(c => `${c.x},${c.z}`))
-  return positions.filter(p => mine.has(`${p.x},${p.z}`))
+  const mine = new Set(cells.map(c => `${c.x},${c.y + aboveGround},${c.z}`))
+  return positions.filter(p => mine.has(`${p.x},${p.y},${p.z}`))
 }
 
 // why a cut cell is still bare after the replant: nowhere to stand within reach of it, or the place itself failed. The

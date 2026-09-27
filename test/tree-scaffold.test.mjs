@@ -149,9 +149,9 @@ test('goto standing precheck accepts verified scaffold interior and top deck onl
 })
 
 for(const offset of [-5,4])test(`scaffold access uses resolved tree ground offset ${offset} without applying it twice`,async()=>{
- const {planCells}=await import('../src/lib/plan.mjs')
+ const {planCells,migratePlan}=await import('../src/lib/plan.mjs')
  const plan=JSON.parse(JSON.stringify({x:0,y:-offset,z:0,plan:'T',legend:{T:{kind:'tree',species:'oak',ground_offset:offset}}}))
- const cell=planCells(plan)[0],f=fixture()
+ const cell=planCells(migratePlan(plan))[0],f=fixture()
  assert.equal(cell.y,0)
  const result=await runTree(f.api,{x:cell.x,y:cell.y,z:cell.z,species:'oak'},'harvest')
  assert.equal(result.harvested,13)

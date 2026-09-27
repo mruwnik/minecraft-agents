@@ -98,7 +98,7 @@ export default {
     const cutable = c => isStalkCut(nameAt(c), nameAt({ ...c, y: c.y - 1 }), nameAt({ ...c, y: c.y - 2 }))
     const cutDone = []
     let outOfReach = 0
-    for (const c of harvestOrder(fieldCrops(at.cells, stalks).filter(cutable))) {
+    for (const c of harvestOrder(fieldCrops(at.cells, stalks, 2).filter(cutable))) {
       // look again now that the ones under it may be gone: this block could be the BASE by now
       if (!cutable(c)) continue
       const stalk = nameAt(c)

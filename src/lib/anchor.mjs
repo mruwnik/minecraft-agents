@@ -17,7 +17,7 @@ export function fieldCensus (cells, worldAt) {
     if (spec.kind === 'water') {
       if (ground && !holdsWater(ground)) out.dry++
       // open water in a field is a hole: the body wades in, `dig` refuses the blocks beside it and no walk will cross it
-      else if (ground?.name === 'water') out.open = (out.open ?? 0) + 1
+      else if (spec.cover && ground?.name === 'water') out.open = (out.open ?? 0) + 1
       continue
     }
     if (spec.kind !== 'crop') continue

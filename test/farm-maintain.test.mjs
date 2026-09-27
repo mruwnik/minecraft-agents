@@ -6,7 +6,8 @@
 // tries a till it has no hoe for, counts every planned crop cell it leaves empty, and says why.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { bareLine, bareWhy, hasHoe, NO_HOE, seedReserve } from '../src/lib/farm.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'

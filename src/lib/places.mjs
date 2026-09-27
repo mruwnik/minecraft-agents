@@ -1,3 +1,4 @@
+import { hasPlan, parsePlacePlan } from './plan.mjs'
 // Named places: parsing/matching them, marking one, and the refusals around asking for or working at a place.
 
 import { within } from './world.mjs'
@@ -102,7 +103,7 @@ export function describePlaces (places, from, options = {}) {
 export const describePlace = (places, name, from) => {
   const place = places.find(p => p.name === name)
   if (!place) return null
-  const rows = place.plan ? place.plan.split('\n') : []
+  const parsed = hasPlan(place) ? parsePlacePlan(place) : null
   return {
     name: place.name,
     kind: place.kind,
@@ -110,7 +111,7 @@ export const describePlace = (places, name, from) => {
     away: `${awayFrom(from)(place)}m`,
     by: place.by,
     ...(place.note ? { note: place.note } : {}),
-    ...(rows.length ? { plan: `${Math.max(...rows.map(r => r.length))}x${rows.length}` } : {})
+    ...(parsed && !parsed.error ? { plan: `${parsed.width}x${parsed.maxY - parsed.minY + 1}x${parsed.height}` } : {})
   }
 }
 

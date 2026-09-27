@@ -3,7 +3,7 @@ import { checkTree, inspectTree, harvestStands, key, treeRoot } from './inspect.
 import { treeProfile } from './profiles.mjs'
 import { farmApi, recoverFarm } from '../farm/attention.mjs'
 import { foreignZone } from '../../library/farm/shared/clutter.mjs'
-import { workRefusal, planCells, planSpec } from '../lib.mjs'
+import { workRefusal, planCells, planSpec, hasPlan } from '../lib.mjs'
 import { isAir, isGroundCover } from '../lib/world.mjs'
 
 export const TREE_ARGS = { x: 'number!', y: 'number!', z: 'number!', species: 'string', form: 'string', place: 'string', flower: 'string', scaffold: 'boolean' }
@@ -17,7 +17,7 @@ export function treeContext (api, a) {
   if (a.place && !place) throw new Error(`no place called ${a.place}`)
   const refusal = place && workRefusal(place, api.me?.())
   if (refusal) throw new Error(refusal)
-  return { root, cells: place?.plan ? planCells(place) : [] }
+  return { root, cells: hasPlan(place) ? planCells(place) : [] }
 }
 const publicReport = t => ({ root: t.root, species: t.species, form: t.form, state: t.state, wood: t.wood.length, canopy: t.leaves.length, protected: t.protected, attention: [...t.attention] })
 async function guard (api, tree) {
@@ -128,14 +128,15 @@ export async function runTree (api, a, action) {
     const planned = cells.filter(c => planSpec(c)?.kind === 'flower' && planSpec(c).item === a.flower && c.y === root.y && Math.max(Math.abs(c.x - root.x), Math.abs(c.z - root.z)) <= 2).map(c => ({ x: c.x, y: c.y + 1, z: c.z }))
     const choices = planned.length ? planned : [[-1, 0], [0, -1], [tree.profile.width, 0], [0, tree.profile.width]].map(([dx, dz]) => ({ x: root.x + dx, y: root.y + 1, z: root.z + dz }))
     if (!choices.some(p => api.block(p.x, p.y, p.z)?.name === a.flower)) {
-      const at = choices.find(p => ['dirt', 'grass_block'].includes(api.block(p.x, p.y - 1, p.z)?.name) && isAir(api.block(p.x, p.y, p.z)?.name) && !cells.some(c => c.x === p.x && c.z === p.z && planSpec(c)?.kind !== 'flower'))
+      const at = choices.find(p => ['dirt', 'grass_block'].includes(api.block(p.x, p.y - 1, p.z)?.name) && isAir(api.block(p.x, p.y, p.z)?.name) && !cells.some(c => c.x === p.x && c.z === p.z && c.y + 1 === p.y && planSpec(c)?.kind !== 'flower'))
       if (!at) report.attention.push('no free adjacent flower site; reserve one beside the tree')
       else if (!(api.inv()[a.flower] > 0)) report.attention.push(`missing flower ${a.flower}; tree planting waits until the flower is established`)
       else {
         const zones = (await api.act('zones')).zones ?? []
         if (foreignZone(zones, api.me?.(), at)) throw new Error(`protected zone at ${key(at)}`)
         await checkpoint(api)
-        if (await attempt(api, 'place', { ...at, item: a.flower }, report) && api.block(at.x, at.y, at.z)?.name !== a.flower) report.attention.push(`flower placement unverified at ${key(at)}`)
+        if (!['dirt', 'grass_block'].includes(api.block(at.x, at.y - 1, at.z)?.name)) report.attention.push(`flower needs dirt or grass support at ${at.x},${at.y - 1},${at.z}`)
+        else if (await attempt(api, 'place', { ...at, item: a.flower }, report) && api.block(at.x, at.y, at.z)?.name !== a.flower) report.attention.push(`flower placement unverified at ${key(at)}`)
       }
     }
   }

@@ -166,6 +166,7 @@
       <button id="planClose">close ×</button>
     </div>
     <div id="planMeta"></div>
+    <label>Block elevation <select id="planLayer" aria-label="Plan block elevation"></select></label>
     <div id="planWorld"></div>
     <div id="planGridRow">
       <canvas id="planCanvas"></canvas>
@@ -175,7 +176,7 @@
   </div>
 </div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlan, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
+import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
 const canvas = document.getElementById('map')
 const ctx = canvas.getContext('2d')
@@ -462,6 +463,7 @@ const store = (key, value) => {
   try { localStorage.setItem(key, value) } catch {}
 }
 let planView = VIEWS.includes(stored('dashboard.plan.view', 'plan')) ? stored('dashboard.plan.view', 'plan') : 'plan'
+let planLevel = null
 let planPlace = null      // the place the popup shows
 let planWorld = null      // the last /api/world answer for it (or {error}), null while none has come
 let planTimer = null
@@ -476,11 +478,11 @@ const hatch = (c, px, py, w, h, colour) => {
 }
 
 // what the diff knows about every plan cell; without a world answer, every cell is unseen
-const diffOf = parsed => planWorld?.cells ? planDiff(planPlace, planWorld.cells) : planDiff(planPlace, [])
+const diffOf = parsed => layerDiff(planPlace, planWorld?.cells ?? [], planLevel)
 
 const cellFill = (cell, view) => {
-  if (view === 'world') return cell.seen ? worldColour(cell.top === 'air' ? cell.ground : cell.top) : worldColour('unloaded')
-  return cellColour(cell.ch)
+  if (view === 'world') return cell.seen ? worldColour(cellWorldBlock(cell)) : worldColour('unloaded')
+  return cellColour(cell.ch, cell.spec)
 }
 
 const drawPlanGrid = (parsed, view) => {
@@ -529,13 +531,13 @@ const drawPlanLegend = (parsed, view) => {
   legend.textContent = ''
   if (view === 'world') {
     const diff = diffOf(parsed)
-    const seen = [...new Set(diff.cells.filter(c => c.seen).map(c => c.top === 'air' ? c.ground : c.top))]
+    const seen = [...new Set(diff.cells.filter(c => c.seen).map(c => cellWorldBlock(c)))]
     seen.forEach(name => legend.append(legendItem(name.replaceAll('_', ' '), worldColour(name))))
     if (diff.unseen) legend.append(legendItem('not loaded', null, 'unseen'))
     return
   }
-  const kinds = [...new Set(parsed.cells.map(({ ch }) => ch))]
-  kinds.forEach(ch => legend.append(legendItem(cellLabel(ch), cellColour(ch))))
+  const kinds = [...new Map(diffOf(parsed).cells.map(c => [c.ch, c])).values()]
+  kinds.forEach(c => legend.append(legendItem(cellLabel(c.ch, c.spec), cellColour(c.ch, c.spec))))
   if (view !== 'diff') return
   legend.append(legendItem('differs', null, 'differ'), legendItem('unsure', null, 'unsure'), legendItem('not loaded', null, 'unseen'))
 }
@@ -550,13 +552,13 @@ const worldStatus = parsed => {
   const seenBy = `seen by ${planWorld.body}, ${planWorld.distance} blocks off, ${ago(planWorld.at)}`
   const counts = planView === 'diff' ? [`${diff.differ} of ${diff.total} cells differ`] : []
   if (diff.unseen) counts.push(`${diff.unseen} not loaded`)
-  if (diff.unsure) counts.push(`${diff.unsure} unsure (slabs nobody checked for water)`)
+  if (diff.unsure) counts.push(`${diff.unsure} unsure (world details unavailable)`)
   return { text: [seenBy, ...counts].join(' · '), error: false }
 }
 
 const renderPlanCard = () => {
   if (!planPlace) return
-  const parsed = parsePlan(planPlace.plan)
+  const parsed = parsePlacePlan(planPlace)
   if (parsed.error) return
   VIEWS.forEach(v => el('planView').querySelector(`[data-view="${v}"]`).classList.toggle('on', v === planView))
   const status = worldStatus(parsed)
@@ -596,16 +598,19 @@ el('planView').addEventListener('click', e => {
 
 // a place opens only if it has a plan that actually parses; a bare point (a hut, a marker) has nothing to show
 const showPlan = (place, world = null) => {
-  if (!place?.plan) return
-  const parsed = parsePlan(place.plan)
+  if (!place?.structure) return
+  const parsed = parsePlacePlan(place)
   if (parsed.error) return
   planPlace = place
+  const levels = planLevels(place)
+  planLevel = levels[0]
+  el('planLayer').replaceChildren(...levels.map(y => { const option = document.createElement('option'); option.value = y; option.textContent = `Y = ${y} (layer ${y - place.y})`; return option }))
   planWorld = world?.place === place.name || world?.error ? world : null
   el('planTitle').textContent = place.name
   el('planMeta').textContent = [
     `by ${place.by ?? 'unclaimed'}`,
     place.note || null,
-    `${parsed.width}x${parsed.height} blocks, anchored at ${place.x},${place.y},${place.z} (north-west corner)`
+    `${parsed.width}x${parsed.height} footprint, ${levels.length} block elevations; top-down slice selected below. Anchored at ${place.x},${place.y},${place.z} (north-west corner)`
   ].filter(Boolean).join('\n')
   el('planHover').textContent = ''
   renderPlanCard()
@@ -614,14 +619,16 @@ const showPlan = (place, world = null) => {
   startWorldPoll()
 }
 
+el('planLayer').addEventListener('change', e => { planLevel = Number(e.target.value); renderPlanCard() })
+
 const openPlan = name => showPlan(snap.places.find(p => p.name === name))
 
 const closePlan = () => { el('planOverlay').hidden = true; stopWorldPoll(); planPlace = null; planWorld = null }
 
 // hovering a cell says what the plan wants there, what stands there, and whether the two agree
 const hoverText = cell => {
-  const where = `${cell.ch} at ${cell.x},${cell.z}`
-  const plan = `plan: ${cellLabel(cell.ch)} (${cell.expected})`
+  const where = `${cell.ch} at ${cell.x},${cell.y},${cell.z}`
+  const plan = `plan: ${cellLabel(cell.ch, cell.spec)} (${cell.expected})`
   if (planView === 'plan' || !planWorld?.cells) return [where, plan]
   const verdict = !cell.seen ? 'not loaded' : cell.ok === null ? 'unsure' : cell.ok ? 'matches' : 'differs'
   return [where, plan, `world: ${worldLabel(cell)}`, verdict]
@@ -631,7 +638,7 @@ el('planCanvas').addEventListener('mousemove', e => {
   const r = el('planCanvas').getBoundingClientRect()
   const dx = Math.floor((e.clientX - r.left) / CELL_PX)
   const dz = Math.floor((e.clientY - r.top) / CELL_PX)
-  const cell = diffOf(parsePlan(planPlace.plan)).cells.find(c => c.dx === dx && c.dz === dz)
+  const cell = diffOf(parsePlacePlan(planPlace)).cells.find(c => c.dx === dx && c.dz === dz)
   const hover = el('planHover')
   hover.textContent = ''
   if (!cell) return

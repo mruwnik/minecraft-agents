@@ -1,4 +1,4 @@
-import { resolveLegend } from './lib/plan.mjs'
+import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 // Claude's Minecraft body.
 // Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
 // small localhost HTTP API (see README.md) and everything notable that happens is
@@ -2843,24 +2843,28 @@ export const quick = {
     const saved = readPlaces().find(p => p.name === a.name)
     // moving somebody else's place, re-planning it or calling it something else overwrites THEIR record of it.
     // Adding to its note is how agents leave each other word and stays open (markFields keeps the owner through it)
-    const rewrites = a.legend !== undefined || a.map !== undefined || a.x !== undefined || (a.kind !== undefined && a.kind !== saved?.kind)
+    const rewrites = a.structure !== undefined || a.legend !== undefined || a.map !== undefined || a.x !== undefined || (a.kind !== undefined && a.kind !== saved?.kind)
     const refusal = rewrites ? mapRefusal(saved, bot.username) : null
     if (refusal) throw new Error(refusal)
     // a note-only mark used to move the place to my feet (BUGS.md 09-24 12:42Z): markMove keeps the anchor, says a move
     // out loud, and refuses one off a plan that still stands where it was marked
-    const stands = saved?.plan ? planStands(planCells(saved), (x, y, z) => bot.blockAt(new Vec3(x, y, z))) : false
+    const stands = hasPlan(saved) ? planStands(planCells(saved), (x, y, z) => bot.blockAt(new Vec3(x, y, z))) : false
     const where = markMove({ saved, args: a, here: bot.entity.position, stands })
     if (where.error) throw new Error(where.error)
     const at = where.at
-    const legend = a.legend === undefined ? saved?.legend : resolveLegend(a.legend)
-    const plan = a.map === undefined ? saved?.plan : parsePlan(a.map, legend).rows?.join('\n')
-    const errors = plan ? planErrors(parsePlan(plan, legend)) : []
+    if (a.map !== undefined && a.structure !== undefined) throw new Error('choose structure= or legacy map= import, not both')
+    if (a.legend !== undefined && a.map === undefined) throw new Error('legend= is only accepted with legacy map= import; update structure.legend instead')
+    const structure = a.structure !== undefined ? parseStructurePlan(a.structure).structure : a.map !== undefined ? legacyPlanStructure(a.map, a.legend) : saved?.structure
+    const parsed = a.structure !== undefined ? parseStructurePlan(a.structure) : structure ? parseStructurePlan(structure) : null
+    const errors = parsed ? planErrors(parsed) : []
     if (errors.length) throw new Error(errors.join('; '))
     const fields = markFields({ saved, by: bot.username, note: a.note })
     if (fields.error) throw new Error(fields.error)
-    const place = { ...saved, name: String(a.name), kind: a.kind ?? saved?.kind ?? 'place', x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z), by: fields.by, note: fields.note, plan, ...(legend ? { legend } : {}) }
+    const place = { ...saved, name: String(a.name), kind: a.kind ?? saved?.kind ?? 'place', x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z), by: fields.by, note: fields.note, structure }
+    delete place.plan
+    delete place.legend
     savePlaces([...readPlaces().filter(p => p.name !== place.name), place])
-    return { marked: place.name, at: `${place.x},${place.y},${place.z}`, moved: where.moved, plan: plan ? `${plan.split('\n')[0].length}x${plan.split('\n').length}` : undefined }
+    return { marked: place.name, at: `${place.x},${place.y},${place.z}`, moved: where.moved, plan: parsed ? `${parsed.width}x${parsed.maxY - parsed.minY + 1}x${parsed.height}` : undefined }
   },
   // deleting an entry off the shared map is never leaving word: whoever marked it is the only one who can take it off
   unmark (a) {

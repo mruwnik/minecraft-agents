@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells } from '../src/lib.mjs'
+import { parsePlan} from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { seedReserve } from '../src/lib/farm.mjs'
 import { CompositeHandBack } from '../src/composite.mjs'
 import maintain from '../library/farm/maintain.mjs'

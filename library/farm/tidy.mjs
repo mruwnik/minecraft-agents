@@ -1,3 +1,4 @@
+import { hasPlan } from '../../src/lib/plan.mjs'
 // Clear the rubble off a farm. A walk that bridged a gap, a pathfinder that towered on cobblestone, a tree that grew
 // into the field: they leave blocks standing over the beds and paths that the plan never asked for, shading the crops
 // and breaking the walk. This digs each of them and picks the drops up. It never touches what the plan DOES ask for,
@@ -19,7 +20,7 @@ export default {
     api = farmApi(api)
     const here = api.pos()
     const range = a.range ?? RANGE
-    const named = api.places().filter(p => p.plan && (a.place ? p.name === a.place : Math.hypot(p.x - here.x, p.z - here.z) <= range))
+    const named = api.places().filter(p => hasPlan(p) && (a.place ? p.name === a.place : Math.hypot(p.x - here.x, p.z - here.z) <= range))
     if (!named.length) {
       throw new Error(a.place
         ? `no plan called ${a.place}: ./mc places kind=farm lists the ones there are`

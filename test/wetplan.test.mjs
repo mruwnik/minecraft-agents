@@ -3,7 +3,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fakeApi } from './helpers.mjs'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { drainJobs, shoreOrder, reopenJobs, wetFooting } from '../src/build/water.mjs'
 import { buildFromPlan } from '../src/build/plan.mjs'
 

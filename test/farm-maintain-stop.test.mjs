@@ -4,7 +4,8 @@
 // filled=, tilled=, replanted= or bare=. The sweep's report is now brought up to date before every checkpoint
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { fakeApi } from './helpers.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 

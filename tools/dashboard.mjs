@@ -1,3 +1,4 @@
+import { parsePlacePlan } from '../src/lib/plan.mjs'
 // A read-only window on every agent body: where each one is, what it is doing, and what it sees.
 //
 //   node tools/dashboard.mjs            # http://127.0.0.1:3700
@@ -147,20 +148,21 @@ const worlds = {}
 const lookAtPlace = async name => {
   const place = readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === name)
   if (!place) return { error: `no place called ${name}` }
-  const parsed = parsePlan(place.plan)
+  const parsed = parsePlacePlan(place)
   if (parsed.error) return { error: `${name} has no plan to compare the world against` }
   const body = nearestBody(mergeBodies(agents, polls), place.x, place.z)
   if (!body) return { error: 'no body is up to look' }
-  const boxes = scanBoxes({ x: place.x, y: place.y, z: place.z, w: parsed.width, h: parsed.height }, scanCap())
+  const levels = [...new Set(parsed.cells.map(c => place.y + c.dy))]
+  const boxes = levels.flatMap(y => scanBoxes({ x: place.x, y, z: place.z, w: parsed.width, h: parsed.height }, scanCap()))
   const scans = await Promise.all(boxes.map(box => ask(body.apiPort, 'scan', box, 10000)))
   const failed = scans.find(r => !r.ok)
   if (failed) return { error: `${body.name} could not scan: ${failed.error ?? failed.answer?.error ?? 'no answer'}`, body: body.name }
   const cells = scans.flatMap((r, i) => parseScan(r.answer.map, boxes[i]))
   const unsure = unsureWater(place, cells)
   const checks = await Promise.all(unsure.slice(0, WORLD_BLOCK_AT_CAP).map(c => ask(body.apiPort, 'block_at', c, 5000)))
-  const settled = new Map(checks.flatMap((r, i) => r.ok && r.answer.name ? [[`${unsure[i].x},${unsure[i].z}`, r.answer]] : []))
+  const settled = new Map(checks.flatMap((r, i) => r.ok && r.answer.name ? [[`${unsure[i].x},${unsure[i].y},${unsure[i].z}`, r.answer]] : []))
   const known = cells.map(c => {
-    const b = c.y === place.y ? settled.get(`${c.x},${c.z}`) : null
+    const b = settled.get(`${c.x},${c.y},${c.z}`)
     return b ? { ...c, name: b.name, waterlogged: String(b.properties?.waterlogged) === 'true' } : c
   })
   const seen = known.filter(c => c.name !== 'unloaded').length

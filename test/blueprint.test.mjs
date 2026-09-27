@@ -1,3 +1,4 @@
+import { canonicalFixture } from './plan-fixture.mjs'
 // The blueprint format (docs/superpowers/specs/2026-09-26-blueprint-format-design.md): a Markdown file is parsed into
 // layers of tokens, resolved with material parameters, turned by facing=, costed, staged and judged against a world.
 // Everything here is pure; the walking half is in test/blueprint-build.test.mjs.
@@ -7,7 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   parseBlueprint, resolve, turnsFor, rotate, blueprintCells, bill, stackSlots, counts, enclosure, lint, placement,
-  jobsFor, orderJobs, stages, siteCheck, farmPlanToBlueprint, blueprintHash, buildNote, parseNote, renderLayer, stageLine,
+  jobsFor, orderJobs, stages, siteCheck as rawSiteCheck, farmPlanToBlueprint, blueprintHash, buildNote, parseNote, renderLayer, stageLine,
   matchesCell, flatGround, REGISTRY
 } from '../src/blueprint/format.mjs'
 import { familyName, familyRefusal } from '../src/build/materials.mjs'
@@ -612,3 +613,5 @@ test('farmPlanToBlueprint: a torch post is a fence at y0 and a torch at y1', () 
   const at = (dx, dy) => blueprintCells(bp).find(c => c.dx === dx && c.dy === dy)?.spec.alts[0].name
   assert.deepEqual([at(0, -1), at(0, 0), at(0, 1), at(1, 0), at(1, 1), at(2, 0)], ['dirt', 'oak_fence', 'torch', 'oak_fence', undefined, 'oak_fence_gate'])
 })
+
+function siteCheck (bp, at, world, context) { return rawSiteCheck(bp, at, world, { ...context, places: context.places.map(canonicalFixture) }) }

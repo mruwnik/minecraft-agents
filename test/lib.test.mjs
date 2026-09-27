@@ -26,7 +26,8 @@ import flockBreed from '../library/flock/breed.mjs'
 import flockLead from '../library/flock/lead.mjs'
 import apiaryHarvest from '../library/apiary/harvest.mjs'
 import apiaryMaintain from '../library/apiary/maintain.mjs'
-import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, farmWaste, seedTarget, seedDrop, parsePlan, planCells, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, replantBatch, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { tillWarning, planAnchor, planBeside, penOpenRefusal, penProbes, planStructure, PLAN_LEGEND, COMPOST_CHANCE, RENAMED, renamedList, placeMissed, strayFluid, penInside, insideCount, pairPlan, placeTarget, flockPlan, flockSurplus, billShortfall, jobsBill, jobCall, groundJobs, sameFamily, helpText, argsUsage, docText, parseCliArgs, PRIMITIVES, SECTIONS, routineSteps, seedSource, compostPlan, farmSurplus, farmWaste, seedTarget, seedDrop, parsePlan, planErrors, planLane, planBill, planSummary, fieldCensus, farmJobs, checkArgs, handBackReason, compositeError, patchItemEnchants, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, mineFailure, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, stalkReplant, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, fullSide, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, HUNGER_FLOOR, foodSort, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, patchPathfinder, patchGotoPartial, stackTop, isBaby, noHomeError, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, parseClock, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, coordsError, nextDrop, digRefusal, fluidsLeft, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, bedChoice, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, parseEventTail, fillOutcome, penLeak, penStance, stanceNote, transferFix, transferOutcome, gatesLeftOpen, oversleeping, replantSpot, isStalkCut, staleCode, leadVerdict, clampedOffset, nudgeAway, breedingFood, flushCells, airReflex, openAbove, surfacingStalled, breaksUnderfoot, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, replantBatch, digFromHere, digPlan, digUnreached, DIG_WALK_MS, chargeLeash, breakOffDigs, attackRefusal, fleeUnwinnable, huntPick, spotScore, bestSpots, brokenSlot, placeOutcome, equipSlot, shouldFlee, fleeStep, fleeOscillating, fleeRange, FLEE_GIVEUP_MS, rangedThreat, minedCount, plansFromOwnCell, missingTool, stepOffChoice, wakeWorthy, waitReport, bedtime, feetCell, overMemory, placeAgainst, leftLying, collectTally, arrivalError, ripeCrop, harvestOrder, dawnVerdict, withdrawPlan, isNight, occupiedBy, nextSheep, describeClock, buriedIn, doorwayNode, mayDig, explainNoPath, boxedIn, refuseReason, isStalled, explainInterrupt, ignorableMob, canPlaceFromHere, invited, workRefusal, placeRefusal, INVITE_WORDS, codeVersion, repeatByType, REPEAT_WINDOW, bodyRefusal, mapRefusal, holeUpVerdict, burrowPlan, holedUpNote, fleeIntoCave, respawnPlan, eatHold, eatBackoff, mealToDrop, mealFailed, markMove, planStands, doingText, holeCells, gridLeftovers, holeUpRefusal, mealTally, isTreeLog, routeSummary, circling, terse, compact, describePlaces, describePlace, markFields, NOTE_MAX, matchPlaces, capOutput, renderScan, inAnyZone, minecraftName, parseChosenName, nextPort, newAgentArgs, pickFuel, isWedged, retryUntilCount, matchesProps, checkWatch, within, clientVersions, blockTextures, makeUntil } from '../src/lib.mjs'
+import { planCells, canonicalFixture } from './plan-fixture.mjs'
 
 const terseCases = [
   ['long action with inventory changes',
@@ -239,11 +240,11 @@ for (const [title, name, expected] of [
   ['a note is kept', 'east-hill',
     { name: 'east-hill', kind: 'mine', at: '140,75,-140', away: '25m', by: 'Claude', note: 'exposed stone' }],
   ['a plan is reported by its size, not printed', 'chani-wheat-field',
-    { name: 'chani-wheat-field', kind: 'farm', at: '118,68,-139', away: '3m', by: 'Chani', note: 'irrigated', plan: '3x2' }],
+    { name: 'chani-wheat-field', kind: 'farm', at: '118,68,-139', away: '3m', by: 'Chani', note: 'irrigated', plan: '3x2x2' }],
   ['a name nobody marked is null', 'no-such-place', null]
 ]) {
   test(`describePlace: ${title}`, () =>
-    assert.deepEqual(describePlace(searchPlaces, name, { x: 116, y: 69, z: -137 }), expected))
+    assert.deepEqual(describePlace(searchPlaces.map(canonicalFixture), name, { x: 116, y: 69, z: -137 }), expected))
 }
 
 // backlog #141: marking a place again stamped the marker's own name on it, so appending one line to Chani's carrot
@@ -3051,8 +3052,8 @@ test('parsePlan: an empty map is an error', () => assert.match(parsePlan('  \n \
 test('parsePlan: an absurd map is an error', () => assert.match(parsePlan('w'.repeat(200)).error, /at most 64/))
 
 test('planCells: the anchor is the north-west corner and y is the ground block', () => {
-  assert.deepEqual(planCells({ plan: 'w~\n.c', x: 10, y: 63, z: -90 }).map(c => `${c.ch}@${c.x},${c.y},${c.z}`),
-    ['w@10,63,-90', '~@11,63,-90', '.@10,63,-89', 'c@11,63,-89'])
+  assert.deepEqual(planCells({ plan: 'w~\n.c', x: 10, y: 63, z: -90 }).map(c => `${c.spec.kind}@${c.x},${c.y},${c.z}`).sort(),
+    ['crop@10,63,-90', 'water@11,63,-90', 'path@10,63,-89', 'crop@11,63,-89'].sort())
 })
 // Item 4 (fixes round 2, AhuraMazda): the guide said `t` was a crafting table while the legend said sapling, so a `t`
 // cell asked for an oak_sapling nobody wanted and the crafting table never appeared. The legend is the spec's: `t` is a
@@ -3862,7 +3863,11 @@ for (const [name, argv, expected] of [
 test('farm.plan: a plan that waters every cell is checked, then saved on the shared map', async () => {
   const { api, calls } = fakeApi({ places: [] })
   const out = await farmPlan.run(api, { name: 'north-field', map: 'w~w', x: 10, y: 64, z: -20 })
-  assert.deepEqual([calls, out.saved, out.needs], [['mark name=north-field kind=farm note=3x1 wheat:2 water map=w~w x=10 y=64 z=-20'], 'north-field', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
+  assert.equal(calls.length, 1)
+  assert.match(calls[0], /^mark name=north-field kind=farm note=3x2x1 water wheat:2 structure\(/)
+  assert.match(calls[0], /layers=\(y=0 rows=_~_\) \(y=1 rows=w_w\)/)
+  assert.match(calls[0], /x=10 y=64 z=-20$/)
+  assert.deepEqual([out.saved, out.needs], ['north-field', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
 })
 
 test('farm.plan: a plan with a cell nothing waters is refused before anything is dug', async () => {
@@ -3874,7 +3879,9 @@ test('farm.plan: a plan with a cell nothing waters is refused before anything is
 test('farm.plan: name= alone prints what is saved, with its bill of materials', async () => {
   const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 1, y: 64, z: 2, plan: 'w~w' }] })
   const out = await farmPlan.run(api, { name: 'north-field' })
-  assert.match(out.text, /north-field farm @1,64,2\nw~w\n3x1 wheat:2 water needs wheat_seeds:2 oak_slab water_bucket/)
+  assert.match(out.text, /^north-field farm @1,64,2\n/)
+  assert.deepEqual(out.structure.layers, [{ y: 0, rows: ['_~_'] }, { y: 1, rows: ['w_w'] }])
+  assert.match(out.text, /3x2x1 water wheat:2 needs oak_slab wheat_seeds:2 water_bucket$/)
 })
 
 test('farm.fields: every plan in range, counted from the map without walking', async () => {
@@ -3950,7 +3957,7 @@ test('farm.plan: a plan with a path from the gate down the rows warns about noth
 test('farm.plan: check=true runs every check and marks nothing', async () => {
   const { api, calls } = fakeApi({ places: [] })
   const out = await farmPlan.run(api, { map: 'w~w', x: 10, y: 64, z: -20, check: true })
-  assert.deepEqual([calls, out.checked, out.is, out.needs], [[], true, '3x1 wheat:2 water', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
+  assert.deepEqual([calls, out.checked, out.is, out.needs], [[], true, '3x2x1 water wheat:2', { wheat_seeds: 2, oak_slab: 1, water_bucket: 1 }])
   assert.match(out.save, /name=/)
 })
 

@@ -129,7 +129,8 @@ test('fieldLeg: a failure that is not about the path is the primitive\'s own, on
 
 // ---------------------------------------------------------------- the sweep's own legs
 // a plan at y=63: the body walks at 64 on dirt; one bed of growing wheat anchors the plan, the other is empty farmland
-import { parsePlan, planCells, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'
 
 const fakePlace = plan => ({ name: 'test-field', kind: 'farm', x: 0, y: 63, z: 0, plan, parsed: parsePlan(plan), cells: planCells({ plan, x: 0, y: 63, z: 0 }), bill: planBill(parsePlan(plan)) })

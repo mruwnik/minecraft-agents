@@ -1,3 +1,4 @@
+import { withMapLock, atomicMapWrite } from '../map-store.mjs'
 // The body's own record: events.jsonl and the tail of it that `events` serves, one-line-per-fault error reporting, and
 // the files every body shares (state/zones.json, state/places.json, state/gates.log).
 import fs from 'node:fs'
@@ -19,11 +20,7 @@ const PLACES_FILE = path.join(ROOT, 'state', 'places.json')
 export const GATES_FILE = path.join(ROOT, 'state', 'gates.log')
 export const readPlaces = () => fs.existsSync(PLACES_FILE) ? JSON.parse(fs.readFileSync(PLACES_FILE, 'utf8')) : []
 // every body shares this file: write beside it and rename, so a reader never catches it half written
-export const savePlaces = places => {
-  const tmp = `${PLACES_FILE}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(places, null, 1))
-  fs.renameSync(tmp, PLACES_FILE)
-}
+export const savePlaces = places => withMapLock(PLACES_FILE, () => atomicMapWrite(PLACES_FILE, places))
 // what `events` shows: starts from the tail of the file, so a restart does not wipe the history
 function readEventTail () {
   if (!fs.existsSync(EVENTS_FILE)) return []

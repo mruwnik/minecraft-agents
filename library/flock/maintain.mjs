@@ -1,3 +1,4 @@
+import { hasPlan } from '../../src/lib/plan.mjs'
 // Keep one pen's flock at the size it should be: breed it up, shear the sheep, cull what is over (never the last pair),
 // pick up what fell and put the produce in the pen's chest. The pen is the truth of how many there are, not my memory.
 import { flockPlan, flockSurplus, placeTarget } from '../../src/lib.mjs'
@@ -17,7 +18,7 @@ export default {
     const within = a.within ?? 24
     // the pen's own chests, when the place has a plan that marks them; deposit= names another chest or a storage place
     const marked = a.place ? api.places().find(p => p.name === a.place) : null
-    const cells = marked?.plan?.includes('C') ? api.plan(a.place).cells : []
+    const cells = hasPlan(marked) ? api.plan(a.place).cells : []
     const store = depositTarget(a.deposit, api.places())
     if (store?.error) throw new Error(store.error)
     const canDeposit = canStore(store, cells)

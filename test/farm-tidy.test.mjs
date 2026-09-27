@@ -6,7 +6,8 @@ import farmFields from '../library/farm/fields.mjs'
 import farmTidy from '../library/farm/tidy.mjs'
 import farmMaintain from '../library/farm/maintain.mjs'
 import { strays, clutterBlocks, clutterLine, clutterKinds, foreignZone } from '../library/farm/shared/clutter.mjs'
-import { parsePlan, planCells, routineSteps } from '../src/lib.mjs'
+import { parsePlan, routineSteps } from '../src/lib.mjs'
+import { planCells, canonicalFixture } from './plan-fixture.mjs'
 import fs from 'node:fs'
 
 const block = (name, properties = {}) => ({ name, properties, solid: name !== 'air' && name !== 'water' })
@@ -73,7 +74,7 @@ test('clutterBlocks: generic crop beds retain compatible crops while specific be
 
 test('clutterBlocks: every stray block over the footprint, at ground+1 and ground+2', () => {
   const found = clutterBlocks(PLACE.cells, blockAt(littered()))
-  assert.deepEqual(found.map(b => `${b.name}@${key(b)}`), ['oak_log@100,72,200', 'cobblestone@101,72,200', 'dirt@100,71,201'])
+  assert.deepEqual(found.map(b => `${b.name}@${key(b)}`).sort(), ['oak_log@100,72,200', 'cobblestone@101,72,200', 'dirt@100,71,201'].sort())
 })
 
 for (const [why, at, name] of [
@@ -288,7 +289,7 @@ test('farm.tidy: somebody else\u2019s field with a silent note is refused before
 
 test('farm.tidy: somebody else\u2019s field whose note invites work is swept like my own', async () => {
   const { api } = tidyApi()
-  api.places = () => [{ ...PLAN, by: 'Chani', note: 'anyone welcome, harvest and tidy' }]
+  api.places = () => [canonicalFixture({ ...PLAN, by: 'Chani', note: 'anyone welcome, harvest and tidy' })]
   const out = await farmTidy.run(api, { place: 'test-field' })
   assert.deepEqual([out.cleared, out.left], [3, 0])
 })

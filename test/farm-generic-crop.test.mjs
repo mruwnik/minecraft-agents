@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PLAN_LEGEND, planCropMatches, parsePlan, planCells, planBill, planSummary, planErrors, planAnchor, fieldCensus, farmJobs, jobsBill, groundJobs, seedReserve, farmSurplus } from '../src/lib.mjs'
+import { PLAN_LEGEND, planCropMatches, parsePlan, planBill, planSummary, planErrors, planAnchor, fieldCensus, farmJobs, jobsBill, groundJobs, seedReserve, farmSurplus } from '../src/lib.mjs'
+import { planCells } from './plan-fixture.mjs'
 import { fakeApi } from './helpers.mjs'
 import buildFarm from '../library/farm/build.mjs'
 import maintainFarm from '../library/farm/maintain.mjs'

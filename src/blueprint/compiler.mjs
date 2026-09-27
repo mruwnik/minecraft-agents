@@ -1,3 +1,4 @@
+import { readStructureLayers } from '../structure/layers.mjs'
 import { validateBlueprintDocument, semanticBlueprintHash, BLUEPRINT_LIMITS } from './schema.mjs'
 import { REGISTRY, derivedState } from './format.mjs'
 import { materialCandidates } from './materials.mjs'
@@ -62,15 +63,11 @@ export function compileBlueprintStructure (source, registry = REGISTRY) {
     objects.push(object)
     for (const cell of footprint) put(cell.at, { objectId: id, states: cell.states }, path)
   }
-  for (const [i, layer] of (document.structure.layers ?? []).entries()) {
-    if (Object.keys(layer).some(k => !['y', 'rows'].includes(k))) fail(`structure.layers[${i}]`, 'unsupported layer field')
-    if (!Number.isInteger(layer.y) || !Array.isArray(layer.rows) || layer.rows.length !== depth || layer.rows.some(row => typeof row !== 'string' || [...row].length !== width)) fail(`structure.layers[${i}]`, 'layer needs integer y and dimensions-sized rows')
-    layer.rows.forEach((row, z) => [...row].forEach((token, x) => {
-      if (token === '_') return
-      const spec = token === '.' ? { require: 'air' } : document.structure.legend?.[token]
-      if (!spec) fail(`structure.layers[${i}]`, `unknown token ${token}`)
-      add(spec, [x, layer.y, z], `cell-${x}-${layer.y}-${z}`, `structure.layers[${i}]`)
-    }))
+  const geometry = readStructureLayers(document.structure.layers ?? [], { width, depth, minY: -4, maxY: height - 1, maxCells: BLUEPRINT_LIMITS.cells, label: 'blueprint structure' })
+  for (const { x, y, z, token, layer } of geometry.cells) {
+    const spec = token === '.' ? { require: 'air' } : document.structure.legend?.[token]
+    if (!spec) fail(`structure.layers[${layer}]`, `unknown token ${token}`)
+    add(spec, [x, y, z], `cell-${x}-${y}-${z}`, `structure.layers[${layer}]`)
   }
   for (const [i, spec] of (document.structure.objects ?? []).entries()) {
     if (!inside(spec.at)) fail(`structure.objects[${i}].at`, 'invalid coordinates')

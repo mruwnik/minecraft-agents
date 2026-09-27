@@ -1,3 +1,4 @@
+import { hasPlan, jobGroundKey } from '../lib/plan.mjs'
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
 import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
@@ -17,7 +18,7 @@ const WATER_CANDIDATES = 32
 const waterKey = p => `${p.x},${p.y},${p.z}`
 const irrigationSources = (api, cells) => new Set([
   ...cells,
-  ...(api.places?.() ?? []).filter(p => p.plan).flatMap(planCells)
+  ...(api.places?.() ?? []).filter(p => hasPlan(p)).flatMap(planCells)
 ].filter(c => planSpec(c)?.kind === 'water').map(waterKey))
 
 export const NO_BUCKET = 'no bucket: craft item=bucket (3 iron_ingot)'
@@ -83,7 +84,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   const recover = handler => farm ? recoverFarm(handler) : handler
   const plan = api.plan(a.place)
   // the plan's y is the ground block, so the body stands one above it
-  const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: plan.y + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
+  const middle = { x: plan.x + Math.floor((plan.parsed.width - 1) / 2), y: Math.floor((Math.min(...plan.cells.map(c => c.y)) + Math.max(...plan.cells.map(c => c.y))) / 2) + 1, z: plan.z + Math.floor((plan.parsed.height - 1) / 2) }
   const counts = {}
   const missing = {}
   // a walk to a standing cell that finds no path is walked once more with dig=true inside the plan's own footprint,
@@ -99,7 +100,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   const dams = []
   const kept = []
   const keptColumns = new Set()
-  const notKept = job => !keptColumns.has(`${job.x},${job.z}`)
+  const notKept = job => !keptColumns.has(jobGroundKey(job))
   // a job with no dry cell in reach to work from is left for the driver, named with the water in the way
   const blocked = []
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
@@ -239,7 +240,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   }
   const reopen = reopenJobs(dams, api.block)
   kept.push(...reopen.kept)
-  reopen.kept.forEach(line => keptColumns.add(line.replace(/^(-?\d+),-?\d+,(-?\d+).*/, '$1,$2')))
+  reopen.kept.forEach(line => keptColumns.add(line.match(/^-?\d+,-?\d+,-?\d+/)?.[0]))
   for (const job of reopen.open) { await tryJob(job); await api.checkpoint() }
   for (const job of ground()) { await tryJob(job); await api.checkpoint() }
   for (const job of field()) { await tryJob(job); await api.checkpoint() }

@@ -5,8 +5,8 @@
 // tools/dashboard/lib.mjs). Never import the src/lib.mjs barrel here: it re-exports node-only modules (players.mjs
 // reads state/ with fs), and a browser links the whole graph before running any of it, so one `node:` import
 // anywhere below map.mjs leaves the page static. test/dashboard.test.mjs walks the graph to keep this true.
-import { parsePlan, PLAN_LEGEND, planSpec } from '../../src/lib/plan.mjs'
-export { parsePlan }
+import { parsePlan, PLAN_LEGEND, planSpec, parsePlacePlan, planCells, hasPlan, planCropMatches } from '../../src/lib/plan.mjs'
+export { parsePlan, parsePlacePlan }
 
 // polls: { <agent name>: { ok, state, error, at } }. A port that does not answer is a body that is down, which is
 // the ordinary state of most folders here, not a failure of the dashboard.
@@ -37,7 +37,7 @@ export const humanSightings = (bodies, agentNames) => {
 
 export const mapPoints = (bodies, places, zones, humans) => [
   ...bodies.filter(b => b.up && b.state?.pos).map(b => ({ x: b.state.pos.x, z: b.state.pos.z })),
-  ...places.map(p => ({ x: p.x, z: p.z })),
+  ...places.flatMap(p => [{ x: p.x, z: p.z }, ...planRects([p]).map(r => ({ x: r.x + r.w, z: r.z + r.h }))]),
   ...zones.flatMap(z => [{ x: z.x1, z: z.z1 }, { x: z.x2, z: z.z2 }]),
   ...humans.map(h => ({ x: h.x, z: h.z }))
 ]
@@ -84,8 +84,8 @@ export const onCanvas = ({ px, py }, width, height, margin = 0) =>
 // A place with a plan is not a point, it is a rectangle: the plan is anchored at its own north-west corner
 // (x,z), rows run south, columns east - exactly what parsePlan already knows how to size.
 export const planRects = places => places.flatMap(place => {
-  if (!place.plan) return []
-  const parsed = parsePlan(place.plan, place.legend)
+  if (!hasPlan(place)) return []
+  const parsed = parsePlacePlan(place)
   if (parsed.error) return []
   return [{ name: place.name, x: place.x, z: place.z, w: parsed.width, h: parsed.height }]
 })
@@ -115,8 +115,26 @@ const CELL_LEGEND = {
 const UNKNOWN_CELL = { colour: '#555f6e', label: 'unknown' }
 
 // a character the legend does not know (a stray space, a typo) is drawn grey and labelled as such, not guessed at
-export const cellColour = ch => (CELL_LEGEND[ch] ?? UNKNOWN_CELL).colour
-export const cellLabel = ch => (CELL_LEGEND[ch] ?? UNKNOWN_CELL).label
+const styleFor = (ch, spec) => {
+  if (!spec) return CELL_LEGEND[ch] ?? UNKNOWN_CELL
+  const preset = Object.entries(PLAN_LEGEND).find(([, s]) => spec.kind === 'crop' ? s.crop && s.crop === spec.crop : s.kind === spec.kind)
+  if (spec.generic) return { colour: '#94ae58' }
+  if (spec.kind === 'tree') return CELL_LEGEND.t
+  if (spec.kind === 'ground') return { colour: '#836443' }
+  if (spec.kind === 'air') return { colour: '#303641' }
+  if (spec.kind === 'reserved') return { colour: '#444c46' }
+  return CELL_LEGEND[preset?.[0]] ?? UNKNOWN_CELL
+}
+export const cellColour = (ch, spec) => styleFor(ch, spec).colour
+export const cellLabel = (ch, spec) => !spec ? (CELL_LEGEND[ch] ?? UNKNOWN_CELL).label
+  : (spec.generic ? 'mixed crop' : spec.kind === 'tree' ? `${spec.species} tree (${spec.form ?? 'auto'})` : spec.crop ?? spec.item ?? spec.ground ?? spec.kind).replaceAll('_', ' ')
+export const cellWorldBlock = cell => ['ground', 'water', 'path', 'reserved'].includes(cell.spec?.kind) ? cell.ground : cell.top
+export const planLevels = place => [...new Set(planCells(place).map(c => place.y + c.blockY))].sort((a, b) => a - b)
+export const layerDiff = (place, world, y) => {
+  const all = planDiff(place, world)
+  const cells = all.cells.filter(c => c.y === y)
+  return { cells, total: cells.length, differ: cells.filter(c => c.ok === false).length, unseen: cells.filter(c => !c.seen).length, unsure: cells.filter(c => c.seen && c.ok === null).length }
+}
 
 // which footprint, if any, a world x,z lands in - the north-west corner is inside, the far edge (x+w, z+h) is not
 export const hitPlan = (rects, x, z) =>
@@ -142,7 +160,12 @@ const water = ground => {
   return isAir(ground.name) ? false : null
 }
 const JUDGES = {
-  crop: (spec, ground, top) => top.name === spec.crop,
+  crop: (spec, ground, top) => planCropMatches(spec, top.name),
+  air: (spec, ground, top) => isAir(top.name),
+  reserved: () => true,
+  ground: (spec, ground) => ground.name === spec.ground,
+  block: (spec, ground, top) => top.name === spec.item,
+  tree: (spec, ground, top) => top.name === spec.item || top.name === `${spec.species}_log` || (spec.species === 'azalea' && ['oak_log', 'flowering_azalea'].includes(top.name)) || (['crimson', 'warped'].includes(spec.species) && top.name === `${spec.species}_stem`),
   water: (spec, ground) => water(ground),
   path: (spec, ground, top) => isSolid(ground.name) && isOpen(top.name),
   fence: (spec, ground, top) => /_fence$/.test(top.name),
@@ -169,8 +192,8 @@ const EXPECTATIONS = {
 }
 export const cellExpectation = (ch, spec = PLAN_LEGEND[ch]) => {
   if (!spec) return 'not in the legend'
-  if (spec.kind === 'crop') return `${cellLabel(ch)} on ${spec.ground}`
-  return EXPECTATIONS[spec.kind] ?? spec.kind
+  if (spec.kind === 'crop') return `${cellLabel(ch, spec)} on ${spec.ground}`
+  return spec.kind === 'tree' ? `${spec.species} sapling or grown tree` : spec.kind === 'air' ? 'air' : spec.kind === 'reserved' ? 'preserve existing blocks' : spec.literal && spec.item ? spec.item : EXPECTATIONS[spec.kind] ?? spec.ground ?? spec.kind
 }
 
 const seenBlock = cell => Boolean(cell) && cell.name !== 'unloaded'
@@ -178,17 +201,17 @@ const seenBlock = cell => Boolean(cell) && cell.name !== 'unloaded'
 export const planDiff = (place, worldCells) => {
   const world = new Map(worldCells.map(c => [`${c.x},${c.y},${c.z}`, c]))
   const at = (x, y, z) => world.get(`${x},${y},${z}`)
-  const cells = (parsePlan(place.plan, place.legend).cells ?? []).map(cell => {
+  const cells = planCells(place).map(cell => {
     const { dx, dz, ch } = cell
     const spec = planSpec(cell)
     const x = place.x + dx
     const z = place.z + dz
-    const ground = at(x, place.y, z)
-    const top = at(x, place.y + 1, z)
+    const ground = at(x, cell.y, z)
+    const top = at(x, cell.y + 1, z)
     const seen = seenBlock(ground) && seenBlock(top)
     const judge = JUDGES[spec?.kind]
-    const ok = seen && judge ? judge(spec, ground, top) : null
-    return { dx, dz, x, z, ch, expected: cellExpectation(ch, spec), ground: ground?.name ?? 'unloaded', top: top?.name ?? 'unloaded', ok, seen }
+    const ok = seen && judge ? (spec.literal && spec.item && !['tree', 'crop', 'torch'].includes(spec.kind) ? top.name === spec.item : judge(spec, ground, top)) : null
+    return { dx, dz, x, y: place.y + cell.blockY, z, ch, spec, expected: cellExpectation(ch, spec), ground: ground?.name ?? 'unloaded', top: top?.name ?? 'unloaded', ok, seen }
   })
   return {
     cells,

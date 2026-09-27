@@ -6,15 +6,17 @@ import harvest from '../library/tree/harvest.mjs'
 import prepare from '../library/tree/prepare.mjs'
 import forestry from '../library/forestry/maintain.mjs'
 import farmPlan from '../library/farm/plan.mjs'
-import { parsePlan, planCells, planBill, planErrors, resolveLegend } from '../src/lib/plan.mjs'
+import { parsePlan, planCells as resolvedPlanCells, planBill, planErrors, resolveLegend, migratePlan, parsePlacePlan } from '../src/lib/plan.mjs'
 import { planChests } from '../src/lib/storage.mjs'
 import { clutterBlocks } from '../library/farm/shared/clutter.mjs'
 const coord = p => `${p.x},${p.y},${p.z}`
 const root = { x: 0, y: 0, z: 0 }
+// Legacy-shaped fixtures enter through the explicit importer; runtime sees canonical layers.
+const planCells = place => resolvedPlanCells(migratePlan(place))
 function worldFixture ({ soil = 'dirt', items = {}, plan, fail, checkpoint } = {}) {
   const world = new Map(), calls = [], events = []
   let pos = { x: 2.5, y: 1, z: 2.5 }
-  const places = plan ? [plan] : []
+  const places = plan ? [migratePlan(plan)] : []
   const api = {
     block: (x,y,z) => ({ name: world.get(`${x},${y},${z}`) ?? (y <= 0 ? soil : 'air'), solid: !['air','oak_sapling','dandelion'].includes(world.get(`${x},${y},${z}`) ?? (y <= 0 ? soil : 'air')), properties: {} }),
     act: async (name, args = {}) => {
@@ -24,11 +26,11 @@ function worldFixture ({ soil = 'dirt', items = {}, plan, fail, checkpoint } = {
       if (name === 'goto') pos = { x:args.x+0.5, y:args.y, z:args.z+0.5 }
       if (name === 'place') { assert.ok(items[args.item] > 0, `fixture stock ${args.item}`); items[args.item]--; world.set(coord(args), args.item) }
       if (name === 'dig') world.set(coord(args),'air')
-      if (name === 'mark') places.push({ ...args, plan: args.map, legend: resolveLegend(args.legend), by:'Tester' })
+      if (name === 'mark') places.push(migratePlan({ ...args, ...(args.structure ? {} : { plan: args.map, legend: resolveLegend(args.legend) }), by:'Tester' }))
       return {}
     },
     pos: () => pos, me: () => 'Tester', inv: () => items, places: () => places,
-    plan: name => { const p=places.find(p=>p.name===name); return {...p,cells:planCells(p),parsed:parsePlan(p.plan,p.legend)} },
+    plan: name => { const p=places.find(p=>p.name===name); return {...p,cells:planCells(p),parsed:parsePlacePlan(p)} },
     checkpoint: async () => { if(checkpoint) await checkpoint() }, emit: (type,data) => events.push({type,...data}), report:()=>{}, note:()=>{},
     clock:()=>({elapsedDays:0,day:true,night:false}), until:async()=>true, drops:()=>[], freeSlots:()=>27
   }
@@ -55,9 +57,9 @@ test('independent: plan command persists custom legend and default symbol overri
  const f=worldFixture()
  await farmPlan.run(f.api,{name:'aliases',...root,map:'Cq~',legend:{C:'stone',q:'carrots'}})
  const saved=JSON.parse(JSON.stringify(f.places[0]))
- assert.equal(planCells(saved)[1].spec.crop,'carrots')
+ assert.equal(planCells(saved).find(c=>c.x===1&&c.spec.kind==='crop').spec.crop,'carrots')
  assert.deepEqual(planChests(planCells(saved)),[])
- assert.equal(planBill(parsePlan(saved.plan,saved.legend)).carrot,1)
+ assert.equal(planBill(parsePlacePlan(saved)).carrot,1)
 })
 test('independent: farm clutter leaves planned mature tree and overlapping canopy intact',()=>{
  const p={...root,plan:'x.',legend:{x:{kind:'tree',species:'oak'}}}, f=worldFixture()

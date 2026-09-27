@@ -5,7 +5,7 @@ import path from 'node:path'
 import { breedPlan } from '../villager/breed.mjs'
 import { woodenGate } from '../enclosure/blocks.mjs'
 import { boatHabitatPlan } from '../boat/habitat.mjs'
-import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
+import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, parsePlacePlan, hasPlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverableNavigationTarget, navigationTargetKey } from '../composite.mjs'
 import { scaffoldJournal } from '../scaffold/journal.mjs'
 import { ROOT, HOME, cfg } from './home.mjs'
@@ -54,8 +54,9 @@ function planOf (name) {
   if (!place) throw new Error(`no place called ${name}: mark it, then save a map with ./mc plan name=${name} kind=farm x= y= z= map='...'`)
   const refusal = workRefusal(place, cfg.username)
   if (refusal) throw new Error(refusal)
-  if (!place.plan) throw new Error(`${name} is on the map but has no plan: save one with ./mc plan name=${name} map='...'`)
-  const parsed = parsePlan(place.plan, place.legend)
+  if (!hasPlan(place)) throw new Error(`${name} is on the map but has no plan: save one with ./mc plan name=${name} map='...'`)
+  const parsed = parsePlacePlan(place)
+  if (parsed.error) throw new Error(parsed.error)
   return { ...place, parsed, cells: planCells(place), bill: planBill(parsed) }
 }
 
