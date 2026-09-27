@@ -2658,7 +2658,7 @@ export const quick = {
   entity: (a) => ({
     found: Object.values(bot.entities).filter(e => e !== bot.entity && matcher(a.name)(e.name ?? '') && (a.hostile !== true || isHostile(e)))
       .sort((x, y) => x.position.distanceTo(bot.entity.position) - y.position.distanceTo(bot.entity.position)).slice(0, a.count ?? 2)
-      .map(e => ({ id: e.id, name: e.name, width: e.width, height: e.height, hostile: isHostile(e), ...(a.uuid ? { uuid: e.uuid, vehicleId: boatRuntime.currentVehicleId(e) } : {}), ...(['villager', 'cow', 'sheep', 'pig'].includes(e.name) ? { baby: isBaby(e.metadata), adult: !isBaby(e.metadata) } : {}), dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata) }))
+      .map(e => ({ id: e.id, name: e.name, width: e.width, height: e.height, hostile: isHostile(e), ...(a.uuid ? { uuid: e.uuid, vehicleId: boatRuntime.currentVehicleId(e) } : {}), ...(['villager', 'cow', 'sheep', 'pig'].includes(e.name) ? { baby: isBaby(e.metadata), adult: !isBaby(e.metadata) } : {}), dist: Math.round(e.position.distanceTo(bot.entity.position)), at: e.position.floored().toArray().join(','), exact: e.position.toArray().map(n => Math.round(n * 100) / 100).join(','), metadata: JSON.stringify(e.metadata), attributes: e.attributes, equipment: (e.equipment ?? []).flatMap((item, slot) => item ? [{ slot, name: item.name, count: item.count }] : []) }))
   }),
   watch: (a) => {
     if (!a.name || [a.block, a.mob, a.item].filter(Boolean).length !== 1) throw new Error('watch needs name= and exactly one of block=, mob=, item=')
