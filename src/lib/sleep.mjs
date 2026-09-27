@@ -29,6 +29,19 @@ export function bedChoice (beds, zones, me, any = false, occupied = new Set()) {
   if (any || beds.some(b => !theirs(b))) return { error: `every bed you may use within 32 blocks is occupied: a bed holds one sleeper. ${spare}` }
   return { error: `the only bed within 32 blocks is in ${theirs(beds[0]).name}: that is their bed, and a bed holds one sleeper. ${spare}, or sleep any=true if they invited you` }
 }
+// Automatic sleeping never treats protected village beds as public accommodation.
+// Require positive ownership, and avoid beds near villagers even outside mapped zones.
+export function automaticBeds (beds, zones, places, me, residents = []) {
+  const mine = `${String(me).toLowerCase()}-`
+  return beds.filter(bed => {
+    const containing = zones.filter(z => inAnyZone([z], bed))
+    if (containing.some(z => /-village$/i.test(z.name) || !String(z.name).toLowerCase().startsWith(mine))) return false
+    if (residents.some(p => p && Math.hypot(p.x - bed.x, p.y - bed.y, p.z - bed.z) <= 16)) return false
+    return containing.some(z => String(z.name).toLowerCase().startsWith(mine)) ||
+      places.some(p => p.kind === 'bed' && p.by === me && Math.hypot(p.x - bed.x, p.y - bed.y, p.z - bed.z) <= 2)
+  })
+}
+
 // the bedtime reflex failed with this error: what to tell the driver (null: nothing, the driver's own order took over)
 export const bedtimeReport = error => /^cancelled: superseded/.test(error)
   ? null

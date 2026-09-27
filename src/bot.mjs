@@ -1,3 +1,4 @@
+import { automaticBeds } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
@@ -556,7 +557,7 @@ function connect () {
       })
       emit('respawned', { ...(plan.why ? { doing: plan.do, note: plan.why } : {}) })
       if (plan.do === 'burrow') holeUp(plan.why)
-      if (plan.do === 'sleep') runLong('sleep', { timeout: 60 }).catch(() => {})
+      if (plan.do === 'sleep') runLong('sleep', { timeout: 60, automatic: true }).catch(() => {})
     }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
@@ -922,6 +923,7 @@ setInterval(() => {
 }, 5000)
 // is the MaxListeners warning (11 physicsTick listeners) a plateau or a leak? One line every 10 minutes in bot.log settles it
 setInterval(() => { if (ready) console.log(`[listeners] physicsTick=${bot.listenerCount('physicsTick')} heapMb=${Math.round(process.memoryUsage().heapUsed / 1e6)}`) }, 600000)
+export const automaticSleepBeds = () => automaticBeds(bedsNear(), zones, readPlaces(), cfg.username, Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position))
 // bedtime reflex (see bedtime in lib.mjs)
 let lastDriven = Date.now()
 let lastBedTry = 0
@@ -932,7 +934,7 @@ setInterval(() => {
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   if (!isNight(bot.time.timeOfDay)) holedUp = null
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp) || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: !bedChoice(bedsNear(), zones, cfg.username).error,
+    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp) || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: automaticSleepBeds().length > 0,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
   if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
@@ -940,7 +942,7 @@ setInterval(() => {
   lastBedTry = now
   if (bedFailures === 0) emit('bedtime', { note: 'night, no orders, a bed nearby: going to bed by myself' })
   // say so once a night: the driver is told, and the retries (ever further apart) stay quiet
-  runLong('sleep', { timeout: 60 }).then(r => {
+  runLong('sleep', { timeout: 60, automatic: true }).then(r => {
     const report = r.ok ? null : bedtimeReport(r.error)
     if (report && bedFailures++ === 0) emit('bedtime_failed', { error: report })
   })
@@ -2582,8 +2584,8 @@ export const long = {
     // card bebf3a5f): walk there once (bed=<place>, else my nearest kind=bed mark; src/lib/sleep.mjs ownBed) and look again
     let walked = false
     for (;;) {
-      const { bed: p, error } = bedChoice(bedsNear(), zones, cfg.username, a.any === true, occupied)
-      if (error && !walked && /^no bed within 32/.test(error)) {
+      const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
+      if (error && !a.automatic && !walked && /^no bed within 32/.test(error)) {
         const from = pos()
         const plan = nightPlan({ near: false, bed: ownBed(readPlaces(), cfg.username, { bed: a.bed, from }), from, bedRange: a.bed_range ?? BED_RANGE })
         if (plan.do !== 'walk') throw new Error(`${error} (${plan.why})`)

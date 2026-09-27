@@ -10,7 +10,7 @@ import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverabl
 import { scaffoldJournal } from '../scaffold/journal.mjs'
 import { ROOT, HOME, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
-import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance } from '../bot.mjs'
+import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance, automaticSleepBeds } from '../bot.mjs'
 import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 
 // ---------------------------------------------------------------- the composite runner ("autopilot")
@@ -151,14 +151,14 @@ function makeApi (composite, a, alive) {
     alive()
     if (!night()) sleptTonight = false
     if (night() && bot.vehicle) throw new HandBack('night aboard a vehicle; find a checked landing before walking to a bed')
-    if (night() && !sleptTonight && bedsNear().length) {
+    if (night() && !sleptTonight && automaticSleepBeds().length) {
       sleptTonight = true
       // said out loud: an agent that saw `asleep doing=mine.get 174s` with nothing moving stopped it as wedged (Chani, twice)
       const mine = task
       if (mine) mine.paused = 'night'
       emit('task_paused', { id: mine?.id, name: composite, why: PAUSES.night })
       try {
-        await long.sleep({}).catch(() => {})
+        await long.sleep({ automatic: true }).catch(() => {})
         await until(() => !bot.isSleeping, { timeout: 900, every: 5, what: 'the night never ended' }).catch(() => {})
       } finally {
         if (mine) delete mine.paused

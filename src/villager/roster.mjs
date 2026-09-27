@@ -78,10 +78,11 @@ export function mergeVillagerObservation (roster, input) {
     }
   }
 
+  let claimAccepted=false
   if(input.workstationClaim){
     const c=input.workstationClaim
     if(c.basis!==WORKSTATION_CLAIM_BASIS||!['x','y','z'].every(k=>Number.isInteger(c[k]))||typeof c.block!=='string'||typeof c.profession!=='string'||!validTime(c.observedAt)||Date.parse(c.observedAt)>Date.parse(input.at))throw new Error('workstation claim requires a causal exact UUID observation with timestamp and block')
-    if(newerOrEqual(c.observedAt,prior.workstationClaim?.observedAt))next.workstationClaim={...plain(c),observedBy:String(input.by ?? 'unknown')}
+    if(newerOrEqual(c.observedAt,prior.workstationClaim?.observedAt)&&(!prior.workstationClaim?.invalidatedAt||Date.parse(c.observedAt)>Date.parse(prior.workstationClaim.invalidatedAt))){next.workstationClaim={...plain(c),observedBy:String(input.by ?? 'unknown')};claimAccepted=true}
   }
   if(input.invalidateWorkstationClaim&&next.workstationClaim&&newerOrEqual(input.at,next.workstationClaim.observedAt))next.workstationClaim={...next.workstationClaim,invalidatedAt:input.at,invalidationReason:String(input.invalidateWorkstationClaim)}
 
@@ -102,7 +103,7 @@ export function mergeVillagerObservation (roster, input) {
   }
 
   const villagers={...roster.villagers,[input.uuid]:next}
-  if(input.workstationClaim)for(const [uuid,r] of Object.entries(villagers))if(uuid!==input.uuid&&r.workstationClaim&&['x','y','z'].every(k=>r.workstationClaim[k]===next.workstationClaim[k]))villagers[uuid]={...r,workstationClaim:{...r.workstationClaim,invalidatedAt:input.at,invalidationReason:'another exact UUID verified a claim at this station'}}
+  if(claimAccepted)for(const [uuid,r] of Object.entries(villagers))if(uuid!==input.uuid&&r.workstationClaim&&newerOrEqual(next.workstationClaim.observedAt,r.workstationClaim.observedAt)&&['x','y','z'].every(k=>r.workstationClaim[k]===next.workstationClaim[k]))villagers[uuid]={...r,workstationClaim:{...r.workstationClaim,invalidatedAt:input.at,invalidationReason:'another exact UUID verified a claim at this station'}}
   return { ...roster, villagers }
 
 }

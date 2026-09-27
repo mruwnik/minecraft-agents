@@ -38,6 +38,7 @@ test('another verified claimant invalidates prior evidence and changed-block inv
  const later=new Date(now+1000).toISOString()
  roster=mergeVillagerObservation(roster,{uuid:B,at:later,by:'Probe',workstationClaim:{...claim,observedAt:later}})
  assert.equal(roster.villagers[A].workstationClaim.invalidationReason,'another exact UUID verified a claim at this station')
+ roster=mergeVillagerObservation(roster,{uuid:A,at:stamp,by:'OldProbe',workstationClaim:claim});assert.equal(roster.villagers[B].workstationClaim.invalidatedAt,undefined,'older claim must not invalidate newer association');assert.equal(roster.villagers[A].workstationClaim.invalidatedAt,later,'older observation must not resurrect invalidated evidence')
  const seen=roster.villagers[B].lastSeenAt
  roster=mergeVillagerObservation(roster,{uuid:B,at:new Date(now+2000).toISOString(),by:'Probe',invalidateWorkstationClaim:'block removed'})
  assert.equal(roster.villagers[B].lastSeenAt,seen);assert.ok(roster.villagers[B].workstationClaim.invalidatedAt)
