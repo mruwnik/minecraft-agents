@@ -9,6 +9,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import mineflayer from 'mineflayer'
+import { installWorldClock } from './world-clock.mjs'
 import pf from 'mineflayer-pathfinder'
 import collectBlock from 'mineflayer-collectblock'
 import pvp from 'mineflayer-pvp'
@@ -249,6 +250,7 @@ function connect () {
   bot = mineflayer.createBot({
     host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: 'offline'
   })
+  installWorldClock(bot)
   villagerRoster.attach(bot)
   bot.loadPlugin(pathfinder)
   bot.loadPlugin(collectBlock.plugin)
