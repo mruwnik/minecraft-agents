@@ -44,6 +44,10 @@
   #builds .stale { color: var(--warn); }
   #empty { color: var(--dim); padding: 30px 0; }
   .block { margin-bottom: 22px; }
+  #previewCanvas { display: block; width: 100%; height: 360px; background: #0e1015; border: 1px solid var(--line); border-radius: 4px; cursor: grab; touch-action: none; }
+  .previewControls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; color: var(--dim); }
+  .previewControls button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  #previewHover { min-height: 1.45em; color: var(--dim); }
   #layers { display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: flex-start; }
   .layer { display: flex; flex-direction: column; gap: 5px; }
   .layer .cap { color: var(--dim); display: flex; gap: 8px; align-items: baseline; }
@@ -92,6 +96,16 @@
       <div class="desc" id="desc"></div>
       <div id="meta"></div>
       <div id="builds"></div>
+      <div class="block" id="previewBlock">
+        <h2>building preview</h2>
+        <canvas id="previewCanvas" aria-label="Rotatable building preview"></canvas>
+        <div class="previewControls">
+          <button id="rotateLeft" aria-label="Rotate left">↶</button><button id="rotateRight" aria-label="Rotate right">↷</button>
+          <label>show through <input id="previewCut" type="range" aria-label="Highest visible layer"><span id="previewLayer"></span></label>
+          <span>drag to rotate · blueprint default palette, not placed materials</span>
+        </div>
+        <div id="previewHover"></div>
+      </div>
       <div class="block">
         <h2>layers, from the ground up</h2>
         <div id="gridRow">
@@ -113,7 +127,7 @@
   </div>
 </main>
 <script type="module">
-import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockCount } from './blueprint.mjs'
+import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockCount, previewFaces, previewBounds } from './blueprint.mjs'
 
 const CELL_PX = 22
 const POLL_MS = 5000
@@ -123,6 +137,54 @@ const tag = (name, cls, text) => { const e = document.createElement(name); if (c
 let library = { at: 0, blueprints: [] }
 let selected = new URLSearchParams(location.search).get('name')
 const drawn = {}   // per layer y: the cells the canvas shows, for the hover
+let previewAngle = Math.PI / 4
+let previewName = null
+let previewPolygons = []
+let previewDrag = null
+
+const drawPreview = () => {
+  const detail = library.blueprints.find(b => b.name === selected)
+  if (!detail?.bp) return
+  const canvas = el('previewCanvas'); const rect = canvas.getBoundingClientRect()
+  const w = Math.max(1, rect.width); const h = rect.height; const dpr = devicePixelRatio || 1
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr)
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const maxY = Number(el('previewCut').value)
+  el('previewLayer').textContent = maxY === Number(el('previewCut').max) ? ` y${maxY} (whole building)` : ` y${maxY}`
+  const faces = previewFaces(detail.preview, { angle: previewAngle, maxY })
+  // Fit the whole building so cutting the roof away does not zoom the room.
+  const bounds = previewBounds(previewFaces(detail.preview, { angle: previewAngle }))
+  const scale = Math.min((w - 40) / Math.max(1, bounds.x2 - bounds.x1), (h - 40) / Math.max(1, bounds.y2 - bounds.y1))
+  const px = p => ({ x: w / 2 + (p.x - (bounds.x1 + bounds.x2) / 2) * scale, y: h / 2 + (p.y - (bounds.y1 + bounds.y2) / 2) * scale })
+  ctx.clearRect(0, 0, w, h)
+  previewPolygons = faces.map(face => ({ ...face, points: face.points.map(px) }))
+  for (const face of previewPolygons) {
+    ctx.beginPath(); face.points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath()
+    ctx.fillStyle = face.colour; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = .6; ctx.stroke()
+  }
+}
+const insidePolygon = (points, x, y) => {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]; const b = points[j]
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+el('previewCanvas').addEventListener('pointerdown', e => { previewDrag = { x: e.clientX, angle: previewAngle }; e.currentTarget.setPointerCapture(e.pointerId) })
+el('previewCanvas').addEventListener('pointerup', () => { previewDrag = null })
+el('previewCanvas').addEventListener('pointercancel', () => { previewDrag = null })
+el('previewCanvas').addEventListener('pointermove', e => {
+  if (previewDrag) { previewAngle = previewDrag.angle + (e.clientX - previewDrag.x) / 140; drawPreview(); return }
+  const r = e.currentTarget.getBoundingClientRect()
+  const face = [...previewPolygons].reverse().find(f => insidePolygon(f.points, e.clientX - r.left, e.clientY - r.top))
+  el('previewHover').textContent = face ? `x+${face.cell.x} y${face.cell.y} z+${face.cell.z} · ${face.cell.name}` : ''
+})
+el('previewCanvas').addEventListener('pointerleave', () => { el('previewHover').textContent = '' })
+el('rotateLeft').addEventListener('click', () => { previewAngle -= Math.PI / 2; drawPreview() })
+el('rotateRight').addEventListener('click', () => { previewAngle += Math.PI / 2; drawPreview() })
+el('previewCut').addEventListener('input', drawPreview)
+new ResizeObserver(drawPreview).observe(el('previewCanvas'))
 
 const levelOf = status => status === 'ok' ? 'ok' : status === 'build refuses' ? 'error' : status === 'does not parse' ? 'parse' : 'warning'
 
@@ -277,10 +339,20 @@ const renderDetail = () => {
   el('desc').textContent = detail.bp?.description ?? ''
   el('hover').textContent = ''
   if (!detail.bp) {
+    el('previewBlock').hidden = true
     el('meta').textContent = ''; el('builds').textContent = ''; el('layers').textContent = ''; el('legend').textContent = ''; el('bill').textContent = ''; el('billNote').textContent = ''
     renderLint(detail)
     return
   }
+  el('previewBlock').hidden = false
+  if (previewName !== `${detail.name}:${detail.hash}`) {
+    previewName = `${detail.name}:${detail.hash}`; previewAngle = Math.PI / 4
+    el('previewCut').min = detail.bp.layers[0].y
+    el('previewCut').max = detail.bp.layers.at(-1).y
+    el('previewCut').value = detail.bp.layers.at(-1).y
+  }
+  el('previewHover').textContent = ''
+  drawPreview()
   renderMeta(detail)
   renderLayers(detail)
   renderBill(detail)

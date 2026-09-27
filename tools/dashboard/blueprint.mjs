@@ -98,6 +98,41 @@ export const layerCells = (bp, y) => {
   }))
 }
 
+// Orthographic whole-building preview. Faces carry their source cell for hover;
+// the layer cutoff exposes rooms without pretending the roof is transparent.
+export const previewFaces = (cells, { angle = Math.PI / 4, maxY = Infinity } = {}) => {
+  const cos = Math.cos(angle); const sin = Math.sin(angle)
+  const project = ([x, y, z]) => ({ x: cos * x - sin * z, y: .45 * (sin * x + cos * z) - .85 * y, depth: .85 * (sin * x + cos * z) + .45 * y })
+  const faces = []
+  for (const cell of cells ?? []) {
+    if (cell.y > maxY) continue
+    const colour = altColour({ name: cell.name, states: cell.states })
+    for (const [a, b, c, d, e, f] of cell.shapes) {
+      const x = cell.x + a; const y = cell.y + b; const z = cell.z + c
+      const X = cell.x + d; const Y = cell.y + e; const Z = cell.z + f
+      const sides = [
+        { points: [[x,Y,z],[X,Y,z],[X,Y,Z],[x,Y,Z]], light: 1.1 },
+        { points: cos >= 0 ? [[x,y,Z],[x,Y,Z],[X,Y,Z],[X,y,Z]] : [[X,y,z],[X,Y,z],[x,Y,z],[x,y,z]], light: .72 },
+        { points: sin >= 0 ? [[X,y,Z],[X,Y,Z],[X,Y,z],[X,y,z]] : [[x,y,z],[x,Y,z],[x,Y,Z],[x,y,Z]], light: .88 }
+      ]
+      for (const side of sides) {
+        const points = side.points.map(project)
+        faces.push({ cell, points, depth: points.reduce((n, p) => n + p.depth, 0) / 4, colour: shade(colour ?? '#4b5462', side.light) })
+      }
+    }
+  }
+  return faces.sort((a, b) => a.depth - b.depth)
+}
+
+export const previewBounds = faces => {
+  const bounds = { x1: Infinity, x2: -Infinity, y1: Infinity, y2: -Infinity }
+  for (const face of faces) for (const p of face.points) {
+    bounds.x1 = Math.min(bounds.x1, p.x); bounds.x2 = Math.max(bounds.x2, p.x)
+    bounds.y1 = Math.min(bounds.y1, p.y); bounds.y2 = Math.max(bounds.y2, p.y)
+  }
+  return Number.isFinite(bounds.x1) ? bounds : { x1: 0, x2: 1, y1: 0, y2: 1 }
+}
+
 // what the page says under the cursor: the cell's offset from the anchor (x east, z south), then the block
 export const hoverText = cell => `x+${cell.dx} y${cell.y} z+${cell.dz} · ${cell.label} (${cell.token})`
 

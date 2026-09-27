@@ -1,8 +1,28 @@
 // The node-side pure helpers behind tools/dashboard.mjs: reading the agent folders, deciding which file a look may
 // hand out, and routing a request. The map itself is in ./map.mjs, which the browser loads too.
 import path from 'node:path'
+import prismarineBlock from 'prismarine-block'
+import minecraftData from 'minecraft-data'
 import { parsePlan } from '../../src/lib/plan.mjs'
 import { parseBlueprint, resolve, bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
+
+const PreviewBlock = prismarineBlock('26.1')
+const previewRegistry = minecraftData('26.1')
+// Registry shapes keep slabs, stairs, beds and gates at their actual dimensions.
+// Non-colliding decorative blocks need a small visible model of their own.
+export const previewCells = bp => bp.layers.flatMap(layer => layer.grid.flatMap((row, z) => [...row].flatMap((token, x) => {
+  const alt = bp.legend[token]?.alts?.[0]
+  if (!alt || /^(air|cave_air|void_air)$/.test(alt.name)) return []
+  let shapes
+  try {
+    const defaults = PreviewBlock.fromStateId(previewRegistry.blocksByName[alt.name].defaultState).getProperties()
+    shapes = PreviewBlock.fromProperties(alt.name, { ...defaults, ...alt.states }, 0).shapes
+  } catch { shapes = [[0, 0, 0, 1, 1, 1]] }
+  if (!shapes.length) shapes = /torch|candle|lantern/.test(alt.name) ? [[.4, 0, .4, .6, .7, .6]]
+    : /water|lava/.test(alt.name) ? [[0, 0, 0, 1, .875, 1]]
+      : [[.2, 0, .2, .8, .6, .8]]
+  return [{ x, y: layer.y, z, token, name: alt.name, states: alt.states ?? {}, shapes }]
+})))
 
 const parseConfig = text => {
   try {
@@ -188,5 +208,5 @@ export const blueprintDetail = ({ name, text, hash }, places = []) => {
   const parsed = parseBlueprint(text)
   if (parsed.errors.length) return { name, hash, bp: null, bill: null, lint: null, counts: null, errors: parsed.errors, builds }
   const bp = resolve(parsed)
-  return { name, hash, bp, bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds }
+  return { name, hash, bp, preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds }
 }
