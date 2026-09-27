@@ -9,6 +9,7 @@ export function makeBoatRuntime (deps) {
   let bot, boatLeashHolder
   const sync = () => { bot = deps.getBot(); boatLeashHolder = deps.getBoatLeashHolder() }
   function isBoat (entity) { return /(^|_)boat$/.test(entity?.name ?? '') }
+  const carriedBoatCount = () => Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
   function boatById (id) {
     const boat = bot.entities[id]
     if (!isBoat(boat)) throw new Error(`no boat with id ${id} is in sight`)
@@ -157,7 +158,7 @@ export function makeBoatRuntime (deps) {
       if (boatPassengers(boat).length) throw new Error(`boat ${a.id} still has passengers`)
       if (boatLeashHolder.has(boat.id)) throw new Error(`boat ${a.id} is leashed; detach before recovering it`)
       const at = boat.position.clone()
-      const before = Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
+      const before = carriedBoatCount()
       await reachBoatForUse(boat)
       await equipBoatBreakingAxe()
       for (let hit = 0; hit < 3 && bot.entities[boat.id]; hit++) {
@@ -166,7 +167,7 @@ export function makeBoatRuntime (deps) {
       }
       if (bot.entities[boat.id]) throw new Error(`empty boat ${boat.id} did not break after three hits`)
       for (let i = 0; i < 20; i++) {
-        const now = Object.entries(inventoryCounts()).filter(([name]) => /^\w+_boat$/.test(name)).reduce((n, [, count]) => n + count, 0)
+        const now = carriedBoatCount()
         if (now > before) return { recovered: boat.id, itemCount: now - before, at: pos() }
         await bot.waitForTicks(1)
       }
