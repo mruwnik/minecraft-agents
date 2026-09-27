@@ -112,3 +112,16 @@ test('lectern cache invalidation lets a changed offer be checked afresh and pres
   assert.deepEqual(result.paid, { emerald: 1 })
   assert.equal(h.purchases, 1)
 })
+
+test('UUID trading refuses recycled numeric IDs, including replacement during approach', async () => {
+  const h = merchantHarness(), original = h.bot.entities[2]
+  const uuid = original.uuid
+  h.bot.entities[2] = entity(2, 'villager', '00000000-0000-4000-8000-999999999999')
+  await assert.rejects(h.runtime.long.trades({ id: 2, uuid }), /with UUID/)
+  assert.equal(h.opens, 0)
+  h.bot.entities[2] = original
+  const deps = { ...h.deps, goNear: async () => { h.bot.entities[2] = entity(2, 'villager') } }
+  const runtime = makeVillagerRuntime(deps)
+  await assert.rejects(runtime.long.trade({id:2,uuid,offer:1}), /exact villager changed/)
+  assert.equal(h.purchases, 0)
+})

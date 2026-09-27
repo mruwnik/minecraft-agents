@@ -521,3 +521,32 @@ test('roller restores a dug lectern when an interrupted reroll fails to release 
   assert.equal(cleanedUp, true)
   assert.equal(placed, true)
 })
+
+test('UUID rolling in a crowd accepts only proven locked rivals and never builds a pen', async () => {
+  const uuid='12345678-1234-4234-8234-123456789abc', rivalUuid='12345678-1234-4234-8234-123456789abd'
+  const cell={x:0,y:64,z:0};let locked=true;const changes=[]
+  const row=(id,uuid,profession)=>({id,uuid,baby:false,exact:'1,64,1',metadata:JSON.stringify({16:false,19:{profession}})})
+  const api={places:()=>[],zones:()=>[],me:()=> 'Probe',clock:()=>({day:true}),inv:()=>({lectern:2,emerald:64,book:1}),block:()=>({name:'lectern'}),report:()=>{},note:()=>{},checkpoint:async()=>{},until:async f=>assert.ok(await f()),
+    act:async(name,args)=>{
+      if(name==='goto')return{}
+      if(name==='entity')return{found:[row(1,uuid,'librarian'),row(2,rivalUuid,'farmer')]}
+      if(name==='find_blocks')return{positions:[]}
+      if(name==='trades')return args.uuid===rivalUuid?{profession:'farmer',level:1,offers:[{nbTradeUses:locked?1:0}]}:{profession:'librarian',level:1,offers:[book('mending',1,12)]}
+      changes.push(name);throw Error(name)
+    }}
+  const args={...cell,uuid,pen:false,want:'mending',tries:1}
+  assert.equal((await roll.run(api,args)).found,'mending 1')
+  assert.deepEqual(changes,[])
+  locked=false
+  await assert.rejects(roll.run(api,args),/not proven trade-locked/)
+  assert.deepEqual(changes,[])
+})
+
+test('a fresh traded-target guard prevents removing its station even when offer use counters reset',async()=>{
+  const cell={x:0,y:64,z:0};let reads=0,digs=0
+  const row={id:1,exact:'1,64,1',metadata:JSON.stringify({16:false,19:{profession:'librarian'}})}
+  const api={places:()=>[],zones:()=>[],me:()=> 'Probe',clock:()=>({day:true}),inv:()=>({lectern:2}),block:()=>({name:'lectern'}),report:()=>{},note:()=>{},until:async f=>assert.ok(await f()),
+    act:async n=>{if(n==='goto')return{};if(n==='entity')return{found:[row]};if(n==='find_blocks')return{positions:[]};if(n==='trades')return{profession:'librarian',level:++reads>=4?2:1,offers:[book('unbreaking',1,12)]};if(n==='dig'){digs++;throw Error('unsafe dig')}throw Error(n)}}
+  await assert.rejects(roll.run(api,{...cell,id:1,pen:false,want:'mending',tries:2}),/trade-locked/)
+  assert.equal(digs,0)
+})

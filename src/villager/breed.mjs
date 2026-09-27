@@ -1,3 +1,4 @@
+import { entityUuid, villagerObservation } from './observation.mjs'
 import { cellKey as breedKey, safeFullBlock as safeFull, buildingMaterial as breedMaterial, woodenGate as breedGate } from '../enclosure/blocks.mjs'
 import { roomPlan, roomInside } from '../enclosure/layout.mjs'
 export { cellKey as breedKey, safeFullBlock as breedFullBlock, buildingMaterial as breedMaterial, woodenGate as breedGate } from '../enclosure/blocks.mjs'
@@ -49,12 +50,12 @@ export function breedCensus (plan, entities) {
     if (xyz.length !== 3 || xyz.some(n => !Number.isFinite(n))) throw new Error('villager observation lacks exact position')
     const p = { x: xyz[0], y: xyz[1], z: xyz[2] }
     if (!breedInside(plan, p)) continue
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e.uuid ?? '')) throw new Error('villager observation lacks UUID')
-    const metadata = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : e.metadata
-    const baby = typeof e.baby === 'boolean' ? e.baby : metadata?.[16]
+    if (!entityUuid(e.uuid)) throw new Error('villager observation lacks UUID')
+    const observation = villagerObservation(e)
+    const baby = observation.baby
     if (typeof baby !== 'boolean') throw new Error(`villager ${e.uuid} has unknown adult/baby metadata`)
     if (e.vehicleId !== undefined && e.vehicleId !== null) throw new Error(`villager ${e.uuid} must be on foot before breeding`)
-    seen.set(e.uuid, { ...e, position: p, baby, sleeping: e.sleeping === true || metadata?.[6] === 2 })
+    seen.set(e.uuid, { ...e, position: p, baby, sleeping: observation.sleeping })
   }
   return [...seen.values()]
 }

@@ -1,6 +1,7 @@
 // Only entities whose adult hitbox fits the one-cell house entrance and
 // three-cell passage are eligible for the small boat-transfer workflow.
-export const entityUuid = text => typeof text === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(text)
+import { entityUuid, observedAge } from '../lib/entity-observation.mjs'
+export { entityUuid } from '../lib/entity-observation.mjs'
 
 const PASSENGERS = Object.freeze({
   villager: { label: 'adult villager' },
@@ -11,18 +12,9 @@ const PASSENGERS = Object.freeze({
 export const BOAT_PASSENGER_MAX_WIDTH = 0.95
 export const BOAT_PASSENGER_MAX_HEIGHT = 2
 
-function ageFlag (entity) {
-  if (typeof entity?.baby === 'boolean') return entity.baby
-  let metadata = entity?.metadata
-  if (typeof metadata === 'string') {
-    try { metadata = JSON.parse(metadata) } catch { return undefined }
-  }
-  return typeof metadata?.[16] === 'boolean' ? metadata[16] : undefined
-}
-
 export function boatPassengerProfile (entity) {
   if (!entity || !PASSENGERS[entity.name]) return { ok: false, error: `unsupported boat passenger ${entity?.name ?? 'unknown'}; supported adults are villagers, cows, sheep and pigs` }
-  const baby = ageFlag(entity)
+  const baby = observedAge(entity)
   if (baby !== false) return { ok: false, error: `${entity.name} ${entity.uuid ?? ''} must be positively observed as an adult; babies and unknown age are refused` }
   if (!Number.isFinite(entity.width) || !Number.isFinite(entity.height) || entity.width <= 0 || entity.height <= 0) return { ok: false, error: `${entity.name} ${entity.uuid ?? ''} lacks observed hitbox dimensions` }
   if (entity.width > BOAT_PASSENGER_MAX_WIDTH || entity.height > BOAT_PASSENGER_MAX_HEIGHT) return { ok: false, error: `${entity.name} ${entity.uuid ?? ''} hitbox ${entity.width}x${entity.height} does not fit the one-wide, two-high gate` }

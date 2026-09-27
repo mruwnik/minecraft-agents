@@ -1,6 +1,7 @@
+import { entityUuid, villagerObservation } from '../villager/observation.mjs'
 // Villager trading and attributed household food delivery runtime.
 // Live body dependencies are injected, keeping client lifecycle in bot.mjs.
-import { isBaby, within, offerCost, tradeLine } from '../lib.mjs'
+import { within, offerCost, tradeLine } from '../lib.mjs'
 import { compatibleInventoryStacks } from '../inventory/compact.mjs'
 
 export function makeVillagerRuntime (deps) {
@@ -8,17 +9,17 @@ export function makeVillagerRuntime (deps) {
     getFeeding, setFeeding, currentVehicleId } = deps
   let bot
   const sync = () => { bot = deps.getBot() }
-  const PROFESSIONS = 'unemployed armorer butcher cartographer cleric farmer fisherman fletcher leatherworker librarian mason nitwit shepherd toolsmith weaponsmith'.split(' ')
   function villagerData (entity) {
-    const raw = entity.metadata?.[19] ?? entity.metadata?.[18]
-    const profession = typeof raw?.profession === 'string' ? raw.profession.replace(/^minecraft:/, '') : PROFESSIONS[raw?.villagerProfession ?? raw?.profession ?? raw?.[1] ?? 0] ?? 'unknown'
-    return { profession, level: raw?.level ?? raw?.[2] ?? 1, adult: !isBaby(entity.metadata), nitwit: profession === 'nitwit' }
+    const data = villagerObservation(entity)
+    // Trading retains Mineflayer's default-false wire age semantics.
+    return { profession: data.profession, level: data.level, adult: data.baby !== true, nitwit: data.nitwit }
   }
   function targetVillager (a) {
+    if (a.uuid !== undefined && !entityUuid(a.uuid)) throw new Error('trading needs a valid exact uuid=')
     const target = a.x === undefined ? bot.entity.position : new Vec3(a.x + 0.5, a.y, a.z + 0.5)
     const nearby = Object.values(bot.entities).filter(e => e.name === 'villager' && e.position.distanceTo(target) <= (a.id === undefined ? 6 : 8))
-    const entity = a.id !== undefined ? nearby.find(e => e.id === a.id) : nearby.sort((x, y) => x.position.distanceTo(target) - y.position.distanceTo(target))[0]
-    if (!entity) throw new Error(`no villager within 6 blocks${a.id === undefined ? '' : ` with id ${a.id}`}`)
+    const entity = a.uuid !== undefined ? nearby.find(e => e.uuid === a.uuid && (a.id === undefined || e.id === a.id)) : a.id !== undefined ? nearby.find(e => e.id === a.id) : nearby.sort((x, y) => x.position.distanceTo(target) - y.position.distanceTo(target))[0]
+    if (!entity) throw new Error(`no villager within 6 blocks${a.uuid !== undefined ? ` with UUID ${a.uuid}` : a.id === undefined ? '' : ` with id ${a.id}`}`)
     return entity
   }
   function villagerEnchants (item) {
@@ -54,11 +55,12 @@ export function makeVillagerRuntime (deps) {
       const data = villagerData(entity)
       if (data.profession === 'unemployed' || data.profession === 'nitwit' || !data.adult) return { ...data, id: entity.id, offers: [], text: data.adult ? data.profession : 'baby' }
       await goNear(entity.position, 2.5)
-      if (!bot.entities[entity.id] || bot.entity.position.distanceTo(entity.position) > 6) throw new Error('the villager walked off before the window opened')
+      if (bot.entity.position.distanceTo(entity.position) > 6) throw new Error('the villager walked off before the window opened')
+      if (bot.entities[entity.id] !== entity || (a.uuid && entity.uuid !== a.uuid)) throw new Error('the exact villager changed before the window opened')
       const window = await openVillagerWindow(entity, 'villager window did not open in 5 s')
       try {
         const offers = window.trades.map((o, n) => ({ index: n + 1, inputItem1: o.inputItem1 && { name: o.inputItem1.name, count: o.realPrice ?? o.inputItem1.count }, inputItem2: o.inputItem2 && { name: o.inputItem2.name, count: o.inputItem2.count }, outputItem: o.outputItem && { name: o.outputItem.name, count: o.outputItem.count, enchants: villagerEnchants(o.outputItem) }, nbTradeUses: o.nbTradeUses, maximumNbTradeUses: o.maximumNbTradeUses, tradeDisabled: o.tradeDisabled }))
-        lastVillagerOffers = { id: entity.id, offers, at: Date.now() }
+        lastVillagerOffers = { id: entity.id, uuid: entity.uuid, offers, at: Date.now() }
         return { ...villagerData(entity), id: entity.id, offers, text: [`profession=${data.profession} level=${data.level} offers=${offers.length}`, ...offers.map((o, n) => tradeLine(o, n + 1))].join('\n') }
       } finally { window.close() }
     },
@@ -67,13 +69,14 @@ export function makeVillagerRuntime (deps) {
       if (!(a.offer >= 1 && Number.isInteger(a.offer)) || !(a.times === undefined || (Number.isInteger(a.times) && a.times >= 1))) throw new Error('trade needs offer=1,2,... and positive times=')
       if (tradeOutcomeUncertain || tradeInFlight) throw new Error('a prior trade outcome is uncertain; inspect inventory and offers, then restart this body before another purchase')
       const entity = targetVillager(a)
-      const cached = lastVillagerOffers?.id === entity.id && Date.now() - lastVillagerOffers.at < 5000 ? lastVillagerOffers.offers[a.offer - 1] : null
+      const cached = lastVillagerOffers?.id === entity.id && lastVillagerOffers.uuid === entity.uuid && Date.now() - lastVillagerOffers.at < 5000 ? lastVillagerOffers.offers[a.offer - 1] : null
       if (cached) {
         const needs = Object.fromEntries(Object.entries(offerCost(cached)).map(([name, n]) => [name, n * (a.times ?? 1)]))
         const held = inventoryCounts()
         if (Object.entries(needs).some(([name, n]) => (held[name] ?? 0) < n)) throw new Error(`trade needs ${Object.entries(needs).map(([name, n]) => `${n} ${name}`).join(' and ')}: carrying ${Object.entries(needs).map(([name]) => `${held[name] ?? 0} ${name}`).join(', ')}`)
       }
       await goNear(entity.position, 2.5)
+      if (bot.entities[entity.id] !== entity || (a.uuid && entity.uuid !== a.uuid)) throw new Error('the exact villager changed before the window opened')
       const window = await openVillagerWindow(entity, 'villager window did not open in 5 s')
       let originalOpen = true
       const closeOriginal = () => { if (originalOpen) { originalOpen = false; window.close() } }
