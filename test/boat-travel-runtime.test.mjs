@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { createRequire } from 'node:module'
 import { makeBoatTravelRuntime } from '../src/body/boat-travel.mjs'
 
 function fixture ({ passengers = [], mounted = false, failValidation = false, cancel = false, night = false, leash = null } = {}) {
@@ -97,4 +98,26 @@ test('unconfirmed landing never reports success or leaves input/listeners behind
   assert.equal(f.bot.vehicle.id, 4)
   assert.equal(f.bot.listenerCount('forcedMove'), 0)
   assert.deepEqual(f.writes.at(-1).value, { inputs: {} })
+})
+
+test('mounted landing sends actual passenger rotation before shift without position prediction', async () => {
+  const f = landFixture()
+  // The native mounted look helper only changes local camera state.
+  f.bot.entity.yaw = 0
+  await f.runtime.long.boat_land({ id: 4, x: 1, y: 64, z: 0 })
+  const index = f.writes.findIndex(p => p.name === 'look')
+  const shift = f.writes.findIndex(p => p.value.inputs?.shift)
+  assert.ok(index >= 0 && index < shift)
+  const packet = f.writes[index].value
+  assert.equal(packet.yaw, 270)
+  assert.equal(packet.pitch, 0)
+  assert.equal(packet.x, undefined)
+  assert.equal(packet.y, undefined)
+  assert.equal(packet.z, undefined)
+  const require = createRequire(import.meta.url)
+  const { createSerializer } = require('minecraft-protocol')
+  for (const version of ['1.21.5', '26.1']) {
+    const serializer = createSerializer({ state: 'play', isServer: false, version })
+    assert.ok(serializer.createPacketBuffer({ name: 'look', params: packet }).length > 0)
+  }
 })

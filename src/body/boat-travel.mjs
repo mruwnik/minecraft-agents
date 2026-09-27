@@ -72,6 +72,11 @@ export function makeBoatTravelRuntime ({ getBot, cancelGuard, readBoatState, get
           const blockAt = (x, y, z) => bot.blockAt(Vec3 ? new Vec3(x, y, z) : { x, y, z })
           const landing = checkedBoatLanding(blockAt, entity, point(a))
           await bot.look(landing.yaw, 0, true)
+          // Mineflayer's mounted player physics stops its normal look packets.
+          // Vanilla's dismount vector uses the passenger's server-side look,
+          // so local camera rotation alone cannot select the checked shore.
+          bot._client.write('look', { yaw: 180 - landing.yaw * 180 / Math.PI, pitch: 0,
+            onGround: false, flags: { onGround: false, hasHorizontalCollision: false } })
           await pause(50); guard.check()
           checkedBoatLanding(blockAt, entity, point(a))
           requested = true
