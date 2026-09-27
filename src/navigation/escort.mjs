@@ -91,7 +91,9 @@ export function configureEscortMoves (moves, options) {
   moves.refreshEscortTerrain = () => { corridor = createEscortCorridor(options.blockAt, options) }
   moves.escortCorridor = () => corridor
   moves.canDig = false; moves.allowSprinting = false; moves.allowParkour = false
-  moves.allow1by1towers = false; moves.maxDropDown = 1; moves.scafoldingBlocks = []
+  // Native maxDropDown counts from feet to the landing SUPPORT block: two
+  // means a one-block feet descent. The geometry filter also enforces <=1.
+  moves.allow1by1towers = false; moves.maxDropDown = 2; moves.scafoldingBlocks = []
   // Native post-processing otherwise shortcuts a valid wide route using only
   // player-sized physics. Its documented exclusion hook disables that shortcut.
   moves.exclusionAreasStep.push(() => 0)

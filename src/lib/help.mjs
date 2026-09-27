@@ -106,7 +106,7 @@ export const PRIMITIVES = {
   find_blocks: { section: 'sense', args: 'block= [maxDistance=64] [count=10]', doc: 'where the nearest blocks of a kind are; * wildcards work (*_log)' },
   block_at: { section: 'sense', args: 'x= y= z=', doc: 'the name and properties of one block' },
   scan: { section: 'sense', args: 'x1= y1= z1= x2= y2= z2= [where=]', doc: 'an ASCII map of a box of the world, or with where= just the coordinates of one kind of block' },
-  path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=] [route=] [live=]', doc: 'what the pathfinder makes of a walk from here, without walking it; route=true names the gates it opens and a waypoint every six steps; live=true plans with the movements walks use right now and names what differs from a fresh set' },
+  path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=] [route=] [live=] [surface=horse]', doc: 'what the pathfinder makes of a walk from here, without walking it; route=true names the gates it opens and a waypoint every six steps; live=true plans with the movements walks use right now and names what differs from a fresh set. surface=horse checks an explicit checkpoint within16 blocks using horse-width dry surface geometry, including a return path; route=true lists every checked waypoint' },
   inventory: { section: 'sense', args: '', doc: 'what I carry, what I wear and how many slots are free' },
   chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest, with free= (empty slots) and slots= (its size) so a deposit can pick a chest with room' },
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
@@ -118,7 +118,7 @@ export const PRIMITIVES = {
   protect: { section: 'map', args: 'name= x1= y1= z1= x2= y2= z2=', doc: 'protect a box of the world, mine or shared' },
   unprotect: { section: 'map', args: 'name=', doc: 'drop a protected area' },
   // ---- move
-  goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true, and crosses planted cells only where there is no other way, at a walking pace' },
+  goto: { section: 'move', args: 'place= | player= | x= z= [y=] [range=] [dig=] [surface=horse]', doc: 'walk there, opening doors and swimming; it does not dig or bridge unless dig=true, and crosses planted cells only where there is no other way, at a walking pace. surface=horse requires explicit x/y/z within16 blocks, checks loaded approach and retreat, rejects nearby danger/night, and stops on damage or stalled progress; it never automatically retreats' },
   follow: { section: 'move', args: 'player=', doc: 'keep walking after someone until stop' },
   rail_ride: { section: 'move', args: 'id= track=x:y:z,x:y:z exit=x:y:z', doc: 'ride one explicit empty minecart along a checked straight powered corridor to a braking station; never builds track and remains mounted on interruption' },
   horse_state: { section: 'move', args: '[id=]', doc: 'inspect nearby horses, donkeys and mules: server-confirmed age, tameness, saddle and passenger state' },

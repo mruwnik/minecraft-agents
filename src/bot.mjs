@@ -32,6 +32,7 @@ import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarg
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
+import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
 import { walkStandstill, walkProgress, WALK_PROGRESS_MS, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './navigation/stuck.mjs'
 import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
@@ -1625,6 +1626,12 @@ async function gotoWalk (a) {
   }
   return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
 }
+const surfaceWalkRuntime = makeSurfaceWalkRuntime({
+  getBot: () => bot, Vec3, goals, makeMoves, cancelGuard,
+  reportPerformance: (...args) => reportPerformance(...args),
+  report: data => emit('surface_walk', data),
+  dangerous: p => isNight(bot.time.timeOfDay) || Object.values(bot.entities).some(e => e.isValid && isHostile(e) && e.position.distanceTo(p ? new Vec3(p.x, p.y, p.z) : bot.entity.position) < 12)
+})
 const boatRuntime = makeBoatRuntime({
   getBot: () => bot, getBoatLeashHolder: () => boatLeashHolder,
   Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove, cancelGuard,
@@ -1662,6 +1669,7 @@ export const long = {
   ...villagerRuntime.long,
   async goto (a) {
     if (bot.vehicle) throw new Error('cannot walk while mounted; use the vehicle controller or confirm a safe dismount first')
+    if (a.surface !== undefined) return surfaceWalkRuntime.walk(a)
     spared = spareTest(a)
     try { return await gotoWalk(a) } finally { spared = NONE_SPARED }
   },
@@ -2665,6 +2673,7 @@ export const quick = {
   },
   // debugging aid: what the pathfinder makes of a walk from here, without walking it. stroll=true: with lead's movements (no sprint, no parkour)
   path_to: (a) => {
+    if (a.surface !== undefined) return surfaceWalkRuntime.preview(a)
     const fresh = makeMoves(a.dig === true)
     // live=true: plan with the movements the walks really use, and name every setting where they differ from a fresh set
     const moves = a.live ? bot.pathfinder.movements : fresh
