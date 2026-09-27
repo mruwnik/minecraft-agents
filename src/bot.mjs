@@ -1,3 +1,4 @@
+import { scaffoldSide } from './scaffold/side.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
 import { settleInventory } from './body/inventory-settle.mjs'
@@ -2026,6 +2027,11 @@ export const long = {
     alive()
     if (bot.blockAt(target)?.name !== 'scaffolding' || count() >= before) throw new Error(`placing scaffolding did not take at ${a.x},${a.y},${a.z}`)
     return { placed: 1, at: `${a.x},${a.y},${a.z}` }
+  },
+
+  async scaffold_side (a) {
+    handPlacing++
+    try { return await scaffoldSide(a, {bot, Vec3, refusalFor, cancelGuard, inventoryCounts, findItem}) } finally { handPlacing-- }
   },
 
   async pillar_up (a) {

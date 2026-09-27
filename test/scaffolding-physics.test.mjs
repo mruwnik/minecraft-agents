@@ -283,3 +283,21 @@ test('closed or mismatched trapdoors do not gain contextual climbing physics', (
     assert.ok(state.pos.y < 3.5, JSON.stringify(properties))
   }
 })
+
+test('native route crosses a supported lateral scaffold deck, retraces it, then descends its own column',()=>{
+ const world=worldOf(p=>{
+  if(p.x===0&&p.z===0&&p.y>=0&&p.y<=7)return {name:'scaffolding',properties:{distance:0,bottom:false}}
+  if(p.y===7&&p.z===0&&p.x>=1&&p.x<=4)return {name:'scaffolding',properties:{distance:p.x,bottom:true}}
+ })
+ const driven=drivenBot(world,new Vec3(.5,0,.5)),{bot,goals}=driven
+ for(const target of [[0,8,0],[1,8,0],[2,8,0],[3,8,0],[4,8,0],[3,8,0],[2,8,0],[1,8,0],[0,8,0],[0,0,0],[-1,0,0]]){
+  const goal=new goals.GoalBlock(...target)
+  assert.equal(bot.pathfinder.getPathTo(driven.moves,goal).status,'success',`planned ${target}`)
+  let done=false;const reached=()=>{done=true};bot.on('goal_reached',reached);bot.pathfinder.setGoal(goal)
+  for(let i=0;i<220&&!done;i++)driven.tick()
+  bot.off('goal_reached',reached)
+  assert.equal(done,true,`${target}: actual ${bot.entity.position}`)
+  assert.ok(Math.abs(bot.entity.position.y-target[1])<.6,`verified height ${target}: actual ${bot.entity.position}`)
+ }
+ assert.deepEqual(bot.controlState,controls())
+})

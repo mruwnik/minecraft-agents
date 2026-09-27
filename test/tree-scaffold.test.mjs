@@ -24,18 +24,23 @@ function fixture(stock=128){
    if(a.y>1)assert.equal(block(a.x,a.y-1,a.z).name,'scaffolding','elevated arrival needs installed support')
    pos={x:a.x+.5,y:a.y,z:a.z+.5}
   }
-  if(name==='place'||name==='scaffold_extend'){
+  if(name==='place'||name==='scaffold_extend'||name==='scaffold_side'){
    if(name==='place')assert.equal(a.item,'scaffolding');assert.equal(block(a.x,a.y,a.z).name,'air');assert.ok(items.scaffolding>0)
-   assert.ok(digFromHere(pos,name==='scaffold_extend'?{...a,y:a.base_y}:a),'scaffold click stays within reach')
-   items.scaffolding--;world.set(key(a),{name:'scaffolding',solid:false,properties:{distance:0,bottom:a.y===1}})
+   assert.ok(digFromHere(pos,name==='scaffold_extend'?{...a,y:a.base_y}:name==='scaffold_side'?{x:a.from_x,y:a.from_y,z:a.from_z}:a),'scaffold click stays within reach')
+   items.scaffolding--;world.set(key(a),{name:'scaffolding',solid:false,properties:{distance:name==='scaffold_side'?(block(a.from_x,a.from_y,a.from_z).properties.distance+1):0,bottom:a.y===1}})
   }
   if(name==='dig'){
    assert.ok(digFromHere(pos,a),'dig stays within reach, primitive need not walk')
    const name=block(a.x,a.y,a.z).name
    if(name==='scaffolding'){
-    assert.equal(pos.y,1,'descent reaches ground before removal')
+    if(a.y===1)assert.equal(pos.y,1,'descent reaches ground before base removal')
+    else assert.equal(block(Math.floor(pos.x),Math.floor(pos.y)-1,Math.floor(pos.z)).name,'scaffolding','side removal keeps verified parent support')
     assert.ok(Math.floor(pos.x)!==a.x||Math.floor(pos.z)!==a.z,'never dig own underfoot column')
-    for(let y=a.y;block(a.x,y,a.z).name==='scaffolding';y++)world.set(`${a.x},${y},${a.z}`,{name:'air',solid:false,properties:{}})
+    world.set(key(a),{name:'air',solid:false,properties:{}})
+    const supported=new Set([...world].filter(([k,b])=>b.name==='scaffolding'&&Number(k.split(',')[1])===1).map(([k])=>k))
+    let changed=true
+    while(changed){changed=false;for(const [k,b] of world){if(b.name!=='scaffolding'||supported.has(k))continue;const [x,y,z]=k.split(',').map(Number);const below=`${x},${y-1},${z}`;if(supported.has(below)||[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz])=>supported.has(`${x+dx},${y},${z+dz}`))){supported.add(k);changed=true}}}
+    for(const [k,b] of world)if(b.name==='scaffolding'&&!supported.has(k))world.set(k,{name:'air',solid:false,properties:{}})
    }else world.set(key(a),{name:'air',solid:false,properties:{}})
   }
   return{}
@@ -93,7 +98,7 @@ test('failed descent retains supports and reports cleanup coordinates instead of
  }
  const result=await runTree(f.api,args,'harvest')
  assert.ok(result.cleanup_left.length>0);assert.equal(f.journal.size,1)
- assert.equal(f.calls.filter(c=>c.name==='dig'&&c.x!==0).length,0)
+ assert.equal(f.calls.filter(c=>c.name==='dig'&&c.x!==0&&c.y===1).length,0)
 })
 test('journal survives recreation and rejects path traversal IDs',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'tree-scaffold-'))
@@ -122,7 +127,7 @@ test('cleanup never collapses a newly attached unrecorded scaffold extension',as
 
 test('actual scaffold_extend clicks a horizontal base face and never clicks after cancellation',async()=>{
  const source=fs.readFileSync(new URL('../src/bot.mjs',import.meta.url),'utf8')
- const body=source.slice(source.indexOf('  async scaffold_extend (a) {'),source.indexOf('  async pillar_up (a) {'))
+ const body=source.slice(source.indexOf('  async scaffold_extend (a) {'),source.indexOf('  async scaffold_side (a) {'))
  const make=new Function('bot','vecOf','Vec3','isAir','refusalFor','digFromHere','cancelGuard','inventoryCounts','findItem',`let handPlacing=0;return ({${body}}).scaffold_extend`)
  class Vec{constructor(x,y,z){Object.assign(this,{x,y,z})}offset(x,y,z){return new Vec(this.x+x,this.y+y,this.z+z)}floored(){return new Vec(Math.floor(this.x),Math.floor(this.y),Math.floor(this.z))}}
  for(const cancelled of [false,true]){
@@ -171,7 +176,7 @@ test('switching scaffold columns descends recorded current exit first; recoverab
  const a={x:0,y:1,z:0,exit:{x:1,y:1,z:0}},b={x:5,y:1,z:0,exit:{x:6,y:1,z:0}}
  let pos={x:.5,y:8,z:.5};const calls=[],report={attention:[]}
  const api={pos:()=>pos,checkpoint:async()=>{},act:async(n,p)=>{calls.push(p);pos={x:p.x+.5,y:p.y,z:p.z+.5}}}
- await reachTreePlatform(api,[{x:5,y:8,z:0,scaffold:b}],report,[a,b]);assert.deepEqual([calls[0].x,calls[0].y,calls[0].z],[1,1,0])
+ await reachTreePlatform(api,[{x:5,y:8,z:0,scaffold:b}],report,[a,b]);assert.deepEqual([calls[0].x,calls[0].y,calls[0].z],[0,1,0])
  pos={x:20,y:1,z:0};api.act=async(n,p)=>{calls.push(p);if(p.x===2)throw Error('no walkable path');pos={x:p.x+.5,y:p.y,z:p.z+.5}}
  const spot=await reachTreePlatform(api,[{x:2,y:1,z:0},{x:1,y:1,z:0}],report)
  assert.equal(spot.x,1);assert.deepEqual(report.attention,[])

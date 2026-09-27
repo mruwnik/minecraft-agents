@@ -185,6 +185,7 @@ export const PRIMITIVES = {
   watches: { section: 'control', args: '', doc: 'the watches I have set' },
   reflexes: { section: 'control', args: '[on=]', doc: 'switch the body reflexes (eating, fleeing, bedtime, shutting gates) on or off' },
   control: { section: 'control', args: 'state= [ms=]', doc: 'hold one movement key down by hand (a debugging aid)' },
+  scaffold_side: { section: 'control', args: 'x= y= z= from_x= from_y= from_z=', doc: 'place one supported horizontal scaffold beside a specified scaffold, distance at most six from vertical support; verifies loaded clear headroom, reach and actual placement; never walks or digs' },
   scaffold_extend: { section: 'control', args: 'x= y= z= base_y=', doc: 'extend a supported scaffold column by one verified block from beside its base; clicks the side, requires clear loaded headroom and carried scaffolding, and never walks or digs' },
   pillar_up: { section: 'control', args: '[steps=1] [item=]', doc: 'climb 1..4 blocks by normal jumping and placing underfoot; requires full support and a clear jump column, never digs, and verifies actual ascent' },
   wait: { section: 'control', args: '[seconds=100]', doc: 'block until something happens that needs me; reads the event log, so it needs no body' },

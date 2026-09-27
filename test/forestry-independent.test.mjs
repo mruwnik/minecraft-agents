@@ -330,7 +330,7 @@ function enableScaffolds(f,{cancelAt}={}) {
      if(++count===cancelAt)throw new Error('cancelled')
      return {}
    }
-   const scaffoldBase=name==='dig'&&f.world.get(coord(args))==='scaffolding'
+   const scaffoldBase=name==='dig'&&f.world.get(coord(args))==='scaffolding'&&[...records.values()].some(r=>r.columns.some(c=>coord(c)===coord(args)))
    if(scaffoldBase){assert.equal(f.api.pos().y,1,'must descend onto ground before removing support');assert.ok(f.api.pos().x!==args.x+.5||f.api.pos().z!==args.z+.5,'must leave the column first')}
    const r=await act(name,args)
    if(scaffoldBase){for(const [p,block]of f.world){const [x,,z]=p.split(',').map(Number);if(block==='scaffolding'&&x===args.x&&z===args.z)f.world.set(p,'air')}}
@@ -338,6 +338,75 @@ function enableScaffolds(f,{cancelAt}={}) {
  }
  return records
 }
+function enableLateralScaffolds(f,{cancelSide=false}={}) {
+ const records=enableScaffolds(f),act=f.api.act,read=f.api.block
+ let cachedDistances
+ const distances=()=>{
+  if(cachedDistances)return cachedDistances
+  const cells=[...f.world].filter(([,name])=>name==='scaffolding').map(([p])=>{const [x,y,z]=p.split(',').map(Number);return {x,y,z}})
+  const result=new Map(cells.map(p=>[coord(p),7]))
+  for(let pass=0;pass<=cells.length;pass++)for(const p of cells){
+   const below={...p,y:p.y-1},b=read(below.x,below.y,below.z)
+   let d=b.name==='scaffolding'?(result.get(coord(below))??7):b.solid?0:7
+   for(const [dx,dz]of [[1,0],[-1,0],[0,1],[0,-1]])d=Math.min(d,(result.get(coord({...p,x:p.x+dx,z:p.z+dz}))??7)+1)
+   result.set(coord(p),Math.min(7,d))
+  }
+  return cachedDistances=result
+ }
+ f.api.block=(x,y,z)=>{const b=read(x,y,z);return b.name==='scaffolding'?{...b,properties:{distance:distances().get(`${x},${y},${z}`)}}:b}
+ f.api.act=async(name,args)=>{
+  if(name==='scaffold_side'){
+   const from={x:args.from_x,y:args.from_y,z:args.from_z}
+   assert.equal(from.y,args.y)
+   assert.equal(Math.abs(from.x-args.x)+Math.abs(from.z-args.z),1)
+   assert.ok([...records.values()].some(r=>r.verified.includes(coord(from))),'side scaffold attaches to owned verified support')
+   assert.ok((distances().get(coord(from))??7)<6,'side span remains within six-block support limit')
+   assert.equal(read(args.x,args.y,args.z).name,'air')
+   assert.ok(f.items.scaffolding>0)
+   f.items.scaffolding--;f.world.set(coord(args),'scaffolding');cachedDistances=undefined;f.calls.push({name,args})
+   if(cancelSide)throw Error('cancelled')
+   return {}
+  }
+  if(name==='dig'&&read(args.x,args.y,args.z).name==='scaffolding'){
+   const side=[...records.values()].flatMap(r=>r.platforms??[]).find(p=>coord(p)===coord(args))
+   if(side){
+    assert.equal(read(side.from.x,side.from.y,side.from.z).name,'scaffolding','side cleanup retains the parent support')
+    assert.notEqual(coord({x:Math.floor(f.api.pos().x),y:Math.floor(f.api.pos().y)-1,z:Math.floor(f.api.pos().z)}),coord(args),'never dig the scaffold supporting the body')
+   }
+  }
+  const result=await act(name,args)
+  cachedDistances=undefined
+  if(name==='dig'){for(const [p,d]of distances())if(d>6)f.world.set(p,'air');cachedDistances=undefined}
+  return result
+ }
+ return records
+}
+function broadOak(f) {
+ smallOak(f,10)
+ for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++)f.world.set(`${x},11,${z}`,'oak_leaves')
+}
+test('independent: broad canopy uses owned supported lateral access and cleans it after full harvest',async()=>{
+ const f=worldFixture({items:{scaffolding:256}});broadOak(f)
+ const records=enableLateralScaffolds(f)
+ const r=await harvest.run(f.api,{...root,species:'oak'})
+ assert.deepEqual(r.attention,[])
+ assert.ok(f.calls.some(c=>c.name==='scaffold_side'),'broad canopy requires actual lateral scaffold placements')
+ assert.equal(r.remaining.length,0)
+ assert.equal(r.harvested,91)
+ assert.equal(records.size,0)
+ assert.ok(![...f.world.values()].includes('scaffolding'))
+})
+test('independent: cancellation after a lateral placement records its support and leaves the whole tree intact',async()=>{
+ const f=worldFixture({items:{scaffolding:256}});broadOak(f)
+ const records=enableLateralScaffolds(f,{cancelSide:true})
+ await assert.rejects(harvest.run(f.api,{...root,species:'oak'}),/cancelled/)
+ assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
+ assert.equal(f.world.get('0,1,0'),'oak_log')
+ assert.equal(f.world.get('4,11,4'),'oak_leaves')
+ assert.equal(records.size,1)
+ const record=[...records.values()][0]
+ for(const [p,b]of f.world)if(b==='scaffolding')assert.ok(record.verified.includes(p),`placed scaffold ${p} is recoverable`)
+})
 test('independent: partial scaffold crafting preserves inaccessible tree and continues to later planting',async()=>{
  const p={name:'trees',by:'Tester',...root,plan:'x         A         x',legend:{x:{kind:'tree',species:'oak'}}}
  const f=worldFixture({plan:p,items:{oak_sapling:2,bamboo:128,string:32}})
@@ -361,7 +430,7 @@ test('independent: partial scaffold crafting preserves inaccessible tree and con
 })
 test('independent: tall tree harvest builds access, removes upper tree, descends and cleans owned scaffold',async()=>{
  const f=worldFixture({items:{scaffolding:64}});smallOak(f,10)
- const records=enableScaffolds(f)
+ const records=enableLateralScaffolds(f)
  const r=await harvest.run(f.api,{...root,species:'oak'})
  assert.deepEqual(r.attention,[])
  assert.equal(r.remaining.length,0)

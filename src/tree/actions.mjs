@@ -1,3 +1,4 @@
+import { treeHarvestSequence, visibleTreeBlock } from '../scaffold/reach.mjs'
 import { planScaffoldAccess, buildScaffoldAccess, addScaffoldAccess, cleanupScaffold, scaffoldId, reachTreePlatform } from '../scaffold/access.mjs'
 import { checkTree, inspectTree, harvestStands, key, treeRoot } from './inspect.mjs'
 import { treeProfile } from './profiles.mjs'
@@ -77,8 +78,9 @@ export async function runTree (api, a, action) {
     api.report?.(report)
     // Top down: no base is cut while upper wood remains. Every actual block and
     // target is checked again; the server, not the click count, establishes removal.
-    const ordered = [...tree.blocks].sort((a, b) => b.y - a.y || a.x - b.x || a.z - b.z)
-    for (const b of ordered) {
+    const sequence = treeHarvestSequence(tree, access, api.block)
+    if (sequence.missing.length) { report.attention.push(`whole-tree visible access missing for ${sequence.missing.length} blocks; tree retained`); return finish() }
+    for (const {block:b,spots} of sequence.steps) {
       await checkpoint(api)
       const actual = api.block(b.x, b.y, b.z)
       if (actual && isAir(actual.name)) continue
@@ -86,10 +88,11 @@ export async function runTree (api, a, action) {
       // Reinspect protected blocks that may have appeared since preflight.
       const current = inspectTree(api.block, root, tree.species, tree.form)
       if (current.protected?.length) { report.attention.push('protected nest/hive/heart appeared during harvest; stopped'); break }
-      const spot = await reachTreePlatform(api, access.get(key(b)), report, scaffold?.columns ?? [])
+      const spot = await reachTreePlatform(api, spots.filter(p=>visibleTreeBlock(api.block,{x:p.x+.5,y:p.y,z:p.z+.5},b)), report, scaffold ?? [])
       if (!spot) break
       const pos = api.pos()
       if (Math.hypot(pos.x - (spot.x + 0.5), pos.z - (spot.z + 0.5)) > 0.8 || Math.abs(pos.y - spot.y) > 0.6) { report.attention.push(`did not reach verified work platform ${key(spot)}`); break }
+      if (!visibleTreeBlock(api.block, pos, b)) { report.attention.push(`tree target ${key(b)} is not visibly reachable from verified platform`); break }
       if (!await attempt(api, 'dig', { x: b.x, y: b.y, z: b.z, batch: true }, report)) break
       const after = api.block(b.x, b.y, b.z)
       if (!after || !isAir(after.name)) { report.attention.push(`dig left ${key(b)} standing or unloaded`); break }
