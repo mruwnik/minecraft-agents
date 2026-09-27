@@ -1,3 +1,4 @@
+import { treeSupplies, provisionTreeBasics, provisionTreeScaffold } from '../../src/tree/provision.mjs'
 import { maintainTreeServices } from '../../src/tree/services.mjs'
 import { cleanupScaffold, scaffoldId } from '../../src/scaffold/access.mjs'
 import { workRefusal } from '../../src/lib/places.mjs'
@@ -10,8 +11,8 @@ import { depositTarget } from '../../src/lib/storage.mjs'
 import { canStore, storeSurplus } from '../../src/storage.mjs'
 
 export default {
-  doc: 'forestry.maintain place= [days=] [deposit=] [bone_meal=false]: inspect planned trees, safely harvest complete accessible trees, collect, restore adjacent planned flowers and replant. Uses the same saved plan/legend as farm.plan. Protected/ambiguous trees and missing supplies/access emit forestry_attention; safety stops remain hard',
-  args: { place: 'string!', days: 'number', deposit: 'any', bone_meal: 'boolean' },
+  doc: 'forestry.maintain place= [days=] [deposit=] [source=] [bone_meal=false]: inspect planned trees, safely harvest complete accessible trees, collect, restore adjacent planned flowers and replant. Uses the same saved plan/legend as farm.plan. Supplies come only from planned chests by default; source= selects an explicit chest/marked storage point and source=false is inventory-only. Crafts needed scaffolding from available bamboo/string at a planned crafting table. Protected/ambiguous trees and missing supplies/access emit forestry_attention; safety stops remain hard',
+  args: { place: 'string!', days: 'number', deposit: 'any', source: 'any', bone_meal: 'boolean' },
   async run (api, a) {
     if (a.days !== undefined && (!Number.isInteger(a.days) || a.days < 0)) throw new Error('days must be a nonnegative integer')
     if (a.bone_meal !== undefined && typeof a.bone_meal !== 'boolean') throw new Error('bone_meal must be true or false')
@@ -28,6 +29,8 @@ export default {
     const checkpoint = () => api.checkpoint({ canDeposit })
     for (;;) {
       summary.attention = []
+      const supply = await treeSupplies(api, plan, a.source, summary)
+      await provisionTreeBasics(api, plan, supply, summary)
       await maintainTreeServices(api, plan.cells, summary)
       treeAttention(api, 'forestry.maintain', summary)
       for (const cell of trees) {
@@ -43,6 +46,7 @@ export default {
         let check = await runTree(api, args, 'check')
         if (check.attention.length) { treeAttention(api, 'forestry.maintain', check); summary.attention.push(...check.attention); continue }
         if (check.state === 'mature') {
+          await provisionTreeScaffold(api, plan, cell, supply, summary)
           const cut = await runTree(api, args, 'harvest')
           summary.harvested += cut.harvested ?? 0
           summary.attention.push(...cut.attention)

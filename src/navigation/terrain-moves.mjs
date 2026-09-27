@@ -57,8 +57,17 @@ export function configureTerrainMoves (moves, { blockAt, scaffolding = false, cl
   moves.resolveTerrainWaypoint = node => {
     const geometry = geometryNow()
     const stand = geometry.stand(node.x, node.y, node.z)
-    return stand ? { x: node.x + 0.5, y: stand.height, z: node.z + 0.5 } : null
+    return stand ? { x: stand.centerX ?? node.x + 0.5, y: stand.height, z: stand.centerZ ?? node.z + 0.5 } : null
   }
+  moves.preserveTerrainPosition = position => {
+    const x = Math.floor(position.x), y = Math.floor(position.y), z = Math.floor(position.z)
+    for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) for (let dy = 0; dy <= 1; dy++) {
+      if (blockAt(x + dx, y + dy, z + dz)?.name === 'cocoa') return true
+    }
+    return false
+  }
+  moves.terrainWaypointReached = (position, waypoint) => !moves.preserveTerrainPosition(waypoint) ||
+    Math.floor(position.x) === Math.floor(waypoint.x) && Math.floor(position.z) === Math.floor(waypoint.z)
   moves.resolveTerrainStart = (position, onGround) => {
     if (!onGround) return null
     const x = Math.floor(position.x), y = Math.floor(position.y), z = Math.floor(position.z)

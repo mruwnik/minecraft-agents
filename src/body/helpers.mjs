@@ -168,7 +168,8 @@ export const cellAt = (x, y, z) => {
   if (!b) return null
   const scaffold = b.name === 'scaffolding' && bot.pathfinder?.movements?.scaffoldingSupported === true
   const walkable = scaffold || isWoodDoor(b) || (b.name.endsWith('_fence_gate') && b.getProperties().open)
-  return { name: b.name, solid: b.boundingBox === 'block' && !walkable, liquid: FLUIDS.has(b.name), crop: breaksUnderfoot(b.name), ...(scaffold ? { climbable: true } : {}) }
+  return { name: b.name, solid: b.boundingBox === 'block' && !walkable, shapes: b.shapes, properties: b.getProperties?.() ?? {}, liquid: FLUIDS.has(b.name), crop: breaksUnderfoot(b.name),
+    scaffoldingSupported: bot.pathfinder?.movements?.scaffoldingSupported === true, climbableVinesSupported: bot.pathfinder?.movements?.climbableVinesSupported === true, ...(scaffold ? { climbable: true } : {}) }
 }
 export async function goNear (v, range = 2) {
   // already there: don't ask the pathfinder, which can fail from a perch (pillar top, ledge) even though nothing needs walking

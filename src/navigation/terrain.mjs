@@ -79,7 +79,35 @@ export function createTerrainGeometry (blockAt, { openDoors = true, scaffolding 
     }
     return true
   }
-  const bodyBox = (x, height, z) => [x + 0.5 - PLAYER_HALF, height, z + 0.5 - PLAYER_HALF, x + 0.5 + PLAYER_HALF, height + PLAYER_HEIGHT, z + 0.5 + PLAYER_HALF]
+  const bodyBox = (x, height, z, centerX = x + 0.5, centerZ = z + 0.5) => [centerX - PLAYER_HALF, height, centerZ - PLAYER_HALF, centerX + PLAYER_HALF, height + PLAYER_HEIGHT, centerZ + PLAYER_HALF]
+  // Cocoa is genuinely collidable. A young attached pod leaves enough width
+  // along its far edge, but the cell centre does not. Pre-align in the adjacent
+  // approach/exit cell too: cutting diagonally into the pod would still hit it.
+  // Keep each centre inside its node cell, but allow its footprint to borrow
+  // checked neighbouring ground: opposing mature pods can leave a gap across
+  // the cell boundary even though both ordinary cell centres are obstructed.
+  const cocoaCenters = (x, height, z) => {
+    const xs = new Set(), zs = new Set(), gap = PLAYER_HALF + 0.005
+    for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let y = Math.floor(height); y < height + PLAYER_HEIGHT; y++) {
+        const p = get(x + dx, y, z + dz)
+        if (p.name !== 'cocoa') continue
+        for (const s of p.shapes) {
+          if (y + s[4] <= height || y + s[1] >= height + PLAYER_HEIGHT) continue
+          if (['east', 'west'].includes(p.properties.facing)) for (const value of [x + dx + s[0] - gap, x + dx + s[3] + gap]) if (value >= x + 0.05 && value <= x + 0.95) xs.add(value)
+          if (['north', 'south'].includes(p.properties.facing)) for (const value of [z + dz + s[2] - gap, z + dz + s[5] + gap]) if (value >= z + 0.05 && value <= z + 0.95) zs.add(value)
+        }
+      }
+    }
+    if (!xs.size && !zs.size) return []
+    xs.add(x + 0.5); zs.add(z + 0.5)
+    return [...xs].flatMap(centerX => [...zs].map(centerZ => ({ centerX, centerZ })))
+      .filter(p => p.centerX !== x + 0.5 || p.centerZ !== z + 0.5)
+      // At a cocoa corner, pre-align both axes. A merely nearest one-axis
+      // stance can be clear itself yet disconnect both narrow continuations.
+      .sort((a, b) => Number(a.centerX === x + 0.5) + Number(a.centerZ === z + 0.5) - Number(b.centerX === x + 0.5) - Number(b.centerZ === z + 0.5) ||
+        Math.hypot(a.centerX - x - 0.5, a.centerZ - z - 0.5) - Math.hypot(b.centerX - x - 0.5, b.centerZ - z - 0.5))
+  }
   const stand = (x, y, z, { climb = true } = {}) => {
     const below = get(x, y - 1, z), feet = get(x, y, z)
     if (!below.loaded || !feet.loaded) return null
@@ -90,11 +118,24 @@ export function createTerrainGeometry (blockAt, { openDoors = true, scaffolding 
       if (p.hazardous || p.leaf && !leaves) continue
       for (const shape of p.support) {
         const height = base + shape[4]
-        if (height <= cap + EPS) surfaces.push({ height, support: p })
+        if (height <= cap + EPS) surfaces.push({ height, support: p, base })
       }
     }
     surfaces.sort((a, b) => b.height - a.height)
-    for (const surface of surfaces) if (clearBox(bodyBox(x, surface.height, z))) return { x, y, z, ...surface, grounded: true, climbable }
+    for (const surface of surfaces) {
+      for (const center of cocoaCenters(x, surface.height, z)) {
+        const box = bodyBox(x, surface.height, z, center.centerX, center.centerZ)
+        let supported = true
+        for (let bx = Math.floor(box[0]); bx <= Math.floor(box[3] - EPS); bx++) for (let bz = Math.floor(box[2]); bz <= Math.floor(box[5] - EPS); bz++) {
+          const base = Math.ceil(surface.height) - 1, p = get(bx, base, bz)
+          if (!p.loaded || p.hazardous || dry && p.liquid || avoidCrops && p.crop || p.leaf && !leaves ||
+            !p.support.some(s => Math.abs(base + s[4] - surface.height) < EPS && bx + s[0] <= Math.max(box[0], bx) &&
+              bx + s[3] >= Math.min(box[3], bx + 1) && bz + s[2] <= Math.max(box[2], bz) && bz + s[5] >= Math.min(box[5], bz + 1))) supported = false
+        }
+        if (supported && clearBox(box)) return { x, y, z, ...surface, ...center, grounded: true, climbable }
+      }
+      if (clearBox(bodyBox(x, surface.height, z))) return { x, y, z, ...surface, grounded: true, climbable }
+    }
     if (!dry && feet.liquid && !feet.hazardous && clearBox(bodyBox(x, y, z))) return { x, y, z, height: y, grounded: false, swimming: true, climbable: false, support: null }
     if (climb && climbable && !feet.hazardous && !(dry && feet.liquid) && clearBox(bodyBox(x, y, z))) return { x, y, z, height: y, grounded: false, climbable: true, support: null }
     return null
@@ -111,7 +152,7 @@ export function createTerrainGeometry (blockAt, { openDoors = true, scaffolding 
     // Lift before crossing an upward step; cross before dropping a downward
     // step. The swept body prevents clipping a thin side panel or overhang.
     const high = Math.max(from.height, to.height)
-    const a = bodyBox(from.x, from.height, from.z), b = bodyBox(to.x, to.height, to.z)
+    const a = bodyBox(from.x, from.height, from.z, from.centerX, from.centerZ), b = bodyBox(to.x, to.height, to.z, to.centerX, to.centerZ)
     if (rise > 0 && !clearBox([a[0], from.height, a[2], a[3], high + PLAYER_HEIGHT, a[5]])) return false
     if (rise < 0 && !clearBox([b[0], to.height, b[2], b[3], high + PLAYER_HEIGHT, b[5]])) return false
     return clearBox([Math.min(a[0], b[0]), high, Math.min(a[2], b[2]), Math.max(a[3], b[3]), high + PLAYER_HEIGHT, Math.max(a[5], b[5])])
@@ -136,4 +177,16 @@ export function patchTerrainStart (source) {
   if (!source.includes(anchor)) return { status: 'anchor missing', source }
   const replacement = `      ${marker}\n      const terrainStart = movements.resolveTerrainStart?.(startPos, bot.entity.onGround)\n      start = new Move(terrainStart?.x ?? p.x, terrainStart?.y ?? (p.y + offset), terrainStart?.z ?? p.z, movements.countScaffoldingItems(), 0)`
   return { status: 'patched', source: source.replace(anchor, replacement) }
+}
+
+export function patchTerrainStop (source) {
+  const marker = '// preserve checked terrain stance on stopping v2'
+  if (source.includes(marker)) return { status: 'already patched', source }
+  const anchor = '    const blockX = Math.floor(bot.entity.position.x) + 0.5'
+  const arrival = '    if (Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 &&'
+  if (!source.includes(anchor) || !source.includes(arrival)) return { status: 'anchor missing', source }
+  const next = source.includes('// preserve checked terrain stance on stopping')
+    ? source.replace('// preserve checked terrain stance on stopping', marker)
+    : source.replace(anchor, `    ${marker}\n    if (stateMovements?.preserveTerrainPosition?.(bot.entity.position)) return\n\n${anchor}`)
+  return { status: 'patched', source: next.replace(arrival, '    if ((stateMovements.terrainWaypointReached?.(p, nextPoint) ?? true) && Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 &&') }
 }

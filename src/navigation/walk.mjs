@@ -6,16 +6,22 @@
 //
 // A cell is { name, solid, liquid, crop } or null when its chunk is not loaded; the caller reads it off the world.
 
+import { createTerrainGeometry } from './terrain.mjs'
+
 // the arm reaches 4.5 from the eyes. Work (till, plant, cover) walks to within this node distance of the cell it works:
 // standing one up and four across from a ground cell is 4.12 away, so a lane every eight rows serves a whole field
 export const WORK_RANGE = 4.2
 
 // a passable feet or head cell: air, water, a carpet, a door the walk opens; never a crop, never lava
 const passable = cell => Boolean(cell) && !cell.solid && !cell.crop && cell.name !== 'lava'
+const terrainOptions = cell => ({ dry: false, leaves: true, scaffolding: cell?.scaffoldingSupported === true || cell?.name === 'scaffolding' && cell.climbable === true, climbableVines: cell?.climbableVinesSupported === true })
 
 // can the body stand (or swim) with its feet in this cell: feet and head clear, and a floor under it or water round it
 export const standable = (cellAt, { x, y, z }) => {
   const feet = cellAt(x, y, z)
+  if (Array.isArray(feet?.shapes)) {
+    return Boolean(createTerrainGeometry(cellAt, terrainOptions(feet)).stand(x, y, z))
+  }
   if (!passable(feet) || !passable(cellAt(x, y + 1, z))) return false
   const floor = cellAt(x, y - 1, z)
   // Tall barriers extend half a block into this feet cell and cannot be treated
@@ -117,6 +123,11 @@ const landing = (cellAt, goal, range) => {
 // every cell a walk reaches from `start` by steps of one across and at most one up or down (a step up needs head room);
 // null once a cell LOOK away is reached: that floor is open ground, not a pit
 const floorAround = (cellAt, start) => {
+  // Bounding-box summaries turn an attached cocoa collar into full-height
+  // walls and falsely redirect a flat-ground goal onto the pods. Where actual
+  // shapes are available, use the same supported stances/edges as execution.
+  const startCell = cellAt(start.x, start.y, start.z)
+  const geometry = Array.isArray(startCell?.shapes) ? createTerrainGeometry(cellAt, terrainOptions(startCell)) : null
   const seen = new Map([[key(start), start]])
   const queue = [start]
   while (queue.length) {
@@ -125,8 +136,14 @@ const floorAround = (cellAt, start) => {
     for (const [dx, dz] of SIDES) {
       for (const dy of [0, 1, -1]) {
         const next = { x: cell.x + dx, y: cell.y + dy, z: cell.z + dz }
-        if (seen.has(key(next)) || !standable(cellAt, next)) continue
-        if (dy === 1 && !passable(cellAt(cell.x, cell.y + 2, cell.z))) continue
+        if (seen.has(key(next))) continue
+        if (geometry) {
+          const from = geometry.stand(cell.x, cell.y, cell.z), to = geometry.stand(next.x, next.y, next.z)
+          if (!from || !to || !geometry.edge(from, to)) continue
+        } else {
+          if (!standable(cellAt, next)) continue
+          if (dy === 1 && !passable(cellAt(cell.x, cell.y + 2, cell.z))) continue
+        }
         seen.set(key(next), next)
         queue.push(next)
       }

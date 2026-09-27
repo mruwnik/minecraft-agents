@@ -66,8 +66,9 @@ function merchantHarness () {
   const window = { trades: [offer], close: () => { closed++ } }
   bot.openVillager = async () => { opens++; return window }
   bot.trade = async () => { purchases++; inventory = { emerald: inventory.emerald - offer.inputItem1.count, bread: 1 } }
-  const deps = { getBot: () => bot, Vec3, goNear: async () => {}, inventoryCounts: () => inventory }
-  return { bot, runtime: makeVillagerRuntime(deps), deps, window, offer, get opens () { return opens }, get purchases () { return purchases }, get closed () { return closed }, setInventory: value => { inventory = value } }
+  const observations = []
+  const deps = { getBot: () => bot, Vec3, goNear: async () => {}, inventoryCounts: () => inventory, by: 'Probe', recordVillagerObservation: v => observations.push(v) }
+  return { bot, runtime: makeVillagerRuntime(deps), deps, window, offer, observations, get opens () { return opens }, get purchases () { return purchases }, get closed () { return closed }, setInventory: value => { inventory = value } }
 }
 const microtasks = async () => { for (let i = 0; i < 8; i++) await Promise.resolve() }
 
@@ -124,4 +125,18 @@ test('UUID trading refuses recycled numeric IDs, including replacement during ap
   const runtime = makeVillagerRuntime(deps)
   await assert.rejects(runtime.long.trade({id:2,uuid,offer:1}), /exact villager changed/)
   assert.equal(h.purchases, 0)
+})
+
+test('merchant reads save observed offers and only an inventory-confirmed purchase adds lock evidence', async () => {
+  const h = merchantHarness(), uuid = h.bot.entities[2].uuid
+  await h.runtime.long.trades({ uuid })
+  assert.equal(h.observations.length, 1)
+  assert.equal(h.observations[0].uuid, uuid)
+  assert.equal(h.observations[0].offers[0].outputItem.name, 'bread')
+  assert.equal(h.observations[0].purchase, undefined)
+  const bought = await h.runtime.long.trade({ uuid, offer: 1 })
+  assert.equal(bought.bought, 'bread:1')
+  assert.equal(h.observations.length, 2)
+  assert.equal(h.observations[1].purchase.bought, 'bread')
+  assert.equal(h.observations[1].purchase.boughtCount, 1)
 })

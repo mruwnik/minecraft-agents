@@ -6,13 +6,27 @@ import { compatibleInventoryStacks } from '../inventory/compact.mjs'
 
 export function makeVillagerRuntime (deps) {
   const { Vec3, goNear, findItem, inventoryCounts, cancelGuard, emit,
-    getFeeding, setFeeding, currentVehicleId } = deps
+    getFeeding, setFeeding, currentVehicleId, recordVillagerObservation } = deps
   let bot
   const sync = () => { bot = deps.getBot() }
   function villagerData (entity) {
     const data = villagerObservation(entity)
     // Trading retains Mineflayer's default-false wire age semantics.
     return { profession: data.profession, level: data.level, adult: data.baby !== true, nitwit: data.nitwit }
+  }
+  function recordVillager (entity, input = {}) {
+    if (!recordVillagerObservation || !entity?.uuid) return
+    try {
+      recordVillagerObservation({
+        uuid: entity.uuid,
+        by: deps.observerName ?? deps.by ?? 'unknown',
+        at: new Date().toISOString(),
+        position: entity.position && { x: entity.position.x, y: entity.position.y, z: entity.position.z },
+        ...villagerData(entity),
+        baby: villagerObservation(entity).baby,
+        ...input
+      })
+    } catch (error) { emit?.('villager_roster_error', { uuid: entity.uuid, message: error.message }) }
   }
   function targetVillager (a) {
     if (a.uuid !== undefined && !entityUuid(a.uuid)) throw new Error('trading needs a valid exact uuid=')
@@ -29,6 +43,15 @@ export function makeVillagerRuntime (deps) {
     const values = Array.isArray(raw) ? raw : raw?.enchantments ?? raw?.levels ?? []
     return values.map(e => ({ name: e.name ?? bot.registry.enchantments?.[e.id]?.name ?? String(e.id), lvl: e.lvl ?? e.level }))
   }
+  const offerSnapshots = trades => trades.map((o, n) => ({
+    index: n + 1,
+    inputItem1: o.inputItem1 && { name: o.inputItem1.name, count: o.realPrice ?? o.inputItem1.count },
+    inputItem2: o.inputItem2 && { name: o.inputItem2.name, count: o.inputItem2.count },
+    outputItem: o.outputItem && { name: o.outputItem.name, count: o.outputItem.count, enchants: villagerEnchants(o.outputItem) },
+    nbTradeUses: o.nbTradeUses,
+    maximumNbTradeUses: o.maximumNbTradeUses,
+    tradeDisabled: o.tradeDisabled
+  }))
   let lastVillagerOffers = null
   let villagerWindowUncertain = false
   let tradeOutcomeUncertain = false
@@ -59,8 +82,9 @@ export function makeVillagerRuntime (deps) {
       if (bot.entities[entity.id] !== entity || (a.uuid && entity.uuid !== a.uuid)) throw new Error('the exact villager changed before the window opened')
       const window = await openVillagerWindow(entity, 'villager window did not open in 5 s')
       try {
-        const offers = window.trades.map((o, n) => ({ index: n + 1, inputItem1: o.inputItem1 && { name: o.inputItem1.name, count: o.realPrice ?? o.inputItem1.count }, inputItem2: o.inputItem2 && { name: o.inputItem2.name, count: o.inputItem2.count }, outputItem: o.outputItem && { name: o.outputItem.name, count: o.outputItem.count, enchants: villagerEnchants(o.outputItem) }, nbTradeUses: o.nbTradeUses, maximumNbTradeUses: o.maximumNbTradeUses, tradeDisabled: o.tradeDisabled }))
+        const offers = offerSnapshots(window.trades)
         lastVillagerOffers = { id: entity.id, uuid: entity.uuid, offers, at: Date.now() }
+        recordVillager(entity, { offers, ...(a.place ? { place: { name: a.place } } : {}) })
         return { ...villagerData(entity), id: entity.id, offers, text: [`profession=${data.profession} level=${data.level} offers=${offers.length}`, ...offers.map((o, n) => tradeLine(o, n + 1))].join('\n') }
       } finally { window.close() }
     },
@@ -109,6 +133,12 @@ export function makeVillagerRuntime (deps) {
         // The exact item exchange confirms this purchase; the caller may reopen
         // once to verify the villager's profession and wanted book.
         tradeOutcomeUncertain = false
+        const offers = offerSnapshots(window.trades)
+        recordVillager(entity, {
+          offers,
+          purchase: { offer: a.offer, bought: output.name, boughtCount: bought, paid, usedBefore },
+          ...(a.place ? { place: { name: a.place } } : {})
+        })
         return { bought: `${output.name}:${bought}`, paid, uses: null, usedBefore }
       } finally { closeOriginal() }
     },

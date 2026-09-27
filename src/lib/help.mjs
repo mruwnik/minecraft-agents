@@ -158,8 +158,8 @@ export const PRIMITIVES = {
   villager_food: { section: 'creature', args: 'uuid= item= count= [otherUuid=]', doc: 'drop a bounded breeding-food portion toward one observed on-foot adult and report server-confirmed item pickup by UUID' },
   give: { section: 'item', args: 'player= item= [count=] [dig=]', doc: 'walk to within arm\'s reach of a player, toss every stack until count= is met and watch that it was taken. short= says what the pocket lacked; lying= where a drop still lies and how far from them' },
   enchant: { section: 'item', args: 'item= [slot=] [x= y= z=]', doc: 'enchant one item I carry at an enchanting table, paying lapis and levels' },
-  trades: { section: 'item', args: '[x= y= z=] [id=] [uuid=]', doc: 'read one nearby villager profession and numbered offers' },
-  trade: { section: 'item', args: 'offer= [times=1] [x= y= z=] [id=] [uuid=]', doc: 'buy a numbered offer from one nearby villager and verify the inventory change' },
+  trades: { section: 'item', args: '[x= y= z=] [id=] [uuid=] [place=]', doc: 'read one nearby villager profession and numbered offers; place= explicitly associates it with a saved place' },
+  trade: { section: 'item', args: 'offer= [times=1] [x= y= z=] [id=] [uuid=] [place=]', doc: 'buy a numbered offer from one nearby villager, verify the inventory change and optionally set place=' },
   // ---- creature
   attack: { section: 'creature', args: 'mob= [id=] [leash=24]', doc: 'hunt one animal or monster: the nearest of its kind, or the id= that animals gave you; it leaves the drops lying where they fall' },
   shear: { section: 'creature', args: '[count=] [within=40]', doc: 'wool without killing: needs shears' },

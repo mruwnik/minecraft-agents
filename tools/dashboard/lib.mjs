@@ -76,12 +76,14 @@ export const route = url => {
   const { pathname } = new URL(url, 'http://dashboard')
   if (pathname === '/' || pathname === '/index.html') return { kind: 'page' }
   if (pathname === '/blueprints') return { kind: 'blueprints' }
+  if (pathname === '/villagers') return { kind: 'villagers' }
   if (pathname === '/blueprint.mjs') return { kind: 'bpscript' }
   if (pathname === '/api/blueprint-preview') return { kind: 'bppreview' }
   if (pathname === '/api/blueprints') return { kind: 'bplist' }
   const blueprint = BLUEPRINT.exec(pathname)
   if (blueprint) return { kind: 'blueprint', name: blueprint[1] }
   if (pathname === '/api/state') return { kind: 'state' }
+  if (pathname === '/api/villagers') return { kind: 'villagersApi' }
   if (pathname === '/api/chat') return { kind: 'chat' }
   if (pathname === '/api/world') return { kind: 'world' }
   if (pathname === '/map.mjs') return { kind: 'script' }

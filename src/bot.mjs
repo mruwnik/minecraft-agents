@@ -49,6 +49,7 @@ import { makeTravelRuntime } from './body/travel.mjs'
 import { makeRidingRuntime, horseState } from './body/riding.mjs'
 import { driveHorse } from './navigation/horse.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
+import { makeVillagerRosterObserver, saveVillagerObservation } from './villager/roster.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, setLastSpoken, edibleCarried, runComposite } from './body/runner.mjs'
@@ -246,6 +247,7 @@ function connect () {
   bot = mineflayer.createBot({
     host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: 'offline'
   })
+  villagerRoster.attach(bot)
   bot.loadPlugin(pathfinder)
   bot.loadPlugin(collectBlock.plugin)
   bot.loadPlugin(pvp.plugin)
@@ -1619,6 +1621,8 @@ const boatRuntime = makeBoatRuntime({
   Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove,
   getSwimStepTarget: () => swimStepTarget, setSwimStepTarget: value => { swimStepTarget = value }
 })
+const villagerRosterFile = path.join(ROOT, 'state', 'villagers.json')
+const villagerRoster = makeVillagerRosterObserver({ file: villagerRosterFile, by: cfg.username })
 const travelRuntime = makeTravelRuntime({ getBot: () => bot, Vec3, cancelGuard, edibleCarried, reportPerformance: (...args) => reportPerformance(...args) })
 const ridingRuntime = makeRidingRuntime({
   getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveHorse,
@@ -1628,6 +1632,8 @@ const ridingRuntime = makeRidingRuntime({
 })
 const villagerRuntime = makeVillagerRuntime({
   getBot: () => bot, Vec3, goNear, findItem, inventoryCounts, cancelGuard, emit,
+  by: cfg.username,
+  recordVillagerObservation: input => saveVillagerObservation(villagerRosterFile, input),
   getFeeding: () => feeding, setFeeding: value => { feeding = value },
   currentVehicleId: boatRuntime.currentVehicleId
 })

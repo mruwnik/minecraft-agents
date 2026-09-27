@@ -18,12 +18,14 @@ import { scanCap } from '../src/lib.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
 import { semanticBlueprintHash } from '../src/blueprint/schema.mjs'
+import { emptyVillagerRoster, readVillagerRoster } from '../src/villager/roster.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
 const BLUEPRINTS_PAGE = path.join(import.meta.dirname, 'dashboard', 'blueprints.html')
+const VILLAGERS_PAGE = path.join(import.meta.dirname, 'dashboard', 'villagers.html')
 const BLUEPRINT_MODULE = path.join(import.meta.dirname, 'dashboard', 'blueprint.mjs')
 const SRC_DIR = path.join(ROOT, 'src')
 const PORT = Number(process.env.PORT ?? 3700)
@@ -100,6 +102,12 @@ const snapshot = () => {
     humans: humanSightings(bodies, agentNames()),
     places: readJson(path.join(ROOT, 'state', 'places.json'), []),
     zones: readJson(path.join(ROOT, 'state', 'zones.json'), [])
+  }
+}
+
+const villagers = () => {
+  try { return readVillagerRoster(path.join(ROOT, 'state', 'villagers.json')) } catch (error) {
+    return { ...emptyVillagerRoster(), error: `villager roster unavailable: ${error.message}` }
   }
 }
 
@@ -238,6 +246,7 @@ const renderPage = async query => {
 }
 // the library is inlined for the same reason: the list and the chosen blueprint (?name=) are drawn on the first paint
 const renderBlueprintsPage = () => fs.readFileSync(BLUEPRINTS_PAGE, 'utf8').replace('</head>', `<script>window.__PRELOAD_LIBRARY__=${inline(library())}</script>\n</head>`)
+const renderVillagersPage = () => fs.readFileSync(VILLAGERS_PAGE, 'utf8')
 
 const handlers = {
   page: async (res, query) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query)),
@@ -247,6 +256,8 @@ const handlers = {
     const answer = await worldFor(name)
     return sendJson(res, answer.error ? 404 : 200, answer)
   },
+  villagers: (res) => send(res, 200, 'text/html; charset=utf-8', renderVillagersPage()),
+  villagersApi: (res) => sendJson(res, 200, villagers()),
   state: (res) => sendJson(res, 200, snapshot()),
   blueprints: (res) => send(res, 200, 'text/html; charset=utf-8', renderBlueprintsPage()),
   bplist: (res) => sendJson(res, 200, library()),
@@ -258,7 +269,7 @@ const handlers = {
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /blueprints, /api/state, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /blueprints, /api/state, /api/villagers, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
 }
 
 http.createServer(async (req, res) => {

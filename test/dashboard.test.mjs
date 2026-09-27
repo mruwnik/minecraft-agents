@@ -206,6 +206,8 @@ const routes = [
   ['/', { kind: 'page' }],
   ['/index.html', { kind: 'page' }],
   ['/api/state', { kind: 'state' }],
+  ['/api/villagers', { kind: 'villagersApi' }],
+  ['/villagers', { kind: 'villagers' }],
   ['/api/state?since=3', { kind: 'state' }],
   ['/api/chat', { kind: 'chat' }],
   ['/api/chat?limit=50', { kind: 'chat' }],

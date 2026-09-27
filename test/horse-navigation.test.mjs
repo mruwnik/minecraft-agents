@@ -142,13 +142,14 @@ test('actual decoded horse attribute packets feed both state inspection and nati
     const wire = fixture(undefined, version), canonical = fixture(undefined, version)
     const attribute = { value: 0.225, modifiers: [{ uuid: 'test:horse_speed', amount: 0.1, operation: 2 }] }
     wire.entity.attributes = {}
-    const packet = { name: 'entity_update_attributes', params: { entityId: 2, properties: [{ key: 'generic.movement_speed', ...attribute }] } }
+    const wireKey = version === '26.1' ? 'minecraft:movement_speed' : 'generic.movement_speed'
+    const packet = { name: 'entity_update_attributes', params: { entityId: 2, properties: [{ key: wireKey, ...attribute }] } }
     const serializer = protocol.createSerializer({ state: 'play', isServer: true, version })
     const deserializer = protocol.createDeserializer({ state: 'play', version })
     const decoded = deserializer.parsePacketBuffer(serializer.createPacketBuffer(packet)).data.params
     const apply = new Function('fetchEntity', 'bot', `${source.slice(start, end)}; return updateAttributes`)(() => wire.entity, { emit: () => {} })
     apply(decoded)
-    assert.deepEqual(Object.keys(wire.entity.attributes), ['generic.movement_speed'])
+    assert.deepEqual(Object.keys(wire.entity.attributes), [wireKey])
     assert.equal(observedHorseSpeed(wire.bot, wire.entity), 0.2475)
     canonical.entity.attributes = { [canonical.bot.registry.attributesByName.movementSpeed.resource]: structuredClone(attribute) }
     const before = structuredClone(wire.entity.attributes)
