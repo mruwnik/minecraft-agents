@@ -1,7 +1,7 @@
 // The one-line result renderer that ./mc prints (src/cli.mjs, imported by nothing but tools/mc.mjs and lib.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP, waitReport } from '../src/cli.mjs'
+import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP, waitReport, wakeWorthy } from '../src/cli.mjs'
 
 // `eat` answers ate= and gained= (AGENT_GUIDE), the same names a long result renders as +item:n and ate=item:n. The short
 // renderer dropped both as long-result bookkeeping: Chani ate at food 7 and read `ok food=10 health=10`, then reported
@@ -92,6 +92,39 @@ test('waitReport: skipped chat lines are counted alongside a wake-worthy line th
   const text = chatLine('Chani', 'good morning') + JSON.stringify({ seq: 2, t: '2026-09-26T18:00:02Z', type: 'dawn' }) + '\n'
   assert.deepEqual(waitReport(text, 'Jizo', at, { chattiness: 0.5 }).lines,
     ['dawn', 'skipped 1 chat line below your chattiness (0.5): ./mc events type=chat n=1'])
+})
+
+test('job wake policy keeps routine progress quiet, exposes verbose progress, and avoids duplicate success wakeups', () => {
+  assert.equal(wakeWorthy({ type: 'job_progress', verbose: false }), false)
+  assert.equal(wakeWorthy({ type: 'job_waiting', verbose: false }), false)
+  assert.equal(wakeWorthy({ type: 'job_progress', verbose: true }), true)
+  assert.equal(wakeWorthy({ type: 'job_waiting', verbose: true }), true)
+  assert.equal(wakeWorthy({ type: 'task_done', job: 9, notify: false }), false) // scheduler compatibility alias
+  assert.equal(wakeWorthy({ type: 'task_cancelled', job: 9, notify: false }), false) // cancellation has not settled yet
+  assert.equal(wakeWorthy({ type: 'task_done', action: 'legacy-long' }), true) // older non-job lifecycle
+  assert.equal(wakeWorthy({ type: 'job_completed', notify: false }), false) // automatic bedtime success
+  assert.equal(wakeWorthy({ type: 'job_completed', notify: true }), true)
+  assert.equal(wakeWorthy({ type: 'job_failed' }), true)
+  assert.equal(wakeWorthy({ type: 'job_cancelled' }), true)
+  assert.equal(wakeWorthy({ type: 'whisper', from: 'Steve', to: 'Jizo' }, 'Jizo'), true)
+})
+
+test('waitReport lists only notifications that can end a wait', () => {
+  const line = (seq, type, extra = {}) => `${JSON.stringify({ seq, t: new Date(at).toISOString(), type, ...extra })}\n`
+  const events = line(1, 'job_progress', { id: 8, verbose: false, progress: { round: 10 } }) +
+    line(2, 'job_waiting', { id: 8, verbose: false, reason: 'night' }) +
+    line(3, 'task_done', { job: 8, notify: false }) +
+    line(4, 'job_progress', { id: 9, verbose: true, progress: { round: 1 } }) +
+    line(5, 'job_completed', { id: 8, notify: true }) +
+    line(6, 'job_completed', { id: 10, notify: false })
+  assert.deepEqual(waitReport(events, 'Jizo', at).lines, ['job_progress id=9 verbose progress={"round":1}', 'job_completed id=8 notify'])
+})
+
+test('waitReport does not wake an owned long job for ordinary night/day transitions', () => {
+  const line = (seq, type) => `${JSON.stringify({ seq, t: new Date(at).toISOString(), type })}\n`
+  const events = line(1, 'night_fell') + line(2, 'dawn') + line(3, 'woke_up') + line(4, 'job_progress') + line(5, 'job_failed')
+  assert.deepEqual(waitReport(events, 'Jizo', at, {}, [], { jobActive: true }).lines, ['job_failed'])
+  assert.deepEqual(waitReport(line(6, 'dawn'), 'Jizo', at).lines, ['dawn'])
 })
 
 // ---------------------------------------------------------------- autopilot: a routine that stopped and a body that is stuck wake the wait (autopilot card)

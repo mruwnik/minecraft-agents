@@ -34,7 +34,8 @@ export function terse (r) {
   if (typeof r.text === 'string') return r.text
   const head = r.ok ? 'ok' : 'FAIL'
   const error = r.error ? [`error: ${r.error}`] : []
-  if (r.status === 'running') return `ok running task=${r.task} (still going: block on ./mc wait for its task_done, do not end your turn)`
+  if (r.status === 'running' && r.task !== undefined) return `ok running task=${r.task} (still going: block on ./mc wait for its task_done, do not end your turn)`
+  if (r.status === 'running' || r.status === 'queued') return `ok ${r.status} job=${r.job ?? r.task} (inspect with ./mc job id=${r.job ?? r.task}; block with ./mc wait job=${r.job ?? r.task})`
   const hidden = r.action ? LONG_FIELDS : SHORT_FIELDS
   const extras = compact(Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))), false)
   if (!r.action) return [head, ...(extras ? [extras] : []), ...(r.pos ? [`pos=${compact(r.pos)}`] : []), ...error].join(' ')
@@ -66,13 +67,16 @@ export function describeClock (clock, now) {
 
 // ./mc wait: an idle subagent is not woken by its monitor (the events only reach it with the next message), so drivers wait inside a
 // blocking command instead. These are the events worth ending the wait for
-const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_down', 'error', 'task_done', 'task_cancelled', 'wedged', 'stalled', 'buried',
+const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_down', 'error', 'job_failed', 'job_cancelled', 'job_interrupted', 'wedged', 'stalled', 'buried',
   'watch_hit', 'night_fell', 'dawn', 'woke_up', 'bedtime_failed', 'code_updated',
   // a run the body gave up on is the agent's problem now, and an agent asleep in ./mc wait cannot take it (#138)
   'flee_stuck', 'flee_held',
   // a routine on autopilot that ended, and a body its own watch found going nowhere (autopilot card, src/navigation/stuck.mjs)
   'routine_stopped', 'stuck', 'farm_attention', 'forestry_attention'])
-export const wakeWorthy = (event, me) => WAKE_TYPES.has(event.type) ||
+export const wakeWorthy = (event, me, { jobActive = false } = {}) => (jobActive && ['night_fell', 'dawn', 'woke_up'].includes(event.type) ? false : WAKE_TYPES.has(event.type)) ||
+  (['task_done', 'task_cancelled'].includes(event.type) && event.notify !== false) ||
+  (event.type === 'job_completed' && event.notify !== false) ||
+  (['job_progress', 'job_waiting'].includes(event.type) && event.verbose === true) ||
   (event.type === 'chat' && event.from !== me) || (event.type === 'hurt' && event.health <= 8)
 
 // Chattiness (card 2e032c4a): how much a chat/whisper line asks ME for an answer, in [0,1], and whether it is loud
@@ -131,10 +135,10 @@ const aged = (event, now) => {
 // agents= is the roster of agent body names (src/players.mjs agentNames) so a sender not in it counts as a human for
 // messageWeight's human bonus. A chat/whisper event that wakeWorthy would report but hears() would not is left out
 // and counted instead: nothing is hidden, `skippedLine` says how many and how to read them.
-export function waitReport (text, me, now = Date.now(), chat = {}, agents = []) {
+export function waitReport (text, me, now = Date.now(), chat = {}, agents = [], { jobActive = false } = {}) {
   const whole = text.slice(0, text.lastIndexOf('\n') + 1)
   const events = whole.split('\n').filter(Boolean).map(line => JSON.parse(line))
-  const candidates = events.filter(e => wakeWorthy(e, me))
+  const candidates = events.filter(e => wakeWorthy(e, me, { jobActive }))
   // an empty (unprovided) roster means "unknown", not "everyone is human": only flag a sender human when there IS a
   // roster and it leaves them out, so a caller that skips agents= gets today's behaviour, not a surprise 0.8 floor
   const chatty = e => (e.type !== 'chat' && e.type !== 'whisper') ||

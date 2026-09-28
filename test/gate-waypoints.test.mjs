@@ -34,7 +34,7 @@ test('the real waypoint processor centres the gate and subsequent route away fro
   const route = [node(60, -123), node(60, -122, [gateAction]), node(60, -121), node(59, -121)]
   const result = processor(patched.source)(route)
   assert.deepEqual(result.map(p => [p.x, p.y, p.z]), [[60.5, 69, -122.5], [60.5, 69, -121.5], [60.5, 69, -120.5], [59.5, 69, -120.5]])
-  assert.equal(result[1].toPlace[0], gateAction, 'opening the gate remains part of the path')
+  assert.deepEqual(result[1].toPlace[0], gateAction, 'opening the gate remains part of the cloned path')
   // Gate59-neighbour fence ends at x60: the old x60 waypoint overlaps it.
   assert.ok(result[1].x - 0.3001 > 60)
   assert.equal(patchGateWaypoints(patched.source).status, 'already')
@@ -47,9 +47,10 @@ for (const kind of ['dig', 'scaffold']) {
     const work = kind === 'dig' ? node(60, -121, [], [{ x: 60, y: 69, z: -121 }]) : node(60, -121, [{ x: 60, y: 68, z: -121 }])
     const tail = node(59, -121)
     const route = [node(60, -122, [{ x: 60, y: 69, z: -122, useOne: true }]), work, tail]
-    processor(patched.source)(route)
-    assert.deepEqual([route[0].x, route[0].z], [60.5, -121.5])
-    assert.deepEqual([work.x, work.z, tail.x, tail.z], [60, -121, 59, -121])
+    const processed = processor(patched.source)(route)
+    assert.deepEqual([processed[0].x, processed[0].z], [60.5, -121.5])
+    assert.deepEqual([processed[1].x, processed[1].z, processed[2].x, processed[2].z], [60, -121, 59, -121])
+    assert.deepEqual([route[0].x, route[0].z, work.x, work.z, tail.x, tail.z], [60, -122, 60, -121, 59, -121], 'processor leaves the search path untouched')
   })
 }
 

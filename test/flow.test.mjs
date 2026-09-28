@@ -140,7 +140,7 @@ test('condition operators preserve unknown observations through negation', async
 })
 
 test('seq executes normal actions in order and when rechecks before dispatch', async () => {
-  const calls = [], observations = []
+  const calls = [], observations = [], progress = []
   let reads = 0, ticks = 0, clock = 0
   const program = ['seq',
     ['action', 'goto', { x: 2, y: 64, z: 4 }],
@@ -151,6 +151,7 @@ test('seq executes normal actions in order and when rechecks before dispatch', a
     act: async (name, args) => { calls.push([name, args]); return { ok: true } },
     observe: async () => { observations.push(++reads); return { properties: { open: reads >= 3 } } },
     waitTicks: async n => { ticks += n; clock += n * 50 }, now: () => clock,
+    onProgress: state => progress.push(state),
     pollSeconds: 0.25
   })
   assert.deepEqual(calls.map(x => x[0]), ['goto', 'toggle'])
@@ -158,6 +159,11 @@ test('seq executes normal actions in order and when rechecks before dispatch', a
   assert.equal(ticks, 10)
   assert.equal(result.actions, 2)
   assert.equal(result.waited, 0.5)
+  assert.deepEqual(progress.filter(state => state.phase).map(({ action, phase }) => `${action}:${phase}`), [
+    'goto:running', 'goto:completed', 'toggle:running', 'toggle:completed'
+  ])
+  assert.ok(progress.some(state => state.waiting === true && state.reason === 'flow condition'))
+  assert.ok(progress.some(state => state.waiting === false))
 })
 
 test('any samples competing conditions in order and runs exactly one ready branch', async () => {

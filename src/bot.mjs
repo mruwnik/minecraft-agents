@@ -35,8 +35,10 @@ import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } 
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
 import { walkStandstill, walkProgress, WALK_PROGRESS_MS, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine } from './navigation/stuck.mjs'
-import { enqueue, dequeue, queuedReply, droppedLine, withoutQueue } from './queue.mjs'
 import { neededArgs } from './needs.mjs'
+import { createJobShelf } from './job-shelf.mjs'
+import { createJobScheduler } from './job-scheduler.mjs'
+import { mayRunBesideOwner } from './job-policy.mjs'
 import { airSample, freshAir, serverPosNote } from './survival/airlog.mjs'
 import { surfaceWay, openingProgress, roofAt, SURFACE_SCAN } from './navigation/surface.mjs'
 import { digLegs } from './navigation/dig-legs.mjs'
@@ -44,7 +46,6 @@ import { noPathAdvice, inHole, perchedOverField } from './navigation/cave-exit.m
 import { farmWalk, legFlags, stepsOff, noFirstMove, clearGoalOnFailure } from './lib/path.mjs'
 import { spareTest } from './farm/leg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellRefusal } from './navigation/climb.mjs'
-import { resultEvent } from './taskresult.mjs'
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
 import { placeFaces } from './build/cover.mjs'
 import { slabMergeRefusal } from './build/slab-merge.mjs'
@@ -60,7 +61,7 @@ import { makeVillagerRuntime } from './body/villager.mjs'
 import { makeVillagerRosterObserver, saveVillagerObservation } from './villager/roster.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
-import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, setLastSpoken, edibleCarried, runComposite } from './body/runner.mjs'
+import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
 import { matcher, countsOf, chestTransfer, carried, inventoryCounts, inventoryQuiet, diffCounts, findItem, vecOf, dropsNear, sweepDrops, walkToDig, cellAt, goNear, findBlocksNear, findBlockByName, bedsNear, craftBatch, containerAt, leashHolderOf, onMyLeads, leadsCarried, leashCandidate, leashOne, unleashOne, leadWalk } from './body/helpers.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
@@ -475,18 +476,19 @@ function connect () {
     }, 5000)
     ready = true
     waitingForServer = false
+    scheduler?.pump()
     emit('spawned', { pos: pos(), dimension: bot.game.dimension, ...codeHere })
   })
 
-  // a running composite hands control back when a person addresses me: a whisper always, a chat that says my name
+  // incoming conversation is recorded for the active job; it never implicitly cancels that job
   bot.on('chat', (username, message) => {
     if (username === bot.username) return
-    if (new RegExp(cfg.username, 'i').test(message)) setLastSpoken({ from: username, message, at: Date.now() })
+    lastDriven = Date.now()
     emit('chat', { from: username, message })
   })
   bot.on('whisper', (username, message) => {
     if (username === bot.username) return
-    setLastSpoken({ from: username, message, at: Date.now() })
+    lastDriven = Date.now()
     emit('whisper', { from: username, message })
   })
   bot.on('playerJoined', p => { if (ready && p.username !== bot.username) emit('player_joined', { player: p.username }) })
@@ -558,7 +560,7 @@ function connect () {
       })
       emit('respawned', { ...(plan.why ? { doing: plan.do, note: plan.why } : {}) })
       if (plan.do === 'burrow') holeUp(plan.why)
-      if (plan.do === 'sleep') runLong('sleep', { timeout: 60, automatic: true }).catch(() => {})
+      if (plan.do === 'sleep') submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
     }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
@@ -935,7 +937,7 @@ setInterval(() => {
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   if (!isNight(bot.time.timeOfDay)) holedUp = null
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task || Boolean(holedUp) || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: automaticSleepBeds().length > 0,
+    night: isNight(bot.time.timeOfDay), busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: automaticSleepBeds().length > 0,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
   if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
@@ -943,10 +945,7 @@ setInterval(() => {
   lastBedTry = now
   if (bedFailures === 0) emit('bedtime', { note: 'night, no orders, a bed nearby: going to bed by myself' })
   // say so once a night: the driver is told, and the retries (ever further apart) stay quiet
-  runLong('sleep', { timeout: 60, automatic: true }).then(r => {
-    const report = r.ok ? null : bedtimeReport(r.error)
-    if (report && bedFailures++ === 0) emit('bedtime_failed', { error: report })
-  })
+  submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
 }, 10000)
 // shared clock: lets logged-off agents (no bed, rule 3) see when it is day without reconnecting
 setInterval(() => {
@@ -969,6 +968,7 @@ export let stepsDone = 0 // composite steps finished: the task progress the watc
 export const setStepsDone = n => { stepsDone = n }
 const stuckSample = () => ({
   t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
+  waiting: task?.jobId ? jobShelf.get(task.jobId)?.progress?.waiting ?? null : null,
   sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
   oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: trappedIn(), frozenWalks, failedWalks,
   routine: task?.progress?.routine ?? null
@@ -2570,6 +2570,13 @@ export const long = {
         if (!observations.includes(name) || typeof read !== 'function') throw new Error(`run: observation ${name} is unavailable`)
         return read(args)
       },
+      onProgress: detail => {
+        if (!task) return
+        task.progress = { ...(task.progress ?? {}), ...detail }
+        if (task.jobId) scheduler?.report(task.jobId, detail.waiting ? 'job_waiting' : 'job_progress', {
+          ...detail, ...(detail.waiting ? {} : { waiting: false }), progress: task.progress
+        })
+      },
       act: async (name, args, legacyStep) => {
         const fn = resolveFlowAction(name, long, quick)
         const where = legacyStep ? `step ${legacyStep.index}/${legacyStep.total} (${name})` : `flow/${name}`
@@ -2662,7 +2669,8 @@ export const quick = {
       ...Object.entries(PRIMITIVES).filter(([name]) => served(name)).map(([name, p]) => ({ name, ...p })),
       ...[...composites].map(([name, mod]) => ({ name, args: argsUsage(mod.args), doc: docText(mod.doc), stops: mod.stops ?? 'the usual hand-backs' }))
     ]
-    return { text: helpText(a.topic, entries) }
+    const catalogue = helpText(a.topic, entries)
+    return { text: `${catalogue}\n\nLong and body-changing actions queue by default and return a job ID. Add wait=true for a bounded synchronous reply; use interrupt=true to replace the current owner after cleanup. Inspect with job/jobs, cancel one ID, resume or discard a held queue, and stop to cancel all work.` }
   },
 
   // stop this body for good (logging off for the night, or done playing): answers first, then leaves the server and exits
@@ -2731,7 +2739,8 @@ export const quick = {
       holding: bot.heldItem?.name,
       asleep: bot.isSleeping,
       doing: task && doingText({ name: task.name, seconds: Math.round((Date.now() - task.started) / 1000), paused: task.paused }),
-      queued: queued.length ? queued.map(c => `${c.name} (${c.id})`).join(', ') : undefined,
+      queued: jobShelf.list().queued.map(id => { const j = jobShelf.get(id); return j ? `${j.name} (${j.id})` : String(id) }).join(', ') || undefined,
+      queueHeld: jobShelf.snapshot().held?.reason,
       stuck: stuckField(stuckNow),
       following: followTarget,
       reflexesOff: !reflexes,
@@ -3030,9 +3039,8 @@ export const quick = {
   },
 
   follow (a) {
-    cancelTask('follow')
-    followTarget = a.player
     if (!bot.players[a.player]?.entity) throw new Error(`can't see ${a.player} right now`)
+    followTarget = a.player
     resumeFollow()
     return { following: a.player }
   },
@@ -3041,9 +3049,11 @@ export const quick = {
   async control (a) {
     const from = pos()
     const finishTrace = a.trace ? controlTrace(bot, { duration: a.ms ?? 1000 }) : null
+    const alive = cancelGuard()
     try {
       bot.setControlState(a.state ?? 'forward', true)
-      await new Promise(r => setTimeout(r, a.ms ?? 1000))
+      const until = Date.now() + (a.ms ?? 1000)
+      while (Date.now() < until) { alive(); await bot.waitForTicks(1) }
       return { from, to: pos(), onGround: bot.entity.onGround, velocity: roundVec(bot.entity.velocity), ...(finishTrace ? { trace: finishTrace() } : {}) }
     } finally {
       finishTrace?.()
@@ -3051,8 +3061,8 @@ export const quick = {
     }
   },
 
-  // the chores waiting behind the task (queue=true) go with it, and the reply names them
-  stop () { const dropped = droppedLine(queued); queued = []; cancelTask('stop'); followTarget = null; endFlee(); return dropped ? { dropped } : {} },
+  // stop is an explicit all-work cancellation; normal chat never calls it implicitly.
+  stop () { return stopAllJobs() },
   // without on= it only tells: a bare `reflexes` "to look" used to switch them all off, silently
   reflexes (a) {
     if (a.on === undefined) return { reflexes, note: 'unchanged: reflexes on=true|false switches them' }
@@ -3068,10 +3078,17 @@ export const quick = {
   }
 }
 
-function cancelTask (why) {
+function cancelTask (why, { holdQueue = true } = {}) {
+  const active = jobShelf.snapshot().active
+  if (active != null) {
+    jobShelf.markCancelling(active, why)
+    if (holdQueue) jobShelf.hold(`job ${active} cancelled by ${why}; explicitly resume or discard queued jobs`)
+  }
   gen++
-  if (task) emit('task_cancelled', { id: task.id, name: task.name, why })
+  if (task) emit('task_cancelled', { id: task.id, name: task.name, why, ...(task.jobId ? { notify: false } : {}) })
   if (task) lastCancel = { id: task.id, why }
+  task?.releaseFollow?.()
+  followTarget = null
   task = null
   fighting = null
   fightStart = null
@@ -3088,6 +3105,13 @@ export const refusalFor = (name, args) => (['trades', 'trade'].includes(name) &&
 let taskId = 0
 let lastCancel = null
 let lastReflex = null
+const jobShelf = createJobShelf(path.join(HOME, 'jobs.json'))
+taskId = Math.max(0, ...jobShelf.snapshot().jobs.map(job => Number(job.id) || 0))
+for (const recovered of jobShelf.snapshot().jobs.filter(job => job.status === 'interrupted' && !job.recoveryReported)) {
+  emit('job_interrupted', { id: recovered.id, name: recovered.name, error: recovered.error })
+  jobShelf.patch(recovered.id, { recoveryReported: true })
+}
+let scheduler
 const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
 // #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
 // included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
@@ -3276,6 +3300,32 @@ async function shutGatesBehind () {
   // a far one is named, not walked to: the body once crossed the map for two gates and left the cow it had just brought home
   return { shut: near.length, far: far && `${far}: still open and more than 32 blocks back: go and shut them (toggle x= y= z= open=false)` }
 }
+async function shutTrackedGatesAfterCancel () {
+  const tracked = [...doorsIOpened].filter(key => !heldOpen.has(key))
+  if (!tracked.length) return {}
+  const open = []
+  const unknown = []
+  for (const key of tracked) {
+    const block = bot.blockAt(new Vec3(...key.match(/-?\d+/g).map(Number)))
+    if (!block) unknown.push(key)
+    else if (block.getProperties?.().open === true) open.push(key)
+    else doorsIOpened.delete(key)
+  }
+  if (!open.length && !unknown.length) return {}
+  const safeToWalk = ready && bot.entity && bot.health > 0 && !bot.isSleeping && !bot.vehicle &&
+    !flee && !holingUp && !fighting && !surfacing && !diggingOut
+  if (!safeToWalk) return { restorationPending: `job was cancelled with tracked gate state unresolved (${[...open, ...unknown].join('; ')}); close it after the body is safe` }
+  let result = {}
+  if (open.length) {
+    try { result = await shutGatesBehind() }
+    catch (error) { return { restorationPending: `could not close a tracked gate after cancellation: ${error.message}` } }
+  }
+  const unresolved = [
+    ...(result.far ? [result.far] : []),
+    ...(unknown.length ? [`gate state is unloaded at ${unknown.join('; ')}`] : [])
+  ]
+  return { ...result, ...(unresolved.length ? { restorationPending: unresolved.join('; ') } : {}) }
+}
 // pressed against a fence, a wall or a shut gate my centre lies inside ITS cell, and every plan starts on the wrong side of it (see realCell): three steps
 // back into the cell I really stand in, before any task plans a walk
 // the cell I really stand in when my centre lies in a fence's cell, else null
@@ -3297,39 +3347,27 @@ async function leaveFenceCell () {
   console.log(`[left fence cell] ${mine.name} -> ${cell.x},${cell.y},${cell.z}`)
 }
 
-// ./mc <action> queue=true while a task runs: the chore waits its turn instead of superseding the task (a side craft
-// cancelled a running routine, card 6cf481c0). The next one starts when the task ends, however it ends; ./mc stop drops
-// them. Its result is written as task_done, since nobody holds a reply for it (src/queue.mjs)
-let queued = []
-const startQueued = () => {
-  const { next, rest } = dequeue(queued)
-  queued = rest
-  if (!next) return
-  console.log(`[queued ${next.id}] starting ${next.name} ${JSON.stringify(next.args)}`)
-  runLong(next.name, next.args, next.args, next.id).catch(e => sayError(`queued ${next.name}: ${e.message}`))
-}
-
+// One shelf slot owns all body-changing work. Submission persists before this pump claims it;
+// nested composite/flow api.act calls still invoke their registered action directly.
 async function runLong (name, args, given = args, queuedAs = null) {
-  // morning, and the server still has me in bed: get up rather than refuse (Arren added a `wake` to every morning after "you are asleep: wake first")
-  if (bot.isSleeping && name !== 'wake' && oversleeping({ asleep: true, timeOfDay: bot.time.timeOfDay, thundering: bot.thunderState > 0 })) await long.wake().catch(() => {})
   const refusal = refusalFor(name, args)
   if (refusal) return { ok: false, error: refusal }
-  const previous = task
-  cancelTask(`superseded by ${name}`)
-  // A cancelled villager roll may have a lectern in hand. Give its finally block time to put that exact block back
-  // before another long action starts using the same legs and hand.
-  if (previous?.name === 'villager.roll' && previous.work) {
-    try { await within(20000, previous.work, 'the previous villager roll is still restoring its lectern') }
-    catch (e) { return { ok: false, error: e.message } }
-  }
+  if (task) return { ok: false, error: `body owner invariant violated: ${task.name} (${task.id}) is still active` }
   followTarget = null
   const mine = { id: queuedAs ?? ++taskId, name, gen, started: Date.now() }
   task = mine
+  mine.jobId = queuedAs ?? null
   console.log(`[task ${mine.id}] ${name} ${JSON.stringify(given)}`)
   gatesPassed.clear()
   useMoves(mayDig(name, args))
   await leaveFenceCell().catch(() => {})
+  if (task !== mine || mine.gen !== gen) return { ok: false, cancelled: true, task: mine.id, error: 'cancelled before action start' }
   scaffolded = []
+  // morning, and the server still has me in bed: wake only after the scheduler has durably reserved this job.
+  if (bot.isSleeping && name !== 'wake' && oversleeping({ asleep: true, timeOfDay: bot.time.timeOfDay, thundering: bot.thunderState > 0 })) {
+    await long.wake().catch(() => {})
+    if (task !== mine || mine.gen !== gen) return { ok: false, cancelled: true, task: mine.id, error: 'cancelled while waking' }
+  }
   const before = inventoryCounts()
   const mealsAtStart = { ...mealsEaten }
   const finish = (extra) => {
@@ -3339,7 +3377,6 @@ async function runLong (name, args, given = args, queuedAs = null) {
     const result = { task: mine.id, action: name, seconds, ...mealTally({ ...diffCounts(before, inventoryCounts()), ate: diffCounts(mealsAtStart, mealsEaten).gained }), pos: pos(), ...vitals, ...extra }
     // back to walking, so a later flee or follow doesn't tunnel
     if (task === mine) { task = null; useMoves(false); bot.setControlState('sneak', false) }
-    if (task === null) startQueued()
     return result
   }
   // inventory updates trail the action by a few ticks; wait so gained/lost are accurate
@@ -3349,10 +3386,12 @@ async function runLong (name, args, given = args, queuedAs = null) {
   // not after toggle (it is the tool for this); not when another task has taken over
   // bamboo bases the wedge reflex dug to free me: plant them again, whether the task worked or not
   const replantBases = async () => {
-    if (task !== mine || !basesOwed.length) return {}
+    if (!basesOwed.length) return {}
+    if (task !== mine) return { restorationPending: `${basesOwed.length} bamboo base${basesOwed.length === 1 ? '' : 's'} still need restoration` }
     const owed = basesOwed.splice(0)
     const { placed = 0 } = await long.place({ blocks: owed }).catch(() => ({}))
-    return { bambooReplanted: `${placed} of ${owed.length} bases I dug to free myself${placed < owed.length ? `: plant the rest (place item=bamboo at ${owed.map(o => `${o.x},${o.y},${o.z}`).join(' ')})` : ''}` }
+    const note = `${placed} of ${owed.length} bases I dug to free myself${placed < owed.length ? `: plant the rest (place item=bamboo at ${owed.map(o => `${o.x},${o.y},${o.z}`).join(' ')})` : ''}`
+    return { bambooReplanted: note, ...(placed < owed.length ? { restorationPending: note } : {}) }
   }
   // what the walk climbed on: dig back the pillars still standing within reach, and say where the rest are
   const reclaimScaffold = async () => {
@@ -3370,11 +3409,11 @@ async function runLong (name, args, given = args, queuedAs = null) {
     }
     const left = standing.filter(c => !taken.includes(c))
     const note = scaffoldNote(tally(scaffolded), tally(taken), left)
-    return note ? { scaffold: note } : {}
+    return note ? { scaffold: note, restorationPending: note } : {}
   }
   const tidy = async r => {
-    if (task !== mine || name === 'toggle') return { ...r, ...await replantBases(), ...await reclaimScaffold().catch(() => ({})) }
-    r = { ...r, ...await replantBases(), ...await reclaimScaffold().catch(() => ({})) }
+    if (task !== mine || name === 'toggle') return { ...r, ...await replantBases(), ...await reclaimScaffold().catch(e => ({ restorationPending: e.message })) }
+    r = { ...r, ...await replantBases(), ...await reclaimScaffold().catch(e => ({ restorationPending: e.message })) }
     const { shut: gatesShut, far: gatesLeftOpen } = await shutGatesBehind().catch(() => ({ shut: 0 }))
     // an animal that left the pen at my heels: say so now, not at nightfall when the pen is empty (Kettricken built an airlock over this)
     const out = [...gatesPassed].map(straysAt).filter(Boolean).join(' ')
@@ -3384,23 +3423,91 @@ async function runLong (name, args, given = args, queuedAs = null) {
   const work = long[name](args).then(tidy).then(
     r => settle().then(() => finish({ ok: true, ...r })),
     // a cancelled task fails with the pathfinder's vague "goal was changed": say why it was cancelled instead
-    e => settle().then(replantBases).then(async b => ({ ...b, ...await reclaimScaffold().catch(() => ({})) })).then(b => {
+    e => settle().then(replantBases).then(async b => ({
+      ...b,
+      ...await reclaimScaffold().catch(error => ({ restorationPending: error.message })),
+      ...await shutTrackedGatesAfterCancel()
+    })).then(b => {
       // a death while it ran: the kit lies where the body fell, and the driver collects there first
       const carried = deathLine({ diedAt: lastDeath?.at, startedAt: mine.started, pos: lastDeath?.pos, kit: lastDeath?.kit })
       return finish(failedResult({ base: b, report: { ...e.report, ...(carried ? { carried } : {}) }, cancelled: lastCancel?.id === mine.id, why: lastCancel?.why, message: e.message, explain: explainFailure }))
     })
   )
   mine.work = work
-  const timeout = (args.timeout ?? 60) * 1000
-  const timedOut = Symbol('timeout')
-  const first = await Promise.race([work, new Promise(r => setTimeout(() => r(timedOut), timeout))])
-  // every result is written once, to events.jsonl and bot.log: a fast one as task_result (the caller holds it already, so no
-  // wait wakes for it), a slow one as task_done, which is how the wait stream hands it over (src/taskresult.mjs)
-  const record = (finished, r) => { const { type, data } = resultEvent(finished, r); emit(type, data) }
-  if (first !== timedOut) { record(queuedAs === null, first); return first }
-  // still going: report completion through the event stream instead
-  work.then(r => { if (mine.gen === gen) record(false, r) })
-  return { ok: true, status: 'running', task: mine.id, note: 'still going: run ./mc wait (blocking, Bash timeout 600000 ms) to get its task_done. Do not end your turn to wait' }
+  return await work
+}
+
+async function executeAcceptedJob (job) {
+  const { name, args, given, id } = job
+  if (jobShelf.get(id)?.status !== 'running') return { ok: false, cancelled: true, error: 'cancelled before the body action started' }
+  if (long[name]) return runLong(name, args, given, id)
+  if (!quick[name]) return { ok: false, error: `unknown action ${name}` }
+  const mine = { id, name, gen, started: Date.now(), jobId: id, progress: {} }
+  task = mine
+  try {
+    const refusal = refusalFor(name, args)
+    if (refusal) return { ok: false, error: refusal }
+    useMoves(mayDig(name, args))
+    const result = await quick[name](args)
+    if (name === 'follow') await new Promise(resolve => { mine.releaseFollow = resolve })
+    return { ok: true, action: name, ...result }
+  } finally {
+    if (task === mine) { task = null; useMoves(false); bot.setControlState('sneak', false) }
+  }
+}
+
+scheduler = createJobScheduler({
+  shelf: jobShelf,
+  execute: executeAcceptedJob,
+  emit,
+  isReady: () => ready && !flee && !holingUp && !fighting && !surfacing && !diggingOut,
+  onTerminal: (job, result, status) => {
+    if (status === 'completed' || status === 'failed') emit('task_done', { ...(result ?? {}), job: job.id, task: job.id, action: job.name, notify: false })
+    if (status === 'failed' && job.name === 'sleep' && job.given?.automatic) {
+      const report = bedtimeReport(result?.error ?? result?.message)
+      if (report && bedFailures++ === 0) emit('bedtime_failed', { error: report })
+    }
+  }
+})
+setInterval(() => scheduler?.pump(), 500)
+
+function submitJob (name, args, given = args, { urgent = false, verbose = false, notify = given?.automatic !== true } = {}) {
+  const record = scheduler.submit({ name, args, given }, { urgent, verbose, notify })
+  taskId = Math.max(taskId, record.id)
+  return record
+}
+
+function stopAllJobs () {
+  const { active, dropped } = scheduler.stop(reason => cancelTask(reason, { holdQueue: false }))
+  followTarget = null; endFlee()
+  const held = jobShelf.snapshot().held
+  return { ok: true, stopped: active ?? null, dropped: dropped.map(job => job.id), ...(held ? { restorationPending: held.reason } : {}) }
+}
+
+function cancelAcceptedJob (id, reason = 'cancelled by request') {
+  const job = jobShelf.get(id)
+  if (!job) return { ok: false, error: `no job ${id}` }
+  const cancelled = scheduler.cancel(id, reason)
+  if (cancelled.cleanup === 'pending') cancelTask(reason, { holdQueue: false })
+  return cancelled
+}
+
+function jobControl (name, args) {
+  if (name === 'jobs') return { ok: true, ...jobShelf.list({ after: args.after ?? 0, limit: args.limit ?? 100 }) }
+  if (name === 'job') {
+    const job = jobShelf.get(args.id)
+    return job ? { ok: true, job } : { ok: false, error: `no job ${args.id}` }
+  }
+  if (name === 'cancel') return cancelAcceptedJob(args.id)
+  if (name === 'resume') {
+    const result = scheduler.resume({ recovered: args.recovered === true })
+    return { ok: !result.blocked, ...result, queued: jobShelf.list().queued.length }
+  }
+  if (name === 'discard') {
+    const { dropped: discarded, held, blocked } = scheduler.discard('discarded by request')
+    return { ok: !blocked, discarded: discarded.map(job => job.id), clearedHold: Boolean(held && !blocked), restorationPending: blocked ? held.reason : undefined }
+  }
+  return null
 }
 
 for (const file of libraryFiles()) {
@@ -3412,7 +3519,9 @@ for (const file of libraryFiles()) {
   if (problem) { console.log(`[library] ${problem}`); emit('error', { message: problem }); continue }
   // instant: it only reads (or writes the map), so it goes in the quick table and never cancels a task that is running
   const table = mod.instant ? quick : long
-  table[name] = args => runComposite(name, mod, args)
+  table[name] = args => runComposite(name, mod, args, (type, detail) => {
+    if (task?.jobId) scheduler?.report(task.jobId, type, detail)
+  })
   composites.set(name, mod)
   console.log(`[library] ${name}: ${mod.doc}`)
 }
@@ -3449,11 +3558,49 @@ http.createServer((req, res) => {
       const args = tracked.args
       // help is answered even before the body is connected: a driver reads it first of all
       if (name === '' || name === 'help') out = { ok: true, ...quick.help(args) }
-      else if (!ready && name !== 'events') out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
+      else if (args.queue === false && args.interrupt !== true) out = { ok: false, error: 'queue=false is no longer supported; jobs queue by default. Use interrupt=true to cancel the current job safely before urgent work' }
+      else if (!ready && !['events', 'job', 'jobs', 'cancel', 'resume', 'discard', 'stop'].includes(name)) out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
       else if (lacking) out = { ok: false, error: lacking }
-      else if (quick[name]) { if (name === 'wake') lastDriven = Date.now(); out = { ok: true, ...(await quick[name](args)) } }
-      else if (long[name] && args.queue && task) { lastDriven = Date.now(); queued = enqueue(queued, { name, args: { ...args } }, ++taskId); out = queuedReply(taskId, task, queued.length) }
-      else if (long[name]) { lastDriven = Date.now(); out = await runLong(name, args.queue ? withoutQueue({ ...args }) : args, tracked.given) }
+      else if (['job', 'jobs', 'cancel', 'resume', 'discard'].includes(name)) out = jobControl(name, args)
+      else if (name === 'stop') out = stopAllJobs()
+      else if (name === 'quit') {
+        const stopping = stopAllJobs()
+        if (stopping.restorationPending) {
+          out = { ok: false, cleanup: 'failed', error: stopping.restorationPending, note: 'body remains online for recovery' }
+        } else if (stopping.stopped != null) {
+          const settled = await scheduler.wait(stopping.stopped, 120000)
+          if (!settled || !['completed', 'failed', 'cancelled', 'interrupted'].includes(settled.status)) {
+            out = { ok: false, cleanup: 'pending', job: stopping.stopped, error: 'the active job has not finished cancellation cleanup; body remains online' }
+          } else if (settled.status === 'failed') out = { ok: false, cleanup: 'failed', job: stopping.stopped, error: settled.error ?? settled.result?.error ?? 'job cleanup failed; body remains online for recovery' }
+          else out = { ok: true, ...quick.quit(args) }
+        } else out = { ok: true, ...quick.quit(args) }
+      }
+      else if (mayRunBesideOwner(name, { quick, long })) { out = { ok: true, ...(await quick[name](args)) } }
+      else if (long[name] || quick[name]) {
+        const { queue: _queue, interrupt = false, sync = false, verbose = false, wait, waitMs, ...rest } = args
+        const waitForResult = sync || (name !== 'smelt' && wait === true)
+        const waitDuration = Number.isFinite(Number(waitMs)) ? Math.max(0, Math.min(120000, Number(waitMs))) : 120000
+        const actionArgs = name === 'smelt' && wait !== undefined ? { ...rest, wait } : rest
+        lastDriven = Date.now()
+        if (interrupt) {
+          const { job: accepted, afterCleanup } = scheduler.interrupt({ name, args: actionArgs, given: tracked.given }, reason => cancelTask(reason, { holdQueue: false }), { verbose, notify: tracked.given?.automatic !== true })
+          taskId = Math.max(taskId, accepted.id)
+          out = { ok: true, status: 'queued', job: accepted.id, urgent: true, afterCleanup, held: jobShelf.snapshot().held?.reason }
+          if (waitForResult) {
+            const finished = await scheduler.wait(accepted.id, waitDuration)
+            if (finished && ['completed', 'failed', 'cancelled', 'interrupted'].includes(finished.status)) out = { ok: finished.status === 'completed', job: accepted.id, ...finished.result }
+            else out = { ok: true, status: jobShelf.get(accepted.id)?.status ?? 'queued', job: accepted.id, urgent: true, afterCleanup, held: jobShelf.snapshot().held?.reason }
+          }
+        } else {
+          const accepted = submitJob(name, actionArgs, tracked.given, { verbose, notify: tracked.given?.automatic !== true })
+          out = { ok: true, status: jobShelf.get(accepted.id)?.status ?? 'queued', job: accepted.id, held: jobShelf.snapshot().held?.reason }
+          if (waitForResult) {
+            const finished = await scheduler.wait(accepted.id, waitDuration)
+            if (finished && ['completed', 'failed', 'cancelled', 'interrupted'].includes(finished.status)) out = { ok: finished.status === 'completed', job: accepted.id, ...finished.result }
+            else out = { ok: true, status: jobShelf.get(accepted.id)?.status ?? 'queued', job: accepted.id, held: jobShelf.snapshot().held?.reason }
+          }
+        }
+      }
       else out = { ok: false, error: didYouMean(name, [...Object.keys(long), ...Object.keys(quick)]) }
       const ignored = ignoredParams(tracked.unread(), out.ok, String(quick[name] ?? long[name] ?? ''))
       if (ignored && out.status !== 'running') out = { ...out, ignored }

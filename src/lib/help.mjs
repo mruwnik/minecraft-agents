@@ -179,7 +179,12 @@ export const PRIMITIVES = {
   whisper: { section: 'self', args: 'player= message=', doc: 'say something to one player' },
   // ---- control
   run: { section: 'control', args: 'steps=', doc: 'run one bounded EDN flow form, e.g. (seq (action :goto {:x 4 :y 64 :z 2}) (when (= (read :block_at {:x 4 :y 64 :z 2} [:properties :open]) true) 30 (action :toggle {:x 4 :y 64 :z 2 :open false}))). Compose seq, when, any, action; conditions use read, and, or, not and comparisons. A when body may be any flow node. A wait starts at its sequence position; any polls branches in order and runs the first ready branch (ties go to the earlier branch). Only allowlisted observations and existing commands are available; timeout runs no branch action. Legacy object-list steps remain supported' },
-  stop: { section: 'control', args: '', doc: 'cancel whatever the body is doing' },
+  stop: { section: 'control', args: '', doc: 'cancel the active job after cleanup, clear the pending queue, and stop following' },
+  job: { section: 'control', args: 'id=', doc: 'inspect a durable job status and result by ID; body-changing actions return a job ID immediately, or pass sync=true to wait up to waitMs=120000 for its result (wait=true is an alias except for smelt)' },
+  jobs: { section: 'control', args: '[after=] [limit=]', doc: 'list durable job status, active owner, pending queue, and any failure hold; actions queue by default. Use verbose=true on a submitted action to receive detailed progress notifications; otherwise progress stays in job status. Use interrupt=true to cancel the owner after cleanup and run urgent work; queue=false is refused' },
+  cancel: { section: 'control', args: 'id=', doc: 'cancel one queued or active job; active cleanup finishes before another body job may start' },
+  resume: { section: 'control', args: '[recovered=true]', doc: 'release a normal failure/cancellation hold and resume the FIFO queue. If cleanup reported restorationPending or the body restarted with work pending, inspect/repair the named world state first, then pass recovered=true to acknowledge recovery and release the safety hold' },
+  discard: { section: 'control', args: '', doc: 'cancel every queued job and clear the queue hold' },
   watch: { section: 'control', args: 'name= block=|mob=|item= [where=] [count=] [atMost=] [within=] [x= y= z=] [repeat=]', doc: 'tell me when the world comes to look like this' },
   unwatch: { section: 'control', args: 'name=', doc: 'drop a watch' },
   watches: { section: 'control', args: '', doc: 'the watches I have set' },
@@ -188,7 +193,7 @@ export const PRIMITIVES = {
   scaffold_side: { section: 'control', args: 'x= y= z= from_x= from_y= from_z=', doc: 'place one supported horizontal scaffold beside a specified scaffold, distance at most six from vertical support; verifies loaded clear headroom, reach and actual placement; never walks or digs' },
   scaffold_extend: { section: 'control', args: 'x= y= z= base_y=', doc: 'extend a supported scaffold column by one verified block from beside its base; clicks the side, requires clear loaded headroom and carried scaffolding, and never walks or digs' },
   pillar_up: { section: 'control', args: '[steps=1] [item=]', doc: 'climb 1..4 blocks by normal jumping and placing underfoot; requires full support and a clear jump column, never digs, and verifies actual ascent' },
-  wait: { section: 'control', args: '[seconds=100]', doc: 'block until something happens that needs me; reads the event log, so it needs no body' },
+  wait: { section: 'control', args: '[job=] [seconds=100]', doc: 'wait for a job ID to finish, or wait for an event that needs me; job results remain available with ./mc job id=' },
   dawn: { section: 'control', args: '', doc: 'block until morning; needs no body, so a bodiless night is spent here' },
   clock: { section: 'control', args: '', doc: 'the world time as last seen by any body; needs no body' },
   help: { section: 'control', args: '[<section or action>]', doc: 'this catalogue, one section of it, or everything about one action' }

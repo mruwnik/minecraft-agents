@@ -46,7 +46,33 @@ if (action === 'dawn') {
 // the body, and keeps its place in .wait-offset, so what happens between two waits is reported by the next one
 if (action === 'wait') {
   const home = process.env.MC_HOME ?? path.join(import.meta.dirname, '..')
+  if (args.job !== undefined) {
+    const deadline = Date.now() + (args.seconds ?? 100) * 1000
+    const poll = () => new Promise((resolve, reject) => {
+      const req = http.request(`http://127.0.0.1:${apiPort}/job`, { method: 'POST' }, res => {
+        const chunks = []
+        res.on('data', chunk => chunks.push(chunk))
+        res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))) } catch (error) { reject(error) } })
+      })
+      req.on('error', reject)
+      req.end(JSON.stringify({ id: args.job }))
+    })
+    while (Date.now() < deadline) {
+      const result = await poll()
+      if (!result.ok) { console.log(`FAIL ${result.error}`); process.exit(1) }
+      const job = result.job
+      if (['completed', 'failed', 'cancelled', 'interrupted'].includes(job.status)) {
+        console.log(verbose ? JSON.stringify(job, null, 1) : capOutput(terse({ ok: job.status === 'completed', job: job.id, ...(job.result ?? {}), ...(job.error ? { error: job.error } : {}) })))
+        process.exit(job.status === 'completed' ? 0 : 1)
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+    const result = await poll()
+    console.log(verbose ? JSON.stringify(result.job, null, 1) : `job ${args.job} still ${result.job?.status ?? 'unknown'}; inspect with ./mc job id=${args.job}`)
+    process.exit(0)
+  }
   const eventsFile = path.join(home, 'events.jsonl')
+  const jobsFile = path.join(home, 'jobs.json')
   const offsetFile = path.join(home, '.wait-offset')
   const { username: me, chat = {} } = JSON.parse(fs.readFileSync(configFile, 'utf8'))
   // the agent roster (src/players.mjs agentNames, inlined: tools/mc.mjs may import nothing but src/cli.mjs, #148),
@@ -56,13 +82,20 @@ if (action === 'wait') {
     ? fs.readdirSync(agentsDir).filter(n => fs.existsSync(path.join(agentsDir, n, 'config.json')))
     : []
   const size = () => fs.existsSync(eventsFile) ? fs.statSync(eventsFile).size : 0
+  const jobActive = () => {
+    if (!fs.existsSync(jobsFile)) return false
+    try {
+      const shelf = JSON.parse(fs.readFileSync(jobsFile, 'utf8'))
+      return shelf.active != null && shelf.jobs?.some(job => job.id === shelf.active && ['running', 'cancelling'].includes(job.status)) === true
+    } catch { return false }
+  }
   const saved = fs.existsSync(offsetFile) ? Number(fs.readFileSync(offsetFile, 'utf8')) : NaN
   let offset = saved <= size() ? saved : size()
   const deadline = Date.now() + (args.seconds ?? 100) * 1000
   const tick = () => {
     const fresh = Buffer.alloc(size() - offset)
     if (fresh.length) fs.readSync(fs.openSync(eventsFile, 'r'), fresh, 0, fresh.length, offset)
-    const report = waitReport(fresh.toString('utf8'), me, Date.now(), chat, agents)
+    const report = waitReport(fresh.toString('utf8'), me, Date.now(), chat, agents, { jobActive: jobActive() })
     offset += report.consumed
     fs.writeFileSync(offsetFile, String(offset))
     if (!report.lines.length && Date.now() < deadline) return setTimeout(tick, 1000)
