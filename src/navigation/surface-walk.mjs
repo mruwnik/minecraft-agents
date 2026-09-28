@@ -73,8 +73,9 @@ export function makeSurfaceWalkRuntime ({ getBot, Vec3, goals, makeMoves, cancel
     const { internal, ...report } = planning(args)
     return report
   }
-  const walk = async args => {
-    const bot = getBot(), check = cancelGuard(), initialHealth = bot.health
+  const walk = async (args, { check: extraCheck = () => {} } = {}) => {
+    const bot = getBot(), alive = cancelGuard(), initialHealth = bot.health
+    const check = () => { alive(); extraCheck() }
     guard(bot, initialHealth, check)
     const plan = planning(args), { internal, ...previewReport } = plan
     if (!internal) return { ...previewReport, arrived: false }

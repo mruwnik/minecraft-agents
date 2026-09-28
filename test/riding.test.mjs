@@ -344,3 +344,15 @@ test('unexpected authoritative horse landing returns actual recovery context and
   assert.equal(context.mounted,false)
   assert.equal(f.bot.listenerCount('forcedMove'),0)
 })
+
+test('surface boarding is explicitly bounded and never falls back to ordinary goNear',async()=>{
+  const f=fixture({flags:6});f.bot.entity.onGround=true;f.horse.position.x=60
+  let ordinary=0,surface=0
+  const runtime=makeRidingRuntime({getBot:()=>f.bot,cancelGuard:()=>()=>{},pause:async()=>{},
+    goNear:async()=>{ordinary++},surfaceWalk:{walk:async()=>{surface++;return{arrived:false,status:'noPath'}}}})
+  await assert.rejects(runtime.long.ride({id:9,approach:'surface'}),/16-block/)
+  assert.equal(ordinary,0);assert.equal(surface,0);assert.equal(f.bot.vehicle,undefined)
+  f.horse.position.x=1
+  assert.equal((await runtime.long.ride({id:9,approach:'surface'})).mounted,true)
+  assert.equal(ordinary,0);assert.equal(surface,0)
+})

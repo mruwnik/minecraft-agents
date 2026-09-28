@@ -124,7 +124,7 @@ export const PRIMITIVES = {
   horse_state: { section: 'move', args: '[id=]', doc: 'inspect nearby horses, donkeys and mules: server-confirmed age, tameness, saddle and passenger state' },
   tame: { section: 'move', args: 'id= [attempts=12] [seconds=120]', doc: 'tame an authorized adult horse, donkey or mule by mounting again after bucking; verifies the server tame flag and remains mounted on success' },
   horse_saddle: { section: 'move', args: 'id=', doc: 'fit one carried saddle to a tamed horse, donkey or mule through its checked inventory; remains mounted' },
-  ride: { section: 'move', args: 'id= [x= y= z=]', doc: 'mount an authorized tamed horse, donkey or mule, fitting a carried saddle if needed; coordinates ride a checked flat, dry, straight corridor up to 128 blocks; remains mounted' },
+  ride: { section: 'move', args: 'id= [x= y= z=] [terrain=flat|steps] [plan=true] [approach=surface]', doc: 'mount an authorized tamed equine; optional bounded surface approach follows a nearby moving horse for at most 8s; coordinates ride checked flat legs up to 128m or natural step legs up to 16m, plan=true validates without boarding; remains mounted' },
   horse_dismount: { section: 'move', args: '[id=]', doc: 'leave a stationary horse on inspected dry ground; waits for server passenger removal and actual dismount position before walking resumes' },
   boat_state: { section: 'move', args: '[id=]', doc: 'read nearby boats, their passenger IDs and UUIDs, and the boat I ride' },
   boat_place: { section: 'move', args: 'item= x= y= z=', doc: 'place one carried boat at a checked water or ground cell and report its entity ID' },

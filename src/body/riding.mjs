@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { CompositeHandBack } from '../composite.mjs'
 import { dryHorseLanding, checkedHorseLanding } from '../navigation/horse-landing.mjs'
 import { observedHorseSpeed } from '../navigation/horse.mjs'
+import { approachHorseSurface } from '../navigation/horse-approach.mjs'
 import { isNight } from '../lib/sleep.mjs'
 
 const HORSES = new Set(['horse', 'donkey', 'mule'])
@@ -56,7 +57,7 @@ export function horseState (bot, entity) {
 }
 
 export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => true, report = () => {}, reportPerformance = () => {}, edibleCarried = () => false, now = () => performance.now(), goNear,
-  Vec3, pause = ms => new Promise(resolve => setTimeout(resolve, ms)), driveHorse }) {
+  Vec3, pause = ms => new Promise(resolve => setTimeout(resolve, ms)), driveHorse, surfaceWalk }) {
   const target = (bot, id, args) => {
     if (!Number.isInteger(id)) throw new Error('choose an explicit horse, donkey or mule id')
     const entity = bot.entities[id]
@@ -90,10 +91,11 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
     for (let i = 0; i < ticks; i++) { check(); if (predicate()) return true; await pause(50) }
     check(); return predicate()
   }
-  const board = async (bot, entity, check) => {
+  const board = async (bot, entity, check, approach) => {
     check()
     if (bot.vehicle?.id === entity.id) return
-    if (distance(bot.entity.position, entity.position) > 3 && goNear) { await goNear(entity, check); check() }
+    if (approach === 'surface') await approachHorseSurface({ bot, entity, check, surfaceWalk, now, report })
+    else if (distance(bot.entity.position, entity.position) > 3 && goNear) { await goNear(entity, check); check() }
     if (distance(bot.entity.position, entity.position) > 3) throw new Error('walk within three blocks of the animal before mounting')
     bot.pathfinder?.setGoal(null)
     await bot.unequip('hand')
@@ -108,11 +110,11 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
       else bot._client.write('steer_vehicle', { sideways: 0, forward: 0, jump: 0 })
     } catch { /* Preserve cancellation/disconnect failure. Never dismount here. */ }
   }
-  const saddle = async (bot, entity, check) => {
+  const saddle = async (bot, entity, check, approach) => {
     if (horseState(bot, entity).saddled) return
     if (!horseState(bot, entity).tamed) throw new Error('tame the horse before saddling')
     if (!bot.inventory.items().some(i => i.name === 'saddle')) throw new Error('carry a saddle before riding; check the starter chest')
-    await board(bot, entity, check)
+    await board(bot, entity, check, approach)
     if (bot.currentWindow) throw new Error('close the existing inventory window before saddling')
     let windowId = null
     const snapshots = new Map()
@@ -214,7 +216,8 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
       },
       async ride (a) {
         const hasGoal = ['x', 'y', 'z'].some(k => a[k] !== undefined)
-        const terrain = a.terrain ?? 'flat'
+        const terrain = a.terrain ?? 'flat', approach = a.approach
+        if (approach !== undefined && approach !== 'surface') throw new Error('ride approach accepts surface only')
         if (!['flat', 'steps'].includes(terrain)) throw new Error('ride terrain must be flat or steps')
         if (a.plan && !hasGoal) throw new Error('ride plan=true requires x= y= z=')
         if (hasGoal && (!['x', 'y', 'z'].every(k => Number.isFinite(a[k])) || !driveHorse)) throw new Error('horse goal travel needs a verified horse physics controller; ride id= boards a saddled horse without moving it')
@@ -224,8 +227,8 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
           if (!horseState(bot, entity).tamed) throw new Error('tame the horse before riding')
           const plan = hasGoal && driveHorse.validate ? await driveHorse.validate({ bot, entity, goal: point(a), terrain, check: guard.check, pause, report, reportPerformance }) : null
           if (a.plan) return { ...horseState(bot, entity), plan }
-          await saddle(bot, entity, guard.check)
-          await board(bot, entity, guard.check)
+          await saddle(bot, entity, guard.check, approach)
+          await board(bot, entity, guard.check, approach)
           const trip = hasGoal ? await driveHorse({ bot, entity, goal: point(a), terrain, check: guard.check, pause, report, reportPerformance }) : null
           return { ...horseState(bot, entity), ...(trip ? { trip } : {}) }
         } finally { neutral(bot); guard.dispose() }

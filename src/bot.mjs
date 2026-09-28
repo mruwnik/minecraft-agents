@@ -1648,7 +1648,7 @@ const villagerRosterFile = path.join(ROOT, 'state', 'villagers.json')
 const villagerRoster = makeVillagerRosterObserver({ file: villagerRosterFile, by: cfg.username })
 const travelRuntime = makeTravelRuntime({ getBot: () => bot, Vec3, cancelGuard, edibleCarried, reportPerformance: (...args) => reportPerformance(...args) })
 const ridingRuntime = makeRidingRuntime({
-  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveHorse,
+  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveHorse, surfaceWalk: surfaceWalkRuntime,
   reportPerformance: (...args) => reportPerformance(...args),
   goNear: async (entity, check) => { check(); await goNear(entity.position, 2.5); check() },
   report: progress => emit('riding_progress', progress)

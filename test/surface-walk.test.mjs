@@ -190,3 +190,18 @@ test('damage during the final landing frame still aborts arrival', async () => {
   },onPause:({bot})=>{if(settling&&bot.entity.onGround)bot.health=19}})
   await assert.rejects(f.runtime.walk(target),/damage/)
 })
+
+import { approachHorseSurface } from '../src/navigation/horse-approach.mjs'
+test('moving-horse capture retargets actual native surface walks and settles before boarding distance',async()=>{
+  let moved=false
+  const f=fixture({onPause:({bot,time})=>{if(time>=100&&!moved){moved=true;bot.entities[2].position.x=10.5}}})
+  const horse={id:2,isValid:true,name:'horse',position:new Vec3(8.5,1,0.5),width:1.4,height:1.6}
+  f.bot.entities[2]=horse
+  const result=await approachHorseSurface({bot:f.bot,entity:horse,check:()=>{},surfaceWalk:f.runtime,now:f.time})
+  assert.equal(result.withinReach,true)
+  assert.ok(result.attempts>=2)
+  assert.ok(f.bot.entity.position.distanceTo(horse.position)<=2.5)
+  assert.equal(f.bot.pathfinder.goal,null)
+  assert.equal(f.bot.pathfinder.movements,f.original)
+  assert.equal(f.bot.listenerCount('path_stop'),0)
+})
