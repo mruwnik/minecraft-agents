@@ -8,7 +8,7 @@ const EPS = 1e-6
 // native player physics. The horse can step early when its wider front reaches
 // a rise: its support envelope may be one block above the player's feet.
 export function createEscortCorridor (blockAt, { from, to, width = 1.4, height = 1.6, maxY = 320, valleyDepth = 2, lateral = 8, padding = 0.02 } = {}) {
-  const cache = new Map(), sky = new Map()
+  const cache = new Map(), sky = new Map(), skyFailures = new Map()
   const at = (x, y, z) => {
     const key = `${x},${y},${z}`
     if (!cache.has(key)) cache.set(key, blockAt(x, y, z))
@@ -25,34 +25,37 @@ export function createEscortCorridor (blockAt, { from, to, width = 1.4, height =
       const p = terrainProfile(at(x, by, z), { openDoors: false })
       // Canopy above the body is allowed; solid roofs/geology and unknown sky
       // are not certified as a surface route. Body clearance still checks leaves.
-      if (!p.loaded || p.hazardous || p.liquid || !p.leaf && p.shapes.length) { clear = false; break }
+      if (!p.loaded || p.hazardous || p.liquid || !p.leaf && p.shapes.length) {
+        clear = false; skyFailures.set(key, { reason: 'surface column is obstructed or unloaded', cell: { x, y: by, z }, block: p.name ?? 'unloaded' }); break
+      }
     }
     sky.set(key, clear)
     return clear
   }
-  const stance = position => {
+  const stance = (position, onFailure) => {
+    const reject = (reason, details = {}) => { onFailure?.({ reason, at: { ...position }, ...details }); return null }
     const { x, y, z } = position
     const t = distance2 ? Math.max(0, Math.min(1, ((x - from.x) * dx + (z - from.z) * dz) / distance2)) : 0
-    if (y < from.y + (to.y - from.y) * t - valleyDepth || Math.hypot(x - from.x - dx * t, z - from.z - dz * t) > lateral) return null
+    if (y < from.y + (to.y - from.y) * t - valleyDepth || Math.hypot(x - from.x - dx * t, z - from.z - dz * t) > lateral) return reject('outside the bounded surface corridor')
     const supports = []
     for (let bx = Math.floor(x - half); bx <= Math.floor(x + half - EPS); bx++) for (let bz = Math.floor(z - half); bz <= Math.floor(z + half - EPS); bz++) {
       let top = null
       for (let by = Math.floor(y + 1) - 1; by >= Math.floor(y) - 2; by--) {
         const p = terrainProfile(at(bx, by, bz), { openDoors: false })
-        if (!p.loaded || p.hazardous || p.liquid || p.crop || p.leaf || p.noSupport || /^(?:farmland|slime_block|honey_block|soul_sand)$/.test(p.name)) return null
+        if (!p.loaded || p.hazardous || p.liquid || p.crop || p.leaf || p.noSupport || /^(?:farmland|slime_block|honey_block|soul_sand)$/.test(p.name)) return reject('unsafe or unsupported footing block', { cell: { x: bx, y: by, z: bz }, block: p.name ?? 'unloaded' })
         const shape = p.support.find(s => s[0] <= Math.max(0, x - half - bx) + EPS && s[3] >= Math.min(1, x + half - bx) - EPS &&
           s[2] <= Math.max(0, z - half - bz) + EPS && s[5] >= Math.min(1, z + half - bz) - EPS)
         if (shape) { top = by + shape[4]; break }
         // A narrow physical obstacle is not support, even with solid ground below.
-        if (p.shapes.length) return null
+        if (p.shapes.length) return reject('collision shape does not support the full horse footprint', { cell: { x: bx, y: by, z: bz }, block: p.name })
       }
-      if (top === null) return null
+      if (top === null) return reject('no supporting surface within the checked step depth', { column: { x: bx, z: bz }, fromY: Math.floor(y + 1) - 1, toY: Math.floor(y) - 2 })
       supports.push(top)
     }
     const floor = Math.max(...supports)
-    if (floor - Math.min(...supports) > 1 + EPS || floor < y - EPS || floor > y + 1 + EPS) return null
-    if (!geometry.clearBox([x - half, floor, z - half, x + half, floor + Math.max(1.8, height), z + half])) return null
-    for (let bx = Math.floor(x - half); bx <= Math.floor(x + half - EPS); bx++) for (let bz = Math.floor(z - half); bz <= Math.floor(z + half - EPS); bz++) if (!surface(bx, floor, bz)) return null
+    if (floor - Math.min(...supports) > 1 + EPS || floor < y - EPS || floor > y + 1 + EPS) return reject('support heights exceed the one-block step envelope', { floor, lowest: Math.min(...supports) })
+    if (!geometry.clearBox([x - half, floor, z - half, x + half, floor + Math.max(1.8, height), z + half])) return reject('horse or rider body clearance is obstructed', { box: [x - half, floor, z - half, x + half, floor + Math.max(1.8, height), z + half] })
+    for (let bx = Math.floor(x - half); bx <= Math.floor(x + half - EPS); bx++) for (let bz = Math.floor(z - half); bz <= Math.floor(z + half - EPS); bz++) if (!surface(bx, floor, bz)) return reject('not a checked surface column', skyFailures.get(`${bx},${floor},${bz}`))
     return { ...position, height: floor }
   }
   const edge = (a, b) => {

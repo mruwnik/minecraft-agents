@@ -33,21 +33,32 @@ function geometryFor(bot,from,to) {
   }
   const corridor=createEscortCorridor(at,{from,to,width:1.4,height:CLEARANCE,padding:0,maxY:(bot.game?.minY??-64)+(bot.game?.height??384)})
   const geometry=createTerrainGeometry(at,{openDoors:false,dry:true,avoidCrops:true})
+  let groundFailure
   const ground=p=>{
+    groundFailure=null
     for(const y of [Math.floor(p.y),Math.floor(p.y)-1]) {
-      const s=corridor.stance({x:p.x,y,z:p.z})
+      let failure
+      const s=corridor.stance({x:p.x,y,z:p.z}, detail=>{failure=detail})
+      groundFailure??=failure
       if(s&&s.height<=p.y+1e-5&&p.y-s.height<=1.001) {
         for(let x=Math.floor(p.x-HALF);x<=Math.floor(p.x+HALF-1e-7);x++)for(let z=Math.floor(p.z-HALF);z<=Math.floor(p.z+HALF-1e-7);z++) {
-          if(/ice$/.test(at(x,Math.ceil(s.height)-1,z)?.name??''))return null
+          if(/ice$/.test(at(x,Math.ceil(s.height)-1,z)?.name??'')){groundFailure={reason:'ice has unsupported stopping friction',cell:{x,y:Math.ceil(s.height)-1,z}};return null}
         }
         return s.height
       }
+      if(s)groundFailure??={reason:'support is above the simulated horse or more than one block below',floor:s.height}
     }
     return null
   }
-  const validate=(previous,state)=>{
+  const validate=(previous,state,phase)=>{
     const a=previous.pos,b=state.pos
-    if(state.isInWater||state.isInLava||Math.abs(b.y-a.y)>1.001||ground(b)===null)throw new HorseStepError('horse step route needs continuous dry support with at most one-block natural steps')
+    const support=ground(b)
+    if(state.isInWater||state.isInLava||Math.abs(b.y-a.y)>1.001||support===null) {
+      const detail={phase,from:point(a),at:point(b),onGround:state.onGround,velocity:point(state.vel),reason:state.isInWater||state.isInLava?'native physics entered fluid':Math.abs(b.y-a.y)>1.001?'native vertical step exceeds one block':groundFailure?.reason??'no checked support',support:groundFailure}
+      const error=new HorseStepError(`horse step route needs continuous dry support with at most one-block natural steps; ${JSON.stringify(detail)}`)
+      error.detail=detail
+      throw error
+    }
     const high=Math.max(a.y,b.y)
     // Lift before an ascent; cross before dropping. Never sweep through a
     // floor that native step physics legitimately climbs onto.
@@ -67,17 +78,17 @@ function model(bot,entity,attributes,yaw) {
   return {state,physics,world}
 }
 const stopped=state=>state.onGround&&Math.hypot(state.vel.x,state.vel.z)<0.003&&Math.abs(state.vel.y)<0.09
-function advance(model,state,forward,geometry) {
+function advance(model,state,forward,geometry,phase=forward?'forward movement':'neutral movement') {
   const before=copy(state)
   state.control=control(forward)
   model.physics.simulatePlayer(state,model.world)
-  geometry.validate(before,state)
+  geometry.validate(before,state,phase)
   return before
 }
 function neutralCoast(model,state,geometry) {
   const coast=copy(state),frames=[]
   for(let i=0;i<40;i++) {
-    advance(model,coast,false,geometry)
+    advance(model,coast,false,geometry,`neutral stopping tick ${i}`)
     frames.push(copy(coast))
     if(stopped(coast))return frames
   }
@@ -92,7 +103,7 @@ export function planHorseSteps({bot,entity,goal,speed,attributes}) {
   if(bot.health<16)throw new HorseStepError('horse step travel requires at least16 health')
   const yaw=Math.atan2(from.x-to.x,from.z-to.z),m=model(bot,entity,attributes,yaw)
   const geometry=geometryFor(bot,from,to)
-  geometry.validate(copy(m.state),m.state)
+  geometry.validate(copy(m.state),m.state,'starting stance')
   const frames=[],distance=Math.hypot(to.x-from.x,to.z-from.z)
   for(let tick=0;tick<400;tick++) {
     if(dangerAt(bot,m.state.pos))throw new HorseStepError('nearby danger intersects the horse step route')

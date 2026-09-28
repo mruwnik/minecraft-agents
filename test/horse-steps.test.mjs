@@ -127,3 +127,33 @@ test('observed pen staging dimensions support a short westward terrace descent w
   assert.equal(f.entity.position.y,66)
   assert.ok(f.entity.position.distanceTo(new Vec3(8.5,66,-124.5))<0.35)
 })
+
+test('recorded bank lip geometry permits a natural descent and retains leaf-litter traversal',async()=>{
+  // These synthetic broad terraces reproduce the recorded heights, not a
+  // claim about the unobserved cells surrounding the live bank.
+  const f=fixture(p=>{
+    const top=p.z<=-102?66:65
+    if(p.y<top)return'grass_block'
+    if(p.z===-101&&p.y===65)return'leaf_litter'
+    return'air'
+  },{from:[13.52,66,-103.49]})
+  const preview=driveHorse.validate({...f,goal:{x:13.5,y:66,z:-102.5},terrain:'steps'})
+  assert.equal(preview.at.y,66)
+  const result=await driveHorse({...f,goal:{x:13.5,y:65,z:-98.5},terrain:'steps'})
+  assert.equal(result.arrived,true)
+  assert.equal(f.entity.position.y,65)
+})
+
+test('unsupported-footing preview identifies the failed native sample and exact block',()=>{
+  const f=fixture(p=>p.x===3&&p.y===0?'water':undefined)
+  assert.throws(()=>driveHorse.validate({...f,goal:{x:9,y:1,z:0},terrain:'steps'}),error=>{
+    assert.ok(error instanceof HorseStepError)
+    assert.equal(error.detail.support.block,'water')
+    assert.deepEqual(error.detail.support.cell,{x:3,y:0,z:-1})
+    assert.ok(error.detail.at.x>2&&error.detail.at.x<3)
+    assert.equal(error.detail.at.y,1)
+    assert.match(error.message,/unsafe or unsupported footing block/)
+    return true
+  })
+  assert.equal(f.packets.length,0)
+})
