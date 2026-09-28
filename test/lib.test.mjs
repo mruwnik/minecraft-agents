@@ -1798,10 +1798,10 @@ for (const [name, feet, expected] of [
 const PLACED = { '10,70,20': 'cobblestone', '10,71,20': 'cobblestone', '11,70,20': 'air' }
 for (const [name, tried, expected] of [
   ['nothing aimed at', [], []],
-  ['a cell that now holds a block was built', [{ x: 10, y: 70, z: 20 }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
-  ['the same cell tried four times counts once', [{ x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }, { x: 10, y: 70, z: 20 }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
-  ['a cell still air was never built', [{ x: 11, y: 70, z: 20 }], []],
-  ['a cell outside the loaded world is not guessed at', [{ x: 99, y: 70, z: 20 }], []]
+  ['a cell that now holds a block was built', [{ x: 10, y: 70, z: 20, name: 'cobblestone' }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
+  ['the same cell tried four times counts once', [{ x: 10, y: 70, z: 20, name: 'cobblestone' }, { x: 10, y: 70, z: 20, name: 'cobblestone' }, { x: 10, y: 70, z: 20, name: 'cobblestone' }, { x: 10, y: 70, z: 20, name: 'cobblestone' }], [{ x: 10, y: 70, z: 20, name: 'cobblestone' }]],
+  ['a cell still air was never built', [{ x: 11, y: 70, z: 20, name: 'cobblestone' }], []],
+  ['a cell outside the loaded world is not guessed at', [{ x: 99, y: 70, z: 20, name: 'cobblestone' }], []]
 ]) {
   test(`scaffoldBuilt: ${name}`, () => assert.deepEqual(scaffoldBuilt(tried, c => PLACED[`${c.x},${c.y},${c.z}`] ?? null), expected))
 }

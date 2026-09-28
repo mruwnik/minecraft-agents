@@ -1,3 +1,4 @@
+import { pillarMaterial, pillarStock } from '../scaffold/pillar.mjs'
 import { planSpec } from '../lib/plan.mjs'
 import { planChests, depositTarget, STORAGE_BLOCKS } from '../lib/storage.mjs'
 import { workRefusal } from '../lib/places.mjs'
@@ -5,7 +6,7 @@ import { recoverFarm } from '../farm/attention.mjs'
 import { foreignZone } from '../../library/farm/shared/clutter.mjs'
 import { treeSpec, checkTree, harvestStands } from './inspect.mjs'
 import { treeProfile } from './profiles.mjs'
-import { planScaffoldAccess } from '../scaffold/access.mjs'
+import { planScaffoldAccess, planTreeAccess } from '../scaffold/access.mjs'
 const key=p=>`${p.x},${p.y},${p.z}`
 
 // One bounded read per configured chest per sweep; every withdrawal is limited
@@ -89,10 +90,23 @@ export async function provisionTreeBasics(api,plan,supply,report){
 }
 
 export async function provisionTreeScaffold(api,plan,cell,supply,report){
- const s=treeSpec(cell),tree=checkTree(api.block,cell,s.species,s.form,plan.cells)
+ const s=treeSpec(cell),checked=checkTree(api.block,cell,s.species,s.form,plan.cells)
+ const tree={...checked,blocks:checked.wood}
  if(tree.attention.length||tree.state!=='mature')return
  const zones=(await api.act('zones')).zones??[]
- const access=planScaffoldAccess(api,tree,harvestStands(tree,api.block),zones)
+ const stands=harvestStands(tree,api.block)
+ if(!planTreeAccess(api,tree,stands,zones).attention.length)return
+ const solid=planScaffoldAccess(api,tree,stands,zones,true)
+ if(solid.count&&solid.attention.every(s=>s.startsWith('whole-tree access missing: need '))){
+  let short=Math.max(0,solid.count-pillarStock(api))
+  for(const name of supply.names().filter(pillarMaterial)){
+   const take=Math.min(short,Math.max(0,supply.available(name)-(api.inv()[name]??0)))
+   if(take>0)await supply.take({[name]:(api.inv()[name]??0)+take})
+   short=Math.max(0,solid.count-pillarStock(api))
+   if(!short)return
+  }
+ }
+ const access=planScaffoldAccess(api,tree,stands,zones)
  if(!access.count||access.count>256||access.attention.some(s=>!s.startsWith('whole-tree access missing: need ')))return
  await supply.take({scaffolding:access.count})
  const short=Math.max(0,access.count-(api.inv().scaffolding??0))
@@ -104,6 +118,6 @@ export async function provisionTreeScaffold(api,plan,cell,supply,report){
  const table=plan.cells.find(c=>planSpec(c)?.kind==='table'&&api.block(c.x,c.y+1,c.z)?.name==='crafting_table')
  if(!table){report.attention.push(`need ${short} scaffolding: provide a planned crafting_table with safe support`);return}
  await api.checkpoint()
- const arrived=await api.act('goto',{x:table.x,y:table.y+1,z:table.z,range:2,dig:false}).then(()=>true,recoverFarm(e=>{report.attention.push(e.message);return false}))
+ const arrived=await api.act('goto',{x:table.x,y:table.y+1,z:table.z,range:2,dig:false}).then(()=>true,recoverFarm(e=>{report.attention.push(e.message);api.acknowledgeFailure?.('goto');return false}))
  if(arrived)await supply.craft('scaffolding',batches*6)
 }

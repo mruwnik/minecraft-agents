@@ -54,10 +54,19 @@ export const digGuard = (cells, ring = RING) => ({ spare: spareCells(cells), flo
 // JSON from the command line). The pathfinder never breaks a block its exclusion puts at 100
 const parsed = v => typeof v === 'string' ? JSON.parse(v) : v
 const cellKey = c => `${c.x},${c.y},${c.z}`
-export const spareTest = ({ spare, floor }) => {
+export const spareTest = ({ spare, floor, bounds, columns, protectLeaves }) => {
   const cells = new Set((parsed(spare) ?? []).map(cellKey))
   const box = parsed(floor)
-  return at => cells.has(cellKey(at)) || (!!box && at.y <= box.y && inFootprint(box, at))
+  const area = parsed(bounds)
+  const protectedColumns = new Set((parsed(columns) ?? []).map(p => `${p.x},${p.z}`))
+  return (at, name) => {
+    if (protectLeaves && /_leaves$/.test(name ?? '')) return true
+    // A scoped dig walk may clear only within its owner's exact rectangle.
+    // The pathfinder's exclusion callback uses true to forbid breaking.
+    if (area && !inFootprint(area, at)) return true
+    if (protectedColumns.has(`${Math.floor(at.x)},${Math.floor(at.z)}`)) return true
+    return cells.has(cellKey(at)) || (!!box && at.y <= box.y && inFootprint(box, at))
+  }
 }
 
 // walk one leg of a sweep to `to` (x, y, z, range). The result is the walk's own, with `dug` naming the cell when it

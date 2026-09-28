@@ -93,7 +93,8 @@ export const scaffoldTakeBack = (cells, feet) => cells.filter(c =>
   Math.hypot(c.x + 0.5 - feet.x, c.z + 0.5 - feet.z) <= 4.5)
 
 // tried: every cell the pathfinder aimed a placement at (it retries one cell several times a tick, and its own place call
-// rejects over blocks the server did put down). What it really built is whatever now stands in those cells
+// rejects over blocks the server did put down). Recover only the recorded material;
+// a replanted sapling or another replacement is no longer an owned support.
 export const scaffoldBuilt = (tried, nameAt) => {
   const seen = new Set()
   return tried.filter(c => {
@@ -101,7 +102,7 @@ export const scaffoldBuilt = (tried, nameAt) => {
     if (seen.has(key)) return false
     seen.add(key)
     return true
-  }).map(c => ({ ...c, name: nameAt(c) })).filter(c => c.name && !isAir(c.name))
+  }).filter(c => c.name && !isAir(c.name) && nameAt(c) === c.name)
 }
 
 const countLine = counts => Object.entries(counts).map(([name, n]) => `${name}:${n}`).join(' ')

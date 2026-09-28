@@ -73,3 +73,12 @@ test('known partial scaffold craft reports actual gain and continues; cancellati
  assert.equal(await supply.craft('scaffolding',36),18);assert.match(f.report.attention.join(' '),/18\/36/)
  f.api.act=async()=>{throw Error('cancelled')};await assert.rejects(()=>supply.craft('scaffolding',6),/cancelled/)
 })
+for(const item of ['dirt','oak_planks'])test(`configured chest supplies bounded ${item} instead of requiring scaffold recipes`,async()=>{
+ const f=fixture({[item]:128});tall(f)
+ const supply=await treeSupplies(f.api,f.plan,undefined,f.report)
+ await provisionTreeScaffold(f.api,f.plan,tree,supply,f.report)
+ assert.deepEqual(f.report.attention,[])
+ assert.ok(f.items[item]>0&&f.items[item]<128)
+ assert.ok(!f.calls.some(c=>c.name==='craft'))
+ assert.ok(!f.calls.some(c=>c.name==='dig'))
+})

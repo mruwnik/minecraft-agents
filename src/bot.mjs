@@ -1,5 +1,7 @@
 import { automaticBeds } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
+import { centerStand } from './navigation/center-stand.mjs'
+import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
 import { settleInventory } from './body/inventory-settle.mjs'
@@ -237,7 +239,10 @@ export function makeMoves (dig) {
   moves.exclusionAreasBreak.push(zoneCost)
   // nor anything that looks built, protected or not
   moves.exclusionAreasBreak.push(block => looksBuilt(block.name) ? 100 : 0)
-  moves.exclusionAreasBreak.push(block => block.position && spared(block.position) ? 100 : 0)
+  moves.exclusionAreasBreak.push(block => block.position && spared(block.position, block.name) ? 100 : 0)
+  // Dig walks can place emergency footing as well as break obstructions; keep
+  // that placement inside the same caller-authorized cells and bounds.
+  moves.exclusionAreasPlace.push(block => block.position && spared(block.position, block.name) ? 100 : 0)
   moves.exclusionAreasPlace.push(zoneCost)
   moves.exclusionAreasStep.push(block => gateStepCost(block.name))
   moves.exclusionAreasStep.push(block => thicketCost(besideNames(block.position, (x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name)))
@@ -1676,6 +1681,22 @@ export const long = {
 
   async dig (a) {
     const p = vecOf(a)
+    const checkSafeHive = (block, smokeAt) => {
+      const place = readPlaces().find(saved => saved.name === a.place)
+      if (!a.safe_hive || !forestHiveClaim(place, cfg.username, p, block?.name)) throw new Error('safe hive destruction requires a known hive inside this body\'s owned forest plan')
+      const smoke = hiveSmokeCampfire((x, y, z) => {
+        const b = bot.blockAt(new Vec3(x, y, z))
+        return b ? { name: b.name, properties: b.getProperties?.() ?? {} } : null
+      }, { x: p.x, y: p.y, z: p.z })
+      if (!smoke || smoke.x !== smokeAt?.x || smoke.y !== smokeAt?.y || smoke.z !== smokeAt?.z) throw new Error('safe hive destruction refused: exact campfire smoke column is not verifiably lit and clear')
+    }
+    if (a.safe_hive === true) checkSafeHive(bot.blockAt(p), a.smoke)
+    if (a.silk_touch === true) {
+      const place = readPlaces().find(saved => saved.name === a.place)
+      const initial = bot.blockAt(p)
+      if (!forestHiveClaim(place, cfg.username, p, initial?.name)) throw new Error('Silk Touch hive pickup requires a known nest inside an owned forest plan')
+      if (!silkTouchTool(bot.inventory.items())) throw new Error('Silk Touch tool required to move this hive with bees intact')
+    }
     const refusal = digRefusal(bot.blockAt(p)?.name, [1, 2, 3].map(dy => bot.blockAt(p.offset(0, dy, 0))?.name), a.wet === true)
     if (refusal) throw new Error(refusal)
     // everything the cell can say from here is said before the body moves (card 150b3ee1: 148 s walking to a cell that was air).
@@ -1693,7 +1714,15 @@ export const long = {
     if (step === 'air') return { already: 'air' }
     if (step === 'tool') throw new Error(`${cell.name} needs a ${cell.needed} or better: you carry none, craft one first`)
     const block = cell.block
-    await bot.tool.equipForBlock(block)
+    if (a.safe_hive === true) checkSafeHive(block, a.smoke)
+    if (a.silk_touch === true) {
+      const place = readPlaces().find(saved => saved.name === a.place)
+      if (!forestHiveClaim(place, cfg.username, p, block?.name)) throw new Error('Silk Touch hive target changed or left the owned forest plan')
+      const tool = silkTouchTool(bot.inventory.items())
+      if (!tool) throw new Error('Silk Touch tool required to move this hive with bees intact')
+      await bot.equip(tool, 'hand')
+      if (!silkTouchTool([bot.heldItem])) throw new Error('Silk Touch tool was not equipped; hive retained')
+    } else await bot.tool.equipForBlock(block)
     await bot.dig(block)
     if (block.name === 'lectern') villagerRuntime.invalidateOffers()
     // batch=true: one cell of a sweep (farm.harvest). No wait for the drop and no chase after it: one collect follows the sweep
@@ -2039,6 +2068,10 @@ export const long = {
     return { placed: 1, at: `${a.x},${a.y},${a.z}` }
   },
 
+  async center_work_stand (a) {
+    return centerStand({ bot, Vec3, target: { x: a.x, y: a.y, z: a.z }, support: a.support, alive: cancelGuard() })
+  },
+
   async scaffold_side (a) {
     handPlacing++
     try { return await scaffoldSide(a, {bot, Vec3, refusalFor, cancelGuard, inventoryCounts, findItem}) } finally { handPlacing-- }
@@ -2072,9 +2105,12 @@ export const long = {
     checkColumn()
     const alive = cancelGuard()
     bot.pathfinder.setGoal(null)
+    // Explicit pillars belong to their caller's cleanup journal, not to the
+    // pathfinder's end-of-task reclaim pass (which may run after replanting).
+    handPlacing++
     try {
       await pillarUp(() => { alive(); checkColumn(); return false }, steps, item.name)
-    } finally { bot.setControlState('jump', false) }
+    } finally { handPlacing--; bot.setControlState('jump', false) }
     for (let tick = 0; tick < 20 && !bot.entity.onGround; tick++) {
       alive()
       await bot.waitForTicks(1)

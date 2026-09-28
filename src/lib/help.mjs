@@ -138,7 +138,7 @@ export const PRIMITIVES = {
   boat_release: { section: 'move', args: 'id= passengerUuid=', doc: 'break a nearby boat after I dismount and verify the named passenger is safely on foot' },
   boat_swim: { section: 'move', args: 'x= y= z= [ms=700]', doc: 'swim toward a checked water waypoint with forward and jump held together for one bounded stroke' },
   // ---- block
-  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=] [batch=]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel; batch=true: one cell of a sweep, no wait for the drop and no chase after it, collect afterwards). Walks only when the cell is out of arm\'s reach. Not water or lava: use fill or place' },
+  dig: { section: 'block', args: 'x= y= z= [wet=] [dig=] [batch=] [silk_touch=true place=<owned forest>] [safe_hive=true smoke={x,y,z} place=<owned forest>]', doc: 'break one block and pick up what it drops (dig=true: the walk to it may tunnel; batch=true: one cell of a sweep, no wait for the drop and no chase after it, collect afterwards). silk_touch=true requires and equips an actual Silk Touch tool for a known hive inside the named owned forest plan. safe_hive=true permits destroying that exact claimed hive only while smoke={x,y,z} names a lit campfire 1–5 blocks directly below it with a clear column. Walks only when the cell is out of arm\'s reach. Not water or lava: use fill or place' },
   place: { section: 'block', args: 'item= x= y= z= [facing=] [half=] [against=] | blocks=', doc: 'build: one block, or a whole list of them in the order given' },
   clear: { section: 'block', args: 'x1= y1= z1= x2= y2= z2= [keep=]', doc: 'dig out a whole box top-down, up to 400 blocks; beds, containers and fluids are kept' },
   till: { section: 'block', args: 'x= y= z= | blocks=', doc: 'hoe dirt or grass into farmland (give the ground block, not the air above it)' },
@@ -191,6 +191,7 @@ export const PRIMITIVES = {
   reflexes: { section: 'control', args: '[on=]', doc: 'switch the body reflexes (eating, fleeing, bedtime, shutting gates) on or off' },
   control: { section: 'control', args: 'state= [ms=]', doc: 'hold one movement key down by hand (a debugging aid)' },
   scaffold_side: { section: 'control', args: 'x= y= z= from_x= from_y= from_z=', doc: 'place one supported horizontal scaffold beside a specified scaffold, distance at most six from vertical support; verifies loaded clear headroom, reach and actual placement; never walks or digs' },
+  center_work_stand: { section: 'control', args: 'x= y= z= support=', doc: 'center within the current supported work cell over an owned solid pillar or scaffold; bounded same-cell motion only, with verified support and clear headroom' },
   scaffold_extend: { section: 'control', args: 'x= y= z= base_y=', doc: 'extend a supported scaffold column by one verified block from beside its base; clicks the side, requires clear loaded headroom and carried scaffolding, and never walks or digs' },
   pillar_up: { section: 'control', args: '[steps=1] [item=]', doc: 'climb 1..4 blocks by normal jumping and placing underfoot; requires full support and a clear jump column, never digs, and verifies actual ascent' },
   wait: { section: 'control', args: '[job=] [seconds=100]', doc: 'wait for a job ID to finish, or wait for an event that needs me; job results remain available with ./mc job id=' },

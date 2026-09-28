@@ -1,0 +1,987 @@
+{
+  "root": {
+    "x": -100,
+    "y": 69,
+    "z": -215
+  },
+  "blocks": [
+    {
+      "x": -100,
+      "y": 70,
+      "z": -215,
+      "name": "oak_log",
+      "properties": {
+        "axis": "y"
+      }
+    },
+    {
+      "x": -100,
+      "y": 71,
+      "z": -215,
+      "name": "oak_log",
+      "properties": {
+        "axis": "y"
+      }
+    },
+    {
+      "x": -100,
+      "y": 72,
+      "z": -215,
+      "name": "oak_log",
+      "properties": {
+        "axis": "y"
+      }
+    },
+    {
+      "x": -99,
+      "y": 73,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -98,
+      "y": 74,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -98,
+      "y": 75,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -98,
+      "y": 76,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -98,
+      "y": 76,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -98,
+      "y": 76,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -98,
+      "y": 75,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -98,
+      "y": 75,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -98,
+      "y": 74,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -98,
+      "y": 74,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -99,
+      "y": 75,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -99,
+      "y": 76,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -99,
+      "y": 77,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -99,
+      "y": 76,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -99,
+      "y": 76,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -99,
+      "y": 76,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -99,
+      "y": 75,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -99,
+      "y": 75,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -99,
+      "y": 74,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -99,
+      "y": 74,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -99,
+      "y": 75,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -99,
+      "y": 76,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -99,
+      "y": 75,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -99,
+      "y": 74,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -99,
+      "y": 74,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -100,
+      "y": 75,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 76,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -100,
+      "y": 77,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -100,
+      "y": 77,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 77,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -100,
+      "y": 76,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -100,
+      "y": 76,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 75,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -100,
+      "y": 75,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -100,
+      "y": 76,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 76,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -100,
+      "y": 75,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -99,
+      "y": 74,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 75,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -100,
+      "y": 74,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -100,
+      "y": 74,
+      "z": -215,
+      "name": "oak_log",
+      "properties": {
+        "axis": "y"
+      }
+    },
+    {
+      "x": -100,
+      "y": 74,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -100,
+      "y": 74,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -100,
+      "y": 73,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -100,
+      "y": 73,
+      "z": -215,
+      "name": "oak_log",
+      "properties": {
+        "axis": "y"
+      }
+    },
+    {
+      "x": -100,
+      "y": 73,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -100,
+      "y": 74,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -101,
+      "y": 75,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -101,
+      "y": 76,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -101,
+      "y": 77,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 76,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 76,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -101,
+      "y": 75,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 75,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -101,
+      "y": 75,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -101,
+      "y": 76,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 76,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -101,
+      "y": 75,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 74,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -101,
+      "y": 74,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -101,
+      "y": 74,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    },
+    {
+      "x": -101,
+      "y": 74,
+      "z": -213,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -102,
+      "y": 75,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -102,
+      "y": 76,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -102,
+      "y": 76,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -102,
+      "y": 76,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "5"
+      }
+    },
+    {
+      "x": -102,
+      "y": 75,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -102,
+      "y": 75,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "4"
+      }
+    },
+    {
+      "x": -101,
+      "y": 74,
+      "z": -217,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -102,
+      "y": 74,
+      "z": -216,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -101,
+      "y": 73,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "1"
+      }
+    },
+    {
+      "x": -102,
+      "y": 74,
+      "z": -214,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "3"
+      }
+    },
+    {
+      "x": -102,
+      "y": 74,
+      "z": -215,
+      "name": "oak_leaves",
+      "properties": {
+        "waterlogged": false,
+        "persistent": false,
+        "distance": "2"
+      }
+    }
+  ],
+  "terrain": [
+    {
+      "x": -102,
+      "y": 69,
+      "z": -217,
+      "name": "grass_block"
+    },
+    {
+      "x": -101,
+      "y": 69,
+      "z": -217,
+      "name": "grass_block"
+    },
+    {
+      "x": -100,
+      "y": 69,
+      "z": -217,
+      "name": "grass_block"
+    },
+    {
+      "x": -99,
+      "y": 69,
+      "z": -217,
+      "name": "grass_block"
+    },
+    {
+      "x": -98,
+      "y": 69,
+      "z": -217,
+      "name": "grass_block"
+    },
+    {
+      "x": -102,
+      "y": 69,
+      "z": -216,
+      "name": "grass_block"
+    },
+    {
+      "x": -101,
+      "y": 69,
+      "z": -216,
+      "name": "grass_block"
+    },
+    {
+      "x": -100,
+      "y": 69,
+      "z": -216,
+      "name": "grass_block"
+    },
+    {
+      "x": -99,
+      "y": 69,
+      "z": -216,
+      "name": "grass_block"
+    },
+    {
+      "x": -98,
+      "y": 69,
+      "z": -216,
+      "name": "grass_block"
+    },
+    {
+      "x": -102,
+      "y": 69,
+      "z": -215,
+      "name": "grass_block"
+    },
+    {
+      "x": -101,
+      "y": 69,
+      "z": -215,
+      "name": "grass_block"
+    },
+    {
+      "x": -100,
+      "y": 69,
+      "z": -215,
+      "name": "dirt"
+    },
+    {
+      "x": -99,
+      "y": 69,
+      "z": -215,
+      "name": "grass_block"
+    },
+    {
+      "x": -98,
+      "y": 69,
+      "z": -215,
+      "name": "grass_block"
+    },
+    {
+      "x": -102,
+      "y": 69,
+      "z": -214,
+      "name": "grass_block"
+    },
+    {
+      "x": -101,
+      "y": 69,
+      "z": -214,
+      "name": "grass_block"
+    },
+    {
+      "x": -100,
+      "y": 69,
+      "z": -214,
+      "name": "grass_block"
+    },
+    {
+      "x": -99,
+      "y": 69,
+      "z": -214,
+      "name": "grass_block"
+    },
+    {
+      "x": -98,
+      "y": 69,
+      "z": -214,
+      "name": "grass_block"
+    },
+    {
+      "x": -101,
+      "y": 70,
+      "z": -217,
+      "name": "bush"
+    },
+    {
+      "x": -101,
+      "y": 70,
+      "z": -216,
+      "name": "short_grass"
+    },
+    {
+      "x": -101,
+      "y": 70,
+      "z": -215,
+      "name": "short_grass"
+    },
+    {
+      "x": -99,
+      "y": 70,
+      "z": -214,
+      "name": "short_grass"
+    },
+    {
+      "x": -100,
+      "y": 70,
+      "z": -214,
+      "name": "dandelion"
+    }
+  ]
+}

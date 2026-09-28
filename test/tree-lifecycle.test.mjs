@@ -76,13 +76,15 @@ test('missing flower reports attention without planting',async()=>{
  assert.match(r.attention.join(' '),/missing flower/);assert.equal(f.calls.some(c=>c.name==='place'),false)
  assert.equal(f.events[0].name,'forestry_attention')
 })
-test('whole small tree harvest removes canopy and trunk top down and collects',async()=>{
+test('small tree harvest removes only wood, retaining natural leaves for decay',async()=>{
  const f=fixture(tree)
  const r=await runTree(f.api,at,'harvest')
  assert.deepEqual(r.attention,[])
- assert.equal(r.harvested,4);assert.deepEqual(r.remaining,[])
- assert.deepEqual(f.calls.filter(c=>c.name==='dig').map(c=>c.y),[3,3,2,1])
+ assert.equal(r.harvested,2);assert.deepEqual(r.remaining,[])
+ assert.deepEqual(f.calls.filter(c=>c.name==='dig').map(c=>c.y),[2,1])
  assert.ok(f.calls.some(c=>c.name==='collect'))
+ assert.equal(f.api.block(0,3,0).name,'oak_leaves')
+ assert.equal(r.decay_wait,120)
 })
 test('tall tree without elevated access retained whole with coordinates',async()=>{
  const blocks={};for(let y=1;y<=10;y++)blocks[`0,${y},0`]=wood();blocks['0,11,0']=leaf()
@@ -113,7 +115,7 @@ test('forestry maintain harvests then replants same saved custom plan',async()=>
  const plan=migratePlan({name:'grove',x:0,y:0,z:0,plan:'o',legend:{o:'oak_sapling'}})
  plan.cells=planCells(plan);f.api.plan=()=>plan;f.api.places=()=>[plan]
  const r=await maintain.run(f.api,{place:'grove',deposit:false})
- assert.equal(r.harvested,4);assert.equal(r.planted,1);assert.equal(r.sweeps,1)
+ assert.equal(r.harvested,2);assert.equal(r.planted,1);assert.equal(r.sweeps,1)
 })
 
 test('signed tree ground offsets serialize and resolve once without moving other cells',()=>{
@@ -136,7 +138,7 @@ for(const offset of [-3,4])test(`maintain and inspection use surveyed ground off
  const cell=plan.cells[0]
  assert.equal(inspectTree(f.api.block,cell,'oak').root.y,offset)
  const result=await maintain.run(f.api,{place:'slope',deposit:false})
- assert.equal(result.harvested,4);assert.equal(result.planted,1)
+ assert.equal(result.harvested,2);assert.equal(result.planted,1)
  assert.equal(f.calls.find(c=>c.name==='place'&&c.item==='oak_sapling').y,offset+1)
 })
 
@@ -157,4 +159,32 @@ test('harmless flowers on higher terrain do not block growth or make mature tree
  assert.deepEqual(inspectTree(mature.api.block,{x:0,y:0,z:0},'oak').attention,[])
  f.world.set('2,2,0',{name:'stone',solid:true})
  assert.match(checkTree(f.api.block,{x:0,y:0,z:0},'spruce').attention.join(' '),/occupied/)
+})
+
+test('maintenance leaves foliage intact, waits two minutes, returns for drops, then replants',async()=>{
+ const f=fixture(tree,{oak_sapling:1}),plan=migratePlan({name:'grove',x:0,y:0,z:0,plan:'o',legend:{o:'oak_sapling'}})
+ plan.cells=planCells(plan);f.api.plan=()=>plan;f.api.places=()=>[plan]
+ let waited=0
+ f.api.pause=async seconds=>{waited+=seconds;f.calls.push({name:'decay',seconds});assert.equal(f.api.block(0,3,0).name,'oak_leaves')}
+ const result=await maintain.run(f.api,{place:'grove',deposit:false})
+ assert.deepEqual(result.attention,[])
+ assert.equal(waited,120)
+ assert.equal(result.harvested,2);assert.equal(result.planted,1)
+ const lastWait=f.calls.findLastIndex(c=>c.name==='decay')
+ const collect=f.calls.findIndex((c,i)=>i>lastWait&&c.name==='collect')
+ assert.ok(f.calls.findIndex((c,i)=>i>lastWait&&c.name==='goto')<collect)
+ assert.ok(collect>lastWait)
+ assert.ok(f.calls.findIndex(c=>c.name==='place')>collect)
+ assert.deepEqual(f.calls.filter(c=>c.name==='dig').map(c=>c.y),[2,1])
+})
+test('cancellation during decay wait prevents later collection and replanting',async()=>{
+ const f=fixture(tree,{oak_sapling:1}),plan=migratePlan({name:'grove',x:0,y:0,z:0,plan:'o',legend:{o:'oak_sapling'}})
+ plan.cells=planCells(plan);f.api.plan=()=>plan;f.api.places=()=>[plan]
+ let waiting=false,stoppedAt
+ f.api.pause=async()=>{waiting=true;stoppedAt=f.calls.length}
+ f.api.checkpoint=async()=>{if(waiting)throw Error('cancelled')}
+ await assert.rejects(maintain.run(f.api,{place:'grove',deposit:false}),/cancelled/)
+ assert.equal(f.calls.length,stoppedAt)
+ assert.equal(f.api.block(0,3,0).name,'oak_leaves')
+ assert.equal(f.calls.some(c=>c.name==='place'),false)
 })

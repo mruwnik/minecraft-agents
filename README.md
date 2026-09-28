@@ -184,4 +184,3 @@ body carries a scaffolding block). `start-body` runs it at every body start, so 
 It also fixes `node_modules/mineflayer/lib/plugins/entities.js`: mineflayer 4.39.0 writes the air_supply of EVERY entity's
 metadata packet into `bot.oxygenLevel`, so a body beside a pond read a squid's air and a swimmer's by turns (`oxygen` fell
 20 -> 8 -> 7 on dry land, card 962beec2). The patch keeps only the body's own (`patchOwnBreath` in `src/airlog.mjs`).
-

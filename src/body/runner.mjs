@@ -8,6 +8,8 @@ import { boatHabitatPlan } from '../boat/habitat.mjs'
 import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, parsePlacePlan, hasPlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverableNavigationTarget, navigationTargetKey } from '../composite.mjs'
 import { scaffoldJournal } from '../scaffold/journal.mjs'
+import { silkTouchTool } from '../tree/hives.mjs'
+import { latestOwnClosedDigHole } from '../survival/recover-hole.mjs'
 import { ROOT, HOME, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
 import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance, automaticSleepBeds } from '../bot.mjs'
@@ -17,8 +19,8 @@ import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 // src/bot.mjs holds primitives; a composite is one file in library/, `export default { doc, args, run }`. The runner loads
 // them at body start and registers each in `long`, so to a driver a composite is an ordinary action: a new one cancels
 // the old, `state` shows it as doing=, and one that outlasts timeout= reports through task_done like anything else.
-// The hand-back rules (handBackReason in lib.mjs) belong to the RUNNER: a composite cannot opt out of being stopped
-// when someone speaks to me, when I am hurt or starving, or when the same step fails twice.
+// The hand-back rules belong to the RUNNER: conversation is observable while a job runs and does not
+// implicitly cancel it; health, food, night, and repeated-step failures still can.
 export const LIBRARY_DIR = path.join(ROOT, 'library')
 // library/<file>.mjs is the action <file>; library/<folder>/<file>.mjs is <folder>.<file>. A new domain is a new folder.
 export const libraryFiles = () => {
@@ -33,13 +35,9 @@ export const compositeName = file => file.replace(/\.mjs$/, '').split('/').join(
 // what ./mc help knows about the composites this body loaded
 export const composites = new Map()
 // actions the CLI answers by itself, with no body running
-export const CLI_ONLY = ['wait', 'dawn', 'clock']
+export const CLI_ONLY = ['wait', 'dawn', 'clock', 'job', 'jobs', 'cancel', 'resume', 'discard']
 // Preserve the runner export used by bot.mjs; the policy itself lives with food logic.
 export { BANNED_FOOD }
-// the last thing a person said TO me: a whisper always counts, a chat only when it says my name
-let lastSpoken = null
-export const setLastSpoken = v => { lastSpoken = v }
-
 const worldDay = () => Math.floor(Number(bot.time.age ?? 0) / 24000)
 // a body below the hunger floor carrying rotten flesh is not a body with nothing edible: it has a meal it is now
 // allowed to eat, and a composite that stopped for "nothing edible carried" was stopping over its own dinner (#139)
@@ -61,7 +59,7 @@ function planOf (name) {
 }
 
 // everything a composite may do to the world, and the only way it may do it
-function makeApi (composite, a, alive) {
+function makeApi (composite, a, alive, jobEvent = () => {}) {
   const ownerTask = task
   let cleanupServiceDirection = null
   const notes = []
@@ -144,7 +142,12 @@ function makeApi (composite, a, alive) {
     }
     return long.place({ ...args, [ROLLBACK_PLACE]: true })
   }
-  const until = makeUntil({ waitTicks: n => bot.waitForTicks(n), alive, composite })
+  const waitForCondition = makeUntil({ waitTicks: n => bot.waitForTicks(n), alive, composite })
+  const until = async (condition, options = {}) => {
+    if (ownerTask?.jobId) jobEvent('job_waiting', { reason: options.what ?? 'condition' })
+    try { return await waitForCondition(condition, options) }
+    finally { if (ownerTask?.jobId) jobEvent('job_progress', { waiting: false }) }
+  }
   // between steps: night with a bed is slept through and the composite never sees it; anything else that needs a person stops the task
   const checkpoint = async (extra = {}) => {
     pendingNavigationFailure = null
@@ -157,6 +160,7 @@ function makeApi (composite, a, alive) {
       const mine = task
       if (mine) mine.paused = 'night'
       emit('task_paused', { id: mine?.id, name: composite, why: PAUSES.night })
+      if (mine?.jobId) jobEvent('job_waiting', { reason: 'night', why: PAUSES.night })
       try {
         await long.sleep({ automatic: true }).catch(() => {})
         await until(() => !bot.isSleeping, { timeout: 900, every: 5, what: 'the night never ended' }).catch(() => {})
@@ -165,9 +169,10 @@ function makeApi (composite, a, alive) {
       }
       alive()
       emit('task_resumed', { id: mine?.id, name: composite })
+      if (mine?.jobId) jobEvent('job_progress', { waiting: false })
     }
     const reason = handBackReason({
-      spoken: lastSpoken && lastSpoken.at > startedAt ? `${lastSpoken.from}: ${lastSpoken.message}`.slice(0, 90) : null,
+      spoken: null,
       health: bot.health,
       food: bot.food,
       edible: edibleCarried(),
@@ -196,6 +201,12 @@ function makeApi (composite, a, alive) {
       checkpoint,
       performance: reportPerformance,
       scaffolds: scaffoldJournal(path.join(HOME, 'scaffolds.json')),
+      forestry: scaffoldJournal(path.join(HOME, 'forestry.json')),
+      ownSurvivalHole: () => {
+        const file = path.join(HOME, 'events.jsonl')
+        return fs.existsSync(file) ? latestOwnClosedDigHole(fs.readFileSync(file, 'utf8'), cfg.username) : null
+      },
+      acknowledgeFailure: name => { alive(); const had = failures.delete(name); return had },
       scaffoldOccupied: column => Object.values(bot.entities).some(e => e !== bot.entity && e.name !== 'item' && e.position && Math.abs(e.position.x - column.x - 0.5) < 0.8 && Math.abs(e.position.z - column.z - 0.5) < 0.8 && e.position.y >= column.y - 1 && e.position.y <= column.top + 2),
       navigationCapabilities: () => ({
         scaffolding: bot.pathfinder?.movements?.scaffoldingSupported === true,
@@ -203,8 +214,10 @@ function makeApi (composite, a, alive) {
       }),
       recoverNavigationFailure,
       block: blockAt,
+      grounded: () => Boolean(bot.entity?.onGround && !bot.vehicle),
       clock: () => ({ time: bot.time.timeOfDay, night: night(), day: !night(), raining: bot.isRaining, elapsedDays: worldDay() - startedDay }),
       inv: () => inventoryCounts(),
+      hasSilkTouch: () => Boolean(silkTouchTool(bot.inventory.items())),
       // who this body is, for a composite that has to tell its own protected zones from somebody else's
       me: () => cfg.username,
       // is this block something you can stand on, and does a pen with animals in it surround me? (mine.get mends its own shaft)
@@ -229,16 +242,20 @@ function makeApi (composite, a, alive) {
       report: partial => Object.assign(report, partial),
       // an event of the composite's own (routine_day, routine_stopped), and what it tells the stuck watch about itself
       emit,
-      progress: data => { if (ownerTask) ownerTask.progress = { ...ownerTask.progress, ...data } }
+      progress: data => {
+        if (!ownerTask) return
+        ownerTask.progress = { ...ownerTask.progress, ...data }
+        if (ownerTask.jobId) jobEvent('job_progress', { progress: ownerTask.progress })
+      }
     }
   }
 }
 
-export async function runComposite (name, mod, a) {
+export async function runComposite (name, mod, a, jobEvent) {
   const bad = checkArgs(name, mod.args, a)
   if (bad) throw new Error(bad)
   const alive = cancelGuard()
-  const { api, notes, report } = makeApi(name, a, alive)
+  const { api, notes, report } = makeApi(name, a, alive, jobEvent)
   const outcome = await mod.run(api, a).then(
     r => ({ stopped: 'done', ...r }),
     // whatever ends it early (stop, a death, a step that threw), the report built so far rides out on the error (src/composite.mjs)

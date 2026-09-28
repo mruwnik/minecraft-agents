@@ -1,11 +1,14 @@
 import { treeHarvestSequence, visibleTreeBlock } from '../scaffold/reach.mjs'
-import { planScaffoldAccess, buildScaffoldAccess, addScaffoldAccess, cleanupScaffold, scaffoldId, reachTreePlatform } from '../scaffold/access.mjs'
+import { planTreeAccess, planScaffoldAccess, buildScaffoldAccess, addScaffoldAccess, cleanupScaffold, scaffoldId, reachTreePlatform } from '../scaffold/access.mjs'
 import { checkTree, inspectTree, harvestStands, key, treeRoot } from './inspect.mjs'
 import { treeProfile } from './profiles.mjs'
 import { farmApi, recoverFarm } from '../farm/attention.mjs'
 import { foreignZone } from '../../library/farm/shared/clutter.mjs'
-import { workRefusal, planCells, planSpec, hasPlan } from '../lib.mjs'
+import { workRefusal, planCells, planSpec, hasPlan, parsePlacePlan } from '../lib.mjs'
 import { isAir, isGroundCover } from '../lib/world.mjs'
+import { validateForestryRecord, forestryRecordMatchesSite, isLegacyPlannedStump, legacyPlannedStumpRefusal } from './journal.mjs'
+import { handleCenterWorkRefusal, cleanupScaffoldRecoverably } from '../scaffold/recovery.mjs'
+import { allowClaimedHives, forestHiveClaim, hiveSmokeCampfire } from './hives.mjs'
 
 export const TREE_ARGS = { x: 'number!', y: 'number!', z: 'number!', species: 'string', form: 'string', place: 'string', flower: 'string', scaffold: 'boolean' }
 export function treeAttention (api, action, report) {
@@ -18,38 +21,195 @@ export function treeContext (api, a) {
   if (a.place && !place) throw new Error(`no place called ${a.place}`)
   const refusal = place && workRefusal(place, api.me?.())
   if (refusal) throw new Error(refusal)
-  return { root, cells: hasPlan(place) ? planCells(place) : [] }
+  return { root, place, cells: hasPlan(place) ? planCells(place) : [] }
 }
 const publicReport = t => ({ root: t.root, species: t.species, form: t.form, state: t.state, wood: t.wood.length, canopy: t.leaves.length, protected: t.protected, attention: [...t.attention] })
+
+export function observedTreeProgress (blocks, blockAt, scaffold=null) {
+  const supports = new Map((scaffold?.cells ?? []).map(p => [key(p), p.item]))
+  const remaining = blocks.filter(p => {
+    const current = blockAt(p.x, p.y, p.z)
+    if (!current || !isAir(current.name)) {
+      if (current && supports.get(key(p)) === current.name) return false
+      // A changed non-air block is unresolved, not proof that the original
+      // target was harvested. Keep it in the report until inspected.
+      return true
+    }
+    return false
+  }).map(({ x, y, z, name }) => ({ x, y, z, name }))
+  return { remaining, harvested: blocks.length - remaining.length }
+}
 async function guard (api, tree) {
   const zones = (await api.act('zones')).zones ?? []
-  const positions = [...(tree.footprint ?? []), ...tree.blocks]
+  const positions = [...(tree.footprint ?? []), ...tree.blocks, ...(tree.protected ?? [])]
   const foreign = positions.find(p => foreignZone(zones, api.me?.(), p))
   if (foreign) throw new Error(`protected zone at ${key(foreign)} does not invite tree work`)
 }
-const attempt = (api, action, args, report) => api.act(action, args).then(() => true, recoverFarm(e => { report.attention.push(e.message); return false }))
+const attempt = (api, action, args, report) => api.act(action, args).then(() => true, recoverFarm(e => {
+  if (action === 'goto' || action === 'collect') api.acknowledgeFailure?.(action)
+  report.attention.push(e.message)
+  return false
+}))
 const checkpoint = api => api.checkpoint?.() ?? Promise.resolve()
 
-export async function runTree (api, a, action) {
+export async function runTree (api, a, action, { pillar = false, decayRecovery = false, allowForestHives = false } = {}) {
   if (a.flower && !/^(dandelion|poppy|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|(?:red|orange|white|pink)_tulip)$/.test(a.flower)) throw new Error('flower must be a supported small flower block ID')
   api = farmApi(api)
-  const { root, cells } = treeContext(api, a)
+  const { root, place, cells } = treeContext(api, a)
+  const parsedForest = action === 'harvest' && allowForestHives && place?.kind === 'forest' && place.by === api.me?.()
+    ? parsePlacePlan(place)
+    : null
+  const forestScope = parsedForest && !parsedForest.error
+    ? { place: place.name, owner: place.by, x: place.x, z: place.z, width: parsedForest.width, height: parsedForest.height }
+    : null
+  // The user has authorized clearing any obstruction on the claimed forest.
+  // Persist a narrow, revalidated plot scope so legacy scaffold cleanup can
+  // reclaim an adjacent unjournaled scaffold there, without extending that
+  // authority to similarly named or neighboring plots.
+  if (forestScope) {
+    const id = scaffoldId(root), priorRecord = api.scaffolds?.(id)
+    if (priorRecord) api.scaffolds(id, { ...priorRecord, forestScope })
+  }
   if (action === 'harvest' && api.scaffolds?.(scaffoldId(root))) {
     const prior = { root, attention: [] }
-    await cleanupScaffold(api, scaffoldId(root), prior)
+    await cleanupScaffoldRecoverably(api, cleanupScaffold, scaffoldId(root), prior)
     if (prior.cleanup_left?.length || prior.attention.length) return treeAttention(api, 'tree.harvest', prior)
   }
-  const read = () => checkTree(api.block, root, a.species, a.form ?? 'auto', cells)
+  const read = () => {
+    const observed = checkTree(api.block, root, a.species, a.form ?? 'auto', cells)
+    if (!allowForestHives) return observed
+    const policy = allowClaimedHives(observed, place, api.me?.(), api.hasSilkTouch?.())
+    if (api.hasSilkTouch?.()) return policy.tree
+    // check/inspect must not block maintain's chance to place a campfire.
+    // Actual removal below independently refuses unless smoke is verified.
+    const verifiedSmoke = policy.hives.map(h => hiveSmokeCampfire(api.block, h)).filter(Boolean)
+    return { ...policy.tree, attention: policy.tree.attention.filter(reason => {
+      if (reason.startsWith('Silk Touch or a verified campfire')) return false
+      const match = reason.match(/^blocks adjoining trunk need inspection: (.+)$/)
+      if (!match) return true
+      const cells = match[1].split(' ')
+      const knownSmoke = new Set(verifiedSmoke.map(p => `campfire@${p.x},${p.y},${p.z}`))
+      return !cells.every(cell => knownSmoke.has(cell))
+    }) }
+  }
+  const journalId = scaffoldId(root)
+  let forestry = api.forestry?.(journalId) ?? null
   let tree = read()
+  let resumedHarvest = false
+  if (forestry) {
+    if (!forestryRecordMatchesSite(forestry, tree)) {
+      tree.attention.push('forestry journal root/species/form does not match this planned tree site')
+    } else if (forestry.phase === 'harvesting') {
+      const resumed = validateForestryRecord(forestry, tree, api.block)
+      if (resumed.ok) { tree = resumed.tree; resumedHarvest = true }
+      else tree.attention.push(resumed.reason)
+    } else if (forestry.phase === 'decaying' && ['harvest', 'plant'].includes(action) && !(action === 'plant' && decayRecovery)) {
+      tree.attention.push('tree has a pending decay collection and replant record; forestry.maintain must finish it first')
+    } else if (!['harvesting', 'decaying'].includes(forestry.phase)) {
+      tree.attention.push('forestry journal phase is invalid; inspect the saved tree record before work')
+    }
+  } else if (api.forestry && isLegacyPlannedStump(tree, cells)) {
+    tree.attention = tree.attention.filter(s => s !== 'wood has no attributable canopy: possible build or incomplete tree; inspect manually')
+  } else if (api.forestry && tree.attention.includes('wood has no attributable canopy: possible build or incomplete tree; inspect manually')) {
+    tree.attention.push(`legacy stump recovery refused: ${legacyPlannedStumpRefusal(tree, cells)}`)
+  }
   const report = publicReport(tree)
+  const refreshRemaining = scaffold => {
+    Object.assign(report, observedTreeProgress(tree.blocks, api.block, scaffold))
+  }
   if (action === 'inspect' || action === 'check') return action === 'inspect' ? { ...report, blocks: tree.blocks, footprint: tree.footprint } : report
   await guard(api, tree)
-  const finish = () => treeAttention(api, `tree.${action}`, report)
+  const finish = () => { api.report?.(report); return treeAttention(api, `tree.${action}`, report) }
   if (report.attention.length) return finish()
   if (action === 'harvest') {
-    if (tree.state !== 'mature') return finish()
+    if (tree.state !== 'mature') {
+      if (resumedHarvest && forestry?.wood.every(p => isAir(api.block(p.x, p.y, p.z)?.name))) {
+        forestry = { ...forestry, phase: 'decaying', readyAt: forestry.readyAt ?? Date.now() + 120000 }
+        api.forestry(journalId, forestry)
+        report.harvested = forestry.wood.length
+        report.remaining = []
+        report.decay_wait = Math.max(0, Math.ceil((forestry.readyAt - Date.now()) / 1000))
+      }
+      return finish()
+    }
+    // An owned forest's nest is moved intact before its supporting logs are
+    // touched. The primitive independently checks the exact claim and equips
+    // the actual enchanted tool; an ordinary fast-tool dig would destroy it.
+    const hives = allowForestHives ? allowClaimedHives(tree, place, api.me?.(), true).hives : []
+    for (const hive of hives) {
+      await checkpoint(api)
+      if (api.block(hive.x, hive.y, hive.z)?.name !== hive.name) {
+        report.attention.push(`hive changed at ${key(hive)} before safe pickup`)
+        return finish()
+      }
+      const silk = Boolean(api.hasSilkTouch?.())
+      let smoke = null, cleanupCampfire = false
+      if (!silk) {
+        smoke = hiveSmokeCampfire(api.block, hive)
+        if (!smoke) {
+          const at = { x: hive.x, y: hive.y - 1, z: hive.z }
+          if (api.inv().campfire > 0 && isAir(api.block(at.x, at.y, at.z)?.name) && forestHiveClaim(place, api.me?.(), at, 'beehive')) {
+            if (!await attempt(api, 'place', { item: 'campfire', ...at }, report)) {
+              cleanupCampfire = api.block(at.x, at.y, at.z)?.name === 'campfire'
+              smoke = cleanupCampfire ? at : null
+            }
+            cleanupCampfire = api.block(at.x, at.y, at.z)?.name === 'campfire'
+            smoke = hiveSmokeCampfire(api.block, hive)
+          }
+        }
+        if (!smoke) {
+          report.attention.push(`no verifiable campfire smoke below ${hive.name}@${key(hive)}; hive retained (provide Silk Touch or a campfire with a clear 1–5 block smoke column)`)
+          if (cleanupCampfire) {
+            await attempt(api, 'dig', { x: hive.x, y: hive.y - 1, z: hive.z }, report)
+            if (!isAir(api.block(hive.x, hive.y - 1, hive.z)?.name)) report.attention.push(`temporary campfire remains at ${hive.x},${hive.y - 1},${hive.z}; cleanup required`)
+          }
+          return finish()
+        }
+        // Forest-plan blocks may be cleared by this job. Removing the verified
+        // smoker also prevents it from becoming an ambiguous tree obstruction.
+        cleanupCampfire = forestHiveClaim(place, api.me?.(), smoke, 'beehive')
+      }
+      const before = api.inv()[hive.name] ?? 0
+      const cleanSmoke = async () => {
+        if (!cleanupCampfire || !smoke || isAir(api.block(smoke.x, smoke.y, smoke.z)?.name)) return true
+        const removed = await attempt(api, 'dig', { ...smoke }, report)
+        if (!removed || !isAir(api.block(smoke.x, smoke.y, smoke.z)?.name)) {
+          report.attention.push(`temporary campfire remains at ${key(smoke)}; cleanup required`)
+          return false
+        }
+        return true
+      }
+      if (!await attempt(api, 'dig', { x: hive.x, y: hive.y, z: hive.z, ...(silk ? { silk_touch: true } : { safe_hive: true, smoke }), place: a.place }, report)) {
+        await cleanSmoke()
+        return finish()
+      }
+      if (!isAir(api.block(hive.x, hive.y, hive.z)?.name)) {
+        report.attention.push(`hive remained at ${key(hive)} after attempted safe removal`)
+        await cleanSmoke()
+        return finish()
+      }
+      if (!await cleanSmoke()) return finish()
+      if (!silk) {
+        report.hivesDestroyed = [...(report.hivesDestroyed ?? []), { ...hive }]
+        tree = read()
+        report.protected = tree.protected
+        if (tree.attention.length) { report.attention.push(...tree.attention); return finish() }
+        continue
+      }
+      if (!await attempt(api, 'collect', { range: 6 }, report)) return finish()
+      if ((api.inv()[hive.name] ?? 0) <= before) {
+        report.attention.push(`moved ${hive.name}@${key(hive)} but its Silk Touch drop was not recovered; retain tree until collected`)
+        return finish()
+      }
+      report.hivesMoved = [...(report.hivesMoved ?? []), { ...hive }]
+      tree = read()
+      report.protected = tree.protected
+      if (tree.attention.length) { report.attention.push(...tree.attention); return finish() }
+    }
+    // Natural leaves decay after the last log is gone; only wood is work.
+    tree = { ...tree, blocks: tree.wood }
     const access = harvestStands(tree, api.block)
-    const inaccessible = tree.blocks.filter(b => !access.get(key(b))?.length)
+    const inaccessible = treeHarvestSequence(tree,access,api.block).missing
     let scaffold = null
     if (inaccessible.length) {
       if (a.scaffold === false) {
@@ -57,59 +217,141 @@ export async function runTree (api, a, action) {
         return finish()
       }
       const zones = (await api.act('zones')).zones ?? []
-      const plan = planScaffoldAccess(api, tree, access, zones)
+      const plan = pillar ? planScaffoldAccess(api, tree, access, zones, true) : planTreeAccess(api, tree, access, zones)
       report.scaffold_needed = plan.count
       if (plan.attention.length) { report.attention.push(...plan.attention); return finish() }
+      if (api.forestry && !forestry) {
+        forestry = { root: { ...root }, species: tree.species, form: tree.form,
+          wood: tree.wood.map(({ x, y, z, name }) => ({ x, y, z, name })),
+          leaves: tree.leaves.map(({ x, y, z, name }) => ({ x, y, z, name })),
+          phase: 'harvesting', readyAt: null }
+        api.forestry(journalId, forestry)
+      }
       try { scaffold = await buildScaffoldAccess(api, tree, plan, report) } catch (e) {
         report.attention.push('scaffold construction interrupted; recorded cleanup_left must be recovered before more tree work')
         treeAttention(api, 'tree.harvest', report)
         throw e
       }
+      if (scaffold && forestScope) {
+        scaffold = { ...scaffold, forestScope }
+        api.scaffolds?.(scaffold.id, scaffold)
+      }
       if (report.attention.length) {
-        if (scaffold) await cleanupScaffold(api, scaffold.id, report)
+        if (scaffold) await cleanupScaffoldRecoverably(api, cleanupScaffold, scaffold.id, report)
+        if(!pillar&&plan.kind!=='pillar'&&!report.cleanup_left?.length&&report.attention.some(s=>/no walkable path|no first move|did not reach|no verified tree work platform|not visibly reachable|scaffold platform placement not verified|scaffold_side: placing scaffolding did not take/.test(s))){
+          const alternate=planScaffoldAccess(api,tree,harvestStands(tree,api.block),zones,true)
+          if(!alternate.attention.length)return runTree(api,a,action,{pillar:true,allowForestHives})
+        }
         return finish()
       }
       addScaffoldAccess(access, tree, scaffold)
     }
     let interrupted = false
     try {
+    if (api.forestry && !forestry) {
+      forestry = { root: { ...root }, species: tree.species, form: tree.form,
+        wood: tree.wood.map(({ x, y, z, name }) => ({ x, y, z, name })),
+        leaves: tree.leaves.map(({ x, y, z, name }) => ({ x, y, z, name })),
+        phase: 'harvesting', readyAt: null }
+      api.forestry(journalId, forestry)
+    }
     report.harvested = 0
     report.remaining = tree.blocks.map(b => ({ x: b.x, y: b.y, z: b.z, name: b.name }))
     api.report?.(report)
-    // Top down: no base is cut while upper wood remains. Every actual block and
-    // target is checked again; the server, not the click count, establishes removal.
-    const sequence = treeHarvestSequence(tree, access, api.block)
+    // Prefer upper wood first; a verified trunk climb may clear lower logs for
+    // access. The server, not the click count, establishes removal.
+    const workView = (x,y,z) => scaffold?.clearance?.some(p=>p.x===x&&p.y===y&&p.z===z) ? {name:'air'} : api.block(x,y,z)
+    // Natural leaves belonging to this tree are valid intervening blocks for a
+    // coordinate-targeted wood dig. They remain untouched; every target is
+    // still rechecked as the expected log and verified as air afterwards.
+    const transparentCanopy = new Set((tree.leaves ?? []).map(key))
+    const sequence = treeHarvestSequence(tree, access, workView)
     if (sequence.missing.length) { report.attention.push(`whole-tree visible access missing for ${sequence.missing.length} blocks; tree retained`); return finish() }
     for (const {block:b,spots} of sequence.steps) {
       await checkpoint(api)
       const actual = api.block(b.x, b.y, b.z)
-      if (actual && isAir(actual.name)) continue
+      if (actual && (isAir(actual.name)||scaffold?.cells.some(p=>key(p)===key(b)))) continue
       if (actual?.name !== b.name) { report.attention.push(`tree changed at ${key(b)}; stopped before touching ${actual?.name ?? 'unloaded'}`); break }
       // Reinspect protected blocks that may have appeared since preflight.
       const current = inspectTree(api.block, root, tree.species, tree.form)
       if (current.protected?.length) { report.attention.push('protected nest/hive/heart appeared during harvest; stopped'); break }
-      const spot = await reachTreePlatform(api, spots.filter(p=>visibleTreeBlock(api.block,{x:p.x+.5,y:p.y,z:p.z+.5},b)), report, scaffold ?? [])
-      if (!spot) break
-      const pos = api.pos()
-      if (Math.hypot(pos.x - (spot.x + 0.5), pos.z - (spot.z + 0.5)) > 0.8 || Math.abs(pos.y - spot.y) > 0.6) { report.attention.push(`did not reach verified work platform ${key(spot)}`); break }
-      if (!visibleTreeBlock(api.block, pos, b)) { report.attention.push(`tree target ${key(b)} is not visibly reachable from verified platform`); break }
+      const candidates = [...new Map(spots.map(p=>[key(p),p])).values()].slice(0,3)
+      let spot = null
+      const failures = []
+      for (const candidate of candidates) {
+        const local = { attention: [] }
+        let reached
+        const reachStructure = { ...(scaffold ?? { columns: [], platforms: [] }), ...(forestScope ? { forestScope } : {}) }
+        try { reached = await reachTreePlatform(api, [candidate], local, reachStructure) }
+        catch (error) {
+          if (!handleCenterWorkRefusal(api, error, local, `work platform ${key(candidate)} refused centering`)) throw error
+          failures.push(...local.attention)
+          continue
+        }
+        if (!reached) { failures.push(...local.attention); continue }
+        const current = api.block(b.x,b.y,b.z)
+        if (current && isAir(current.name)) { spot = reached; break }
+        if (!current || current.name !== b.name) {
+          failures.push(`tree changed at ${key(b)}; stopped before touching ${current?.name ?? 'unloaded'}`)
+          break
+        }
+        const pos = api.pos()
+        if (Math.hypot(pos.x - (reached.x + 0.5), pos.z - (reached.z + 0.5)) > 0.8 || Math.abs(pos.y - reached.y) > 0.6) {
+          failures.push(`did not reach verified work platform ${key(reached)}`)
+          continue
+        }
+        if (!visibleTreeBlock(api.block, pos, b, new Set(), transparentCanopy)) {
+          failures.push(`tree target ${key(b)} is not visibly reachable from verified platform ${key(reached)}`)
+          continue
+        }
+        spot = reached
+        break
+      }
+      if (!spot) {
+        report.attention.push(...new Set(failures.length ? failures : [`tree target ${key(b)} is not visibly reachable from any verified platform`]))
+        break
+      }
+      if(isAir(api.block(b.x,b.y,b.z)?.name))continue
       if (!await attempt(api, 'dig', { x: b.x, y: b.y, z: b.z, batch: true }, report)) break
       const after = api.block(b.x, b.y, b.z)
       if (!after || !isAir(after.name)) { report.attention.push(`dig left ${key(b)} standing or unloaded`); break }
-      report.harvested++
+      report.harvested = tree.blocks.filter(p=>isAir(api.block(p.x,p.y,p.z)?.name)).length
       report.remaining = report.remaining.filter(p => key(p) !== key(b))
       api.report?.(report)
     }
+    if(scaffold?.kind==='pillar'){
+      await cleanupScaffoldRecoverably(api,cleanupScaffold,scaffold.id,report)
+      if(report.cleanup_left?.length){refreshRemaining(scaffold);return finish()}
+    }
+    report.harvested = tree.blocks.filter(p=>isAir(api.block(p.x,p.y,p.z)?.name)).length
     report.remaining = tree.blocks.filter(b => api.block(b.x, b.y, b.z)?.name === b.name).map(b => ({ x: b.x, y: b.y, z: b.z, name: b.name }))
     if (report.remaining.length && !report.attention.length) report.attention.push(`${report.remaining.length} tree blocks remain; harvest incomplete`)
+    const originalStatus = forestry?.wood.map(p => api.block(p.x, p.y, p.z)) ?? []
+    const originalRemain = forestry?.wood.filter((p, i) => originalStatus[i]?.name === p.name) ?? []
+    const originalObserved = originalStatus.every(b => b && isAir(b.name))
+    if (forestry && !report.attention.length && !report.remaining.length && !originalRemain.length && originalObserved && !tree.blocks.some(p => !isAir(api.block(p.x, p.y, p.z)?.name))) {
+      forestry = { ...forestry, phase: 'decaying', readyAt: Date.now() + 120000 }
+      api.forestry?.(journalId, forestry)
+    }
+    if(!pillar&&scaffold&&scaffold.kind!=='pillar'&&!report.harvested&&report.attention.some(s=>/no walkable path|no first move|did not reach|no verified tree work platform|not visibly reachable|work platform .* refused centering/.test(s))){
+      await cleanupScaffoldRecoverably(api,cleanupScaffold,scaffold.id,report)
+      if(!report.cleanup_left?.length){
+        const zones=(await api.act('zones')).zones??[]
+        const alternate=planScaffoldAccess(api,tree,harvestStands(tree,api.block),zones,true)
+        if(!alternate.attention.length)return await runTree(api,a,action,{pillar:true,allowForestHives})
+      }
+    }
+    if(report.harvested&&!report.remaining.length)report.decay_wait=120
     if (report.harvested) await attempt(api, 'collect', { range: Math.min(16, tree.profile.radius + 2) }, report)
     return finish()
     } catch (e) {
       interrupted = true
+      refreshRemaining(scaffold)
+      api.report?.(report)
       if (scaffold) { report.attention.push('tree work interrupted; scaffold cleanup remains recorded'); treeAttention(api, 'tree.harvest', report) }
       throw e
     } finally {
-      if (scaffold && !interrupted) { await cleanupScaffold(api, scaffold.id, report); treeAttention(api, 'tree.harvest', report) }
+      if (scaffold && !interrupted) { await cleanupScaffoldRecoverably(api, cleanupScaffold, scaffold.id, report); treeAttention(api, 'tree.harvest', report) }
     }
   }
   if (tree.state === 'mature') { report.attention.push('mature tree retained; harvest it before preparing or replanting'); return finish() }

@@ -90,7 +90,7 @@ const still = samples => {
   if (last.boxed && !last.night && runBack(samples, boxedRun) >= STILL_MS) {
     return { kind: 'boxed', reason: `boxed in for ${minutes(STILL_MS)}`, advice: 'no neighbouring cell to step to: dig or open a way out (a fence gate, the block in the way, the block over the head), or ask in chat for somebody to', pos: last.pos }
   }
-  const waiting = last.routine && WAITING.includes(last.routine.phase)
+  const waiting = Boolean(last.waiting) || last.routine && WAITING.includes(last.routine.phase)
   const working = last.taskId !== null && last.taskId !== undefined && !waiting
   if (!working || runBack(samples, taskRun) < STILL_MS) return null
   return { kind: 'still', reason: `no movement and no progress in ${last.taskName} for ${minutes(STILL_MS)}`, advice: `${last.taskName} is going nowhere: stop it, step two blocks away (goto), start it again, and if the walk will not go read what surrounds the body (look, block_at)`, pos: last.pos }

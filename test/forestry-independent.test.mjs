@@ -86,7 +86,7 @@ test('independent: forestry lifecycle harvests whole tree, collects then replant
  assert.deepEqual(r.attention,[])
  assert.equal(r.planted,1)
  assert.equal(f.world.get('0,1,0'),'oak_sapling')
- assert.equal(f.world.get('0,4,0'),'air')
+ assert.equal(f.world.get('0,4,0'),'oak_leaves')
  const names=f.calls.map(c=>c.name)
  assert.ok(names.indexOf('collect')>names.lastIndexOf('dig'))
  assert.ok(names.indexOf('place')>names.indexOf('collect'))
@@ -216,7 +216,7 @@ test('independent: interruption after one harvested block reports remainder and 
  const f=worldFixture({fail:name=>{if(name==='dig'&&++digs===2)throw new Error('out of reach')}});smallOak(f)
  const r=await harvest.run(f.api,{...root,species:'oak'})
  assert.equal(r.harvested,1)
- assert.equal(r.remaining.length,3)
+ assert.equal(r.remaining.length,2)
  assert.ok(r.attention.some(s=>/reach/.test(s)))
  assert.equal(f.world.get('0,1,0'),'oak_log')
  assert.ok(f.calls.some(c=>c.name==='collect'))
@@ -224,9 +224,10 @@ test('independent: interruption after one harvested block reports remainder and 
 test('independent: live path-search timeout reports access attention without cutting the tree',async()=>{
  const message='tree.harvest/goto: the search ran out of time (up to 5 s) before it found a way, which is not the same as there being none. The usual cause is a dead end close to the goal (a fenced alley beside a pen gate) that the search keeps trying first, and from inside that dead end even path_to finds nothing. Step back 10-20 blocks the way you came, then `path_to x= y= z= route=true` there names the gates of the long way round: walk it in legs, gate by gate'
  const f=worldFixture({fail:name=>{if(name==='goto')throw new Error(message)}});smallOak(f)
+ f.api.pos=()=>({x:12.5,y:1,z:12.5})
  const r=await harvest.run(f.api,{...root,species:'oak',scaffold:false})
  assert.equal(r.harvested,0)
- assert.equal(r.remaining.length,4)
+ assert.equal(r.remaining.length,3)
  assert.ok(r.attention.some(s=>s.includes('search ran out of time')))
  assert.ok(f.events.some(e=>e.type==='forestry_attention'))
  assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
@@ -235,6 +236,7 @@ test('independent: live path-search timeout reports access attention without cut
 for(const message of ['bot is dead','cancelled: out of air: swimming up to breathe. Work from dry land, then retry']) test(`independent: harvest preserves hard safety handback: ${message}`,async()=>{
  const error=new Error(message)
  const f=worldFixture({fail:name=>{if(name==='goto')throw error}});smallOak(f)
+ f.api.pos=()=>({x:12.5,y:1,z:12.5})
  await assert.rejects(harvest.run(f.api,{...root,species:'oak',scaffold:false}),e=>e===error)
  assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
 })
@@ -385,21 +387,46 @@ function broadOak(f) {
  smallOak(f,10)
  for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++)f.world.set(`${x},11,${z}`,'oak_leaves')
 }
-test('independent: broad canopy uses owned supported lateral access and cleans it after full harvest',async()=>{
+test('independent: a misdirected scaffold side click journals its exact consumed block before cleanup',async()=>{
+ const f=worldFixture({items:{scaffolding:256,dirt:128}});broadOak(f)
+ const records=enableLateralScaffolds(f),act=f.api.act
+ let wrong=null
+ f.api.act=async(name,args)=>{
+  const result=await act(name,args)
+  if(name==='scaffold_side'&&!wrong){
+   wrong=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>({x:args.from_x+dx,y:args.from_y,z:args.from_z+dz})).find(p=>coord(p)!==coord(args)&&f.api.block(p.x,p.y,p.z).name==='air')
+   assert.ok(wrong,'fixture needs an open wrong-facing neighbor')
+   f.world.set(coord(args),'air');f.world.set(coord(wrong),'scaffolding')
+  }
+  return result
+ }
+ const access=(await import('../library/scaffold/access.mjs')).default
+ const r=await access.run(f.api,{...root,species:'oak',check:false})
+ assert.ok(wrong)
+ assert.ok(r.attention.some(s=>/exact consumed block recorded for cleanup/.test(s)))
+ const record=[...records.values()][0]
+ assert.ok(record.verified.includes(coord(wrong)),'the exact off-target position is verified while inventory falls')
+ const {cleanupScaffold,scaffoldId}=await import('../src/scaffold/access.mjs')
+ await cleanupScaffold(f.api,scaffoldId(root),{attention:[]})
+ assert.equal(f.api.block(wrong.x,wrong.y,wrong.z).name,'air','verified wrong-facing scaffold was cleaned')
+ assert.equal(records.size,0,'no owned support journal remains')
+})
+test('independent: broad canopy is retained while wood access is built and cleaned',async()=>{
  const f=worldFixture({items:{scaffolding:256}});broadOak(f)
  const records=enableLateralScaffolds(f)
  const r=await harvest.run(f.api,{...root,species:'oak'})
  assert.deepEqual(r.attention,[])
- assert.ok(f.calls.some(c=>c.name==='scaffold_side'),'broad canopy requires actual lateral scaffold placements')
+ assert.equal(f.world.get('4,11,4'),'oak_leaves','broad canopy is left to decay')
  assert.equal(r.remaining.length,0)
- assert.equal(r.harvested,91)
+ assert.equal(r.harvested,10)
  assert.equal(records.size,0)
  assert.ok(![...f.world.values()].includes('scaffolding'))
 })
 test('independent: cancellation after a lateral placement records its support and leaves the whole tree intact',async()=>{
  const f=worldFixture({items:{scaffolding:256}});broadOak(f)
  const records=enableLateralScaffolds(f,{cancelSide:true})
- await assert.rejects(harvest.run(f.api,{...root,species:'oak'}),/cancelled/)
+ const access=(await import('../library/scaffold/access.mjs')).default
+ await assert.rejects(access.run(f.api,{...root,species:'oak',check:false}),/cancelled/)
  assert.equal(f.calls.filter(c=>c.name==='dig').length,0)
  assert.equal(f.world.get('0,1,0'),'oak_log')
  assert.equal(f.world.get('4,11,4'),'oak_leaves')
@@ -434,7 +461,7 @@ test('independent: tall tree harvest builds access, removes upper tree, descends
  const r=await harvest.run(f.api,{...root,species:'oak'})
  assert.deepEqual(r.attention,[])
  assert.equal(r.remaining.length,0)
- assert.equal(r.harvested,11)
+ assert.equal(r.harvested,10)
  assert.ok(f.calls.some(c=>c.name==='scaffold_extend'))
  assert.equal(records.size,0)
  assert.ok(![...f.world.values()].includes('scaffolding'))

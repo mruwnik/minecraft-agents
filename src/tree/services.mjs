@@ -11,7 +11,7 @@ export async function maintainTreeServices(api,cells,report){
  const services=cells.filter(c=>['flower','chest','composter','table','fence','gate','block','torch'].includes(planSpec(c)?.kind)).flatMap(c=>planSpec(c).kind==='torch'?[c,{...c,y:c.y+1,spec:{kind:'block',item:'torch'},torchTop:true}]:[c])
  if(!services.length)return
  const zones=(await api.act('zones')).zones??[]
- const attempt=async(name,args)=>api.act(name,args).then(()=>true,recoverFarm(e=>{report.attention.push(e.message);return false}))
+ const attempt=async(name,args)=>api.act(name,args).then(()=>true,recoverFarm(e=>{report.attention.push(e.message);if(name==='goto')api.acknowledgeFailure?.('goto');return false}))
  for(const c of services){
   await api.checkpoint()
   const spec=planSpec(c),at={x:c.x,y:c.y+1,z:c.z},ground={x:c.x,y:c.y,z:c.z}

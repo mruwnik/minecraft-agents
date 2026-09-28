@@ -43,6 +43,7 @@ for (const [name, samples, expected] of [
   ['a body that woke 100 s ago and stands still since', series(600, i => (i < 500 ? { ...working, sleeping: true } : working)), null],
   ['a routine waiting for dusk stands still by design', series(900, () => routineAt(1, [], 'dusk')), null],
   ['a routine waiting for dawn stands still by design', series(900, () => routineAt(1, [], 'dawn')), null],
+  ['a forestry job waiting for its next sweep is not path-stuck', series(300, () => ({ taskId: 16, taskName: 'forestry.maintain', waiting: 'next forestry sweep' })), null],
   ['a routine standing still mid-steps', series(180, () => routineAt(1, [], 'steps')), 'still'],
   ['an idle body boxed in for 179 s', series(179, () => ({ boxed: true })), null],
   ['an idle body boxed in for 180 s', series(180, () => ({ boxed: true })), 'boxed'],

@@ -16,7 +16,7 @@ export const treeRoot = a => {
 const NATURAL = /^(?:air|cave_air|void_air|vine|weeping_vines|weeping_vines_plant|twisting_vines|twisting_vines_plant|pale_hanging_moss|resin_clump)$/
 export const treePart = name => /_(?:log|wood|leaves|hyphae)$/.test(name) || ['crimson_stem', 'warped_stem', 'mangrove_roots', 'muddy_mangrove_roots', 'nether_wart_block', 'warped_wart_block', 'shroomlight'].includes(name)
 const FLOWERS = new Set(['dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'torchflower', 'pink_petals', 'wildflowers'])
-const harmlessPlant = name => isGroundCover(name) || FLOWERS.has(name)
+export const harmlessPlant = name => isGroundCover(name) || FLOWERS.has(name) || name === 'bush'
 const PROTECTED = new Set(['bee_nest', 'beehive', 'creaking_heart'])
 const neighbors = p => [-1, 0, 1].flatMap(dx => [-1, 0, 1].flatMap(dy => [-1, 0, 1].filter(dz => dx || dy || dz).map(dz => ({ x: p.x + dx, y: p.y + dy, z: p.z + dz }))))
 export function inspectTree (worldAt, root, species, form = 'auto') {
@@ -93,7 +93,8 @@ export function checkTree (worldAt, root, species, form, cells = []) {
     let blocked = 0
     for (let dx = -p.radius; dx <= p.radius + p.width - 1; dx++) for (let dz = -p.radius; dz <= p.radius + p.width - 1; dz++) for (let dy = 2; dy <= p.height; dy++) {
       const b = worldAt(root.x + dx, root.y + dy, root.z + dz)
-      if (b && !isAir(b.name) && !harmlessPlant(b.name)) blocked++
+      const decaying = b && p.leaves.includes(b.name) && b.name.endsWith('_leaves') && b.properties?.persistent !== true && b.properties?.persistent !== 'true'
+      if (b && !isAir(b.name) && !harmlessPlant(b.name) && !decaying) blocked++
     }
     if (blocked) attention.push(`${blocked} occupied cells in conservative growth envelope (radius ${p.radius}, height ${p.height}); choose wider spacing or clear authorized obstructions`)
   }
@@ -107,7 +108,7 @@ export function checkTree (worldAt, root, species, form, cells = []) {
 }
 
 export function harvestStands (tree, worldAt) {
-  const removed = new Set(tree.blocks.map(key))
+  const removed = new Set([...tree.wood,...tree.leaves].map(key))
   const at = (x, y, z) => {
     const b = worldAt(x, y, z)
     if (!b) return null

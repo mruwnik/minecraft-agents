@@ -35,7 +35,7 @@ export default {
       // impossible walks to the runner: those stop the entire farm on its second
       // failure. Keep the drops in the unreachable tally and collect elsewhere.
       const blocked = loadedAround(cellAt, goal, goal.range) && noStanding(cellAt, goal, goal.range)
-      const reached = blocked ? false : await api.act('goto', goal).then(() => true, recoverFarm(() => false))
+      const reached = blocked ? false : await api.act('goto', goal).then(() => true, recoverFarm(() => { api.acknowledgeFailure?.('goto'); return false }))
       tried.push({ ...drop, reached })
       await api.pause(0.5)
       // full, and it did not stack either: the rest will not come
