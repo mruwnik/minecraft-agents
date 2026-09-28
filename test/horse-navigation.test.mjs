@@ -72,6 +72,8 @@ test('server vehicle corrections stop prediction and preserve authoritative posi
     if (++ticks === 5) f.bot._client.emit('vehicle_move', { x: 1, y: 1, z: 0.5, yaw: 90, pitch: 0 })
   } }), /server corrected/)
   assert.deepEqual(f.entity.position, new Vec3(1, 1, 0.5))
+  assert.equal(f.entity.yaw,Math.PI/2)
+  assert.equal(f.bot.entity.yaw,Math.PI/2)
   assert.equal(f.bot._client.listenerCount('vehicle_move'), 0)
   assert.deepEqual(f.packets.at(-1).data.inputs, {})
 })

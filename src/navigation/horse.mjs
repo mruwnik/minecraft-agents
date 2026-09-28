@@ -126,13 +126,14 @@ export async function driveHorse ({ bot, entity, goal, terrain = 'flat', check, 
     // vehicle attachment. This is client prediction while mounted; the server
     // forcedMove on dismount remains authoritative for resuming foot travel.
     bot.entity.position?.set(entity.position.x, entity.position.y + SEAT[entity.name] - 0.6, entity.position.z)
-    bot.entity.yaw = yaw; bot.entity.pitch = 0
+    bot.entity.yaw = entity.yaw; bot.entity.pitch = 0
   }
   const corrected = packet => {
     correction = packet
     if (['x', 'y', 'z'].every(k => Number.isFinite(packet[k]))) {
       entity.position.set(packet.x, packet.y, packet.z)
       entity.velocity?.set(0, 0, 0)
+      if (Number.isFinite(packet.yaw)) entity.yaw = Math.PI - packet.yaw * Math.PI / 180
       riderPose()
       // Vanilla acknowledges the corrected vehicle pose; do not continue the
       // prediction that the server rejected or synthesize a rider teleport.
@@ -152,6 +153,7 @@ export async function driveHorse ({ bot, entity, goal, terrain = 'flat', check, 
     bot._client.write('vehicle_move', { x: state.pos.x, y: state.pos.y, z: state.pos.z, yaw: notchYaw, pitch: 0, onGround: true })
     entity.position.set(state.pos.x, state.pos.y, state.pos.z)
     entity.velocity?.set(state.vel.x, state.vel.y, state.vel.z)
+    entity.yaw = yaw
     riderPose()
   }
   bot._client.on('vehicle_move', corrected)

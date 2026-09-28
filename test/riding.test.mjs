@@ -212,6 +212,7 @@ test('horse_state without id lists nearby supported animals', () => {
 function dismountFixture () {
   const f = fixture({ flags: 6 })
   f.bot.vehicle = f.horse; f.horse.passengers = [f.bot.entity]
+  Object.assign(f.horse, { yaw: 0, width: 1.4, height: 1.6 })
   f.bot.blockAt = p => ({ name: p.y < 64 ? 'stone' : 'air', boundingBox: p.y < 64 ? 'block' : 'empty', getProperties: () => ({}) })
   return f
 }
@@ -237,7 +238,7 @@ test('dismount rejects moving horse and unsafe landing before sending shift', as
   await assert.rejects(moving.runtime.long.horse_dismount({}), /stationary/)
   assert.equal(moving.writes.some(w => w.packet.inputs?.shift), false)
   const unsafe = dismountFixture(); unsafe.bot.blockAt = () => null
-  await assert.rejects(unsafe.runtime.long.horse_dismount({}), /dry landing/)
+  await assert.rejects(unsafe.runtime.long.horse_dismount({}), /unloaded/)
   assert.equal(unsafe.writes.some(w => w.packet.inputs?.shift), false)
 })
 test('passenger removal alone never claims a successful dismount', async () => {
@@ -316,4 +317,30 @@ test('ride step preview checks the requested terrain without saddling or boardin
   assert.equal(f.writes.length,0)
   await assert.rejects(f.runtime.long.ride({id:9,plan:true}),/requires/)
   await assert.rejects(f.runtime.long.ride({id:9,terrain:'jump'}),/terrain/)
+})
+
+test('unsafe preferred horse exit refuses before shift even with a safe other neighbour',async()=>{
+  const f=dismountFixture()
+  f.bot.blockAt=p=>({name:p.y<(p.x>=2?63:64)?'stone':'air',boundingBox:p.y<(p.x>=2?63:64)?'block':'empty',getProperties:()=>({})})
+  await assert.rejects(f.runtime.long.horse_dismount({}),/fallback is unproved/)
+  assert.equal(f.bot.vehicle,f.horse)
+  assert.equal(f.writes.some(w=>w.packet.inputs?.shift),false)
+})
+test('unexpected authoritative horse landing returns actual recovery context and never starts walking',async()=>{
+  const f=dismountFixture(),write=f.client.write
+  f.client.write=(name,packet)=>{
+    write(name,packet)
+    if(name==='player_input'&&packet.inputs.shift){
+      f.client.emit('set_passengers',{entityId:9,passengers:[]})
+      f.bot.entity.position={x:1,y:63,z:0.2}
+      f.bot.emit('forcedMove')
+    }
+  }
+  await assert.rejects(f.runtime.long.horse_dismount({}),/server dismount landing differs/)
+  assert.equal(f.bot.vehicle,null)
+  const context=f.reports.find(p=>p.status==='server landing differed; movement stopped')
+  assert.deepEqual(context.actual,{x:1,y:63,z:0.2})
+  assert.equal(context.horse.id,9)
+  assert.equal(context.mounted,false)
+  assert.equal(f.bot.listenerCount('forcedMove'),0)
 })

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { CompositeHandBack } from '../composite.mjs'
-import { dryHorseLanding } from '../navigation/horse-landing.mjs'
+import { dryHorseLanding, checkedHorseLanding } from '../navigation/horse-landing.mjs'
 import { observedHorseSpeed } from '../navigation/horse.mjs'
 import { isNight } from '../lib/sleep.mjs'
 
@@ -188,18 +188,22 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
         bot.on('forcedMove', positioned)
         try {
           guard.check(); neutral(bot)
-          const before = point(entity.position)
+          const before = point(entity.position), beforeYaw = entity.yaw
           await pause(250); guard.check()
           if (distance(before, entity.position) > 0.05 || Math.hypot(entity.velocity?.x ?? 0, entity.velocity?.y ?? 0, entity.velocity?.z ?? 0) > 0.08) throw new Error('wait until the horse is stationary before dismounting')
-          const feet = { x: Math.floor(entity.position.x), y: Math.floor(entity.position.y), z: Math.floor(entity.position.z) }
-          const safe = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]].some(([dx,dz]) => dryHorseLanding(blockAt, { x: feet.x + dx + 0.5, y: feet.y, z: feet.z + dz + 0.5 }))
-          if (!safe) throw new Error('no checked dry landing beside the horse; remain mounted')
+          if (!Number.isFinite(entity.yaw) || Math.abs(Math.atan2(Math.sin(entity.yaw - beforeYaw), Math.cos(entity.yaw - beforeYaw))) > 0.01) throw new Error('wait for a confirmed stationary horse heading before dismounting')
+          const expected = checkedHorseLanding(blockAt, entity, { mainHand: bot.settings?.mainHand ?? 'right' })
+          report({ action: 'horse_dismount', status: 'preferred server landing checked', expected })
           requested = true
           if (bot.supportFeature?.('newPlayerInputPacket')) bot._client.write('player_input', { inputs: { shift: true } })
           else bot.dismount()
           if (!await wait(guard.check, () => !bot.vehicle && landing !== null)) throw new Error('horse dismount needs both server passenger removal and server landing position')
           const actual = Object.fromEntries(['x','y','z'].map(k => [k, Math.floor(landing[k])]))
-          if (!dryHorseLanding(blockAt, { ...landing, y: actual.y }) || Math.abs(landing.y - actual.y) > 0.01 || distance(landing, entity.position) > 4) throw new Error('server dismount landing is outside the checked dry area; inspect before walking')
+          if (!dryHorseLanding(blockAt, { ...landing, y: actual.y }) || Math.abs(landing.y - actual.y) > 0.01 || distance(landing, expected) > 0.1) {
+            const context = { action: 'horse_dismount', status: 'server landing differed; movement stopped', mounted: Boolean(bot.vehicle), expected, actual: landing, horse: { id, uuid: entity.uuid, at: point(entity.position) } }
+            report(context)
+            throw new Error(`server dismount landing differs from the checked exit; inspect before walking: ${JSON.stringify(context)}`)
+          }
           return { dismounted: id, at: landing }
         } finally {
           bot.removeListener('forcedMove', positioned)

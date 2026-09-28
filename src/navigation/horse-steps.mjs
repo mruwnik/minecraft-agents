@@ -139,12 +139,14 @@ export async function driveHorseSteps({bot,entity,goal,speed,attributes,check,ch
   let correction=null,completed=false
   const pose=()=>{
     bot.entity.position?.set(entity.position.x,entity.position.y+seat[entity.name]-0.6,entity.position.z)
-    bot.entity.yaw=plan.yaw;bot.entity.pitch=0
+    bot.entity.yaw=entity.yaw;bot.entity.pitch=0
   }
   const corrected=packet=>{
     correction=packet
     if(['x','y','z'].every(k=>Number.isFinite(packet[k]))) {
-      entity.position.set(packet.x,packet.y,packet.z);entity.velocity?.set(0,0,0);pose()
+      entity.position.set(packet.x,packet.y,packet.z);entity.velocity?.set(0,0,0)
+      if(Number.isFinite(packet.yaw))entity.yaw=Math.PI-packet.yaw*Math.PI/180
+      pose()
       bot._client.write('vehicle_move',packet)
     }
   }

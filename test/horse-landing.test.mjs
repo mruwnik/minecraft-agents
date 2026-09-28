@@ -25,3 +25,40 @@ test('landing requires loaded safe full-footprint support and real player cleara
   assert.equal(dryHorseLanding(world('air', (x, y) => y === 118 ? block('oak_leaves') : undefined), { x: 0.5, y: 117, z: 0.5 }), false)
   assert.equal(dryHorseLanding(world(), { x: 0.5, y: 117.5, z: 0.5 }), false)
 })
+
+import { checkedHorseLanding } from '../src/navigation/horse-landing.mjs'
+const ordinary = (x, y, z) => block(y < 66 ? 'grass_block' : 'air')
+const horse = { position: { x: 51.5, y: 66, z: -42.5 }, width: 1.3964844, height: 1.6, yaw: 0 }
+test('horse landing follows vehicle heading and main hand, not an arbitrary safe neighbour', () => {
+  for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2, 0.37]) {
+    const right = checkedHorseLanding(ordinary, { ...horse, yaw }, { mainHand: 'right' })
+    const left = checkedHorseLanding(ordinary, { ...horse, yaw }, { mainHand: 'left' })
+    assert.equal(right.y, 66)
+    assert.ok(Math.abs((right.x + left.x) / 2 - horse.position.x) < 1e-9)
+    assert.ok(Math.abs((right.z + left.z) / 2 - horse.position.z) < 1e-9)
+    assert.ok(Math.abs(Math.max(Math.abs(right.x - horse.position.x), Math.abs(right.z - horse.position.z)) - (horse.width + 0.6 + 0.00001) / 2) < 1e-9)
+  }
+  const right = checkedHorseLanding(ordinary, horse)
+  assert.ok(right.x > horse.position.x)
+})
+test('recorded bank position cannot dismount merely because a different neighbour is safe', () => {
+  // Local reproduction of the failure class, not an invented complete scan:
+  // preferred east exit drops one block; west stays at the horse's level.
+  const bank = (x, y, z) => block(y < (x >= 52 ? 65 : 66) ? 'grass_block' : 'air')
+  assert.equal(dryHorseLanding(bank, { x: 50.5, y: 66, z: -42.5 }), true)
+  assert.throws(() => checkedHorseLanding(bank, horse), /fallback is unproved/)
+})
+test('first physically clear but hazardous candidate refuses instead of skipping to another side', () => {
+  const lavaSide = (x, y, z) => x === 52 && y === 66 ? block('water') : ordinary(x, y, z)
+  assert.throws(() => checkedHorseLanding(lavaSide, horse), /first horse landing is not checked dry/)
+  const partial = (x, y, z) => x === 52 && y === 66 ? block('farmland') : ordinary(x, y, z)
+  assert.throws(() => checkedHorseLanding(partial, horse), /first horse landing is not checked dry/)
+})
+test('vanilla upward standing search accepts a full block rise and refuses crouch-only or unknown exits', () => {
+  const raised = (x, y, z) => block(y < (x === 52 ? 67 : 66) ? 'grass_block' : 'air')
+  assert.equal(checkedHorseLanding(raised, horse).y, 67)
+  const roof = (x, y, z) => x === 52 && y >= 67 ? block('stone') : ordinary(x, y, z)
+  assert.throws(() => checkedHorseLanding(roof, horse), /fallback is unproved/)
+  assert.throws(() => checkedHorseLanding((x, y, z) => x === 52 ? null : ordinary(x, y, z), horse), /unloaded cell/)
+  assert.throws(() => checkedHorseLanding(ordinary, { ...horse, yaw: undefined }), /confirmed dimensions/)
+})

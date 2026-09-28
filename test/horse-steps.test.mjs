@@ -81,6 +81,8 @@ test('server correction is acknowledged and stops step prediction at the authori
     if(++ticks===5)f.bot._client.emit('vehicle_move',{x:1,y:1,z:0.5,yaw:90,pitch:0,onGround:true})
   }}),/server corrected/)
   assert.deepEqual(f.entity.position,new Vec3(1,1,0.5))
+  assert.equal(f.entity.yaw,Math.PI/2)
+  assert.equal(f.bot.entity.yaw,Math.PI/2)
   assert.equal(f.packets.filter(p=>p.name==='vehicle_move').at(-1).data.x,1)
   assert.deepEqual(f.packets.at(-1).data.inputs,{})
 })
