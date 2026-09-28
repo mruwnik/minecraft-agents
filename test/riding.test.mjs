@@ -302,3 +302,18 @@ test('explicit safe dismount remains available at night and low vitals', async (
   }
   assert.equal((await f.runtime.long.horse_dismount({})).dismounted, 9)
 })
+
+test('ride step preview checks the requested terrain without saddling or boarding',async()=>{
+  let received,driven=false
+  const driveHorse=async()=>{driven=true}
+  driveHorse.validate=args=>{received=args;return{terrain:args.terrain,ticks:60}}
+  const f=fixture({flags:2,driveHorse})
+  const result=await f.runtime.long.ride({id:9,x:6,y:65,z:0,terrain:'steps',plan:true})
+  assert.equal(received.terrain,'steps')
+  assert.deepEqual(result.plan,{terrain:'steps',ticks:60})
+  assert.equal(f.bot.vehicle,undefined)
+  assert.equal(driven,false)
+  assert.equal(f.writes.length,0)
+  await assert.rejects(f.runtime.long.ride({id:9,plan:true}),/requires/)
+  await assert.rejects(f.runtime.long.ride({id:9,terrain:'jump'}),/terrain/)
+})

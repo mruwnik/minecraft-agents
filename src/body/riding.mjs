@@ -210,15 +210,19 @@ export function makeRidingRuntime ({ getBot, cancelGuard, allowEntity = () => tr
       },
       async ride (a) {
         const hasGoal = ['x', 'y', 'z'].some(k => a[k] !== undefined)
+        const terrain = a.terrain ?? 'flat'
+        if (!['flat', 'steps'].includes(terrain)) throw new Error('ride terrain must be flat or steps')
+        if (a.plan && !hasGoal) throw new Error('ride plan=true requires x= y= z=')
         if (hasGoal && (!['x', 'y', 'z'].every(k => Number.isFinite(a[k])) || !driveHorse)) throw new Error('horse goal travel needs a verified horse physics controller; ride id= boards a saddled horse without moving it')
         const bot = getBot(), entity = target(bot, a.id, a), guard = watch(bot, entity, a)
         try {
           guard.check()
           if (!horseState(bot, entity).tamed) throw new Error('tame the horse before riding')
-          if (hasGoal && driveHorse.validate) await driveHorse.validate({ bot, entity, goal: point(a), check: guard.check, pause, report, reportPerformance })
+          const plan = hasGoal && driveHorse.validate ? await driveHorse.validate({ bot, entity, goal: point(a), terrain, check: guard.check, pause, report, reportPerformance }) : null
+          if (a.plan) return { ...horseState(bot, entity), plan }
           await saddle(bot, entity, guard.check)
           await board(bot, entity, guard.check)
-          const trip = hasGoal ? await driveHorse({ bot, entity, goal: point(a), check: guard.check, pause, report, reportPerformance }) : null
+          const trip = hasGoal ? await driveHorse({ bot, entity, goal: point(a), terrain, check: guard.check, pause, report, reportPerformance }) : null
           return { ...horseState(bot, entity), ...(trip ? { trip } : {}) }
         } finally { neutral(bot); guard.dispose() }
       }

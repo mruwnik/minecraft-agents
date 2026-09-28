@@ -7,7 +7,7 @@ const EPS = 1e-6
 // A led horse needs its own corridor, although the leader still walks using
 // native player physics. The horse can step early when its wider front reaches
 // a rise: its support envelope may be one block above the player's feet.
-export function createEscortCorridor (blockAt, { from, to, width = 1.4, height = 1.6, maxY = 320, valleyDepth = 2, lateral = 8 } = {}) {
+export function createEscortCorridor (blockAt, { from, to, width = 1.4, height = 1.6, maxY = 320, valleyDepth = 2, lateral = 8, padding = 0.02 } = {}) {
   const cache = new Map(), sky = new Map()
   const at = (x, y, z) => {
     const key = `${x},${y},${z}`
@@ -15,7 +15,7 @@ export function createEscortCorridor (blockAt, { from, to, width = 1.4, height =
     return cache.get(key)
   }
   const geometry = createTerrainGeometry(at, { openDoors: false, dry: true, avoidCrops: true })
-  const half = Math.max(0.7, width / 2) + 0.02
+  const half = Math.max(0.7, width / 2) + padding
   const dx = to.x - from.x, dz = to.z - from.z, distance2 = dx * dx + dz * dz
   const surface = (x, y, z) => {
     const key = `${x},${y},${z}`

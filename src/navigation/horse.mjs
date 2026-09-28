@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { createTerrainGeometry, terrainProfile } from './terrain.mjs'
+import { planHorseSteps, driveHorseSteps } from './horse-steps.mjs'
 
 const require = createRequire(import.meta.url)
 const { Physics, PlayerState } = require('prismarine-physics')
@@ -92,10 +93,15 @@ function input (bot, forward) {
 // Horses are client-simulated vehicles. Unlike minecarts, input packets alone
 // do not move them. Every outgoing position below comes from native collision
 // physics at 20 Hz; server corrections are authoritative and abort the trip.
-export async function driveHorse ({ bot, entity, goal, check, pause, report = () => {}, reportPerformance = () => {} }) {
+export async function driveHorse ({ bot, entity, goal, terrain = 'flat', check, pause, report = () => {}, reportPerformance = () => {} }) {
   if (!['horse', 'donkey', 'mule'].includes(entity.name)) throw new HorseRouteError('unsupported mounted animal')
   const speed = horseSpeed(bot, entity)
   checkPose(bot, entity)
+  if (terrain === 'steps') return driveHorseSteps({ bot, entity, goal, speed, attributes: physicsAttributes(bot, entity), check, checkPose: () => {
+    checkPose(bot, entity)
+    if (horseSpeed(bot, entity) !== speed) throw new HorseRouteError('horse movement speed changed during the checked step leg')
+  }, pause, report, reportPerformance })
+  if (terrain !== 'flat') throw new HorseRouteError('horse terrain must be flat or steps')
   const blockAt = (x, y, z) => bot.blockAt(new Vec3(x, y, z))
   const validateRoute = (from, target, options, phase) => {
     const began = performance.now()
@@ -211,10 +217,14 @@ export async function driveHorse ({ bot, entity, goal, check, pause, report = ()
   }
 }
 
-driveHorse.validate = ({ bot, entity, goal, check, reportPerformance = () => {} }) => {
+driveHorse.validate = ({ bot, entity, goal, terrain = 'flat', check, reportPerformance = () => {} }) => {
   check()
-  horseSpeed(bot, entity)
+  const speed = horseSpeed(bot, entity)
   checkPose(bot, entity)
   const began = performance.now()
-  try { return checkedHorseRoute((x, y, z) => bot.blockAt(new Vec3(x, y, z)), entity.position, goal) } finally { reportPerformance('horse.route', performance.now() - began, { id: entity.id, phase: 'preflight' }) }
+  try {
+    if (terrain === 'steps') return planHorseSteps({ bot, entity, goal, speed, attributes: physicsAttributes(bot, entity) }).summary
+    if (terrain !== 'flat') throw new HorseRouteError('horse terrain must be flat or steps')
+    return checkedHorseRoute((x, y, z) => bot.blockAt(new Vec3(x, y, z)), entity.position, goal)
+  } finally { reportPerformance('horse.route', performance.now() - began, { id: entity.id, phase: 'preflight', terrain }) }
 }
