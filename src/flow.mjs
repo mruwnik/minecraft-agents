@@ -266,7 +266,7 @@ export async function evaluateFlowCondition (condition, { observe, cache = new M
 // branch from one cached observation sample and picks the first ready branch.
 export async function executeFlow (program, {
   act, observe, waitTicks, alive = () => {}, actions = [], observations = [],
-  limits = {}, pollSeconds = DEFAULT_LIMITS.pollSeconds, now = () => performance.now(), legacy = false
+  limits = {}, pollSeconds = DEFAULT_LIMITS.pollSeconds, now = () => performance.now(), legacy = false, onProgress = () => {}
 } = {}) {
   const validated = legacy
     ? { program, limits: { ...DEFAULT_LIMITS, ...limits } }
@@ -283,13 +283,21 @@ export async function executeFlow (program, {
     if (!legacy && globalExpired()) fail(`total flow time limit ${maxWait}s reached; no later action ran`)
     if (actionCount >= maxActions) fail(`action limit ${maxActions} reached`)
     actionCount++
-    const result = await act(name, structuredClone(args), legacyStep)
-    alive()
-    return legacy ? { action: name, ...(result ?? {}) } : { action: name, result }
+    onProgress({ waiting: false, step: actionCount, action: name, phase: 'running' })
+    try {
+      const result = await act(name, structuredClone(args), legacyStep)
+      alive()
+      onProgress({ waiting: false, step: actionCount, action: name, phase: 'completed' })
+      return legacy ? { action: name, ...(result ?? {}) } : { action: name, result }
+    } catch (error) {
+      onProgress({ waiting: false, step: actionCount, action: name, phase: 'failed' })
+      throw error
+    }
   }
   const awaitBranch = async branches => {
     const branchStartedAt = now(), expired = branches.map(() => false)
     const branchElapsed = () => (now() - branchStartedAt) / 1000
+    onProgress({ waiting: true, reason: 'flow condition', branches: branches.length })
     for (;;) {
       alive()
       if (globalExpired()) fail(`total flow time limit ${maxWait}s reached; no later action ran`)
@@ -314,7 +322,7 @@ export async function executeFlow (program, {
         if (afterConfirm > branches[i][2]) { expired[i] = true; continue }
         if (confirmed) { winner = i; break }
       }
-      if (winner >= 0) return run(branches[winner][3])
+      if (winner >= 0) { onProgress({ waiting: false }); return run(branches[winner][3]) }
       if (expired.every(Boolean)) {
         const labels = branches.map(([, , timeout]) => `${timeout}s`).join(', ')
         fail(`condition timed out after ${labels}; no action ran`)
@@ -357,7 +365,9 @@ export async function executeFlow (program, {
     if (op === 'when') return awaitBranch([node])
     if (op === 'any') return awaitBranch(args)
   }
-  const result = await run(validated.program)
+  let result
+  try { result = await run(validated.program) }
+  catch (error) { onProgress({ waiting: false, phase: 'failed' }); throw error }
   return { result, actions: actionCount, waited: waitedTotal }
 }
 
