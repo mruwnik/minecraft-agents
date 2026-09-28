@@ -7,7 +7,7 @@ const EPS = 1e-6
 // A led horse needs its own corridor, although the leader still walks using
 // native player physics. The horse can step early when its wider front reaches
 // a rise: its support envelope may be one block above the player's feet.
-export function createEscortCorridor (blockAt, { from, to, width = 1.4, height = 1.6, maxY = 320, valleyDepth = 2, lateral = 8, padding = 0.02 } = {}) {
+export function createEscortCorridor (blockAt, { from, to, width = 1.4, height = 1.6, maxY = 320, valleyDepth = 2, lateral = 8, padding = 0.02, allowHighLogs = false } = {}) {
   const cache = new Map(), sky = new Map(), skyFailures = new Map()
   const at = (x, y, z) => {
     const key = `${x},${y},${z}`
@@ -24,8 +24,11 @@ export function createEscortCorridor (blockAt, { from, to, width = 1.4, height =
     for (let by = Math.ceil(y + height); by < maxY; by++) {
       const p = terrainProfile(at(x, by, z), { openDoors: false })
       // Canopy above the body is allowed; solid roofs/geology and unknown sky
-      // are not certified as a surface route. Body clearance still checks leaves.
-      if (!p.loaded || p.hazardous || p.liquid || !p.leaf && p.shapes.length) {
+      // are not certified as a surface route. Mounted routes may also pass
+      // below high tree branches; the full rider body box still checks logs
+      // and leaves at any height it actually intersects.
+      const highTree = allowHighLogs && /(?:_log|_wood)$|^(?:crimson|warped)_(?:stem|hyphae)$/.test(p.name ?? '')
+      if (!p.loaded || p.hazardous || p.liquid || !p.leaf && !highTree && p.shapes.length) {
         clear = false; skyFailures.set(key, { reason: 'surface column is obstructed or unloaded', cell: { x, y: by, z }, block: p.name ?? 'unloaded' }); break
       }
     }

@@ -157,3 +157,16 @@ test('unsupported-footing preview identifies the failed native sample and exact 
   })
   assert.equal(f.packets.length,0)
 })
+
+test('mounted step routes allow tree logs above rider clearance but retain real branch and roof collisions',async()=>{
+  for(const obstruction of ['high log','low log','stone roof','plank roof','unloaded sky']) {
+    const f=fixture(p=>{
+      if(p.x>=50&&p.x<=51&&p.z===-41&&p.y===(obstruction==='low log'?69:73))return obstruction==='unloaded sky'?'unknown':obstruction==='stone roof'?'stone':obstruction==='plank roof'?'oak_planks':'oak_log'
+      return p.y<66?'grass_block':'air'
+    },{from:[47.5,66,-40.5]})
+    f.bot.game.height=384
+    const go=()=>driveHorse({...f,goal:{x:50.5,y:66,z:-40.5},terrain:'steps'})
+    if(obstruction==='high log')assert.equal((await go()).arrived,true)
+    else {await assert.rejects(go(),HorseStepError);assert.equal(f.packets.length,0)}
+  }
+})

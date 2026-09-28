@@ -31,7 +31,7 @@ function geometryFor(bot,from,to) {
     if(!cache.has(key))cache.set(key,bot.blockAt(new Vec3(x,y,z)))
     return cache.get(key)
   }
-  const corridor=createEscortCorridor(at,{from,to,width:1.4,height:CLEARANCE,padding:0,maxY:(bot.game?.minY??-64)+(bot.game?.height??384)})
+  const corridor=createEscortCorridor(at,{from,to,width:1.4,height:CLEARANCE,padding:0,allowHighLogs:true,maxY:(bot.game?.minY??-64)+(bot.game?.height??384)})
   const geometry=createTerrainGeometry(at,{openDoors:false,dry:true,avoidCrops:true})
   let groundFailure
   const ground=p=>{
