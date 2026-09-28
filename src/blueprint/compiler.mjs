@@ -117,10 +117,16 @@ export function concreteBlueprint (ir, assignments, registry = REGISTRY) {
         if (!values?.includes(value)) fail(`allocation.${object.id}.${state}`, 'unsupported concrete state')
       }
     }
-    const signature = JSON.stringify([alt, object?.tags ?? []])
+    // Reused grass beneath a roof or wall naturally turns to dirt in-game.
+    // Both are safe full-cube support when the material role permits dirt;
+    // freezing only grass would demand inaccessible excavation on resume.
+    const slot = object?.material && ir.document.materials[object.material]
+    const acceptsDirt = slot && materialCandidates(slot, registry).includes('dirt') && (!slot.candidates || slot.candidates.includes('dirt') || slot.acceptExisting?.includes('dirt'))
+    const naturalFoundation = cell.at[1] < 0 && name === 'grass_block' && ir.document.site?.existing === 'reuse_compatible' && acceptsDirt
+    const signature = JSON.stringify([alt, object?.tags ?? [], naturalFoundation])
     if (!indexed.has(signature)) {
       const token = String.fromCharCode(0x100 + indexed.size)
-      indexed.set(signature, token); legend[token] = { token, alts: object?.type === 'fence_gate' && STEP[alt.states.facing] ? [alt, { name, states: { ...alt.states, facing: { east: 'west', west: 'east', north: 'south', south: 'north' }[alt.states.facing] } }] : [alt], tags: object?.tags ?? [] }
+      indexed.set(signature, token); legend[token] = { token, alts: naturalFoundation ? [alt, { name: 'dirt', states: alt.states }] : object?.type === 'fence_gate' && STEP[alt.states.facing] ? [alt, { name, states: { ...alt.states, facing: { east: 'west', west: 'east', north: 'south', south: 'north' }[alt.states.facing] } }] : [alt], tags: object?.tags ?? [] }
     }
     const [x, y, z] = cell.at
     if (!layers.has(y)) layers.set(y, Array.from({ length: ir.depth }, () => Array(ir.width).fill('_')))

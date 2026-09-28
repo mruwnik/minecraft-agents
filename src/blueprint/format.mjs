@@ -30,6 +30,7 @@ export const REACH = 4.5
 // the margin of free slots a build never fills: the drops of a dig, a tool swap
 export const CARRY_MARGIN = 2
 export const DEFAULT_SCAFFOLD = 'dirt'
+export const scaffoldMatches = (name, item) => name === item || item === 'dirt' && name === 'grass_block'
 export const DEFAULT_FILL = 'dirt'
 
 const key = (x, y, z) => `${x},${y},${z}`
@@ -802,6 +803,13 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
   const ordered = []
   const unreachable = []
   const ring = ringCells(bp, at, world, registry)
+  const plannedColumns = new Map()
+  const withPlannedScaffold = stand => {
+    if (!stand) return stand
+    const column = plannedColumns.get(`${stand.x},${stand.z}`)
+    const cells = column?.filter(c => c.y < stand.y)
+    return cells?.length && cells.at(-1).y === stand.y - 1 ? { ...stand, scaffold: cells.length, scaffoldCells: cells } : stand
+  }
   const layers = [...new Set(jobs.map(layerOf))].sort((a, b) => a - b)
   const attachAfter = list => {
     // an attachable goes after the job of the cell it hangs on, when that cell is in the same list
@@ -826,11 +834,11 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
         const against = placementSight(job, c, world.get, name => hasBox(name, registry))
         return against ? { ...c, against } : null
       }).filter(Boolean)
-    if (job.do === 'dig' || job.class === 'attach' || job.class === 'fluid' || fromOutside) return candidates[0] ?? null
+    if (job.do === 'dig' || job.class === 'attach' || job.class === 'fluid' || fromOutside) return withPlannedScaffold(candidates[0] ?? null)
     // a solid block may not cut the body off: the spot must still be reachable once the block stands
     for (const c of candidates.slice(0, 4)) {
       const still = world.withJob(job, () => reachableFrom(world, ring, box, registry).has(key(c.x, c.y, c.z)))
-      if (still) return c
+      if (still) return withPlannedScaffold(c)
     }
     return candidates.length ? undefined : null
   }
@@ -839,7 +847,11 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
     for (const c of spots) {
       if (!fullBlock(world.get(c.x, at.y - 1, c.z)?.name, registry)) continue
       const column = Array.from({ length: c.y - at.y }, (_, i) => ({ x: c.x, y: at.y + i, z: c.z }))
-      if (column.some(p => !isAir(world.get(p.x, p.y, p.z)?.name)) || !isAir(world.get(c.x, c.y, c.z)?.name) || !isAir(world.get(c.x, c.y + 1, c.z)?.name)) continue
+      // A resumed build can reuse its own earlier dirt pillar. Its blocks must
+      // form a grounded prefix; a gap or a different block is still an obstacle.
+      let seenAir = false
+      const scaffold = bp.params.scaffold ?? DEFAULT_SCAFFOLD
+      if (column.some(p => { const name = world.get(p.x, p.y, p.z)?.name; if (isAir(name)) { seenAir = true; return false } return !scaffoldMatches(name, scaffold) || seenAir }) || !isAir(world.get(c.x, c.y, c.z)?.name) || !isAir(world.get(c.x, c.y + 1, c.z)?.name)) continue
       if (['dig', 'till', 'pour'].includes(job.do)) return { ...c, scaffold: c.y - at.y, scaffoldCells: column }
       if (!canPlaceFromHere({ x: c.x + .5, y: c.y, z: c.z + .5 }, job)) continue
       // The planned pillar supplies its own support but cannot erase an occluding wall.
@@ -853,6 +865,8 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
     if (!stand.scaffold) return
     for (let y = at.y; y < stand.y; y++) world.set(stand.x, y, stand.z, bp.params.scaffold ?? DEFAULT_SCAFFOLD)
     ring.push({ x: stand.x, y: stand.y, z: stand.z })
+    const k = `${stand.x},${stand.z}`
+    if ((plannedColumns.get(k)?.length ?? 0) < stand.scaffoldCells.length) plannedColumns.set(k, stand.scaffoldCells)
   }
   for (const y of layers) {
     const ofLayer = jobs.filter(j => layerOf(j) === y)
@@ -877,7 +891,7 @@ export function orderJobs (jobs, bp, at, worldAt, registry = REGISTRY) {
         world.apply(job)
         continue
       }
-      ordered.push({ ...job, ...(stand.against ? { against: stand.against } : {}), stand: { x: stand.x, y: stand.y, z: stand.z } })
+      ordered.push({ ...job, ...(stand.against ? { against: stand.against } : {}), stand: { x: stand.x, y: stand.y, z: stand.z, ...(stand.scaffold ? { scaffold: stand.scaffold, scaffoldCells: stand.scaffoldCells } : {}) } })
       world.apply(job)
       if (!pending.length && deferred.length && !fromOutside) { pending = deferred; deferred = []; fromOutside = true }
     }

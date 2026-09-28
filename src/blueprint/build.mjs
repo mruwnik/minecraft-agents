@@ -10,7 +10,7 @@ import { readBlueprintSource, blueprintDocumentFiles } from './source.mjs'
 import { canonicalBlueprint, semanticBlueprintHash } from './schema.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS } from './format.mjs'
+import { parseBlueprint, resolve, rotate, turnsFor, lint, bill, counts, enclosure, renderLayer, flatGround, jobsFor, orderJobs, stages, shortfall, stageLine, siteCheck, blueprintHash, buildNote, parseNote, matchesCell, blueprintCells, isSecondPart, isAir, faceWord, alongFace, hashMatches, CARRY_MARGIN, DEFAULT_SCAFFOLD, DEFAULT_FILL, DIRS, scaffoldMatches } from './format.mjs'
 import { hasWaterSource, mapRefusal, workRefusal, shortLine } from '../lib.mjs'
 import { canPlaceFromHere } from '../lib/place.mjs'
 import { placementSight } from './visibility.mjs'
@@ -304,17 +304,28 @@ export async function buildBlueprint (api, a, io = {}) {
       if (stand.scaffoldCells?.length) {
         // The planner proved this outside column clear. Construct precisely that
         // column/material; an unrestricted dig=true route may spend other blocks.
-        await api.act('goto', { x: stand.x, y: at.y, z: stand.z, range: 0 })
-        for (let remaining = stand.scaffold; remaining > 0; remaining -= 4) {
+        // A later job may use the same column. Stand on its verified existing
+        // top instead of trying to pillar through the blocks already placed.
+        const item = scaffoldItem(bp)
+        let built = 0
+        while (built < stand.scaffoldCells.length && scaffoldMatches(api.block(stand.scaffoldCells[built].x, stand.scaffoldCells[built].y, stand.scaffoldCells[built].z)?.name, item)) built++
+        if (stand.scaffoldCells.slice(built).some(c => scaffoldMatches(api.block(c.x, c.y, c.z)?.name, item))) throw new Error(`scaffold at ${stand.x},${stand.z} has a gap; inspect it before continuing`)
+        await api.act('goto', { x: stand.x, y: at.y + built, z: stand.z, range: 0, into: true })
+        for (let remaining = stand.scaffold - built; remaining > 0; remaining -= 4) {
+          // Exact goto can finish during the last step down. Let ordinary
+          // physics settle on the proved full support before pillar_up checks
+          // onGround; it must never place while the body is still airborne.
+          if (api.pause) await api.pause(0.25)
+          await api.checkpoint()
           await api.act('pillar_up', { steps: Math.min(4, remaining), item: scaffoldItem(bp) })
           await api.checkpoint()
         }
         scaffold.push(`${stand.scaffold} ${scaffoldItem(bp)} at ${stand.x},${at.y},${stand.z}`)
       }
-      return api.act('goto', { x: stand.x, y: stand.y, z: stand.z, range: 0 })
+      return api.act('goto', { x: stand.x, y: stand.y, z: stand.z, range: 0, into: true })
     }
     const walked = await walk().then(r => ({ r }), e => ({ e }))
-    if (walked.e) { stuck = stuck ?? `${job.do} ${cell}: ${walked.e.message}`; return }
+    if (walked.e) { stuck = stuck ?? `${job.do} ${cell} from ${stand.x},${stand.y},${stand.z}: ${walked.e.message}`; return }
     if (walked.r?.scaffold) scaffold.push(walked.r.scaffold)
     if (!['dig', 'till', 'pour'].includes(job.do)) {
       const actual = api.pos()
