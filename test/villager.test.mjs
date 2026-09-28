@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseWant, bookOffer, rollVerdict, rollRefusal, tradeLine, offerCost, cheapestLockOffer, matchesVillagerOutput, JOB_BLOCK_PROFESSION, villagerPenPlan } from '../src/lib.mjs'
 import roll from '../library/villager/roll.mjs'
+import { rollTargets, matchingRollOffer } from '../src/villager/trade.mjs'
 
 const book = (enchant, level, emeralds = 20, index = 1) => ({ index, inputItem1: { name: 'emerald', count: emeralds }, inputItem2: { name: 'book', count: 1 }, outputItem: { name: 'enchanted_book', count: 1, enchants: [{ name: enchant, lvl: level }] }, nbTradeUses: 0, maximumNbTradeUses: 12 })
 
@@ -75,6 +76,33 @@ test('roll selects the cheapest matching book and reports a close miss', () => {
   assert.equal(rollVerdict(offers.slice(0, 2), wants, 20).best.level, 5)
 })
 
+test('acceptable offer targets match either exact book, minimum book, or ordinary output', () => {
+  const targets = rollTargets({ maxPrice: 50, targets: [
+    { id: 'efficient', output: 'enchanted_book', enchant: 'efficiency', level: 3, maxPrice: 32 },
+    { id: 'bane', enchant: 'bane_of_arthropods', level: 2, atLeast: true },
+    { id: 'arrows', output: 'arrow' }
+  ] })
+  assert.equal(matchingRollOffer([book('efficiency', 2, 18)], targets), null, 'exact level does not accept a lower book')
+  assert.equal(matchingRollOffer([book('efficiency', 3, 33)], targets), null, 'the target price cap limits the emerald input')
+  assert.equal(matchingRollOffer([book('bane_of_arthropods', 4, 45)], targets)?.target.id, 'bane')
+  assert.equal(matchingRollOffer([{ index: 7, outputItem: { name: 'arrow', count: 16 }, inputItem1: { name: 'emerald', count: 1 } }], targets)?.target.id, 'arrows')
+  assert.equal(matchingRollOffer([book('efficiency', 3, 30), book('bane_of_arthropods', 4, 45)], targets)?.target.id, 'efficient')
+  assert.equal(matchingRollOffer([{ ...book('efficiency', 3, 30), tradeDisabled: true }], targets), null)
+})
+
+test('list and legacy selectors share validation and reject ambiguous or empty requests', () => {
+  assert.deepEqual(rollTargets({ want: 'efficiency:3' })[0], { output: 'enchanted_book', enchant: 'efficiency', level: 3, atLeast: false, maxPrice: 64 })
+  assert.equal(rollTargets({ output: 'minecraft:arrow' })[0].output, 'arrow')
+  assert.throws(() => rollTargets({ targets: [] }), /nonempty/)
+  assert.throws(() => rollTargets({ targets: [{ id: 'x' }] }), /needs output/)
+  assert.throws(() => rollTargets({ targets: [{ output: 'arrow', level: 3 }] }), /needs enchant/)
+  assert.throws(() => rollTargets({ targets: [{ enchant: 'efficiency', atLeast: true }] }), /needs level/)
+  assert.throws(() => rollTargets({ targets: [{ output: 'arrow', maxPrice: 65 }] }), /maxPrice/)
+  assert.throws(() => rollTargets({ targets: [{ id: 'x', output: 'arrow' }, { id: 'x', output: 'book' }] }), /unique/)
+  assert.throws(() => rollTargets({ targets: [{ output: 'arrow' }], want: 'efficiency:3' }), /cannot be combined/)
+  assert.throws(() => rollTargets({ want: 'efficiency:3', output: 'arrow' }), /not both/)
+})
+
 test('locking buys affordable paper before spending emeralds or a book', () => {
   const enchanted = book('mending', 1, 24, 1)
   const paper = { index: 2, inputItem1: { name: 'paper', count: 24 }, outputItem: { name: 'emerald', count: 1 } }
@@ -116,12 +144,14 @@ test('pen geometry blocks every reachable exterior cell within lectern claim ran
   }
 })
 
-test('preconditions require one adult, a job block and money before rolling', () => {
+test('preconditions require one adult and a job block; lock affordability uses actual offers', () => {
   const base = { villagers: 1, profession: 'unemployed', adult: true, day: true, carried: { lectern: 1, emerald: 64, book: 1 }, buy: true }
   assert.equal(rollRefusal(base), null)
   assert.match(rollRefusal({ ...base, villagers: 2 }), /2 villagers/)
   assert.equal(rollRefusal({ ...base, villagers: 2, allowCrowd: true }), null)
-  assert.match(rollRefusal({ ...base, carried: { lectern: 1 } }), /64 emerald/)
+  assert.equal(rollRefusal({ ...base, carried: { lectern: 1 } }), null, 'a cheap bookshelf or another real offer may fund the eventual lock')
+  assert.equal(rollRefusal({ ...base, carried: { lectern: 1, emerald: 9 } }), null)
+  assert.equal(cheapestLockOffer([book('efficiency', 3, 41), { index: 2, inputItem1: { name: 'emerald', count: 9 }, outputItem: { name: 'bookshelf', count: 1 } }], { emerald: 9 })?.index, 2)
   assert.equal(rollRefusal({ ...base, placed: true, carried: { emerald: 64, book: 1 } }), null)
 })
 
@@ -171,7 +201,7 @@ test('roller restores the lectern over three rounds and locks with paper', async
       throw new Error(name)
     }
   }
-  const result = await roll.run(api, { want: 'mending', ...cell, buy: true, tries: 4, pen: false })
+  const result = await roll.run(api, { want: 'mending', ...cell, buy: true, tries: 4, pen: false, verbose: true })
   assert.equal(result.rounds, 3)
   assert.equal(result.found, 'mending 1')
   assert.equal(result.boughtOffer, 2)
@@ -211,6 +241,104 @@ test('generic workstation roll tracks UUID across changing entity IDs and separa
   assert.equal(result.boughtOffer, 2)
   assert.equal(tradeArgs.offer, 2)
   assert.equal(tradeArgs.id, tradeTimeEntityId)
+})
+
+test('rolling accepts the second listed target on a later offer set and locks through another offer', async () => {
+  const cell = { x: 1, y: 64, z: 2 }
+  const uuid = '0c432c3c-1111-4111-8111-111111111111'
+  const raw = Array(21).fill(null); raw[19] = { villagerProfession: 0 }
+  let placed = true; let round = 0; let bought = null; let day = true
+  const notes = [], progress = []
+  const inv = { fletching_table: 1, stick: 32, emerald: 1 }
+  const stick = { index: 1, inputItem1: { name: 'stick', count: 32 }, outputItem: { name: 'emerald', count: 1 } }
+  const arrow = { index: 2, inputItem1: { name: 'emerald', count: 1 }, outputItem: { name: 'arrow', count: 16 } }
+  const api = {
+    places: () => [], zones: () => [], me: () => 'Probe', clock: () => ({ day }), inv: () => inv,
+    block: () => ({ name: placed ? 'fletching_table' : 'air' }), report: () => {}, note: n => notes.push(n), progress: p => progress.push(p), checkpoint: async () => {},
+    until: async (pred, options = {}) => { if (/dawn/.test(options.what ?? '')) day = true; assert.equal(await pred(), true) },
+    act: async (name, args) => {
+      if (name === 'goto') return {}
+      if (name === 'entity') return { found: [{ id: 7 + round, uuid, exact: '2,64,2', metadata: JSON.stringify(raw) }] }
+      if (name === 'find_blocks') return { positions: [] }
+      if (name === 'trades') return { profession: placed ? 'fletcher' : 'unemployed', offers: round ? [stick, { ...arrow, tradeDisabled: bought !== null }] : [stick] }
+      if (name === 'dig') { placed = false; round++; day = false; inv.fletching_table++; return {} }
+      if (name === 'place') { placed = true; inv.fletching_table--; return {} }
+      if (name === 'trade') { bought = args.offer; return {} }
+      throw new Error(name)
+    }
+  }
+  const result = await roll.run(api, { ...cell, block: 'fletching_table', uuid, pen: false, tries: 2, buy: true,
+    targets: [{ id: 'flint', output: 'flint' }, { id: 'arrows', output: 'arrow', maxPrice: 2 }] })
+  assert.equal(result.rounds, 2)
+  assert.equal(result.found, 'arrow')
+  assert.equal(result.matched.id, 'arrows')
+  assert.equal(result.matched.targetIndex, 1)
+  assert.equal(result.matched.offer.index, 2)
+  assert.deepEqual(result.matched.cost, { emerald: 1 })
+  assert.equal(result.boughtOffer, 1, 'the lock trade is chosen across all offers, separately from the target')
+  assert.equal(result.locked, true, 'the matched offer remains verified even if later disabled')
+  assert.deepEqual(notes, [], 'default rolling does not append one final-result note per offer set')
+  assert.equal(progress.at(-1).roll.rounds, 2, 'the current outcome is available in job progress')
+  assert.ok(progress.some(p => p.roll.waiting === 'daylight'), 'the same job waits through night before the next offer set')
+})
+
+test('a transient occupied workstation cell retries locally but permanent refusal stays bounded', async () => {
+  const cell = { x: 1, y: 64, z: 2 }
+  const uuid = '0c432c3c-1111-4111-8111-111111111111'
+  const raw = Array(21).fill(null); raw[19] = { villagerProfession: 0 }
+  for (const fails of [1, 3]) {
+    let placed = false, attempts = 0, pauses = 0
+    const api = {
+      places: () => [], zones: () => [], me: () => 'Probe', clock: () => ({ day: true }), inv: () => ({ fletching_table: 1 }),
+      block: () => ({ name: placed ? 'fletching_table' : 'air' }), report: () => {}, note: () => {}, checkpoint: async () => {},
+      pause: async () => { pauses++ }, until: async pred => assert.equal(await pred(), true),
+      act: async name => {
+        if (name === 'goto') return {}
+        if (name === 'entity') return { found: [{ id: 7, uuid, exact: '2,64,2', metadata: JSON.stringify(raw) }] }
+        if (name === 'find_blocks') return { positions: [] }
+        if (name === 'place') { attempts++; if (attempts <= fails) throw new Error('server refused to place while villager stood in it'); placed = true; return {} }
+        if (name === 'trades') return { profession: 'fletcher', offers: [{ index: 1, inputItem1: { name: 'emerald', count: 1 }, outputItem: { name: 'arrow', count: 16 } }] }
+        throw new Error(name)
+      }
+    }
+    if (fails === 1) {
+      const result = await roll.run(api, { ...cell, uuid, block: 'fletching_table', output: 'arrow', pen: false, tries: 1 })
+      assert.equal(result.found, 'arrow')
+      assert.equal(attempts, 2)
+      assert.equal(pauses, 1)
+    } else {
+      await assert.rejects(roll.run(api, { ...cell, uuid, block: 'fletching_table', output: 'arrow', pen: false, tries: 1 }), /server refused/)
+      assert.equal(attempts, 3, 'a persistent refusal does not loop forever')
+      assert.equal(pauses, 2)
+    }
+  }
+})
+
+test('a dark start and a claim wait crossing dusk resume after dawn with the exact UUID', async () => {
+  const cell = { x: 1, y: 64, z: 2 }, uuid = '0c432c3c-1111-4111-8111-111111111111'
+  const raw = Array(21).fill(null); raw[19] = { villagerProfession: 0 }
+  let day = false, claimWaits = 0, dawnWaits = 0
+  const api = {
+    places: () => [], zones: () => [], me: () => 'Probe', clock: () => ({ day }), inv: () => ({ fletching_table: 1 }),
+    block: () => ({ name: 'fletching_table' }), report: () => {}, note: () => {}, checkpoint: async () => {},
+    until: async (pred, options = {}) => {
+      if (/ordinary dawn/.test(options.what ?? '')) { dawnWaits++; day = true }
+      else if (/did not claim/.test(options.what ?? '') && claimWaits++ === 0) { day = false; throw new Error('villager.roll: waited 60s and the villager did not claim the fletching_table') }
+      assert.equal(await pred(), true)
+    },
+    act: async (name, args) => {
+      if (name === 'goto') return {}
+      if (name === 'entity') return { found: [{ id: 7, uuid, exact: '2,64,2', metadata: JSON.stringify(raw) }] }
+      if (name === 'find_blocks') return { positions: [] }
+      if (name === 'trades') { assert.equal(args.uuid, uuid); return { profession: 'fletcher', offers: [{ index: 1, outputItem: { name: 'arrow', count: 16 } }] } }
+      throw new Error(name)
+    }
+  }
+  const result = await roll.run(api, { ...cell, uuid, block: 'fletching_table', output: 'arrow', pen: false, tries: 1 })
+  assert.equal(result.uuid, uuid)
+  assert.equal(result.found, 'arrow')
+  assert.equal(claimWaits, 2)
+  assert.equal(dawnWaits, 2)
 })
 
 test('roller stops with the lectern placed when the last spare has been used', async () => {

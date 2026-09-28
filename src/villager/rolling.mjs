@@ -3,29 +3,22 @@ import { verifyCrowdedClaimants, verifyWorkstationEnclosure } from './claim.mjs'
 import { chooseVillagerCapture, makeVillagerCapture } from './capture.mjs'
 import { villagerObservation } from './observation.mjs'
 import { parseWant, rollVerdict, rollRefusal, tradeLine, inAnyZone, workRefusal, cheapestLockOffer, matchesVillagerOutput, JOB_BLOCK_PROFESSION } from '../lib.mjs'
+import { bookOffer, rollTargets, matchingRollOffer } from './trade.mjs'
 
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const professionOf = raw => villagerObservation({ metadata: raw }).profession
 
 export default {
-  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow [enchant=sharpness level=3]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=] [buy=false]: reroll one villager at a workstation until its offers match (no attempt limit unless tries= is supplied); optionally buy the cheapest affordable offer to lock the job; proveStation=true requires an observed unemployed target and records a sole-station causal claim',
-  stops: 'a matching offer is found, an explicit tries limit runs out, night falls, or the villager leaves',
-  args: { want: 'string', output: 'string', enchant: 'string', level: 'number', atLeast: 'boolean', uuid: 'string', id: 'number', block: 'string', pen: 'boolean', penBlock: 'string', maxPrice: 'number', tries: 'number', buy: 'boolean', proveStation:'boolean',claimHabitat:'any', x: 'number!', y: 'number!', z: 'number!' },
+  doc: 'villager.roll x= y= z= [block=lectern] [want=efficiency:3 | output=arrow | targets=[{"id":"choice","output":"enchanted_book","enchant":"efficiency","level":3,"maxPrice":32}]] [uuid=] [id=] [pen=true] [penBlock=cobblestone] [maxPrice=64] [tries=] [buy=false] [verbose=false]: reroll until any acceptable offer appears, waiting through normal nights; the list reports the matched target, while buy locks through the cheapest affordable offer',
+  stops: 'a matching offer is found, an explicit tries limit runs out, the villager leaves, or a real safety/claim/trade failure occurs',
+  args: { targets: 'any', want: 'string', output: 'string', enchant: 'string', level: 'number', atLeast: 'boolean', uuid: 'string', id: 'number', block: 'string', pen: 'boolean', penBlock: 'string', maxPrice: 'number', tries: 'number', buy: 'boolean', verbose: 'boolean', proveStation:'boolean',claimHabitat:'any', x: 'number!', y: 'number!', z: 'number!' },
 
   async run (api, a) {
-    if (a.want && (a.output || a.enchant || a.level !== undefined)) throw new Error('use want= for an enchanted book or output= with optional enchant=/level=; do not combine selectors')
-    if (a.want && a.block && a.block !== 'lectern') throw new Error('want= enchanted books is only supported with block=lectern')
-    const block = a.block ?? (a.want ? 'lectern' : null)
+    const targets = rollTargets(a)
+    if (targets.some(t => t.output === 'enchanted_book') && a.block && a.block !== 'lectern') throw new Error('enchanted books require block=lectern')
+    const block = a.block ?? (targets.some(t => t.output === 'enchanted_book') ? 'lectern' : null)
     if (!block || !JOB_BLOCK_PROFESSION[block]) throw new Error(`block= must be a supported villager workstation${block ? `; unsupported ${block}` : ''}`)
-    if (a.output && !/^[a-z0-9_:-]+$/i.test(a.output)) throw new Error('output= must be an item name such as arrow')
     const wants = a.want ? parseWant(a.want) : []
-    if (typeof wants === 'string') throw new Error(wants)
-    if ((a.enchant || a.level !== undefined || a.atLeast) && !a.enchant) throw new Error('level= and atLeast= require enchant=')
-    if (a.atLeast && a.level === undefined) throw new Error('atLeast=true requires level=')
-    if (a.level !== undefined && (!Number.isInteger(a.level) || a.level < 1 || a.level > 255)) throw new Error('level= must be an integer from 1 to 255')
-    const enchant = a.enchant ? parseWant(`${a.enchant}${a.level !== undefined ? `:${a.level}${a.atLeast ? '+' : ''}` : ''}`) : []
-    if (typeof enchant === 'string') throw new Error(enchant)
-    const selector = { wants, output: a.output, enchant: enchant[0]?.enchant, level: enchant[0]?.level, atLeast: Boolean(enchant[0]?.atLeast) }
     const maxPrice = a.maxPrice ?? 64
     const tries = a.tries ?? Infinity
     if ((a.tries !== undefined && (!Number.isInteger(tries) || tries < 1 || tries > 200)) || !Number.isInteger(maxPrice) || maxPrice < 1 || maxPrice > 64) throw new Error('tries= must be 1..200 and maxPrice= must be 1..64')
@@ -35,6 +28,17 @@ export default {
     if (owner) throw new Error(owner)
     const foreignZone = api.zones().find(z => inAnyZone([z], cell) && !new RegExp(`^(${api.me().toLowerCase()}|starter)-`).test(z.name.toLowerCase()))
     if (foreignZone) throw new Error(`${cell.x},${cell.y},${cell.z} is in protected zone ${foreignZone.name}`)
+
+    const waitForDay = async completed => {
+      await api.checkpoint?.()
+      if (api.clock().day) return
+      api.progress?.({ roll: { rounds: completed, waiting: 'daylight', station: cell } })
+      await api.until(() => api.clock().day, { timeout: 1200, every: 5, what: 'ordinary dawn did not arrive' })
+      await api.checkpoint?.()
+    }
+    // Starting at night is also a pause, not a failed batch. The runner's
+    // checkpoint hands back if waiting here would be unsafe.
+    await waitForDay(0)
 
     await api.act('goto', { ...cell, range: 5 })
 
@@ -76,9 +80,14 @@ export default {
     let lastLevel = null
     let missingBlock = false
     let exitError = null
-    const report = () => api.report({ rounds, seen: seen ?? 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null })
+    const report = (force = false) => {
+      const progress = { rounds, seen: seen ?? 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null }
+      api.report(progress)
+      if (force || a.verbose === true || rounds % 10 === 0) api.progress?.({ roll: progress })
+    }
     let seen = 'none'
     api.report({ rounds: 0, seen, best: null, found: null, locked: false })
+    api.progress?.({ roll: { rounds: 0, seen, best: null } })
     const present = () => api.block(a.x, a.y, a.z)?.name === block
     const refreshTarget = async () => {
       const current = (await api.act('entity', { name: 'villager', uuid: true, count: 100 })).found.find(e => trackedUuid ? e.uuid === trackedUuid : e.id === id)
@@ -92,17 +101,27 @@ export default {
     const status = async () => (await readTrades()).profession
     const ensureBlock = async (cleanup = false) => {
       if (present()) { missingBlock = false; return }
-      if (!cleanup) await verifyClaimants()
-      await (cleanup && api.cleanupAct ? api.cleanupAct('place', { item: block, ...cell }) : api.act('place', { item: block, ...cell }))
-      if (!present()) throw new Error(`could not restore ${block} at ${a.x},${a.y},${a.z}`)
-      missingBlock = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!cleanup) await verifyClaimants()
+        try {
+          await (cleanup && api.cleanupAct ? api.cleanupAct('place', { item: block, ...cell }) : api.act('place', { item: block, ...cell }))
+        } catch (error) {
+          if (!/server refused|stand in it/i.test(error.message) || attempt === 2 || !['air', 'cave_air'].includes(api.block(cell.x, cell.y, cell.z)?.name)) throw error
+          if (!cleanup) await refreshTarget()
+          await api.pause?.(0.5)
+          continue
+        }
+        if (!present()) throw new Error(`could not restore ${block} at ${a.x},${a.y},${a.z}`)
+        missingBlock = false
+        return
+      }
     }
     const capture = pen ? makeVillagerCapture(api, { a, cell, pen, penBlock, trackedUuid, freshIds, job, initialId: id }) : null
     const serviceSills = capture?.serviceSills ?? []
     if (professionOf(target.raw) === job) {
       if (!placed) throw new Error(`villager ${trackedUuid ?? id} already has profession ${job} but ${block} is not at the requested cell; inspect its current workstation before changing anything`)
       const current = await readTrades()
-      const wantedNow = wants.length ? rollVerdict(current.offers, wants, maxPrice).found : current.offers.some(o => matchesVillagerOutput(o, selector))
+      const wantedNow = matchingRollOffer(current.offers, targets)
       if (!wantedNow && (Number(current.level ?? 1) > 1 || current.offers.some(o => (o.nbTradeUses ?? 0) > 0))) throw new Error(`villager ${trackedUuid ?? id} has traded as ${job}; its profession is locked and this command will not break ${block}`)
     }
     try {
@@ -116,9 +135,19 @@ export default {
       if (capture) id = await capture.capture(ensureBlock)
       else if (!present()) await ensureBlock()
       for (rounds = 1; rounds <= tries; rounds++) {
-        if (!api.clock().day) return { rounds: rounds - 1, found: 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null, stopped: `night fell; ${block} left placed` }
+        await waitForDay(rounds - 1)
         await refreshTarget()
-        await api.until(async () => (await status()) === job, { timeout: 60, every: 2, what: `the villager did not claim the ${block}` })
+        try { await api.until(async () => (await status()) === job, { timeout: 60, every: 2, what: `the villager did not claim the ${block}` }) }
+        catch (error) {
+          if (!/waited 60s and the villager did not claim/.test(error.message) || api.clock().day || !present()) throw error
+          // A workday can end during the bounded claim wait. Keep the sole
+          // station in place, then recheck identity/claimants before one fresh
+          // bounded wait; a daylight claim failure remains a real stop.
+          await waitForDay(rounds - 1)
+          await refreshTarget()
+          await verifyClaimants()
+          await api.until(async () => (await status()) === job, { timeout: 60, every: 2, what: `the villager did not claim the ${block} after dawn` })
+        }
         if(claimPending){
           await verifyClaimants()
           if(!present()||(await status())!==job)throw new Error('workstation claim changed before confirmation')
@@ -127,11 +156,11 @@ export default {
         }
         const read = await readTrades()
         lastLevel = Number.isFinite(Number(read.level)) ? Number(read.level) : null
-        const verdict = wants.length ? rollVerdict(read.offers, wants, maxPrice) : { found: read.offers.map((offer, n) => matchesVillagerOutput(offer, selector) ? { offer, index: offer.index ?? n + 1 } : null).find(Boolean) ?? null, best: null }
+        const verdict = { found: matchingRollOffer(read.offers, targets), best: wants.length ? rollVerdict(read.offers, wants, maxPrice).best : null }
         if (verdict.best && (!best || verdict.best.price < best.price)) best = verdict.best
-        seen = read.offers.map((o, n) => tradeLine(o, n + 1)).find((s, n) => wants.length ? s.includes('enchanted_book') : matchesVillagerOutput(read.offers[n], selector)) ?? 'none'
-        report()
-        api.note(`round=${rounds} seen=${seen} best=${best ? `${best.enchant} ${best.level} at ${best.price}` : 'none'}`)
+        seen = read.offers.map((o, n) => tradeLine(o, n + 1)).find((s, n) => targets.some(t => matchesVillagerOutput(read.offers[n], t))) ?? 'none'
+        report(Boolean(verdict.found))
+        if (a.verbose === true) api.note(`round=${rounds} seen=${seen} best=${best ? `${best.enchant} ${best.level} at ${best.price}` : 'none'}`)
         if (verdict.found) {
           const found = verdict.found
           let locked = false
@@ -145,11 +174,12 @@ export default {
             await refreshTarget()
             await api.act('trade', { id, uuid: trackedUuid, ...cell, offer: boughtOffer, times: 1 })
             const after = await readTrades()
-            const stillMatches = after.offers.some(o => matchesVillagerOutput(o, selector, { includeDisabled: true }))
+            const stillMatches = after.offers.some((o, n) => (o.index ?? n + 1) === found.index && matchesVillagerOutput(o, found.target, { includeDisabled: true }))
             locked = after.profession === job && stillMatches
-            if (!locked) throw new Error(`trade completed but the requested ${wants.length ? 'book' : 'output'} was not confirmed afterwards for UUID ${trackedUuid ?? 'unknown'}`)
+            if (!locked) throw new Error(`trade completed but the matched offer was not confirmed afterwards for UUID ${trackedUuid ?? 'unknown'}`)
           }
-          return { rounds, uuid: trackedUuid, profession: job,...(workstationClaim?{workstationClaim}:{}), found: wants.length ? `${found.enchant} ${found.level}` : found.offer.outputItem?.name ?? 'matching offer', ...(wants.length ? { price: found.price, offer: found.index } : { offer: found.index }), ...(boughtOffer ? { boughtOffer } : {}), locked }
+          const book = found.target.enchant ? bookOffer(found.offer) : null
+          return { rounds, uuid: trackedUuid, profession: job,...(workstationClaim?{workstationClaim}:{}), found: book ? `${book.enchant} ${book.level}` : found.offer.outputItem?.name ?? 'matching offer', price: found.price, offer: found.index, matched: { id: found.target.id ?? null, targetIndex: found.targetIndex, target: found.target, offer: found.offer, cost: found.cost }, ...(boughtOffer ? { boughtOffer } : {}), locked }
         }
         if (rounds === tries) break
         if ((api.inv()[block] ?? 0) < 1) return { rounds, uuid: trackedUuid, profession: job, level: lastLevel, found: 'none', best: best ? `${best.enchant} ${best.level} at ${best.price}` : null, locked: false, stopped: `out of spare ${block}; current job block left placed` }
@@ -170,7 +200,14 @@ export default {
           if ((api.inv()[block] ?? 0) <= lecternsBefore) api.note(`lectern drop at ${cell.x},${cell.y},${cell.z} was not recovered; using a spare`)
           await capture.sealService()
         }
-        await api.until(async () => (await status()) === 'unemployed', { timeout: 20, every: 2, what: `this villager is locked already: it kept ${job} with no ${block}; use a fresh one` })
+        const released = async () => (await status()) === 'unemployed'
+        try { await api.until(released, { timeout: 20, every: 2, what: `this villager is locked already: it kept ${job} with no ${block}; use a fresh one` }) }
+        catch (error) {
+          if (!/waited 20s and this villager is locked already/.test(error.message) || api.clock().day) throw error
+          await waitForDay(rounds)
+          await refreshTarget()
+          await api.until(released, { timeout: 20, every: 2, what: `this villager kept ${job} without ${block} after dawn; use a fresh one` })
+        }
         claimPending=a.proveStation===true
         await ensureBlock()
         await api.checkpoint()

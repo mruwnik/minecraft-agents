@@ -53,6 +53,54 @@ export function rollVerdict (offers, wants, maxPrice = 64) {
   return { found: matches.sort((a, b) => a.price - b.price)[0] ?? null, best: same.sort((a, b) => nearest(a) - nearest(b) || a.price - b.price)[0] ?? null }
 }
 
+// A roll accepts one offer matching any target. The legacy selectors become the
+// same concrete target shape, so matching and post-purchase verification agree.
+export function rollTargets (args) {
+  const { targets, want, output, enchant, level, atLeast, maxPrice = 64 } = args
+  if (!Number.isInteger(maxPrice) || maxPrice < 1 || maxPrice > 64) throw new Error('maxPrice= must be 1..64')
+  if (targets !== undefined && (want !== undefined || output !== undefined || enchant !== undefined || level !== undefined || atLeast !== undefined)) throw new Error('targets= cannot be combined with want= or output=/enchant=/level=/atLeast=')
+  if (targets !== undefined && (!Array.isArray(targets) || !targets.length || targets.length > 32)) throw new Error('targets= must be a nonempty list of at most 32 offer targets')
+  if (targets === undefined && want && (output || enchant || level !== undefined || atLeast !== undefined)) throw new Error('use want= or output=/enchant=/level=/atLeast=, not both')
+  const raw = targets ?? (want !== undefined
+    ? (() => { const parsed = parseWant(want); if (typeof parsed === 'string') throw new Error(parsed); return parsed.map(w => ({ output: 'enchanted_book', ...w })) })()
+    : [{ output, enchant, level, atLeast }])
+  const ids = new Set()
+  return raw.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).some(k => !['id', 'output', 'enchant', 'level', 'atLeast', 'maxPrice'].includes(k))) throw new Error(`targets[${index}] has unsupported fields`)
+    if (entry.id !== undefined && (typeof entry.id !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/i.test(entry.id) || ids.has(entry.id))) throw new Error(`targets[${index}].id must be a unique name`)
+    if (entry.id) ids.add(entry.id)
+    const item = entry.output?.replace?.(/^minecraft:/, '')
+    if (entry.output !== undefined && (typeof entry.output !== 'string' || !/^[a-z0-9_]+$/.test(item))) throw new Error(`targets[${index}].output must be an item name`)
+    if (entry.level !== undefined && entry.level !== null && (!Number.isInteger(entry.level) || entry.level < 1 || entry.level > 255)) throw new Error(`targets[${index}].level must be 1..255`)
+    if (entry.atLeast !== undefined && typeof entry.atLeast !== 'boolean') throw new Error(`targets[${index}].atLeast must be boolean`)
+    if ((entry.level !== undefined && entry.level !== null || entry.atLeast) && !entry.enchant) throw new Error(`targets[${index}] needs enchant= with level=/atLeast=`)
+    if (entry.atLeast && entry.level == null) throw new Error(`targets[${index}].atLeast needs level=`)
+    let parsed = null
+    if (entry.enchant !== undefined) {
+      if (typeof entry.enchant !== 'string') throw new Error(`targets[${index}].enchant must be an enchantment name`)
+      const checked = parseWant(`${entry.enchant}${entry.level == null ? '' : `:${entry.level}${entry.atLeast ? '+' : ''}`}`)
+      if (typeof checked === 'string' || checked.length !== 1) throw new Error(typeof checked === 'string' ? checked : `targets[${index}].enchant is invalid`)
+      parsed = checked[0]
+    }
+    const cap = entry.maxPrice ?? maxPrice
+    if (!Number.isInteger(cap) || cap < 1 || cap > 64) throw new Error(`targets[${index}].maxPrice must be 1..64`)
+    // No selector is the historic "any offer" form. Explicit list entries must
+    // name an output or enchantment to avoid silently matching everything.
+    if (targets !== undefined && !item && !parsed) throw new Error(`targets[${index}] needs output= or enchant=`)
+    return { ...(entry.id ? { id: entry.id } : {}), output: item ?? (parsed && (targets !== undefined || want !== undefined) ? 'enchanted_book' : undefined), enchant: parsed?.enchant, level: parsed?.level, atLeast: parsed?.atLeast ?? false, maxPrice: cap }
+  })
+}
+
+export function matchingRollOffer (offers, targets) {
+  const matches = offers.flatMap((offer, position) => targets.flatMap((target, targetIndex) => {
+    if (!matchesVillagerOutput(offer, target)) return []
+    const cost = offerCost(offer)
+    const price = cost.emerald ?? 0 // maxPrice limits emeralds; other inputs remain in cost.
+    return price <= target.maxPrice ? [{ offer, index: offer.index ?? position + 1, target, targetIndex, price, cost }] : []
+  }))
+  return matches.sort((a, b) => a.price - b.price || a.targetIndex - b.targetIndex || a.index - b.index)[0] ?? null
+}
+
 // Spend paper or another cheap input before emeralds or books when one trade will lock the profession.
 export function cheapestLockOffer (offers, carried) {
   const cost = offer => offerCost(offer)
@@ -83,7 +131,7 @@ export function tradeLine (offer, i) {
   return `${i}) ${inputs} -> ${output}${book ? ` ${book.enchant} ${book.level}` : ''} (uses ${offer.nbTradeUses ?? 0}/${offer.maximumNbTradeUses ?? '?'})${offer.tradeDisabled ? ' disabled' : ''}`
 }
 
-export function rollRefusal ({ villagers, allowCrowd = false, profession, adult, nitwit, day, carried, placed = false, block = 'lectern', spareBlocks = 0, buy = false, maxPrice = 64 }) {
+export function rollRefusal ({ villagers, allowCrowd = false, profession, adult, nitwit, day, carried, placed = false, block = 'lectern', spareBlocks = 0 }) {
   if (villagers !== 1 && !(allowCrowd && villagers > 0)) return `${villagers} villagers within 8 blocks: isolate exactly one before rolling, or use pen=true with id= for the one to attract`
   if (!adult) return 'this villager is a baby and cannot take a profession'
   if (nitwit) return 'this villager is a nitwit and cannot take a profession'
@@ -92,7 +140,9 @@ export function rollRefusal ({ villagers, allowCrowd = false, profession, adult,
   if (profession && profession !== 'unemployed' && profession !== job) return `it is a ${profession}: remove its job block or use a fresh villager`
   if (!day) return 'villagers take jobs while awake by day: try again after dawn'
   if (!placed && !carried?.[block]) return `need one ${block} to place the job block`
-  if (buy && !((carried.emerald ?? 0) >= maxPrice && (carried.book ?? 0) >= 1) && (carried.paper ?? 0) < 64) return `buy=true needs ${maxPrice} emerald and 1 book, or 64 paper for the cheaper paper trade, before rolling`
+  // There is no fixed preflight bill for buy=true: another offer may lock the
+  // villager for fewer emeralds or a different carried item. Check the actual
+  // offer set with cheapestLockOffer when a desired result appears.
   if (spareBlocks) return `${spareBlocks} other ${block} within 16 blocks: the villager may claim the wrong one`
   return null
 }
