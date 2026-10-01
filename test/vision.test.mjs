@@ -256,11 +256,11 @@ const pinned = {
 const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
 test('render: the pinned view is drawn exactly as before', () => {
   const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['630d27bd1e1ad611', ['cow', 'item']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['9591798a0c66a4f7', ['cow', 'item']])
 })
 test('render: the pinned panorama is drawn exactly as before', () => {
   const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['789ed62c0c5133de', ['cow', 'item', 'sheep', 'zombie']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['91e5ad952490ea7e', ['cow', 'item', 'sheep', 'zombie']])
 })
 
 test('render: an entity whose box is wholly behind the eye is neither drawn nor seen', () => {
@@ -269,6 +269,24 @@ test('render: an entity whose box is wholly behind the eye is neither drawn nor 
   assert.deepEqual(img.seen, [])
   assert.equal(sha(img), sha(render({ ...scene, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })))
 })
+
+// a 64x64 view north from the scene's eye with fov 90: the pixel a point dx, dy across and up, dz north of the eye lands on
+const pixelAt = (dx, dy, dz) => [Math.round((dx / dz + 1) * 32 - 0.5), Math.round((1 - dy / dz) * 32 - 0.5)]
+const view64 = { yaw: 0, pitch: 0, width: 64, height: 64, fov: 90, maxDist: 12 }
+const bare = render({ ...scene, ...view64 })
+const covers = (img, [x, y]) => pixel(img, x, y).join() !== pixel(bare, x, y).join()
+// a cow three blocks north, side on: east is yaw -pi/2, west pi/2
+const sideOn = yaw => render({ ...scene, ...view64, entities: [{ name: 'cow', x: 0.5, y: -1, z: -2.5, width: 0.9, height: 1.4, yaw }] })
+test('render: a cow seen side on stands on legs, with the floor showing between them', () => {
+  const img = sideOn(-Math.PI / 2)
+  assert.deepEqual([covers(img, pixelAt(-0.11, -1.22, 3)), covers(img, pixelAt(0.3, -1.22, 3))], [false, true])
+})
+for (const [name, yaw, east, west] of [['east', -Math.PI / 2, true, false], ['west', Math.PI / 2, false, true]]) {
+  test(`render: a cow facing ${name} has its head out on that side`, () => {
+    const img = sideOn(yaw)
+    assert.deepEqual([covers(img, pixelAt(0.8, -0.2, 3)), covers(img, pixelAt(-0.8, -0.2, 3))], [east, west])
+  })
+}
 
 // ---------------------------------------------------------------- eyes
 const registry = prismarineRegistry('26.1')

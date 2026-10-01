@@ -449,18 +449,67 @@ const screenRect = (project, eye, box, width, height) => {
   return [Math.max(0, Math.floor(x1) - PAD), Math.max(0, Math.floor(y1) - PAD), Math.min(width - 1, Math.ceil(x2) + PAD), Math.min(height - 1, Math.ceil(y2) + PAD)]
 }
 
+// ---------------------------------------------------------------- mobs
+// A mob is drawn as a few boxes in its own frame: x across and z forward in widths, y up in heights, so one table
+// serves a chicken and a ravager. The last number picks the palette entry: 0 body, 1 head, 2 limbs.
+const FAMILIES = {
+  biped: [[-0.42, 0.75, -0.42, 0.42, 1, 0.42, 1], [-0.42, 0.375, -0.21, 0.42, 0.75, 0.21, 0], [-0.83, 0.375, -0.21, -0.42, 0.75, 0.21, 0],
+    [0.42, 0.375, -0.21, 0.83, 0.75, 0.21, 0], [-0.42, 0, -0.21, 0, 0.375, 0.21, 2], [0, 0, -0.21, 0.42, 0.375, 0.21, 2]],
+  quadruped: [[-0.5, 0.4, -0.8, 0.5, 0.8, 0.55, 0], [-0.33, 0.55, 0.55, 0.33, 1, 0.95, 1], [-0.45, 0, -0.75, -0.15, 0.4, -0.45, 2],
+    [0.15, 0, -0.75, 0.45, 0.4, -0.45, 2], [-0.45, 0, 0.2, -0.15, 0.4, 0.5, 2], [0.15, 0, 0.2, 0.45, 0.4, 0.5, 2]],
+  creeper: [[-0.42, 0.7, -0.42, 0.42, 1, 0.42, 1], [-0.42, 0.25, -0.25, 0.42, 0.7, 0.25, 0], [-0.42, 0, 0.25, 0, 0.25, 0.6, 2],
+    [0, 0, 0.25, 0.42, 0.25, 0.6, 2], [-0.42, 0, -0.6, 0, 0.25, -0.25, 2], [0, 0, -0.6, 0.42, 0.25, -0.25, 2]],
+  spider: [[-0.3, 0.25, -0.55, 0.3, 0.8, 0, 0], [-0.2, 0.25, 0, 0.2, 0.65, 0.3, 1], ...[-0.25, -0.1, 0.05, 0.2].map(z => [-0.5, 0.05, z, 0.5, 0.4, z + 0.06, 2])],
+  bird: [[-0.5, 0.3, -0.5, 0.5, 0.75, 0.4, 0], [-0.3, 0.6, 0.25, 0.3, 1, 0.65, 1], [-0.3, 0, -0.05, -0.1, 0.3, 0.1, 2], [0.1, 0, -0.05, 0.3, 0.3, 0.1, 2]],
+  blob: [[-0.5, 0, -0.5, 0.5, 1, 0.5, 1]]
+}
+const FAMILY_OF = Object.fromEntries(Object.entries({
+  biped: 'player zombie husk drowned skeleton stray bogged parched wither_skeleton villager wandering_trader pillager vindicator evoker illusioner witch piglin piglin_brute zombified_piglin zombie_villager enderman iron_golem snow_golem creaking warden',
+  quadruped: 'cow mooshroom pig sheep goat horse donkey mule skeleton_horse zombie_horse llama trader_llama camel camel_husk wolf fox cat ocelot polar_bear panda hoglin zoglin ravager sniffer armadillo turtle',
+  creeper: 'creeper',
+  spider: 'spider cave_spider',
+  bird: 'chicken parrot'
+}).flatMap(([family, names]) => names.split(' ').map(name => [name, family])))
+
+// The mob's parts sized to it, the eye turned into its frame (rays are turned per pixel), and the world-space box
+// round its turned parts for screenRect. Turning keeps lengths, so a hit's t compares with the terrain's directly.
+const mobFor = (e, eye) => {
+  const parts = FAMILIES[FAMILY_OF[e.name] ?? (e.height >= 2 * e.width ? 'biped' : 'blob')]
+    .map(([x1, y1, z1, x2, y2, z2, paint]) => [x1 * e.width, y1 * e.height, z1 * e.width, x2 * e.width, y2 * e.height, z2 * e.width, paint])
+  const hull = [0, 1, 2].map(i => Math.min(...parts.map(p => p[i]))).concat([3, 4, 5].map(i => Math.max(...parts.map(p => p[i]))))
+  const yaw = e.yaw ?? 0
+  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) }
+  const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) }
+  const corners = [[hull[0], hull[2]], [hull[3], hull[2]], [hull[0], hull[5]], [hull[3], hull[5]]]
+    .map(([x, z]) => [e.x + x * right.x + z * forward.x, e.z + x * right.z + z * forward.z])
+  const ox = eye.x - e.x
+  const oz = eye.z - e.z
+  return {
+    e,
+    parts,
+    hull,
+    right,
+    forward,
+    eye: { x: ox * right.x + oz * right.z, y: eye.y - e.y, z: ox * forward.x + oz * forward.z },
+    box: [Math.min(...corners.map(c => c[0])), e.y + hull[1], Math.min(...corners.map(c => c[1])), Math.max(...corners.map(c => c[0])), e.y + hull[4], Math.max(...corners.map(c => c[1]))],
+    pixels: 0,
+    sumX: 0,
+    sumY: 0
+  }
+}
+
 // Draw the world. `near` is the fraction of the picture closer than NEAR. `texture(blockName, face, props)` returns {width,height,rgba,tint?} or null; entities are
-// {name, kind?, x, y, z, width, height} boxes. Returns {width,height,rgba,seen} where `seen` lists the entities
+// {name, kind?, x, y, z, width, height, yaw?}, drawn as their family's parts. Returns {width,height,rgba,seen} where `seen` lists the entities
 // that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on.
 export function render ({ grid, info, texture, eye, entities = [], timeOfDay, width, height, maxDist = 64, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
   const rgba = new Uint8Array(width * height * 4)
-  const boxes = entities
+  const mobs = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
-    .map(e => ({ e, box: [e.x - e.width / 2, e.y, e.z - e.width / 2, e.x + e.width / 2, e.y + e.height, e.z + e.width / 2], pixels: 0, sumX: 0, sumY: 0 }))
-    .map(b => ({ ...b, rect: screenRect(cam.project, eye, b.box, width, height) }))
-    .filter(b => b.rect)
+    .map(e => mobFor(e, eye))
+    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height) }))
+    .filter(m => m.rect)
   let nearPixels = 0
   // one block description serves every cell of that state for as long as `info` keeps it, so its pictures are looked
   // up once, not once a hit
@@ -476,8 +525,9 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
     return !image || image.rgba[texel(image, hit.u, hit.v) + 3] >= 128
   }
   const d = { x: 0, y: 0, z: 0 }
+  const local = { x: 0, y: 0, z: 0 }
   for (let py = 0; py < height; py++) {
-    const rowBoxes = boxes.filter(b => py >= b.rect[1] && py <= b.rect[3])
+    const rowMobs = mobs.filter(m => py >= m.rect[1] && py <= m.rect[3])
     for (let px = 0; px < width; px++) {
       cam.ray(px, py, d)
       const up = clamp01(d.y)
@@ -489,10 +539,17 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
       let nearest = null
       let nearestT = Infinity
       let nearestFace = null
-      for (const b of rowBoxes) {
-        if (px < b.rect[0] || px > b.rect[2]) continue
-        if (!rayBox(eye, d, b.box[0], b.box[1], b.box[2], b.box[3], b.box[4], b.box[5], boxHit)) continue
-        if (boxHit.t < limit && boxHit.t < nearestT) { nearest = b; nearestT = boxHit.t; nearestFace = boxHit.face }
+      for (const m of rowMobs) {
+        if (px < m.rect[0] || px > m.rect[2]) continue
+        local.x = d.x * m.right.x + d.z * m.right.z
+        local.y = d.y
+        local.z = d.x * m.forward.x + d.z * m.forward.z
+        const h = m.hull
+        if (!rayBox(m.eye, local, h[0], h[1], h[2], h[3], h[4], h[5], boxHit) || boxHit.t >= limit || boxHit.t >= nearestT) continue
+        for (const p of m.parts) {
+          if (!rayBox(m.eye, local, p[0], p[1], p[2], p[3], p[4], p[5], boxHit)) continue
+          if (boxHit.t < limit && boxHit.t < nearestT) { nearest = m; nearestT = boxHit.t; nearestFace = boxHit.face }
+        }
       }
       let r = skyR
       let g = skyG
@@ -528,7 +585,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
       rgba[at + 3] = 255
     }
   }
-  const seen = boxes.filter(b => b.pixels > 0).map(({ e, pixels, sumX, sumY }) => ({
+  const seen = mobs.filter(m => m.pixels > 0).map(({ e, pixels, sumX, sumY }) => ({
     name: e.label ?? e.name,
     px: Math.round(sumX / pixels),
     py: Math.round(sumY / pixels),
