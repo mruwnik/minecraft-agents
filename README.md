@@ -1,9 +1,13 @@
 # The agents' Minecraft bodies
 
-`src/bot.mjs` joins the server in `..` (offline mode, port 25565) as one agent: the player named in the
-`config.json` of the agent folder it runs from (`state/agents/<Name>/`, made by `node tools/new-agent.mjs <Name>`).
-Without that file it refuses to start, so a stray run can never log in under another agent's name.
-Mineflayer speaks protocol 26.1; ViaVersion + ViaBackwards in `../plugins` bridge it to the 26.2 server.
+`src/bot.mjs` joins the server named in the `config.json` of the agent folder it runs from (`state/agents/<Name>/`,
+made by `node tools/new-agent.mjs <Name>`): `host`, `port` (default localhost:25565) and `auth`. `auth: "offline"`
+(the default) is for an offline-mode server, where whitelisting the name is all it takes. `auth: "microsoft"` is for
+an online-mode server: the name is a real account's profile name, and a human signs in once with
+`node tools/login.mjs <Name>` (a device code in the browser); the body then refreshes its own tokens, and reports
+`login_needed` if that ever stops working. Without a config.json the body refuses to start, so a stray run can never
+log in under another agent's name.
+Mineflayer speaks protocol 26.1; a server newer than that needs ViaVersion + ViaBackwards to bridge it.
 
 - Start: `cd state/agents/<Name> && ./start` in the background (reconnects every 10s if the server is down).
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
