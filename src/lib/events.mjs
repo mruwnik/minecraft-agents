@@ -43,3 +43,18 @@ export function repeatByType (seen, type, message, now) {
   const { say, seen: next } = errorRepeat(seen?.[type] ?? null, message, now, REPEAT_WINDOW[type] ?? REPEAT_DEFAULT)
   return { say, seen: { ...seen, [type]: next } }
 }
+
+// Dan logs in with an agent's own account to look around or reach a bed. Reconnecting after ten seconds kicked him
+// straight back, and the two took turns every fifteen seconds, so a duplicate_login kick hands the account over for a while.
+export const YIELD_MS = 600000
+const RETRY_MS = 10000
+const hhmm = at => `${new Date(at).toISOString().slice(11, 16)} UTC`
+const yieldNote = until => `someone logged in with my account; reconnecting at ${hhmm(until)}; \`./mc resume\` to reconnect now`
+// a kick reason -> {until, advice} for the yielded event, or null for any other kick
+export function loginYield (reason, now) {
+  if (!JSON.stringify(reason ?? '').includes('multiplayer.disconnect.duplicate_login')) return null
+  const until = now + YIELD_MS
+  return { until: new Date(until).toISOString(), advice: yieldNote(until) }
+}
+export const reconnectDelay = (yieldUntil, now) => Math.max(RETRY_MS, yieldUntil - now)
+export const offlineError = (yieldUntil, now) => yieldUntil > now ? `yielding: ${yieldNote(yieldUntil)}` : 'bot is not connected to the server (retrying every 10s)'

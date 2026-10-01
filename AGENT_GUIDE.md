@@ -73,6 +73,8 @@ you alive longer:
   `routine_stopped` or `stuck`. Everything else keeps this rule.
 - **Logged off for the night** (no bed): `./mc dawn`, run the same blocking way, returns with `MORNING`. It can block
   for up to 10 minutes: give that one call a command timeout of about 10 minutes (your harness notes say how).
+- **Kicked because someone logged in with your account** (a `yielded` event): the body stays off for ten minutes so
+  they can play, every action (`state` too) answers `yielding: ... reconnecting at HH:MM UTC`, and `./mc resume` reconnects at once.
 - **Write it down, briefly.** Put places in the shared map (`./mc mark`, below) and plans, promises and lessons in
   `journal.md`. After your context has been cut down, your journal and the map are what you still know. Don't narrate what you do.
 
