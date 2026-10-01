@@ -248,7 +248,7 @@ const lookFrame = async (agent, args) => {
 const serveLook = async (res, name, query) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const args = { file: LOOK_FILE, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
+  const args = { file: LOOK_FILE, ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
   const frame = await lookFrame(agent, args)
   if (frame.error) return sendJson(res, frame.code, { error: frame.error })
   send(res, 200, 'image/png', frame.png, {
@@ -280,14 +280,13 @@ const serveActions = (res, name) => {
 // look, about 60 ms of the body's render worker a frame instead of 120, so it keeps up with the 10 a second
 // streamFrames allows. Each stream draws to its own file, so two popups on one body never read each other's
 // half-written frame.
-const LIVE_SIZE = { view: { width: 320, height: 180 }, pano: { width: 576, height: 144 } }
+const LIVE_SIZE = { width: 320, height: 180 }
 let liveStreams = 0
-const streamLook = async (req, res, name, query) => {
+const streamLook = async (req, res, name) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const pano = Boolean(query.get('pano'))
   const file = `dashboard-live-${++liveStreams}.png`
-  const args = { file, marks: true, ...(pano ? { pano: true } : {}), ...LIVE_SIZE[pano ? 'pano' : 'view'] }
+  const args = { file, marks: true, ...LIVE_SIZE }
   let open = true
   req.on('close', () => { open = false })
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' })
@@ -380,7 +379,7 @@ http.createServer(async (req, res) => {
   }
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
-  if (r.kind === 'live') return streamLook(req, res, r.name, query).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'live') return streamLook(req, res, r.name).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
   return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()

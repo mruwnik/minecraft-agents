@@ -266,7 +266,6 @@ const routes = [
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani/live', { kind: 'live', name: 'Chani' }],
-  ['/api/look/Chani/live?pano=1', { kind: 'live', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],
   ['/api/look/../../etc/passwd', { kind: 'unknown' }],
   ['/api/screen/Chani', { kind: 'screen', name: 'Chani' }],

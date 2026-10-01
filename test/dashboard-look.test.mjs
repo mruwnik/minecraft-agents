@@ -92,7 +92,7 @@ test('look popup: a click on the picture opens one live stream and a 1 s invento
 
   el('lookimg').listeners.click()
   assert.equal(el('lookOverlay').hidden, false)
-  assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live?'])
+  assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live'])
   assert.equal(fetches.length, 1, 'only the inventory is fetched; the picture comes down the stream')
   assert.match(fetches[0], /^\/api\/screen\/Chani\?/)
   assert.equal(timers.length, 0, 'the next inventory ask waits for this one to arrive')
@@ -167,19 +167,12 @@ test('look popup: a player name is shown as text, never run as html', () => {
   assert.deepEqual([el('lookBigMarks').innerHTML.includes('<img'), el('lookBigMarks').innerHTML.includes('&lt;img src=x onerror=alert(1)&gt; 2m')], [false, true])
 })
 
-test('look popup: a panorama streams as a panorama', () => {
-  const { el, streams } = page()
-  el('pano').checked = true
-  el('lookimg').listeners.click()
-  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
-})
-
 test('inline card: the watch button starts a live stream and flips to pause; pause closes it and flips back', () => {
   const { el, streams } = page()
   assert.equal(el('relook').textContent, 'watch')
   el('relook').listeners.click()
   assert.equal(el('relook').textContent, 'pause')
-  assert.deepEqual([streams.length, streams[0].url, streams[0].closed], [1, '/api/look/Chani/live?', false])
+  assert.deepEqual([streams.length, streams[0].url, streams[0].closed], [1, '/api/look/Chani/live', false])
   el('relook').listeners.click()
   assert.equal(el('relook').textContent, 'watch')
   assert.equal(streams[0].closed, true)
@@ -194,18 +187,11 @@ test('inline card: a frame from the watch stream draws the picture and caption, 
   assert.equal(el('lookmeta').textContent, 'Chani · south pitch 0\nsees nothing alive')
 })
 
-test('inline card: honours the pano checkbox the same way the popup does', () => {
-  const { el, streams } = page()
-  el('pano').checked = true
-  el('relook').listeners.click()
-  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
-})
-
 test('inline card: switching the selected body while watching keeps watching, on the new body', () => {
   const { el, streams, select } = page()
   el('relook').listeners.click()
   select('Bob')
-  assert.deepEqual([streams.length, streams[0].closed, streams[1].url, streams[1].closed], [2, true, '/api/look/Bob/live?', false])
+  assert.deepEqual([streams.length, streams[0].closed, streams[1].url, streams[1].closed], [2, true, '/api/look/Bob/live', false])
   assert.equal(el('relook').textContent, 'pause')
 })
 
