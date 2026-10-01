@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import zlib from 'node:zlib'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -223,6 +224,43 @@ for (const [name, extra, blocked] of nearCases) {
     assert.equal(img.near >= 0 && img.near <= 1, true)
   })
 }
+
+// The renderer's picture for this scene, pinned: a change in the pixels is a change on purpose, and updates the hash.
+// Entities sit on screen, off screen and behind the eye; the floor's far rows reach the fog; a plant and a slab wear a
+// texture whose texels differ and one is see-through, so where each ray lands on them shows.
+const checker = { width: 2, height: 2, rgba: Uint8Array.from([200, 0, 0, 255, 0, 0, 200, 0, 0, 200, 0, 255, 200, 200, 0, 255]) }
+const pinnedGrid = makeGrid(scene.grid.origin, scene.grid.size)
+pinnedGrid.data.set(scene.grid.data)
+pinnedGrid.set(-1, -1, -2, 3)
+pinnedGrid.set(-2, -1, -3, 4)
+const pinned = {
+  ...scene,
+  grid: pinnedGrid,
+  info: id => [null, { kind: 'cube', name: 'wall' }, { kind: 'cube', name: 'floor' }, { kind: 'cross', name: 'plant' }, { kind: 'boxes', name: 'slab', boxes: [[0, 0, 0, 1, 0.5, 1]] }][id],
+  texture: name => name === 'plant' || name === 'slab' ? checker : scene.texture(name),
+  entities: [
+    { name: 'cow', kind: 'passive', x: 0.5, y: -1, z: -2.5, width: 0.9, height: 1.4 },
+    { name: 'item', x: 2.5, y: -1, z: -1.5, width: 0.35, height: 0.35 },
+    { name: 'zombie', kind: 'hostile', x: 0.5, y: -1, z: 3.5, width: 0.6, height: 1.95 },
+    { name: 'sheep', x: -9, y: -1, z: -2, width: 0.9, height: 1.3 }
+  ]
+}
+const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
+test('render: the pinned view is drawn exactly as before', () => {
+  const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
+  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['630d27bd1e1ad611', ['cow', 'item']])
+})
+test('render: the pinned panorama is drawn exactly as before', () => {
+  const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
+  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['789ed62c0c5133de', ['cow', 'item', 'sheep', 'zombie']])
+})
+
+test('render: an entity whose box is wholly behind the eye is neither drawn nor seen', () => {
+  const behind = { ...scene, entities: [{ name: 'cow', x: 0.5, y: -1, z: 3.5, width: 0.9, height: 1.4 }] }
+  const img = render({ ...behind, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })
+  assert.deepEqual(img.seen, [])
+  assert.equal(sha(img), sha(render({ ...scene, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })))
+})
 
 // ---------------------------------------------------------------- eyes
 const registry = prismarineRegistry('26.1')

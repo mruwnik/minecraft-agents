@@ -200,48 +200,82 @@ export function makeGrid (origin, size) {
 }
 
 // ---------------------------------------------------------------- rays
-const AXES = ['x', 'y', 'z']
 const ENTRY_FACE = { x: ['east', 'west'], y: ['top', 'bottom'], z: ['south', 'north'] } // [moving negative, moving positive]
 
-// Nearest intersection of a ray with an axis-aligned box [x1,y1,z1,x2,y2,z2], or null. t >= 0.
-function rayBox (o, d, box) {
+// Nearest intersection of a ray with an axis-aligned box, into `out` ({t, face}); false when it misses. Scalars only:
+// a frame asks this a few hundred thousand times and each returned object was a share of the frame.
+function rayBox (o, d, x1, y1, z1, x2, y2, z2, out) {
   let tNear = -Infinity
   let tFar = Infinity
   let axis = 'x'
-  for (const [i, a] of AXES.entries()) {
-    if (d[a] === 0) {
-      if (o[a] < box[i] || o[a] > box[i + 3]) return null
-      continue
-    }
-    const t1 = (box[i] - o[a]) / d[a]
-    const t2 = (box[i + 3] - o[a]) / d[a]
-    if (Math.min(t1, t2) > tNear) { tNear = Math.min(t1, t2); axis = a }
+  if (d.x === 0) { if (o.x < x1 || o.x > x2) return false } else {
+    const t1 = (x1 - o.x) / d.x
+    const t2 = (x2 - o.x) / d.x
+    if (Math.min(t1, t2) > tNear) { tNear = Math.min(t1, t2); axis = 'x' }
     tFar = Math.min(tFar, Math.max(t1, t2))
   }
-  if (tNear > tFar || tNear < 0) return null
-  return { t: tNear, face: ENTRY_FACE[axis][d[axis] > 0 ? 1 : 0] }
+  if (d.y === 0) { if (o.y < y1 || o.y > y2) return false } else {
+    const t1 = (y1 - o.y) / d.y
+    const t2 = (y2 - o.y) / d.y
+    if (Math.min(t1, t2) > tNear) { tNear = Math.min(t1, t2); axis = 'y' }
+    tFar = Math.min(tFar, Math.max(t1, t2))
+  }
+  if (d.z === 0) { if (o.z < z1 || o.z > z2) return false } else {
+    const t1 = (z1 - o.z) / d.z
+    const t2 = (z2 - o.z) / d.z
+    if (Math.min(t1, t2) > tNear) { tNear = Math.min(t1, t2); axis = 'z' }
+    tFar = Math.min(tFar, Math.max(t1, t2))
+  }
+  if (tNear > tFar || tNear < 0) return false
+  out.t = tNear
+  out.face = ENTRY_FACE[axis][d[axis] > 0 ? 1 : 0]
+  return true
 }
 
-// The two diagonal quads that plants are drawn on.
-function rayCross (o, d, x, y, z) {
-  const planes = [[1, -1, x - z], [1, 1, x + z + 1]] // a*px + b*pz = c
-  const hits = planes.flatMap(([a, b, c]) => {
-    const denom = a * d.x + b * d.z
-    if (denom === 0) return []
-    const t = (c - a * o.x - b * o.z) / denom
-    const [lx, ly, lz] = [o.x + d.x * t - x, o.y + d.y * t - y, o.z + d.z * t - z]
-    return t >= 0 && lx >= 0 && lx <= 1 && ly >= 0 && ly <= 1 && lz >= 0 && lz <= 1 ? [{ t, face: 'cross', u: lx, v: 1 - ly }] : []
-  })
-  return hits.sort((p, q) => p.t - q.t)
-}
-
-function faceUV (face, o, d, t, x, y, z) {
-  const [lx, ly, lz] = [o.x + d.x * t - x, o.y + d.y * t - y, o.z + d.z * t - z]
-  if (face === 'top' || face === 'bottom') return { u: lx, v: lz }
-  return { u: face === 'north' || face === 'south' ? lx : lz, v: 1 - ly }
+// where a ray meets one of the two diagonal quads plants are drawn on (a*px + b*pz = c), or -1
+const crossPlane = (o, d, x, y, z, a, b, c) => {
+  const denom = a * d.x + b * d.z
+  if (denom === 0) return -1
+  const t = (c - a * o.x - b * o.z) / denom
+  const lx = o.x + d.x * t - x
+  const ly = o.y + d.y * t - y
+  const lz = o.z + d.z * t - z
+  return t >= 0 && lx >= 0 && lx <= 1 && ly >= 0 && ly <= 1 && lz >= 0 && lz <= 1 ? t : -1
 }
 
 const clamp01 = v => Math.min(1, Math.max(0, v))
+
+// a hit, with the texel it lands on; `image` is filled in by the renderer's accept
+const hitAt = (x, y, z, id, block, face, o, d, t) => {
+  const lx = o.x + d.x * t - x
+  const ly = o.y + d.y * t - y
+  const lz = o.z + d.z * t - z
+  const top = face === 'top' || face === 'bottom'
+  return { x, y, z, id, block, t, face, u: face === 'east' || face === 'west' ? lz : lx, v: top ? lz : 1 - ly, image: null }
+}
+
+const boxHit = { t: 0, face: '' }
+// accept() judges each hit on its own, so the nearest it takes is the nearest of those it takes
+const nearestBoxHit = (block, x, y, z, id, o, d, maxDist, accept) => {
+  let best = null
+  for (const b of block.boxes) {
+    if (!rayBox(o, d, x + clamp01(b[0]), y + clamp01(b[1]), z + clamp01(b[2]), x + clamp01(b[3]), y + clamp01(b[4]), z + clamp01(b[5]), boxHit)) continue
+    if (boxHit.t > maxDist || (best && boxHit.t >= best.t)) continue
+    const hit = hitAt(x, y, z, id, block, boxHit.face, o, d, boxHit.t)
+    if (accept(hit)) best = hit
+  }
+  return best
+}
+
+const nearestCrossHit = (block, x, y, z, id, o, d, maxDist, accept) => {
+  let best = null
+  for (const t of [crossPlane(o, d, x, y, z, 1, -1, x - z), crossPlane(o, d, x, y, z, 1, 1, x + z + 1)]) {
+    if (t < 0 || t > maxDist || (best && t >= best.t)) continue
+    const hit = hitAt(x, y, z, id, block, 'cross', o, d, t)
+    if (accept(hit)) best = hit
+  }
+  return best
+}
 
 // Walk the voxels along a ray (Amanatides & Woo) until something solid is hit. `info(stateId)` describes a block:
 // null for air, {kind:'cube'}, {kind:'boxes', boxes} or {kind:'cross'}. `accept(hit)` can reject see-through texels.
@@ -272,15 +306,12 @@ export function castRay (grid, info, o, d, maxDist, accept = () => true) {
     const id = inside ? data[(ly * size.z + lz) * size.x + lx] : 0
     const block = id ? info(id) : null
     if (block) {
-      const found = block.kind === 'cube'
-        ? (entered ? [{ t, face: entered }] : [])
+      const hit = block.kind === 'cube'
+        ? (entered ? hitAt(x, y, z, id, block, entered, o, d, t) : null)
         : block.kind === 'cross'
-          ? rayCross(o, d, x, y, z)
-          : block.boxes.map(b => rayBox(o, d, [x + clamp01(b[0]), y + clamp01(b[1]), z + clamp01(b[2]), x + clamp01(b[3]), y + clamp01(b[4]), z + clamp01(b[5])])).filter(Boolean).sort((p, q) => p.t - q.t)
-      for (const f of found) {
-        const hit = { x, y, z, id, block, ...faceUV(f.face, o, d, f.t, x, y, z), ...f }
-        if (hit.t <= maxDist && accept(hit)) return hit
-      }
+          ? nearestCrossHit(block, x, y, z, id, o, d, maxDist, accept)
+          : nearestBoxHit(block, x, y, z, id, o, d, maxDist, accept)
+      if (hit && (block.kind !== 'cube' || accept(hit))) return hit
     }
     if (nx <= ny && nx <= nz) {
       t = nx
@@ -311,22 +342,45 @@ export const directionFor = (yaw, pitch) => ({
 })
 const cross = (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x })
 
-function rayMaker ({ panorama, yaw = 0, pitch = 0, fov = 90, width, height }) {
+// ray(px, py, out) writes a pixel's unit direction into `out`. project(p) is the pixel a point lands on, or null behind
+// the eye; a panorama has none, as its projection is not linear and a box's corners do not bound its picture
+function cameraFor ({ panorama, yaw = 0, pitch = 0, fov = 90, width, height }) {
   if (panorama) {
     // 360 degrees around, north in the middle, square pixels at the horizon
     const vfov = 2 * Math.PI * height / width
-    return (px, py) => directionFor((0.5 - (px + 0.5) / width) * 2 * Math.PI, (0.5 - (py + 0.5) / height) * vfov)
+    return {
+      ray: (px, py, out) => {
+        const d = directionFor((0.5 - (px + 0.5) / width) * 2 * Math.PI, (0.5 - (py + 0.5) / height) * vfov)
+        out.x = d.x
+        out.y = d.y
+        out.z = d.z
+      },
+      project: null
+    }
   }
   const forward = directionFor(yaw, pitch)
   const right = directionFor(yaw - Math.PI / 2, 0)
   const up = cross(right, forward)
   const half = Math.tan(fov * Math.PI / 360)
-  return (px, py) => {
-    const sx = ((px + 0.5) / width * 2 - 1) * half
-    const sy = (1 - (py + 0.5) / height * 2) * half * height / width
-    const v = { x: forward.x + right.x * sx + up.x * sy, y: forward.y + right.y * sx + up.y * sy, z: forward.z + right.z * sx + up.z * sy }
-    const len = Math.hypot(v.x, v.y, v.z)
-    return { x: v.x / len, y: v.y / len, z: v.z / len }
+  return {
+    ray: (px, py, out) => {
+      const sx = ((px + 0.5) / width * 2 - 1) * half
+      const sy = (1 - (py + 0.5) / height * 2) * half * height / width
+      const x = forward.x + right.x * sx + up.x * sy
+      const y = forward.y + right.y * sx + up.y * sy
+      const z = forward.z + right.z * sx + up.z * sy
+      const len = Math.hypot(x, y, z)
+      out.x = x / len
+      out.y = y / len
+      out.z = z / len
+    },
+    project: p => {
+      const f = p.x * forward.x + p.y * forward.y + p.z * forward.z
+      if (f <= 1e-9) return null
+      const sx = (p.x * right.x + p.y * right.y + p.z * right.z) / f
+      const sy = (p.x * up.x + p.y * up.y + p.z * up.z) / f
+      return { px: (sx / half + 1) / 2 * width - 0.5, py: (1 - sy / (half * height / width)) / 2 * height - 0.5 }
+    }
   }
 }
 
@@ -356,16 +410,41 @@ function texel (image, u, v) {
 // a view is 'blocked' when most of it is a block face closer than this (standing in a hole, nose against a wall)
 const NEAR = 2
 
+// the pixels an entity's box can cover: its corners projected, a pixel wider for rounding; every pixel when the camera
+// cannot project it or the box straddles the eye. null when the whole box is behind the eye, which no ray reaches
+const PAD = 1
+const screenRect = (project, eye, box, width, height) => {
+  if (!project) return [0, 0, width - 1, height - 1]
+  let x1 = Infinity
+  let y1 = Infinity
+  let x2 = -Infinity
+  let y2 = -Infinity
+  let behind = 0
+  for (let i = 0; i < 8; i++) {
+    const p = project({ x: box[i & 1 ? 3 : 0] - eye.x, y: box[i & 2 ? 4 : 1] - eye.y, z: box[i & 4 ? 5 : 2] - eye.z })
+    if (!p) { behind++; continue }
+    x1 = Math.min(x1, p.px)
+    y1 = Math.min(y1, p.py)
+    x2 = Math.max(x2, p.px)
+    y2 = Math.max(y2, p.py)
+  }
+  if (behind === 8) return null
+  if (behind) return [0, 0, width - 1, height - 1]
+  return [Math.max(0, Math.floor(x1) - PAD), Math.max(0, Math.floor(y1) - PAD), Math.min(width - 1, Math.ceil(x2) + PAD), Math.min(height - 1, Math.ceil(y2) + PAD)]
+}
+
 // Draw the world. `near` is the fraction of the picture closer than NEAR. `texture(blockName, face, props)` returns {width,height,rgba,tint?} or null; entities are
 // {name, kind?, x, y, z, width, height} boxes. Returns {width,height,rgba,seen} where `seen` lists the entities
 // that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on.
 export function render ({ grid, info, texture, eye, entities = [], timeOfDay, width, height, maxDist = 64, ...camera }) {
-  const rayFor = rayMaker({ ...camera, width, height })
+  const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
   const rgba = new Uint8Array(width * height * 4)
   const boxes = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => ({ e, box: [e.x - e.width / 2, e.y, e.z - e.width / 2, e.x + e.width / 2, e.y + e.height, e.z + e.width / 2], pixels: 0, sumX: 0, sumY: 0 }))
+    .map(b => ({ ...b, rect: screenRect(cam.project, eye, b.box, width, height) }))
+    .filter(b => b.rect)
   let nearPixels = 0
   // one block description serves every cell of that state, so its pictures are looked up once a frame, not once a hit
   const pictures = new Map()
@@ -381,35 +460,56 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
     hit.image = image
     return !image || image.rgba[texel(image, hit.u, hit.v) + 3] >= 128
   }
+  const d = { x: 0, y: 0, z: 0 }
   for (let py = 0; py < height; py++) {
+    const rowBoxes = boxes.filter(b => py >= b.rect[1] && py <= b.rect[3])
     for (let px = 0; px < width; px++) {
-      const d = rayFor(px, py)
+      cam.ray(px, py, d)
       const up = clamp01(d.y)
-      const sky = [mix(200, 105, up) * light, mix(222, 160, up) * light, mix(255, 250, up) * light]
+      const skyR = mix(200, 105, up) * light
+      const skyG = mix(222, 160, up) * light
+      const skyB = mix(255, 250, up) * light
       const hit = castRay(grid, info, eye, d, maxDist, accept)
+      const limit = hit ? hit.t : maxDist
       let nearest = null
-      for (const b of boxes) {
-        const h = rayBox(eye, d, b.box)
-        if (h && h.t < (hit?.t ?? maxDist) && h.t < (nearest?.t ?? Infinity)) nearest = { ...h, b }
+      let nearestT = Infinity
+      let nearestFace = null
+      for (const b of rowBoxes) {
+        if (px < b.rect[0] || px > b.rect[2]) continue
+        if (!rayBox(eye, d, b.box[0], b.box[1], b.box[2], b.box[3], b.box[4], b.box[5], boxHit)) continue
+        if (boxHit.t < limit && boxHit.t < nearestT) { nearest = b; nearestT = boxHit.t; nearestFace = boxHit.face }
       }
-      let color = sky
+      let r = skyR
+      let g = skyG
+      let b = skyB
       if (nearest) {
-        nearest.b.pixels++
-        nearest.b.sumX += px
-        nearest.b.sumY += py
-        const base = ENTITY_COLORS[nearest.b.e.name] ?? ENTITY_COLORS[nearest.b.e.kind] ?? (nearest.b.e.kind === 'hostile' ? HOSTILE : hashColor(nearest.b.e.name))
-        color = base.map(c => c * FACE_SHADE[nearest.face] * Math.max(light, 0.6))
+        nearest.pixels++
+        nearest.sumX += px
+        nearest.sumY += py
+        const base = ENTITY_COLORS[nearest.e.name] ?? ENTITY_COLORS[nearest.e.kind] ?? (nearest.e.kind === 'hostile' ? HOSTILE : hashColor(nearest.e.name))
+        r = base[0] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
+        g = base[1] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
+        b = base[2] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
       } else if (hit) {
         if (hit.t < NEAR) nearPixels++
-        const at = hit.image ? texel(hit.image, hit.u, hit.v) : 0
-        const base = hit.image ? [0, 1, 2].map(i => hit.image.rgba[at + i] * (hit.image.tint?.[i] ?? 255) / 255) : hashColor(hit.block.name ?? String(hit.id))
         const fog = (hit.t / maxDist) ** 2
-        color = base.map((c, i) => mix(c * FACE_SHADE[hit.face] * light, sky[i], fog))
+        if (hit.image) {
+          const at = texel(hit.image, hit.u, hit.v)
+          const tint = hit.image.tint
+          r = mix(hit.image.rgba[at] * (tint?.[0] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyR, fog)
+          g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyG, fog)
+          b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyB, fog)
+        } else {
+          const base = hashColor(hit.block.name ?? String(hit.id))
+          r = mix(base[0] * FACE_SHADE[hit.face] * light, skyR, fog)
+          g = mix(base[1] * FACE_SHADE[hit.face] * light, skyG, fog)
+          b = mix(base[2] * FACE_SHADE[hit.face] * light, skyB, fog)
+        }
       }
       const at = (py * width + px) * 4
-      rgba[at] = color[0]
-      rgba[at + 1] = color[1]
-      rgba[at + 2] = color[2]
+      rgba[at] = r
+      rgba[at + 1] = g
+      rgba[at + 2] = b
       rgba[at + 3] = 255
     }
   }
