@@ -24,6 +24,11 @@
   #mapview { flex: 1; position: relative; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
+  #actions { position: absolute; left: 10px; top: 10px; width: 320px; max-height: calc(100% - 40px); background: rgba(28,32,39,0.9); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
+  #actions h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+  #actionsLog { overflow-y: auto; }
+  #actionsLog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #actionsLog .bad { color: #f0907e; }
   /* the chat drawer sits under the map, never beside it: closed it is one 30px bar, open it takes at most 30% of
      the height, so the map keeps the room it has and the side panel is untouched either way */
   #chat { flex: none; border-top: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; max-height: 30vh; }
@@ -158,6 +163,10 @@
     <div id="mapview">
       <canvas id="map"></canvas>
       <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
+      <div id="actions" hidden>
+        <h2>actions · <span id="actionsName"></span></h2>
+        <div id="actionsLog"></div>
+      </div>
     </div>
     <div id="chat">
       <div id="chatbar">
@@ -735,6 +744,35 @@ const select = name => {
   renderList()
   draw()
   if (watching) startWatch()
+  refreshActions()
+}
+
+// ---------------------------------------------------------------- the action log
+// Ages are relative (-12s), so every 2 s poll redraws the list even when the entries themselves have not changed.
+const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const relAge = (now, iso) => {
+  const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000))
+  return s < 60 ? `-${s}s` : s < 3600 ? `-${Math.round(s / 60)}m` : `-${Math.round(s / 3600)}h`
+}
+let actionsEntries = []
+const renderActions = () => {
+  el('actions').hidden = !selected
+  if (!selected) return
+  const log = el('actionsLog')
+  const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
+  const now = Date.now()
+  log.innerHTML = actionsEntries.map(e => `<div class="${e.bad ? 'bad' : ''}" title="${escHtml(e.gist)}">${relAge(now, e.t)} ${escHtml(e.type)} ${escHtml(e.gist)}</div>`).join('')
+  el('actionsName').textContent = selected
+  if (pinned) log.scrollTop = log.scrollHeight
+}
+// a poll for a body we have since switched away from must not overwrite what the new one shows
+const refreshActions = () => {
+  if (!selected) return renderActions()
+  const asked = selected
+  fetch(`/api/actions/${encodeURIComponent(asked)}`)
+    .then(r => r.json())
+    .then(a => { if (asked === selected) { actionsEntries = a.entries; renderActions() } })
+    .catch(() => {})
 }
 
 // a look's caption under its picture, or why there is no picture. Once a picture is up it stays up: an error
@@ -1000,8 +1038,10 @@ resize()
 if (window.__PRELOAD_STATE__) applyState(window.__PRELOAD_STATE__)
 refresh()
 refreshChat()
+refreshActions()
 setInterval(refresh, 2000)
 setInterval(refreshChat, 2000)
+setInterval(refreshActions, 2000)
 </script>
 </body>
 </html>
