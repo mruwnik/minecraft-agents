@@ -193,6 +193,27 @@ test('farm.maintain: a checkpoint right after the dry till is skipped, so its pl
   assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
 })
 
+test('farm.maintain: a dry till that fails still gets its own checkpoint, seed in hand or not', async () => {
+  const items = { wheat_seeds: 2, stone_hoe: 1 }
+  const world = { '0,63,0': 'dirt', '0,64,0': 'air', '1,63,0': 'dirt', '1,64,0': 'air' }
+  const made = fakeApi({
+    place: fakePlace('ww'),
+    world,
+    items,
+    answers: {
+      'farm.harvest': { harvested: {}, replanted: 0 },
+      till: p => new Error(`till: tilled nothing: 1 still dirt: is there a block on top of it? (first ${p.x},${p.y},${p.z})`)
+    }
+  })
+  made.api.checkpoint = async () => { made.calls.push('checkpoint') }
+  await maintainFarm.run(made.api, { place: 'test-field' })
+  // a failed dry till never sows its plant (untilled, like any other failed till): it must not borrow the sown-at-once
+  // skip meant for a till that actually went in, or two failing beds in a row run with no checkpoint between them at all
+  const tillAt = x => made.calls.indexOf(`till ${x},63,0`)
+  assert.equal(made.calls[tillAt(0) + 1], 'checkpoint')
+  assert.equal(made.calls[tillAt(1) + 1], 'checkpoint')
+})
+
 test('farm.maintain: no seed means no till on the dry bed, and farm_needs_water says why and where', async () => {
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
   const { summary, calls, events } = await sweep({ plan: 'w~', world, items: { stone_hoe: 1 } })

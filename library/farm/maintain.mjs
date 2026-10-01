@@ -263,8 +263,8 @@ export default {
       // for it: seed thrown on dirt is a failure too, and a wasted one
       let hadHoe = hasHoe(api.inv())
       let rekitTried = false
-      // set true for the sweep's one dry till that goes ahead: its plant must run before the next checkpoint gets a
-      // chance to hand back or sleep the night, or the bed is left bare and dry to revert (see the pause() call below)
+      // set true for a dry till that goes ahead: its plant must run before the next checkpoint gets a chance to hand
+      // back or sleep the night, or the bed is left bare and dry to revert (see the pause() call below)
       let sowNext = false
       const untilled = new Set()
       // tills held for want of water, so farm_needs_water= can say the reason and name the beds
@@ -348,9 +348,13 @@ export default {
         if (failed && job.do === 'plant') leave(job, bareWhy(failed), `${job.x},${job.y},${job.z}`)
         sayJobs()
         // a checkpoint right here could hand back or sleep the night on bare, dry farmland: skipped once, for the
-        // till just above, so its own plant (the very next job, sowAsTilled's doing) runs before any of that can happen
-        if (sowNext) sowNext = false
-        else await pause()
+        // till just above, so its own plant (the very next job, sowAsTilled's doing) runs before any of that can
+        // happen - but only when that till actually went in. A till that failed never gets its plant (untilled.has
+        // sends it straight past, below) and still needs its own checkpoint, or a run of failing dry tills loses the
+        // runner's "twice in a row" stop along with every checkpoint in between
+        const sowing = sowNext && !failed
+        sowNext = false
+        if (!sowing) await pause()
       }
       sayJobs()
       // whatever a done job left undone: reported, never silently repeated (the next sweep picks it up). A bed
