@@ -5594,6 +5594,39 @@ test('repeatByType: two kinds taking turns do not reset each other', () => {
   assert.equal(repeatByType(state, 'kicked', 'not whitelisted', 3000).say, null)
 })
 
+// Dan logs in with an agent's own account to look around: the server kicks the body with duplicate_login, the body
+// was back ten seconds later and kicked him, and the two took turns every fifteen seconds (17 kicks on 2026-10-01).
+const DUPLICATE = '{"type":"compound","value":{"translate":{"type":"string","value":"multiplayer.disconnect.duplicate_login"}}}'
+const T0 = Date.parse('2026-10-01T22:35:00Z')
+
+for (const [reason, yields] of [[DUPLICATE, true], [{ translate: 'multiplayer.disconnect.duplicate_login' }, true], ['You are not whitelisted', false], ['§cAn unhandled error occurred in your connection', false]]) {
+  test(`loginYield: ${JSON.stringify(reason).slice(0, 60)} ${yields ? 'yields the account' : 'is an ordinary kick'}`, () => {
+    assert.equal(lib.loginYield(reason, T0) !== null, yields)
+  })
+}
+
+test('loginYield: holds off for YIELD_MS and says when it comes back and how to come back sooner', () => {
+  const y = lib.loginYield(DUPLICATE, T0)
+  assert.equal(lib.YIELD_MS, 600000)
+  assert.equal(y.until, '2026-10-01T22:45:00.000Z')
+  assert.match(y.advice, /someone logged in with my account; reconnecting at 22:45 UTC; `\.\/mc resume` to reconnect now/)
+})
+
+for (const [label, until, now, wait] of [
+  ['an ordinary drop retries in ten seconds', 0, T0, 10000],
+  ['a yield waits it out', T0 + 600000, T0, 600000],
+  ['a yield nearly over still leaves the usual ten seconds', T0 + 3000, T0, 10000]
+]) {
+  test(`reconnectDelay: ${label}`, () => {
+    assert.equal(lib.reconnectDelay(until, now), wait)
+  })
+}
+
+test('offlineError: a yielding body says it is yielding, an ordinary one that it is retrying', () => {
+  assert.match(lib.offlineError(T0 + 600000, T0), /yielding.*reconnecting at 22:45 UTC.*\.\/mc resume/)
+  assert.equal(lib.offlineError(0, T0), 'bot is not connected to the server (retrying every 10s)')
+})
+
 test('repeatByType: a kick loop says its count far more rarely than an ordinary error', () => {
   assert.ok(REPEAT_WINDOW.kicked >= 300000)
   const first = repeatByType(null, 'kicked', 'not whitelisted', 0)
