@@ -15,10 +15,12 @@ if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
 fi
 
 # a body reparented to init (pid 1, or anything else that isn't running start-body) has already outlived its
-# supervisor, so there is nothing to TERM but the body itself
+# supervisor, so there is nothing to TERM but the body itself. "start-body" must appear as its own path segment
+# or hyphenated word, not merely as a substring of some unrelated word on the command line (e.g. a test file
+# named restart-body.test.mjs matched *start-body* and this script TERMed the test runner that ran it)
 ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
 pcmd=$(ps -ww -o command= -p "$ppid" 2>/dev/null)
-if [ -n "$ppid" ] && [ "$ppid" != "1" ] && [[ "$pcmd" == *start-body* ]]; then
+if [ -n "$ppid" ] && [ "$ppid" != "1" ] && [[ "$pcmd" =~ (^|[^A-Za-z])start-body([^A-Za-z]|$) ]]; then
   echo "stopping supervisor (pid $ppid) for body $pid"
   kill -TERM "$ppid" 2>/dev/null
 else
