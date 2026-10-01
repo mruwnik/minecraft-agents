@@ -771,7 +771,7 @@ const showInventory = html => {
 }
 const loadInventory = () => {
   if (!selected) return Promise.resolve()
-  const url = `/api/inventory/${encodeURIComponent(selected)}?t=${Date.now()}`
+  const url = `/api/screen/${encodeURIComponent(selected)}?t=${Date.now()}`
   return fetch(url).then(res => (res.ok ? res.json() : null)).then(inv => showInventory(inv ? inventoryHtml(inv) : ''))
     .catch(() => showInventory(''))
 }

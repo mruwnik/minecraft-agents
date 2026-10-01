@@ -257,12 +257,12 @@ const serveLook = async (res, name, query) => {
   })
 }
 
-// one body's inventory, slot by slot. `inventory` is a quick action too (src/bot.mjs): it reads the
-// bot's own inventory slots, so this never interrupts whatever the body is doing.
-const serveInventory = async (res, name) => {
+// one body's screen: HUD numbers, inventory slots and the container it has open. `screen` is a quick action
+// (src/bot.mjs): it reads the bot's own state, so this never interrupts whatever the body is doing.
+const serveScreen = async (res, name) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const r = await ask(agent.apiPort, 'inventory', { slots: true }, 5000)
+  const r = await ask(agent.apiPort, 'screen', {}, 5000)
   if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
   return sendJson(res, 200, r.answer)
 }
@@ -354,9 +354,9 @@ const handlers = {
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  inventory: (res, query, r) => serveInventory(res, r.name),
+  screen: (res, query, r) => serveScreen(res, r.name),
   icon: (res, query, r) => serveIcon(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/inventory/<Name> or /api/icon/<item>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name> or /api/icon/<item>' })
 }
 
 http.createServer(async (req, res) => {

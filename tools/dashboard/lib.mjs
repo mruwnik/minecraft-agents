@@ -90,7 +90,7 @@ export const inventoryIcon = (name, image) => {
 
 const ICON = /^\/api\/icon\/([a-z0-9_]{1,64})$/
 const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})(\/live)?$/
-const INVENTORY = /^\/api\/inventory\/([A-Za-z0-9_]{1,32})$/
+const SCREEN = /^\/api\/screen\/([A-Za-z0-9_]{1,32})$/
 // map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
 // same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
 // lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
@@ -123,8 +123,8 @@ export const route = url => {
   if (srclib) return { kind: 'srclib', name: srclib[1] }
   const look = LOOK.exec(pathname)
   if (look) return { kind: look[2] ? 'live' : 'look', name: look[1] }
-  const inventory = INVENTORY.exec(pathname)
-  if (inventory) return { kind: 'inventory', name: inventory[1] }
+  const screen = SCREEN.exec(pathname)
+  if (screen) return { kind: 'screen', name: screen[1] }
   const icon = ICON.exec(pathname)
   if (icon) return { kind: 'icon', name: icon[1] }
   return { kind: 'unknown' }
