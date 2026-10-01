@@ -143,7 +143,9 @@ export function textureCandidates (block, face, props = {}) {
 export function makeGrid (origin, size) {
   const data = new Uint16Array(size.x * size.y * size.z)
   const index = (x, y, z) => {
-    const [lx, ly, lz] = [x - origin.x, y - origin.y, z - origin.z]
+    const lx = x - origin.x
+    const ly = y - origin.y
+    const lz = z - origin.z
     if (lx < 0 || ly < 0 || lz < 0 || lx >= size.x || ly >= size.y || lz >= size.z) return -1
     return (ly * size.z + lz) * size.x + lx
   }
@@ -151,7 +153,6 @@ export function makeGrid (origin, size) {
     origin,
     size,
     data,
-    get: (x, y, z) => { const i = index(x, y, z); return i < 0 ? 0 : data[i] },
     set: (x, y, z, id) => { const i = index(x, y, z); if (i >= 0) data[i] = id }
   }
 }
@@ -202,16 +203,31 @@ const clamp01 = v => Math.min(1, Math.max(0, v))
 
 // Walk the voxels along a ray (Amanatides & Woo) until something solid is hit. `info(stateId)` describes a block:
 // null for air, {kind:'cube'}, {kind:'boxes', boxes} or {kind:'cross'}. `accept(hit)` can reject see-through texels.
+// Every pixel walks a hundred-odd cells, so the walk keeps to scalars: an array or two per step was most of a frame.
 export function castRay (grid, info, o, d, maxDist, accept = () => true) {
-  const cell = AXES.map(a => Math.floor(o[a]))
-  const step = AXES.map(a => Math.sign(d[a]))
-  const delta = AXES.map(a => d[a] === 0 ? Infinity : Math.abs(1 / d[a]))
-  const next = AXES.map((a, i) => d[a] === 0 ? Infinity : ((d[a] > 0 ? cell[i] + 1 : cell[i]) - o[a]) / d[a])
+  const { data, origin, size } = grid
+  let x = Math.floor(o.x)
+  let y = Math.floor(o.y)
+  let z = Math.floor(o.z)
+  const sx = Math.sign(d.x)
+  const sy = Math.sign(d.y)
+  const sz = Math.sign(d.z)
+  const dx = d.x === 0 ? Infinity : Math.abs(1 / d.x)
+  const dy = d.y === 0 ? Infinity : Math.abs(1 / d.y)
+  const dz = d.z === 0 ? Infinity : Math.abs(1 / d.z)
+  let nx = d.x === 0 ? Infinity : ((d.x > 0 ? x + 1 : x) - o.x) / d.x
+  let ny = d.y === 0 ? Infinity : ((d.y > 0 ? y + 1 : y) - o.y) / d.y
+  let nz = d.z === 0 ? Infinity : ((d.z > 0 ? z + 1 : z) - o.z) / d.z
   let t = 0
   let entered = null
   while (t <= maxDist) {
-    const [x, y, z] = cell
-    const id = grid.get(x, y, z)
+    const lx = x - origin.x
+    const ly = y - origin.y
+    const lz = z - origin.z
+    const inside = lx >= 0 && ly >= 0 && lz >= 0 && lx < size.x && ly < size.y && lz < size.z
+    // past the grid's far side there is nothing left to hit
+    if (!inside && ((lx < 0 && sx <= 0) || (lx >= size.x && sx >= 0) || (ly < 0 && sy <= 0) || (ly >= size.y && sy >= 0) || (lz < 0 && sz <= 0) || (lz >= size.z && sz >= 0))) return null
+    const id = inside ? data[(ly * size.z + lz) * size.x + lx] : 0
     const block = id ? info(id) : null
     if (block) {
       const found = block.kind === 'cube'
@@ -224,11 +240,22 @@ export function castRay (grid, info, o, d, maxDist, accept = () => true) {
         if (hit.t <= maxDist && accept(hit)) return hit
       }
     }
-    const i = next[0] <= next[1] && next[0] <= next[2] ? 0 : next[1] <= next[2] ? 1 : 2
-    t = next[i]
-    next[i] += delta[i]
-    cell[i] += step[i]
-    entered = ENTRY_FACE[AXES[i]][step[i] > 0 ? 1 : 0]
+    if (nx <= ny && nx <= nz) {
+      t = nx
+      nx += dx
+      x += sx
+      entered = sx > 0 ? 'west' : 'east'
+    } else if (ny <= nz) {
+      t = ny
+      ny += dy
+      y += sy
+      entered = sy > 0 ? 'bottom' : 'top'
+    } else {
+      t = nz
+      nz += dz
+      z += sz
+      entered = sz > 0 ? 'north' : 'south'
+    }
   }
   return null
 }
@@ -298,8 +325,17 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => ({ e, box: [e.x - e.width / 2, e.y, e.z - e.width / 2, e.x + e.width / 2, e.y + e.height, e.z + e.width / 2], pixels: 0, sumX: 0, sumY: 0 }))
   let nearPixels = 0
+  // one block description serves every cell of that state, so its pictures are looked up once a frame, not once a hit
+  const pictures = new Map()
+  const picture = (block, face) => {
+    const key = face === 'top' || face === 'bottom' || face === 'cross' ? face : 'side'
+    if (!pictures.has(block)) pictures.set(block, {})
+    const faces = pictures.get(block)
+    if (!(key in faces)) faces[key] = texture(block.name, key, block.props)
+    return faces[key]
+  }
   const accept = hit => {
-    const image = texture(hit.block.name, hit.face === 'top' || hit.face === 'bottom' || hit.face === 'cross' ? hit.face : 'side', hit.block.props)
+    const image = picture(hit.block, hit.face)
     hit.image = image
     return !image || image.rgba[texel(image, hit.u, hit.v) + 3] >= 128
   }
@@ -328,7 +364,11 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
         const fog = (hit.t / maxDist) ** 2
         color = base.map((c, i) => mix(c * FACE_SHADE[hit.face] * light, sky[i], fog))
       }
-      rgba.set([color[0], color[1], color[2], 255], (py * width + px) * 4)
+      const at = (py * width + px) * 4
+      rgba[at] = color[0]
+      rgba[at + 1] = color[1]
+      rgba[at + 2] = color[2]
+      rgba[at + 3] = 255
     }
   }
   const seen = boxes.filter(b => b.pixels > 0).map(({ e, pixels, sumX, sumY }) => ({
