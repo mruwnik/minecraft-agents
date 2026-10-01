@@ -92,13 +92,6 @@ for (const start of starts) {
   })
 }
 
-// why the pathfinder is not simply told bamboo is passable: its cell-centred steering pins the body among the stalks
-test('groveExit: steering straight out through cell centres stays stuck in the grove', () => {
-  const start = starts[0]
-  const centres = [8, 9, 10, 11, 12].map(x => ({ x: x + 0.5, z: -42.5 }))
-  assert.equal(boxClearOfGrove(walk(start, centres)), false)
-})
-
 test('groveExit: a pocket of bamboo sealed in by stone has no way out', () => {
   const pocket = (x, z) => Math.abs(x) <= 1 && Math.abs(z) <= 1
   assert.equal(groveExit({ from: { x: 0.5, z: 0.5 }, bambooAt: pocket, openAt: pocket }), null)

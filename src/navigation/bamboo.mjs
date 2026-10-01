@@ -1,5 +1,5 @@
 // Vanilla's Mth.getSeed(x, 0, z) in exact 64-bit arithmetic (Block.box offset, up to 0.25 each axis). x * 3129871
-// wraps as a 32-bit int first (Math.imul), matching the server's own hitbox so the pathfinder stops disagreeing with it.
+// wraps as a 32-bit int first (Math.imul): any mismatch here puts a stalk somewhere the server does not, and the body walks into it.
 const seed = (x, z) => {
   let l = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n))
   l = BigInt.asIntN(64, l * l * 42317861n + l * 11n)
@@ -28,12 +28,25 @@ const cellsUnder = (px, pz, w) => [...new Set([Math.floor(px - w), Math.floor(px
 // A body boxed in by bamboo (by the shape the pathfinder plans with) still has room between the server's offset stalks.
 // Its free space, searched on a fine grid, leads out; string-pulled into straight runs the body can walk.
 export function groveExit ({ from, bambooAt, openAt, radius = 8 }) {
+  // the BFS and its 0.02-step string-pull revisit the same cells thousands of times; a grove with no exit otherwise
+  // reruns bambooAt/openAt (bot.blockAt round trips) and the BigInt stalk-shape math on every one of them
+  const cells = new Map()
+  const cellAt = (x, z) => {
+    const key = `${x},${z}`
+    const cached = cells.get(key)
+    if (cached) return cached
+    const bamboo = bambooAt(x, z)
+    const info = { bamboo, open: openAt(x, z), box: bamboo ? stalkShape(x, z) : null }
+    cells.set(key, info)
+    return info
+  }
   const stalks = (px, pz) => [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => [Math.floor(px) + dx, Math.floor(pz) + dz]))
-    .filter(([x, z]) => bambooAt(x, z))
-    .map(([x, z]) => { const [minX, , minZ, maxX, , maxZ] = stalkShape(x, z); return [x + minX, z + minZ, x + maxX, z + maxZ] })
-  const free = (px, pz, w) => cellsUnder(px, pz, w).every(([x, z]) => openAt(x, z) || bambooAt(x, z)) &&
+    .map(([x, z]) => [x, z, cellAt(x, z)])
+    .filter(([, , info]) => info.bamboo)
+    .map(([x, z, info]) => { const [minX, , minZ, maxX, , maxZ] = info.box; return [x + minX, z + minZ, x + maxX, z + maxZ] })
+  const free = (px, pz, w) => cellsUnder(px, pz, w).every(([x, z]) => { const info = cellAt(x, z); return info.open || info.bamboo }) &&
     stalks(px, pz).every(([minX, minZ, maxX, maxZ]) => px + w <= minX || px - w >= maxX || pz + w <= minZ || pz - w >= maxZ)
-  const out = (px, pz) => cellsUnder(px, pz, CLEAR).every(([x, z]) => openAt(x, z) && !bambooAt(x, z))
+  const out = (px, pz) => cellsUnder(px, pz, CLEAR).every(([x, z]) => { const info = cellAt(x, z); return info.open && !info.bamboo })
   const near = (px, pz) => Math.abs(px - from.x) <= radius && Math.abs(pz - from.z) <= radius
   const point = ([i, j]) => ({ x: i * STEP, z: j * STEP })
 
