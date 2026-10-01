@@ -367,6 +367,8 @@ for (const [name, change, same] of [
   ['a turn', { yaw: 0.3 }, false],
   ['a hundred ticks later', { timeOfDay: 6100 }, false],
   ['an entity that moved a block', { entities: [{ name: 'cow', x: 4, y: 65, z: 2 }] }, false],
+  ['an entity that turned a degree', { entities: [{ name: 'cow', x: 3, y: 65, z: 2, yaw: 0.017 }] }, true],
+  ['an entity that turned round', { entities: [{ name: 'cow', x: 3, y: 65, z: 2, yaw: Math.PI }] }, false],
   ['a block changed', { world: '1:1' }, false],
   ['another size', { width: 480, height: 270 }, false],
   ['a panorama', { panorama: true }, false]
@@ -421,4 +423,21 @@ test('look: an unchanged scene answers the last frame without asking the worker 
   assert.deepEqual([second.view, second.seen], [first.view, first.seen])
   // answering from the cache skips the worker round trip entirely: the draw count stays at the first, real draw
   assert.equal(look.draws, 1)
+})
+
+// a cow without a size of its own, three blocks in front of the body and facing away from it
+const withCow = () => Object.assign(standingBot(), { entities: { 7: { name: 'cow', type: 'animal', kind: 'Passive mobs', position: new Vec3(0.5, 64, -2.5), yaw: 0 } } })
+test('look: marks=true outlines each seen entity in fractions of the picture, the seen strings as they were', async () => {
+  const look = eyesFor(withCow())
+  const plain = await look({ file: 'a.png' })
+  const marked = await look({ file: 'b.png', marks: true })
+  const [mark] = marked.marks
+  assert.deepEqual([plain.marks, marked.seen, mark.name, mark.kind, mark.dist], [undefined, plain.seen, 'cow', 'animal', Number(plain.seen[0].match(/ (\d+)m @/)[1])])
+  assert.ok(mark.box.every(v => v >= 0 && v <= 1) && mark.box[0] < mark.box[2] && mark.box[1] < mark.box[3], String(mark.box))
+})
+
+test("look: an entity without a size takes its registry's, so a cow is not drawn a player's height", async () => {
+  const { marks: [{ box }] } = await eyesFor(withCow())({ file: 'a.png', marks: true })
+  // 1.4 high, its top stays below the eye; at the 1.8 default it would reach above the middle of the picture
+  assert.ok(box[1] > 0.5, String(box))
 })
