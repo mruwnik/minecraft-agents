@@ -92,6 +92,7 @@ const ICON = /^\/api\/icon\/([a-z0-9_]{1,64})$/
 const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})(\/live)?$/
 const SCREEN = /^\/api\/screen\/([A-Za-z0-9_]{1,32})$/
 const ACTIONS = /^\/api\/actions\/([A-Za-z0-9_]{1,32})$/
+const WHISPER = /^\/api\/whisper\/([A-Za-z0-9_]{1,32})$/
 // map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
 // same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
 // lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
@@ -128,6 +129,8 @@ export const route = url => {
   if (screen) return { kind: 'screen', name: screen[1] }
   const actions = ACTIONS.exec(pathname)
   if (actions) return { kind: 'actions', name: actions[1] }
+  const whisper = WHISPER.exec(pathname)
+  if (whisper) return { kind: 'whisper', name: whisper[1] }
   const icon = ICON.exec(pathname)
   if (icon) return { kind: 'icon', name: icon[1] }
   return { kind: 'unknown' }

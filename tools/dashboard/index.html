@@ -24,10 +24,6 @@
   #mapview { flex: 1; position: relative; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
-  #actions { position: absolute; left: 10px; top: 10px; width: 320px; max-height: calc(100% - 40px); background: rgba(28,32,39,0.9); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
-  #actions[hidden] { display: none; }
-  #actions h2 { margin: 0 0 6px; }
-  #actionsLog { overflow-y: auto; }
   #actionsLog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* the chat drawer sits under the map, never beside it: closed it is one 30px bar, open it takes at most 30% of
      the height, so the map keeps the room it has and the side panel is untouched either way */
@@ -40,6 +36,9 @@
   #chatbar .spacer { flex: 1; }
   #chatfilter { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; width: 220px; }
   #chatfilter:focus { outline: none; border-color: var(--zone); }
+  #whisper { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+  #whisper:focus { outline: none; border-color: var(--zone); }
+  #whisperErr:empty { display: none; }
   #chatbar label { color: var(--dim); cursor: pointer; white-space: nowrap; }
   #chatlog { overflow-y: auto; padding: 4px 12px 8px; scrollbar-color: var(--dim) transparent; }
   #chatlog::-webkit-scrollbar { width: 10px; }
@@ -56,7 +55,7 @@
   #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
-  #actions h2, #chatbar h2, section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+  #chatbar h2, section h2, #lookSide h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
   section h2 { margin: 0 0 8px; }
   .body { padding: 5px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
   .body:hover { background: #232932; }
@@ -69,10 +68,13 @@
   #lookimg { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; cursor: zoom-in; }
   #lookOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.8); display: flex; align-items: center; justify-content: center; z-index: 50; }
   #lookOverlay[hidden] { display: none; }
-  /* a fixed width keeps the card from jumping with every frame: the caption's length, a wider panorama picture,
+  /* a fixed width keeps the card from jumping with every frame: the caption's length,
      the HUD/container/inventory blocks all redraw inside this box instead of resizing it */
-  #lookCard { display: flex; flex-direction: column; gap: 8px; width: min(96vw, 640px); max-height: 94vh; }
-  #lookCard.pano { width: min(96vw, 864px); }
+  #lookCard { display: flex; gap: 12px; width: min(96vw, 980px); max-height: 94vh; }
+  #lookMain { flex: 1 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  #lookSide { flex: 0 0 320px; min-height: 0; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  #lookSide h2 { margin: 0; }
+  #actionsLog { flex: 1; min-height: 0; overflow-y: auto; }
   #lookBig { width: 100%; height: auto; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
   /* three lines reserved so a one-line or three-line caption never changes the card's height */
   #lookBigMeta { color: var(--dim); white-space: pre-wrap; word-break: break-word; min-height: 3lh; }
@@ -170,10 +172,6 @@
     <div id="mapview">
       <canvas id="map"></canvas>
       <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
-      <div id="actions" hidden>
-        <h2>actions · <span id="actionsName"></span></h2>
-        <div id="actionsLog"></div>
-      </div>
     </div>
     <div id="chat">
       <div id="chatbar">
@@ -193,7 +191,6 @@
       <div class="row">
         <span id="lookname">pick a body</span>
         <span class="spacer"></span>
-        <label class="muted"><input type="checkbox" id="pano"> pano</label>
         <button id="relook">watch</button>
       </div>
       <div class="lookFrame"><img id="lookimg" alt="" hidden><div id="lookimgMarks" class="marks"></div></div>
@@ -212,16 +209,24 @@
 </main>
 <div id="lookOverlay" hidden>
   <div id="lookCard">
-    <div class="planHead">
-      <span id="lookBigMeta"></span>
-      <span class="spacer"></span>
-      <button id="lookClose">close ×</button>
+    <div id="lookMain">
+      <div class="planHead">
+        <span id="lookBigMeta"></span>
+        <span class="spacer"></span>
+        <button id="lookClose">close ×</button>
+      </div>
+      <div class="lookFrame"><img id="lookBig" alt="" hidden><div id="lookBigMarks" class="marks"></div></div>
+      <div id="lookHud"></div>
+      <div id="lookWindowMeta"></div>
+      <div id="lookWindow" class="screen"></div>
+      <div id="lookInventory" class="screen"></div>
     </div>
-    <div class="lookFrame"><img id="lookBig" alt="" hidden><div id="lookBigMarks" class="marks"></div></div>
-    <div id="lookHud"></div>
-    <div id="lookWindowMeta"></div>
-    <div id="lookWindow" class="screen"></div>
-    <div id="lookInventory" class="screen"></div>
+    <div id="lookSide">
+      <h2>actions</h2>
+      <div id="actionsLog"></div>
+      <input id="whisper" type="text" placeholder="whisper to the agent, Enter sends" spellcheck="false" autocomplete="off">
+      <div id="whisperErr" class="err"></div>
+    </div>
   </div>
 </div>
 <div id="planOverlay" hidden>
@@ -750,13 +755,16 @@ const select = name => {
   el('lookimgMarks').innerHTML = ''
   el('lookBigMarks').innerHTML = ''
   el('lookname').textContent = name
+  // the previous body's refused whisper (text and error) must not carry over and be sent to this one
+  el('whisper').value = ''
+  el('whisperErr').textContent = ''
   // cleared and rendered before the fetch: the new body's log lands scrolled to the bottom instead of pinned
   // being measured against whatever the previous body's list was scrolled to
   actionsEntries = []
   renderActions()
   renderList()
   draw()
-  if (watching) startWatch()
+  setWatching(Boolean(name))
   refreshActions()
 }
 
@@ -768,8 +776,6 @@ const relAge = (now, iso) => {
 }
 let actionsEntries = []
 const renderActions = () => {
-  el('actions').hidden = !selected || !watching
-  el('actionsName').textContent = selected ?? ''
   if (!selected) return
   const log = el('actionsLog')
   const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
@@ -793,6 +799,21 @@ const refreshActions = () => {
     .then(a => { if (id === actionsRequest) { actionsEntries = a.entries ?? []; renderActions() } })
     .catch(() => {})
 }
+// what is typed under the log reaches the driver as a whisper from "dashboard" (tools/dashboard.mjs), and comes back
+// into the log above as one; a refused send keeps the text, so nothing typed is lost
+el('whisper').addEventListener('keydown', e => {
+  // an IME's own Enter, confirming a conversion, must not send the half-composed text: Chrome marks it
+  // isComposing, Safari gives it keyCode 229
+  if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
+  const message = el('whisper').value.trim()
+  if (!message || !selected) return
+  el('whisper').value = ''
+  el('whisperErr').textContent = ''
+  const failed = error => { el('whisperErr').textContent = error; el('whisper').value ||= message }
+  fetch(`/api/whisper/${encodeURIComponent(selected)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message }) })
+    .then(r => r.ok ? refreshActions() : r.json().then(a => failed(a.error ?? 'not sent'), () => failed('not sent')))
+    .catch(e => failed(e.message))
+})
 
 // each entity the picture shows, outlined where it is drawn and labelled with its distance, so nobody has to match
 // the caption's pixel numbers by eye; boxes are fractions of the picture, so they follow it however it is scaled
@@ -817,9 +838,10 @@ const showLook = (img, meta, look) => {
   meta.textContent = [[`${selected} · ${look.view}`, at].filter(Boolean).join(' · '), look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
 }
 
-// the inline card's own live stream, the same mechanism as the popup's (below): started by "watch", stopped by
-// "pause". Independent of the popup - both read the look cache in src/vision/eyes.mjs, so an identical unchanged
-// scene is served from the last-frame cache and costs one render, not two, however many streams are open on a body.
+// the inline card's own live stream, the same mechanism as the popup's (below): started by selecting a body,
+// stopped by "pause" (or deselecting). Independent of the popup - both read the look cache in src/vision/eyes.mjs,
+// so an identical unchanged scene is served from the last-frame cache and costs one render, not two, however many
+// streams are open on a body.
 let watching = false
 let watchStream = null
 const closeWatch = () => { watchStream?.close(); watchStream = null }
@@ -828,8 +850,7 @@ const startWatch = () => {
   closeWatch()
   el('lookmeta').className = ''
   if (el('lookimg').hidden) el('lookmeta').textContent = 'rendering…'
-  const params = new URLSearchParams(el('pano').checked ? { pano: '1' } : {})
-  watchStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live?${params}`)
+  watchStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live`)
   watchStream.onmessage = e => {
     const look = JSON.parse(e.data)
     if (look.png) el('lookimg').src = `data:image/png;base64,${look.png}`
@@ -841,7 +862,6 @@ const setWatching = on => {
   el('relook').textContent = on ? 'pause' : 'watch'
   if (on) startWatch()
   else closeWatch()
-  renderActions()
 }
 el('relook').addEventListener('click', () => setWatching(!watching))
 
@@ -923,10 +943,11 @@ const liveScreen = run => loadScreen().then(() => {
 const openLook = () => {
   if (!selected) return
   el('lookOverlay').hidden = false
-  el('lookCard').className = el('pano').checked ? 'pano' : ''
+  // the log was built while the popup was display:none, every scroll metric 0: pin it to the newest entry now
+  // that it is visible, instead of leaving it at the top where that zero left it
+  el('actionsLog').scrollTop = el('actionsLog').scrollHeight
   if (el('lookBig').hidden) el('lookBigMeta').textContent = 'rendering…'
-  const params = new URLSearchParams(el('pano').checked ? { pano: '1' } : {})
-  lookStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live?${params}`)
+  lookStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live`)
   lookStream.onmessage = e => {
     const look = JSON.parse(e.data)
     if (look.png) el('lookBig').src = `data:image/png;base64,${look.png}`
@@ -944,7 +965,7 @@ const closeLook = () => {
 el('lookimg').addEventListener('click', openLook)
 el('lookClose').addEventListener('click', closeLook)
 el('lookOverlay').addEventListener('click', e => { if (e.target === el('lookOverlay')) closeLook() })
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('lookOverlay').hidden) closeLook() })
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229 && !el('lookOverlay').hidden) closeLook() })
 
 // ---------------------------------------------------------------- the chat log
 // One line per thing said, merged by the server from every body's event log. The page keeps the last answer and
