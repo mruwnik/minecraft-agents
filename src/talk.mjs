@@ -34,6 +34,11 @@ export const offlineWhisper = (name, players) => {
 // mineflayer cuts a longer text into 256-character lines mid-word; before that our own primitives cut it off silently
 // at a fixed length (the human, 17:50Z: "whisper seems to have a length limit"). A long text now goes out in numbered
 // pieces, each cut at the last sentence end that fits, else the last word end, else hard.
+// the server's own answer to a chat or command it will not pass on: a system line only the body sees, so the body
+// reports it (an unsigned /tell on a server that enforces secure chat is refused this way, and looks sent otherwise)
+const REFUSALS = [/^Command had invalid signature/, /^No player was found/, /^Unknown or incomplete command/, /^An unexpected error occurred trying to execute that command/]
+export const chatRefusal = text => REFUSALS.some(r => r.test(String(text ?? ''))) ? String(text) : null
+
 export const CHAT_MAX = 256
 export const sayLimit = player => CHAT_MAX - (player ? `/tell ${player} `.length : 0)
 

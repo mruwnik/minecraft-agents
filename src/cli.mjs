@@ -67,7 +67,7 @@ export function describeClock (clock, now) {
 
 // ./mc wait: an idle subagent is not woken by its monitor (the events only reach it with the next message), so drivers wait inside a
 // blocking command instead. These are the events worth ending the wait for
-const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'died', 'kicked', 'body_down', 'error', 'job_failed', 'job_cancelled', 'job_interrupted', 'wedged', 'stalled', 'buried',
+const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'chat_refused', 'died', 'kicked', 'body_down', 'error', 'job_failed', 'job_cancelled', 'job_interrupted', 'wedged', 'stalled', 'buried',
   'watch_hit', 'night_fell', 'dawn', 'woke_up', 'bedtime_failed', 'code_updated',
   // a run the body gave up on is the agent's problem now, and an agent asleep in ./mc wait cannot take it (#138)
   'flee_stuck', 'flee_held',

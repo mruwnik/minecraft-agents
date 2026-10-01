@@ -2,7 +2,7 @@
 // their wait). Today's tally was 38 chats from agents against 5 whispers (720224ff), so `chat` reads its own text.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from '../src/talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from '../src/talk.mjs'
 
 const online = ['Chani', 'Perrin', 'Steve']
 
@@ -80,6 +80,20 @@ test('splitSay: every piece fits the limit, with its number', () => {
   assert.deepEqual(pieces.map(p => p.length <= 60), pieces.map(() => true))
   assert.equal(pieces.map(p => p.replace(/^\(\d+\/\d+\) /, '')).join(' '), long)
 })
+
+// the server answers a chat or command it will not pass on with a system line only the body sees
+const refusals = [
+  ['an unsigned /tell on a server that enforces secure chat', 'Command had invalid signature. Check that your chat is up to date and that your account is not banned', true],
+  ['a whisper to nobody', 'No player was found', true],
+  ['a mistyped command', 'Unknown or incomplete command, see below for error', true],
+  ['a command the server could not run', 'An unexpected error occurred trying to execute that command', true],
+  ['somebody chatting', '<Chani> the bed is yours', false],
+  ['a death line', 'mruwnik was slain by Zombie', false],
+  ['a join line', 'Chani joined the game', false]
+]
+for (const [name, text, refused] of refusals) {
+  test(`chatRefusal: ${name}`, () => assert.equal(chatRefusal(text), refused ? text : null))
+}
 
 test('sayLimit: chat has the whole line, a whisper pays for its header', () => {
   assert.equal(sayLimit(), 256)

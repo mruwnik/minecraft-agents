@@ -32,7 +32,7 @@ import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarnin
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit } from './talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
@@ -511,10 +511,12 @@ function connect () {
   bot.on('playerJoined', p => { if (ready && p.username !== bot.username) emit('player_joined', { player: p.username }) })
   bot.on('playerLeft', p => { if (p.username !== bot.username) emit('player_left', { player: p.username }) })
   // The server announces the death in a system message ("Claude was slain by Zombie"), which beats every guess at the
-  // cause. Nothing else here reads system messages, so this only looks for my own death line.
-  bot.on('message', msg => {
+  // cause. A chat or command the server refuses is answered the same way, and nobody else would ever see it.
+  bot.on('message', (msg, position) => {
     const said = deathBy(String(msg), bot.username)
     if (said) saidDeath = { said, at: Date.now() }
+    const refusal = position === 'system' && chatRefusal(String(msg))
+    if (refusal) emit('chat_refused', { text: refusal })
   })
   const died = pos => {
     diedAt = Date.now()
