@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import { parsePlan, planBill } from '../src/lib.mjs'
 import { planCells } from './plan-fixture.mjs'
 import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/build/plan.mjs'
+import { CompositeHandBack } from '../src/composite.mjs'
 import { fakeApi as baseFakeApi } from './helpers.mjs'
 const fakeApi = options => {
   const made = baseFakeApi(options)
@@ -164,7 +165,35 @@ test('farm.maintain: no bucket means no till on the dry bed, and farm_needs_wate
   assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.farm_needs_water))
 })
 
-test('farm.maintain: with the channel already holding water a second sweep does no water work', async () => {
+test('farm.maintain: a later sweep that waters and tills its bed clears an earlier farm_needs_water', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  let harvests = 0
+  const made = fakeApi({
+    place: fakePlace('w~'),
+    world,
+    items: { wheat_seeds: 1, stone_hoe: 1 },
+    answers: {
+      // the second sweep's own channel gains water before its job list is read, same as one a sweep poured itself
+      'farm.harvest': () => {
+        harvests++
+        if (harvests === 2) world['1,63,0'] = 'water'
+        return { harvested: {}, replanted: 0 }
+      }
+    }
+  })
+  // made.report only ever merges (Object.assign, same as the real runner): once farm_needs_water is set it would
+  // never read back as cleared there. The sweep's own last report is the one summary that actually reflects the fix
+  let lastReport = {}
+  const report = made.api.report
+  made.api.report = partial => { lastReport = partial; return report(partial) }
+  made.api.checkpoint = async () => { if (made.report.sweeps === 2) throw new CompositeHandBack('done') }
+  await assert.rejects(maintainFarm.run(made.api, { place: 'test-field', days: 2 }), /done/)
+  assert.equal(made.report.sweeps, 2)
+  assert.ok(made.calls.includes('till 0,63,0'), 'the now-hydrated bed is tilled on the second sweep')
+  assert.equal(lastReport.farm_needs_water, undefined)
+})
+
+test('farm.maintain: a channel already holding water means no water work, and the bed is tilled', async () => {
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air', '1,63,0': 'oak_slab#top~' })
   const { summary, calls } = await sweep({ plan: 'w~', world, items: { wheat_seeds: 1, stone_hoe: 1 } })
   assert.equal(calls.some(c => /^(find_blocks|fill|pour|dig) /.test(c)), false)
@@ -177,8 +206,10 @@ test('farm.build: no bucket means no till on the dry bed, and farm_needs_water s
   const made = fakeApi({ place: fakePlace('w~'), world, items: { wheat_seeds: 1, stone_hoe: 1 } })
   const summary = await buildFarm.run(made.api, { place: 'test-field', partial: true })
   assert.equal(made.calls.some(c => c.startsWith('till ')), false)
+  assert.equal(made.calls.some(c => c.startsWith('place') && c.includes('wheat_seeds')), false)
   assert.match(summary.farm_needs_water, new RegExp(NO_BUCKET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   assert.ok(made.events.some(e => e.type === 'farm_attention' && e.reasons.farm_needs_water))
+  assert.equal(summary.unfinished, undefined)
 })
 
 // Sources are removed by a bucket in the real world. Model that mutation so a

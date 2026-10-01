@@ -280,6 +280,7 @@ export default {
         if (bareSaid) summary.bare = bareSaid
         else delete summary.bare
         if (dryBeds.length) summary.farm_needs_water = needsWaterLine(water, dryBeds)
+        else delete summary.farm_needs_water
       }
       for (const job of jobs) {
         if (['till', 'plant', 'place'].includes(job.do) && unfilled.has(bedKey(job))) continue
