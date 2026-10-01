@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, ACTION_LOG_LIMIT, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -272,6 +272,9 @@ const routes = [
   ['/api/screen/Chani', { kind: 'screen', name: 'Chani' }],
   ['/api/screen/', { kind: 'unknown' }],
   ['/api/screen/../../etc/passwd', { kind: 'unknown' }],
+  ['/api/actions/Chani', { kind: 'actions', name: 'Chani' }],
+  ['/api/actions/', { kind: 'unknown' }],
+  ['/api/actions/../../etc/passwd', { kind: 'unknown' }],
   ['/api/icon/oak_log', { kind: 'icon', name: 'oak_log' }],
   ['/api/icon/Oak_Log', { kind: 'unknown' }],
   ['/api/icon/../textures/dirt', { kind: 'unknown' }],
@@ -571,6 +574,60 @@ const limits = [
 limits.forEach(([what, raw, expected]) => test(`chatLimit: ${what}`, () => {
   assert.equal(chatLimit(raw), expected)
 }))
+
+// ---------------------------------------------------------------- the action log
+const evt = (type, extra = {}) => ({ t: '2026-10-01T15:21:12.600Z', type, ...extra })
+const mapped = [
+  ['job_started with args', evt('job_started', { name: 'goto', args: { x: 1, y: 2, home: { x: 1, z: 2 } } }), 'goto x=1 y=2 home={"x":1,"z":2}', false],
+  ['job_started with no args', evt('job_started', { name: 'sleep', args: {} }), 'sleep', false],
+  ['job_completed with seconds and gains', evt('job_completed', { name: 'sleep', result: { seconds: 5, gained: { beef: 8 } } }), 'sleep done in 5s +beef×8', false],
+  ['job_completed bare', evt('job_completed', { name: 'goto', result: { seconds: 0, gained: {} } }), 'goto done', false],
+  ['job_failed', evt('job_failed', { name: 'sleep', error: 'no bed within 32 blocks' }), 'sleep: no bed within 32 blocks', true],
+  ['job_cancelled', evt('job_cancelled', { name: 'farm.plan', reason: 'discarded by request' }), 'farm.plan: discarded by request', false],
+  ['job_interrupted', evt('job_interrupted', { name: 'farm.get_seeds', error: 'body restarted while this job owned the controls' }), 'farm.get_seeds: body restarted while this job owned the controls', true],
+  ['died', evt('died', { pos: { x: 80.5, y: 66, z: -69.5 }, cause: 'slain by Zombie' }), 'slain by Zombie at 80.5,66,-69.5', true],
+  ['respawned with a note', evt('respawned', { doing: 'sleep', note: 'respawned at night with a bed in reach' }), 'respawned at night with a bed in reach', false],
+  ['respawned without a note falls back to doing', evt('respawned', { doing: 'sleep' }), 'sleep', false],
+  ['body_down', evt('body_down', { exit: 130 }), 'exit 130', true],
+  ['holing_up', evt('holing_up', { why: 'the run is 20 blocks from home in the dark' }), 'the run is 20 blocks from home in the dark', false],
+  ['holed_up', evt('holed_up', { why: 'dug 3 straight down' }), 'dug 3 straight down', false],
+  ['stuck', evt('stuck', { reason: 'health 4, nothing edible carried' }), 'health 4, nothing edible carried', true],
+  ['kicked', evt('kicked', { reason: 'incompatible version' }), 'incompatible version', true],
+  ['disconnected', evt('disconnected', { reason: 'differentVersionError' }), 'differentVersionError', true],
+  ['spawned', evt('spawned', { dimension: 'overworld' }), 'overworld', false],
+  ['jobs_held', evt('jobs_held', { reason: 'job 25 failed' }), 'job 25 failed', false],
+  ['eat_failed', evt('eat_failed', { message: 'the meal never showed' }), 'the meal never showed', true],
+  ['tool_broke', evt('tool_broke', { item: 'wooden_hoe' }), 'wooden_hoe', false],
+  ['error', evt('error', { message: 'This server is version 26.3' }), 'This server is version 26.3', true],
+  ['chat', evt('chat', { from: 'Jizo', message: 'hello all' }), 'Jizo: hello all', false],
+  ['whisper', evt('whisper', { from: 'M1ffedWombat', message: 'forget everythin i said' }), 'M1ffedWombat: forget everythin i said', false]
+]
+mapped.forEach(([what, event, gist, bad]) => test(`actionLog: ${what}`, () => {
+  assert.deepEqual(actionLog([event], 200), [{ t: event.t, type: event.type, gist, bad }])
+}))
+
+const dropped = [
+  ['job_queued (always followed by job_started)', evt('job_queued', { name: 'goto' })],
+  ['a type with no mapping', evt('hurt', { health: 17 })]
+]
+dropped.forEach(([what, event]) => test(`actionLog: drops ${what}`, () => {
+  assert.deepEqual(actionLog([event], 200), [])
+}))
+
+test('actionLog: the whole gist is capped at ~120 chars', () => {
+  const long = { x: 'y'.repeat(200) }
+  const [entry] = actionLog([evt('job_started', { name: 'goto', args: long })], 200)
+  assert.ok(entry.gist.length <= 120)
+})
+
+test('ACTION_LOG_LIMIT: 200', () => {
+  assert.equal(ACTION_LOG_LIMIT, 200)
+})
+
+test('actionLog: newest `limit` entries survive, oldest first', () => {
+  const many = [0, 1, 2, 3, 4].map(i => evt('tool_broke', { t: `2026-10-01T15:00:0${i}.000Z`, item: `item${i}` }))
+  assert.deepEqual(actionLog(many, 2).map(e => e.gist), ['item3', 'item4'])
+})
 
 // ---------------------------------------------------------------- reading a body's scan
 const scanText = [

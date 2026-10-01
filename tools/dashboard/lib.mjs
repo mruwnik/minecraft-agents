@@ -91,6 +91,7 @@ export const inventoryIcon = (name, image) => {
 const ICON = /^\/api\/icon\/([a-z0-9_]{1,64})$/
 const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})(\/live)?$/
 const SCREEN = /^\/api\/screen\/([A-Za-z0-9_]{1,32})$/
+const ACTIONS = /^\/api\/actions\/([A-Za-z0-9_]{1,32})$/
 // map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
 // same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
 // lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
@@ -125,6 +126,8 @@ export const route = url => {
   if (look) return { kind: look[2] ? 'live' : 'look', name: look[1] }
   const screen = SCREEN.exec(pathname)
   if (screen) return { kind: 'screen', name: screen[1] }
+  const actions = ACTIONS.exec(pathname)
+  if (actions) return { kind: 'actions', name: actions[1] }
   const icon = ICON.exec(pathname)
   if (icon) return { kind: 'icon', name: icon[1] }
   return { kind: 'unknown' }
@@ -172,6 +175,54 @@ export const chatLimit = raw => {
   if (!Number.isInteger(n) || n <= 0) return CHAT_LIMIT
   return Math.min(n, CHAT_CAP)
 }
+
+// ---------------------------------------------------------------- the action log
+// "Action" = what the body was told to do (./mc requests, as job_started/args) and what came of it
+// (job outcomes, death/respawn, holing up, chat). One line per entry; everything not listed here is
+// either too noisy to show (hurt, fleeing, job_progress, ...) or a duplicate of a line already shown
+// (job_queued is always followed ms later by job_started, which is what a queued-behind job becomes).
+export const ACTION_LOG_LIMIT = 200
+
+const GIST_CAP = 120
+const capGist = s => s.length > GIST_CAP ? `${s.slice(0, GIST_CAP - 1)}…` : s
+
+const argGist = args => Object.entries(args ?? {})
+  .map(([k, v]) => `${k}=${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
+  .join(' ')
+
+const gainedGist = result => {
+  const items = Object.entries(result?.gained ?? {})
+  return items.length ? ` ${items.map(([name, n]) => `+${name}×${n}`).join(' ')}` : ''
+}
+
+const GIST = {
+  job_started: e => capGist([e.name, argGist(e.args)].filter(Boolean).join(' ')),
+  job_completed: e => `${e.name} done${e.result?.seconds ? ` in ${e.result.seconds}s` : ''}${gainedGist(e.result)}`,
+  job_failed: e => `${e.name}: ${e.error ?? e.result?.error}`,
+  job_cancelled: e => `${e.name}: ${e.reason}`,
+  job_interrupted: e => `${e.name}: ${e.error}`,
+  died: e => capGist(`${e.cause}${e.pos ? ` at ${e.pos.x},${e.pos.y},${e.pos.z}` : ''}`),
+  respawned: e => e.note ?? e.doing,
+  body_down: e => `exit ${e.exit}`,
+  holing_up: e => capGist(e.why),
+  holed_up: e => capGist(e.why),
+  stuck: e => capGist(e.reason),
+  kicked: e => e.reason,
+  disconnected: e => e.reason,
+  spawned: e => e.dimension,
+  jobs_held: e => e.reason,
+  eat_failed: e => e.message,
+  tool_broke: e => e.item,
+  error: e => e.message,
+  chat: e => `${e.from}: ${e.message}`,
+  whisper: e => `${e.from}: ${e.message}`
+}
+const BAD = new Set(['job_failed', 'job_interrupted', 'died', 'body_down', 'stuck', 'kicked', 'disconnected', 'eat_failed', 'error'])
+
+export const actionLog = (lines, limit) => lines
+  .filter(e => e && GIST[e.type])
+  .map(e => ({ t: e.t, type: e.type, gist: GIST[e.type](e), bad: BAD.has(e.type) }))
+  .slice(-limit)
 
 // ---------------------------------------------------------------- what stands on a plan's footprint
 // A body's `scan` answers ASCII (renderScan in src/lib.mjs): a header naming the x range, a ruler, then per level

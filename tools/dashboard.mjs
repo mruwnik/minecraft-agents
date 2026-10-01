@@ -6,14 +6,15 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 //
 // It polls each body's `state` every 2 s (a quick action: it never takes the task slot, so a body mid-build is not
 // disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs),
-// /api/look/<Name> which renders one PNG through that body's eyes and /api/look/<Name>/live which streams them.
+// /api/actions/<Name> (that body's recent action log, same event logs), /api/look/<Name> which renders one PNG
+// through that body's eyes and /api/look/<Name>/live which streams them.
 // /blueprints is a second page: the blueprint library (blueprints/*.md) as a list and, per blueprint, its layers
 // drawn, its bill and what lint says.
 // Nothing here drives a body or spends an agent's tokens.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, ACTION_LOG_LIMIT, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
@@ -267,6 +268,14 @@ const serveScreen = async (res, name) => {
   return sendJson(res, 200, r.answer)
 }
 
+// one body's recent actions, read straight from its events.jsonl tail (the same source the chat log reads). A
+// folder with no config.json still counts, same as the chat log: the reader wants what the body did, not whether
+// it currently answers.
+const serveActions = (res, name) => {
+  if (!fs.existsSync(path.join(AGENTS_DIR, name))) return sendJson(res, 404, { error: `no agent folder called ${name}` })
+  return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(name), ACTION_LOG_LIMIT) })
+}
+
 // the popup's live look, as server-sent events of base64 PNGs with their captions. Two thirds the size of a one-shot
 // look, about 60 ms of the body's render worker a frame instead of 120, so it keeps up with the 10 a second
 // streamFrames allows. Each stream draws to its own file, so two popups on one body never read each other's
@@ -355,8 +364,9 @@ const handlers = {
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
   screen: (res, query, r) => serveScreen(res, r.name),
+  actions: (res, query, r) => serveActions(res, r.name),
   icon: (res, query, r) => serveIcon(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name> or /api/icon/<item>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name> or /api/icon/<item>' })
 }
 
 http.createServer(async (req, res) => {

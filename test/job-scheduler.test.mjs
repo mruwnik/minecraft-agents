@@ -28,12 +28,17 @@ test('submission reserves one owner synchronously and runs FIFO only after full 
   const first = deferred(), second = deferred(), started = []
   const t = setup(job => { started.push(job.name); return job.name === 'first' ? first.promise : second.promise })
   try {
-    const a = t.scheduler.submit({ name: 'first', args: {} })
+    const a = t.scheduler.submit({ name: 'first', args: { depth: 1 }, given: { depth: '1' } })
     const b = t.scheduler.submit({ name: 'second', args: {} })
     assert.equal(t.shelf.snapshot().active, a.id)
     assert.deepEqual(started, []) // execution begins in a microtask, after durable ownership is reserved
+    // args on queued/started mirror job.given (the plain, pre-coercion arguments) over job.args
+    assert.deepEqual(t.events.find(e => e.type === 'job_queued' && e.id === a.id)?.args, { depth: '1' })
     await until(() => started.length === 1)
     assert.deepEqual(started, ['first'])
+    assert.deepEqual(t.events.find(e => e.type === 'job_started' && e.id === a.id)?.args, { depth: '1' })
+    // second has no explicit given; args falls back to the plain args it was submitted with
+    assert.deepEqual(t.events.find(e => e.type === 'job_queued' && e.id === b.id)?.args, {})
     first.resolve({ ok: true, cleanup: 'settled' })
     await until(() => started.length === 2)
     assert.equal(t.shelf.get(a.id).status, 'completed')
