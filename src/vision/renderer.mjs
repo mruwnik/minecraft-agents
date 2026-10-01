@@ -140,8 +140,9 @@ export function textureCandidates (block, face, props = {}) {
 }
 
 // ---------------------------------------------------------------- world grid
+// shared memory, so the render worker reads the very cells block updates are written into, without a copy per look
 export function makeGrid (origin, size) {
-  const data = new Uint16Array(size.x * size.y * size.z)
+  const data = new Uint16Array(new SharedArrayBuffer(size.x * size.y * size.z * 2))
   const index = (x, y, z) => {
     const lx = x - origin.x
     const ly = y - origin.y

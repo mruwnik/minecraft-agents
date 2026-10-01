@@ -270,3 +270,13 @@ test('look: a body that has not moved does not copy the world again', async () =
   await look({ file: 'b.png' })
   assert.deepEqual([copied > 0, bot.reads], [true, copied])
 })
+
+test("look: the body's own thread runs on while the picture is drawn", async () => {
+  const look = eyesFor(standingBot())
+  await look({ file: 'a.png' })
+  let ticks = 0
+  const timer = setInterval(() => ticks++, 1)
+  await look({ file: 'b.png' })
+  clearInterval(timer)
+  assert.ok(ticks > 0)
+})
