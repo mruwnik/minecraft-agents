@@ -114,8 +114,9 @@ Block textures are Mojang's art, so they are not checked in: `textures/` is giti
 Every body start runs it beside `patch-deps.mjs`. With pictures already there it prints `[textures] already 1083` and
 stops; with none it extracts `assets/minecraft/textures/block/*.png` from a client jar and prints
 `[textures] extracted 1083 from <jar>`. The jar it reads is `$MC_CLIENT_JAR` when that is set, otherwise the newest
-plain release under `~/.minecraft/versions/<version>/<version>.jar` (OptiFine, snapshots, pre-releases and mod-loader
-folders are skipped). Finding no jar is a warning, never a failure: the body still starts, and the pictures still draw.
+plain release the launcher installed under `~/.minecraft/versions/<version>/<version>.jar` (on a Mac,
+`~/Library/Application Support/minecraft/versions`); OptiFine, snapshots, pre-releases and mod-loader folders are
+skipped. Finding no jar is a warning, never a failure: the body still starts, and the pictures still draw.
 To fill `textures/` by hand, or from a jar kept somewhere else:
 
     node tools/textures.mjs

@@ -1,9 +1,16 @@
-// The client jar: known release order and reading its block texture atlas.
+// The client jar: where the launcher keeps it, known release order and reading its block texture atlas.
+import path from 'node:path'
 
 // ---------------------------------------------------------------- the client jar (textures/ is not checked in)
 // The version folders under ~/.minecraft/versions that hold a plain client jar, newest first. A name that is not
 // only digits and dots belongs to something else: OptiFine builds, pre-releases, release candidates, snapshots and
 // loader folders all sit beside the releases, and none of them is the jar tools/textures.mjs is looking for.
+// The launcher's versions folders, best first: ~/.minecraft everywhere, but the Mac launcher puts it under Library.
+export const versionsDirs = (home, platform) => [
+  ...(platform === 'darwin' ? [path.join(home, 'Library/Application Support/minecraft/versions')] : []),
+  path.join(home, '.minecraft/versions')
+]
+
 const RELEASE = /^\d+(\.\d+)*$/
 const versionOrder = (a, b) => {
   const [x, y] = [a.split('.').map(Number), b.split('.').map(Number)]

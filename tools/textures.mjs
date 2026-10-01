@@ -2,16 +2,16 @@
 // without it. tools/start-body runs it beside patch-deps.mjs. It never stops a body from starting: with no textures
 // `./mc look` still draws, colouring every block by a hash of its name instead of its picture.
 //   node tools/textures.mjs
-// The jar it reads: $MC_CLIENT_JAR when set, else the newest plain release under ~/.minecraft/versions/<v>/<v>.jar.
+// The jar it reads: $MC_CLIENT_JAR when set, else the newest plain release the launcher installed (<versions>/<v>/<v>.jar).
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { clientVersions, blockTextures } from '../src/lib.mjs'
+import { clientVersions, versionsDirs, blockTextures } from '../src/lib.mjs'
 
 const ROOT = path.join(import.meta.dirname, '..')
 const TEXTURES = path.join(ROOT, 'textures')
-const VERSIONS = path.join(os.homedir(), '.minecraft/versions')
+const VERSIONS = versionsDirs(os.homedir(), process.platform)
 const END_OF_CENTRAL_DIRECTORY = 0x06054b50
 
 // A zip is read from the end: the central directory at its tail lists every entry and where its bytes begin.
@@ -46,10 +46,10 @@ const contentOf = (buf, entry) => {
 }
 
 const pngsIn = dir => fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.png')) : []
-const jarOf = version => path.join(VERSIONS, version, `${version}.jar`)
-const installedJar = () => fs.existsSync(VERSIONS)
-  ? clientVersions(fs.readdirSync(VERSIONS)).map(jarOf).find(f => fs.existsSync(f))
-  : undefined
+const jarOf = (dir, version) => path.join(dir, version, `${version}.jar`)
+const installedJar = () => VERSIONS.filter(fs.existsSync)
+  .flatMap(dir => clientVersions(fs.readdirSync(dir)).map(v => jarOf(dir, v)))
+  .find(fs.existsSync)
 
 const already = pngsIn(TEXTURES)
 if (already.length) {
@@ -61,7 +61,7 @@ const jar = process.env.MC_CLIENT_JAR ?? installedJar()
 if (!jar || !fs.existsSync(jar)) {
   console.log(`[textures] WARNING: no client jar found, so pictures will show every block as a colour hashed from its name.
 [textures] Two ways to give it one: set MC_CLIENT_JAR=/path/to/<version>.jar in the environment a body starts in,
-[textures] or install any plain release so that ~/.minecraft/versions/<version>/<version>.jar exists (e.g. 1.21.8).`)
+[textures] or install any plain release with the launcher so that one of these holds <version>/<version>.jar: ${VERSIONS.join(', ')}`)
   process.exit(0)
 }
 
