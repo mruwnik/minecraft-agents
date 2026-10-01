@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events'
 import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import { Vec3 } from 'vec3'
-import { makeEyes } from '../src/vision/eyes.mjs'
+import { makeEyes, lookKey } from '../src/vision/eyes.mjs'
 import { encodePng, decodePng, textureCandidates, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
@@ -308,6 +308,22 @@ const eyesFor = bot => {
   return makeEyes(bot, { textureDir: dir, snapshotDir: dir })
 }
 
+const lookKeyBase = { eye: { x: 0.5, y: 65.62, z: 0.5 }, yaw: 0.1, pitch: 0, timeOfDay: 6000, entities: [{ name: 'cow', x: 3, y: 65, z: 2 }], world: '1:0', width: 320, height: 180, maxDist: 64, panorama: false, fov: 100 }
+for (const [name, change, same] of [
+  ['the same scene', {}, true],
+  ['a step of under a sixteenth of a block', { eye: { x: 0.52, y: 65.62, z: 0.5 } }, true],
+  // 0.004 from the brief lands exactly on this base yaw's rounding boundary (11 vs 12) and flips buckets by
+  // floating-point luck; 0.0003 keeps the same "well under half a degree" intent without the boundary coincidence
+  ['a turn of under half a degree', { yaw: 0.1 + 0.0003 }, true],
+  ['a step of a block', { eye: { x: 1.5, y: 65.62, z: 0.5 } }, false],
+  ['a turn', { yaw: 0.3 }, false],
+  ['a hundred ticks later', { timeOfDay: 6100 }, false],
+  ['an entity that moved a block', { entities: [{ name: 'cow', x: 4, y: 65, z: 2 }] }, false],
+  ['a block changed', { world: '1:1' }, false],
+  ['another size', { width: 480, height: 270 }, false],
+  ['a panorama', { panorama: true }, false]
+]) test(`lookKey: ${name} ${same ? 'draws nothing new' : 'is a new picture'}`, () => assert.equal(lookKey({ ...lookKeyBase, ...change }) === lookKey(lookKeyBase), same))
+
 const freshCases = [
   ['a block update', bot => { putWall(bot, 0); bot.wallCells.forEach(position => bot.emit('blockUpdate', null, { position, stateId: STONE })) }],
   ['a chunk that arrives', bot => { putWall(bot, 0); bot.emit('chunkColumnLoad', new Vec3(0, 0, -16)) }],
@@ -334,11 +350,29 @@ test('look: a body that has not moved does not copy the world again', async () =
 })
 
 test("look: the body's own thread runs on while the picture is drawn", async () => {
-  const look = eyesFor(standingBot())
+  const bot = standingBot()
+  const look = eyesFor(bot)
   await look({ file: 'a.png' })
   let ticks = 0
   const timer = setInterval(() => ticks++, 1)
+  // a changed scene so this look is actually drawn, not answered from the cache under test below
+  bot.time.timeOfDay = 6100
   await look({ file: 'b.png' })
   clearInterval(timer)
   assert.ok(ticks > 0)
+})
+
+test('look: an unchanged scene answers the last frame without asking the worker to draw again', async () => {
+  const bot = standingBot()
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eyes-'))
+  const look = makeEyes(bot, { textureDir: dir, snapshotDir: dir })
+  const first = await look({ file: 'a.png' })
+  const started = performance.now()
+  const second = await look({ file: 'b.png' })
+  const cached = performance.now() - started
+  // a cache hit still writes the file (the dashboard reads it from disk), with the bytes the worker drew the first time
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'a.png')), fs.readFileSync(path.join(dir, 'b.png')))
+  assert.deepEqual([second.view, second.seen], [first.view, first.seen])
+  // answering from the cache skips the worker round trip entirely, so it is far faster than the first, real draw
+  assert.ok(cached < 5)
 })

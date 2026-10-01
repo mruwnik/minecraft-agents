@@ -9,8 +9,20 @@ const MARGIN = 8
 export const YAWS = { north: 0, west: 90, south: 180, east: 270 }
 const rad = deg => deg * Math.PI / 180
 
+// Everything a picture depends on, coarse enough that a body standing still answers the same key: the eye to a
+// sixteenth of a block, the direction to half a degree, the day to a hundred ticks, entities to a quarter block,
+// and the world copy's identity and edit count
+export const lookKey = ({ eye, yaw, pitch, timeOfDay, entities, world, width, height, maxDist, panorama, fov }) => [
+  Math.round(eye.x * 16), Math.round(eye.y * 16), Math.round(eye.z * 16),
+  Math.round(yaw * 360 / Math.PI), Math.round(pitch * 360 / Math.PI),
+  Math.floor((timeOfDay ?? 0) / 100),
+  world, width, height, maxDist, panorama ? 'pano' : 'view', fov,
+  ...entities.map(e => `${e.name}@${Math.round(e.x * 4)},${Math.round(e.y * 4)},${Math.round(e.z * 4)}`)
+].join('|')
+
 export function makeEyes (bot, { textureDir, snapshotDir }) {
   let shot = 0
+  let last = null
 
   // started on the first look and again after a crash; a crash fails the looks it was drawing, not the body.
   // It holds the process open only while it draws, so a body (or a test) that is done can exit.
@@ -74,6 +86,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
   // Copying the world is the part of a look the body's own thread pays, so the copy is kept between looks and kept
   // true by block updates. It reaches MARGIN past the view, so the body can step about before it is copied again.
   let copy = null
+  let copies = 0
   const forget = () => { copy = null }
   bot.on('chunkColumnLoad', forget)
   bot.on('chunkColumnUnload', forget)
@@ -82,12 +95,13 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     if (!copy) return
     copy.grid.set(now.position.x, now.position.y, now.position.z, now.stateId)
     if (now.stateId && now.position.y > copy.grid.top) copy.grid.top = now.position.y
+    copy.edits++
   })
   const worldAround = (eye, radius) => {
     const at = { x: Math.floor(eye.x), y: Math.floor(eye.y), z: Math.floor(eye.z) }
     const fits = copy && copy.world === bot.world && copy.radius === radius && ['x', 'y', 'z'].every(a => Math.abs(at[a] - copy.centre[a]) <= MARGIN)
-    if (!fits) copy = { grid: snapshotWorld(at, radius + MARGIN, Math.min(radius, 48) + MARGIN), world: bot.world, radius, centre: at }
-    return copy.grid
+    if (!fits) copy = { grid: snapshotWorld(at, radius + MARGIN, Math.min(radius, 48) + MARGIN), world: bot.world, radius, centre: at, id: ++copies, edits: 0 }
+    return copy
   }
 
   const visibleEntities = () => Object.values(bot.entities)
@@ -115,11 +129,15 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const width = a.width ?? (panorama ? 864 : 480)
     const height = a.height ?? (panorama ? 216 : 270)
     const maxDist = Math.min(a.dist ?? 64, 96)
-    const { origin, size, data, top } = worldAround(eye, maxDist)
-    const out = await draw({
-      grid: { origin, size, data, top }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
+    const entities = visibleEntities()
+    const world = worldAround(eye, maxDist)
+    const key = lookKey({ eye, yaw, pitch, timeOfDay: bot.time.timeOfDay, entities, world: `${world.id}:${world.edits}`, width, height, maxDist, panorama, fov: a.fov ?? 100 })
+    // a body standing still is asked for the same picture ten times a second: the worker draws it once
+    const out = last?.key === key ? last.out : await draw({
+      grid: { origin: world.grid.origin, size: world.grid.size, data: world.grid.data, top: world.grid.top }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities, timeOfDay: bot.time.timeOfDay,
       width, height, maxDist, panorama, yaw, pitch, fov: a.fov ?? 100
     })
+    last = { key, out }
     fs.mkdirSync(snapshotDir, { recursive: true })
     const file = path.join(snapshotDir, a.file ?? `look-${String(++shot).padStart(3, '0')}.png`)
     fs.writeFileSync(file, out.png)
