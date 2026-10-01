@@ -6,7 +6,13 @@ import { sameFamily, WEEDS } from './anchor.mjs'
 import { channelCovered } from '../build/cover.mjs'
 import { itemShortfall } from './inventory.mjs'
 
-const JOB_ORDER = ['skip', 'clear', 'till', 'pour', 'cover', 'plant', 'place']
+// a bed tilled before its channel holds water dries back to dirt, so the water goes in first
+const JOB_ORDER = ['skip', 'clear', 'pour', 'cover', 'till', 'plant', 'place']
+// farmland stays farmland with water within 4 on x and z, level with it or one up (the rule dryCells and planErrors use)
+export const hydrated = (worldAt, { x, y, z }) => [y, y + 1].some(wy => {
+  for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) if (holdsWater(worldAt(x + dx, wy, z + dz))) return true
+  return false
+})
 // A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
 // A field tilled in one pass and sown in the next loses the beds the body walked back over (15 of 28, round 2 item 3),
 // so every till is followed at once by the planting of its own cell, and the walk does each bed once.
