@@ -755,6 +755,9 @@ const select = name => {
   el('lookimgMarks').innerHTML = ''
   el('lookBigMarks').innerHTML = ''
   el('lookname').textContent = name
+  // the previous body's refused whisper (text and error) must not carry over and be sent to this one
+  el('whisper').value = ''
+  el('whisperErr').textContent = ''
   // cleared and rendered before the fetch: the new body's log lands scrolled to the bottom instead of pinned
   // being measured against whatever the previous body's list was scrolled to
   actionsEntries = []
@@ -799,7 +802,9 @@ const refreshActions = () => {
 // what is typed under the log reaches the driver as a whisper from "dashboard" (tools/dashboard.mjs), and comes back
 // into the log above as one; a refused send keeps the text, so nothing typed is lost
 el('whisper').addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return
+  // an IME's own Enter, confirming a conversion, must not send the half-composed text: Chrome marks it
+  // isComposing, Safari gives it keyCode 229
+  if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
   const message = el('whisper').value.trim()
   if (!message || !selected) return
   el('whisper').value = ''
@@ -938,6 +943,9 @@ const liveScreen = run => loadScreen().then(() => {
 const openLook = () => {
   if (!selected) return
   el('lookOverlay').hidden = false
+  // the log was built while the popup was display:none, every scroll metric 0: pin it to the newest entry now
+  // that it is visible, instead of leaving it at the top where that zero left it
+  el('actionsLog').scrollTop = el('actionsLog').scrollHeight
   if (el('lookBig').hidden) el('lookBigMeta').textContent = 'rendering…'
   lookStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live`)
   lookStream.onmessage = e => {
@@ -957,7 +965,7 @@ const closeLook = () => {
 el('lookimg').addEventListener('click', openLook)
 el('lookClose').addEventListener('click', closeLook)
 el('lookOverlay').addEventListener('click', e => { if (e.target === el('lookOverlay')) closeLook() })
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('lookOverlay').hidden) closeLook() })
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229 && !el('lookOverlay').hidden) closeLook() })
 
 // ---------------------------------------------------------------- the chat log
 // One line per thing said, merged by the server from every body's event log. The page keeps the last answer and

@@ -441,11 +441,18 @@ for (const [what, text] of [['empty', ''], ['blank', '   ']]) test(`whisper: ${w
   assert.deepEqual(posts, [])
 })
 
-test('whisper: other keys send nothing', () => {
+// an IME's own Enter (confirming a conversion) fires keydown with isComposing true in Chrome, or keyCode 229 in
+// Safari; either must leave the half-composed text alone, same as any other non-Enter key
+const noSendKeydowns = [
+  ['other keys', { key: 'a' }],
+  ['a composing Enter', { key: 'Enter', isComposing: true }],
+  ['an IME Enter', { key: 'Enter', keyCode: 229 }]
+]
+for (const [what, event] of noSendKeydowns) test(`whisper: ${what} send nothing`, () => {
   const { el, posts, select } = page()
   select('Chani')
   el('whisper').value = 'hi'
-  el('whisper').listeners.keydown({ key: 'a' })
+  el('whisper').listeners.keydown(event)
   assert.deepEqual([posts, el('whisper').value], [[], 'hi'])
 })
 
@@ -455,4 +462,20 @@ test('whisper: a refused send says why and gives the text back', async () => {
   typeAndEnter(el, 'come home')
   await settle()
   assert.deepEqual([el('whisperErr').textContent, el('whisper').value], ['the body did not answer', 'come home'])
+})
+
+test('whisper: selecting another body clears a stale restored text and error', async () => {
+  const { el, select } = page(undefined, { postAnswer: { ok: false, json: async () => ({ error: 'the body did not answer' }) } })
+  select('Chani')
+  typeAndEnter(el, 'come home')
+  await settle()
+  select('Bob')
+  assert.deepEqual([el('whisperErr').textContent, el('whisper').value], ['', ''])
+})
+
+test('look popup: opening pins the action log to its newest entry', () => {
+  const { el } = page()
+  el('actionsLog').scrollHeight = 500
+  el('lookimg').listeners.click()
+  assert.equal(el('actionsLog').scrollTop, 500)
 })
