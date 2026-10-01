@@ -102,22 +102,41 @@ export function decodePng (file) {
 // ---------------------------------------------------------------- textures
 const SHAPED = /_(stairs|slab|wall|fence_gate|fence|pressure_plate|button|trapdoor|carpet|pane)$/
 const FACE_SUFFIXES = { top: ['_top', ''], bottom: ['_bottom', '_top', ''], side: ['_side', '', '_front'], cross: ['', '_side'] }
+// blocks whose picture is filed under another name
+const DRAWN_AS = {
+  snow_block: 'snow', magma_block: 'magma', bamboo: 'bamboo_stalk', bamboo_sapling: 'bamboo_stage0', dried_kelp_block: 'dried_kelp',
+  ender_chest: 'obsidian', chest: 'oak_planks', trapped_chest: 'oak_planks', redstone_wire: 'redstone_dust_line0', fire: 'fire_0',
+  soul_fire: 'soul_fire_0', frosted_ice: 'frosted_ice_0', petrified_oak_slab: 'oak_planks', light_weighted_pressure_plate: 'gold_block',
+  heavy_weighted_pressure_plate: 'iron_block', piston_head: 'piston', sticky_piston: 'piston', moving_piston: 'piston',
+  campfire: 'campfire_log', soul_campfire: 'soul_campfire_log'
+}
+// a wrapper, treatment or variant of a block that shares its picture; tried after the full name, so smooth_stone keeps its own
+const plainName = name => name
+  .replace(/^(waxed|infested|potted|smooth)_/, '')
+  .replace(/^(water|lava|powder_snow)_cauldron$/, 'cauldron')
+  .replace(/^(\w+_)?candle_cake$/, 'cake')
+  .replace(/_wood$/, '_log')
+  .replace(/_hyphae$/, '_stem')
+
+function candidatesFor (name, face, props) {
+  const half = props.half === 'upper' ? '_top' : '_bottom'
+  const base = name.replace(SHAPED, '')
+  const faced = n => FACE_SUFFIXES[face].map(s => `${n}${s}`)
+  return [
+    ...(props.age !== undefined ? [`${name}_stage${props.age}`] : []),
+    ...(props.half === 'upper' || props.half === 'lower' ? [`${name}${half}`] : []),
+    ...faced(name),
+    ...(base === name ? [] : [...faced(base), `${base}_planks`, `${base}s`, `${base}_wool`, ...faced(`${base}_block`)])
+  ]
+}
 
 // Texture file names (without .png) worth trying for a block face, best first. The caller picks the first that exists.
 export function textureCandidates (block, face, props = {}) {
   if (block === 'water' || block === 'lava') return [`${block}_still`]
   if (block.endsWith('_bed')) return [block.replace(/_bed$/, '_wool')]
-  if (block === 'chest' || block === 'trapped_chest') return ['oak_planks']
   if (block === 'grass_block' && face === 'bottom') return ['dirt']
-  const half = props.half === 'upper' ? '_top' : '_bottom'
-  const name = block.replace('wall_', '')
-  const base = name.replace(SHAPED, '')
-  return [
-    ...(props.age !== undefined ? [`${name}_stage${props.age}`] : []),
-    ...(props.half === 'upper' || props.half === 'lower' ? [`${name}${half}`] : []),
-    ...FACE_SUFFIXES[face].map(s => `${name}${s}`),
-    ...(base === name ? [] : [base, `${base}_planks`, `${base}s`, `${base}_wool`, `${base}_block`])
-  ]
+  const name = DRAWN_AS[block] ?? block.replace('wall_', '')
+  return [...new Set([name, plainName(name)].flatMap(n => candidatesFor(n, face, props)))]
 }
 
 // ---------------------------------------------------------------- world grid

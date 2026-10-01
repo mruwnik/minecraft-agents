@@ -59,11 +59,38 @@ const textureCases = [
   ['wheat', 'side', { age: 7 }, 'wheat_stage7'],
   ['furnace', 'side', {}, 'furnace_side'],
   ['crafting_table', 'top', {}, 'crafting_table_top'],
-  ['wall_torch', 'side', {}, 'torch']
+  ['wall_torch', 'side', {}, 'torch'],
+  ['bamboo', 'side', {}, 'bamboo_stalk'],
+  ['oak_wood', 'side', {}, 'oak_log'],
+  ['stripped_birch_wood', 'side', {}, 'stripped_birch_log'],
+  ['crimson_hyphae', 'side', {}, 'crimson_stem'],
+  ['waxed_cut_copper_stairs', 'side', {}, 'cut_copper'],
+  ['infested_stone_bricks', 'side', {}, 'stone_bricks'],
+  ['potted_poppy', 'cross', {}, 'poppy'],
+  ['smooth_sandstone_slab', 'top', {}, 'sandstone_top'],
+  ['quartz_stairs', 'side', {}, 'quartz_block_side'],
+  ['snow_block', 'top', {}, 'snow'],
+  ['magma_block', 'side', {}, 'magma'],
+  ['water_cauldron', 'side', {}, 'cauldron_side'],
+  ['sweet_berry_bush', 'cross', { age: 2 }, 'sweet_berry_bush_stage2'],
+  ['campfire', 'top', {}, 'campfire_log'],
+  ['redstone_wire', 'top', {}, 'redstone_dust_line0'],
+  ['fire', 'cross', {}, 'fire_0'],
+  ['frosted_ice', 'top', {}, 'frosted_ice_0'],
+  ['dried_kelp_block', 'side', {}, 'dried_kelp_side'],
+  ['ender_chest', 'side', {}, 'obsidian'],
+  ['piston_head', 'side', {}, 'piston_side'],
+  ['sticky_piston', 'top', {}, 'piston_top'],
+  ['light_weighted_pressure_plate', 'top', {}, 'gold_block'],
+  ['petrified_oak_slab', 'top', {}, 'oak_planks'],
+  ['red_candle_cake', 'side', {}, 'cake_side']
 ]
 const known = new Set(['stone', 'grass_block_top', 'grass_block_side', 'dirt', 'oak_log_top', 'oak_log', 'water_still', 'oak_planks',
   'stone_bricks', 'cobblestone', 'white_wool', 'oak_door_top', 'oak_door_bottom', 'wheat_stage7', 'furnace_side', 'furnace_top',
-  'furnace_front', 'crafting_table_top', 'crafting_table_side', 'crafting_table_front', 'torch'])
+  'furnace_front', 'crafting_table_top', 'crafting_table_side', 'crafting_table_front', 'torch', 'bamboo_stalk', 'oak_log',
+  'stripped_birch_log', 'crimson_stem', 'cut_copper', 'stone_bricks', 'poppy', 'sandstone_top', 'sandstone', 'quartz_block_side',
+  'snow', 'magma', 'cauldron_side', 'sweet_berry_bush_stage2', 'campfire_log', 'redstone_dust_line0', 'fire_0', 'frosted_ice_0',
+  'dried_kelp_side', 'obsidian', 'piston_side', 'piston_top', 'gold_block', 'oak_planks', 'cake_side'])
 for (const [block, face, props, expected] of textureCases) {
   test(`texture for ${block} ${face} ${JSON.stringify(props)}`, () =>
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
