@@ -247,13 +247,12 @@ const lookFrame = async (agent, args) => {
 const serveLook = async (res, name, query) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const args = { file: LOOK_FILE, marks: true, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
+  const args = { file: LOOK_FILE, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
   const frame = await lookFrame(agent, args)
   if (frame.error) return sendJson(res, frame.code, { error: frame.error })
   send(res, 200, 'image/png', frame.png, {
     'x-look-view': encodeURIComponent(frame.view),
     'x-look-seen': encodeURIComponent(JSON.stringify(frame.seen)),
-    'x-look-marks': encodeURIComponent(JSON.stringify(frame.marks)),
     'x-look-blocked': encodeURIComponent(frame.blocked)
   })
 }

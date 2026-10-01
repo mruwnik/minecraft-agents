@@ -254,11 +254,11 @@ const pinned = {
   ]
 }
 const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
-test('render: the pinned view is drawn exactly as before', () => {
+test('render: the pinned view is drawn as pinned', () => {
   const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
   assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['edae299000cdce66', ['cow', 'item']])
 })
-test('render: the pinned panorama is drawn exactly as before', () => {
+test('render: the pinned panorama is drawn as pinned', () => {
   const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
   assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['d894513612815aa8', ['cow', 'item', 'sheep', 'zombie']])
 })

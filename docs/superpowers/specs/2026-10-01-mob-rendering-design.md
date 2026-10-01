@@ -59,8 +59,8 @@ actually cover (not hidden ones). The look reply's `seen` strings do not change:
 
 The dashboard asks its looks with `marks=true`, and only then does the reply carry
 `marks: [{name, kind, dist, box}]` with `box` in fractions of the picture (0..1, three decimals), so a scaled image
-needs no size. The driver never pays for marks it did not ask for. `/api/look/<Name>` sends them as an `x-look-marks`
-header; the live stream carries them in each event.
+needs no size. The driver never pays for marks it did not ask for. The live stream, which both the small picture and
+the popup use, carries them in each event.
 
 The page draws, over both the small picture and the popup, a thin outline per mark with a label above it
 (`cow 12m`), always on: the picture is small and a person reading it wants the names without hunting with a mouse.
@@ -75,7 +75,10 @@ round draws a new picture and a mob twitching its head does not.
 
 Each pixel inside a mob's screen rectangle pays one frame change and one enclosing-box test; only pixels on the mob pay
 up to six part tests. Measured on a 480x270 frame with eight mobs close up (bench script in the session scratchpad):
-before 45 ms with mobs, 42 ms without. The budget is no more than 10% over the before figure with mobs.
+before 45 ms with mobs, 42 ms without. The budget was no more than 10% over the before figure with mobs; measured
+after, 47-53 ms (7-13% over, the spread is the machine's load), with no change without mobs. Accepted: eight mobs within
+seven blocks is the worst case, the hull test already skips a mob whose box starts behind the nearest hit, and the live
+stream's 320x180 frames stay far inside their 100 ms.
 
 ## Tests (test/vision.test.mjs, test/dashboard-look.test.mjs)
 

@@ -114,8 +114,8 @@ An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV s
 less than most text descriptions of the same scene. Mobs are a few blocks each in their game colours, shaped by family
 (two legs, four legs, creeper, spider, bird; anything else a box of its size) and turned the way they face, the front of
 the head painted as a face. Players are magenta, a hostile without colours of its own red, dropped items small yellow
-cubes. `marks=true` adds `marks`, each seen entity's outline as fractions of the picture; the dashboard asks for it to
-outline and label every mob over the picture, the driver never needs it.
+cubes. The dashboard outlines and labels every mob over its pictures (`marks=true` on the look: each seen entity's
+outline as fractions of the picture).
 Not drawn: block light (caves render fully lit, which is handy), translucent water, item models, mob textures, the sun.
 
 Block and item textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs`

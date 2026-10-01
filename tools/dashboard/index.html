@@ -750,7 +750,7 @@ const select = name => {
 // a player's name comes off the wire, and the marks are written as html
 const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const marksHtml = marks => marks.map(({ name, kind, dist, box: [x1, y1, x2, y2] }) =>
-  `<div class="mark ${escapeHtml(kind ?? '')}" style="left:${x1 * 100}%;top:${y1 * 100}%;width:${(x2 - x1) * 100}%;height:${(y2 - y1) * 100}%"><span>${escapeHtml(name)} ${dist}m</span></div>`).join('')
+  `<div class="mark ${escapeHtml(kind ?? '')}" style="left:${x1 * 100}%;top:${y1 * 100}%;width:${(x2 - x1) * 100}%;height:${(y2 - y1) * 100}%"><span>${escapeHtml(name)} ${Number(dist)}m</span></div>`).join('')
 
 // a look's caption under its picture, or why there is no picture. Once a picture is up it stays up: an error
 // later (a busy body) only changes the caption, so the card never loses and regains its 180px on a bad frame
