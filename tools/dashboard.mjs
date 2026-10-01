@@ -242,7 +242,7 @@ const lookFrame = async (agent, args) => {
   if (!r.ok) return { code: 503, error: r.error ?? r.answer?.error ?? 'the body did not answer' }
   const file = snapshotFile(path.join(AGENTS_DIR, agent.name), r.answer.file)
   if (!file || !fs.existsSync(file)) return { code: 502, error: `the body rendered ${r.answer.file}, which is not a file I may serve` }
-  return { png: fs.readFileSync(file), view: r.answer.view ?? '', seen: r.answer.seen ?? [], marks: r.answer.marks ?? [], blocked: r.answer.blocked ?? '' }
+  return { png: fs.readFileSync(file), at: r.answer.at ?? null, view: r.answer.view ?? '', seen: r.answer.seen ?? [], marks: r.answer.marks ?? [], blocked: r.answer.blocked ?? '' }
 }
 
 const serveLook = async (res, name, query) => {

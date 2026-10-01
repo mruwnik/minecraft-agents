@@ -149,6 +149,17 @@ for (const [name, open, marked] of [['the popup', 'lookimg', 'lookBigMarks'], ['
   })
 }
 
+// the header shows where the body stands, from the same stream frame as the caption; both the popup and the
+// inline card go through showLook(), so one frame shape is wired into both
+for (const [name, open, meta] of [['the popup', 'lookimg', 'lookBigMeta'], ['the small picture', 'relook', 'lookmeta']]) {
+  test(`look header: ${name} shows the body's current coordinates`, () => {
+    const { el, streams } = page()
+    el(open).listeners.click()
+    streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', seen: [], blocked: '', at: { x: 102, y: 70, z: -108 } }) })
+    assert.equal(el(meta).textContent, 'Chani · north pitch 0 · 102 70 -108\nsees nothing alive')
+  })
+}
+
 test('look popup: a player name is shown as text, never run as html', () => {
   const { el, streams } = page()
   el('lookimg').listeners.click()
@@ -344,10 +355,19 @@ test('actions panel: hidden while nothing is selected, even if a poll fires', ()
   assert.equal(el('actions').hidden, true)
 })
 
-test('actions panel: select shows it and renders the body\'s log; deselecting hides it again', async () => {
+test('actions panel: selecting a body alone does not show it - only watching its view does', async () => {
+  const { el, select, run } = page()
+  select('Chani')
+  run('Chani', { entries: [entry()] })
+  await settle()
+  assert.equal(el('actions').hidden, true)
+})
+
+test('actions panel: watching shows it and renders the body\'s log; pausing hides it again', async () => {
   const FIXED_NOW = Date.parse('2026-10-01T15:21:24.000Z')
   const { el, select, run } = page(undefined, { clock: FIXED_NOW })
   select('Chani')
+  el('relook').listeners.click()
   run('Chani', { entries: [entry({ t: '2026-10-01T15:21:12.000Z' })] })
   await settle()
   assert.equal(el('actions').hidden, false)
@@ -355,6 +375,15 @@ test('actions panel: select shows it and renders the body\'s log; deselecting hi
     { cls: '', text: '-12s job_started goto x=1', title: 'goto x=1' }
   ])
   assert.equal(el('actionsName').textContent, 'Chani')
+  el('relook').listeners.click()
+  assert.equal(el('actions').hidden, true)
+})
+
+test('actions panel: deselecting hides it even while watching', async () => {
+  const { el, select } = page()
+  select('Chani')
+  el('relook').listeners.click()
+  assert.equal(el('actions').hidden, false)
   select(null)
   assert.equal(el('actions').hidden, true)
 })

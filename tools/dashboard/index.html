@@ -768,7 +768,7 @@ const relAge = (now, iso) => {
 }
 let actionsEntries = []
 const renderActions = () => {
-  el('actions').hidden = !selected
+  el('actions').hidden = !selected || !watching
   el('actionsName').textContent = selected ?? ''
   if (!selected) return
   const log = el('actionsLog')
@@ -813,7 +813,8 @@ const showLook = (img, meta, look) => {
   img.hidden = false
   el(`${img.id}Marks`).innerHTML = marksHtml(look.marks ?? [])
   meta.className = ''
-  meta.textContent = [`${selected} · ${look.view}`, look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
+  const at = look.at ? `${look.at.x} ${look.at.y} ${look.at.z}` : null
+  meta.textContent = [[`${selected} · ${look.view}`, at].filter(Boolean).join(' · '), look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
 }
 
 // the inline card's own live stream, the same mechanism as the popup's (below): started by "watch", stopped by
@@ -840,6 +841,7 @@ const setWatching = on => {
   el('relook').textContent = on ? 'pause' : 'watch'
   if (on) startWatch()
   else closeWatch()
+  renderActions()
 }
 el('relook').addEventListener('click', () => setWatching(!watching))
 

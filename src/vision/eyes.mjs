@@ -148,6 +148,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const facing = Object.keys(YAWS).reduce((best, k) => Math.cos(rad(YAWS[k]) - yaw) > Math.cos(rad(YAWS[best]) - yaw) ? k : best)
     return {
       file: path.relative(process.cwd(), file),
+      at: { x: Math.floor(bot.entity.position.x), y: Math.floor(bot.entity.position.y), z: Math.floor(bot.entity.position.z) },
       view: panorama ? 'pano N=centre W=left E=right S=edges' : `${facing} pitch ${Math.round(pitch * 180 / Math.PI)}`,
       blocked: out.near >= 0.4 ? `${Math.round(out.near * 100)}% of the view is a wall under 2m away: move or look another way before reading the picture` : null,
       seen: out.seen.map(e => `${e.name} ${e.dist}m @px${e.px},${e.py}`),
