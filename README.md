@@ -141,7 +141,8 @@ It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: t
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
 that agent's driver nothing - no tokens are spent by looking. A port that does not answer is simply a body that is
 down. Its own API, for scripts: `/api/state` (every body, plus places and zones) and `/api/look/<Name>` (a PNG, with
-`?pano=1`; what the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers).
+`?pano=1`; what the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers) and
+`/api/screen/<Name>` (the `screen` action as JSON: HUD, inventory slots and the open container).
 
 The map arithmetic is in `tools/dashboard/map.mjs`, which has no node imports so the page and `npm test` use the
 same code; `tools/dashboard/lib.mjs` reads the folders and routes.
