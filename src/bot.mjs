@@ -1001,10 +1001,11 @@ async function pickUpReflexBed ({ name, x, y, z, item }) {
   pickingUp.add(name)
   const before = inventoryCounts()[item] ?? 0
   await scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS)
-  pickingUp.delete(name)
-  // judged by the world, not the job's status: a dig that failed after breaking the bed still took it down
+  // judged by the world, not the job's status: a dig that failed after breaking the bed still took it down.
+  // One left standing stays in pickingUp, so it is not retried this run: every failed job holds the driver's queue
   const cell = cellAt(x, y, z)
   if (!cell || cell.name === item) return
+  pickingUp.delete(name)
   unmark(name)
   const pocketed = (inventoryCounts()[item] ?? 0) > before
   emit('bed_picked_up', { at: `${x},${y},${z}`, item, note: pocketed ? 'picked up the bed I put down for the night' : 'took down the bed I put down for the night, but it did not reach my pockets: it may lie on the ground there' })
