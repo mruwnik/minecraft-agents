@@ -135,9 +135,10 @@ Blocks without a texture (newer than the jar, or entity-rendered like signs) get
 A browser page that shows where every body is and what it is doing, for whoever is watching rather than playing.
 It reads `state/agents/*/config.json`, polls each body's `state` every 2 seconds and draws a top-down map (x east,
 z south): a dot per body with its name, health, food and current task, each human as a diamond wherever a body can see them,
-protected zones as boxes and marked places as crosses. Click a body and its view appears beside the map, rendered
-through its own eyes. Drag to pan, wheel to zoom; the map fits itself around the bodies, and "fit everything" widens
-it to the whole map.
+protected zones as boxes and marked places as crosses. Click a body and its name appears beside the map; "watch"
+streams its view there live, the button becoming "pause" until clicked again, and the picture doubles as a button
+into a bigger, independent live popup. Drag to pan, wheel to zoom; the map fits itself around the bodies, and
+"fit everything" widens it to the whole map.
 
 It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
