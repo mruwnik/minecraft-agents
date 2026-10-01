@@ -14,7 +14,7 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, ACTION_LOG_LIMIT, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
@@ -273,7 +273,7 @@ const serveScreen = async (res, name) => {
 // it currently answers.
 const serveActions = (res, name) => {
   if (!fs.existsSync(path.join(AGENTS_DIR, name))) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(name), ACTION_LOG_LIMIT) })
+  return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(name)) })
 }
 
 // the popup's live look, as server-sent events of base64 PNGs with their captions. Two thirds the size of a one-shot

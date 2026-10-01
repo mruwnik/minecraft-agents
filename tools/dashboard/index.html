@@ -25,17 +25,17 @@
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
   #actions { position: absolute; left: 10px; top: 10px; width: 320px; max-height: calc(100% - 40px); background: rgba(28,32,39,0.9); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
-  #actions h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+  #actions[hidden] { display: none; }
+  #actions h2 { margin: 0 0 6px; }
   #actionsLog { overflow-y: auto; }
   #actionsLog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #actionsLog .bad { color: #f0907e; }
   /* the chat drawer sits under the map, never beside it: closed it is one 30px bar, open it takes at most 30% of
      the height, so the map keeps the room it has and the side panel is untouched either way */
   #chat { flex: none; border-top: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; max-height: 30vh; }
   #chat.closed { max-height: none; }
   #chat.closed #chatlog, #chat.closed .chatTools { display: none; }
   #chatbar { display: flex; align-items: center; gap: 10px; padding: 5px 12px; flex: none; }
-  #chatbar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0; font-weight: 600; }
+  #chatbar h2 { margin: 0; }
   #chatbar .muted { color: var(--dim); }
   #chatbar .spacer { flex: 1; }
   #chatfilter { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; width: 220px; }
@@ -56,7 +56,8 @@
   #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
-  section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  #actions h2, #chatbar h2, section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+  section h2 { margin: 0 0 8px; }
   .body { padding: 5px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
   .body:hover { background: #232932; }
   .body.sel { border-color: var(--up); background: #232932; }
@@ -741,6 +742,10 @@ const select = name => {
   el('lookBig').src = ''
   el('lookBig').hidden = true
   el('lookname').textContent = name
+  // cleared and rendered before the fetch: the new body's log lands scrolled to the bottom instead of pinned
+  // being measured against whatever the previous body's list was scrolled to
+  actionsEntries = []
+  renderActions()
   renderList()
   draw()
   if (watching) startWatch()
@@ -749,29 +754,35 @@ const select = name => {
 
 // ---------------------------------------------------------------- the action log
 // Ages are relative (-12s), so every 2 s poll redraws the list even when the entries themselves have not changed.
-const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const relAge = (now, iso) => {
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000))
-  return s < 60 ? `-${s}s` : s < 3600 ? `-${Math.round(s / 60)}m` : `-${Math.round(s / 3600)}h`
+  return s < 60 ? `-${s}s` : s < 3600 ? `-${Math.floor(s / 60)}m` : `-${Math.floor(s / 3600)}h`
 }
 let actionsEntries = []
 const renderActions = () => {
   el('actions').hidden = !selected
+  el('actionsName').textContent = selected ?? ''
   if (!selected) return
   const log = el('actionsLog')
   const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
   const now = Date.now()
-  log.innerHTML = actionsEntries.map(e => `<div class="${e.bad ? 'bad' : ''}" title="${escHtml(e.gist)}">${relAge(now, e.t)} ${escHtml(e.type)} ${escHtml(e.gist)}</div>`).join('')
-  el('actionsName').textContent = selected
+  log.textContent = ''
+  actionsEntries.forEach(e => {
+    const row = line(e.bad ? 'err' : '', `${relAge(now, e.t)} ${e.type} ${e.gist}`)
+    row.title = e.gist
+    log.append(row)
+  })
   if (pinned) log.scrollTop = log.scrollHeight
 }
-// a poll for a body we have since switched away from must not overwrite what the new one shows
+// a poll superseded by a later one - a body switch, or two overlapping polls for the same body - must not
+// overwrite what the latest request shows
+let actionsRequest = 0
 const refreshActions = () => {
-  if (!selected) return renderActions()
-  const asked = selected
-  fetch(`/api/actions/${encodeURIComponent(asked)}`)
-    .then(r => r.json())
-    .then(a => { if (asked === selected) { actionsEntries = a.entries; renderActions() } })
+  const id = ++actionsRequest
+  if (!selected) { actionsEntries = []; return renderActions() }
+  fetch(`/api/actions/${encodeURIComponent(selected)}`)
+    .then(r => r.ok ? r.json() : { entries: [] })
+    .then(a => { if (id === actionsRequest) { actionsEntries = a.entries ?? []; renderActions() } })
     .catch(() => {})
 }
 
