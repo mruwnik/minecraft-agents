@@ -1,6 +1,7 @@
 #!/bin/bash
 # runs one agent's body (called by state/agents/<Name>/start). A dead body is silent, and its driver would wait for ever: when the body
 # ends badly, leave a body_down line in its events.jsonl, which the driver's event monitor picks up.
+self="$(readlink -f "$0")"
 cd "$1" || exit 1
 # NODE_OPTIONS (eg --inspect=...) is for the body alone: every helper below is a short node process that would
 # otherwise inherit it and bind the very same fixed debug port in turn, printing noise and racing the body for
@@ -45,7 +46,8 @@ if ! broken=$(node ../../../tools/check-code.mjs ../../.. 60 2>&1); then
     advice: "your body did not start: this code does not parse (someone is mid-edit, or saved a broken file). Tell whoever edits the bot, and ./start again once it is fixed" }) + "\n")' "$broken" >> events.jsonl
   exit 4
 fi
-supervisor=$(BODY_SUPERVISOR=1 node ../../../tools/detach.mjs "$0" "$@") || exit 1
+# the supervisor starts in this directory, where a relative path given to this script no longer leads anywhere
+supervisor=$(BODY_SUPERVISOR=1 node ../../../tools/detach.mjs "$self" "$PWD" "${@:2}") || exit 1
 node ../../../tools/body-lock.mjs write . "$supervisor"
 trap - EXIT
 exit 0

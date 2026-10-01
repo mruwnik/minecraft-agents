@@ -117,3 +117,16 @@ test('start-body: a supervisor killed before the body starts reports body_down i
 
   fs.rmSync(root, { recursive: true, force: true })
 })
+
+// restart-body is run from the repo root as `tools/restart-body state/agents/<name>`, and hands that relative path
+// on: the supervisor, started from inside the agent directory, must still find it
+test('start-body: a relative agent dir and script path bring the body up', async () => {
+  const { root, agentDir, srcDir } = fixtureRoot()
+  spawn('tools/start-body', [path.relative(root, agentDir), '--now'], { cwd: root, detached: true, stdio: 'ignore' }).unref()
+
+  await waitUntil(() => fs.existsSync(path.join(srcDir, 'bot.recorded.json')))
+
+  const pid = readPid(agentDir)
+  assert.ok(alive(pid))
+  process.kill(pid)
+})
