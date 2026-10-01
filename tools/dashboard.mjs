@@ -12,9 +12,10 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
+import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
 import { semanticBlueprintHash } from '../src/blueprint/schema.mjs'
@@ -32,6 +33,7 @@ const VILLAGERS_PAGE = path.join(import.meta.dirname, 'dashboard', 'villagers.ht
 const VILLAGES_PAGE = path.join(import.meta.dirname, 'dashboard', 'villages.html')
 const BLUEPRINT_MODULE = path.join(import.meta.dirname, 'dashboard', 'blueprint.mjs')
 const SRC_DIR = path.join(ROOT, 'src')
+const TEXTURES = path.join(ROOT, 'textures')
 const PORT = Number(process.env.PORT ?? 3700)
 const POLL_MS = 2000
 const LOOK_FILE = 'dashboard-look.png'
@@ -249,14 +251,31 @@ const serveLook = async (res, name, query) => {
   })
 }
 
-// one body's inventory: items carried, armour worn. `inventory` is a quick action too (src/bot.mjs): it reads the
+// one body's inventory, slot by slot. `inventory` is a quick action too (src/bot.mjs): it reads the
 // bot's own inventory slots, so this never interrupts whatever the body is doing.
 const serveInventory = async (res, name) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const r = await ask(agent.apiPort, 'inventory', {}, 5000)
+  const r = await ask(agent.apiPort, 'inventory', { slots: true }, 5000)
   if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
   return sendJson(res, 200, r.answer)
+}
+
+// textures/ as tools/textures.mjs fills it, tinted as the look pictures are; an animated one is its frames stacked, so
+// only the first square is kept
+const textureImage = name => {
+  const file = path.join(TEXTURES, `${name}.png`)
+  if (!fs.existsSync(file)) return null
+  const { width, height, rgba } = decodePng(fs.readFileSync(file))
+  const tint = tintOf(name)
+  const frame = rgba.subarray(0, width * Math.min(width, height) * 4)
+  return { width, height: Math.min(width, height), rgba: tint ? frame.map((v, i) => i % 4 === 3 ? v : v * tint[i % 4] / 255) : frame }
+}
+// the browser keeps an icon: a body's inventory is drawn again every second, and its items seldom change
+const serveIcon = (res, name) => {
+  const icon = inventoryIcon(name, textureImage)
+  if (!icon) return sendJson(res, 404, { error: `no picture for ${name} in textures/ (node tools/textures.mjs fills it)` })
+  send(res, 200, 'image/png', encodePng(icon.width, icon.height, icon.rgba), { 'cache-control': 'max-age=3600' })
 }
 
 // ?farm=<name> is inlined into the page itself (not left to the /api/state fetch below it) so the popup it opens
@@ -304,7 +323,8 @@ const handlers = {
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
   inventory: (res, query, r) => serveInventory(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name> or /api/inventory/<Name>' })
+  icon: (res, query, r) => serveIcon(res, r.name),
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/inventory/<Name> or /api/icon/<item>' })
 }
 
 http.createServer(async (req, res) => {

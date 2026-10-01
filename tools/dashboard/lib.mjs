@@ -5,6 +5,7 @@ import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
 import minecraftData from 'minecraft-data'
 import { parsePlan, planSpec, parsePlacePlan, planCells, hasPlan } from '../../src/lib/plan.mjs'
+import { blockIcon, textureCandidates } from '../../src/vision/renderer.mjs'
 import { compileBlueprintStructure, concreteBlueprint } from '../../src/blueprint/compiler.mjs'
 import { allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
 import { readBlueprintManifest } from '../../src/blueprint/manifest.mjs'
@@ -60,6 +61,21 @@ export const snapshotFile = (home, file) => {
   return full.startsWith(dir + path.sep) ? full : null
 }
 
+// One item's icon on the inventory screen. `image(name)` is a decoded texture (block names bare, items as item/<name>) or
+// null. Most items have a picture of their own; a compass or clock has only its animation frames, a crossbow its states.
+// A block item has none: the game draws a cube of the block, or the flat picture for one you walk through (a flower).
+const ITEM_PICTURES = ['', '_00', '_standby']
+export const inventoryIcon = (name, image) => {
+  const own = ITEM_PICTURES.map(suffix => image(`item/${name}${suffix}`)).find(Boolean)
+  if (own) return own
+  const face = (side, names = []) => [...names, ...textureCandidates(name, side)].map(image).find(Boolean)
+  const side = face('side')
+  if (!side) return null
+  if (previewRegistry.blocksByName[name]?.boundingBox !== 'block') return side
+  return blockIcon(face('top') ?? side, face('side', [`${name}_front`]), side)
+}
+
+const ICON = /^\/api\/icon\/([a-z0-9_]{1,64})$/
 const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
 const INVENTORY = /^\/api\/inventory\/([A-Za-z0-9_]{1,32})$/
 // map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
@@ -96,6 +112,8 @@ export const route = url => {
   if (look) return { kind: 'look', name: look[1] }
   const inventory = INVENTORY.exec(pathname)
   if (inventory) return { kind: 'inventory', name: inventory[1] }
+  const icon = ICON.exec(pathname)
+  if (icon) return { kind: 'icon', name: icon[1] }
   return { kind: 'unknown' }
 }
 
