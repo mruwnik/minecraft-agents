@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import { Vec3 } from 'vec3'
 import { makeEyes, lookKey } from '../src/vision/eyes.mjs'
-import { encodePng, decodePng, textureCandidates, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
+import { encodePng, decodePng, textureCandidates, colorOf, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
 test('png: encode then decode round-trips rgba pixels', () => {
@@ -104,6 +104,20 @@ for (const [block, face, props, expected] of textureCases) {
   test(`texture for ${block} ${face} ${JSON.stringify(props)}`, () =>
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
 }
+
+// chests are entity-rendered: their real art is an atlas under entity/chest/, so textureCandidates above still
+// points at a stand-in block texture (for the dashboard's inventory icon), but render() below uses this dedicated
+// colour for the world view instead, rather than drawing a chest as if it were that other block
+for (const block of ['chest', 'trapped_chest', 'ender_chest']) {
+  test(`colorOf: ${block} has its own colour`, () => assert.equal(colorOf(block)?.length, 3))
+}
+test('colorOf: chest, trapped_chest and ender_chest are all different', () => {
+  const [chest, trapped, ender] = ['chest', 'trapped_chest', 'ender_chest'].map(colorOf)
+  assert.notDeepEqual(chest, trapped)
+  assert.notDeepEqual(chest, ender)
+  assert.notDeepEqual(trapped, ender)
+})
+test('colorOf: a block with a real texture has no override', () => assert.equal(colorOf('oak_planks'), undefined))
 
 // ---------------------------------------------------------------- inventory icons
 const filled = (rgba, size = 16) => ({ width: size, height: size, rgba: Uint8Array.from({ length: size * size * 4 }, (_, i) => rgba[i % 4]) })
@@ -218,6 +232,18 @@ test('render: entities behind a wall are not reported', () => {
   const entities = [{ name: 'zombie', x: 0.5, y: 0, z: -7.5, width: 0.6, height: 1.95 }]
   const img = render({ ...scene, entities, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })
   assert.deepEqual(img.seen, [])
+})
+
+// a chest's block texture (whatever textureCandidates resolves it to, for the dashboard's inventory icon) is not
+// its real picture - render() must ignore it and always draw the dedicated colorOf colour in the world view
+test('render: a chest is drawn in its own colour, ignoring whatever its block texture resolves to', () => {
+  const settings = { yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 }
+  const chestScene = color => ({ ...scene, info: id => [null, { kind: 'cube', name: 'chest' }, { kind: 'cube', name: 'floor' }][id], texture: name => name === 'chest' ? solid(...color) : scene.texture(name) })
+  const resolvesToPlanks = pixel(render({ ...chestScene([162, 130, 78]), ...settings }), 16, 16)
+  const resolvesToSomethingElse = pixel(render({ ...chestScene([9, 9, 9]), ...settings }), 16, 16)
+  const dedicated = pixel(render({ ...chestScene(colorOf('chest')), ...settings }), 16, 16)
+  assert.deepEqual(resolvesToPlanks, dedicated)
+  assert.deepEqual(resolvesToSomethingElse, dedicated)
 })
 
 const nearCases = [

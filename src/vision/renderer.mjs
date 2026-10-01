@@ -111,6 +111,11 @@ const DRAWN_AS = {
   heavy_weighted_pressure_plate: 'iron_block', piston_head: 'piston', sticky_piston: 'piston', moving_piston: 'piston',
   campfire: 'campfire_log', soul_campfire: 'soul_campfire_log'
 }
+// chests are entity-rendered: their real picture is an atlas under entity/chest/, not a plain texture under
+// block/, so DRAWN_AS above only gives textureCandidates something plausible for the dashboard's inventory icon.
+// The world view (render(), below) uses this dedicated colour instead, so a chest is not just a plank cube.
+const BLOCK_COLORS = { chest: [162, 112, 63], trapped_chest: [138, 56, 43], ender_chest: [35, 48, 46] }
+export const colorOf = block => BLOCK_COLORS[block]
 // a wrapper, treatment or variant of a block that shares its picture; tried after the full name, so smooth_stone keeps its own
 const plainName = name => name
   .replace(/^(waxed|infested|potted|smooth)_/, '')
@@ -557,7 +562,10 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
   const picture = (block, face) => {
     const key = face === 'top' || face === 'bottom' || face === 'cross' ? face : 'side'
     const faces = block.pictures ??= {}
-    if (!(key in faces)) faces[key] = texture(block.name, key, block.props)
+    if (!(key in faces)) {
+      const color = colorOf(block.name)
+      faces[key] = color ? { width: 1, height: 1, rgba: Uint8Array.from([...color, 255]) } : texture(block.name, key, block.props)
+    }
     return faces[key]
   }
   const accept = hit => {
