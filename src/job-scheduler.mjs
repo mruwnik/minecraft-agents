@@ -88,7 +88,7 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
     pumping = true
     const myGeneration = ++generation
     const current = () => myGeneration === generation
-    event('started', job, { action: job.name })
+    event('started', job, { action: job.name, args: job.given ?? job.args })
     const work = Promise.resolve().then(() => execute(job))
     activePromise = work
     work.then(result => {
@@ -131,7 +131,7 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
   }
   const submit = (input, { urgent = false, verbose = false, notify = true } = {}) => {
     const job = shelf.accept(input, { urgent, verbose, notify })
-    event('queued', job, { action: job.name, position: shelf.list().queued.length, urgent })
+    event('queued', job, { action: job.name, args: job.given ?? job.args, position: shelf.list().queued.length, urgent })
     pump()
     return job
   }
@@ -157,7 +157,7 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
     // completes. If there is work behind it, keep that queue held for an explicit resume.
     if (!before.held && before.queue.length) shelf.hold('urgent replacement requested; explicitly resume or discard the pending FIFO queue after it completes')
     const job = shelf.accept(input, { urgent: true, ...options })
-    event('queued', job, { action: job.name, position: shelf.list().queued.length, urgent: true })
+    event('queued', job, { action: job.name, args: job.given ?? job.args, position: shelf.list().queued.length, urgent: true })
     if (prior != null) {
       shelf.markCancelling(prior, `interrupted by job ${job.id}`)
       cancelOwner(`interrupted by job ${job.id}`)

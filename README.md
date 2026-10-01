@@ -111,8 +111,12 @@ mineflayer already holds, glued to the bot by `src/vision/eyes.mjs`, which draws
 (`src/vision/render-worker.mjs`) so the body keeps ticking. No GPU, browser or extra dependency; a 480x270 frame takes
 about a tenth of a second, so the dashboard's look popup streams ~10 frames a second.
 An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV shot, ~350 for a panorama), which is
-less than most text descriptions of the same scene. Entities are flat-coloured boxes (players magenta, hostiles red).
-Not drawn: block light (caves render fully lit, which is handy), translucent water, item/entity models, the sun.
+less than most text descriptions of the same scene. Mobs are a few blocks each in their game colours, shaped by family
+(two legs, four legs, creeper, spider, bird; anything else a box of its size) and turned the way they face, the front of
+the head painted as a face. Players are magenta, a hostile without colours of its own red, dropped items small yellow
+cubes. The dashboard outlines and labels every mob over its pictures (`marks=true` on the look: each seen entity's
+outline as fractions of the picture).
+Not drawn: block light (caves render fully lit, which is handy), translucent water, item models, mob textures, the sun.
 
 Block and item textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs`
 fills it. Every body start runs it beside `patch-deps.mjs`. Blocks (`assets/minecraft/textures/block/*.png`, flat in
@@ -138,7 +142,8 @@ z south): a dot per body with its name, health, food and current task, each huma
 protected zones as boxes and marked places as crosses. Click a body and its name appears beside the map; "watch"
 streams its view there live, the button becoming "pause" until clicked again, and the picture doubles as a button
 into a bigger, independent live popup. Drag to pan, wheel to zoom; the map fits itself around the bodies, and
-"fit everything" widens it to the whole map.
+"fit everything" widens it to the whole map. A translucent panel over the left of the map shows that body's recent
+actions - job starts/completions/failures, death, respawn, holing up, chat - newest at the bottom, aging in place.
 
 It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs

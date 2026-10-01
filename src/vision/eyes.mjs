@@ -10,14 +10,14 @@ export const YAWS = { north: 0, west: 90, south: 180, east: 270 }
 const rad = deg => deg * Math.PI / 180
 
 // Everything a picture depends on, coarse enough that a body standing still answers the same key: the eye to a
-// sixteenth of a block, the direction to half a degree, the day to a hundred ticks, entities to a quarter block,
-// and the world copy's identity and edit count
+// sixteenth of a block, the direction to half a degree, the day to a hundred ticks, entities to a quarter block and
+// a sixteenth of a turn, and the world copy's identity and edit count
 export const lookKey = ({ eye, yaw, pitch, timeOfDay, entities, world, width, height, maxDist, panorama, fov }) => [
   Math.round(eye.x * 16), Math.round(eye.y * 16), Math.round(eye.z * 16),
   Math.round(yaw * 360 / Math.PI), Math.round(pitch * 360 / Math.PI),
   Math.floor((timeOfDay ?? 0) / 100),
   world, width, height, maxDist, panorama ? 'pano' : 'view', fov,
-  ...entities.map(e => `${e.name}@${Math.round(e.x * 4)},${Math.round(e.y * 4)},${Math.round(e.z * 4)}`)
+  ...entities.map(e => `${e.name}@${Math.round(e.x * 4)},${Math.round(e.y * 4)},${Math.round(e.z * 4)}/${Math.round((e.yaw ?? 0) * 8 / Math.PI)}`)
 ].join('|')
 
 export function makeEyes (bot, { textureDir, snapshotDir }) {
@@ -113,11 +113,13 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
       x: e.position.x,
       y: e.position.y,
       z: e.position.z,
-      width: e.name === 'item' ? 0.35 : e.width || 0.6,
-      height: e.name === 'item' ? 0.35 : e.height || 1.8
+      width: e.name === 'item' ? 0.35 : e.width || bot.registry.entitiesByName[e.name]?.width || 0.6,
+      height: e.name === 'item' ? 0.35 : e.height || bot.registry.entitiesByName[e.name]?.height || 1.8,
+      yaw: e.yaw ?? 0
     }))
 
-  // look {pano} | {dir: north|south|east|west} | {yaw, pitch in degrees} | {x,y,z to look towards}; default: where the bot is facing
+  // look {pano} | {dir: north|south|east|west} | {yaw, pitch in degrees} | {x,y,z to look towards}; default: where the bot is facing.
+  // {marks: true} adds each seen entity's outline
   const look = async function look (a = {}) {
     const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? 1.62, 0)
     const towards = a.x === undefined ? null : { dx: a.x + 0.5 - eye.x, dy: (a.y ?? eye.y) + 0.5 - eye.y, dz: a.z + 0.5 - eye.z }
@@ -146,9 +148,12 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const facing = Object.keys(YAWS).reduce((best, k) => Math.cos(rad(YAWS[k]) - yaw) > Math.cos(rad(YAWS[best]) - yaw) ? k : best)
     return {
       file: path.relative(process.cwd(), file),
+      at: { x: Math.floor(bot.entity.position.x), y: Math.floor(bot.entity.position.y), z: Math.floor(bot.entity.position.z) },
       view: panorama ? 'pano N=centre W=left E=right S=edges' : `${facing} pitch ${Math.round(pitch * 180 / Math.PI)}`,
       blocked: out.near >= 0.4 ? `${Math.round(out.near * 100)}% of the view is a wall under 2m away: move or look another way before reading the picture` : null,
-      seen: out.seen.map(e => `${e.name} ${e.dist}m @px${e.px},${e.py}`)
+      seen: out.seen.map(e => `${e.name} ${e.dist}m @px${e.px},${e.py}`),
+      // for the dashboard's outlines, in fractions of the picture so a scaled image needs no size; the driver never asks
+      ...(a.marks ? { marks: out.seen.map(e => ({ name: e.name, kind: e.kind, dist: e.dist, box: [e.box[0] / width, e.box[1] / height, (e.box[2] + 1) / width, (e.box[3] + 1) / height].map(v => Math.round(v * 1000) / 1000) })) } : {})
     }
   }
   // tests only: how many looks actually asked the worker to draw, versus answering from the cache

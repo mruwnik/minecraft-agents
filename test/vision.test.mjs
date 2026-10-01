@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import { Vec3 } from 'vec3'
 import { makeEyes, lookKey } from '../src/vision/eyes.mjs'
-import { encodePng, decodePng, textureCandidates, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
+import { encodePng, decodePng, textureCandidates, colorOf, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
 test('png: encode then decode round-trips rgba pixels', () => {
@@ -104,6 +104,20 @@ for (const [block, face, props, expected] of textureCases) {
   test(`texture for ${block} ${face} ${JSON.stringify(props)}`, () =>
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
 }
+
+// chests are entity-rendered: their real art is an atlas under entity/chest/, so textureCandidates above still
+// points at a stand-in block texture (for the dashboard's inventory icon), but render() below uses this dedicated
+// colour for the world view instead, rather than drawing a chest as if it were that other block
+for (const block of ['chest', 'trapped_chest', 'ender_chest']) {
+  test(`colorOf: ${block} has its own colour`, () => assert.equal(colorOf(block)?.length, 3))
+}
+test('colorOf: chest, trapped_chest and ender_chest are all different', () => {
+  const [chest, trapped, ender] = ['chest', 'trapped_chest', 'ender_chest'].map(colorOf)
+  assert.notDeepEqual(chest, trapped)
+  assert.notDeepEqual(chest, ender)
+  assert.notDeepEqual(trapped, ender)
+})
+test('colorOf: a block with a real texture has no override', () => assert.equal(colorOf('oak_planks'), undefined))
 
 // ---------------------------------------------------------------- inventory icons
 const filled = (rgba, size = 16) => ({ width: size, height: size, rgba: Uint8Array.from({ length: size * size * 4 }, (_, i) => rgba[i % 4]) })
@@ -220,6 +234,18 @@ test('render: entities behind a wall are not reported', () => {
   assert.deepEqual(img.seen, [])
 })
 
+// a chest's block texture (whatever textureCandidates resolves it to, for the dashboard's inventory icon) is not
+// its real picture - render() must ignore it and always draw the dedicated colorOf colour in the world view
+test('render: a chest is drawn in its own colour, ignoring whatever its block texture resolves to', () => {
+  const settings = { yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 }
+  const chestScene = color => ({ ...scene, info: id => [null, { kind: 'cube', name: 'chest' }, { kind: 'cube', name: 'floor' }][id], texture: name => name === 'chest' ? solid(...color) : scene.texture(name) })
+  const resolvesToPlanks = pixel(render({ ...chestScene([162, 130, 78]), ...settings }), 16, 16)
+  const resolvesToSomethingElse = pixel(render({ ...chestScene([9, 9, 9]), ...settings }), 16, 16)
+  const dedicated = pixel(render({ ...chestScene(colorOf('chest')), ...settings }), 16, 16)
+  assert.deepEqual(resolvesToPlanks, dedicated)
+  assert.deepEqual(resolvesToSomethingElse, dedicated)
+})
+
 const nearCases = [
   ['a wall one block away fills the view', [[-1, 0, 1].flatMap(x => [-1, 0, 1, 2].map(y => [x, y, -1, 1]))].flat(), true],
   ['a wall four blocks away does not', [], false]
@@ -254,13 +280,13 @@ const pinned = {
   ]
 }
 const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
-test('render: the pinned view is drawn exactly as before', () => {
+test('render: the pinned view is drawn as pinned', () => {
   const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['630d27bd1e1ad611', ['cow', 'item']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['edae299000cdce66', ['cow', 'item']])
 })
-test('render: the pinned panorama is drawn exactly as before', () => {
+test('render: the pinned panorama is drawn as pinned', () => {
   const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['789ed62c0c5133de', ['cow', 'item', 'sheep', 'zombie']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['d894513612815aa8', ['cow', 'item', 'sheep', 'zombie']])
 })
 
 test('render: an entity whose box is wholly behind the eye is neither drawn nor seen', () => {
@@ -268,6 +294,54 @@ test('render: an entity whose box is wholly behind the eye is neither drawn nor 
   const img = render({ ...behind, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })
   assert.deepEqual(img.seen, [])
   assert.equal(sha(img), sha(render({ ...scene, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })))
+})
+
+// a 64x64 view north from the scene's eye with fov 90: the pixel a point dx, dy across and up, dz north of the eye lands on
+const pixelAt = (dx, dy, dz) => [Math.round((dx / dz + 1) * 32 - 0.5), Math.round((1 - dy / dz) * 32 - 0.5)]
+const view64 = { yaw: 0, pitch: 0, width: 64, height: 64, fov: 90, maxDist: 12 }
+const bare = render({ ...scene, ...view64 })
+const covers = (img, [x, y]) => pixel(img, x, y).join() !== pixel(bare, x, y).join()
+// a cow three blocks north, side on: east is yaw -pi/2, west pi/2
+const sideOn = yaw => render({ ...scene, ...view64, entities: [{ name: 'cow', x: 0.5, y: -1, z: -2.5, width: 0.9, height: 1.4, yaw }] })
+test('render: a cow seen side on stands on legs, with the floor showing between them', () => {
+  const img = sideOn(-Math.PI / 2)
+  assert.deepEqual([covers(img, pixelAt(-0.11, -1.22, 3)), covers(img, pixelAt(0.3, -1.22, 3))], [false, true])
+})
+for (const [name, yaw, east, west] of [['east', -Math.PI / 2, true, false], ['west', Math.PI / 2, false, true]]) {
+  test(`render: a cow facing ${name} has its head out on that side`, () => {
+    const img = sideOn(yaw)
+    assert.deepEqual([covers(img, pixelAt(0.8, -0.2, 3)), covers(img, pixelAt(-0.8, -0.2, 3))], [east, west])
+  })
+}
+
+// the mean colour of the pixels an entity changed, standing three blocks north facing the eye
+const entityColour = entity => {
+  const img = render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, ...entity }] })
+  const changed = []
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) if (covers(img, [x, y])) changed.push(pixel(img, x, y))
+  return [0, 1, 2].map(i => changed.reduce((s, c) => s + c[i], 0) / changed.length)
+}
+for (const [name, entity, looks] of [
+  ['a creeper is green', { name: 'creeper', kind: 'hostile', width: 0.6, height: 1.7 }, ([r, g, b]) => g > r && g > b],
+  ['a skeleton is pale', { name: 'skeleton', kind: 'hostile', width: 0.6, height: 1.99 }, c => Math.min(...c) > 120],
+  ['a spider is dark', { name: 'spider', kind: 'hostile', width: 1.4, height: 0.9 }, c => Math.max(...c) < 90],
+  ['a hostile without colours of its own is red', { name: 'breeze', kind: 'hostile', width: 0.6, height: 1.77 }, ([r, g, b]) => r > 2 * g && r > 2 * b],
+  ['a player is magenta', { name: 'player', kind: 'player', width: 0.6, height: 1.8 }, ([r, g, b]) => r > g && b > g]
+]) test(`render: ${name}`, () => assert.ok(looks(entityColour(entity)), String(entityColour(entity))))
+
+test('render: a zombie facing the eye shows its face, one facing away the back of its head', () => {
+  const zombie = yaw => render({ ...scene, ...view64, entities: [{ name: 'zombie', kind: 'hostile', x: 0.5, y: -1, z: -2.5, width: 0.6, height: 1.95, yaw }] })
+  const head = pixelAt(0, 0.2, 2.75)
+  assert.notDeepEqual(pixel(zombie(Math.PI), ...head), pixel(zombie(0), ...head))
+})
+
+test('render: seen gives each entity the box of pixels it covers, holding its centre, smaller for a chicken than a cow', () => {
+  const at = entity => render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, kind: 'passive', ...entity }] }).seen[0]
+  const cow = at({ name: 'cow', width: 0.9, height: 1.4 })
+  const chicken = at({ name: 'chicken', width: 0.4, height: 0.7 })
+  const area = ({ box: [x1, y1, x2, y2] }) => (x2 - x1 + 1) * (y2 - y1 + 1)
+  const holds = ({ px, py, box: [x1, y1, x2, y2] }) => x1 <= px && px <= x2 && y1 <= py && py <= y2
+  assert.deepEqual([cow.kind, holds(cow), holds(chicken), area(chicken) < area(cow) / 3], ['passive', true, true, true])
 })
 
 // ---------------------------------------------------------------- eyes
@@ -319,6 +393,8 @@ for (const [name, change, same] of [
   ['a turn', { yaw: 0.3 }, false],
   ['a hundred ticks later', { timeOfDay: 6100 }, false],
   ['an entity that moved a block', { entities: [{ name: 'cow', x: 4, y: 65, z: 2 }] }, false],
+  ['an entity that turned a degree', { entities: [{ name: 'cow', x: 3, y: 65, z: 2, yaw: 0.017 }] }, true],
+  ['an entity that turned round', { entities: [{ name: 'cow', x: 3, y: 65, z: 2, yaw: Math.PI }] }, false],
   ['a block changed', { world: '1:1' }, false],
   ['another size', { width: 480, height: 270 }, false],
   ['a panorama', { panorama: true }, false]
@@ -339,6 +415,14 @@ for (const [name, change] of freshCases) {
     assert.deepEqual([before.blocked, Boolean(after.blocked)], [null, true])
   })
 }
+
+test('look: reports the body\'s current position as floored block coordinates', async () => {
+  const bot = standingBot()
+  const look = eyesFor(bot)
+  // 0.5 floors to 0 on every axis; Math.round would give 1, so this pins down which one the dashboard gets
+  const { at } = await look({ file: 'a.png' })
+  assert.deepEqual(at, { x: 0, y: 64, z: 0 })
+})
 
 test('look: a body that has not moved does not copy the world again', async () => {
   const bot = standingBot()
@@ -373,4 +457,21 @@ test('look: an unchanged scene answers the last frame without asking the worker 
   assert.deepEqual([second.view, second.seen], [first.view, first.seen])
   // answering from the cache skips the worker round trip entirely: the draw count stays at the first, real draw
   assert.equal(look.draws, 1)
+})
+
+// a cow without a size of its own, three blocks in front of the body and facing away from it
+const withCow = () => Object.assign(standingBot(), { entities: { 7: { name: 'cow', type: 'animal', kind: 'Passive mobs', position: new Vec3(0.5, 64, -2.5), yaw: 0 } } })
+test('look: marks=true outlines each seen entity in fractions of the picture, the seen strings as they were', async () => {
+  const look = eyesFor(withCow())
+  const plain = await look({ file: 'a.png' })
+  const marked = await look({ file: 'b.png', marks: true })
+  const [mark] = marked.marks
+  assert.deepEqual([plain.marks, marked.seen, mark.name, mark.kind, mark.dist], [undefined, plain.seen, 'cow', 'animal', Number(plain.seen[0].match(/ (\d+)m @/)[1])])
+  assert.ok(mark.box.every(v => v >= 0 && v <= 1) && mark.box[0] < mark.box[2] && mark.box[1] < mark.box[3], String(mark.box))
+})
+
+test("look: an entity without a size takes its registry's, so a cow is not drawn a player's height", async () => {
+  const { marks: [{ box }] } = await eyesFor(withCow())({ file: 'a.png', marks: true })
+  // 1.4 high, its top stays below the eye; at the 1.8 default it would reach above the middle of the picture
+  assert.ok(box[1] > 0.5, String(box))
 })
