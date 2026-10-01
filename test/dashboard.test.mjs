@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, streamFrames, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -203,6 +203,29 @@ escapes.forEach(([why, file]) => test(`snapshotFile: refuses a path that ${why}`
   assert.equal(snapshotFile(home, file), null)
 }))
 
+// the inventory screen's icon for an item: its own picture, else the block it places, as the game draws it
+const RED = [200, 0, 0, 255], GREEN = [0, 200, 0, 255], BLUE = [0, 0, 200, 255]
+const texture = rgba => ({ width: 16, height: 16, rgba: Uint8Array.from({ length: 16 * 16 * 4 }, (_, i) => rgba[i % 4]) })
+const textures = Object.fromEntries([
+  ['item/iron_pickaxe', RED], ['item/compass_00', RED], ['item/crossbow_standby', RED], ['poppy', GREEN], ['oak_log_top', RED], ['oak_log', BLUE],
+  ['oak_planks', BLUE], ['furnace_top', RED], ['furnace_front', GREEN], ['furnace_side', BLUE]
+].map(([name, rgba]) => [name, texture(rgba)]))
+const iconPixel = (icon, x, y) => [icon.width, [...icon.rgba.subarray((y * icon.width + x) * 4, (y * icon.width + x) * 4 + 4)]]
+for (const [name, item, x, y, expected] of [
+  ['an item with a picture of its own is drawn as it', 'iron_pickaxe', 8, 8, [16, RED]],
+  ['an item whose picture turns (a compass) shows its first frame', 'compass', 8, 8, [16, RED]],
+  ['a crossbow shows its unloaded picture', 'crossbow', 8, 8, [16, RED]],
+  ['a block you walk through (a flower) is flat, like its item', 'poppy', 8, 8, [16, GREEN]],
+  ['a solid block is a cube: its top on top', 'oak_log', 16, 4, [32, RED]],
+  ['a solid block is a cube: its side on the right', 'oak_log', 26, 18, [32, [0, 0, 120, 255]]],
+  ['a block with a front shows it on the left, as the game does', 'furnace', 6, 18, [32, [0, 160, 0, 255]]],
+  ['a block drawn from another\'s picture (a chest)', 'chest', 26, 18, [32, [0, 0, 120, 255]]]
+]) {
+  test(`inventoryIcon: ${name}`, () => assert.deepEqual(iconPixel(inventoryIcon(item, n => textures[n] ?? null), x, y), expected))
+}
+test('inventoryIcon: nothing to draw it from is no icon (the page writes its initials)', () =>
+  assert.equal(inventoryIcon('shield', n => textures[n] ?? null), null))
+
 const routes = [
   ['/', { kind: 'page' }],
   ['/index.html', { kind: 'page' }],
@@ -249,6 +272,9 @@ const routes = [
   ['/api/inventory/Chani', { kind: 'inventory', name: 'Chani' }],
   ['/api/inventory/', { kind: 'unknown' }],
   ['/api/inventory/../../etc/passwd', { kind: 'unknown' }],
+  ['/api/icon/oak_log', { kind: 'icon', name: 'oak_log' }],
+  ['/api/icon/Oak_Log', { kind: 'unknown' }],
+  ['/api/icon/../textures/dirt', { kind: 'unknown' }],
   ['/nope', { kind: 'unknown' }]
 ]
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {

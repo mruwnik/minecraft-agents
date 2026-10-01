@@ -13,6 +13,13 @@ export const brokenSlot = status => BROKEN[status] ?? null
 const SLOTS = [[/_helmet$|^carved_pumpkin$/, 'head'], [/_chestplate$|^elytra$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet'], [/^shield$/, 'off-hand']]
 export const equipSlot = itemName => SLOTS.find(([pattern]) => pattern.test(itemName))?.[1] ?? 'hand'
 
+// the inventory screen as the dashboard draws it, by mineflayer's player window slot (5-8 armour, 9-35 main, 36-44 hotbar,
+// 45 offhand). 0-4 is the 2x2 crafting grid, which the game empties back into the inventory when the screen closes
+export const inventorySlots = (slots, quickBarSlot) => ({
+  slots: slots.flatMap((item, slot) => item && slot >= 5 ? [{ slot, name: item.name, count: item.count }] : []),
+  selected: quickBarSlot
+})
+
 // the weakest tool that can harvest a block, when none of the carried item types can; null when the block needs no tool or one is carried.
 // mineflayer-tool recurses for ever (until the heap is gone) when asked to equip for a block nothing carried can harvest
 export function missingTool (harvestTools, carriedTypes, nameOf) {

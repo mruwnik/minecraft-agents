@@ -5,17 +5,8 @@ import path from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import prismarineBlock from 'prismarine-block'
 import prismarineRegistry from 'prismarine-registry'
-import { decodePng, encodePng, render, textureCandidates } from './renderer.mjs'
+import { decodePng, encodePng, render, textureCandidates, tintOf } from './renderer.mjs'
 
-const GRASS = [124, 189, 107]
-const FOLIAGE = [89, 174, 48]
-const TINTS = [
-  [/^(grass_block_top|short_grass|tall_grass_(top|bottom)|fern|large_fern_(top|bottom))$/, GRASS],
-  [/^birch_leaves$/, [128, 167, 85]],
-  [/^spruce_leaves$/, [97, 153, 97]],
-  [/^(oak|jungle|acacia|dark_oak|mangrove)_leaves$|^vine$|^lily_pad$/, FOLIAGE],
-  [/^water_still$/, [63, 118, 228]]
-]
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
 
@@ -28,7 +19,7 @@ const faceTextures = new Map()
 const image = name => {
   if (images.has(name)) return images.get(name)
   const file = path.join(textureDir, `${name}.png`)
-  const decoded = fs.existsSync(file) ? { ...decodePng(fs.readFileSync(file)), tint: TINTS.find(([re]) => re.test(name))?.[1] } : null
+  const decoded = fs.existsSync(file) ? { ...decodePng(fs.readFileSync(file)), tint: tintOf(name) } : null
   images.set(name, decoded)
   return decoded
 }

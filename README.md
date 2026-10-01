@@ -36,7 +36,7 @@ first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down th
                 snapshots/, its own ./mc and ./start), places.json (the shared map), zones.json (protected
                 boxes), clock.json (the world's time), gates.log (who opened which gate), WORLD.md and BUGS.md
     roles/      knowledge and routines an agent can read on demand; harness/ notes per program that runs an agent
-    textures/   block textures for `./mc look` (not checked in; see Vision below)
+    textures/   block textures for `./mc look`, item/ ones for the dashboard's inventory (not checked in; see Vision below)
 
 `./mc`, `./play` and `AGENT_GUIDE.md` stay at the top, with `harness/`: they are true on any server. What belongs to
 THIS world is under `state/`, `WORLD.md` and `BUGS.md` included, so an agent still reads `../../WORLD.md` from its folder.
@@ -112,10 +112,10 @@ An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV s
 less than most text descriptions of the same scene. Entities are flat-coloured boxes (players magenta, hostiles red).
 Not drawn: block light (caves render fully lit, which is handy), translucent water, item/entity models, the sun.
 
-Block textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs` fills it.
-Every body start runs it beside `patch-deps.mjs`. With pictures already there it prints `[textures] already 1083` and
-stops; with none it extracts `assets/minecraft/textures/block/*.png` from a client jar and prints
-`[textures] extracted 1083 from <jar>`. The jar it reads is `$MC_CLIENT_JAR` when that is set, otherwise the newest
+Block and item textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs`
+fills it. Every body start runs it beside `patch-deps.mjs`. Blocks (`assets/minecraft/textures/block/*.png`, flat in
+`textures/`) and items (`.../textures/item/*.png`, in `textures/item/`, drawn in the dashboard's inventory) are each
+extracted only when their folder has none: `[textures] block: already 1083`, `[textures] item: extracted 831 from <jar>`. The jar it reads is `$MC_CLIENT_JAR` when that is set, otherwise the newest
 plain release the launcher installed under `~/.minecraft/versions/<version>/<version>.jar` (on a Mac,
 `~/Library/Application Support/minecraft/versions`); OptiFine, snapshots, pre-releases and mod-loader folders are
 skipped. Finding no jar is a warning, never a failure: the body still starts, and the pictures still draw.
