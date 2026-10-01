@@ -172,6 +172,27 @@ test('farm.maintain: a dry bed is tilled anyway when its seed is in hand, and so
   assert.equal(/dry/.test(summary.bare ?? ''), false)
 })
 
+test('farm.maintain: a checkpoint right after the dry till is skipped, so its plant runs before any hand-back', async () => {
+  const items = { wheat_seeds: 1, stone_hoe: 1 }
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const made = fakeApi({
+    place: fakePlace('w~'),
+    world,
+    items,
+    answers: {
+      'farm.harvest': { harvested: {}, replanted: 0 },
+      till: p => { world[cellKey(p)] = 'farmland' },
+      place: p => { world[cellKey(p)] = 'wheat#0'; items[p.item] = (items[p.item] ?? 0) - 1 }
+    }
+  })
+  // a checkpoint hands back the instant a till has happened: unfixed, that fires right after the till and before its
+  // plant ever runs; fixed, the plant goes in first and only then does a checkpoint get a turn
+  made.api.checkpoint = async () => { if (made.calls.some(c => c.startsWith('till '))) throw new CompositeHandBack('hurt') }
+  await assert.rejects(maintainFarm.run(made.api, { place: 'test-field' }), /hurt/)
+  const work = made.calls.filter(c => /^(till|place) /.test(c))
+  assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
+})
+
 test('farm.maintain: no seed means no till on the dry bed, and farm_needs_water says why and where', async () => {
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
   const { summary, calls, events } = await sweep({ plan: 'w~', world, items: { stone_hoe: 1 } })
@@ -180,7 +201,22 @@ test('farm.maintain: no seed means no till on the dry bed, and farm_needs_water 
   assert.match(summary.farm_needs_water, new RegExp(NO_BUCKET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   assert.match(summary.farm_needs_water, /0,63,0/)
   assert.match(summary.bare, /dry:1/)
+  assert.match(summary.missing, /wheat_seeds:1/)
   assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.farm_needs_water))
+})
+
+// every cell round the bed loaded and solid (walledBed in test/farm-maintain.test.mjs): nothing to stand on
+// anywhere within work range of it, dry bed left as dirt besides
+test('farm.maintain: a dry bed with seed in hand is held, not tilled, when its plant has nowhere to stand', async () => {
+  const world = {}
+  for (let x = -5; x <= 5; x++) for (let y = 58; y <= 68; y++) for (let z = -5; z <= 5; z++) world[`${x},${y},${z}`] = 'stone'
+  world['0,63,0'] = 'dirt'
+  world['0,64,0'] = 'air'
+  world['0,65,0'] = 'air'
+  const { summary, calls } = await sweep({ plan: 'w', world, items: { wheat_seeds: 5, stone_hoe: 1 } })
+  assert.equal(calls.some(c => c.startsWith('till ')), false)
+  assert.match(summary.bare, /unreachable:1/)
+  assert.match(summary.farm_needs_water, /0,63,0/)
 })
 
 test('farm.maintain: a later sweep that waters and tills its bed clears an earlier farm_needs_water', async () => {
@@ -231,6 +267,21 @@ test('farm.build: a dry bed is tilled anyway when its seed is in hand, and sown 
   assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
   assert.match(summary.farm_needs_water, /0,63,0/)
   assert.equal(summary.unfinished, undefined)
+})
+
+test('farm.build: a checkpoint right after the dry till is skipped, so its plant runs before any hand-back', async () => {
+  const items = { wheat_seeds: 1 }
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const made = fakeApi({ place: fakePlace('w~'), world, items, answers: {
+    till: p => { world[cellKey(p)] = 'farmland' },
+    place: p => { world[cellKey(p)] = 'wheat#0'; items[p.item] = (items[p.item] ?? 0) - 1 }
+  } })
+  // a checkpoint hands back the instant a till has happened: unfixed, that fires right after the till and before its
+  // plant ever runs; fixed, the plant goes in first and only then does a checkpoint get a turn
+  made.api.checkpoint = async () => { if (made.calls.some(c => c.startsWith('till '))) throw new CompositeHandBack('hurt') }
+  await assert.rejects(buildFarm.run(made.api, { place: 'test-field', partial: true }), /hurt/)
+  const work = made.calls.filter(c => /^(till|place) /.test(c))
+  assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
 })
 
 test('farm.build: no seed means no till on the dry bed, and farm_needs_water says why', async () => {

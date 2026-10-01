@@ -107,6 +107,9 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // never read back as unfinished
   const dryBeds = []
   const dryKeys = new Set()
+  // set true for a dry till that goes ahead because its plant is right behind it, seed in hand: the field loop below
+  // skips its own checkpoint once so that plant runs before anything can hand back or sleep the night on the bare bed
+  let sowNext = false
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
   // a cell the plan's own water stands over is never dug (dig refuses it, rightly): it is reported as skipped= instead
   const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip').filter(notKept)
@@ -155,11 +158,12 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
       }
       // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
       // back instead, and the plant on the same ground held with it - UNLESS the very next job is that plant, seed
-      // in hand, which goes in at once and makes the bed safe (Dan's rule). Either way it counts for farm_needs_water
+      // in hand, which goes in at once and makes the bed safe. Either way it counts for farm_needs_water
       if (job.do === 'till' && !hydrated(api.block, job)) {
         dryBeds.push(job)
         const sownAtOnce = next?.do === 'plant' && jobGroundKey(next) === jobGroundKey(job) && (api.inv()[next.item] ?? 0) > 0
         if (!sownAtOnce) { dryKeys.add(jobGroundKey(job)); return false }
+        sowNext = true
       }
       if (job.do === 'plant' && dryKeys.has(jobGroundKey(job))) return false
     }
@@ -263,7 +267,13 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // tryJob only sees one job; the next one in this same list is what tells a dry till whether its own plant is
   // right behind it, seed in hand, so the bed goes in at once instead of being held
   const fieldJobs = field()
-  for (let i = 0; i < fieldJobs.length; i++) { await tryJob(fieldJobs[i], fieldJobs[i + 1]); await api.checkpoint() }
+  for (let i = 0; i < fieldJobs.length; i++) {
+    await tryJob(fieldJobs[i], fieldJobs[i + 1])
+    // a checkpoint right here could hand back or sleep the night on bare, dry farmland: skipped once, for the till
+    // just above, so its own plant (the very next job in this list) runs before any of that can happen
+    if (sowNext) sowNext = false
+    else await api.checkpoint()
+  }
   const unfinished = left()
   // one look back: a build says what it could not finish rather than running the whole list again
   if (unfinished.length) counts.unfinished = unfinished.map(j => `${j.do} ${j.x},${j.y},${j.z} (${j.why})`).join('; ')
