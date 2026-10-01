@@ -272,6 +272,7 @@ const routes = [
   ['/api/screen/', { kind: 'unknown' }],
   ['/api/screen/../../etc/passwd', { kind: 'unknown' }],
   ['/api/actions/Chani', { kind: 'actions', name: 'Chani' }],
+  ['/api/whisper/Chani', { kind: 'whisper', name: 'Chani' }],
   ['/api/actions/', { kind: 'unknown' }],
   ['/api/actions/../../etc/passwd', { kind: 'unknown' }],
   ['/api/icon/oak_log', { kind: 'icon', name: 'oak_log' }],

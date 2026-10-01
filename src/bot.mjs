@@ -34,7 +34,7 @@ import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from './talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal, heardWhisper } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
@@ -3075,6 +3075,13 @@ export const quick = {
     const parts = splitSay(said.text, sayLimit(a.player))
     for (const part of parts) bot.whisper(a.player, part)
     return parts.length > 1 ? { parts: parts.length } : {}
+  },
+  // the dashboard's: a line typed into an agent's popup, recorded as the whisper it stands for (bot.on('whisper') above)
+  hear (a) {
+    const said = heardWhisper(a)
+    lastDriven = Date.now()
+    emit('whisper', said)
+    return {}
   },
 
   async equip (a) {

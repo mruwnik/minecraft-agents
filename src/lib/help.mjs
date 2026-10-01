@@ -178,6 +178,7 @@ export const PRIMITIVES = {
   quit: { section: 'self', args: '', doc: 'stop my body; ./start in the background brings it back' },
   chat: { section: 'self', args: 'message=', doc: 'say something to everyone' },
   whisper: { section: 'self', args: 'player= message=', doc: 'say something to one player' },
+  hear: { section: 'self', args: 'from= message=', doc: "the dashboard's: a whisper typed outside the game, recorded as if whispered in it" },
   // ---- control
   run: { section: 'control', args: 'steps=', doc: 'run one bounded EDN flow form, e.g. (seq (action :goto {:x 4 :y 64 :z 2}) (when (= (read :block_at {:x 4 :y 64 :z 2} [:properties :open]) true) 30 (action :toggle {:x 4 :y 64 :z 2 :open false}))). Compose seq, when, any, action; conditions use read, and, or, not and comparisons. A when body may be any flow node. A wait starts at its sequence position; any polls branches in order and runs the first ready branch (ties go to the earlier branch). Only allowlisted observations and existing commands are available; timeout runs no branch action. Legacy object-list steps remain supported' },
   stop: { section: 'control', args: '', doc: 'cancel the active job after cleanup, clear the pending queue, and stop following' },

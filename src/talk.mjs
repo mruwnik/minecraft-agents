@@ -67,3 +67,12 @@ export const splitSay = (text, max) => {
   const few = pieces(whole, max - '(9/9) '.length)
   return numbered(few.length < 10 ? few : pieces(whole, max - '(99/99) '.length))
 }
+
+// a whisper that did not come through the game (a line typed into the dashboard's popup), shaped exactly as
+// bot.on('whisper') records one, so the driver cannot tell the two apart
+export const heardWhisper = ({ from, message }) => {
+  const text = typeof message === 'string' ? message.trim() : ''
+  if (!from) throw new Error('hear needs from=: who is whispering')
+  if (!text) throw new Error('nothing said: the text goes in message=')
+  return { from: String(from), message: text }
+}

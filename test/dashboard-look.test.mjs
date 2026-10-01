@@ -19,12 +19,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve))
 
 const DEFAULT_SCREEN = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }
 
-const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
+const page = (screen = DEFAULT_SCREEN, { clock, postAnswer = { ok: true, json: async () => ({ ok: true }) } } = {}) => {
   const nodes = new Map()
   const el = id => {
     if (!nodes.has(id)) {
       const node = {
-        id, hidden: true, src: '', innerHTML: '', className: '', title: '',
+        id, hidden: true, src: '', innerHTML: '', className: '', title: '', value: '',
         scrollTop: 0, clientHeight: 0, scrollHeight: 0,
         style: { setProperty () {} },
         children: [],
@@ -43,6 +43,7 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
   const timers = []
   const streams = []
   const pending = []
+  const posts = []
   class EventSource {
     constructor (url) { this.url = url; this.closed = false; streams.push(this) }
     close () { this.closed = true }
@@ -54,8 +55,12 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
     // select() also drives the body list and the map; both are outside this slice, so they are stubbed as no-ops
     renderList: () => {},
     draw: () => {},
-    fetch: url => {
+    fetch: (url, options) => {
       fetches.push(url)
+      if (url.startsWith('/api/whisper/')) {
+        posts.push({ url, options })
+        return Promise.resolve(postAnswer)
+      }
       if (url.startsWith('/api/screen/')) return Promise.resolve({ ok: true, json: async () => screen })
       if (url.startsWith('/api/actions/')) {
         let resolve
@@ -83,7 +88,7 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
   const relAge = iso => vm.runInContext(`relAge(Date.now(), ${JSON.stringify(iso)})`, context)
   const run = (name, json, { ok = true, which = 0 } = {}) =>
     pending.filter(p => p.url === `/api/actions/${name}`)[which].resolve({ ok, json: async () => json })
-  return { el, fetches, timers, streams, pending, select, poll, run, relAge }
+  return { el, fetches, timers, streams, pending, posts, select, poll, run, relAge }
 }
 
 test('look popup: a click on the picture opens one live stream and a 1 s inventory loop, shows each frame as it comes, and closing stops both', async () => {
@@ -415,4 +420,39 @@ badAnswers.forEach(([what, { ok, json }]) => test(`actions log: ${what} is treat
 test('actions log: lives inside the popup and nowhere else', () => {
   const popup = html.slice(html.indexOf('<div id="lookOverlay"'), html.indexOf('<div id="planOverlay"'))
   assert.deepEqual([popup.includes('id="actionsLog"'), html.split('id="actionsLog"').length - 1, html.includes('id="actions"')], [true, 1, false])
+})
+
+const typeAndEnter = (el, text) => { el('whisper').value = text; el('whisper').listeners.keydown({ key: 'Enter' }) }
+
+test('whisper: Enter posts the trimmed text to the selected body, clears the input, then refreshes the log', async () => {
+  const { el, posts, pending, select } = page()
+  select('Chani')
+  typeAndEnter(el, '  come home  ')
+  assert.deepEqual(posts.map(p => [p.url, p.options.method, JSON.parse(p.options.body)]), [['/api/whisper/Chani', 'POST', { message: 'come home' }]])
+  assert.equal(el('whisper').value, '')
+  await settle()
+  assert.deepEqual(pending.map(p => p.url), ['/api/actions/Chani', '/api/actions/Chani'])
+})
+
+for (const [what, text] of [['empty', ''], ['blank', '   ']]) test(`whisper: ${what} input sends nothing`, () => {
+  const { el, posts, select } = page()
+  select('Chani')
+  typeAndEnter(el, text)
+  assert.deepEqual(posts, [])
+})
+
+test('whisper: other keys send nothing', () => {
+  const { el, posts, select } = page()
+  select('Chani')
+  el('whisper').value = 'hi'
+  el('whisper').listeners.keydown({ key: 'a' })
+  assert.deepEqual([posts, el('whisper').value], [[], 'hi'])
+})
+
+test('whisper: a refused send says why and gives the text back', async () => {
+  const { el, select } = page(undefined, { postAnswer: { ok: false, json: async () => ({ error: 'the body did not answer' }) } })
+  select('Chani')
+  typeAndEnter(el, 'come home')
+  await settle()
+  assert.deepEqual([el('whisperErr').textContent, el('whisper').value], ['the body did not answer', 'come home'])
 })

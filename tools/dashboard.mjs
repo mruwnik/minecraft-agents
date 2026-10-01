@@ -1,5 +1,5 @@
 import { parsePlacePlan } from '../src/lib/plan.mjs'
-// A read-only window on every agent body: where each one is, what it is doing, and what it sees.
+// A window on every agent body: where each one is, what it is doing, and what it sees.
 //
 //   node tools/dashboard.mjs            # http://127.0.0.1:3700
 //   PORT=4000 node tools/dashboard.mjs
@@ -7,10 +7,11 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 // It polls each body's `state` every 2 s (a quick action: it never takes the task slot, so a body mid-build is not
 // disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs),
 // /api/actions/<Name> (that body's recent action log, same event logs), /api/look/<Name> which renders one PNG
-// through that body's eyes and /api/look/<Name>/live which streams them.
+// through that body's eyes, /api/look/<Name>/live which streams them, and POST /api/whisper/<Name> which hands that
+// body's driver a typed line as a whisper.
 // /blueprints is a second page: the blueprint library (blueprints/*.md) as a list and, per blueprint, its layers
 // drawn, its bill and what lint says.
-// Nothing here drives a body or spends an agent's tokens.
+// Nothing here drives a body; only a typed whisper reaches (and so wakes) its driver.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -276,6 +277,20 @@ const serveActions = (res, name) => {
   return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(name)) })
 }
 
+// a line typed into the popup goes to the body as the whisper it stands for: the body's `hear` appends it to its own
+// events.jsonl (it owns that file and its seq numbers), so the driver reads it exactly as one whispered in game
+const WHISPER_FROM = 'dashboard'
+const serveWhisper = async (req, res, name) => {
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST {"message": "..."} to whisper' })
+  const agent = agents.find(a => a.name === name)
+  if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
+  let body = ''
+  for await (const chunk of req) body += chunk
+  const r = await ask(agent.apiPort, 'hear', { from: WHISPER_FROM, message: parseJson(body)?.message }, 5000)
+  if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
+  return sendJson(res, 200, { ok: true })
+}
+
 // the popup's live look, as server-sent events of base64 PNGs with their captions. Two thirds the size of a one-shot
 // look, about 60 ms of the body's render worker a frame instead of 120, so it keeps up with the 10 a second
 // streamFrames allows. Each stream draws to its own file, so two popups on one body never read each other's
@@ -365,7 +380,7 @@ const handlers = {
   screen: (res, query, r) => serveScreen(res, r.name),
   actions: (res, query, r) => serveActions(res, r.name),
   icon: (res, query, r) => serveIcon(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name> or /api/icon/<item>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> or /api/icon/<item>' })
 }
 
 http.createServer(async (req, res) => {
@@ -379,6 +394,7 @@ http.createServer(async (req, res) => {
   }
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'whisper') return serveWhisper(req, res, r.name).catch(e => sendJson(res, 500, { error: e.message }))
   if (r.kind === 'live') return streamLook(req, res, r.name).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
   return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
