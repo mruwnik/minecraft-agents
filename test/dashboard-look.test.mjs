@@ -111,6 +111,13 @@ test('look popup: each frame outlines and labels the entities it shows; a frame 
   assert.equal(el('lookBigMarks').innerHTML, '')
 })
 
+test('look popup: a player name is shown as text, never run as html', () => {
+  const { el, streams } = page()
+  el('lookimg').listeners.click()
+  streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north', blocked: '', seen: [], marks: [{ name: '<img src=x onerror=alert(1)>', kind: 'player', dist: 2, box: [0, 0, 1, 1] }] }) })
+  assert.deepEqual([el('lookBigMarks').innerHTML.includes('<img'), el('lookBigMarks').innerHTML.includes('&lt;img src=x onerror=alert(1)&gt; 2m')], [false, true])
+})
+
 test('look popup: a panorama streams as a panorama', () => {
   const { el, streams } = page()
   el('pano').checked = true
