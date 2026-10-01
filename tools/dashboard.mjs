@@ -5,14 +5,15 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 //   PORT=4000 node tools/dashboard.mjs
 //
 // It polls each body's `state` every 2 s (a quick action: it never takes the task slot, so a body mid-build is not
-// disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs)
-// and /api/look/<Name> which renders one PNG through that body's eyes. /blueprints is a second page: the blueprint
-// library (blueprints/*.md) as a list and, per blueprint, its layers drawn, its bill and what lint says.
+// disturbed) and serves the page, /api/state, /api/chat (what everyone said, merged from the bodies' event logs),
+// /api/look/<Name> which renders one PNG through that body's eyes and /api/look/<Name>/live which streams them.
+// /blueprints is a second page: the blueprint library (blueprints/*.md) as a list and, per blueprint, its layers
+// drawn, its bill and what lint says.
 // Nothing here drives a body or spends an agent's tokens.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, route, parseEventLines, mergeChat, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
@@ -233,20 +234,51 @@ const sendJson = (res, code, value) => send(res, code, 'application/json', JSON.
 
 // one PNG through that body's eyes. `look` is a quick action in src/bot.mjs: it reads the chunk data the body already
 // holds and never turns it, so this cannot interrupt a walk, a build or a composite that is running.
+const lookFrame = async (agent, args) => {
+  const r = await ask(agent.apiPort, 'look', args, 30000)
+  if (!r.ok) return { code: 503, error: r.error ?? r.answer?.error ?? 'the body did not answer' }
+  const file = snapshotFile(path.join(AGENTS_DIR, agent.name), r.answer.file)
+  if (!file || !fs.existsSync(file)) return { code: 502, error: `the body rendered ${r.answer.file}, which is not a file I may serve` }
+  return { png: fs.readFileSync(file), view: r.answer.view ?? '', seen: r.answer.seen ?? [], blocked: r.answer.blocked ?? '' }
+}
+
 const serveLook = async (res, name, query) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const home = path.join(AGENTS_DIR, agent.name)
   const args = { file: LOOK_FILE, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
-  const r = await ask(agent.apiPort, 'look', args, 30000)
-  if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
-  const file = snapshotFile(home, r.answer.file)
-  if (!file || !fs.existsSync(file)) return sendJson(res, 502, { error: `the body rendered ${r.answer.file}, which is not a file I may serve` })
-  send(res, 200, 'image/png', fs.readFileSync(file), {
-    'x-look-view': encodeURIComponent(r.answer.view ?? ''),
-    'x-look-seen': encodeURIComponent(JSON.stringify(r.answer.seen ?? [])),
-    'x-look-blocked': encodeURIComponent(r.answer.blocked ?? '')
+  const frame = await lookFrame(agent, args)
+  if (frame.error) return sendJson(res, frame.code, { error: frame.error })
+  send(res, 200, 'image/png', frame.png, {
+    'x-look-view': encodeURIComponent(frame.view),
+    'x-look-seen': encodeURIComponent(JSON.stringify(frame.seen)),
+    'x-look-blocked': encodeURIComponent(frame.blocked)
   })
+}
+
+// the popup's live look, as server-sent events of base64 PNGs with their captions. Two thirds the size of a one-shot
+// look, about 60 ms of the body's render worker a frame instead of 120, so it keeps up with the 10 a second
+// streamFrames allows. Each stream draws to its own file, so two popups on one body never read each other's
+// half-written frame.
+const LIVE_SIZE = { view: { width: 320, height: 180 }, pano: { width: 576, height: 144 } }
+let liveStreams = 0
+const streamLook = async (req, res, name, query) => {
+  const agent = agents.find(a => a.name === name)
+  if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
+  const pano = Boolean(query.get('pano'))
+  const file = `dashboard-live-${++liveStreams}.png`
+  const args = { file, ...(pano ? { pano: true } : {}), ...LIVE_SIZE[pano ? 'pano' : 'view'] }
+  let open = true
+  req.on('close', () => { open = false })
+  res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' })
+  await streamFrames({
+    frame: () => lookFrame(agent, args),
+    send: ({ code, png, ...rest }) => res.write(`data: ${JSON.stringify({ ...rest, ...(png ? { png: png.toString('base64') } : {}) })}\n\n`),
+    open: () => open,
+    wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
+    minMs: 100,
+    retryMs: 1000
+  })
+  fs.rmSync(path.join(AGENTS_DIR, agent.name, 'snapshots', file), { force: true })
 }
 
 // ?farm=<name> is inlined into the page itself (not left to the /api/state fetch below it) so the popup it opens
@@ -293,7 +325,7 @@ const handlers = {
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name> or /api/look/<Name>/live' })
 }
 
 http.createServer(async (req, res) => {
@@ -307,6 +339,7 @@ http.createServer(async (req, res) => {
   }
   const query = new URL(req.url, 'http://dashboard').searchParams
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'live') return streamLook(req, res, r.name, query).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
   return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()

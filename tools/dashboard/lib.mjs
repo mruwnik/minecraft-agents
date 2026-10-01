@@ -60,7 +60,20 @@ export const snapshotFile = (home, file) => {
   return full.startsWith(dir + path.sep) ? full : null
 }
 
-const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})$/
+// The popup's live look: each frame is asked for the moment the last one is sent, so the page gets them as fast as
+// the body draws, but no more than one per minMs: frames past that only spend the body's render worker. A body that
+// cannot draw is asked again after retryMs. It ends when the page goes away (`open` turns false).
+export async function streamFrames ({ frame, send, open, wait, now = Date.now, minMs, retryMs }) {
+  while (open()) {
+    const began = now()
+    const f = await frame()
+    if (!open()) return
+    send(f)
+    await wait(Math.max(0, (f.error ? retryMs : minMs) - (now() - began)))
+  }
+}
+
+const LOOK = /^\/api\/look\/([A-Za-z0-9_]{1,32})(\/live)?$/
 // map.mjs imports src/lib.mjs, and lib.mjs re-exports src/cli.mjs - both browser-safe, both need serving at the
 // same relative path the browser resolves them to. Matching any flat *.mjs name under src/, rather than hardcoding
 // lib.mjs alone, means the page's module graph does not go back to silently failing to load whenever another
@@ -92,7 +105,7 @@ export const route = url => {
   const srclib = SRCLIB.exec(pathname)
   if (srclib) return { kind: 'srclib', name: srclib[1] }
   const look = LOOK.exec(pathname)
-  if (look) return { kind: 'look', name: look[1] }
+  if (look) return { kind: look[2] ? 'live' : 'look', name: look[1] }
   return { kind: 'unknown' }
 }
 
