@@ -74,17 +74,27 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
     }
     return true
   }
+  // Bumped whenever a dispatch is forcibly superseded (see `abandon`) without its own promise ever
+  // settling. A dispatch only acts on the shelf/emits/calls onTerminal while it is still the current
+  // generation: an orphaned promise tied to a dead connection can settle arbitrarily late, and by then
+  // a different job may already be running (or the queue already resumed) - without this check its
+  // stale result would re-finish a job the shelf already closed out, re-fire onTerminal for it, and
+  // `shelf.hold()` could re-freeze a queue an operator already resumed.
+  let generation = 0
   const pump = () => {
     if (pumping || !isReady()) return
     const job = shelf.claim()
     if (!job) return
     pumping = true
+    const myGeneration = ++generation
+    const current = () => myGeneration === generation
     event('started', job, { action: job.name })
     const work = Promise.resolve().then(() => execute(job))
     activePromise = work
     work.then(result => {
-      const current = shelf.get(job.id)
-      const cancelled = current?.status === 'cancelling' || result?.cancelled === true
+      if (!current()) return
+      const active = shelf.get(job.id)
+      const cancelled = active?.status === 'cancelling' || result?.cancelled === true
       const cleanupPending = result?.restorationPending || result?.cleanupPending || result?.cleanupFailed
       const status = cleanupPending ? 'failed' : cancelled ? 'cancelled' : result?.ok === false ? 'failed' : 'completed'
       flushProgress()
@@ -99,6 +109,7 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
       onTerminal(finished, result, status)
       settle(job.id)
     }, error => {
+      if (!current()) return
       flushProgress()
       const result = { ok: false, error: error?.message ?? String(error) }
       const finished = shelf.finish(job.id, 'failed', result, result.error) ?? { id: job.id, name: job.name }
@@ -110,6 +121,7 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
       onTerminal(finished, result, 'failed')
       settle(job.id)
     }).finally(() => {
+      if (!current()) return
       pumping = false
       activePromise = null
       const state = shelf.snapshot()
@@ -189,11 +201,13 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
   // Cancel/stop/discard only ever mark the shelf; none of them can make an executor promise settle.
   // A dead connection orphans that promise forever, so the owner slot needs freeing directly instead
   // of waiting on a `work.then()` that is never going to fire. The in-flight `work` promise is simply
-  // abandoned here (not awaited, not rejected): if it ever does settle later, shelf.finish's terminal
-  // guard makes that a no-op.
+  // left running (not awaited, not rejected): bumping `generation` supersedes its dispatch, so if it
+  // ever does settle later, pump()'s handlers see they are no longer current and no-op before touching
+  // the shelf, emitting a stale event, or calling onTerminal/onFailure again.
   const abandon = reason => {
     const job = shelf.interruptActive(reason)
     if (!job) return { abandoned: false }
+    generation++
     lastProgressEvent.delete(job.id)
     pumping = false
     activePromise = null

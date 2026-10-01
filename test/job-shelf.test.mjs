@@ -100,6 +100,19 @@ test('interruptActive frees a wedged owner without a process restart, and a late
   } finally { t.close() }
 })
 
+test('interruptActive keeps an existing hold reason and only adds blockUrgent', () => {
+  const t = tempShelf()
+  try {
+    const shelf = createJobShelf(t.file)
+    shelf.accept({ name: 'farm.build', args: { place: 'farm' } })
+    shelf.claim()
+    shelf.hold('earlier failure needs attention')
+    shelf.interruptActive('disconnected: socketClosed')
+    assert.equal(shelf.snapshot().held.reason, 'earlier failure needs attention')
+    assert.equal(shelf.snapshot().held.blockUrgent, true)
+  } finally { t.close() }
+})
+
 test('late completion cannot overwrite cancellation and repeated cancellation is harmless', () => {
   const t = tempShelf()
   try {
