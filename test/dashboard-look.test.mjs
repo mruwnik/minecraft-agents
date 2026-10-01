@@ -1,5 +1,6 @@
 // The look popup: a click on the small picture opens it big and live, fed by one event stream of frames from the
 // dashboard until it is closed, its inventory asked for again a second after each answer; the small picture keeps its one look per click.
+// The action log panel is sliced from the same place: it shares select() with the look popup, so the two live in one file.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -8,20 +9,40 @@ import vm from 'node:vm'
 const html = fs.readFileSync(new URL('../tools/dashboard/index.html', import.meta.url), 'utf8')
 const start = html.indexOf('const select = name =>')
 const end = html.indexOf('// ---------------------------------------------------------------- the chat log', start)
-const script = html.slice(start, end)
+// tag()/line() live earlier in the file (the side panel section) and are pulled in on their own, skipping the
+// body-list/plan-popup code between them and select() that this slice has no use for and no context to run.
+const tagStart = html.indexOf('const tag = (name, cls, text) => {')
+const tagEnd = html.indexOf("const line = (cls, text) => tag('div', cls, text)") + "const line = (cls, text) => tag('div', cls, text)".length
+const script = `${html.slice(tagStart, tagEnd)}\n${html.slice(start, end)}`
 
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
-const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }) => {
+const DEFAULT_SCREEN = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }
+
+const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
   const nodes = new Map()
   const el = id => {
-    // relook's initial label comes from the markup itself (<button id="relook">watch</button>), not the script
-    if (!nodes.has(id)) nodes.set(id, { id, hidden: true, src: '', textContent: id === 'relook' ? 'watch' : '', innerHTML: '', className: '', style: { setProperty () {} }, listeners: {}, addEventListener (type, fn) { this.listeners[type] = fn } })
+    if (!nodes.has(id)) {
+      const node = {
+        id, hidden: true, src: '', innerHTML: '', className: '', title: '',
+        scrollTop: 0, clientHeight: 0, scrollHeight: 0,
+        style: { setProperty () {} },
+        children: [],
+        append (...kids) { this.children.push(...kids) },
+        listeners: {},
+        addEventListener (type, fn) { this.listeners[type] = fn }
+      }
+      // setting textContent (as render* code does to clear a list before redrawing it) drops whatever was appended
+      let text = id === 'relook' ? 'watch' : ''
+      Object.defineProperty(node, 'textContent', { get: () => text, set: v => { text = v; node.children = [] } })
+      nodes.set(id, node)
+    }
     return nodes.get(id)
   }
   const fetches = []
   const timers = []
   const streams = []
+  const pending = []
   class EventSource {
     constructor (url) { this.url = url; this.closed = false; streams.push(this) }
     close () { this.closed = true }
@@ -36,20 +57,33 @@ const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [
     fetch: url => {
       fetches.push(url)
       if (url.startsWith('/api/screen/')) return Promise.resolve({ ok: true, json: async () => screen })
+      if (url.startsWith('/api/actions/')) {
+        let resolve
+        const promise = new Promise(r => { resolve = r })
+        pending.push({ url, resolve })
+        return promise
+      }
       return Promise.resolve({ ok: true, headers: { get: () => '' }, blob: async () => ({}) })
     },
     URL: { createObjectURL: () => 'blob:look', revokeObjectURL () {} },
     URLSearchParams,
     JSON,
-    Date,
+    Date: clock === undefined ? Date : { now: () => clock, parse: Date.parse },
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length },
     clearTimeout: id => { if (timers[id - 1]) timers[id - 1].cleared = true },
-    document: { addEventListener () {} }
+    document: {
+      addEventListener () {},
+      createElement: name => ({ tagName: name, className: '', textContent: '', title: '' })
+    }
   }
   vm.createContext(context)
   vm.runInContext(script, context)
   const select = name => vm.runInContext(`select(${JSON.stringify(name)})`, context)
-  return { el, fetches, timers, streams, select }
+  const poll = () => vm.runInContext('refreshActions()', context)
+  const relAge = iso => vm.runInContext(`relAge(Date.now(), ${JSON.stringify(iso)})`, context)
+  const run = (name, json, { ok = true, which = 0 } = {}) =>
+    pending.filter(p => p.url === `/api/actions/${name}`)[which].resolve({ ok, json: async () => json })
+  return { el, fetches, timers, streams, pending, select, poll, run, relAge }
 }
 
 test('look popup: a click on the picture opens one live stream and a 1 s inventory loop, shows each frame as it comes, and closing stops both', async () => {
@@ -265,3 +299,94 @@ for (const [type, size, slot, place] of [
   const { el } = await shown({ ...carrying, window: { ...chest, type, size, slots: [{ slot, name: 'coal', count: 1 }] } })
   assert.match(el('lookWindow').innerHTML, new RegExp(`data-slot="${slot}" style="grid-area:${place}"`))
 })
+
+// ---------------------------------------------------------------- the action log panel
+const entry = (overrides = {}) => ({ t: '2026-10-01T15:21:00.000Z', type: 'job_started', gist: 'goto x=1', bad: false, ...overrides })
+
+const relAgeCases = [
+  [12, '-12s'], [59, '-59s'], [60, '-1m'], [125, '-2m'], [3599, '-59m'], [3600, '-1h'], [7200, '-2h']
+]
+relAgeCases.forEach(([seconds, expected]) => test(`relAge: ${seconds} s reads ${expected}`, () => {
+  const FIXED_NOW = Date.parse('2026-10-01T15:21:12.600Z')
+  const { relAge } = page(undefined, { clock: FIXED_NOW })
+  assert.equal(relAge(new Date(FIXED_NOW - seconds * 1000).toISOString()), expected)
+}))
+
+test('actions panel: hidden while nothing is selected, even if a poll fires', () => {
+  const { el, poll } = page()
+  assert.equal(el('actions').hidden, true)
+  poll()
+  assert.equal(el('actions').hidden, true)
+})
+
+test('actions panel: select shows it and renders the body\'s log; deselecting hides it again', async () => {
+  const FIXED_NOW = Date.parse('2026-10-01T15:21:24.000Z')
+  const { el, select, run } = page(undefined, { clock: FIXED_NOW })
+  select('Chani')
+  run('Chani', { entries: [entry({ t: '2026-10-01T15:21:12.000Z' })] })
+  await settle()
+  assert.equal(el('actions').hidden, false)
+  assert.deepEqual(el('actionsLog').children.map(c => ({ cls: c.className, text: c.textContent, title: c.title })), [
+    { cls: '', text: '-12s job_started goto x=1', title: 'goto x=1' }
+  ])
+  assert.equal(el('actionsName').textContent, 'Chani')
+  select(null)
+  assert.equal(el('actions').hidden, true)
+})
+
+test('actions panel: switching bodies clears the previous log immediately, before the new one answers', async () => {
+  const { el, select, run } = page()
+  select('A')
+  run('A', { entries: [entry({ gist: 'A thing' })] })
+  await settle()
+  assert.equal(el('actionsLog').children.length, 1)
+  select('B')
+  assert.equal(el('actionsLog').children.length, 0)
+  assert.equal(el('actionsName').textContent, 'B')
+})
+
+test('actions panel: a late answer for a body switched away from is dropped', async () => {
+  const { el, select, run, pending } = page()
+  select('A')
+  select('B')
+  assert.deepEqual(pending.map(p => p.url), ['/api/actions/A', '/api/actions/B'])
+  run('B', { entries: [entry({ gist: 'B is current' })] })
+  await settle()
+  run('A', { entries: [entry({ gist: 'A is stale' })] })
+  await settle()
+  assert.deepEqual(el('actionsLog').children.map(c => c.title), ['B is current'])
+})
+
+test('actions panel: of two overlapping polls for the same body, only the later answer lands', async () => {
+  const { el, select, run, poll } = page()
+  select('Chani')
+  poll()
+  run('Chani', { entries: [entry({ gist: 'second poll' })] }, { which: 1 })
+  await settle()
+  run('Chani', { entries: [entry({ gist: 'first poll, now stale' })] }, { which: 0 })
+  await settle()
+  assert.deepEqual(el('actionsLog').children.map(c => c.title), ['second poll'])
+})
+
+test('actions panel: a bad entry carries the err class and its gist as the title', async () => {
+  const { el, select, run } = page()
+  select('Chani')
+  run('Chani', { entries: [entry({ type: 'died', gist: 'fell into lava', bad: true })] })
+  await settle()
+  const [row] = el('actionsLog').children
+  assert.equal(row.className, 'err')
+  assert.equal(row.title, 'fell into lava')
+  assert.match(row.textContent, /died fell into lava$/)
+})
+
+const badAnswers = [
+  ['a non-ok answer', { ok: false, json: { error: 'no agent folder called Chani' } }],
+  ['an ok answer with no entries field', { ok: true, json: {} }]
+]
+badAnswers.forEach(([what, { ok, json }]) => test(`actions panel: ${what} is treated as no entries, not a crash or stale lines`, async () => {
+  const { el, select, run } = page()
+  select('Chani')
+  run('Chani', json, { ok })
+  await settle()
+  assert.deepEqual(el('actionsLog').children, [])
+}))
