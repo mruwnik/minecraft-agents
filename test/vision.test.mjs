@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import zlib from 'node:zlib'
-import { encodePng, decodePng, textureCandidates, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
+import { encodePng, decodePng, textureCandidates, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
 test('png: encode then decode round-trips rgba pixels', () => {
@@ -95,6 +95,22 @@ for (const [block, face, props, expected] of textureCases) {
   test(`texture for ${block} ${face} ${JSON.stringify(props)}`, () =>
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
 }
+
+// ---------------------------------------------------------------- inventory icons
+const filled = (rgba, size = 16) => ({ width: size, height: size, rgba: Uint8Array.from({ length: size * size * 4 }, (_, i) => rgba[i % 4]) })
+const rgbaAt = (img, x, y) => [...img.rgba.subarray((y * img.width + x) * 4, (y * img.width + x) * 4 + 4)]
+const cube = blockIcon(filled([200, 0, 0, 255]), filled([0, 200, 0, 255]), filled([0, 0, 200, 255]))
+for (const [name, x, y, expected] of [
+  ['the top face, fully lit', 16, 4, [200, 0, 0, 255]],
+  ['the left face (the front) a little darker', 6, 18, [0, 160, 0, 255]],
+  ['the right face darker still', 26, 18, [0, 0, 120, 255]],
+  ['above the cube is see-through', 1, 1, [0, 0, 0, 0]],
+  ['below the left face is see-through', 1, 30, [0, 0, 0, 0]]
+]) {
+  test(`blockIcon: ${name}`, () => assert.deepEqual([cube.width, cube.height, rgbaAt(cube, x, y)], [32, 32, expected]))
+}
+test('blockIcon: a transparent texel stays transparent (glass, leaves)', () =>
+  assert.equal(rgbaAt(blockIcon(filled([9, 9, 9, 0]), filled([9, 9, 9, 0]), filled([9, 9, 9, 0])), 16, 4)[3], 0))
 
 // ---------------------------------------------------------------- rays
 const CUBE = { kind: 'cube' }

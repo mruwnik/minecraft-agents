@@ -139,6 +139,47 @@ export function textureCandidates (block, face, props = {}) {
   return [...new Set([name, plainName(name)].flatMap(n => candidatesFor(n, face, props)))]
 }
 
+// grass and leaves ship grey: the game colours them by biome, and this is a temperate one
+const GRASS = [124, 189, 107]
+const FOLIAGE = [89, 174, 48]
+const TINTS = [
+  [/^(grass_block_top|short_grass|tall_grass_(top|bottom)|fern|large_fern_(top|bottom))$/, GRASS],
+  [/^birch_leaves$/, [128, 167, 85]],
+  [/^spruce_leaves$/, [97, 153, 97]],
+  [/^(oak|jungle|acacia|dark_oak|mangrove)_leaves$|^vine$|^lily_pad$/, FOLIAGE],
+  [/^water_still$/, [63, 118, 228]]
+]
+export const tintOf = texture => TINTS.find(([re]) => re.test(texture))?.[1]
+
+// ---------------------------------------------------------------- inventory icons
+// A block item as the inventory screen draws it: a cube seen from above at 2:1, its front on the left, lit from the top.
+// Each face is a parallelogram origin + s*A + t*B over the texture's (s, t); a pixel is mapped back to the one it lies in.
+const ICON_FACES = (h, q) => [
+  { origin: [h, 0], a: [h, q], b: [-h, q], light: 1 },
+  { origin: [0, q], a: [h, q], b: [0, h], light: 0.8 },
+  { origin: [h, h], a: [h, -q], b: [0, h], light: 0.6 }
+]
+export function blockIcon (top, left, right, size = 32) {
+  const faces = ICON_FACES(size / 2, size / 4).map((face, i) => ({ ...face, image: [top, left, right][i] }))
+  const rgba = new Uint8Array(size * size * 4)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      for (const { origin, a, b, light, image } of faces) {
+        const [dx, dy] = [x + 0.5 - origin[0], y + 0.5 - origin[1]]
+        const det = a[0] * b[1] - a[1] * b[0]
+        const [s, t] = [(dx * b[1] - dy * b[0]) / det, (a[0] * dy - a[1] * dx) / det]
+        if (s < 0 || s >= 1 || t < 0 || t >= 1) continue
+        // square: an animated texture is its frames stacked, and only the first is wanted
+        const at = (Math.floor(t * image.width) * image.width + Math.floor(s * image.width)) * 4
+        rgba.set([0, 1, 2].map(i => Math.round(image.rgba[at + i] * light)), (y * size + x) * 4)
+        rgba[(y * size + x) * 4 + 3] = image.rgba[at + 3]
+        break
+      }
+    }
+  }
+  return { width: size, height: size, rgba }
+}
+
 // ---------------------------------------------------------------- world grid
 export function makeGrid (origin, size) {
   const data = new Uint16Array(size.x * size.y * size.z)
