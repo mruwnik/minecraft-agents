@@ -1,6 +1,7 @@
 import { automaticBeds } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
+import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
 import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
@@ -299,6 +300,17 @@ function connect () {
   boatRuntime.attach()
   // 9 physicsTick listeners stand by design and a walk or a wait adds two for a moment: the warning at 11 was noise, not a leak ([listeners] stayed at 9 for hours on every body)
   bot.setMaxListeners(30)
+
+  // minecraft-data's one fixed bamboo shape misses the server's per-block offset (navigation/bamboo.mjs); the blocks
+  // plugin's bot.blockAt exists by login, before spawn, so wrapping it there covers every respawn and dimension change
+  bot.once('login', () => {
+    const blockAt = bot.blockAt.bind(bot)
+    bot.blockAt = (point, extraInfos) => {
+      const block = blockAt(point, extraInfos)
+      if (block?.name === 'bamboo' && block.position) block.shapes = [stalkShape(block.position.x, block.position.z)]
+      return block
+    }
+  })
 
   bot.once('spawn', () => {
     mcData = bot.registry
@@ -1649,6 +1661,7 @@ async function workGround (a, work) {
 
 // the walk itself: goto sets the cells spared from digging round it
 async function gotoWalk (a) {
+  const wriggled = await wriggleOut()
   let walked = { legs: 1 }
   if (a.place) {
     const p = readPlaces().find(q => q.name === a.place)
@@ -1663,11 +1676,12 @@ async function gotoWalk (a) {
   } else if (a.y === undefined) {
     await bot.pathfinder.goto(new goals.GoalNearXZ(a.x, a.z, a.range ?? 1))
     // an x/z goal is met at any depth, and a walk that may not dig likes caves: say so rather than let the driver assume the surface
-    if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
+    if (bot.blockAt(bot.entity.position.offset(0, 1, 0))?.skyLight === 0) return { pos: pos(), ...(wriggled && { note: wriggled }), underground: 'no sky above you: an x/z goal is met at any depth. For a spot on the surface pass y= as well' }
   } else {
     walked = await walkLegs({ x: a.x, y: a.y, z: a.z }, a.range ?? 1, a.into === true)
   }
-  return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(walked.note && { note: walked.note }) }
+  const note = [wriggled, walked.note].filter(Boolean).join('; ')
+  return { pos: pos(), ...(walked.legs > 1 && { legs: walked.legs }), ...(note && { note }) }
 }
 const surfaceWalkRuntime = makeSurfaceWalkRuntime({
   getBot: () => bot, Vec3, goals, makeMoves, cancelGuard,
@@ -3204,11 +3218,13 @@ let scheduler
 const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
 // #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
 // included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
-const passableAboutFeet = () => {
+const passableAboutFeet = (through = () => false) => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return (dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block'
+  return (dx, dy, dz) => { const block = bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz)); return block?.boundingBox !== 'block' || through(block) }
 }
 const amBoxedIn = () => Boolean(bot?.entity) && boxedIn(passableAboutFeet())
+// bamboo the pathfinder reads as walls (a fence-like thicket), though the server's offset stalks leave the body room to walk out between
+const amBoxedByBamboo = () => amBoxedIn() && !boxedIn(passableAboutFeet(block => block.name === 'bamboo'))
 // a hole one block deep (card 94e6dcb1): the walk out of it is a jump, and a failed one reads as a distant obstacle
 const amInHole = () => Boolean(bot?.entity) && inHole(passableAboutFeet())
 // one block above a field, on a log in the rows (Jizo, 09-26 23:24Z): the way down is a drop onto farmland
@@ -3288,6 +3304,38 @@ async function climbFirst (to) {
     until: now => !inPocket((dx, dy, dz) => passable(now.x + dx, now.y + dy, now.z + dz))
   }).catch(e => { throw new Error(`${why}; ${e.message}`) })
   return `${why}; climbed ${out.climbed} (${out.side} niche, ${out.placed} placed, ${out.dug} dug) to ${out.to.x},${out.to.y},${out.to.z}`
+}
+// walked, never dug: a dug base never regrows, and the free space between the stalks always leads out of a grove that is not sealed
+async function wriggleOut () {
+  if (!amBoxedByBamboo()) return null
+  const alive = cancelGuard()
+  const { y } = feetCell(bot.entity.position, bot.entity.onGround)
+  const at = (x, dy, z) => bot.blockAt(new Vec3(x, y + dy, z))
+  const bambooAt = (x, z) => [0, 1].some(dy => at(x, dy, z)?.name === 'bamboo')
+  const clear = (x, dy, z) => { const block = at(x, dy, z); return Boolean(block) && (block.name === 'bamboo' || block.boundingBox === 'empty') }
+  const openAt = (x, z) => clear(x, 0, z) && clear(x, 1, z) && at(x, -1, z)?.boundingBox === 'block'
+  const waypoints = groveExit({ from: bot.entity.position, bambooAt, openAt })
+  if (!waypoints) return null
+  const reached = async waypoint => {
+    for (let t = 0; t < 40; t++) {
+      const { yaw, sneak, arrived } = steer(bot.entity.position, waypoint)
+      if (arrived) return true
+      alive()
+      await bot.look(yaw, 0, true)
+      bot.setControlState('forward', true)
+      bot.setControlState('sneak', sneak)
+      await bot.waitForTicks(1)
+    }
+    return steer(bot.entity.position, waypoint).arrived
+  }
+  try {
+    for (const waypoint of waypoints) if (!await reached(waypoint)) return null
+  } finally {
+    bot.setControlState('forward', false)
+    bot.setControlState('sneak', false)
+  }
+  const out = waypoints.at(-1)
+  return `wriggled out of the bamboo to ${out.x.toFixed(2)},${out.z.toFixed(2)}`
 }
 // a dig walk goes in legs of 6 (src/navigation/dig-legs.mjs): a straight line of 20 through rock is more search than the 5 s budget
 // holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
