@@ -142,15 +142,18 @@ z south): a dot per body with its name, health, food and current task, each huma
 protected zones as boxes and marked places as crosses. Click a body and its name appears beside the map; "watch"
 streams its view there live, the button becoming "pause" until clicked again, and the picture doubles as a button
 into a bigger, independent live popup. Drag to pan, wheel to zoom; the map fits itself around the bodies, and
-"fit everything" widens it to the whole map. A translucent panel over the left of the map shows that body's recent
-actions - job starts/completions/failures, death, respawn, holing up, chat - newest at the bottom, aging in place.
+"fit everything" widens it to the whole map. Selecting a body starts watching it (pause stops the small picture).
+The popup shows that body's recent actions beside the picture - job starts/completions/failures, death, respawn,
+holing up, chat - newest at the bottom, aging in place. Under the log, a line typed and sent with Enter reaches the
+agent as a whisper from `dashboard`, the same `whisper` event an in-game whisper makes.
 
-It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
+Apart from that whisper it only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
 that agent's driver nothing - no tokens are spent by looking. A port that does not answer is simply a body that is
-down. Its own API, for scripts: `/api/state` (every body, plus places and zones) and `/api/look/<Name>` (a PNG, with
-`?pano=1`; what the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers) and
-`/api/screen/<Name>` (the `screen` action as JSON: HUD, inventory slots and the open container).
+down. Its own API, for scripts: `/api/state` (every body, plus places and zones) and `/api/look/<Name>` (a PNG; what
+the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers) and
+`/api/screen/<Name>` (the `screen` action as JSON: HUD, inventory slots and the open container) and
+`POST /api/whisper/<Name>` (`{"message": "..."}`, whispered to that body's driver from `dashboard`).
 
 The map arithmetic is in `tools/dashboard/map.mjs`, which has no node imports so the page and `npm test` use the
 same code; `tools/dashboard/lib.mjs` reads the folders and routes.

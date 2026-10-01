@@ -1,6 +1,6 @@
 // Sleeping: whether it is night, oversleeping, bed choice, and the report once the body wakes.
 
-import { inAnyZone } from './world.mjs'
+import { inAnyZone, isAir, FLUIDS } from './world.mjs'
 // night is when beds work; state, the shared clock, night_fell and the reflexes must all agree on it
 export const isNight = tick => tick > 12542 && tick < 23460
 
@@ -39,6 +39,70 @@ export function automaticBeds (beds, zones, places, me, residents = []) {
     if (residents.some(p => p && Math.hypot(p.x - bed.x, p.y - bed.y, p.z - bed.z) <= 16)) return false
     return containing.some(z => String(z.name).toLowerCase().startsWith(mine)) ||
       places.some(p => p.kind === 'bed' && p.by === me && Math.hypot(p.x - bed.x, p.y - bed.y, p.z - bed.z) <= 2)
+  })
+}
+
+// a bed reflex-placed near someone else's home is a bed the reflex would then have to explain, or worse, get dug up
+// by its owner. Never within this many blocks of a zone or a marked base that is not the body's own.
+const HUMAN_BASE_MARGIN = 50
+
+const clampAxis = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b))
+const zoneDistance = (point, z) => Math.hypot(
+  point.x - clampAxis(point.x, z.x1, z.x2),
+  point.y - clampAxis(point.y, z.y1, z.y2),
+  point.z - clampAxis(point.z, z.z1, z.z2)
+)
+
+// a human base, for this feature: a zone or a kind=base place not named <me>-... (case-insensitive).
+// Returns the offending zone/place name, or null when point is clear of all of them.
+export function nearHumanBase (point, { zones = [], places = [], me, margin = HUMAN_BASE_MARGIN } = {}) {
+  const mine = `${String(me).toLowerCase()}-`
+  const zone = zones.find(z => !String(z.name).toLowerCase().startsWith(mine) && zoneDistance(point, z) <= margin)
+  if (zone) return zone.name
+  // owned by name, as zones are: the live map has human bases marked by the body that wrote them down
+  const base = places.find(p => p.kind === 'base' && !String(p.name).toLowerCase().startsWith(mine) && Math.hypot(point.x - p.x, point.y - p.y, point.z - p.z) <= margin)
+  return base ? base.name : null
+}
+
+// where a carried bed could go next to the body: the foot cell of the first of north/south/east/west that has room
+// (foot and head both standing-height, clear overhead, solid dry floor), away from any human base and from any
+// villager within the 16 blocks automaticBeds itself uses - so the reflex never places a bed it would then refuse.
+const BED_DIRECTIONS = [
+  { x: 0, y: 0, z: -1, facing: 'north' },
+  { x: 0, y: 0, z: 1, facing: 'south' },
+  { x: 1, y: 0, z: 0, facing: 'east' },
+  { x: -1, y: 0, z: 0, facing: 'west' }
+]
+
+export function carriedBedSpot ({ feet, cellAt, zones = [], places = [], me, residents = [] }) {
+  const standable = cell => {
+    const { x, y, z } = cell
+    const floor = cellAt(x, y - 1, z)
+    return isAir(cellAt(x, y, z)?.name) && isAir(cellAt(x, y + 1, z)?.name) &&
+      floor?.boundingBox === 'block' && !FLUIDS.has(floor?.name) && !nearHumanBase(cell, { zones, places, me })
+  }
+  const candidates = BED_DIRECTIONS.map(d => ({
+    facing: d.facing,
+    foot: { x: feet.x + d.x, y: feet.y, z: feet.z + d.z },
+    head: { x: feet.x + 2 * d.x, y: feet.y, z: feet.z + 2 * d.z }
+  }))
+  const chosen = candidates.find(({ foot, head }) => standable(foot) && standable(head) &&
+    !residents.some(p => p && Math.hypot(p.x - foot.x, p.y - foot.y, p.z - foot.z) <= 16))
+  return chosen ? { ...chosen.foot, facing: chosen.facing } : null
+}
+
+// what to do by day with each bed the reflex put down (its marks: { name, x, y, z, item }). inFlight: names already being
+// dug. A bed out of reach or in an unloaded cell is left standing and marked: a later day tick near it picks it up
+const PICKUP_RANGE = 16
+export function reflexPickups ({ night, asleep, reflexes, beds, cellAt, from, inFlight }) {
+  if (night || asleep || !reflexes) return []
+  return beds.flatMap(bed => {
+    if (inFlight.has(bed.name)) return []
+    const cell = cellAt(bed.x, bed.y, bed.z)
+    if (!cell) return []
+    if (cell.name !== bed.item) return [{ bed, do: 'unmark' }]
+    if (Math.hypot(bed.x - from.x, bed.y - from.y, bed.z - from.z) > PICKUP_RANGE) return []
+    return [{ bed, do: 'dig' }]
   })
 }
 
@@ -83,4 +147,22 @@ export function nightPlan ({ near, bed, from, bedRange = BED_RANGE }) {
   const distance = blocksApart(bed, from)
   if (distance > bedRange) return { do: 'stop', why: `${bed.name} is ${distance} blocks away, beyond bed_range=${bedRange}` }
   return { do: 'walk', to: bed, distance }
+}
+
+// about 15 s of walking; a longer night walk meets more mobs than a bed put down here and picked up by day
+export const WALK_OVER_CARRIED = 64
+
+// placement beats the walk whenever the walk already failed tonight, a monster is near, or carrying a bed that could
+// go down sooner than WALK_OVER_CARRIED makes the walk not worth it
+export function automaticNightPlan ({ near, bed, from, carried, walkFailed, hostileNear, bedRange = BED_RANGE }) {
+  if (near) return { do: 'sleep' }
+  const plan = nightPlan({ near: false, bed, from, bedRange })
+  const blocked = plan.do === 'walk' && (walkFailed || hostileNear || (carried && plan.distance > WALK_OVER_CARRIED))
+  if (plan.do === 'walk' && !blocked) return plan
+  if (carried) return { do: 'place' }
+  if (!blocked) return plan // nightPlan's own stop: no bed known, or beyond bed_range
+  const why = walkFailed
+    ? `the walk to ${bed.name} failed already tonight, and no bed is carried to place instead`
+    : 'a monster is near: beds refuse, and no bed is carried to place instead'
+  return { do: 'stop', why }
 }

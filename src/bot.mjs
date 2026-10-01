@@ -1,4 +1,4 @@
-import { automaticBeds } from './lib/sleep.mjs'
+import { automaticBeds, carriedBedSpot, reflexPickups } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
 import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
@@ -29,12 +29,12 @@ import { restartAdvice } from './restart.mjs'
 import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from './talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal, heardWhisper } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
@@ -111,6 +111,8 @@ export const cancelGuard = () => { const mine = gen; return () => { if (gen !== 
 // A composite may finish restoring one job block after cancellation. This private token cannot be supplied by a CLI caller.
 export const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
+let yieldUntil = 0 // while someone else is logged in as me, I stay off until then
+let reconnectTimer = null
 // when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
 let eatingSince = null
 
@@ -284,6 +286,7 @@ const loginNeeded = () => {
 
 function connect () {
   ready = false
+  yieldUntil = 0
   bot = mineflayer.createBot({
     host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: cfg.auth,
     ...(cfg.auth === 'microsoft' && { profilesFolder: authDir(HOME), onMsaCode: loginNeeded })
@@ -609,7 +612,8 @@ function connect () {
       })
       emit('respawned', { ...(plan.why ? { doing: plan.do, note: plan.why } : {}) })
       if (plan.do === 'burrow') holeUp(plan.why)
-      if (plan.do === 'sleep') submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
+      // #147(c): a just-respawned body sleeps in a near or carried bed, never walks one of its own
+      if (plan.do === 'sleep') submitJob('sleep', { timeout: 60, automatic: true, walk: false }, { automatic: true })
     }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
@@ -761,6 +765,10 @@ function connect () {
   bot.on('kicked', reason => {
     const say = sayOnce('kicked', typeof reason === 'string' ? reason : JSON.stringify(reason))
     if (say) emit('kicked', { reason: say })
+    const yielded = loginYield(reason, Date.now())
+    if (!yielded) return
+    yieldUntil = Date.parse(yielded.until)
+    emit('yielded', yielded)
   })
   // while the server is down we retry quietly: only the first failure is worth an event
   bot.on('error', err => { if (ready || !waitingForServer) sayError(err.message || err.code || String(err)) })
@@ -774,7 +782,7 @@ function connect () {
     // farm.build job 322 stuck at active= for hours after a creeper-interrupted reconnect).
     cancelTask(`disconnected: ${reason}`, { holdQueue: false })
     scheduler?.abandon(`disconnected: ${reason}`)
-    setTimeout(connect, 10000)
+    reconnectTimer = setTimeout(connect, reconnectDelay(yieldUntil, Date.now()))
   })
 }
 
@@ -981,24 +989,84 @@ setInterval(() => {
 }, 5000)
 // is the MaxListeners warning (11 physicsTick listeners) a plateau or a leak? One line every 10 minutes in bot.log settles it
 setInterval(() => { if (ready) console.log(`[listeners] physicsTick=${bot.listenerCount('physicsTick')} heapMb=${Math.round(process.memoryUsage().heapUsed / 1e6)}`) }, 600000)
-export const automaticSleepBeds = () => automaticBeds(bedsNear(), zones, readPlaces(), cfg.username, Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position))
+const villagers = () => Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position)
+export const automaticSleepBeds = () => automaticBeds(bedsNear(), zones, readPlaces(), cfg.username, villagers())
+const carriedBed = () => bot.inventory.items().find(i => i.name.endsWith('_bed'))
+const carriedBedPlace = () => carriedBedSpot({
+  feet: feetCell(bot.entity.position, bot.entity.onGround), cellAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+  zones, places: readPlaces(), me: cfg.username, residents: villagers()
+})
+// each bed the reflex puts down gets its own mark on the shared map, so a restart still knows to pick it up and a
+// driver's own <me>-bed mark (and bed) is never touched
+const reflexBeds = () => readPlaces().filter(p => p.reflex === true && p.by === cfg.username)
+const unmark = name => savePlaces(readPlaces().filter(p => p.name !== name))
+async function placeReflexBed (item, { x, y, z, facing }) {
+  const name = `${cfg.username}-bed-${x}_${y}_${z}`
+  const mark = () => savePlaces([...readPlaces().filter(p => p.name !== name), { name, kind: 'bed', x, y, z, by: cfg.username, reflex: true, item, note: 'placed by the bedtime reflex' }])
+  try {
+    await long.place({ item, x, y, z, facing })
+  } catch (err) {
+    // the bed went down but a later check failed: an unmarked reflex bed would never be picked up
+    if (cellAt(x, y, z)?.name === item) mark()
+    throw err
+  }
+  mark()
+  emit('bed_placed', { at: `${x},${y},${z}`, item, note: 'no bed of mine nearby: put down the one I carry to sleep in, and pick it up by day' })
+}
+// through the scheduler, so the pick-up queues behind the driver's work instead of racing it. Waited on rather than
+// caught in onTerminal: a job dropped from the queue (stop, discard) never reaches onTerminal
+const FOREVER_MS = 2 ** 31 - 1
+const pickingUp = new Set()
+async function pickUpReflexBed ({ name, x, y, z, item }) {
+  pickingUp.add(name)
+  const before = inventoryCounts()[item] ?? 0
+  await scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS)
+  // judged by the world, not the job's status: a dig that failed after breaking the bed still took it down.
+  // One left standing stays in pickingUp, so it is not retried this run: every failed job holds the driver's queue
+  const cell = cellAt(x, y, z)
+  if (!cell || cell.name === item) return
+  pickingUp.delete(name)
+  unmark(name)
+  const pocketed = (inventoryCounts()[item] ?? 0) > before
+  emit('bed_picked_up', { at: `${x},${y},${z}`, item, note: pocketed ? 'picked up the bed I put down for the night' : 'took down the bed I put down for the night, but it did not reach my pockets: it may lie on the ground there' })
+}
 // bedtime reflex (see bedtime in lib.mjs)
 let lastDriven = Date.now()
 let lastBedTry = 0
 let bedFailures = 0
+let bedWalkFailed = false // a walk to the own bed failed or came up short tonight: go straight to placement, not retried till the next night
 setInterval(() => {
   if (!ready) return
   const now = Date.now()
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
-  if (!isNight(bot.time.timeOfDay)) holedUp = null
+  const night = isNight(bot.time.timeOfDay)
+  if (!night) { holedUp = null; bedWalkFailed = false }
+  for (const { bed, do: step } of reflexPickups({ night, asleep: bot.isSleeping, reflexes, beds: reflexBeds(), cellAt, from: bot.entity.position, inFlight: pickingUp })) {
+    if (step === 'unmark') unmark(bed.name)
+    else pickUpReflexBed(bed)
+  }
+  const bedNear = automaticSleepBeds().length > 0
+  const hostileNear = nearbyHostiles(8).length > 0
+  const carried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
+  const from = pos()
+  // the shared map is only worth reading once it is night: by day there is no bedtime plan to make
+  const plan = night
+    ? automaticNightPlan({ near: bedNear, bed: ownBed(readPlaces(), cfg.username, { from }), from, carried, walkFailed: bedWalkFailed, hostileNear })
+    : { do: 'stop' }
+  const bedWalk = plan.do === 'walk'
+  const bedCarried = plan.do === 'place'
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: automaticSleepBeds().length > 0,
-    hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
+    night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried, bedWalk,
+    hostileNear, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
-  if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
+  if (!night || bot.isSleeping) bedFailures = 0
   if (!tired) return
   lastBedTry = now
-  if (bedFailures === 0) emit('bedtime', { note: 'night, no orders, a bed nearby: going to bed by myself' })
+  if (bedFailures === 0) emit('bedtime', {
+    note: bedNear ? 'night, no orders, a bed nearby: going to bed by myself'
+      : bedWalk ? `night, no orders, my own bed ${plan.distance} blocks off: walking to it and going to bed`
+        : 'night, no orders, no bed nearby: placing the bed I carry and going to bed'
+  })
   // say so once a night: the driver is told, and the retries (ever further apart) stay quiet
   submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
 }, 10000)
@@ -2682,13 +2750,46 @@ export const long = {
 
   async sleep (a) {
     if (bot.vehicle) throw new Error('confirm a safe dismount before walking to a bed')
+    const alive = cancelGuard()
     // a taken bed is passed over for the next one I may use (a shared bedroom: "the bed is occupied" was the end of the night)
     const occupied = new Set()
     // no bed within 32 is not the end of the night when one of my own is on the shared map within bed_range (default 200,
     // card bebf3a5f): walk there once (bed=<place>, else my nearest kind=bed mark; src/lib/sleep.mjs ownBed) and look again
     let walked = false
+    let placed = false
     for (;;) {
       const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
+      if (error && a.automatic && !placed) {
+        // walked there already and bedChoice still has nothing for me: that walk counted as failed, so tonight goes straight to placement
+        if (walked) bedWalkFailed = true
+        const from = pos()
+        const plan = automaticNightPlan({
+          near: false, bed: ownBed(readPlaces(), cfg.username, { from }), from,
+          carried: Boolean(carriedBed()) && Boolean(carriedBedPlace()), walkFailed: bedWalkFailed || a.walk === false, hostileNear: nearbyHostiles(8).length > 0
+        })
+        if (plan.do === 'walk') {
+          walked = true
+          try {
+            await goNear(plan.to, 2)
+          } catch (e) {
+            bedWalkFailed = true
+            alive()
+            if (/goal was changed|path was stopped/i.test(e.message)) throw e
+          }
+          continue
+        }
+        if (plan.do === 'place') {
+          const item = carriedBed()
+          const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
+          if (spot) {
+            alive()
+            placed = true
+            await placeReflexBed(item.name, spot)
+            continue
+          }
+        }
+        throw new Error(plan.why ? `${error} (${plan.why})` : error)
+      }
       if (error && !a.automatic && !walked && /^no bed within 32/.test(error)) {
         const from = pos()
         const plan = nightPlan({ near: false, bed: ownBed(readPlaces(), cfg.username, { bed: a.bed, from }), from, bedRange: a.bed_range ?? BED_RANGE })
@@ -3075,6 +3176,13 @@ export const quick = {
     const parts = splitSay(said.text, sayLimit(a.player))
     for (const part of parts) bot.whisper(a.player, part)
     return parts.length > 1 ? { parts: parts.length } : {}
+  },
+  // the dashboard's: a line typed into an agent's popup, recorded as the whisper it stands for (bot.on('whisper') above)
+  hear (a) {
+    const said = heardWhisper(a)
+    lastDriven = Date.now()
+    emit('whisper', said)
+    return {}
   },
 
   async equip (a) {
@@ -3696,7 +3804,8 @@ http.createServer((req, res) => {
       // help is answered even before the body is connected: a driver reads it first of all
       if (name === '' || name === 'help') out = { ok: true, ...quick.help(args) }
       else if (args.queue === false && args.interrupt !== true) out = { ok: false, error: 'queue=false is no longer supported; jobs queue by default. Use interrupt=true to cancel the current job safely before urgent work' }
-      else if (!ready && !['events', 'job', 'jobs', 'cancel', 'resume', 'discard', 'stop'].includes(name)) out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
+      else if (!ready && !['events', 'job', 'jobs', 'cancel', 'resume', 'discard', 'stop'].includes(name)) out = { ok: false, error: offlineError(yieldUntil, Date.now()) }
+      else if (name === 'resume' && !ready && yieldUntil > Date.now()) { clearTimeout(reconnectTimer); connect(); out = { ok: true, reconnecting: true } }
       else if (lacking) out = { ok: false, error: lacking }
       else if (['job', 'jobs', 'cancel', 'resume', 'discard'].includes(name)) out = jobControl(name, args)
       else if (name === 'stop') out = stopAllJobs()

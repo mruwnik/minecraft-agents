@@ -2,7 +2,7 @@
 // their wait). Today's tally was 38 chats from agents against 5 whispers (720224ff), so `chat` reads its own text.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from '../src/talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal, heardWhisper } from '../src/talk.mjs'
 
 const online = ['Chani', 'Perrin', 'Steve']
 
@@ -98,4 +98,15 @@ for (const [name, text, refused] of refusals) {
 test('sayLimit: chat has the whole line, a whisper pays for its header', () => {
   assert.equal(sayLimit(), 256)
   assert.equal(sayLimit('Chani'), 256 - '/tell Chani '.length)
+})
+
+test('heardWhisper: shaped as bot.on(\'whisper\') records one, text trimmed', () => {
+  assert.deepEqual(heardWhisper({ from: 'dashboard', message: '  come home  ' }), { from: 'dashboard', message: 'come home' })
+})
+for (const [what, args, error] of [
+  ['no sender', { message: 'hi' }, /from=/],
+  ['no text', { from: 'dashboard', message: '   ' }, /message=/],
+  ['a non-string text', { from: 'dashboard', message: { a: 1 } }, /message=/]
+]) test(`heardWhisper: ${what} is refused`, () => {
+  assert.throws(() => heardWhisper(args), error)
 })
