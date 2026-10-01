@@ -20,7 +20,8 @@ export function parseChosenName (output) {
 // running body's bot.log, which is the evidence of whatever went wrong.
 // A pid can be reused by something else entirely, so a pid file alone is not proof: the process must still look like
 // a body. The control port answering is the other half - a body started before pid files existed leaves none.
-const bodyProcess = cmdline => /bot\.mjs/.test(String(cmdline ?? ''))
+// the launcher wrapper counts too: it holds the pid file while check-code, patch-deps and textures run before the body
+const bodyProcess = cmdline => /bot\.mjs|start-body/.test(String(cmdline ?? ''))
 const NEVER_KILL = 'Never kill a process: every body on this machine has the identical command line, so `pkill -f bot.mjs` or a PID off `ps` takes down other agents\' bodies too (#145). `./mc quit` is the only way down'
 export function bodyRefusal ({ pid, cmdline, listening, port }) {
   if (pid && bodyProcess(cmdline)) return `your body is already up (pid ${pid}): ./mc state. ${NEVER_KILL}, and a body that will not answer is a message to your lead, not something to kill`

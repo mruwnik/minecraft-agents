@@ -5572,6 +5572,7 @@ test('repeatByType: an ordinary error still says its count after a minute', () =
 const LIVE = 'node --max-old-space-size=1536 /home/x/bot/src/bot.mjs .'
 ;[
   ['a live body of mine refuses the start', { pid: 4242, cmdline: LIVE, listening: false, port: 3777 }, /already up \(pid 4242\)/],
+  ['a launcher still bringing my body up refuses the start', { pid: 4243, cmdline: '/bin/bash ../../../tools/start-body .', listening: false, port: 3777 }, /already up \(pid 4243\)/],
   ['no pid file and a silent port starts', { pid: null, cmdline: null, listening: false, port: 3777 }, null],
   ['a pid file left by a dead body starts', { pid: 4242, cmdline: null, listening: false, port: 3777 }, null],
   ['a pid reused by something else is not a body', { pid: 4242, cmdline: '/usr/bin/firefox', listening: false, port: 3777 }, null],

@@ -8,6 +8,10 @@ cd "$1" || exit 1
 # body, so only its refusal stops us.
 node ../../../tools/body-lock.mjs check .
 [ $? -eq 3 ] && exit 3
+# claim the pid file now, under this wrapper's pid: the checks below take seconds, and two starts in that window both
+# passed the lock and traded logins (the body's own pid replaces it once it is up)
+node ../../../tools/body-lock.mjs write . $$
+trap 'rm -f body.pid' EXIT
 # a body started outside at night dies before its driver can act (a7cd6038): refuse while the shared clock says night,
 # before the log rotation below touches anything. `./start --now` (or START_NOW=1) is the driver's word that the body
 # spawns into a bed or under a roof, which the clock cannot know
