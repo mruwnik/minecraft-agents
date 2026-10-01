@@ -62,6 +62,7 @@ import { driveHorse } from './navigation/horse.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
 import { makeVillagerRosterObserver, saveVillagerObservation } from './villager/roster.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
+import { authDir, profileFile, loginAdvice } from './auth.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
 import { matcher, countsOf, chestTransfer, carried, inventoryCounts, inventoryQuiet, diffCounts, findItem, vecOf, dropsNear, sweepDrops, walkToDig, cellAt, goNear, findBlocksNear, findBlockByName, bedsNear, craftBatch, containerAt, leashHolderOf, onMyLeads, leadsCarried, leashCandidate, leashOne, unleashOne, leadWalk } from './body/helpers.mjs'
@@ -256,10 +257,19 @@ export function useMoves (dig) {
   bot.pathfinder.setMovements(dig ? digMoves : walkMoves)
 }
 
+// a device code asked for at runtime means the cached refresh token is gone (months of disuse): a background body
+// cannot show it to anyone, and the reconnect loop would ask for a new one every ten seconds, so say so and stop.
+// exit 6: tools/start-body writes the body_down line for any non-zero exit
+const loginNeeded = () => {
+  emit('login_needed', { advice: loginAdvice(HOME) })
+  process.exit(6)
+}
+
 function connect () {
   ready = false
   bot = mineflayer.createBot({
-    host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: 'offline'
+    host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: cfg.auth,
+    ...(cfg.auth === 'microsoft' && { profilesFolder: authDir(HOME), onMsaCode: loginNeeded })
   })
   installWorldClock(bot)
   villagerRoster.attach(bot)
@@ -3651,4 +3661,5 @@ http.createServer((req, res) => {
 process.on('uncaughtException', e => sayError(`uncaught: ${e.message}`, { at: stackTop(e.stack) }))
 process.on('unhandledRejection', e => sayError(`unhandled: ${e?.message ?? e}`))
 
+if (cfg.auth === 'microsoft' && !fs.existsSync(profileFile(HOME))) loginNeeded()
 connect()
