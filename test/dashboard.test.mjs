@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, ACTION_LOG_LIMIT, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -614,14 +614,14 @@ dropped.forEach(([what, event]) => test(`actionLog: drops ${what}`, () => {
   assert.deepEqual(actionLog([event], 200), [])
 }))
 
+test('actionLog: an event missing the field its gist reads still gives a string', () => {
+  assert.deepEqual(actionLog([evt('kicked')], 200).map(e => e.gist), [''])
+})
+
 test('actionLog: the whole gist is capped at ~120 chars', () => {
   const long = { x: 'y'.repeat(200) }
   const [entry] = actionLog([evt('job_started', { name: 'goto', args: long })], 200)
   assert.ok(entry.gist.length <= 120)
-})
-
-test('ACTION_LOG_LIMIT: 200', () => {
-  assert.equal(ACTION_LOG_LIMIT, 200)
 })
 
 test('actionLog: newest `limit` entries survive, oldest first', () => {

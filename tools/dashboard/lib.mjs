@@ -221,7 +221,7 @@ const BAD = new Set(['job_failed', 'job_interrupted', 'died', 'body_down', 'stuc
 
 export const actionLog = (lines, limit) => lines
   .filter(e => e && GIST[e.type])
-  .map(e => ({ t: e.t, type: e.type, gist: GIST[e.type](e), bad: BAD.has(e.type) }))
+  .map(e => ({ t: e.t, type: e.type, gist: GIST[e.type](e) ?? '', bad: BAD.has(e.type) }))
   .slice(-limit)
 
 // ---------------------------------------------------------------- what stands on a plan's footprint
