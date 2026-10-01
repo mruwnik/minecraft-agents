@@ -5817,7 +5817,9 @@ for (const [name, cell, expected] of [
   ['a block in reach is dug from here', { name: 'stone', near: true }, 'dig'],
   ['a missing tool is said before the walk', { name: 'iron_ore', needed: 'stone_pickaxe', near: false }, 'tool'],
   ['a cell in an unloaded chunk is walked to and read there', { name: undefined, near: false }, 'walk'],
-  ['a cell in reach that reads as nothing is empty', { name: undefined, near: true }, 'air']
+  ['a cell in reach that reads as nothing is empty', { name: undefined, near: true }, 'air'],
+  ['told to dig by hand, a block the body has no tool for is dug anyway (it drops nothing)', { name: 'diorite', needed: 'wooden_pickaxe', near: true, byHand: true }, 'dig'],
+  ['and walked to first when out of reach', { name: 'diorite', needed: 'wooden_pickaxe', near: false, byHand: true }, 'walk']
 ]) {
   test(`digPlan: ${name}`, () => assert.equal(digPlan(cell), expected))
 }

@@ -1721,12 +1721,13 @@ export const long = {
       return { block, name: block?.name, needed }
     }
     const here = read()
-    const walk = digPlan({ ...here, near: digFromHere(bot.entity.position, p) }) === 'walk'
+    const byHand = a.by_hand === true
+    const walk = digPlan({ ...here, near: digFromHere(bot.entity.position, p), byHand }) === 'walk'
     if (walk) await walkToDig(p)
     const cell = walk ? read() : here
-    const step = digPlan({ ...cell, near: true })
+    const step = digPlan({ ...cell, near: true, byHand })
     if (step === 'air') return { already: 'air' }
-    if (step === 'tool') throw new Error(`${cell.name} needs a ${cell.needed} or better: you carry none, craft one first`)
+    if (step === 'tool') throw new Error(`${cell.name} needs a ${cell.needed} or better: you carry none, craft one first (or by_hand=true breaks it for no drop)`)
     const block = cell.block
     if (a.safe_hive === true) checkSafeHive(block, a.smoke)
     if (a.silk_touch === true) {
@@ -3245,7 +3246,7 @@ async function climbFirst (to) {
     goalY: to.y,
     blockAt: cellAt,
     carried: climbBlocks(inventoryCounts(), name => bot.registry.blocksByName[name]?.boundingBox === 'block'),
-    dig: cell => long.dig({ x: cell.x, y: cell.y, z: cell.z, batch: true }),
+    dig: cell => long.dig({ x: cell.x, y: cell.y, z: cell.z, batch: true, by_hand: true }),
     place: block => long.place({ item: block.item, x: block.x, y: block.y, z: block.z }),
     step: stepUp,
     until: now => !inPocket((dx, dy, dz) => passable(now.x + dx, now.y + dy, now.z + dz))

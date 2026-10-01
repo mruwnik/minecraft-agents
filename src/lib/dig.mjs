@@ -7,11 +7,12 @@ export const digFromHere = (feet, cell, reach = DIG_REACH) =>
   Math.hypot(cell.x + 0.5 - feet.x, cell.y + 0.5 - (feet.y + 1.62), cell.z + 0.5 - feet.z) <= reach
 
 // what a dig does before it moves (card 150b3ee1): a dig at a cell that was already air walked for 148 s before it looked.
-// name: the cell as read from here (undefined: its chunk is not loaded). needed: a tool the body lacks for it. near: digFromHere
-export const digPlan = ({ name, needed, near }) => {
+// name: the cell as read from here (undefined: its chunk is not loaded). needed: a tool the body lacks for it. near: digFromHere.
+// byHand: break it anyway for no drop, the way out of a shaft dug with no pickaxe to carry (mruwnik, 2026-10-01)
+export const digPlan = ({ name, needed, near, byHand = false }) => {
   if (name === undefined) return near ? 'air' : 'walk'
   if (isAir(name)) return 'air'
-  if (needed) return 'tool'
+  if (needed && !byHand) return 'tool'
   return near ? 'dig' : 'walk'
 }
 // a dig's walk that has not arrived by then gives up, and says so
