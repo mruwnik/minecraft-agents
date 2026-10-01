@@ -178,7 +178,7 @@
         <span id="lookname">pick a body</span>
         <span class="spacer"></span>
         <label class="muted"><input type="checkbox" id="pano"> pano</label>
-        <button id="relook">look</button>
+        <button id="relook">watch</button>
       </div>
       <img id="lookimg" alt="" hidden>
       <div id="lookmeta"></div>
@@ -734,7 +734,7 @@ const select = name => {
   el('lookname').textContent = name
   renderList()
   draw()
-  fetchLook()
+  if (watching) startWatch()
 }
 
 // a look's caption under its picture, or why there is no picture. Once a picture is up it stays up: an error
@@ -751,25 +751,32 @@ const showLook = (img, meta, look) => {
   meta.textContent = [`${selected} · ${look.view}`, look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
 }
 
-// one fresh look through the selected body's eyes into img, with its caption in meta; settles when the picture is up
-// or the error is shown. The last picture stays while the next renders: only an empty frame says "rendering…"
-const loadLook = (img, meta) => {
-  if (!selected) return Promise.resolve()
-  meta.className = ''
-  if (img.hidden) meta.textContent = 'rendering…'
-  // t= so a second look of the same body is fetched again rather than taken from the browser cache
-  const params = new URLSearchParams({ t: String(Date.now()), ...(el('pano').checked ? { pano: '1' } : {}) })
-  const url = `/api/look/${encodeURIComponent(selected)}?${params}`
-  return fetch(url).then(async res => {
-    if (!res.ok) return showLook(img, meta, await res.json().catch(() => ({ error: `HTTP ${res.status}` })))
-    const header = name => decodeURIComponent(res.headers.get(name) || '')
-    URL.revokeObjectURL(img.src)
-    img.src = URL.createObjectURL(await res.blob())
-    showLook(img, meta, { view: header('x-look-view'), blocked: header('x-look-blocked'), seen: JSON.parse(header('x-look-seen') || '[]') })
-  }).catch(e => { meta.className = 'err'; meta.textContent = String(e) })
+// the inline card's own live stream, the same mechanism as the popup's (below): started by "watch", stopped by
+// "pause". Independent of the popup - both read the look cache in src/vision/eyes.mjs, so an identical unchanged
+// scene is served from the last-frame cache and costs one render, not two, however many streams are open on a body.
+let watching = false
+let watchStream = null
+const closeWatch = () => { watchStream?.close(); watchStream = null }
+const startWatch = () => {
+  if (!selected) return
+  closeWatch()
+  el('lookmeta').className = ''
+  if (el('lookimg').hidden) el('lookmeta').textContent = 'rendering…'
+  const params = new URLSearchParams(el('pano').checked ? { pano: '1' } : {})
+  watchStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live?${params}`)
+  watchStream.onmessage = e => {
+    const look = JSON.parse(e.data)
+    if (look.png) el('lookimg').src = `data:image/png;base64,${look.png}`
+    showLook(el('lookimg'), el('lookmeta'), look)
+  }
 }
-const fetchLook = () => loadLook(el('lookimg'), el('lookmeta'))
-el('relook').addEventListener('click', fetchLook)
+const setWatching = on => {
+  watching = on
+  el('relook').textContent = on ? 'pause' : 'watch'
+  if (on) startWatch()
+  else closeWatch()
+}
+el('relook').addEventListener('click', () => setWatching(!watching))
 
 // where the game draws each of mineflayer's window slots, as [row, column] of #lookInventory's grid: 5-8 armour, 45 the
 // offhand beside the boots, 9-35 the main grid, 36-44 the hotbar (rows 5 and 9 are the gaps)
