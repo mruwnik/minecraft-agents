@@ -79,6 +79,40 @@ test('restart interrupts owner, holds accepted FIFO and never replays physical w
   } finally { t.close() }
 })
 
+test('interruptActive frees a wedged owner without a process restart, and a later settlement cannot override it', () => {
+  const t = tempShelf()
+  try {
+    const shelf = createJobShelf(t.file)
+    const idle = shelf.interruptActive('disconnected: socketClosed')
+    assert.equal(idle, null) // nothing to abandon when no job is active
+    const stuck = shelf.accept({ name: 'farm.build', args: { place: 'farm' } })
+    const pending = shelf.accept({ name: 'goto', args: {} })
+    shelf.claim()
+    const interrupted = shelf.interruptActive('disconnected: socketClosed')
+    assert.equal(interrupted.status, 'interrupted')
+    assert.equal(interrupted.error, 'disconnected: socketClosed')
+    assert.equal(shelf.snapshot().active, null)
+    assert.match(shelf.snapshot().held.reason, /disconnected/)
+    assert.equal(shelf.snapshot().held.blockUrgent, true)
+    assert.equal(shelf.get(pending.id).status, 'queued')
+    // the orphaned executor promise may still settle long after abandonment; it must not resurrect the job
+    assert.equal(shelf.finish(stuck.id, 'completed', { ok: true }).status, 'interrupted')
+  } finally { t.close() }
+})
+
+test('interruptActive keeps an existing hold reason and only adds blockUrgent', () => {
+  const t = tempShelf()
+  try {
+    const shelf = createJobShelf(t.file)
+    shelf.accept({ name: 'farm.build', args: { place: 'farm' } })
+    shelf.claim()
+    shelf.hold('earlier failure needs attention')
+    shelf.interruptActive('disconnected: socketClosed')
+    assert.equal(shelf.snapshot().held.reason, 'earlier failure needs attention')
+    assert.equal(shelf.snapshot().held.blockUrgent, true)
+  } finally { t.close() }
+})
+
 test('late completion cannot overwrite cancellation and repeated cancellation is harmless', () => {
   const t = tempShelf()
   try {

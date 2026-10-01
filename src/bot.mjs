@@ -746,6 +746,12 @@ function connect () {
     if (ready || !waitingForServer) emit('disconnected', { reason })
     waitingForServer = !ready
     ready = false
+    // Whatever primitive/composite was mid-await is now bound to a socket that will never deliver its
+    // event again: cancel/stop/discard only ever mark the shelf, none of them can make that promise
+    // settle, and without this the owner slot stays wedged until the process itself restarts (card:
+    // farm.build job 322 stuck at active= for hours after a creeper-interrupted reconnect).
+    cancelTask(`disconnected: ${reason}`, { holdQueue: false })
+    scheduler?.abandon(`disconnected: ${reason}`)
     setTimeout(connect, 10000)
   })
 }

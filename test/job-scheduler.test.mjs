@@ -6,12 +6,17 @@ import path from 'node:path'
 import { createJobShelf } from '../src/job-shelf.mjs'
 import { createJobScheduler } from '../src/job-scheduler.mjs'
 
-const setup = execute => {
+const setup = (execute, extra = {}) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'job-scheduler-'))
   const events = []
+  const terminal = []
   const shelf = createJobShelf(path.join(dir, 'jobs.json'))
-  const scheduler = createJobScheduler({ shelf, execute, emit: (type, data) => events.push({ type, ...data }) })
-  return { scheduler, shelf, events, close: () => fs.rmSync(dir, { recursive: true, force: true }) }
+  const scheduler = createJobScheduler({
+    shelf, execute, emit: (type, data) => events.push({ type, ...data }),
+    onTerminal: (job, result, status) => terminal.push({ id: job.id, status }),
+    ...extra
+  })
+  return { scheduler, shelf, events, terminal, close: () => fs.rmSync(dir, { recursive: true, force: true }) }
 }
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 const until = async predicate => {
@@ -189,6 +194,97 @@ test('quiet progress is durable but coalesced; verbose opted-in progress emits e
     await until(() => shelf.get(verbose.id).status === 'completed')
     assert.equal(events.find(e => e.type === 'job_completed' && e.id === verbose.id)?.notify, false)
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a disconnect that orphans the executor promise wedges the queue forever until abandon frees it', async () => {
+  // Reproduces card: a body reconnect (socket EPIPE mid-job) leaves the executor's promise
+  // permanently pending, bound to objects the dead connection will never deliver events for again.
+  // cancel/stop/discard only ever mark the shelf; none of them can force that promise to settle,
+  // so `state.active` stays wedged and every later job sits queued forever.
+  const orphaned = deferred() // stands in for a promise tied to a dead socket: it CAN still settle, just very late
+  const started = []
+  const t = setup(job => { started.push(job.name); return job.name === 'farm.build' ? orphaned.promise : { ok: true } })
+  try {
+    const stuck = t.scheduler.submit({ name: 'farm.build', args: { place: 'farm' } })
+    const next = t.scheduler.submit({ name: 'goto', args: {} })
+    await until(() => started.length === 1)
+
+    // what the driver already tried live: cancel, stop (drops the queue), discard, resume - none of it
+    // can make the orphaned promise settle, so the owner slot never clears
+    t.scheduler.cancel(stuck.id, 'cancelled by request')
+    const stopped = t.scheduler.stop(() => {})
+    t.scheduler.discard('discarded by request')
+    t.scheduler.resume()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.deepEqual(stopped.dropped.map(job => job.id), [next.id]) // the queued job never gets to run either
+    assert.equal(t.shelf.snapshot().active, stuck.id) // still wedged on the orphaned promise
+
+    // the fix: the body's disconnect handler abandons the wedged owner directly
+    const result = t.scheduler.abandon('disconnected: socketClosed')
+    assert.equal(result.abandoned, true)
+    assert.equal(t.shelf.get(stuck.id).status, 'interrupted')
+    assert.equal(t.shelf.snapshot().active, null)
+    assert.ok(t.events.some(event => event.type === 'job_interrupted' && event.id === stuck.id))
+
+    // freshly submitted work is held for an explicit resume, same as any other restoration hold
+    const after = t.scheduler.submit({ name: 'goto', args: {} })
+    assert.equal(t.shelf.get(after.id).status, 'queued')
+    t.scheduler.resume({ recovered: true })
+    await until(() => t.shelf.get(after.id).status === 'completed')
+    assert.deepEqual(started, ['farm.build', 'goto'])
+
+    const eventsBeforeLateSettle = t.events.length
+    // the orphaned promise finally settles, long after abandonment: it must not resurrect job 322,
+    // re-emit a stale job_completed, re-fire onTerminal, or re-freeze a queue the operator already resumed
+    orphaned.resolve({ ok: true, built: 'a shed' })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(t.shelf.get(stuck.id).status, 'interrupted') // not overwritten back to completed
+    assert.equal(t.events.length, eventsBeforeLateSettle) // no stale event emitted at all
+    assert.deepEqual(t.terminal.map(entry => entry.id), [after.id]) // onTerminal never re-fired for 322
+    assert.equal(t.shelf.snapshot().held, null) // the already-resumed queue is not re-frozen
+  } finally { t.close() }
+})
+
+test('an orphaned executor promise that settles badly after abandonment does not re-hold an already-resumed queue', async () => {
+  const pending = [deferred(), deferred()] // one per farm.build dispatch below, each tied to its own dead connection
+  const dispatched = [] // the deferred each dispatch actually received, in dispatch order
+  const started = []
+  const t = setup(job => {
+    started.push(job.name)
+    if (job.name !== 'farm.build') return { ok: true }
+    const next = pending.shift(); dispatched.push(next); return next.promise
+  })
+  try {
+    const stuck = t.scheduler.submit({ name: 'farm.build', args: { place: 'farm' } })
+    await until(() => started.length === 1)
+    t.scheduler.abandon('disconnected: socketClosed')
+    const after = t.scheduler.submit({ name: 'goto', args: {} })
+    t.scheduler.resume({ recovered: true })
+    await until(() => t.shelf.get(after.id).status === 'completed')
+
+    const eventsBeforeLateSettle = t.events.length
+    // the dead connection's attempt finally surfaces as an ok:false result, long after abandonment
+    dispatched[0].resolve({ ok: false, error: 'no path to the goal' })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(t.shelf.get(stuck.id).status, 'interrupted') // not overwritten to failed
+    assert.equal(t.events.length, eventsBeforeLateSettle) // no stale job_failed/jobs_held emitted
+    assert.deepEqual(t.terminal.map(entry => entry.id), [after.id]) // onFailure/onTerminal never re-fired
+    assert.equal(t.shelf.snapshot().held, null) // queue stays resumed, not re-frozen by the late failure
+
+    // a genuine rejection (not just an ok:false result) is guarded the same way
+    const stuck2 = t.scheduler.submit({ name: 'farm.build', args: { place: 'farm' } })
+    await until(() => started.length === 2)
+    t.scheduler.abandon('disconnected: socketClosed')
+    const after2 = t.scheduler.submit({ name: 'goto', args: {} })
+    t.scheduler.resume({ recovered: true })
+    await until(() => t.shelf.get(after2.id).status === 'completed')
+    const eventsBeforeSecondLateSettle = t.events.length
+    dispatched[1].reject(new Error('socket hang up'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(t.shelf.get(stuck2.id).status, 'interrupted')
+    assert.equal(t.events.length, eventsBeforeSecondLateSettle)
+    assert.equal(t.shelf.snapshot().held, null)
+  } finally { t.close() }
 })
 
 test('interrupt does not start replacement when predecessor reports restoration pending', async () => {

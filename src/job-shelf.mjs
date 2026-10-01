@@ -105,6 +105,23 @@ export function createJobShelf (file, { maxJobs = 500 } = {}) {
       return clone(job)
     },
     flush () { persist() },
+    // A reconnect mid-job orphans whatever promise the executor was awaiting: it is bound to a dead
+    // socket/bot that will never deliver the event it needed, so it can never settle on its own. This
+    // frees the owner slot the same way a process restart does (never replayed, held for explicit
+    // resume) without actually restarting the process. `finish`'s terminal-status guard stops a late
+    // settlement of that orphaned promise from overwriting this job's own record; job-scheduler.mjs's
+    // generation token (see `abandon`) is the other half, stopping that late settlement from re-emitting
+    // a stale event or re-holding a queue an operator already resumed.
+    interruptActive (reason) {
+      const job = state.active == null ? null : find(state.active)
+      if (!job || !['running', 'cancelling'].includes(job.status)) return null
+      job.status = 'interrupted'; job.finishedAt = Date.now(); job.error = String(reason)
+      state.active = null
+      // Keep an existing hold's own reason (mirrors the restart-recovery path above); only add blockUrgent.
+      state.held ??= { reason: `job ${job.id} was interrupted by ${reason}`, at: Date.now() }
+      state.held = { ...state.held, blockUrgent: true }
+      dirty = true; trim(); persist(); return clone(job)
+    },
     finish (id, status, result, error) {
       const job = find(id)
       if (!job || !['completed', 'failed', 'cancelled', 'interrupted'].includes(status)) return null
