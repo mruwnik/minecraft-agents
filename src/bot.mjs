@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import mineflayer from 'mineflayer'
 import { installWorldClock } from './world-clock.mjs'
+import { installTickEnd } from './tick-end.mjs'
 import pf from 'mineflayer-pathfinder'
 import collectBlock from 'mineflayer-collectblock'
 import pvp from 'mineflayer-pvp'
@@ -272,6 +273,7 @@ function connect () {
     ...(cfg.auth === 'microsoft' && { profilesFolder: authDir(HOME), onMsaCode: loginNeeded })
   })
   installWorldClock(bot)
+  installTickEnd(bot)
   villagerRoster.attach(bot)
   bot.loadPlugin(pathfinder)
   bot.loadPlugin(collectBlock.plugin)

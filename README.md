@@ -7,7 +7,10 @@ an online-mode server: the name is a real account's profile name, and a human si
 `node tools/login.mjs <Name>` (a device code in the browser); the body then refreshes its own tokens, and reports
 `login_needed` if that ever stops working. Without a config.json the body refuses to start, so a stray run can never
 log in under another agent's name.
-Mineflayer speaks protocol 26.1; a server newer than that needs ViaVersion + ViaBackwards to bridge it.
+Mineflayer speaks protocol 26.1; a server newer than that needs ViaVersion + ViaBackwards to bridge it, either as
+plugins on a Paper server or, for a vanilla server, as [ViaProxy](https://github.com/ViaVersion/ViaProxy) running
+beside the body: point its `viaproxy.yml` at the server (`target-version` the server's, `auth-method: ACCOUNT`, the
+Microsoft account added in its window) and give the body `host: 127.0.0.1`, `port: 25568`, `auth: "offline"`.
 
 - Start: `cd state/agents/<Name> && ./start` in the background (reconnects every 10s if the server is down).
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
