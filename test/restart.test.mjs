@@ -24,11 +24,11 @@ for (const [what, clock, expected] of clocks) {
 }
 
 test('restartAdvice: by day, restart when idle somewhere safe', () => {
-  assert.equal(restartAdvice(day, NOW), 'the shared code has fixes you are not running. No hurry: restart (./mc quit, then ./start in the background) next time you are idle somewhere safe, or at once if a tool misbehaves')
+  assert.equal(restartAdvice(day, NOW), 'the shared code has fixes you are not running. No hurry: restart (./mc quit, then ./start) next time you are idle somewhere safe, or at once if a tool misbehaves')
 })
 
 test('restartAdvice: at night, wait for dawn unless you spawn into a bed', () => {
-  assert.equal(restartAdvice(night, NOW), 'the shared code has fixes you are not running, but it is night (tick 14000) and a body restarted outside now dies: wait for dawn (./mc dawn) unless you spawn into a bed, then restart (./mc quit, then ./start in the background)')
+  assert.equal(restartAdvice(night, NOW), 'the shared code has fixes you are not running, but it is night (tick 14000) and a body restarted outside now dies: wait for dawn (./mc dawn) unless you spawn into a bed, then restart (./mc quit, then ./start)')
 })
 
 test('restartAdvice: with no clock, the daytime advice', () => {

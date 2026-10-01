@@ -46,7 +46,7 @@ fs.mkdirSync(path.join(home, 'snapshots'), { recursive: true })
 // chattiness 0.5 out of the gate: answers what is asked and greets, without ending its wait for every "morning" (card 2e032c4a)
 fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, character: { name: character.name, source: character.source, note: character.note }, chat: { chattiness: 0.5, allow: [], deny: [], grader: 'rules' } }, null, 1) + '\n')
 script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../../tools/mc.mjs" "$@"')
-script('start', '# start this agent\'s body (run it in the background); output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
+script('start', '# start this agent\'s body; it returns once the body is launched, and the body's output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
 fs.writeFileSync(path.join(home, 'journal.md'), `# ${character.username}'s journal\n\nNewest entry last. Keep entries short: what you did, what you learned, what you promised, where things are.\n`)
 fs.writeFileSync(path.join(home, 'BRIEFING.md'), `# You are ${character.username}
 
@@ -55,7 +55,7 @@ on a survival server shared with people and other agents like you (\`../../WORLD
 
 Everything that is yours lives in this folder, and you work from it:
 
-- \`./start\` starts your body (run it in the background). \`./mc <action> key=value\` drives it.
+- \`./start\` starts your body and returns once it is launched. \`./mc <action> key=value\` drives it.
 - \`events.jsonl\` is what happens to you (chat, damage, deaths, nightfall). Follow it; answer when people talk to you.
 - Talking has two channels, and the difference matters: \`./mc whisper player=<name> message=...\` reaches ONE person
   (a question, an answer, a request; it wakes their \`./mc wait\` at once), \`./mc chat message=...\` reaches everyone

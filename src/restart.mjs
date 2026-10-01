@@ -16,7 +16,7 @@ export const nightClock = (clock, now) => {
   return nightTick(clock.timeOfDay)
 }
 
-const RESTART = 'restart (./mc quit, then ./start in the background)'
+const RESTART = 'restart (./mc quit, then ./start)'
 export const restartAdvice = (clock, now = Date.now()) => nightClock(clock, now)
   ? `the shared code has fixes you are not running, but it is night (tick ${clock.timeOfDay}) and a body restarted outside now dies: wait for dawn (./mc dawn) unless you spawn into a bed, then ${RESTART}`
   : `the shared code has fixes you are not running. No hurry: ${RESTART} next time you are idle somewhere safe, or at once if a tool misbehaves`

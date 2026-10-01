@@ -18,7 +18,7 @@ const jizo = [
 ].join('')
 const perrin = [
   line('2026-09-26T16:00:00Z', 'kicked', { reason: 'You are not whitelisted' }),
-  line('2026-09-26T17:30:00Z', 'body_down', { exit: 143, advice: 'your body stopped (crash or kill): ./start it again in the background' }),
+  line('2026-09-26T17:30:00Z', 'body_down', { exit: 143, advice: 'your body stopped (crash or kill): ./start it again' }),
   'not json at all\n',
   line('2026-09-26T17:45:00Z', 'task_done', { name: 'goto' })
 ].join('')
@@ -27,14 +27,14 @@ const logs = [{ agent: 'Jizo', text: jizo }, { agent: 'Perrin', text: perrin }]
 for (const [name, since, expected] of [
   ['the last hour, both agents, newest last', 60, [
     '2026-09-26T17:20:00Z Jizo died 128,61,-124 slain by Zombie',
-    '2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again in the background',
+    '2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again',
     '2026-09-26T17:40:00Z Jizo routine_stopped - health 6 at farm.tidy place=a',
     '2026-09-26T17:50:00Z Jizo stuck 10,64,-20 boxed in for 3 min'
   ]],
   ['the last three hours reach the kick', 180, [
     '2026-09-26T16:00:00Z Perrin kicked - You are not whitelisted',
     '2026-09-26T17:20:00Z Jizo died 128,61,-124 slain by Zombie',
-    '2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again in the background',
+    '2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again',
     '2026-09-26T17:40:00Z Jizo routine_stopped - health 6 at farm.tidy place=a',
     '2026-09-26T17:50:00Z Jizo stuck 10,64,-20 boxed in for 3 min'
   ]],
@@ -65,7 +65,7 @@ test('incidentsReport: reads every agent folder with an events.jsonl, and says w
   }
   fs.mkdirSync(path.join(dir, 'Empty'))
   assert.deepEqual([incidentsReport(dir, 45, now), incidentsReport(dir, 5, now)], [
-    '2026-09-26T17:20:00Z Jizo died 128,61,-124 slain by Zombie\n2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again in the background\n2026-09-26T17:40:00Z Jizo routine_stopped - health 6 at farm.tidy place=a\n2026-09-26T17:50:00Z Jizo stuck 10,64,-20 boxed in for 3 min',
+    '2026-09-26T17:20:00Z Jizo died 128,61,-124 slain by Zombie\n2026-09-26T17:30:00Z Perrin body_down - exit 143: your body stopped (crash or kill): ./start it again\n2026-09-26T17:40:00Z Jizo routine_stopped - health 6 at farm.tidy place=a\n2026-09-26T17:50:00Z Jizo stuck 10,64,-20 boxed in for 3 min',
     'no incidents since 2026-09-26T17:55:00Z (died, body_down, kicked, routine_stopped, stuck across 2 agents)'
   ])
 })

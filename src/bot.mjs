@@ -2727,7 +2727,7 @@ export const quick = {
   quit: () => {
     emit('quit', {})
     setTimeout(() => { bot.quit('quit'); process.exit(0) }, 200)
-    return { note: 'body stopped: ./start (in the background) brings it back' }
+    return { note: 'body stopped: ./start brings it back' }
   },
   // debugging aid: what the pathfinder makes of a walk from here, without walking it. stroll=true: with lead's movements (no sprint, no parkour)
   path_to: (a) => {

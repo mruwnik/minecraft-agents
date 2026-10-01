@@ -12,7 +12,7 @@ plugins on a Paper server or, for a vanilla server, as [ViaProxy](https://github
 beside the body: point its `viaproxy.yml` at the server (`target-version` the server's, `auth-method: ACCOUNT`, the
 Microsoft account added in its window) and give the body `host: 127.0.0.1`, `port: 25568`, `auth: "offline"`.
 
-- Start: `cd state/agents/<Name> && ./start` in the background (reconnects every 10s if the server is down).
+- Start: `cd state/agents/<Name> && ./start`; it returns once the body is launched (the body reconnects every 10s if the server is down).
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
 - Control API: `http://127.0.0.1:3777/<action>` with a JSON body; `./mc <action> key=value ...` wraps it.
   `./mc help` lists actions. Long actions (goto, mine, craft, place, ...) take over the body, return after

@@ -25,7 +25,7 @@ const clockFile = path.join(import.meta.dirname, '..', 'state', 'clock.json')
 const readClock = () => fs.existsSync(clockFile) ? parseClock(fs.readFileSync(clockFile, 'utf8')) : null
 // the morning ping for a logged-off agent: run in the background, it exits (and so notifies you) when it is day
 const DAWN_ENDINGS = {
-  day: 'MORNING: start your body (./start in the background) and play on',
+  day: 'MORNING: start your body (./start) and play on',
   stale: 'NOBODY ONLINE: no body has reported the time for 90 s, and an empty world stands still. Start your body and check ./mc state',
   long: 'STILL NIGHT after 8 minutes (someone is awake): run ./mc dawn again'
 }
