@@ -186,8 +186,25 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
     }
     return { active, dropped }
   }
+  // Cancel/stop/discard only ever mark the shelf; none of them can make an executor promise settle.
+  // A dead connection orphans that promise forever, so the owner slot needs freeing directly instead
+  // of waiting on a `work.then()` that is never going to fire. The in-flight `work` promise is simply
+  // abandoned here (not awaited, not rejected): if it ever does settle later, shelf.finish's terminal
+  // guard makes that a no-op.
+  const abandon = reason => {
+    const job = shelf.interruptActive(reason)
+    if (!job) return { abandoned: false }
+    lastProgressEvent.delete(job.id)
+    pumping = false
+    activePromise = null
+    event('interrupted', job, { reason })
+    emit('jobs_held', { failed: job.id, queued: shelf.list().queued.length, reason: shelf.snapshot().held?.reason })
+    settle(job.id)
+    queueMicrotask(pump)
+    return { abandoned: true, job }
+  }
   return {
-    submit, interrupt, cancel, resume, discard, stop, wait, report, pump,
+    submit, interrupt, cancel, resume, discard, stop, wait, report, pump, abandon,
     get: id => shelf.get(id), list: opts => shelf.list(opts),
     get activePromise () { return activePromise },
     get pumping () { return pumping }
