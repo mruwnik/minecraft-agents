@@ -256,11 +256,11 @@ const pinned = {
 const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
 test('render: the pinned view is drawn exactly as before', () => {
   const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['9591798a0c66a4f7', ['cow', 'item']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['edae299000cdce66', ['cow', 'item']])
 })
 test('render: the pinned panorama is drawn exactly as before', () => {
   const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['91e5ad952490ea7e', ['cow', 'item', 'sheep', 'zombie']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['d894513612815aa8', ['cow', 'item', 'sheep', 'zombie']])
 })
 
 test('render: an entity whose box is wholly behind the eye is neither drawn nor seen', () => {
@@ -287,6 +287,27 @@ for (const [name, yaw, east, west] of [['east', -Math.PI / 2, true, false], ['we
     assert.deepEqual([covers(img, pixelAt(0.8, -0.2, 3)), covers(img, pixelAt(-0.8, -0.2, 3))], [east, west])
   })
 }
+
+// the mean colour of the pixels an entity changed, standing three blocks north facing the eye
+const entityColour = entity => {
+  const img = render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, ...entity }] })
+  const changed = []
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) if (covers(img, [x, y])) changed.push(pixel(img, x, y))
+  return [0, 1, 2].map(i => changed.reduce((s, c) => s + c[i], 0) / changed.length)
+}
+for (const [name, entity, looks] of [
+  ['a creeper is green', { name: 'creeper', kind: 'hostile', width: 0.6, height: 1.7 }, ([r, g, b]) => g > r && g > b],
+  ['a skeleton is pale', { name: 'skeleton', kind: 'hostile', width: 0.6, height: 1.99 }, c => Math.min(...c) > 120],
+  ['a spider is dark', { name: 'spider', kind: 'hostile', width: 1.4, height: 0.9 }, c => Math.max(...c) < 90],
+  ['a hostile without colours of its own is red', { name: 'breeze', kind: 'hostile', width: 0.6, height: 1.77 }, ([r, g, b]) => r > 2 * g && r > 2 * b],
+  ['a player is magenta', { name: 'player', kind: 'player', width: 0.6, height: 1.8 }, ([r, g, b]) => r > g && b > g]
+]) test(`render: ${name}`, () => assert.ok(looks(entityColour(entity)), String(entityColour(entity))))
+
+test('render: a zombie facing the eye shows its face, one facing away the back of its head', () => {
+  const zombie = yaw => render({ ...scene, ...view64, entities: [{ name: 'zombie', kind: 'hostile', x: 0.5, y: -1, z: -2.5, width: 0.6, height: 1.95, yaw }] })
+  const head = pixelAt(0, 0.2, 2.75)
+  assert.notDeepEqual(pixel(zombie(Math.PI), ...head), pixel(zombie(0), ...head))
+})
 
 // ---------------------------------------------------------------- eyes
 const registry = prismarineRegistry('26.1')
