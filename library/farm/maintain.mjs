@@ -269,7 +269,7 @@ export default {
       // a hole that stayed one (nothing to fill it with, or the fill failed) is one bare bed, said once: its till
       // and its plant are not tried on air
       const unfilled = new Set()
-      const seedJobs = new Map(jobs.filter(job => job.do === 'plant').map(job => [bedKey(job), job.item]))
+      const plantJobs = new Map(jobs.filter(job => job.do === 'plant').map(job => [bedKey(job), job]))
       const stillHole = job => { unfilled.add(bedKey(job)); leave(job, 'unfilled', `${job.x},${job.y},${job.z}`) }
       // what the jobs so far left: said after every job and at the end alike
       const sayJobs = () => {
@@ -284,9 +284,6 @@ export default {
       }
       for (const job of jobs) {
         if (['till', 'plant', 'place'].includes(job.do) && unfilled.has(bedKey(job))) continue
-        // Empty seedless beds soon turn back to dirt. Leave them until planting
-        // is possible; the following plant job reports the seed shortage once.
-        if (job.do === 'till' && seedJobs.has(bedKey(job)) && !(api.inv()[seedJobs.get(bedKey(job))] > 0)) continue
         if (job.do === 'place' && job.item === 'torch' && !sameFamily('oak_fence', api.block(job.x, job.y - 1, job.z)?.name)) {
           dry.push(`${job.x},${job.y},${job.z} (torch support missing: place the fence post first)`)
           continue
@@ -298,9 +295,20 @@ export default {
         }
         if (job.do === 'till' && !hasHoe(api.inv())) { untilled.add(bedKey(job)); leave(job, 'untilled', NO_HOE); continue }
         hadHoe ||= hasHoe(api.inv())
-        // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
-        // back instead, with its own plant skipped the way an unfilled hole's is (the untilled check right below)
-        if (job.do === 'till' && !hydrated(api.block, job)) { untilled.add(bedKey(job)); dryBeds.push(job); leave(job, 'dry', 'no water within 4'); continue }
+        // Dan's rule: a dry bed is tilled only when its own seed goes in at once, right after - planted farmland does
+        // not revert, so that is safe even with no water near it. Its plant job is checked unreachable() before the
+        // till, not after: held here, the bed is never tilled onto nothing to stand and plant from. Either way it
+        // counts toward farm_needs_water, tilled or not
+        if (job.do === 'till' && !hydrated(api.block, job)) {
+          dryBeds.push(job)
+          const plantJob = plantJobs.get(bedKey(job))
+          const seedReady = plantJob && (api.inv()[plantJob.item] ?? 0) > 0
+          if (!seedReady) { untilled.add(bedKey(job)); leave(job, 'dry', 'no water within 4'); continue }
+          if (unreachable(plantJob)) continue
+        }
+        // Empty seedless beds (wet, or dry with the seed already sown above) soon turn back to dirt. Leave them
+        // until planting is possible; the following plant job reports the seed shortage once.
+        if (job.do === 'till' && plantJobs.has(bedKey(job)) && !(api.inv()[plantJobs.get(bedKey(job)).item] > 0)) continue
         if (job.do === 'plant' && untilled.has(bedKey(job))) continue
         if (job.do === 'plant' && job.item === 'sugar_cane' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => holdsWater(api.block(job.x + dx, job.y - 1, job.z + dz)))) {
           leave(job, 'water', `no adjacent water at ${job.x},${job.y},${job.z}`)

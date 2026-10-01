@@ -154,9 +154,27 @@ test('farm.maintain: the channel is poured before the bed beside it is tilled, a
   assert.equal(summary.farm_needs_water, undefined)
 })
 
-test('farm.maintain: no bucket means no till on the dry bed, and farm_needs_water says why and where', async () => {
+test('farm.maintain: a dry bed is tilled anyway when its seed is in hand, and sown at once', async () => {
+  const items = { wheat_seeds: 1, stone_hoe: 1 }
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
-  const { summary, calls, events } = await sweep({ plan: 'w~', world, items: { wheat_seeds: 1, stone_hoe: 1 } })
+  const { summary, calls } = await sweep({
+    plan: 'w~',
+    world,
+    items,
+    answers: {
+      till: p => { world[cellKey(p)] = 'farmland' },
+      place: p => { world[cellKey(p)] = 'wheat#0'; items[p.item] = (items[p.item] ?? 0) - 1 }
+    }
+  })
+  const work = calls.filter(c => /^(till|place) /.test(c))
+  assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
+  assert.match(summary.farm_needs_water, /0,63,0/)
+  assert.equal(/dry/.test(summary.bare ?? ''), false)
+})
+
+test('farm.maintain: no seed means no till on the dry bed, and farm_needs_water says why and where', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const { summary, calls, events } = await sweep({ plan: 'w~', world, items: { stone_hoe: 1 } })
   assert.equal(calls.some(c => c.startsWith('till ')), false)
   assert.equal(world['0,63,0'], 'dirt')
   assert.match(summary.farm_needs_water, new RegExp(NO_BUCKET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
@@ -201,9 +219,23 @@ test('farm.maintain: a channel already holding water means no water work, and th
   assert.equal(summary.farm_needs_water, undefined)
 })
 
-test('farm.build: no bucket means no till on the dry bed, and farm_needs_water says why', async () => {
+test('farm.build: a dry bed is tilled anyway when its seed is in hand, and sown at once', async () => {
+  const items = { wheat_seeds: 1 }
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
-  const made = fakeApi({ place: fakePlace('w~'), world, items: { wheat_seeds: 1, stone_hoe: 1 } })
+  const made = fakeApi({ place: fakePlace('w~'), world, items, answers: {
+    till: p => { world[cellKey(p)] = 'farmland' },
+    place: p => { world[cellKey(p)] = 'wheat#0'; items[p.item] = (items[p.item] ?? 0) - 1 }
+  } })
+  const summary = await buildFarm.run(made.api, { place: 'test-field', partial: true })
+  const work = made.calls.filter(c => /^(till|place) /.test(c))
+  assert.deepEqual(work, ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0'])
+  assert.match(summary.farm_needs_water, /0,63,0/)
+  assert.equal(summary.unfinished, undefined)
+})
+
+test('farm.build: no seed means no till on the dry bed, and farm_needs_water says why', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const made = fakeApi({ place: fakePlace('w~'), world, items: {} })
   const summary = await buildFarm.run(made.api, { place: 'test-field', partial: true })
   assert.equal(made.calls.some(c => c.startsWith('till ')), false)
   assert.equal(made.calls.some(c => c.startsWith('place') && c.includes('wheat_seeds')), false)

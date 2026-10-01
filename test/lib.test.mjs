@@ -3325,14 +3325,14 @@ for (const [name, world, expected] of [
 const dryBed = (x, y, z) => ({ x, y, z })
 for (const [name, reason, beds, expected] of [
   ['a given reason, one bed', NO_BUCKET, [dryBed(2, 63, 0)],
-    `${NO_BUCKET}; 1 bed held untilled until water is within 4: 2,63,0`],
+    `${NO_BUCKET}; 1 bed with no water within 4 (a dry bed is tilled only when its seed goes in at once): 2,63,0`],
   ['a given reason, three beds: no +more', noWaterLine(32), [dryBed(2, 63, 0), dryBed(3, 63, 0), dryBed(4, 63, 0)],
-    `${noWaterLine(32)}; 3 beds held untilled until water is within 4: 2,63,0 3,63,0 4,63,0`],
+    `${noWaterLine(32)}; 3 beds with no water within 4 (a dry bed is tilled only when its seed goes in at once): 2,63,0 3,63,0 4,63,0`],
   ['more than three beds: the rest are counted, not named', NO_BUCKET,
     [dryBed(2, 63, 0), dryBed(3, 63, 0), dryBed(4, 63, 0), dryBed(5, 63, 0)],
-    `${NO_BUCKET}; 4 beds held untilled until water is within 4: 2,63,0 3,63,0 4,63,0 +1 more`],
+    `${NO_BUCKET}; 4 beds with no water within 4 (a dry bed is tilled only when its seed goes in at once): 2,63,0 3,63,0 4,63,0 +1 more`],
   ['no reason given: the plan’s own channels are blamed', null, [dryBed(2, 63, 0)],
-    `the plan's channels near them are still dry; 1 bed held untilled until water is within 4: 2,63,0`]
+    `the plan's channels near them are still dry; 1 bed with no water within 4 (a dry bed is tilled only when its seed goes in at once): 2,63,0`]
 ]) {
   test(`needsWaterLine: ${name}`, () => {
     assert.equal(needsWaterLine(reason, beds), expected)
