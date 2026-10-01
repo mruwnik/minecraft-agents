@@ -20,6 +20,15 @@ export const inventorySlots = (slots, quickBarSlot) => ({
   selected: quickBarSlot
 })
 
+// the armour the game's HUD shows: the player's armor attribute, base plus the worn pieces' additive modifiers.
+// 0 until the server sends it (it comes with the first armour change)
+export const armorPoints = (attributes = {}) => {
+  const key = Object.keys(attributes).find(k => /(^|[.:])armor$/.test(k))
+  if (!key) return 0
+  const { value, modifiers = [] } = attributes[key]
+  return value + modifiers.filter(m => m.operation === 0).reduce((n, m) => n + m.amount, 0)
+}
+
 // the weakest tool that can harvest a block, when none of the carried item types can; null when the block needs no tool or one is carried.
 // mineflayer-tool recurses for ever (until the heap is gone) when asked to equip for a block nothing carried can harvest
 export function missingTool (harvestTools, carriedTypes, nameOf) {

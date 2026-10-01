@@ -107,7 +107,8 @@ export const PRIMITIVES = {
   block_at: { section: 'sense', args: 'x= y= z=', doc: 'the name and properties of one block' },
   scan: { section: 'sense', args: 'x1= y1= z1= x2= y2= z2= [where=]', doc: 'an ASCII map of a box of the world, or with where= just the coordinates of one kind of block' },
   path_to: { section: 'sense', args: 'x= y= z= [range=] [dig=] [stroll=] [route=] [live=] [surface=horse]', doc: 'what the pathfinder makes of a walk from here, without walking it; route=true names the gates it opens and a waypoint every six steps; live=true plans with the movements walks use right now and names what differs from a fresh set. surface=horse checks an explicit checkpoint within16 blocks using horse-width dry surface geometry, including a return path; route=true lists every checked waypoint' },
-  inventory: { section: 'sense', args: '[slots=true]', doc: 'what I carry, what I wear and how many slots are free; slots=true adds every stack by window slot and the selected hotbar slot' },
+  inventory: { section: 'sense', args: '', doc: 'what I carry, what I wear and how many slots are free' },
+  screen: { section: 'sense', args: '', doc: "the dashboard's screen: hp, food, xp, oxygen, armour points, every stack by window slot, the selected hotbar slot and the container I have open (kept 5 s after it closes)" },
   chest_contents: { section: 'sense', args: '[x= y= z=]', doc: 'what is in a chest, with free= (empty slots) and slots= (its size) so a deposit can pick a chest with room' },
   events: { section: 'sense', args: '[type=] [last=]', doc: 'my own event log: what happened while you were not looking' },
   // ---- map

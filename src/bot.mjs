@@ -28,8 +28,9 @@ import { restartAdvice } from './restart.mjs'
 import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
+import { watchWindows, containerBlocks } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
 import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from './talk.mjs'
@@ -96,6 +97,7 @@ export let mcData = null
 export let ready = false
 let reflexes = true
 let eyes = null
+let openWindow = () => null
 let followTarget = null
 export let task = null // { id, name, gen, started }
 let gen = 0
@@ -288,6 +290,13 @@ function connect () {
   bot.once('spawn', () => {
     mcData = bot.registry
     eyes = makeEyes(bot, { textureDir: path.join(ROOT, 'textures'), snapshotDir: path.join(HOME, 'snapshots') })
+    openWindow = watchWindows(bot, {
+      nearest: type => {
+        const blocks = containerBlocks(type)
+        const block = blocks && bot.findBlock({ matching: b => blocks.test(b.name), maxDistance: 6 })
+        return block ? { x: block.position.x, y: block.position.y, z: block.position.z } : null
+      }
+    })
     walkMoves = makeMoves(false)
     digMoves = makeMoves(true)
     // The pathfinder towers and bridges with the blocks I carry and says nothing about it (Chani's cobblestone, twice).
@@ -2849,14 +2858,26 @@ export const quick = {
     }
   },
 
-  // slots=true is the dashboard's: every stack by slot would be dozens of tokens a driver pays for on each ./mc inventory
-  inventory (a) {
+  inventory () {
     const slot = n => bot.inventory.slots[bot.getEquipmentDestSlot(n)]?.name ?? null
     return {
       items: inventoryCounts(),
       freeSlots: bot.inventory.emptySlotCount(),
-      armor: { head: slot('head'), torso: slot('torso'), legs: slot('legs'), feet: slot('feet'), offhand: slot('off-hand') },
-      ...(a.slots ? inventorySlots(bot.inventory.slots, bot.quickBarSlot) : {})
+      armor: { head: slot('head'), torso: slot('torso'), legs: slot('legs'), feet: slot('feet'), offhand: slot('off-hand') }
+    }
+  },
+
+  // the dashboard's: what the player's screen shows. Every stack by slot would be dozens of tokens a driver pays for on
+  // each ./mc inventory, so they live here and not there
+  screen () {
+    return {
+      hp: Math.round(bot.health),
+      food: bot.food,
+      xp: bot.experience.level,
+      oxygen: bot.oxygenLevel,
+      armor: armorPoints(bot.entity.attributes),
+      ...inventorySlots(bot.inventory.slots, bot.quickBarSlot),
+      window: openWindow()
     }
   },
 
