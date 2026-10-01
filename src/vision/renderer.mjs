@@ -106,11 +106,15 @@ const FACE_SUFFIXES = { top: ['_top', ''], bottom: ['_bottom', '_top', ''], side
 // blocks whose picture is filed under another name
 const DRAWN_AS = {
   snow_block: 'snow', magma_block: 'magma', bamboo: 'bamboo_stalk', bamboo_sapling: 'bamboo_stage0', dried_kelp_block: 'dried_kelp',
-  ender_chest: 'obsidian', chest: 'oak_planks', trapped_chest: 'oak_planks', redstone_wire: 'redstone_dust_line0', fire: 'fire_0',
+  redstone_wire: 'redstone_dust_line0', fire: 'fire_0',
   soul_fire: 'soul_fire_0', frosted_ice: 'frosted_ice_0', petrified_oak_slab: 'oak_planks', light_weighted_pressure_plate: 'gold_block',
   heavy_weighted_pressure_plate: 'iron_block', piston_head: 'piston', sticky_piston: 'piston', moving_piston: 'piston',
   campfire: 'campfire_log', soul_campfire: 'soul_campfire_log'
 }
+// chests are entity-rendered: their art is an atlas under entity/chest/, not a plain texture under block/, so no
+// candidate above ever finds a file for them. Dedicated colours stand in rather than borrowing another block's.
+const BLOCK_COLORS = { chest: [162, 112, 63], trapped_chest: [138, 56, 43], ender_chest: [35, 48, 46] }
+export const colorOf = block => BLOCK_COLORS[block]
 // a wrapper, treatment or variant of a block that shares its picture; tried after the full name, so smooth_stone keeps its own
 const plainName = name => name
   .replace(/^(waxed|infested|potted|smooth)_/, '')
@@ -515,7 +519,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
           g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyG, fog)
           b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyB, fog)
         } else {
-          const base = hashColor(hit.block.name ?? String(hit.id))
+          const base = colorOf(hit.block.name) ?? hashColor(hit.block.name ?? String(hit.id))
           r = mix(base[0] * FACE_SHADE[hit.face] * light, skyR, fog)
           g = mix(base[1] * FACE_SHADE[hit.face] * light, skyG, fog)
           b = mix(base[2] * FACE_SHADE[hit.face] * light, skyB, fog)

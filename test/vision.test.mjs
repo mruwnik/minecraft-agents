@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import { Vec3 } from 'vec3'
 import { makeEyes, lookKey } from '../src/vision/eyes.mjs'
-import { encodePng, decodePng, textureCandidates, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
+import { encodePng, decodePng, textureCandidates, colorOf, blockIcon, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
 test('png: encode then decode round-trips rgba pixels', () => {
@@ -62,7 +62,8 @@ const textureCases = [
   ['stone_brick_slab', 'top', {}, 'stone_bricks'],
   ['cobblestone_wall', 'side', {}, 'cobblestone'],
   ['white_bed', 'top', {}, 'white_wool'],
-  ['chest', 'side', {}, 'oak_planks'],
+  ['chest', 'side', {}, undefined],
+  ['trapped_chest', 'side', {}, undefined],
   ['oak_door', 'side', { half: 'upper' }, 'oak_door_top'],
   ['oak_door', 'side', { half: 'lower' }, 'oak_door_bottom'],
   ['wheat', 'side', { age: 7 }, 'wheat_stage7'],
@@ -87,7 +88,7 @@ const textureCases = [
   ['fire', 'cross', {}, 'fire_0'],
   ['frosted_ice', 'top', {}, 'frosted_ice_0'],
   ['dried_kelp_block', 'side', {}, 'dried_kelp_side'],
-  ['ender_chest', 'side', {}, 'obsidian'],
+  ['ender_chest', 'side', {}, undefined],
   ['piston_head', 'side', {}, 'piston_side'],
   ['sticky_piston', 'top', {}, 'piston_top'],
   ['light_weighted_pressure_plate', 'top', {}, 'gold_block'],
@@ -104,6 +105,19 @@ for (const [block, face, props, expected] of textureCases) {
   test(`texture for ${block} ${face} ${JSON.stringify(props)}`, () =>
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
 }
+
+// chests are entity-rendered (their art is an atlas under entity/chest/, not a block texture), so they get a
+// dedicated colour instead of resolving to whatever block texture happens to match their candidate names
+for (const block of ['chest', 'trapped_chest', 'ender_chest']) {
+  test(`colorOf: ${block} has its own colour`, () => assert.equal(colorOf(block)?.length, 3))
+}
+test('colorOf: chest, trapped_chest and ender_chest are all different', () => {
+  const [chest, trapped, ender] = ['chest', 'trapped_chest', 'ender_chest'].map(colorOf)
+  assert.notDeepEqual(chest, trapped)
+  assert.notDeepEqual(chest, ender)
+  assert.notDeepEqual(trapped, ender)
+})
+test('colorOf: a block with a real texture has no override', () => assert.equal(colorOf('oak_planks'), undefined))
 
 // ---------------------------------------------------------------- inventory icons
 const filled = (rgba, size = 16) => ({ width: size, height: size, rgba: Uint8Array.from({ length: size * size * 4 }, (_, i) => rgba[i % 4]) })
@@ -218,6 +232,16 @@ test('render: entities behind a wall are not reported', () => {
   const entities = [{ name: 'zombie', x: 0.5, y: 0, z: -7.5, width: 0.6, height: 1.95 }]
   const img = render({ ...scene, entities, yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 })
   assert.deepEqual(img.seen, [])
+})
+
+// chest, trapped_chest and ender_chest have no block texture file (their art is an entity-rendered atlas); render()
+// should draw them with their dedicated colorOf colour, the same way it would draw a block that had that colour
+// baked into its texture file - not the hash-of-name colour used for genuinely unknown blocks
+test('render: a block with no texture file but a dedicated colour renders exactly as it would with that colour as its texture', () => {
+  const noFile = { ...scene, info: id => [null, { kind: 'cube', name: 'chest' }, { kind: 'cube', name: 'floor' }][id], texture: name => name === 'chest' ? null : scene.texture(name) }
+  const withFile = { ...noFile, texture: name => name === 'chest' ? solid(...colorOf('chest')) : scene.texture(name) }
+  const settings = { yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 }
+  assert.deepEqual(pixel(render({ ...noFile, ...settings }), 16, 16), pixel(render({ ...withFile, ...settings }), 16, 16))
 })
 
 const nearCases = [
