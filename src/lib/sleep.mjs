@@ -44,7 +44,7 @@ export function automaticBeds (beds, zones, places, me, residents = []) {
 
 // a bed reflex-placed near someone else's home is a bed the reflex would then have to explain, or worse, get dug up
 // by its owner. Never within this many blocks of a zone or a marked base that is not the body's own.
-export const HUMAN_BASE_MARGIN = 50
+const HUMAN_BASE_MARGIN = 50
 
 const clampAxis = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b))
 const zoneDistance = (point, z) => Math.hypot(
@@ -53,13 +53,14 @@ const zoneDistance = (point, z) => Math.hypot(
   point.z - clampAxis(point.z, z.z1, z.z2)
 )
 
-// a human base, for this feature: a zone not named <me>-... (case-insensitive), or a kind=base place not by me.
+// a human base, for this feature: a zone or a kind=base place not named <me>-... (case-insensitive).
 // Returns the offending zone/place name, or null when point is clear of all of them.
 export function nearHumanBase (point, { zones = [], places = [], me, margin = HUMAN_BASE_MARGIN } = {}) {
   const mine = `${String(me).toLowerCase()}-`
   const zone = zones.find(z => !String(z.name).toLowerCase().startsWith(mine) && zoneDistance(point, z) <= margin)
   if (zone) return zone.name
-  const base = places.find(p => p.kind === 'base' && p.by !== me && Math.hypot(point.x - p.x, point.y - p.y, point.z - p.z) <= margin)
+  // owned by name, as zones are: the live map has human bases marked by the body that wrote them down
+  const base = places.find(p => p.kind === 'base' && !String(p.name).toLowerCase().startsWith(mine) && Math.hypot(point.x - p.x, point.y - p.y, point.z - p.z) <= margin)
   return base ? base.name : null
 }
 
@@ -74,11 +75,11 @@ const BED_DIRECTIONS = [
 ]
 
 export function carriedBedSpot ({ feet, cellAt, zones = [], places = [], me, residents = [] }) {
-  if (nearHumanBase(feet, { zones, places, me })) return null
-  const standable = ({ x, y, z }) => {
+  const standable = cell => {
+    const { x, y, z } = cell
     const floor = cellAt(x, y - 1, z)
     return isAir(cellAt(x, y, z)?.name) && isAir(cellAt(x, y + 1, z)?.name) &&
-      floor?.boundingBox === 'block' && !FLUIDS.has(floor?.name)
+      floor?.boundingBox === 'block' && !FLUIDS.has(floor?.name) && !nearHumanBase(cell, { zones, places, me })
   }
   const candidates = BED_DIRECTIONS.map(d => ({
     facing: d.facing,
@@ -90,9 +91,20 @@ export function carriedBedSpot ({ feet, cellAt, zones = [], places = [], me, res
   return chosen ? { ...chosen.foot, facing: chosen.facing } : null
 }
 
-// the reflex's bed mark goes back to what it was once the bed is picked up, so no mark points at an empty spot.
-// null: no mark of that name.
-export const replaceMark = (places, name, mark) => [...places.filter(p => p.name !== name), ...(mark ? [mark] : [])]
+// what to do by day with each bed the reflex put down (its marks: { name, x, y, z, item }). inFlight: names already being
+// dug. A bed out of reach or in an unloaded cell is left standing and marked: a later day tick near it picks it up
+const PICKUP_RANGE = 16
+export function reflexPickups ({ night, asleep, reflexes, beds, cellAt, from, inFlight }) {
+  if (night || asleep || !reflexes) return []
+  return beds.flatMap(bed => {
+    if (inFlight.has(bed.name)) return []
+    const cell = cellAt(bed.x, bed.y, bed.z)
+    if (!cell) return []
+    if (cell.name !== bed.item) return [{ bed, do: 'unmark' }]
+    if (Math.hypot(bed.x - from.x, bed.y - from.y, bed.z - from.z) > PICKUP_RANGE) return []
+    return [{ bed, do: 'dig' }]
+  })
+}
 
 // the bedtime reflex failed with this error: what to tell the driver (null: nothing, the driver's own order took over)
 export const bedtimeReport = error => /^cancelled: superseded/.test(error)

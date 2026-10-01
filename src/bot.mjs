@@ -1,4 +1,4 @@
-import { automaticBeds, carriedBedSpot, replaceMark } from './lib/sleep.mjs'
+import { automaticBeds, carriedBedSpot, reflexPickups } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
 import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
@@ -976,34 +976,38 @@ const carriedBedPlace = () => carriedBedSpot({
   feet: feetCell(bot.entity.position, bot.entity.onGround), cellAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
   zones, places: readPlaces(), me: cfg.username, residents: villagers()
 })
-// a bed the bedtime reflex put down this run, to be picked up again at dawn: { x, y, z, item, prior, count }.
-// A driver-placed bed is never in here, so it is never touched
-let reflexBed = null
-const reflexBedName = () => `${cfg.username}-bed`
+// each bed the reflex puts down gets its own mark on the shared map, so a restart still knows to pick it up and a
+// driver's own <me>-bed mark (and bed) is never touched
+const reflexBeds = () => readPlaces().filter(p => p.reflex === true && p.by === cfg.username)
+const unmark = name => savePlaces(readPlaces().filter(p => p.name !== name))
 async function placeReflexBed (item, { x, y, z, facing }) {
-  await long.place({ item, x, y, z, facing })
-  const places = readPlaces()
-  const prior = places.find(p => p.name === reflexBedName()) ?? null
-  savePlaces(replaceMark(places, reflexBedName(), { name: reflexBedName(), kind: 'bed', x, y, z, by: cfg.username, note: 'placed by the bedtime reflex' }))
-  reflexBed = { x, y, z, item, prior }
-  emit('bed_placed', { at: `${x},${y},${z}`, item, note: 'no bed of mine nearby: put down the one I carry to sleep in, and pick it up at dawn' })
+  const name = `${cfg.username}-bed-${x}_${y}_${z}`
+  const mark = () => savePlaces([...readPlaces().filter(p => p.name !== name), { name, kind: 'bed', x, y, z, by: cfg.username, reflex: true, item, note: 'placed by the bedtime reflex' }])
+  try {
+    await long.place({ item, x, y, z, facing })
+  } catch (err) {
+    // the bed went down but a later check failed: an unmarked reflex bed would never be picked up
+    if (cellAt(x, y, z)?.name === item) mark()
+    throw err
+  }
+  mark()
+  emit('bed_placed', { at: `${x},${y},${z}`, item, note: 'no bed of mine nearby: put down the one I carry to sleep in, and pick it up by day' })
 }
 // through the scheduler, so the pick-up queues behind the driver's work instead of racing it. Waited on rather than
 // caught in onTerminal: a job dropped from the queue (stop, discard) never reaches onTerminal
 const FOREVER_MS = 2 ** 31 - 1
-function pickUpReflexBed () {
-  if (!reflexBed || reflexBed.count !== undefined) return
-  const { x, y, z, item } = reflexBed
-  reflexBed.count = inventoryCounts()[item] ?? 0
-  scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS).then(settleReflexBed)
-}
-function settleReflexBed () {
-  const { x, y, z, item, prior, count } = reflexBed
-  reflexBed = null
-  // a pick-up that failed leaves the bed standing and marked: still a usable bed
-  if ((inventoryCounts()[item] ?? 0) <= count) return
-  savePlaces(replaceMark(readPlaces(), reflexBedName(), prior))
-  emit('bed_picked_up', { at: `${x},${y},${z}`, item, note: 'picked up the bed I put down for the night' })
+const pickingUp = new Set()
+async function pickUpReflexBed ({ name, x, y, z, item }) {
+  pickingUp.add(name)
+  const before = inventoryCounts()[item] ?? 0
+  await scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS)
+  pickingUp.delete(name)
+  // judged by the world, not the job's status: a dig that failed after breaking the bed still took it down
+  const cell = cellAt(x, y, z)
+  if (!cell || cell.name === item) return
+  unmark(name)
+  const pocketed = (inventoryCounts()[item] ?? 0) > before
+  emit('bed_picked_up', { at: `${x},${y},${z}`, item, note: pocketed ? 'picked up the bed I put down for the night' : 'took down the bed I put down for the night, but it did not reach my pockets: it may lie on the ground there' })
 }
 // bedtime reflex (see bedtime in lib.mjs)
 let lastDriven = Date.now()
@@ -1015,10 +1019,12 @@ setInterval(() => {
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   const night = isNight(bot.time.timeOfDay)
   if (!night) holedUp = null
-  // mid-night wakes (a monster) must not trigger the pick-up: digging the bed then would undo the shelter
-  if (reflexBed && !night && !bot.isSleeping) pickUpReflexBed()
+  for (const { bed, do: step } of reflexPickups({ night, asleep: bot.isSleeping, reflexes, beds: reflexBeds(), cellAt, from: bot.entity.position, inFlight: pickingUp })) {
+    if (step === 'unmark') unmark(bed.name)
+    else pickUpReflexBed(bed)
+  }
   const bedNear = automaticSleepBeds().length > 0
-  const bedCarried = night && !bedNear && !reflexBed && Boolean(carriedBed()) && Boolean(carriedBedPlace())
+  const bedCarried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
   const tired = bedtime({
     night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
@@ -2716,7 +2722,7 @@ export const long = {
     let placed = false
     for (;;) {
       const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
-      const item = error && a.automatic && !placed && !reflexBed ? carriedBed() : null
+      const item = error && a.automatic && !placed ? carriedBed() : null
       const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
       if (spot) {
         placed = true
