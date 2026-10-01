@@ -60,7 +60,12 @@
   .body .meta { color: var(--dim); }
   .body .doing { color: var(--place); }
   #down { margin-top: 8px; line-height: 1.6; }
-  #lookimg { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
+  #lookimg { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; cursor: zoom-in; }
+  #lookOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.8); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  #lookOverlay[hidden] { display: none; }
+  #lookCard { display: flex; flex-direction: column; gap: 8px; max-width: 96vw; max-height: 94vh; }
+  #lookBig { max-width: 96vw; max-height: 84vh; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
+  #lookBigMeta { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
   #lookmeta { color: var(--dim); margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
   #places { white-space: pre-wrap; }
   .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -155,6 +160,16 @@
     </section>
   </aside>
 </main>
+<div id="lookOverlay" hidden>
+  <div id="lookCard">
+    <div class="planHead">
+      <span id="lookBigMeta"></span>
+      <span class="spacer"></span>
+      <button id="lookClose">close ×</button>
+    </div>
+    <img id="lookBig" alt="" hidden>
+  </div>
+</div>
 <div id="planOverlay" hidden>
   <div id="planCard">
     <div class="planHead">
@@ -679,16 +694,16 @@ const select = name => {
   fetchLook()
 }
 
-const fetchLook = () => {
-  if (!selected) return
-  const img = el('lookimg')
-  const meta = el('lookmeta')
+// one fresh look through the selected body's eyes into img, with its caption in meta; settles when the picture is up
+// or the error is shown. The last picture stays while the next renders: only an empty frame says "rendering…"
+const loadLook = (img, meta) => {
+  if (!selected) return Promise.resolve()
   meta.className = ''
-  meta.textContent = 'rendering…'
+  if (img.hidden) meta.textContent = 'rendering…'
   // t= so a second look of the same body is fetched again rather than taken from the browser cache
   const params = new URLSearchParams({ t: String(Date.now()), ...(el('pano').checked ? { pano: '1' } : {}) })
   const url = `/api/look/${encodeURIComponent(selected)}?${params}`
-  fetch(url).then(async res => {
+  return fetch(url).then(async res => {
     if (!res.ok) {
       const why = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
       img.hidden = true
@@ -705,7 +720,33 @@ const fetchLook = () => {
     meta.textContent = [`${selected} · ${vw}`, blocked, seen.length ? `sees: ${seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
   }).catch(e => { meta.className = 'err'; meta.textContent = String(e) })
 }
+const fetchLook = () => loadLook(el('lookimg'), el('lookmeta'))
 el('relook').addEventListener('click', fetchLook)
+
+// the popup: the same picture big, kept fresh. The next look is asked for a second after the last one ARRIVED, not
+// a second after it was asked for, so a slow render never queues up behind itself; lookRun tells a loop that was
+// closed mid-render (and maybe reopened) from the one that should carry on
+const LOOK_LIVE_MS = 1000
+let lookTimer = null
+let lookRun = 0
+const liveLook = run => loadLook(el('lookBig'), el('lookBigMeta')).then(() => {
+  if (run === lookRun) lookTimer = setTimeout(() => liveLook(run), LOOK_LIVE_MS)
+})
+const openLook = () => {
+  if (!selected) return
+  el('lookOverlay').hidden = false
+  liveLook(++lookRun)
+}
+const closeLook = () => {
+  el('lookOverlay').hidden = true
+  clearTimeout(lookTimer)
+  lookTimer = null
+  lookRun++
+}
+el('lookimg').addEventListener('click', openLook)
+el('lookClose').addEventListener('click', closeLook)
+el('lookOverlay').addEventListener('click', e => { if (e.target === el('lookOverlay')) closeLook() })
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('lookOverlay').hidden) closeLook() })
 
 // ---------------------------------------------------------------- the chat log
 // One line per thing said, merged by the server from every body's event log. The page keeps the last answer and
