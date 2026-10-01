@@ -118,7 +118,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     }))
 
   // look {pano} | {dir: north|south|east|west} | {yaw, pitch in degrees} | {x,y,z to look towards}; default: where the bot is facing
-  return async function look (a = {}) {
+  const look = async function look (a = {}) {
     const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? 1.62, 0)
     const towards = a.x === undefined ? null : { dx: a.x + 0.5 - eye.x, dy: (a.y ?? eye.y) + 0.5 - eye.y, dz: a.z + 0.5 - eye.z }
     const yaw = towards ? Math.atan2(-towards.dx, -towards.dz) : a.dir ? rad(YAWS[a.dir]) : a.yaw !== undefined ? rad(a.yaw) : bot.entity.yaw
@@ -133,7 +133,9 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const world = worldAround(eye, maxDist)
     const key = lookKey({ eye, yaw, pitch, timeOfDay: bot.time.timeOfDay, entities, world: `${world.id}:${world.edits}`, width, height, maxDist, panorama, fov: a.fov ?? 100 })
     // a body standing still is asked for the same picture ten times a second: the worker draws it once
-    const out = last?.key === key ? last.out : await draw({
+    const cached = last?.key === key
+    if (!cached) look.draws++
+    const out = cached ? last.out : await draw({
       grid: { origin: world.grid.origin, size: world.grid.size, data: world.grid.data, top: world.grid.top }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities, timeOfDay: bot.time.timeOfDay,
       width, height, maxDist, panorama, yaw, pitch, fov: a.fov ?? 100
     })
@@ -149,4 +151,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
       seen: out.seen.map(e => `${e.name} ${e.dist}m @px${e.px},${e.py}`)
     }
   }
+  // tests only: how many looks actually asked the worker to draw, versus answering from the cache
+  look.draws = 0
+  return look
 }

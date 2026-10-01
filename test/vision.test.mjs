@@ -367,12 +367,10 @@ test('look: an unchanged scene answers the last frame without asking the worker 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eyes-'))
   const look = makeEyes(bot, { textureDir: dir, snapshotDir: dir })
   const first = await look({ file: 'a.png' })
-  const started = performance.now()
   const second = await look({ file: 'b.png' })
-  const cached = performance.now() - started
   // a cache hit still writes the file (the dashboard reads it from disk), with the bytes the worker drew the first time
   assert.deepEqual(fs.readFileSync(path.join(dir, 'a.png')), fs.readFileSync(path.join(dir, 'b.png')))
   assert.deepEqual([second.view, second.seen], [first.view, first.seen])
-  // answering from the cache skips the worker round trip entirely, so it is far faster than the first, real draw
-  assert.ok(cached < 5)
+  // answering from the cache skips the worker round trip entirely: the draw count stays at the first, real draw
+  assert.equal(look.draws, 1)
 })
