@@ -2,6 +2,14 @@
 # runs one agent's body (called by state/agents/<Name>/start). A dead body is silent, and its driver would wait for ever: when the body
 # ends badly, leave a body_down line in its events.jsonl, which the driver's event monitor picks up.
 cd "$1" || exit 1
+# NODE_OPTIONS (eg --inspect=...) is for the body alone: every helper below is a short node process that would
+# otherwise inherit it and bind the very same fixed debug port in turn, printing noise and racing the body for
+# it. Carry the original value across the supervisor hand-off in BODY_NODE_OPTIONS, leave NODE_OPTIONS unset for
+# every helper, and only set it back on the one line that execs the body itself.
+if [ -z "${BODY_NODE_OPTIONS+x}" ]; then
+  export BODY_NODE_OPTIONS="$NODE_OPTIONS"
+fi
+unset NODE_OPTIONS
 # the body outlives the shell that ran ./start: a driver's tool call that times out, or a stopped background task, sends
 # SIGTERM to its process group, and the trap at the end took the body down with it (12 bodies on 2026-10-01). So the
 # checks run here, and then this script runs again in a session of its own for the body, while the caller gets its
@@ -42,15 +50,32 @@ node ../../../tools/body-lock.mjs write . "$supervisor"
 trap - EXIT
 exit 0
 fi
-trap 'rm -f body.pid' EXIT
-node ../../../tools/patch-deps.mjs > bot.log 2>&1
-node ../../../tools/textures.mjs >> bot.log 2>&1
-node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../src/bot.mjs . >> bot.log 2>&1 &
+# one trap covers every way the supervisor can end, not just the wait below: a kill (or a crash) during
+# patch-deps/textures, before $body even exists, used to leave body.pid stale with no trace in events.jsonl (a
+# driver would wait forever for a body_down that was never written). TERM/INT force a known exit code so the EXIT
+# trap below always has one to report, whether the body is running yet or not.
+body=
+report_down () {
+  code=$1
+  rm -f body.pid
+  [ "$code" -eq 0 ] && return
+  last=$(tail -n 5 bot.log 2>/dev/null)
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: Number(process.argv[1]),
+    last: process.argv[2] ? process.argv[2].split("\n") : [],
+    advice: "your body stopped (crash or kill): ./start it again; a crash leaves its cause at the end of bot.log" }) + "\n")' "$code" "$last" >> events.jsonl
+}
+trap 'report_down $?' EXIT
+trap '[ -n "$body" ] && kill "$body" 2>/dev/null; exit 143' TERM
+trap '[ -n "$body" ] && kill "$body" 2>/dev/null; exit 130' INT
+# bash defers a trap until the current foreground command finishes, so a kill (or crash) wouldn't be noticed
+# until patch-deps/textures themselves ended on their own; backgrounding each step and `wait`-ing on it instead
+# makes every trap above fire at once, the same way `wait $body` already does for the body itself below
+node ../../../tools/patch-deps.mjs > bot.log 2>&1 &
+wait $!
+node ../../../tools/textures.mjs >> bot.log 2>&1 &
+wait $!
+NODE_OPTIONS="$BODY_NODE_OPTIONS" node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../src/bot.mjs . >> bot.log 2>&1 &
 body=$!
 node ../../../tools/body-lock.mjs write . $body
-trap 'kill $body 2>/dev/null; rm -f body.pid' TERM INT
 wait $body
-code=$?
-rm -f body.pid
-[ $code -eq 0 ] || echo "{\"seq\":0,\"t\":\"$(date -u +%FT%TZ)\",\"type\":\"body_down\",\"exit\":$code,\"advice\":\"your body stopped (crash or kill): ./start it again; a crash leaves its cause at the end of bot.log\"}" >> events.jsonl
-exit $code
+exit $?
