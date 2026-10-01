@@ -100,6 +100,12 @@
   #lookHud i.bubble.half { background: linear-gradient(90deg, #8cf 50%, #333 50%); border-radius: 50%; }
   #lookHud i.bubble.empty { background: #333; border-radius: 50%; }
   #lookHud .xp { color: #6ee7a8; font-weight: bold; }
+  .lookFrame { position: relative; }
+  .marks { position: absolute; inset: 0; pointer-events: none; }
+  .mark { position: absolute; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.85); }
+  .mark.hostile { border-color: #ff4a4a; }
+  .mark.player { border-color: #ff5cff; }
+  .mark span { position: absolute; left: -1px; bottom: 100%; padding: 0 3px; font-size: 11px; line-height: 1.3; color: #fff; background: rgba(0,0,0,0.6); white-space: nowrap; }
   #lookmeta { color: var(--dim); margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
   #places { white-space: pre-wrap; }
   .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -180,7 +186,7 @@
         <label class="muted"><input type="checkbox" id="pano"> pano</label>
         <button id="relook">look</button>
       </div>
-      <img id="lookimg" alt="" hidden>
+      <div class="lookFrame"><img id="lookimg" alt="" hidden><div id="lookimgMarks" class="marks"></div></div>
       <div id="lookmeta"></div>
     </section>
     <section>
@@ -201,7 +207,7 @@
       <span class="spacer"></span>
       <button id="lookClose">close ×</button>
     </div>
-    <img id="lookBig" alt="" hidden>
+    <div class="lookFrame"><img id="lookBig" alt="" hidden><div id="lookBigMarks" class="marks"></div></div>
     <div id="lookHud"></div>
     <div id="lookWindowMeta"></div>
     <div id="lookWindow" class="screen"></div>
@@ -731,11 +737,18 @@ const select = name => {
   el('lookimg').hidden = true
   el('lookBig').src = ''
   el('lookBig').hidden = true
+  el('lookimgMarks').innerHTML = ''
+  el('lookBigMarks').innerHTML = ''
   el('lookname').textContent = name
   renderList()
   draw()
   fetchLook()
 }
+
+// each entity the picture shows, outlined where it is drawn and labelled with its distance, so nobody has to match
+// the caption's pixel numbers by eye; boxes are fractions of the picture, so they follow it however it is scaled
+const marksHtml = marks => marks.map(({ name, kind, dist, box: [x1, y1, x2, y2] }) =>
+  `<div class="mark ${kind ?? ''}" style="left:${x1 * 100}%;top:${y1 * 100}%;width:${(x2 - x1) * 100}%;height:${(y2 - y1) * 100}%"><span>${name} ${dist}m</span></div>`).join('')
 
 // a look's caption under its picture, or why there is no picture. Once a picture is up it stays up: an error
 // later (a busy body) only changes the caption, so the card never loses and regains its 180px on a bad frame
@@ -747,6 +760,7 @@ const showLook = (img, meta, look) => {
     return
   }
   img.hidden = false
+  el(`${img.id}Marks`).innerHTML = marksHtml(look.marks ?? [])
   meta.className = ''
   meta.textContent = [`${selected} · ${look.view}`, look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
 }
@@ -765,7 +779,7 @@ const loadLook = (img, meta) => {
     const header = name => decodeURIComponent(res.headers.get(name) || '')
     URL.revokeObjectURL(img.src)
     img.src = URL.createObjectURL(await res.blob())
-    showLook(img, meta, { view: header('x-look-view'), blocked: header('x-look-blocked'), seen: JSON.parse(header('x-look-seen') || '[]') })
+    showLook(img, meta, { view: header('x-look-view'), blocked: header('x-look-blocked'), seen: JSON.parse(header('x-look-seen') || '[]'), marks: JSON.parse(header('x-look-marks') || '[]') })
   }).catch(e => { meta.className = 'err'; meta.textContent = String(e) })
 }
 const fetchLook = () => loadLook(el('lookimg'), el('lookmeta'))

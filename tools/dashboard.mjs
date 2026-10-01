@@ -241,18 +241,19 @@ const lookFrame = async (agent, args) => {
   if (!r.ok) return { code: 503, error: r.error ?? r.answer?.error ?? 'the body did not answer' }
   const file = snapshotFile(path.join(AGENTS_DIR, agent.name), r.answer.file)
   if (!file || !fs.existsSync(file)) return { code: 502, error: `the body rendered ${r.answer.file}, which is not a file I may serve` }
-  return { png: fs.readFileSync(file), view: r.answer.view ?? '', seen: r.answer.seen ?? [], blocked: r.answer.blocked ?? '' }
+  return { png: fs.readFileSync(file), view: r.answer.view ?? '', seen: r.answer.seen ?? [], marks: r.answer.marks ?? [], blocked: r.answer.blocked ?? '' }
 }
 
 const serveLook = async (res, name, query) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  const args = { file: LOOK_FILE, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
+  const args = { file: LOOK_FILE, marks: true, ...(query.get('pano') ? { pano: true } : {}), ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
   const frame = await lookFrame(agent, args)
   if (frame.error) return sendJson(res, frame.code, { error: frame.error })
   send(res, 200, 'image/png', frame.png, {
     'x-look-view': encodeURIComponent(frame.view),
     'x-look-seen': encodeURIComponent(JSON.stringify(frame.seen)),
+    'x-look-marks': encodeURIComponent(JSON.stringify(frame.marks)),
     'x-look-blocked': encodeURIComponent(frame.blocked)
   })
 }
@@ -278,7 +279,7 @@ const streamLook = async (req, res, name, query) => {
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
   const pano = Boolean(query.get('pano'))
   const file = `dashboard-live-${++liveStreams}.png`
-  const args = { file, ...(pano ? { pano: true } : {}), ...LIVE_SIZE[pano ? 'pano' : 'view'] }
+  const args = { file, marks: true, ...(pano ? { pano: true } : {}), ...LIVE_SIZE[pano ? 'pano' : 'view'] }
   let open = true
   req.on('close', () => { open = false })
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' })

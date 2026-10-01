@@ -96,6 +96,21 @@ test('look popup: selecting another body clears the last one\'s picture, so an e
   assert.equal(el('lookBig').hidden, true)
 })
 
+test('look popup: each frame outlines and labels the entities it shows; a frame with none, or another body, clears them', () => {
+  const { el, streams, select } = page()
+  el('lookimg').listeners.click()
+  const marks = [{ name: 'cow', kind: 'passive', dist: 3, box: [0.25, 0.5, 0.5, 0.75] }, { name: 'zombie', kind: 'hostile', dist: 9, box: [0.6, 0.1, 0.7, 0.4] }]
+  const frame = marks => streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', blocked: '', seen: [], marks }) })
+  frame(marks)
+  const drawn = el('lookBigMarks').innerHTML
+  assert.deepEqual([drawn.match(/class="mark/g).length, drawn.includes('left:25%;top:50%;width:25%;height:25%'), drawn.includes('cow 3m'), drawn.includes('mark hostile')], [2, true, true, true])
+  frame([])
+  assert.equal(el('lookBigMarks').innerHTML, '')
+  frame(marks)
+  select('Bob')
+  assert.equal(el('lookBigMarks').innerHTML, '')
+})
+
 test('look popup: a panorama streams as a panorama', () => {
   const { el, streams } = page()
   el('pano').checked = true
