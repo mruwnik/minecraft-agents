@@ -1,6 +1,7 @@
 import { automaticBeds } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
+import { stalkShape } from './navigation/bamboo.mjs'
 import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
@@ -292,6 +293,17 @@ function connect () {
 
   bot.once('spawn', () => {
     mcData = bot.registry
+    // minecraft-data gives every bamboo state one fixed shape (the offset at seed 0); the server shifts each stalk by its
+    // own per-block seed, so physics and the pathfinder, both reading blocks through bot.blockAt, walked into stalks the
+    // server put elsewhere. The blocks plugin injects bot.blockAt on connect, not before, so spawn is the first point it
+    // exists; this same bot object carries the wrap through every respawn and dimension change.
+    if (typeof bot.blockAt !== 'function') throw new Error('bamboo shape: bot.blockAt missing at spawn; blocks plugin not injected yet')
+    const blockAt = bot.blockAt.bind(bot)
+    bot.blockAt = (point, extraInfos) => {
+      const block = blockAt(point, extraInfos)
+      if (block?.name === 'bamboo' && block.position) block.shapes = [stalkShape(block.position.x, block.position.z)]
+      return block
+    }
     eyes = makeEyes(bot, { textureDir: path.join(ROOT, 'textures'), snapshotDir: path.join(HOME, 'snapshots') })
     const windows = watchWindows(bot, { now: Date.now })
     openWindow = windows.open

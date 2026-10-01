@@ -16,7 +16,8 @@ export const shutNow = ({ near, open, mine, leading, moving, inDoorway, reflexes
 // itself before a replan, every path through it is gone. Chani's goto to the cell beyond her open gate answered "no walkable path"
 // (13:19Z), and walks replanned in the gate cell stalled there 12 s (14:19Z-16:03Z). What movements.getBlock adds to an open gate: air
 export const openGateWalk = block => block?.name?.endsWith('_fence_gate') && block.open === true ? { safe: true, physical: false } : null
-// bamboo's hitbox sits elsewhere on the server than in the client, so a walk brushing past a stalk gets position resets: a cell beside one costs extra
+// bot.blockAt now mirrors the server's true per-block bamboo hitbox (navigation/bamboo.mjs), but the pathfinder's A* only
+// knows a cell holds bamboo, not where in it the stalk sits, so a path that hugs one can still clip it: a cell beside one costs extra
 // my centre lies inside a fence's (wall's, shut gate's) cell: the free neighbour cell whose edge I am nearest to is where I really stand. free(x, y, z)
 // One line for gates.log when a fence gate at `at` changes between open and shut: who stood nearest (players: [{name, dist}], myself included)
 // `me`, `moving` (my walk has a goal) and `clicking` (my own hand is on a door) say who did it. mine: it opened under my
