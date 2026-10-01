@@ -109,8 +109,12 @@ mineflayer already holds, glued to the bot by `src/vision/eyes.mjs`, which draws
 (`src/vision/render-worker.mjs`) so the body keeps ticking. No GPU, browser or extra dependency; a 480x270 frame takes
 about a tenth of a second, so the dashboard's look popup streams ~10 frames a second.
 An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV shot, ~350 for a panorama), which is
-less than most text descriptions of the same scene. Entities are flat-coloured boxes (players magenta, hostiles red).
-Not drawn: block light (caves render fully lit, which is handy), translucent water, item/entity models, the sun.
+less than most text descriptions of the same scene. Mobs are a few blocks each in their game colours, shaped by family
+(two legs, four legs, creeper, spider, bird; anything else a box of its size) and turned the way they face, the front of
+the head painted as a face. Players are magenta, a hostile without colours of its own red, dropped items small yellow
+cubes. `marks=true` adds `marks`, each seen entity's outline as fractions of the picture; the dashboard asks for it to
+outline and label every mob over the picture, the driver never needs it.
+Not drawn: block light (caves render fully lit, which is handy), translucent water, item models, mob textures, the sun.
 
 Block and item textures are Mojang's art, so they are not checked in: `textures/` is gitignored and `tools/textures.mjs`
 fills it. Every body start runs it beside `patch-deps.mjs`. Blocks (`assets/minecraft/textures/block/*.png`, flat in
