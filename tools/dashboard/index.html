@@ -768,7 +768,7 @@ const renderChat = () => {
   // the reader who scrolled up to read something old keeps their place; everyone else follows the newest line
   const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
   log.textContent = ''
-  if (!shown.length) log.append(tag('div', '', chatLast.messages.length ? 'nothing matches' : 'nobody has said anything yet')).id = 'chatempty'
+  if (!shown.length) log.append(Object.assign(tag('div', '', chatLast.messages.length ? 'nothing matches' : 'nobody has said anything yet'), { id: 'chatempty' }))
   shown.forEach(m => log.append(msgRow(m)))
   const whispers = chatLast.messages.filter(m => m.kind === 'whisper').length
   el('chatcount').textContent = `${shown.length}${shown.length !== chatLast.messages.length ? ` of ${chatLast.messages.length}` : ''} lines · ${whispers} whispers`
