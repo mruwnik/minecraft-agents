@@ -1,6 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import zlib from 'node:zlib'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { EventEmitter } from 'node:events'
+import prismarineChunk from 'prismarine-chunk'
+import prismarineRegistry from 'prismarine-registry'
+import { Vec3 } from 'vec3'
+import { makeEyes } from '../src/vision/eyes.mjs'
 import { encodePng, decodePng, textureCandidates, castRay, makeGrid, render, directionFor } from '../src/vision/renderer.mjs'
 
 // ---------------------------------------------------------------- png
@@ -199,3 +207,66 @@ for (const [name, extra, blocked] of nearCases) {
     assert.equal(img.near >= 0 && img.near <= 1, true)
   })
 }
+
+// ---------------------------------------------------------------- eyes
+const registry = prismarineRegistry('26.1')
+const STONE = registry.blocksByName.stone.defaultState
+const Chunk = prismarineChunk(registry)
+// a body standing on a stone floor (y 63) looking north, with `reads` counting the chunk columns it copies
+const standingBot = () => {
+  const columns = new Map()
+  const column = (cx, cz) => {
+    const key = `${cx},${cz}`
+    if (columns.has(key)) return columns.get(key)
+    const c = new Chunk({ minY: -64, worldHeight: 384 })
+    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) c.setBlockStateId(new Vec3(x, 63, z), STONE)
+    columns.set(key, c)
+    return c
+  }
+  const bot = Object.assign(new EventEmitter(), {
+    registry,
+    reads: 0,
+    game: { minY: -64, height: 384 },
+    entity: { position: new Vec3(0.5, 64, 0.5), eyeHeight: 1.62, yaw: 0, pitch: 0 },
+    entities: {},
+    time: { timeOfDay: 6000 },
+    column
+  })
+  bot.world = { getColumn: (cx, cz) => { bot.reads++; return column(cx, cz) } }
+  return bot
+}
+// a stone wall across the view, one and a half blocks north of the body at (x, 64, 0.5); without an event, as the
+// chunk data changes under a body that has not been told yet
+const putWall = (bot, x) => [...Array(9).keys()].flatMap(dx => [64, 65, 66, 67].map(y => new Vec3(x + dx - 4, y, -2))).forEach(p => {
+  bot.column(p.x >> 4, p.z >> 4).setBlockStateId(new Vec3(p.x & 15, p.y, p.z & 15), STONE)
+  bot.wallCells = [...(bot.wallCells ?? []), p]
+})
+const eyesFor = bot => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eyes-'))
+  return makeEyes(bot, { textureDir: dir, snapshotDir: dir })
+}
+
+const freshCases = [
+  ['a block update', bot => { putWall(bot, 0); bot.wallCells.forEach(position => bot.emit('blockUpdate', null, { position, stateId: STONE })) }],
+  ['a chunk that arrives', bot => { putWall(bot, 0); bot.emit('chunkColumnLoad', new Vec3(0, 0, -16)) }],
+  ['walking off', bot => { putWall(bot, 30); bot.entity.position.x = 30.5 }]
+]
+for (const [name, change] of freshCases) {
+  test(`look: a wall put up since the last look is seen, after ${name}`, async () => {
+    const bot = standingBot()
+    const look = eyesFor(bot)
+    const before = await look({ file: 'a.png' })
+    change(bot)
+    const after = await look({ file: 'b.png' })
+    assert.deepEqual([before.blocked, Boolean(after.blocked)], [null, true])
+  })
+}
+
+test('look: a body that has not moved does not copy the world again', async () => {
+  const bot = standingBot()
+  const look = eyesFor(bot)
+  await look({ file: 'a.png' })
+  const copied = bot.reads
+  await look({ file: 'b.png' })
+  assert.deepEqual([copied > 0, bot.reads], [true, copied])
+})

@@ -16,6 +16,7 @@ const TINTS = [
 ]
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
+const MARGIN = 8
 export const YAWS = { north: 0, west: 90, south: 180, east: 270 }
 const rad = deg => deg * Math.PI / 180
 
@@ -53,12 +54,12 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     return blockInfo.get(stateId)
   }
 
-  function snapshotWorld (eye, radius) {
+  // copies the chunk data in a box round a cell, `across` blocks out each way and `up` blocks above and below
+  function snapshotWorld (centre, across, up) {
     const minY = bot.game.minY ?? -64
     const maxY = minY + (bot.game.height ?? 384) - 1
-    const vertical = Math.min(radius, 48)
-    const origin = { x: Math.floor(eye.x) - radius, y: Math.max(minY, Math.floor(eye.y) - vertical), z: Math.floor(eye.z) - radius }
-    const size = { x: radius * 2 + 1, y: Math.min(maxY, Math.floor(eye.y) + vertical) - origin.y + 1, z: radius * 2 + 1 }
+    const origin = { x: centre.x - across, y: Math.max(minY, centre.y - up), z: centre.z - across }
+    const size = { x: across * 2 + 1, y: Math.min(maxY, centre.y + up) - origin.y + 1, z: across * 2 + 1 }
     const grid = makeGrid(origin, size)
     const local = { x: 0, y: 0, z: 0 }
     for (let cx = origin.x >> 4; cx <= (origin.x + size.x - 1) >> 4; cx++) {
@@ -76,6 +77,20 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
       }
     }
     return grid
+  }
+
+  // Copying the world is the part of a look the body's own thread pays, so the copy is kept between looks and kept
+  // true by block updates. It reaches MARGIN past the view, so the body can step about before it is copied again.
+  let copy = null
+  const forget = () => { copy = null }
+  bot.on('chunkColumnLoad', forget)
+  bot.on('chunkColumnUnload', forget)
+  bot.on('blockUpdate', (old, now) => copy?.grid.set(now.position.x, now.position.y, now.position.z, now.stateId))
+  const worldAround = (eye, radius) => {
+    const at = { x: Math.floor(eye.x), y: Math.floor(eye.y), z: Math.floor(eye.z) }
+    const fits = copy && copy.world === bot.world && copy.radius === radius && ['x', 'y', 'z'].every(a => Math.abs(at[a] - copy.centre[a]) <= MARGIN)
+    if (!fits) copy = { grid: snapshotWorld(at, radius + MARGIN, Math.min(radius, 48) + MARGIN), world: bot.world, radius, centre: at }
+    return copy.grid
   }
 
   const visibleEntities = () => Object.values(bot.entities)
@@ -104,7 +119,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const height = a.height ?? (panorama ? 216 : 270)
     const maxDist = Math.min(a.dist ?? 64, 96)
     const out = render({
-      grid: snapshotWorld(eye, maxDist), info, texture, eye, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
+      grid: worldAround(eye, maxDist), info, texture, eye, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
       width, height, maxDist, panorama, yaw, pitch, fov: a.fov ?? 100
     })
     fs.mkdirSync(snapshotDir, { recursive: true })
