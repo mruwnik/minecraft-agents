@@ -29,7 +29,7 @@ import { restartAdvice } from './restart.mjs'
 import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -1026,26 +1026,36 @@ async function pickUpReflexBed ({ name, x, y, z, item }) {
 let lastDriven = Date.now()
 let lastBedTry = 0
 let bedFailures = 0
+let bedWalkFailed = false // a walk to the own bed failed or came up short tonight: go straight to placement, not retried till the next night
 setInterval(() => {
   if (!ready) return
   const now = Date.now()
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   const night = isNight(bot.time.timeOfDay)
-  if (!night) holedUp = null
+  if (!night) { holedUp = null; bedWalkFailed = false }
   for (const { bed, do: step } of reflexPickups({ night, asleep: bot.isSleeping, reflexes, beds: reflexBeds(), cellAt, from: bot.entity.position, inFlight: pickingUp })) {
     if (step === 'unmark') unmark(bed.name)
     else pickUpReflexBed(bed)
   }
   const bedNear = automaticSleepBeds().length > 0
-  const bedCarried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
+  const hostileNear = nearbyHostiles(8).length > 0
+  const carried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
+  const from = pos()
+  const plan = automaticNightPlan({ near: bedNear, bed: ownBed(readPlaces(), cfg.username, { from }), from, carried, walkFailed: bedWalkFailed, hostileNear })
+  const bedWalk = plan.do === 'walk'
+  const bedCarried = plan.do === 'place'
   const tired = bedtime({
-    night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried,
-    hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
+    night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried, bedWalk,
+    hostileNear, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
   if (!night || bot.isSleeping) bedFailures = 0
   if (!tired) return
   lastBedTry = now
-  if (bedFailures === 0) emit('bedtime', { note: bedNear ? 'night, no orders, a bed nearby: going to bed by myself' : 'night, no orders, no bed nearby: placing the bed I carry and going to bed' })
+  if (bedFailures === 0) emit('bedtime', {
+    note: bedNear ? 'night, no orders, a bed nearby: going to bed by myself'
+      : bedWalk ? `night, no orders, my own bed ${plan.distance} blocks off: walking to it and going to bed`
+        : 'night, no orders, no bed nearby: placing the bed I carry and going to bed'
+  })
   // say so once a night: the driver is told, and the retries (ever further apart) stay quiet
   submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
 }, 10000)
@@ -2737,12 +2747,34 @@ export const long = {
     let placed = false
     for (;;) {
       const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
-      const item = error && a.automatic && !placed ? carriedBed() : null
-      const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
-      if (spot) {
-        placed = true
-        await placeReflexBed(item.name, spot)
-        continue
+      if (error && a.automatic && !placed) {
+        // walked there already and bedChoice still has nothing for me: that walk counted as failed, so tonight goes straight to placement
+        if (walked) bedWalkFailed = true
+        const from = pos()
+        const plan = automaticNightPlan({
+          near: false, bed: ownBed(readPlaces(), cfg.username, { from }), from,
+          carried: Boolean(carriedBed()) && Boolean(carriedBedPlace()), walkFailed: bedWalkFailed, hostileNear: nearbyHostiles(8).length > 0
+        })
+        if (plan.do === 'walk') {
+          walked = true
+          try {
+            await goNear(plan.to, 2)
+          } catch (e) {
+            bedWalkFailed = true
+            if (/^cancelled/.test(e.message)) throw e
+          }
+          continue
+        }
+        if (plan.do === 'place') {
+          const item = carriedBed()
+          const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
+          if (spot) {
+            placed = true
+            await placeReflexBed(item.name, spot)
+            continue
+          }
+        }
+        throw new Error(plan.why ? `${error} (${plan.why})` : error)
       }
       if (error && !a.automatic && !walked && /^no bed within 32/.test(error)) {
         const from = pos()
