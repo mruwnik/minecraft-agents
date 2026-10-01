@@ -76,7 +76,8 @@ round draws a new picture and a mob twitching its head does not.
 Each pixel inside a mob's screen rectangle pays one frame change and one enclosing-box test; only pixels on the mob pay
 up to six part tests. Measured on a 480x270 frame with eight mobs close up (bench script in the session scratchpad):
 before 45 ms with mobs, 42 ms without. The budget was no more than 10% over the before figure with mobs; measured
-after, 47-53 ms (7-13% over, the spread is the machine's load), with no change without mobs. Accepted: eight mobs within
+after, 53 ms against master's 46.5 on a second bench (about 13% over), with no change without mobs; hoisting the
+per-mob values out of the pixel loop gained nothing measurable. Accepted: eight mobs within
 seven blocks is the worst case, the hull test already skips a mob whose box starts behind the nearest hit, and the live
 stream's 320x180 frames stay far inside their 100 ms.
 
