@@ -149,6 +149,17 @@ for (const [name, open, marked] of [['the popup', 'lookimg', 'lookBigMarks'], ['
   })
 }
 
+// the header shows where the body stands, from the same stream frame as the caption; both the popup and the
+// inline card go through showLook(), so one frame shape is wired into both
+for (const [name, open, meta] of [['the popup', 'lookimg', 'lookBigMeta'], ['the small picture', 'relook', 'lookmeta']]) {
+  test(`look header: ${name} shows the body's current coordinates`, () => {
+    const { el, streams } = page()
+    el(open).listeners.click()
+    streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', seen: [], blocked: '', at: { x: 102, y: 70, z: -108 } }) })
+    assert.equal(el(meta).textContent, 'Chani · north pitch 0 · 102 70 -108\nsees nothing alive')
+  })
+}
+
 test('look popup: a player name is shown as text, never run as html', () => {
   const { el, streams } = page()
   el('lookimg').listeners.click()

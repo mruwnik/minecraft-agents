@@ -416,6 +416,14 @@ for (const [name, change] of freshCases) {
   })
 }
 
+test('look: reports the body\'s current position as floored block coordinates', async () => {
+  const bot = standingBot()
+  const look = eyesFor(bot)
+  // 0.5 floors to 0 on every axis; Math.round would give 1, so this pins down which one the dashboard gets
+  const { at } = await look({ file: 'a.png' })
+  assert.deepEqual(at, { x: 0, y: 64, z: 0 })
+})
+
 test('look: a body that has not moved does not copy the world again', async () => {
   const bot = standingBot()
   const look = eyesFor(bot)
