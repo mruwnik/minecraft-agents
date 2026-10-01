@@ -9,8 +9,11 @@ export const DEFAULTS = {
   host: 'localhost',
   port: 25565,
   version: '26.1', // newest protocol mineflayer speaks; ViaBackwards bridges to the newer server
-  apiPort: 3777
+  apiPort: 3777,
+  auth: 'offline'
 }
+
+export const AUTH_MODES = ['offline', 'microsoft']
 
 export const configFile = home => path.join(home, 'config.json')
 
@@ -23,5 +26,6 @@ export const readConfig = home => {
   if (!fs.existsSync(file)) throw new Error(missingConfig(home))
   const cfg = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(file, 'utf8')) }
   if (!cfg.username) throw new Error(`${file} names no username: ${JSON.stringify(cfg)}`)
+  if (!AUTH_MODES.includes(cfg.auth)) throw new Error(`${file}: auth "${cfg.auth}" is not one of ${AUTH_MODES.join(', ')}`)
   return cfg
 }

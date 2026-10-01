@@ -44,3 +44,21 @@ test('a config.json without a username is refused too', () => {
 test('the defaults carry no username', () => {
   assert.equal('username' in DEFAULTS, false)
 })
+
+test('auth defaults to offline', () => {
+  const home = tmp()
+  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve"}')
+  assert.equal(readConfig(home).auth, 'offline')
+})
+
+test('auth may be microsoft', () => {
+  const home = tmp()
+  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve", "auth": "microsoft"}')
+  assert.equal(readConfig(home).auth, 'microsoft')
+})
+
+test('any other auth is refused and the two choices are named', () => {
+  const home = tmp()
+  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve", "auth": "mojang"}')
+  assert.throws(() => readConfig(home), /auth "mojang".*offline.*microsoft/)
+})
