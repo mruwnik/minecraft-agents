@@ -1,7 +1,7 @@
 import { automaticBeds } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
-import { stalkShape } from './navigation/bamboo.mjs'
+import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
 import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
 import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
@@ -3206,11 +3206,13 @@ let scheduler
 const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
 // #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
 // included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
-const passableAboutFeet = () => {
+const passableAboutFeet = (through = () => false) => {
   const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return (dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.boundingBox !== 'block'
+  return (dx, dy, dz) => { const block = bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz)); return block?.boundingBox !== 'block' || through(block) }
 }
 const amBoxedIn = () => Boolean(bot?.entity) && boxedIn(passableAboutFeet())
+// bamboo the pathfinder reads as walls (a fence-like thicket), though the server's offset stalks leave the body room to walk out between
+const amBoxedByBamboo = () => amBoxedIn() && !boxedIn(passableAboutFeet(block => block.name === 'bamboo'))
 // a hole one block deep (card 94e6dcb1): the walk out of it is a jump, and a failed one reads as a distant obstacle
 const amInHole = () => Boolean(bot?.entity) && inHole(passableAboutFeet())
 // one block above a field, on a log in the rows (Jizo, 09-26 23:24Z): the way down is a drop onto farmland
@@ -3291,10 +3293,42 @@ async function climbFirst (to) {
   }).catch(e => { throw new Error(`${why}; ${e.message}`) })
   return `${why}; climbed ${out.climbed} (${out.side} niche, ${out.placed} placed, ${out.dug} dug) to ${out.to.x},${out.to.y},${out.to.z}`
 }
+// walked, never dug: a dug base never regrows, and the free space between the stalks always leads out of a grove that is not sealed
+async function wriggleOut () {
+  if (!amBoxedByBamboo()) return null
+  const { y } = feetCell(bot.entity.position, bot.entity.onGround)
+  const at = (x, dy, z) => bot.blockAt(new Vec3(x, y + dy, z))
+  const bambooAt = (x, z) => [0, 1].some(dy => at(x, dy, z)?.name === 'bamboo')
+  const clear = (x, dy, z) => { const block = at(x, dy, z); return Boolean(block) && (block.name === 'bamboo' || block.boundingBox === 'empty') }
+  const openAt = (x, z) => clear(x, 0, z) && clear(x, 1, z) && at(x, -1, z)?.boundingBox === 'block'
+  const waypoints = groveExit({ from: bot.entity.position, bambooAt, openAt })
+  if (!waypoints) return null
+  const reached = async waypoint => {
+    for (let t = 0; t < 40; t++) {
+      const { yaw, sneak, arrived } = steer(bot.entity.position, waypoint)
+      if (arrived) return true
+      await bot.look(yaw, 0, true)
+      bot.setControlState('forward', true)
+      bot.setControlState('sneak', sneak)
+      await bot.waitForTicks(1)
+    }
+    return steer(bot.entity.position, waypoint).arrived
+  }
+  try {
+    for (const waypoint of waypoints) if (!await reached(waypoint)) return null
+  } finally {
+    bot.setControlState('forward', false)
+    bot.setControlState('sneak', false)
+  }
+  const out = waypoints.at(-1)
+  return `wriggled out of the bamboo to ${out.x.toFixed(2)},${out.z.toFixed(2)}`
+}
 // a dig walk goes in legs of 6 (src/navigation/dig-legs.mjs): a straight line of 20 through rock is more search than the 5 s budget
 // holds, and legs of 5-8 arrived all afternoon where 10+ timed out (card 5e16aff9). A plain walk keeps its one goal
 async function walkLegs (to, range, into = false) {
   const notes = []
+  const wriggled = await wriggleOut()
+  if (wriggled) notes.push(wriggled)
   const climbed = digging ? await climbFirst(to) : null
   if (climbed) notes.push(climbed)
   const legs = digging ? digLegs(bot.entity.position, to) : [to]
