@@ -62,8 +62,7 @@ const textureCases = [
   ['stone_brick_slab', 'top', {}, 'stone_bricks'],
   ['cobblestone_wall', 'side', {}, 'cobblestone'],
   ['white_bed', 'top', {}, 'white_wool'],
-  ['chest', 'side', {}, undefined],
-  ['trapped_chest', 'side', {}, undefined],
+  ['chest', 'side', {}, 'oak_planks'],
   ['oak_door', 'side', { half: 'upper' }, 'oak_door_top'],
   ['oak_door', 'side', { half: 'lower' }, 'oak_door_bottom'],
   ['wheat', 'side', { age: 7 }, 'wheat_stage7'],
@@ -88,7 +87,7 @@ const textureCases = [
   ['fire', 'cross', {}, 'fire_0'],
   ['frosted_ice', 'top', {}, 'frosted_ice_0'],
   ['dried_kelp_block', 'side', {}, 'dried_kelp_side'],
-  ['ender_chest', 'side', {}, undefined],
+  ['ender_chest', 'side', {}, 'obsidian'],
   ['piston_head', 'side', {}, 'piston_side'],
   ['sticky_piston', 'top', {}, 'piston_top'],
   ['light_weighted_pressure_plate', 'top', {}, 'gold_block'],
@@ -106,8 +105,9 @@ for (const [block, face, props, expected] of textureCases) {
     assert.equal(textureCandidates(block, face, props).find(t => known.has(t)), expected))
 }
 
-// chests are entity-rendered (their art is an atlas under entity/chest/, not a block texture), so they get a
-// dedicated colour instead of resolving to whatever block texture happens to match their candidate names
+// chests are entity-rendered: their real art is an atlas under entity/chest/, so textureCandidates above still
+// points at a stand-in block texture (for the dashboard's inventory icon), but render() below uses this dedicated
+// colour for the world view instead, rather than drawing a chest as if it were that other block
 for (const block of ['chest', 'trapped_chest', 'ender_chest']) {
   test(`colorOf: ${block} has its own colour`, () => assert.equal(colorOf(block)?.length, 3))
 }
@@ -234,14 +234,16 @@ test('render: entities behind a wall are not reported', () => {
   assert.deepEqual(img.seen, [])
 })
 
-// chest, trapped_chest and ender_chest have no block texture file (their art is an entity-rendered atlas); render()
-// should draw them with their dedicated colorOf colour, the same way it would draw a block that had that colour
-// baked into its texture file - not the hash-of-name colour used for genuinely unknown blocks
-test('render: a block with no texture file but a dedicated colour renders exactly as it would with that colour as its texture', () => {
-  const noFile = { ...scene, info: id => [null, { kind: 'cube', name: 'chest' }, { kind: 'cube', name: 'floor' }][id], texture: name => name === 'chest' ? null : scene.texture(name) }
-  const withFile = { ...noFile, texture: name => name === 'chest' ? solid(...colorOf('chest')) : scene.texture(name) }
+// a chest's block texture (whatever textureCandidates resolves it to, for the dashboard's inventory icon) is not
+// its real picture - render() must ignore it and always draw the dedicated colorOf colour in the world view
+test('render: a chest is drawn in its own colour, ignoring whatever its block texture resolves to', () => {
   const settings = { yaw: 0, pitch: 0, width: 32, height: 32, fov: 90, maxDist: 12 }
-  assert.deepEqual(pixel(render({ ...noFile, ...settings }), 16, 16), pixel(render({ ...withFile, ...settings }), 16, 16))
+  const chestScene = color => ({ ...scene, info: id => [null, { kind: 'cube', name: 'chest' }, { kind: 'cube', name: 'floor' }][id], texture: name => name === 'chest' ? solid(...color) : scene.texture(name) })
+  const resolvesToPlanks = pixel(render({ ...chestScene([162, 130, 78]), ...settings }), 16, 16)
+  const resolvesToSomethingElse = pixel(render({ ...chestScene([9, 9, 9]), ...settings }), 16, 16)
+  const dedicated = pixel(render({ ...chestScene(colorOf('chest')), ...settings }), 16, 16)
+  assert.deepEqual(resolvesToPlanks, dedicated)
+  assert.deepEqual(resolvesToSomethingElse, dedicated)
 })
 
 const nearCases = [
