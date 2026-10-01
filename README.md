@@ -13,6 +13,8 @@ beside the body: point its `viaproxy.yml` at the server (`target-version` the se
 Microsoft account added in its window) and give the body `host: 127.0.0.1`, `port: 25568`, `auth: "offline"`.
 
 - Start: `cd state/agents/<Name> && ./start`; it returns once the body is launched (the body reconnects every 10s if the server is down).
+- `./restart` stops a running body cleanly and starts it again. It is for the operator, not drivers: a driver that
+  wants its body back decides for itself when it is safe (`./mc quit`, then `./start`) rather than being signalled mid-task.
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
 - Control API: `http://127.0.0.1:3777/<action>` with a JSON body; `./mc <action> key=value ...` wraps it.
   `./mc help` lists actions. Long actions (goto, mine, craft, place, ...) take over the body, return after
@@ -28,8 +30,8 @@ first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down th
     src/        the body: bot.mjs (reflexes, primitives, the composite runner, the HTTP API), lib.mjs (pure helpers,
                 tested), eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
-    tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), new-agent.mjs,
-                patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs
+    tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), restart-body (behind ./restart),
+                new-agent.mjs, patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs
     test/       every *.test.mjs; `npm test` runs them all (`node --test test/*.test.mjs`)
     state/      everything this world made, and the only folder besides node_modules/ and textures/ that git ignores:
                 agents/<Name>/ (one folder per agent: config.json, BRIEFING.md, journal.md, events.jsonl,
