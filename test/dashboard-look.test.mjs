@@ -31,7 +31,7 @@ const page = (inventory = { items: {}, freeSlots: 36, armor: {}, slots: [], sele
     selected: 'Chani',
     fetch: url => {
       fetches.push(url)
-      if (url.startsWith('/api/inventory/')) return Promise.resolve({ ok: true, json: async () => inventory })
+      if (url.startsWith('/api/screen/')) return Promise.resolve({ ok: true, json: async () => inventory })
       return Promise.resolve({ ok: true, headers: { get: () => '' }, blob: async () => ({}) })
     },
     URL: { createObjectURL: () => 'blob:look', revokeObjectURL () {} },
@@ -55,7 +55,7 @@ test('look popup: a click on the picture opens one live stream and a 1 s invento
   assert.equal(el('lookOverlay').hidden, false)
   assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live?'])
   assert.equal(fetches.length, 1, 'only the inventory is fetched; the picture comes down the stream')
-  assert.match(fetches[0], /^\/api\/inventory\/Chani\?/)
+  assert.match(fetches[0], /^\/api\/screen\/Chani\?/)
   assert.equal(timers.length, 0, 'the next inventory ask waits for this one to arrive')
 
   streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', seen: ['cow 3m @px1,2'], blocked: '' }) })
