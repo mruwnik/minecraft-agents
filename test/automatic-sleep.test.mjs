@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { automaticBeds, bedChoice, nearHumanBase, carriedBedSpot, HUMAN_BASE_MARGIN } from '../src/lib/sleep.mjs'
+import { automaticBeds, bedChoice, nearHumanBase, carriedBedSpot, HUMAN_BASE_MARGIN, replaceMark } from '../src/lib/sleep.mjs'
 const bed={x:0,y:65,z:0},own={kind:'bed',by:'Observer',...bed}
 test('automatic sleep requires positive ownership, not an unowned nearby bed',()=>{
  assert.deepEqual(automaticBeds([bed],[],[],'Observer'),[])
@@ -63,4 +63,18 @@ const carriedBedSpotCases = [
 for (const [title, overrides, zones, places, residents, expected] of carriedBedSpotCases) {
   test(`carriedBedSpot: ${title}`, () =>
     assert.deepEqual(carriedBedSpot({ feet: FEET, cellAt: gridCellAt(overrides), zones, places, me: 'Observer', residents }), expected))
+}
+
+// ---------------------------------------------------------------- replaceMark
+const MARK = { name: 'Observer-bed', kind: 'bed', x: 1, y: 65, z: 1, by: 'Observer' }
+const OLD = { ...MARK, x: 9 }
+const HOME = { name: 'home', kind: 'base', x: 0, y: 65, z: 0, by: 'Observer' }
+const replaceMarkCases = [
+  ['adds the mark when there was none', [HOME], MARK, [HOME, MARK]],
+  ['replaces the mark of that name', [OLD, HOME], MARK, [HOME, MARK]],
+  ['null removes the mark', [HOME, MARK], null, [HOME]],
+  ['null with no such mark leaves the map alone', [HOME], null, [HOME]]
+]
+for (const [title, places, mark, expected] of replaceMarkCases) {
+  test(`replaceMark: ${title}`, () => assert.deepEqual(replaceMark(places, 'Observer-bed', mark), expected))
 }

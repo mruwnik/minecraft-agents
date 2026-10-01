@@ -90,6 +90,10 @@ export function carriedBedSpot ({ feet, cellAt, zones = [], places = [], me, res
   return chosen ? { ...chosen.foot, facing: chosen.facing } : null
 }
 
+// the reflex's bed mark goes back to what it was once the bed is picked up, so no mark points at an empty spot.
+// null: no mark of that name.
+export const replaceMark = (places, name, mark) => [...places.filter(p => p.name !== name), ...(mark ? [mark] : [])]
+
 // the bedtime reflex failed with this error: what to tell the driver (null: nothing, the driver's own order took over)
 export const bedtimeReport = error => /^cancelled: superseded/.test(error)
   ? null
