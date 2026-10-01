@@ -601,7 +601,7 @@ function connect () {
     }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
-  bot.on('wake', () => { emit('woke_up'); pickUpReflexBed() })
+  bot.on('wake', () => emit('woke_up'))
   bot.on('rain', () => emit('weather', { raining: bot.isRaining }))
 
   // what each slot held a moment ago: when the server says "your main hand item broke", the item is already gone
@@ -995,7 +995,7 @@ function pickUpReflexBed () {
   if (!reflexBed || reflexBed.count !== undefined) return
   const { x, y, z, item } = reflexBed
   reflexBed.count = inventoryCounts()[item] ?? 0
-  scheduler.wait(submitJob('dig', { x, y, z }, { x, y, z, automatic: true }).id, FOREVER_MS).then(settleReflexBed)
+  scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS).then(settleReflexBed)
 }
 function settleReflexBed () {
   const { x, y, z, item, prior, count } = reflexBed
@@ -1015,8 +1015,10 @@ setInterval(() => {
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
   const night = isNight(bot.time.timeOfDay)
   if (!night) holedUp = null
+  // mid-night wakes (a monster) must not trigger the pick-up: digging the bed then would undo the shelter
+  if (reflexBed && !night && !bot.isSleeping) pickUpReflexBed()
   const bedNear = automaticSleepBeds().length > 0
-  const bedCarried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
+  const bedCarried = night && !bedNear && !reflexBed && Boolean(carriedBed()) && Boolean(carriedBedPlace())
   const tired = bedtime({
     night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
@@ -2714,7 +2716,7 @@ export const long = {
     let placed = false
     for (;;) {
       const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
-      const item = error && a.automatic && !placed ? carriedBed() : null
+      const item = error && a.automatic && !placed && !reflexBed ? carriedBed() : null
       const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
       if (spot) {
         placed = true

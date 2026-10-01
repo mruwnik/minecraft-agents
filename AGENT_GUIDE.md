@@ -151,7 +151,7 @@ its spawn bed and a body is restarted most nights, so only the shared map surviv
 `bed_range=`), and the bedtime reflex calls it: an idle body with a `kind=bed` mark of its own within 200 blocks walks to it
 at nightfall by itself, rather than stand outside all night. With no bed of its own in reach but a bed in its pockets,
 it puts that bed down beside itself (never within 50 blocks of someone else's zone or base, nor with a monster within 8),
-marks it `<you>-bed`, sleeps in it and picks it up again on waking (`bed_placed`, `bed_picked_up`); a bed you placed
+marks it `<you>-bed`, sleeps in it and picks it up again in the morning (`bed_placed`, `bed_picked_up`); a bed you placed
 yourself is never picked up.
 
 A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which the composites then read. The legend is
