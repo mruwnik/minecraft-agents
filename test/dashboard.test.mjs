@@ -244,6 +244,9 @@ const routes = [
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],
   ['/api/look/../../etc/passwd', { kind: 'unknown' }],
+  ['/api/inventory/Chani', { kind: 'inventory', name: 'Chani' }],
+  ['/api/inventory/', { kind: 'unknown' }],
+  ['/api/inventory/../../etc/passwd', { kind: 'unknown' }],
   ['/nope', { kind: 'unknown' }]
 ]
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {

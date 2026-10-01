@@ -249,6 +249,16 @@ const serveLook = async (res, name, query) => {
   })
 }
 
+// one body's inventory: items carried, armour worn. `inventory` is a quick action too (src/bot.mjs): it reads the
+// bot's own inventory slots, so this never interrupts whatever the body is doing.
+const serveInventory = async (res, name) => {
+  const agent = agents.find(a => a.name === name)
+  if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
+  const r = await ask(agent.apiPort, 'inventory', {}, 5000)
+  if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
+  return sendJson(res, 200, r.answer)
+}
+
 // ?farm=<name> is inlined into the page itself (not left to the /api/state fetch below it) so the popup it opens
 // is there on the very first paint - the property a headless screenshot needs, and a plain page load never pays for.
 // </script and </head can't slip out of the inline script tag, since the page ships this straight into an attribute-free <script> body.
@@ -293,7 +303,8 @@ const handlers = {
   chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name> or /api/look/<Name>' })
+  inventory: (res, query, r) => serveInventory(res, r.name),
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name> or /api/inventory/<Name>' })
 }
 
 http.createServer(async (req, res) => {

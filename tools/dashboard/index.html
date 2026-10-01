@@ -66,6 +66,8 @@
   #lookCard { display: flex; flex-direction: column; gap: 8px; max-width: 96vw; max-height: 94vh; }
   #lookBig { max-width: 96vw; max-height: 84vh; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
   #lookBigMeta { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
+  #lookInventory { color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  #lookInventory:empty { display: none; }
   #lookmeta { color: var(--dim); margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
   #places { white-space: pre-wrap; }
   .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -168,6 +170,7 @@
       <button id="lookClose">close ×</button>
     </div>
     <img id="lookBig" alt="" hidden>
+    <div id="lookInventory"></div>
   </div>
 </div>
 <div id="planOverlay" hidden>
@@ -723,13 +726,30 @@ const loadLook = (img, meta) => {
 const fetchLook = () => loadLook(el('lookimg'), el('lookmeta'))
 el('relook').addEventListener('click', fetchLook)
 
-// the popup: the same picture big, kept fresh. The next look is asked for a second after the last one ARRIVED, not
-// a second after it was asked for, so a slow render never queues up behind itself; lookRun tells a loop that was
-// closed mid-render (and maybe reopened) from the one that should carry on
+// item x count, the one in hand marked (from the already-polled state, not a second trip for it), armour worn last
+const inventoryText = inv => {
+  const holding = snap.bodies.find(b => b.name === selected)?.state?.holding
+  const items = Object.entries(inv.items ?? {}).sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, count]) => (name === holding ? `> ${name} ×${count}` : `${name} ×${count}`))
+  const armor = Object.entries(inv.armor ?? {}).filter(([, name]) => name).map(([slot, name]) => `${slot}: ${name}`)
+  return [items.join('\n') || 'inventory empty', armor.length ? `wearing ${armor.join(', ')}` : ''].filter(Boolean).join('\n')
+}
+// the inventory beside the big picture, asked for the same body on the same cadence
+const loadInventory = () => {
+  if (!selected) return Promise.resolve()
+  const box = el('lookInventory')
+  const url = `/api/inventory/${encodeURIComponent(selected)}?t=${Date.now()}`
+  return fetch(url).then(res => (res.ok ? res.json() : null)).then(inv => { box.textContent = inv ? inventoryText(inv) : '' })
+    .catch(() => { box.textContent = '' })
+}
+
+// the popup: the same picture big, kept fresh, with the inventory beside it. The next look is asked for a second
+// after the last one ARRIVED, not a second after it was asked for, so a slow render never queues up behind itself;
+// lookRun tells a loop that was closed mid-render (and maybe reopened) from the one that should carry on
 const LOOK_LIVE_MS = 1000
 let lookTimer = null
 let lookRun = 0
-const liveLook = run => loadLook(el('lookBig'), el('lookBigMeta')).then(() => {
+const liveLook = run => Promise.all([loadLook(el('lookBig'), el('lookBigMeta')), loadInventory()]).then(() => {
   if (run === lookRun) lookTimer = setTimeout(() => liveLook(run), LOOK_LIVE_MS)
 })
 const openLook = () => {
