@@ -203,7 +203,7 @@
     </div>
     <img id="lookBig" alt="" hidden>
     <div id="lookHud"></div>
-    <div id="lookWindowMeta" class="dim"></div>
+    <div id="lookWindowMeta"></div>
     <div id="lookWindow" class="screen"></div>
     <div id="lookInventory" class="screen"></div>
   </div>
@@ -726,6 +726,11 @@ el('planClose').addEventListener('click', closePlan)
 
 const select = name => {
   selected = name
+  // the previous body's picture would otherwise sit under this one's name until the first new frame arrives
+  el('lookimg').src = ''
+  el('lookimg').hidden = true
+  el('lookBig').src = ''
+  el('lookBig').hidden = true
   el('lookname').textContent = name
   renderList()
   draw()
@@ -801,8 +806,9 @@ const hudHtml = s => [
   `<span>${s.armor > 0 ? hudRow('armor', s.armor) : ''}</span><span class="xp">${s.xp}</span><span>${s.oxygen < 20 ? hudRow('bubble', s.oxygen) : ''}</span>`,
   `<span>${hudRow('heart', s.hp)}</span><span></span><span>${hudRow('food', s.food)}</span>`
 ].join('')
-// error does not bubble, so it is caught on its way down
-el('lookInventory').addEventListener('error', e => {
+// error does not bubble, so it is caught on its way down - on #lookCard, which covers both the inventory grid
+// and a container's own grid
+el('lookCard').addEventListener('error', e => {
   const name = e.target.dataset?.item
   if (!name) return
   noIcon.add(name)

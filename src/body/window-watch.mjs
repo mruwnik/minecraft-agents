@@ -13,8 +13,8 @@ const stacks = (slots, size) => slots.slice(0, size).flatMap((item, slot) => ite
 
 // at: the block the opener (containerAt, craftBatch, the furnace actions) declared with `opening` just before it
 // opened the window - never a nearby-block guess, which once reported a barrel for a chest the body actually opened
-// when both stood within range. Consumed by the next windowOpen and cleared, so a window nobody declared for (the
-// enchanting table, a villager trade) always answers null rather than reusing a stale position.
+// when both stood within range. Consumed by the next windowOpen and cleared, so a window nobody declared for (a
+// villager trade) always answers null rather than reusing a stale position.
 export function watchWindows (bot, { now = Date.now } = {}) {
   let declared = null
   let current = null

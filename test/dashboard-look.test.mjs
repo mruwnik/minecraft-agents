@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 
 const html = fs.readFileSync(new URL('../tools/dashboard/index.html', import.meta.url), 'utf8')
-const start = html.indexOf('const showLook')
+const start = html.indexOf('const select = name =>')
 const end = html.indexOf('// ---------------------------------------------------------------- the chat log', start)
 const script = html.slice(start, end)
 
@@ -29,6 +29,9 @@ const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [
     EventSource,
     el,
     selected: 'Chani',
+    // select() also drives the body list and the map; both are outside this slice, so they are stubbed as no-ops
+    renderList: () => {},
+    draw: () => {},
     fetch: url => {
       fetches.push(url)
       if (url.startsWith('/api/screen/')) return Promise.resolve({ ok: true, json: async () => screen })
@@ -44,7 +47,8 @@ const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [
   }
   vm.createContext(context)
   vm.runInContext(script, context)
-  return { el, fetches, timers, streams }
+  const select = name => vm.runInContext(`select(${JSON.stringify(name)})`, context)
+  return { el, fetches, timers, streams, select }
 }
 
 test('look popup: a click on the picture opens one live stream and a 1 s inventory loop, shows each frame as it comes, and closing stops both', async () => {
@@ -77,6 +81,19 @@ test('look popup: a click on the picture opens one live stream and a 1 s invento
   await settle()
   assert.equal(timers.length, 1, 'no new inventory ask is armed after closing')
   assert.equal(fetches.length, 2)
+})
+
+test('look popup: selecting another body clears the last one\'s picture, so an error does not show it under the new name', async () => {
+  const { el, streams, select } = page()
+  el('lookimg').listeners.click()
+  streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', seen: [], blocked: '' }) })
+  assert.equal(el('lookBig').hidden, false)
+
+  select('Bob')
+  assert.deepEqual([el('lookimg').hidden, el('lookimg').src, el('lookBig').hidden, el('lookBig').src], [true, '', true, ''])
+
+  streams[0].onmessage({ data: JSON.stringify({ error: 'the body did not answer' }) })
+  assert.equal(el('lookBig').hidden, true)
 })
 
 test('look popup: a panorama streams as a panorama', () => {
@@ -132,13 +149,20 @@ test('inventory screen: an item with no picture shows its initials, then and on 
   el('lookimg').listeners.click()
   await settle()
   const img = { dataset: { item: 'iron_pickaxe' }, outerHTML: '' }
-  el('lookInventory').listeners.error({ target: img })
+  el('lookCard').listeners.error({ target: img })
   assert.equal(img.outerHTML, '<span class="abbr">IP</span>')
   screen.slots = [...carrying.slots, { slot: 11, name: 'dirt', count: 2 }]
   timers.at(-1).fn()
   await settle()
   assert.equal(fetches.length, 2)
   assert.equal(cells(el('lookInventory').innerHTML)[36].inside, '<span class="abbr">IP</span>')
+})
+
+test('container screen: an item with no picture shows its initials, same as the inventory grid', async () => {
+  const { el } = await shown({ ...carrying, window: chest })
+  const img = { dataset: { item: 'dirt' }, outerHTML: '' }
+  el('lookCard').listeners.error({ target: img })
+  assert.equal(img.outerHTML, '<span class="abbr">D</span>')
 })
 
 test('inventory screen: an unchanged answer leaves the screen alone, a changed one draws it again', async () => {
