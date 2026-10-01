@@ -768,7 +768,7 @@ const relAge = (now, iso) => {
 }
 let actionsEntries = []
 const renderActions = () => {
-  el('actions').hidden = !selected
+  el('actions').hidden = !selected || !watching
   el('actionsName').textContent = selected ?? ''
   if (!selected) return
   const log = el('actionsLog')
@@ -840,6 +840,7 @@ const setWatching = on => {
   el('relook').textContent = on ? 'pause' : 'watch'
   if (on) startWatch()
   else closeWatch()
+  renderActions()
 }
 el('relook').addEventListener('click', () => setWatching(!watching))
 
