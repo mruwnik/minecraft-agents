@@ -530,13 +530,18 @@ const mobFor = (e, eye) => {
     box: [Math.min(...corners.map(c => c[0])), e.y + hull[1], Math.min(...corners.map(c => c[1])), Math.max(...corners.map(c => c[0])), e.y + hull[4], Math.max(...corners.map(c => c[1]))],
     pixels: 0,
     sumX: 0,
-    sumY: 0
+    sumY: 0,
+    x1: Infinity,
+    y1: Infinity,
+    x2: -Infinity,
+    y2: -Infinity
   }
 }
 
 // Draw the world. `near` is the fraction of the picture closer than NEAR. `texture(blockName, face, props)` returns {width,height,rgba,tint?} or null; entities are
 // {name, kind?, x, y, z, width, height, yaw?}, drawn as their family's parts. Returns {width,height,rgba,seen} where `seen` lists the entities
-// that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on.
+// that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on and the box of pixels
+// they cover.
 export function render ({ grid, info, texture, eye, entities = [], timeOfDay, width, height, maxDist = 64, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
@@ -595,6 +600,10 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
         nearest.pixels++
         nearest.sumX += px
         nearest.sumY += py
+        if (px < nearest.x1) nearest.x1 = px
+        if (px > nearest.x2) nearest.x2 = px
+        if (py < nearest.y1) nearest.y1 = py
+        if (py > nearest.y2) nearest.y2 = py
         // 'south' is the mob's own front: the ray came in through its +z face
         const base = nearest.palette[nearestPaint === 1 && nearestFace === 'south' ? 3 : nearestPaint]
         r = base[0] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
@@ -623,11 +632,13 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
       rgba[at + 3] = 255
     }
   }
-  const seen = mobs.filter(m => m.pixels > 0).map(({ e, pixels, sumX, sumY }) => ({
+  const seen = mobs.filter(m => m.pixels > 0).map(({ e, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
     name: e.label ?? e.name,
+    kind: e.kind,
     px: Math.round(sumX / pixels),
     py: Math.round(sumY / pixels),
-    dist: Math.round(Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z))
+    dist: Math.round(Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z)),
+    box: [x1, y1, x2, y2]
   }))
   return { width, height, rgba, seen, near: nearPixels / (width * height) }
 }

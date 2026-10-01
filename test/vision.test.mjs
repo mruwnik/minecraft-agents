@@ -309,6 +309,15 @@ test('render: a zombie facing the eye shows its face, one facing away the back o
   assert.notDeepEqual(pixel(zombie(Math.PI), ...head), pixel(zombie(0), ...head))
 })
 
+test('render: seen gives each entity the box of pixels it covers, holding its centre, smaller for a chicken than a cow', () => {
+  const at = entity => render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, kind: 'passive', ...entity }] }).seen[0]
+  const cow = at({ name: 'cow', width: 0.9, height: 1.4 })
+  const chicken = at({ name: 'chicken', width: 0.4, height: 0.7 })
+  const area = ({ box: [x1, y1, x2, y2] }) => (x2 - x1 + 1) * (y2 - y1 + 1)
+  const holds = ({ px, py, box: [x1, y1, x2, y2] }) => x1 <= px && px <= x2 && y1 <= py && py <= y2
+  assert.deepEqual([cow.kind, holds(cow), holds(chicken), area(chicken) < area(cow) / 3], ['passive', true, true, true])
+})
+
 // ---------------------------------------------------------------- eyes
 const registry = prismarineRegistry('26.1')
 const STONE = registry.blocksByName.stone.defaultState
