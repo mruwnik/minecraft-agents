@@ -101,6 +101,15 @@ export const eatAllowed = ({ food, carried, anyway = false, floor = HUNGER_FLOOR
   return { desperate, allowed: desperate ? [...carried.edible, ...carried.banned] : [...carried.edible] }
 }
 
+// backlog: a body with no food at all re-said "nothing I carry is food" on every backoff tick for as long as its
+// pockets stayed empty, walling the events file the same way the old jam loop did (see errorRepeat). Fires on the
+// edge, like checkWatch: true only the tick empty pockets are first seen, so the reflex can say it once and then
+// leave the body alone until something edible or banned turns up to carry again.
+export const noFoodEdge = (carried, hadNone) => {
+  const hasNone = !carried.edible.length && !carried.banned.length
+  return { fire: hasNone && !hadNone, hasNone }
+}
+
 // ./mc eat: why I will not, said before the plugin is touched at all -- its own refusals name its internals. It names what
 // it passed over, so the answer says what to do next: cook the flesh away, go and find real food, or say anyway=true.
 const floorNote = floor => `, which I eat only at food ${floor} or less or with anyway=true`
