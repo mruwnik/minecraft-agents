@@ -42,13 +42,15 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     worker.postMessage({ id, scene })
   })
 
-  // copies the chunk data in a box round a cell, `across` blocks out each way and `up` blocks above and below
+  // Copies the chunk data in a box round a cell, `across` blocks out each way and `up` blocks above and below. The box
+  // stays centred past the world's floor and ceiling, as a ray starts from inside it; there it is air.
   function snapshotWorld (centre, across, up) {
     const minY = bot.game.minY ?? -64
     const maxY = minY + (bot.game.height ?? 384) - 1
-    const origin = { x: centre.x - across, y: Math.max(minY, centre.y - up), z: centre.z - across }
-    const size = { x: across * 2 + 1, y: Math.min(maxY, centre.y + up) - origin.y + 1, z: across * 2 + 1 }
+    const origin = { x: centre.x - across, y: centre.y - up, z: centre.z - across }
+    const size = { x: across * 2 + 1, y: up * 2 + 1, z: across * 2 + 1 }
     const grid = makeGrid(origin, size)
+    let top = -Infinity
     const local = { x: 0, y: 0, z: 0 }
     for (let cx = origin.x >> 4; cx <= (origin.x + size.x - 1) >> 4; cx++) {
       for (let cz = origin.z >> 4; cz <= (origin.z + size.z - 1) >> 4; cz++) {
@@ -56,15 +58,17 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
         if (!column) continue
         for (local.x = 0; local.x < 16; local.x++) {
           for (local.z = 0; local.z < 16; local.z++) {
-            for (local.y = origin.y; local.y < origin.y + size.y; local.y++) {
+            for (local.y = Math.max(minY, origin.y); local.y <= Math.min(maxY, origin.y + size.y - 1); local.y++) {
               const id = column.getBlockStateId(local)
-              if (id) grid.set(cx * 16 + local.x, local.y, cz * 16 + local.z, id)
+              if (!id) continue
+              grid.set(cx * 16 + local.x, local.y, cz * 16 + local.z, id)
+              if (local.y > top) top = local.y
             }
           }
         }
       }
     }
-    return grid
+    return Object.assign(grid, { top })
   }
 
   // Copying the world is the part of a look the body's own thread pays, so the copy is kept between looks and kept
@@ -73,7 +77,12 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
   const forget = () => { copy = null }
   bot.on('chunkColumnLoad', forget)
   bot.on('chunkColumnUnload', forget)
-  bot.on('blockUpdate', (old, now) => copy?.grid.set(now.position.x, now.position.y, now.position.z, now.stateId))
+  // the top only rises: a block taken from under it leaves rays walking a little further, never a wrong picture
+  bot.on('blockUpdate', (old, now) => {
+    if (!copy) return
+    copy.grid.set(now.position.x, now.position.y, now.position.z, now.stateId)
+    if (now.stateId && now.position.y > copy.grid.top) copy.grid.top = now.position.y
+  })
   const worldAround = (eye, radius) => {
     const at = { x: Math.floor(eye.x), y: Math.floor(eye.y), z: Math.floor(eye.z) }
     const fits = copy && copy.world === bot.world && copy.radius === radius && ['x', 'y', 'z'].every(a => Math.abs(at[a] - copy.centre[a]) <= MARGIN)
@@ -106,9 +115,9 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const width = a.width ?? (panorama ? 864 : 480)
     const height = a.height ?? (panorama ? 216 : 270)
     const maxDist = Math.min(a.dist ?? 64, 96)
-    const { origin, size, data } = worldAround(eye, maxDist)
+    const { origin, size, data, top } = worldAround(eye, maxDist)
     const out = await draw({
-      grid: { origin, size, data }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
+      grid: { origin, size, data, top }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
       width, height, maxDist, panorama, yaw, pitch, fov: a.fov ?? 100
     })
     fs.mkdirSync(snapshotDir, { recursive: true })

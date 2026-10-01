@@ -155,6 +155,14 @@ test('castRay hits a half-height block when aimed low enough', () => {
   assert.deepEqual([hit.x, hit.face, hit.t], [2, 'west', 1.5])
 })
 
+// `top` promises nothing stands higher; the blocks above it stand in for the cells a ray would walk through regardless
+test('castRay: above the grid\'s top, a ray going up or level ends without walking on', () => {
+  const grid = { ...world([[0, -2, 0, 1], [0, 4, 0, 1], [4, 0, 0, 1]]), top: -2 }
+  const from = { x: 0.5, y: 0.5, z: 0.5 }
+  const ray = d => castRay(grid, info, from, d, 12)
+  assert.deepEqual([ray({ x: 0, y: 1, z: 0 }), ray({ x: 1, y: 0, z: 0 }), ray({ x: 0, y: -1, z: 0 }).y], [null, null, -2])
+})
+
 // ---------------------------------------------------------------- camera
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`)
 const directionCases = [

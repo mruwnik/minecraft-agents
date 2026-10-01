@@ -31,7 +31,8 @@ export function encodePng (width, height, rgba) {
   const stride = width * 4
   const raw = Buffer.alloc((stride + 1) * height)
   for (let y = 0; y < height; y++) raw.set(rgba.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1)
-  return Buffer.concat([PNG_MAGIC, pngChunk('IHDR', header), pngChunk('IDAT', zlib.deflateSync(raw)), pngChunk('IEND', Buffer.alloc(0))])
+  // the fastest level: a frame is 9 KB bigger and 2.5 ms sooner, and the stream sends ten a second
+  return Buffer.concat([PNG_MAGIC, pngChunk('IHDR', header), pngChunk('IDAT', zlib.deflateSync(raw, { level: 1 })), pngChunk('IEND', Buffer.alloc(0))])
 }
 
 const CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
@@ -282,9 +283,15 @@ const nearestCrossHit = (block, x, y, z, id, o, d, maxDist, accept) => {
 // Every pixel walks a hundred-odd cells, so the walk keeps to scalars: an array or two per step was most of a frame.
 export function castRay (grid, info, o, d, maxDist, accept = () => true) {
   const { data, origin, size } = grid
+  // nothing stands above the grid's top, so a ray past it and not going down has nothing left to hit
+  const top = grid.top ?? Infinity
   let x = Math.floor(o.x)
   let y = Math.floor(o.y)
   let z = Math.floor(o.z)
+  const lx = x - origin.x
+  const ly = y - origin.y
+  const lz = z - origin.z
+  if (lx < 0 || ly < 0 || lz < 0 || lx >= size.x || ly >= size.y || lz >= size.z) throw new Error('the eye is outside the grid')
   const sx = Math.sign(d.x)
   const sy = Math.sign(d.y)
   const sz = Math.sign(d.z)
@@ -294,16 +301,19 @@ export function castRay (grid, info, o, d, maxDist, accept = () => true) {
   let nx = d.x === 0 ? Infinity : ((d.x > 0 ? x + 1 : x) - o.x) / d.x
   let ny = d.y === 0 ? Infinity : ((d.y > 0 ? y + 1 : y) - o.y) / d.y
   let nz = d.z === 0 ? Infinity : ((d.z > 0 ? z + 1 : z) - o.z) / d.z
+  // the steps left on each axis before the grid's far side, counted rather than timed: a time to the edge rounds
+  // differently from the summed steps, and one cell too many reads the next row
+  let leftX = sx > 0 ? size.x - 1 - lx : lx
+  let leftY = sy > 0 ? size.y - 1 - ly : ly
+  let leftZ = sz > 0 ? size.z - 1 - lz : lz
+  const stepY = sy * size.x * size.z
+  const stepZ = sz * size.x
+  let i = (ly * size.z + lz) * size.x + lx
   let t = 0
   let entered = null
   while (t <= maxDist) {
-    const lx = x - origin.x
-    const ly = y - origin.y
-    const lz = z - origin.z
-    const inside = lx >= 0 && ly >= 0 && lz >= 0 && lx < size.x && ly < size.y && lz < size.z
-    // past the grid's far side there is nothing left to hit
-    if (!inside && ((lx < 0 && sx <= 0) || (lx >= size.x && sx >= 0) || (ly < 0 && sy <= 0) || (ly >= size.y && sy >= 0) || (lz < 0 && sz <= 0) || (lz >= size.z && sz >= 0))) return null
-    const id = inside ? data[(ly * size.z + lz) * size.x + lx] : 0
+    if (y > top && sy >= 0) return null
+    const id = data[i]
     const block = id ? info(id) : null
     if (block) {
       const hit = block.kind === 'cube'
@@ -314,19 +324,25 @@ export function castRay (grid, info, o, d, maxDist, accept = () => true) {
       if (hit && (block.kind !== 'cube' || accept(hit))) return hit
     }
     if (nx <= ny && nx <= nz) {
+      if (leftX-- === 0) return null
       t = nx
       nx += dx
       x += sx
+      i += sx
       entered = sx > 0 ? 'west' : 'east'
     } else if (ny <= nz) {
+      if (leftY-- === 0) return null
       t = ny
       ny += dy
       y += sy
+      i += stepY
       entered = sy > 0 ? 'bottom' : 'top'
     } else {
+      if (leftZ-- === 0) return null
       t = nz
       nz += dz
       z += sz
+      i += stepZ
       entered = sz > 0 ? 'north' : 'south'
     }
   }
@@ -446,12 +462,11 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
     .map(b => ({ ...b, rect: screenRect(cam.project, eye, b.box, width, height) }))
     .filter(b => b.rect)
   let nearPixels = 0
-  // one block description serves every cell of that state, so its pictures are looked up once a frame, not once a hit
-  const pictures = new Map()
+  // one block description serves every cell of that state for as long as `info` keeps it, so its pictures are looked
+  // up once, not once a hit
   const picture = (block, face) => {
     const key = face === 'top' || face === 'bottom' || face === 'cross' ? face : 'side'
-    if (!pictures.has(block)) pictures.set(block, {})
-    const faces = pictures.get(block)
+    const faces = block.pictures ??= {}
     if (!(key in faces)) faces[key] = texture(block.name, key, block.props)
     return faces[key]
   }
