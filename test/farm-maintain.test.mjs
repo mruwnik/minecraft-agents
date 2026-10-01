@@ -19,7 +19,7 @@ const fakePlace = (plan, x = 0, y = 63, z = 0) => {
 }
 
 test('a till that leaves dirt unchanged reports the bed and continues independent sowing', async () => {
-  const world = { '0,63,0': 'dirt', '1,63,0': 'farmland' }
+  const world = { '0,63,0': 'dirt', '1,63,0': 'farmland', '4,63,0': 'water' }
   const items = { stone_hoe: 1, wheat_seeds: 2 }
   const { api, calls, events } = fakeApi({ place: fakePlace('ww'), world, items, answers: {
     'farm.harvest': {},
@@ -36,7 +36,7 @@ test('a till that leaves dirt unchanged reports the bed and continues independen
 })
 
 test('maintenance tills only beds it can seed, then reports the remaining shortage', async () => {
-  const world = Object.fromEntries([0, 1, 2, 3].map(x => [`${x},63,0`, 'dirt']))
+  const world = { ...Object.fromEntries([0, 1, 2, 3].map(x => [`${x},63,0`, 'dirt'])), '-2,63,0': 'water' }
   const items = { stone_hoe: 1, wheat_seeds: 1, carrot: 1 }
   const { api, calls, events } = fakeApi({ place: fakePlace('wwcc'), world, items, answers: {
     'farm.harvest': {},
@@ -128,7 +128,7 @@ test('farm.maintain harvests, clears a melon from a wheat bed, then tills and so
     world[`${x},64,${z}`] = 'air'
     world[`${x},65,${z}`] = 'air'
   }
-  Object.assign(world, { '0,63,0': 'farmland', '0,64,0': 'wheat#7', '1,64,0': 'melon', '4,64,0': 'wheat#7' })
+  Object.assign(world, { '0,63,0': 'farmland', '0,64,0': 'wheat#7', '1,64,0': 'melon', '4,64,0': 'wheat#7', '5,63,0': 'water' })
   const items = {}
   const key = a => `${a.x},${a.y},${a.z}`
   const { api, calls } = fakeApi({ place, places: [place], world, items, answers: {
@@ -157,7 +157,7 @@ test('farm.maintain harvests, clears a melon from a wheat bed, then tills and so
 for (const replace of [true, false]) {
   test(`farm.maintain provisions its own hoe and ${replace ? 'replaces it once' : 'reports a missing replacement'} when it breaks`, async () => {
     const place = fakePlace('wwww')
-    const world = { '0,63,0': 'dirt', '1,63,0': 'dirt', '2,63,0': 'dirt', '3,63,0': 'farmland' }
+    const world = { '0,63,0': 'dirt', '1,63,0': 'dirt', '2,63,0': 'dirt', '3,63,0': 'farmland', '4,63,0': 'water' }
     const items = { wheat_seeds: 10 }
     let kits = 0
     const { api, calls } = fakeApi({ place, world, items, answers: {
@@ -188,7 +188,7 @@ for (const [name, given, expected] of [
     { plan: 'www', world: { '0,63,0': 'dirt', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '2,63,0': 'farmland' }, items: { wheat_seeds: 5 } },
     { work: ['place item=wheat_seeds x=2 y=64 z=0'], tilled: 0, replanted: 1, bare: `1 (untilled:1 ${NO_HOE})` }],
   ['a hoe and seed: the dirt bed is tilled and sown at once, then the empty farmland',
-    { plan: 'www', world: { '0,63,0': 'dirt', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '2,63,0': 'farmland' }, items: { wheat_seeds: 5, stone_hoe: 1 } },
+    { plan: 'www', world: { '0,63,0': 'dirt', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '2,63,0': 'farmland', '4,63,0': 'water' }, items: { wheat_seeds: 5, stone_hoe: 1 } },
     { work: ['till 0,63,0', 'place item=wheat_seeds x=0 y=64 z=0', 'place item=wheat_seeds x=2 y=64 z=0'], tilled: 1, replanted: 2, bare: undefined }],
   ['the seed runs out halfway: the second bed is counted, not tried',
     { plan: 'ww', world: { '0,63,0': 'farmland', '1,63,0': 'farmland' }, items: lastSeed, answers: sowing },
@@ -197,7 +197,7 @@ for (const [name, given, expected] of [
     { plan: 'cw', world: { '0,63,0': 'farmland', '1,63,0': 'farmland' }, items: {} },
     { work: [], tilled: 0, replanted: 0, bare: '2 (no seed:2 carrot, wheat_seeds)' }],
   ['a till that fails leaves its own bed bare, with the reason, and its seed is not thrown on the dirt',
-    { plan: 'ww', world: { '0,63,0': 'dirt', '1,63,0': 'farmland' }, items: { wheat_seeds: 5, stone_hoe: 1 }, answers: { till: new Error('till: stone where farmland should be') } },
+    { plan: 'ww', world: { '0,63,0': 'dirt', '1,63,0': 'farmland', '4,63,0': 'water' }, items: { wheat_seeds: 5, stone_hoe: 1 }, answers: { till: new Error('till: stone where farmland should be') } },
     { work: ['till 0,63,0', 'place item=wheat_seeds x=1 y=64 z=0'], tilled: 0, replanted: 1, bare: '1 (untilled:1 till: stone where farmland should be)' }],
   ['a bed nothing can be stood beside is unreachable',
     { plan: 'w', world: { '0,63,0': 'farmland' }, items: { wheat_seeds: 5 }, answers: { place: new Error('place: nowhere to stand within 4 of 0,64,0') } },

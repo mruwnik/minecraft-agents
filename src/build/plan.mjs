@@ -1,7 +1,7 @@
 import { hasPlan, jobGroundKey } from '../lib/plan.mjs'
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, hasWaterSource, jobsBill, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
+import { billShortfall, farmJobs, groundJobs, hasWaterSource, hydrated, jobsBill, needsWaterLine, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { standingSpots, workFrom } from '../navigation/stand.mjs'
 import { digGuard, fieldLeg, footprintOf } from '../farm/leg.mjs'
@@ -103,11 +103,15 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   const notKept = job => !keptColumns.has(jobGroundKey(job))
   // a job with no dry cell in reach to work from is left for the driver, named with the water in the way
   const blocked = []
+  // tills held for want of water (card 72e49b3d): farm_needs_water= names why and where, and the held cells are
+  // never read back as unfinished
+  const dryBeds = []
+  const dryKeys = new Set()
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
   // a cell the plan's own water stands over is never dug (dig refuses it, rightly): it is reported as skipped= instead
   const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip').filter(notKept)
   const drowned = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do === 'skip')
-  const left = () => [...ground(), ...field()].filter(j => !j.item || (api.inv()[j.item] ?? 0) > 0)
+  const left = () => [...ground(), ...field()].filter(j => !j.item || (api.inv()[j.item] ?? 0) > 0).filter(j => !dryKeys.has(jobGroundKey(j)))
   const skipLine = () => drowned().map(j => `${j.x},${j.y},${j.z} (${j.why})`).join('; ')
   // a cell that was SKIPPED for want of what it needs is still something the field is short of: a dry channel the body
   // carries no water for never becomes a job, so nothing would otherwise say why the plan is not finished
@@ -116,6 +120,9 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // field. But they walk worse than a top slab would, so they are named, once per report, with how to raise them -
   // farm.build ran this same job list all along but never said so, unlike farm.maintain (jizo-melon-patch, 09-26)
   const low = () => lowSlabs(plan.cells, api.block)
+  // waterShortfall's own reason, read by both tryJob (a pour run dry) and summary (a till held dry): declared above
+  // both so neither closes over a binding that is still a `let` with nothing in it yet
+  let water = null
   const summary = () => {
     const short = shortOfSkipped()
     const slabs = low()
@@ -126,7 +133,8 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
       ...(slabs.length ? { lowSlabs: lowSlabLine(slabs.length) } : {}),
       ...(kept.length ? { kept: kept.join('; ') } : {}),
       ...(blocked.length ? { blocked: blocked.join('; ') } : {}),
-      ...(dug.length ? { dug: dug.join('; ') } : {})
+      ...(dug.length ? { dug: dug.join('; ') } : {}),
+      ...(dryBeds.length ? { farm_needs_water: needsWaterLine(water, dryBeds) } : {})
     }
   }
 
@@ -145,6 +153,10 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
         if (!blocked.includes(reason)) blocked.push(reason)
         return false
       }
+      // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
+      // back instead, and the plant on the same ground held with it
+      if (job.do === 'till' && !hydrated(api.block, job)) { dryBeds.push(job); dryKeys.add(jobGroundKey(job)); return false }
+      if (job.do === 'plant' && dryKeys.has(jobGroundKey(job))) return false
     }
     // a missing water_bucket is fetched, not just reported: see fetchWaterBucket above
     if (job.item === 'water_bucket' && (api.inv().water_bucket ?? 0) < 1) {
@@ -210,7 +222,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // cell with none becomes a 'skip' job, not a 'pour' one, and no amount of fetching water inside tryJob later
   // reaches a job list that never named the cell. So this is tried once up front, before that list is built, not
   // down in tryJob - the one there is only a fallback for a bucket a pour used up earlier in the same run
-  let water = await waterShortfall(api, undefined, plan.cells)
+  water = await waterShortfall(api, undefined, plan.cells)
   if (water && drowned().some(j => j.item === 'water_bucket')) counts.stuck = counts.stuck ?? water
   const todo = [...ground(), ...drainJobs(plan.cells, api.block), ...field()]
   // a build that digs or fills inside a pen holding animals empties it long before the fences go back up: refuse while
