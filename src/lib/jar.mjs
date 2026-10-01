@@ -18,7 +18,8 @@ const versionOrder = (a, b) => {
 }
 export const clientVersions = dirs => dirs.filter(d => RELEASE.test(d)).sort(versionOrder)
 
-// The block textures inside a client jar, in the order the jar lists them. Everything else in there is somebody
-// else's business: items, entities, the gui, the animation metadata beside a png, and other namespaces.
-export const BLOCK_TEXTURES = 'assets/minecraft/textures/block/'
-export const blockTextures = names => names.filter(n => n.startsWith(BLOCK_TEXTURES) && n.endsWith('.png'))
+// The block (or item) textures inside a client jar, in the order the jar lists them. Everything else in there is
+// somebody else's business: entities, the gui, the animation metadata beside a png, and other namespaces. Only the
+// folder's own files: tools/textures.mjs writes each under its bare name, so a subfolder's would overwrite a sibling.
+const TEXTURE_FILE = kind => new RegExp(`^assets/minecraft/textures/${kind}/[^/]+\\.png$`)
+export const jarTextures = (names, kind) => names.filter(n => TEXTURE_FILE(kind).test(n))

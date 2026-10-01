@@ -1,4 +1,4 @@
-// textures/ is Mojang's art, so it is not checked in: this fills it from a client jar the first time a body starts
+// textures/ is Mojang's art, so it is not checked in: this fills it (blocks, and items under item/) from a client jar the first time a body starts
 // without it. tools/start-body runs it beside patch-deps.mjs. It never stops a body from starting: with no textures
 // `./mc look` still draws, colouring every block by a hash of its name instead of its picture.
 //   node tools/textures.mjs
@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { clientVersions, versionsDirs, blockTextures } from '../src/lib.mjs'
+import { clientVersions, versionsDirs, jarTextures } from '../src/lib.mjs'
 
 const ROOT = path.join(import.meta.dirname, '..')
 const TEXTURES = path.join(ROOT, 'textures')
@@ -51,11 +51,15 @@ const installedJar = () => VERSIONS.filter(fs.existsSync)
   .flatMap(dir => clientVersions(fs.readdirSync(dir)).map(v => jarOf(dir, v)))
   .find(fs.existsSync)
 
-const already = pngsIn(TEXTURES)
-if (already.length) {
-  console.log(`[textures] already ${already.length}`)
-  process.exit(0)
-}
+// blocks lie flat in textures/, where src/vision/eyes.mjs reads them; items go under item/ for the dashboard's inventory
+// screen. Each kind is filled on its own, so a textures/ from before items were extracted still gets them
+const KINDS = [['block', TEXTURES], ['item', path.join(TEXTURES, 'item')]]
+const missing = KINDS.filter(([kind, dir]) => {
+  const already = pngsIn(dir).length
+  if (already) console.log(`[textures] ${kind}: already ${already}`)
+  return !already
+})
+if (!missing.length) process.exit(0)
 
 const jar = process.env.MC_CLIENT_JAR ?? installedJar()
 if (!jar || !fs.existsSync(jar)) {
@@ -69,11 +73,13 @@ if (!jar || !fs.existsSync(jar)) {
 try {
   const buf = fs.readFileSync(jar)
   const entries = zipEntries(buf)
-  const wanted = new Set(blockTextures(entries.map(e => e.name)))
-  const files = entries.filter(e => wanted.has(e.name))
-  fs.mkdirSync(TEXTURES, { recursive: true })
-  for (const entry of files) fs.writeFileSync(path.join(TEXTURES, path.basename(entry.name)), contentOf(buf, entry))
-  console.log(`[textures] extracted ${files.length} from ${jar}`)
+  for (const [kind, dir] of missing) {
+    const wanted = new Set(jarTextures(entries.map(e => e.name), kind))
+    const files = entries.filter(e => wanted.has(e.name))
+    fs.mkdirSync(dir, { recursive: true })
+    for (const entry of files) fs.writeFileSync(path.join(dir, path.basename(entry.name)), contentOf(buf, entry))
+    console.log(`[textures] ${kind}: extracted ${files.length} from ${jar}`)
+  }
 } catch (e) {
   console.log(`[textures] WARNING: ${jar} could not be read (${e.message}); pictures will show every block as a colour hashed from its name`)
 }
