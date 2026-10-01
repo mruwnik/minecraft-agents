@@ -142,8 +142,9 @@ z south): a dot per body with its name, health, food and current task, each huma
 protected zones as boxes and marked places as crosses. Click a body and its name appears beside the map; "watch"
 streams its view there live, the button becoming "pause" until clicked again, and the picture doubles as a button
 into a bigger, independent live popup. Drag to pan, wheel to zoom; the map fits itself around the bodies, and
-"fit everything" widens it to the whole map. A translucent panel over the left of the map shows that body's recent
-actions - job starts/completions/failures, death, respawn, holing up, chat - newest at the bottom, aging in place.
+"fit everything" widens it to the whole map. Selecting a body starts watching it (pause stops the small picture).
+The popup shows that body's recent actions beside the picture - job starts/completions/failures, death, respawn,
+holing up, chat - newest at the bottom, aging in place.
 
 It only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs

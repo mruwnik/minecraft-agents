@@ -24,10 +24,6 @@
   #mapview { flex: 1; position: relative; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
-  #actions { position: absolute; left: 10px; top: 10px; width: 320px; max-height: calc(100% - 40px); background: rgba(28,32,39,0.9); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
-  #actions[hidden] { display: none; }
-  #actions h2 { margin: 0 0 6px; }
-  #actionsLog { overflow-y: auto; }
   #actionsLog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* the chat drawer sits under the map, never beside it: closed it is one 30px bar, open it takes at most 30% of
      the height, so the map keeps the room it has and the side panel is untouched either way */
@@ -56,7 +52,7 @@
   #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
-  #actions h2, #chatbar h2, section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+  #chatbar h2, section h2, #lookSide h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
   section h2 { margin: 0 0 8px; }
   .body { padding: 5px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
   .body:hover { background: #232932; }
@@ -71,7 +67,11 @@
   #lookOverlay[hidden] { display: none; }
   /* a fixed width keeps the card from jumping with every frame: the caption's length,
      the HUD/container/inventory blocks all redraw inside this box instead of resizing it */
-  #lookCard { display: flex; flex-direction: column; gap: 8px; width: min(96vw, 640px); max-height: 94vh; }
+  #lookCard { display: flex; gap: 12px; width: min(96vw, 980px); max-height: 94vh; }
+  #lookMain { flex: 1 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  #lookSide { flex: 0 0 320px; min-height: 0; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  #lookSide h2 { margin: 0; }
+  #actionsLog { flex: 1; min-height: 0; overflow-y: auto; }
   #lookBig { width: 100%; height: auto; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
   /* three lines reserved so a one-line or three-line caption never changes the card's height */
   #lookBigMeta { color: var(--dim); white-space: pre-wrap; word-break: break-word; min-height: 3lh; }
@@ -169,10 +169,6 @@
     <div id="mapview">
       <canvas id="map"></canvas>
       <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
-      <div id="actions" hidden>
-        <h2>actions · <span id="actionsName"></span></h2>
-        <div id="actionsLog"></div>
-      </div>
     </div>
     <div id="chat">
       <div id="chatbar">
@@ -210,16 +206,22 @@
 </main>
 <div id="lookOverlay" hidden>
   <div id="lookCard">
-    <div class="planHead">
-      <span id="lookBigMeta"></span>
-      <span class="spacer"></span>
-      <button id="lookClose">close ×</button>
+    <div id="lookMain">
+      <div class="planHead">
+        <span id="lookBigMeta"></span>
+        <span class="spacer"></span>
+        <button id="lookClose">close ×</button>
+      </div>
+      <div class="lookFrame"><img id="lookBig" alt="" hidden><div id="lookBigMarks" class="marks"></div></div>
+      <div id="lookHud"></div>
+      <div id="lookWindowMeta"></div>
+      <div id="lookWindow" class="screen"></div>
+      <div id="lookInventory" class="screen"></div>
     </div>
-    <div class="lookFrame"><img id="lookBig" alt="" hidden><div id="lookBigMarks" class="marks"></div></div>
-    <div id="lookHud"></div>
-    <div id="lookWindowMeta"></div>
-    <div id="lookWindow" class="screen"></div>
-    <div id="lookInventory" class="screen"></div>
+    <div id="lookSide">
+      <h2>actions</h2>
+      <div id="actionsLog"></div>
+    </div>
   </div>
 </div>
 <div id="planOverlay" hidden>
@@ -754,7 +756,7 @@ const select = name => {
   renderActions()
   renderList()
   draw()
-  if (watching) startWatch()
+  setWatching(Boolean(name))
   refreshActions()
 }
 
@@ -766,8 +768,6 @@ const relAge = (now, iso) => {
 }
 let actionsEntries = []
 const renderActions = () => {
-  el('actions').hidden = !selected || !watching
-  el('actionsName').textContent = selected ?? ''
   if (!selected) return
   const log = el('actionsLog')
   const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12
@@ -815,9 +815,10 @@ const showLook = (img, meta, look) => {
   meta.textContent = [[`${selected} · ${look.view}`, at].filter(Boolean).join(' · '), look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
 }
 
-// the inline card's own live stream, the same mechanism as the popup's (below): started by "watch", stopped by
-// "pause". Independent of the popup - both read the look cache in src/vision/eyes.mjs, so an identical unchanged
-// scene is served from the last-frame cache and costs one render, not two, however many streams are open on a body.
+// the inline card's own live stream, the same mechanism as the popup's (below): started by selecting a body,
+// stopped by "pause" (or deselecting). Independent of the popup - both read the look cache in src/vision/eyes.mjs,
+// so an identical unchanged scene is served from the last-frame cache and costs one render, not two, however many
+// streams are open on a body.
 let watching = false
 let watchStream = null
 const closeWatch = () => { watchStream?.close(); watchStream = null }
@@ -838,7 +839,6 @@ const setWatching = on => {
   el('relook').textContent = on ? 'pause' : 'watch'
   if (on) startWatch()
   else closeWatch()
-  renderActions()
 }
 el('relook').addEventListener('click', () => setWatching(!watching))
 

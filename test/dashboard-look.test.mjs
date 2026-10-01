@@ -195,11 +195,21 @@ test('inline card: switching the selected body while watching keeps watching, on
   assert.equal(el('relook').textContent, 'pause')
 })
 
-test('inline card: switching the selected body while paused does not start a stream', () => {
+test('inline card: selecting a body starts watching it, even after a pause', () => {
   const { el, streams, select } = page()
   select('Bob')
-  assert.equal(streams.length, 0)
-  assert.equal(el('relook').textContent, 'watch')
+  assert.deepEqual([streams.length, streams[0].url, el('relook').textContent], [1, '/api/look/Bob/live', 'pause'])
+  el('relook').listeners.click()
+  assert.deepEqual([streams[0].closed, el('relook').textContent], [true, 'watch'])
+  select('Bob')
+  assert.deepEqual([streams.length, streams[1].url, streams[1].closed, el('relook').textContent], [2, '/api/look/Bob/live', false, 'pause'])
+})
+
+test('inline card: deselecting stops watching', () => {
+  const { el, streams, select } = page()
+  select('Bob')
+  select(null)
+  assert.deepEqual([streams[0].closed, el('relook').textContent], [true, 'watch'])
 })
 
 test('inline card: no fetch is made for the inline picture - it only ever comes down the stream', () => {
@@ -322,7 +332,7 @@ for (const [type, size, slot, place] of [
   assert.match(el('lookWindow').innerHTML, new RegExp(`data-slot="${slot}" style="grid-area:${place}"`))
 })
 
-// ---------------------------------------------------------------- the action log panel
+// ---------------------------------------------------------------- the action log (now inside the popup)
 const entry = (overrides = {}) => ({ t: '2026-10-01T15:21:00.000Z', type: 'job_started', gist: 'goto x=1', bad: false, ...overrides })
 
 const relAgeCases = [
@@ -334,47 +344,19 @@ relAgeCases.forEach(([seconds, expected]) => test(`relAge: ${seconds} s reads ${
   assert.equal(relAge(new Date(FIXED_NOW - seconds * 1000).toISOString()), expected)
 }))
 
-test('actions panel: hidden while nothing is selected, even if a poll fires', () => {
-  const { el, poll } = page()
-  assert.equal(el('actions').hidden, true)
-  poll()
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: selecting a body alone does not show it - only watching its view does', async () => {
-  const { el, select, run } = page()
-  select('Chani')
-  run('Chani', { entries: [entry()] })
-  await settle()
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: watching shows it and renders the body\'s log; pausing hides it again', async () => {
+test('actions log: renders the selected body\'s log, whether or not the small picture is paused', async () => {
   const FIXED_NOW = Date.parse('2026-10-01T15:21:24.000Z')
   const { el, select, run } = page(undefined, { clock: FIXED_NOW })
   select('Chani')
   el('relook').listeners.click()
   run('Chani', { entries: [entry({ t: '2026-10-01T15:21:12.000Z' })] })
   await settle()
-  assert.equal(el('actions').hidden, false)
   assert.deepEqual(el('actionsLog').children.map(c => ({ cls: c.className, text: c.textContent, title: c.title })), [
     { cls: '', text: '-12s job_started goto x=1', title: 'goto x=1' }
   ])
-  assert.equal(el('actionsName').textContent, 'Chani')
-  el('relook').listeners.click()
-  assert.equal(el('actions').hidden, true)
 })
 
-test('actions panel: deselecting hides it even while watching', async () => {
-  const { el, select } = page()
-  select('Chani')
-  el('relook').listeners.click()
-  assert.equal(el('actions').hidden, false)
-  select(null)
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: switching bodies clears the previous log immediately, before the new one answers', async () => {
+test('actions log: switching bodies clears the previous log immediately, before the new one answers', async () => {
   const { el, select, run } = page()
   select('A')
   run('A', { entries: [entry({ gist: 'A thing' })] })
@@ -382,10 +364,9 @@ test('actions panel: switching bodies clears the previous log immediately, befor
   assert.equal(el('actionsLog').children.length, 1)
   select('B')
   assert.equal(el('actionsLog').children.length, 0)
-  assert.equal(el('actionsName').textContent, 'B')
 })
 
-test('actions panel: a late answer for a body switched away from is dropped', async () => {
+test('actions log: a late answer for a body switched away from is dropped', async () => {
   const { el, select, run, pending } = page()
   select('A')
   select('B')
@@ -397,7 +378,7 @@ test('actions panel: a late answer for a body switched away from is dropped', as
   assert.deepEqual(el('actionsLog').children.map(c => c.title), ['B is current'])
 })
 
-test('actions panel: of two overlapping polls for the same body, only the later answer lands', async () => {
+test('actions log: of two overlapping polls for the same body, only the later answer lands', async () => {
   const { el, select, run, poll } = page()
   select('Chani')
   poll()
@@ -408,7 +389,7 @@ test('actions panel: of two overlapping polls for the same body, only the later 
   assert.deepEqual(el('actionsLog').children.map(c => c.title), ['second poll'])
 })
 
-test('actions panel: a bad entry carries the err class and its gist as the title', async () => {
+test('actions log: a bad entry carries the err class and its gist as the title', async () => {
   const { el, select, run } = page()
   select('Chani')
   run('Chani', { entries: [entry({ type: 'died', gist: 'fell into lava', bad: true })] })
@@ -423,10 +404,15 @@ const badAnswers = [
   ['a non-ok answer', { ok: false, json: { error: 'no agent folder called Chani' } }],
   ['an ok answer with no entries field', { ok: true, json: {} }]
 ]
-badAnswers.forEach(([what, { ok, json }]) => test(`actions panel: ${what} is treated as no entries, not a crash or stale lines`, async () => {
+badAnswers.forEach(([what, { ok, json }]) => test(`actions log: ${what} is treated as no entries, not a crash or stale lines`, async () => {
   const { el, select, run } = page()
   select('Chani')
   run('Chani', json, { ok })
   await settle()
   assert.deepEqual(el('actionsLog').children, [])
 }))
+
+test('actions log: lives inside the popup and nowhere else', () => {
+  const popup = html.slice(html.indexOf('<div id="lookOverlay"'), html.indexOf('<div id="planOverlay"'))
+  assert.deepEqual([popup.includes('id="actionsLog"'), html.split('id="actionsLog"').length - 1, html.includes('id="actions"')], [true, 1, false])
+})
