@@ -3,7 +3,7 @@ import { jobGroundKey } from '../../src/lib/plan.mjs'
 // The plan is the truth of what should be there; the world is the truth of what is (see `./mc plan`).
 import { fertilizePlanned } from '../../src/farm/fertilize.mjs'
 import { waterShortfall } from '../../src/build/plan.mjs'
-import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, NO_HOE, PLAN_LEGEND, planSpec, planAnchor, planStructure, sameFamily, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
+import { bareLine, bareWhy, farmJobs, farmSurplus, farmWaste, hasHoe, hasWaterSource, hydrated, needsWaterLine, NO_HOE, PLAN_LEGEND, planSpec, planAnchor, planStructure, sameFamily, seedDrop, seedReserve, seedTarget, shortLine } from '../../src/lib.mjs'
 import { lowSlabs, lowSlabLine } from '../../src/build/cover.mjs'
 import { cellOf, fieldEdge, parkSpot } from '../../src/farm/field.mjs'
 import { digGuard, fieldLeg, footprintOf } from '../../src/farm/leg.mjs'
@@ -264,6 +264,8 @@ export default {
       let hadHoe = hasHoe(api.inv())
       let rekitTried = false
       const untilled = new Set()
+      // tills held for want of water, so farm_needs_water= can say the reason and name the beds
+      const dryBeds = []
       // a hole that stayed one (nothing to fill it with, or the fill failed) is one bare bed, said once: its till
       // and its plant are not tried on air
       const unfilled = new Set()
@@ -277,6 +279,7 @@ export default {
         const bareSaid = bareLine(bare)
         if (bareSaid) summary.bare = bareSaid
         else delete summary.bare
+        if (dryBeds.length) summary.farm_needs_water = needsWaterLine(water, dryBeds)
       }
       for (const job of jobs) {
         if (['till', 'plant', 'place'].includes(job.do) && unfilled.has(bedKey(job))) continue
@@ -294,6 +297,9 @@ export default {
         }
         if (job.do === 'till' && !hasHoe(api.inv())) { untilled.add(bedKey(job)); leave(job, 'untilled', NO_HOE); continue }
         hadHoe ||= hasHoe(api.inv())
+        // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
+        // back instead, with its own plant skipped the way an unfilled hole's is (the untilled check right below)
+        if (job.do === 'till' && !hydrated(api.block, job)) { untilled.add(bedKey(job)); dryBeds.push(job); leave(job, 'dry', 'no water within 4'); continue }
         if (job.do === 'plant' && untilled.has(bedKey(job))) continue
         if (job.do === 'plant' && job.item === 'sugar_cane' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => holdsWater(api.block(job.x + dx, job.y - 1, job.z + dz)))) {
           leave(job, 'water', `no adjacent water at ${job.x},${job.y},${job.z}`)

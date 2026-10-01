@@ -24,7 +24,8 @@ const stoppedAt = async ({ plan, world, items, answers = {}, stopAt }) => {
 const pick = (report, keys) => Object.fromEntries(keys.map(k => [k, report[k]]))
 
 // checkpoints of a sweep: after the anchor, after the harvest, once per cleared stray, then after every job
-const BEDS = { '0,63,0': 'dirt', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '2,63,0': 'farmland' }
+// '4,63,0' is off the plan, within 4 of the dirt bed at 0,0: without it the till gate (hydrated) holds that bed back
+const BEDS = { '0,63,0': 'dirt', '1,63,0': 'farmland', '1,64,0': 'wheat#3', '2,63,0': 'farmland', '4,63,0': 'water' }
 // two strays over the beds, and a dig that takes the block out of the world
 const LITTERED = { ...BEDS, '0,64,0': 'dirt', '2,64,0': 'cobblestone', '0,65,0': 'air', '2,65,0': 'air' }
 const digOut = world => ({ dig: ({ x, y, z }) => { world[`${x},${y},${z}`] = 'air'; return {} } })
@@ -36,7 +37,7 @@ for (const [name, given, keys, expected] of [
     { plan: 'www', world: BEDS, items: { wheat_seeds: 5, stone_hoe: 1 }, stopAt: 4 },
     ['harvested', 'replanted', 'tilled'], { harvested: { wheat: 2 }, replanted: 1, tilled: 1 }],
   ['spoken to after a failed till: its bed is already bare=, with the reason',
-    { plan: 'ww', world: { '0,63,0': 'dirt', '1,63,0': 'farmland' }, items: { wheat_seeds: 5, stone_hoe: 1 }, answers: { till: new Error('till: stone where farmland should be') }, stopAt: 3 },
+    { plan: 'ww', world: { '0,63,0': 'dirt', '1,63,0': 'farmland', '4,63,0': 'water' }, items: { wheat_seeds: 5, stone_hoe: 1 }, answers: { till: new Error('till: stone where farmland should be') }, stopAt: 3 },
     ['tilled', 'bare'], { tilled: 0, bare: '1 (untilled:1 till: stone where farmland should be)' }],
   ['spoken to after a hole was filled: filled= is said',
     (world => ({ plan: 'ww', world, items: { wheat_seeds: 5, stone_hoe: 1, dirt: 4 }, answers: { place: ({ x, y, z, item }) => { world[`${x},${y},${z}`] = item } }, stopAt: 3 }))({ '0,63,0': 'air', '1,63,0': 'farmland', '1,64,0': 'wheat#3' }),

@@ -93,8 +93,9 @@ const sweep = async ({ plan, world, items, answers = {} }) => {
   const hands = pockets(items)
   const made = fakeApi({ place: fakePlace(plan), world, items, answers: { 'farm.harvest': { harvested: {}, replanted: 0 }, fill: hands.fill, pour: hands.pour, ...answers } })
   const summary = await maintainFarm.run(made.api, { place: 'test-field' })
-  return { summary, water: made.calls.filter(c => /^(find_blocks|fill|dig|pour) /.test(c)) }
+  return { summary, water: made.calls.filter(c => /^(find_blocks|fill|dig|pour) /.test(c)), calls: made.calls, events: made.events }
 }
+const cellKey = p => `${p.x},${p.y},${p.z}`
 
 for (const [name, given, expected] of [
   ['no channel in the plan: no search for water',
@@ -124,6 +125,61 @@ for (const [name, given, expected] of [
     assert.equal(Boolean(summary.missing?.includes('water_bucket')), false, 'water_bucket is never a missing= item: skipped= says why the channel stays dry')
   })
 }
+
+// ---------------------------------------------------------------- the till gate: no bed tilled before its water holds
+test('farm.maintain: the channel is poured before the bed beside it is tilled, and the bed is sown at once', async () => {
+  const items = { bucket: 1, oak_slab: 1, wheat_seeds: 1, stone_hoe: 1 }
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air', ...POND })
+  const { summary, calls } = await sweep({
+    plan: 'w~',
+    world,
+    items,
+    answers: {
+      ...pondFound,
+      till: p => { world[cellKey(p)] = 'farmland' },
+      place: p => {
+        world[cellKey(p)] = p.item === 'oak_slab' ? 'oak_slab#top~' : p.item === 'wheat_seeds' ? 'wheat#0' : p.item
+        items[p.item] = (items[p.item] ?? 0) - 1
+      },
+      pour: p => { world[cellKey({ ...p, y: p.y + 1 })] = 'water'; items.water_bucket--; items.bucket = (items.bucket ?? 0) + 1 }
+    }
+  })
+  const work = calls.filter(c => /^(pour|till|place) /.test(c))
+  const pourIdx = work.findIndex(c => c.startsWith('pour '))
+  const tillIdx = work.findIndex(c => c.startsWith('till '))
+  const plantIdx = work.findIndex(c => /wheat_seeds/.test(c))
+  assert.ok(tillIdx > pourIdx, 'the channel is poured (and covered) before the bed is tilled')
+  assert.equal(plantIdx, tillIdx + 1, 'the bed is sown at once, right after its own till')
+  assert.equal(summary.farm_needs_water, undefined)
+})
+
+test('farm.maintain: no bucket means no till on the dry bed, and farm_needs_water says why and where', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const { summary, calls, events } = await sweep({ plan: 'w~', world, items: { wheat_seeds: 1, stone_hoe: 1 } })
+  assert.equal(calls.some(c => c.startsWith('till ')), false)
+  assert.equal(world['0,63,0'], 'dirt')
+  assert.match(summary.farm_needs_water, new RegExp(NO_BUCKET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(summary.farm_needs_water, /0,63,0/)
+  assert.match(summary.bare, /dry:1/)
+  assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.farm_needs_water))
+})
+
+test('farm.maintain: with the channel already holding water a second sweep does no water work', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air', '1,63,0': 'oak_slab#top~' })
+  const { summary, calls } = await sweep({ plan: 'w~', world, items: { wheat_seeds: 1, stone_hoe: 1 } })
+  assert.equal(calls.some(c => /^(find_blocks|fill|pour|dig) /.test(c)), false)
+  assert.equal(calls.filter(c => c === 'till 0,63,0').length, 1)
+  assert.equal(summary.farm_needs_water, undefined)
+})
+
+test('farm.build: no bucket means no till on the dry bed, and farm_needs_water says why', async () => {
+  const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
+  const made = fakeApi({ place: fakePlace('w~'), world, items: { wheat_seeds: 1, stone_hoe: 1 } })
+  const summary = await buildFarm.run(made.api, { place: 'test-field', partial: true })
+  assert.equal(made.calls.some(c => c.startsWith('till ')), false)
+  assert.match(summary.farm_needs_water, new RegExp(NO_BUCKET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.ok(made.events.some(e => e.type === 'farm_attention' && e.reasons.farm_needs_water))
+})
 
 // Sources are removed by a bucket in the real world. Model that mutation so a
 // pass cannot appear successful while it merely shuffles its own irrigation.

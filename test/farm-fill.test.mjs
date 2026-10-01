@@ -66,8 +66,9 @@ const fakePlace = (plan, x = 0, y = 63, z = 0) => {
   const parsed = parsePlan(plan)
   return { name: 'test-field', kind: 'farm', x, y, z, plan, parsed, cells: planCells({ plan, x, y, z }), bill: planBill(parsed) }
 }
-// three beds and the plan's chest; the beds at x=0 are holes, the one at 1,0 is farmland
-const HOLED = { ...column(0, 0, 'air'), ...column(1, 0, 'farmland'), ...column(0, 1, 'air'), ...column(1, 1, 'dirt', 'chest') }
+// three beds and the plan's chest; the beds at x=0 are holes, the one at 1,0 is farmland. A water cell off the
+// plan, within 4 of both holes, keeps the gate (src/lib/jobs.mjs hydrated) from holding their tills
+const HOLED = { ...column(0, 0, 'air'), ...column(1, 0, 'farmland'), ...column(0, 1, 'air'), ...column(1, 1, 'dirt', 'chest'), '2,63,0': 'water' }
 const PLACED = { dirt: 'dirt', sand: 'sand', wheat_seeds: 'wheat#0' }
 // a fake body whose place and till change the world and its pockets, so the sweep's second look sees what it did
 const sweepOver = ({ plan = 'ww\nwC', world = { ...HOLED }, items, withdraw, place }) => {
@@ -98,7 +99,7 @@ test('farm.maintain reports an unfilled grassy dip without trying to hoe it', as
 })
 
 test('farm.maintain fills a grassy dip before tilling and sowing', async () => {
-  const world = column(0, 0, 'short_grass')
+  const world = { ...column(0, 0, 'short_grass'), '2,63,0': 'water' }
   const { api, calls } = sweepOver({ plan: 'w', world, items: { dirt: 1, wheat_seeds: 1, stone_hoe: 1 } })
   const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
   assert.equal(result.filled, 1)

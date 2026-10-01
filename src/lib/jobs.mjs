@@ -13,6 +13,10 @@ export const hydrated = (worldAt, { x, y, z }) => [y, y + 1].some(wy => {
   for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) if (holdsWater(worldAt(x + dx, wy, z + dz))) return true
   return false
 })
+// farm_needs_water=, shared by farm.maintain and farm.build: the reason the water is missing (waterShortfall's own
+// words, or the fallback when the plan's own channel just never got poured), then how many beds it held untilled and
+// the first three, so the report names where to look without listing a whole field
+export const needsWaterLine = (reason, beds) => `${reason ?? "the plan's channels near them are still dry"}; ${beds.length} bed${beds.length === 1 ? '' : 's'} held untilled until water is within 4: ${beds.slice(0, 3).map(b => `${b.x},${b.y},${b.z}`).join(' ')}${beds.length > 3 ? ` +${beds.length - 3} more` : ''}`
 // A bed tilled and left bare goes back to dirt: dry within minutes, and any of it the moment something jumps on it.
 // A field tilled in one pass and sown in the next loses the beds the body walked back over (15 of 28, round 2 item 3),
 // so every till is followed at once by the planting of its own cell, and the walk does each bed once.
