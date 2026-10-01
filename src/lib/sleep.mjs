@@ -148,3 +148,21 @@ export function nightPlan ({ near, bed, from, bedRange = BED_RANGE }) {
   if (distance > bedRange) return { do: 'stop', why: `${bed.name} is ${distance} blocks away, beyond bed_range=${bedRange}` }
   return { do: 'walk', to: bed, distance }
 }
+
+// about 15 s of walking; a longer night walk meets more mobs than a bed put down here and picked up by day
+export const WALK_OVER_CARRIED = 64
+
+// placement beats the walk whenever the walk already failed tonight, a monster is near, or carrying a bed that could
+// go down sooner than WALK_OVER_CARRIED makes the walk not worth it
+export function automaticNightPlan ({ near, bed, from, carried, walkFailed, hostileNear, bedRange = BED_RANGE }) {
+  if (near) return { do: 'sleep' }
+  const plan = nightPlan({ near: false, bed, from, bedRange })
+  const blocked = plan.do === 'walk' && (walkFailed || hostileNear || (carried && plan.distance > WALK_OVER_CARRIED))
+  if (plan.do === 'walk' && !blocked) return plan
+  if (carried) return { do: 'place' }
+  if (!blocked) return plan // nightPlan's own stop: no bed known, or beyond bed_range
+  const why = walkFailed
+    ? `the walk to ${bed.name} failed already tonight, and no bed is carried to place instead`
+    : 'a monster is near: beds refuse, and no bed is carried to place instead'
+  return { do: 'stop', why }
+}

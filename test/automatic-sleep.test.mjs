@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { automaticBeds, bedChoice, nearHumanBase, carriedBedSpot, reflexPickups } from '../src/lib/sleep.mjs'
+import { automaticBeds, bedChoice, nearHumanBase, carriedBedSpot, reflexPickups, automaticNightPlan, WALK_OVER_CARRIED } from '../src/lib/sleep.mjs'
 const bed={x:0,y:65,z:0},own={kind:'bed',by:'Observer',...bed}
 test('automatic sleep requires positive ownership, not an unowned nearby bed',()=>{
  assert.deepEqual(automaticBeds([bed],[],[],'Observer'),[])
@@ -85,4 +85,36 @@ const reflexPickupsCases = [
 ]
 for (const [title, change, expected] of reflexPickupsCases) {
   test(`reflexPickups: ${title}`, () => assert.deepEqual(reflexPickups({ ...day, ...change }), expected))
+}
+
+// ---------------------------------------------------------------- automaticNightPlan
+
+test('WALK_OVER_CARRIED is 64 blocks', () => assert.equal(WALK_OVER_CARRIED, 64))
+
+const NP_FROM = { x: 0, y: 64, z: 0 }
+const nightBed = x => ({ name: 'own-bed', x, y: 64, z: 0 })
+const npBase = { near: false, from: NP_FROM, carried: false, walkFailed: false, hostileNear: false }
+const WALK_FAIL_WHY = 'the walk to own-bed failed already tonight, and no bed is carried to place instead'
+const HOSTILE_WHY = 'a monster is near: beds refuse, and no bed is carried to place instead'
+const NO_BED_WHY = 'no bed of yours on the shared map: mark yours (mark name=<you>-bed kind=bed, standing on it) or pass bed=<place>'
+
+const automaticNightPlanCases = [
+  ['a bed within 32: sleep', { near: true }, { do: 'sleep' }],
+  ['own bed at 50, no carry: walk', { bed: nightBed(50) }, { do: 'walk', to: nightBed(50), distance: 50 }],
+  ['own bed at 150, no carry: walk', { bed: nightBed(150) }, { do: 'walk', to: nightBed(150), distance: 150 }],
+  ['own bed at 150, carried: placement wins (over WALK_OVER_CARRIED)', { bed: nightBed(150), carried: true }, { do: 'place' }],
+  ['own bed at 50, carried: still walk (under WALK_OVER_CARRIED)', { bed: nightBed(50), carried: true }, { do: 'walk', to: nightBed(50), distance: 50 }],
+  ['own bed at 64, carried: walk (boundary)', { bed: nightBed(64), carried: true }, { do: 'walk', to: nightBed(64), distance: 64 }],
+  ['own bed at 65, carried: place', { bed: nightBed(65), carried: true }, { do: 'place' }],
+  ['own bed beyond 200, carried: place', { bed: nightBed(250), carried: true }, { do: 'place' }],
+  ['own bed beyond 200, not carried: stop', { bed: nightBed(250) }, { do: 'stop', why: 'own-bed is 250 blocks away, beyond bed_range=200' }],
+  ['no bed, carried: place', { bed: null, carried: true }, { do: 'place' }],
+  ['no bed, not carried: stop', { bed: null }, { do: 'stop', why: NO_BED_WHY }],
+  ['walk already failed tonight, carried: place', { bed: nightBed(50), carried: true, walkFailed: true }, { do: 'place' }],
+  ['walk already failed tonight, no carry: stop', { bed: nightBed(50), walkFailed: true }, { do: 'stop', why: WALK_FAIL_WHY }],
+  ['a monster near, bed at 50, carried: place', { bed: nightBed(50), carried: true, hostileNear: true }, { do: 'place' }],
+  ['a monster near, no carry: stop', { bed: nightBed(50), hostileNear: true }, { do: 'stop', why: HOSTILE_WHY }]
+]
+for (const [title, change, expected] of automaticNightPlanCases) {
+  test(`automaticNightPlan: ${title}`, () => assert.deepEqual(automaticNightPlan({ ...npBase, ...change }), expected))
 }

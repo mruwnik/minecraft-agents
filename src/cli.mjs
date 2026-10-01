@@ -151,7 +151,7 @@ export function waitReport (text, me, now = Date.now(), chat = {}, agents = [], 
 
 // bedtime reflex: a body whose driver is away (monitor expired, waiting, asleep itself) still goes to bed, so one absent driver does not
 // keep the night going for everyone. A driver who is at work (a task, or a command in the last 90 s) is left alone
-export const bedtime = s => s.night && !s.busy && !s.asleep && (s.bedNear || s.bedCarried) && !s.hostileNear && s.reflexes && s.idleMs >= 90000 &&
+export const bedtime = s => s.night && !s.busy && !s.asleep && (s.bedNear || s.bedCarried || s.bedWalk) && !s.hostileNear && s.reflexes && s.idleMs >= 90000 &&
   s.sinceTryMs >= Math.min(30000 * 2 ** s.failures, 300000)
 
 // mc without MC_HOME knows no body. It used to fall back to the first one (Claude's): whoever ran bot/mc from a drifted shell drove somebody else's body
