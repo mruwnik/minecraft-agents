@@ -19,12 +19,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve))
 
 const DEFAULT_SCREEN = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }
 
-const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
+const page = (screen = DEFAULT_SCREEN, { clock, postAnswer = { ok: true, json: async () => ({ ok: true }) } } = {}) => {
   const nodes = new Map()
   const el = id => {
     if (!nodes.has(id)) {
       const node = {
-        id, hidden: true, src: '', innerHTML: '', className: '', title: '',
+        id, hidden: true, src: '', innerHTML: '', className: '', title: '', value: '',
         scrollTop: 0, clientHeight: 0, scrollHeight: 0,
         style: { setProperty () {} },
         children: [],
@@ -43,6 +43,7 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
   const timers = []
   const streams = []
   const pending = []
+  const posts = []
   class EventSource {
     constructor (url) { this.url = url; this.closed = false; streams.push(this) }
     close () { this.closed = true }
@@ -54,8 +55,12 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
     // select() also drives the body list and the map; both are outside this slice, so they are stubbed as no-ops
     renderList: () => {},
     draw: () => {},
-    fetch: url => {
+    fetch: (url, options) => {
       fetches.push(url)
+      if (url.startsWith('/api/whisper/')) {
+        posts.push({ url, options })
+        return Promise.resolve(postAnswer)
+      }
       if (url.startsWith('/api/screen/')) return Promise.resolve({ ok: true, json: async () => screen })
       if (url.startsWith('/api/actions/')) {
         let resolve
@@ -83,7 +88,7 @@ const page = (screen = DEFAULT_SCREEN, { clock } = {}) => {
   const relAge = iso => vm.runInContext(`relAge(Date.now(), ${JSON.stringify(iso)})`, context)
   const run = (name, json, { ok = true, which = 0 } = {}) =>
     pending.filter(p => p.url === `/api/actions/${name}`)[which].resolve({ ok, json: async () => json })
-  return { el, fetches, timers, streams, pending, select, poll, run, relAge }
+  return { el, fetches, timers, streams, pending, posts, select, poll, run, relAge }
 }
 
 test('look popup: a click on the picture opens one live stream and a 1 s inventory loop, shows each frame as it comes, and closing stops both', async () => {
@@ -92,7 +97,7 @@ test('look popup: a click on the picture opens one live stream and a 1 s invento
 
   el('lookimg').listeners.click()
   assert.equal(el('lookOverlay').hidden, false)
-  assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live?'])
+  assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live'])
   assert.equal(fetches.length, 1, 'only the inventory is fetched; the picture comes down the stream')
   assert.match(fetches[0], /^\/api\/screen\/Chani\?/)
   assert.equal(timers.length, 0, 'the next inventory ask waits for this one to arrive')
@@ -167,19 +172,12 @@ test('look popup: a player name is shown as text, never run as html', () => {
   assert.deepEqual([el('lookBigMarks').innerHTML.includes('<img'), el('lookBigMarks').innerHTML.includes('&lt;img src=x onerror=alert(1)&gt; 2m')], [false, true])
 })
 
-test('look popup: a panorama streams as a panorama', () => {
-  const { el, streams } = page()
-  el('pano').checked = true
-  el('lookimg').listeners.click()
-  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
-})
-
 test('inline card: the watch button starts a live stream and flips to pause; pause closes it and flips back', () => {
   const { el, streams } = page()
   assert.equal(el('relook').textContent, 'watch')
   el('relook').listeners.click()
   assert.equal(el('relook').textContent, 'pause')
-  assert.deepEqual([streams.length, streams[0].url, streams[0].closed], [1, '/api/look/Chani/live?', false])
+  assert.deepEqual([streams.length, streams[0].url, streams[0].closed], [1, '/api/look/Chani/live', false])
   el('relook').listeners.click()
   assert.equal(el('relook').textContent, 'watch')
   assert.equal(streams[0].closed, true)
@@ -194,26 +192,29 @@ test('inline card: a frame from the watch stream draws the picture and caption, 
   assert.equal(el('lookmeta').textContent, 'Chani · south pitch 0\nsees nothing alive')
 })
 
-test('inline card: honours the pano checkbox the same way the popup does', () => {
-  const { el, streams } = page()
-  el('pano').checked = true
-  el('relook').listeners.click()
-  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
-})
-
 test('inline card: switching the selected body while watching keeps watching, on the new body', () => {
   const { el, streams, select } = page()
   el('relook').listeners.click()
   select('Bob')
-  assert.deepEqual([streams.length, streams[0].closed, streams[1].url, streams[1].closed], [2, true, '/api/look/Bob/live?', false])
+  assert.deepEqual([streams.length, streams[0].closed, streams[1].url, streams[1].closed], [2, true, '/api/look/Bob/live', false])
   assert.equal(el('relook').textContent, 'pause')
 })
 
-test('inline card: switching the selected body while paused does not start a stream', () => {
+test('inline card: selecting a body starts watching it, even after a pause', () => {
   const { el, streams, select } = page()
   select('Bob')
-  assert.equal(streams.length, 0)
-  assert.equal(el('relook').textContent, 'watch')
+  assert.deepEqual([streams.length, streams[0].url, el('relook').textContent], [1, '/api/look/Bob/live', 'pause'])
+  el('relook').listeners.click()
+  assert.deepEqual([streams[0].closed, el('relook').textContent], [true, 'watch'])
+  select('Bob')
+  assert.deepEqual([streams.length, streams[1].url, streams[1].closed, el('relook').textContent], [2, '/api/look/Bob/live', false, 'pause'])
+})
+
+test('inline card: deselecting stops watching', () => {
+  const { el, streams, select } = page()
+  select('Bob')
+  select(null)
+  assert.deepEqual([streams[0].closed, el('relook').textContent], [true, 'watch'])
 })
 
 test('inline card: no fetch is made for the inline picture - it only ever comes down the stream', () => {
@@ -336,7 +337,7 @@ for (const [type, size, slot, place] of [
   assert.match(el('lookWindow').innerHTML, new RegExp(`data-slot="${slot}" style="grid-area:${place}"`))
 })
 
-// ---------------------------------------------------------------- the action log panel
+// ---------------------------------------------------------------- the action log (now inside the popup)
 const entry = (overrides = {}) => ({ t: '2026-10-01T15:21:00.000Z', type: 'job_started', gist: 'goto x=1', bad: false, ...overrides })
 
 const relAgeCases = [
@@ -348,47 +349,19 @@ relAgeCases.forEach(([seconds, expected]) => test(`relAge: ${seconds} s reads ${
   assert.equal(relAge(new Date(FIXED_NOW - seconds * 1000).toISOString()), expected)
 }))
 
-test('actions panel: hidden while nothing is selected, even if a poll fires', () => {
-  const { el, poll } = page()
-  assert.equal(el('actions').hidden, true)
-  poll()
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: selecting a body alone does not show it - only watching its view does', async () => {
-  const { el, select, run } = page()
-  select('Chani')
-  run('Chani', { entries: [entry()] })
-  await settle()
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: watching shows it and renders the body\'s log; pausing hides it again', async () => {
+test('actions log: renders the selected body\'s log, whether or not the small picture is paused', async () => {
   const FIXED_NOW = Date.parse('2026-10-01T15:21:24.000Z')
   const { el, select, run } = page(undefined, { clock: FIXED_NOW })
   select('Chani')
   el('relook').listeners.click()
   run('Chani', { entries: [entry({ t: '2026-10-01T15:21:12.000Z' })] })
   await settle()
-  assert.equal(el('actions').hidden, false)
   assert.deepEqual(el('actionsLog').children.map(c => ({ cls: c.className, text: c.textContent, title: c.title })), [
     { cls: '', text: '-12s job_started goto x=1', title: 'goto x=1' }
   ])
-  assert.equal(el('actionsName').textContent, 'Chani')
-  el('relook').listeners.click()
-  assert.equal(el('actions').hidden, true)
 })
 
-test('actions panel: deselecting hides it even while watching', async () => {
-  const { el, select } = page()
-  select('Chani')
-  el('relook').listeners.click()
-  assert.equal(el('actions').hidden, false)
-  select(null)
-  assert.equal(el('actions').hidden, true)
-})
-
-test('actions panel: switching bodies clears the previous log immediately, before the new one answers', async () => {
+test('actions log: switching bodies clears the previous log immediately, before the new one answers', async () => {
   const { el, select, run } = page()
   select('A')
   run('A', { entries: [entry({ gist: 'A thing' })] })
@@ -396,10 +369,9 @@ test('actions panel: switching bodies clears the previous log immediately, befor
   assert.equal(el('actionsLog').children.length, 1)
   select('B')
   assert.equal(el('actionsLog').children.length, 0)
-  assert.equal(el('actionsName').textContent, 'B')
 })
 
-test('actions panel: a late answer for a body switched away from is dropped', async () => {
+test('actions log: a late answer for a body switched away from is dropped', async () => {
   const { el, select, run, pending } = page()
   select('A')
   select('B')
@@ -411,7 +383,7 @@ test('actions panel: a late answer for a body switched away from is dropped', as
   assert.deepEqual(el('actionsLog').children.map(c => c.title), ['B is current'])
 })
 
-test('actions panel: of two overlapping polls for the same body, only the later answer lands', async () => {
+test('actions log: of two overlapping polls for the same body, only the later answer lands', async () => {
   const { el, select, run, poll } = page()
   select('Chani')
   poll()
@@ -422,7 +394,7 @@ test('actions panel: of two overlapping polls for the same body, only the later 
   assert.deepEqual(el('actionsLog').children.map(c => c.title), ['second poll'])
 })
 
-test('actions panel: a bad entry carries the err class and its gist as the title', async () => {
+test('actions log: a bad entry carries the err class and its gist as the title', async () => {
   const { el, select, run } = page()
   select('Chani')
   run('Chani', { entries: [entry({ type: 'died', gist: 'fell into lava', bad: true })] })
@@ -437,10 +409,81 @@ const badAnswers = [
   ['a non-ok answer', { ok: false, json: { error: 'no agent folder called Chani' } }],
   ['an ok answer with no entries field', { ok: true, json: {} }]
 ]
-badAnswers.forEach(([what, { ok, json }]) => test(`actions panel: ${what} is treated as no entries, not a crash or stale lines`, async () => {
+badAnswers.forEach(([what, { ok, json }]) => test(`actions log: ${what} is treated as no entries, not a crash or stale lines`, async () => {
   const { el, select, run } = page()
   select('Chani')
   run('Chani', json, { ok })
   await settle()
   assert.deepEqual(el('actionsLog').children, [])
 }))
+
+test('actions log: lives inside the popup and nowhere else', () => {
+  const popup = html.slice(html.indexOf('<div id="lookOverlay"'), html.indexOf('<div id="planOverlay"'))
+  assert.deepEqual([popup.includes('id="actionsLog"'), html.split('id="actionsLog"').length - 1, html.includes('id="actions"')], [true, 1, false])
+})
+
+// the log's lines never wrap, so a flex column sized by its content would be as wide as its longest line and
+// squeeze the picture beside it to nothing; the column's width must not come from its content
+test('look popup: the picture sits beside the log, and the log column cannot take its width', () => {
+  const popup = html.slice(html.indexOf('<div id="lookOverlay"'), html.indexOf('<div id="planOverlay"'))
+  const side = html.match(/#lookSide \{([^}]*)\}/)[1]
+  assert.deepEqual([popup.includes('id="lookBig"'), /min-width: 0/.test(side)], [true, true])
+})
+
+const typeAndEnter = (el, text) => { el('whisper').value = text; el('whisper').listeners.keydown({ key: 'Enter' }) }
+
+test('whisper: Enter posts the trimmed text to the selected body, clears the input, then refreshes the log', async () => {
+  const { el, posts, pending, select } = page()
+  select('Chani')
+  typeAndEnter(el, '  come home  ')
+  assert.deepEqual(posts.map(p => [p.url, p.options.method, JSON.parse(p.options.body)]), [['/api/whisper/Chani', 'POST', { message: 'come home' }]])
+  assert.equal(el('whisper').value, '')
+  await settle()
+  assert.deepEqual(pending.map(p => p.url), ['/api/actions/Chani', '/api/actions/Chani'])
+})
+
+for (const [what, text] of [['empty', ''], ['blank', '   ']]) test(`whisper: ${what} input sends nothing`, () => {
+  const { el, posts, select } = page()
+  select('Chani')
+  typeAndEnter(el, text)
+  assert.deepEqual(posts, [])
+})
+
+// an IME's own Enter (confirming a conversion) fires keydown with isComposing true in Chrome, or keyCode 229 in
+// Safari; either must leave the half-composed text alone, same as any other non-Enter key
+const noSendKeydowns = [
+  ['other keys', { key: 'a' }],
+  ['a composing Enter', { key: 'Enter', isComposing: true }],
+  ['an IME Enter', { key: 'Enter', keyCode: 229 }]
+]
+for (const [what, event] of noSendKeydowns) test(`whisper: ${what} send nothing`, () => {
+  const { el, posts, select } = page()
+  select('Chani')
+  el('whisper').value = 'hi'
+  el('whisper').listeners.keydown(event)
+  assert.deepEqual([posts, el('whisper').value], [[], 'hi'])
+})
+
+test('whisper: a refused send says why and gives the text back', async () => {
+  const { el, select } = page(undefined, { postAnswer: { ok: false, json: async () => ({ error: 'the body did not answer' }) } })
+  select('Chani')
+  typeAndEnter(el, 'come home')
+  await settle()
+  assert.deepEqual([el('whisperErr').textContent, el('whisper').value], ['the body did not answer', 'come home'])
+})
+
+test('whisper: selecting another body clears a stale restored text and error', async () => {
+  const { el, select } = page(undefined, { postAnswer: { ok: false, json: async () => ({ error: 'the body did not answer' }) } })
+  select('Chani')
+  typeAndEnter(el, 'come home')
+  await settle()
+  select('Bob')
+  assert.deepEqual([el('whisperErr').textContent, el('whisper').value], ['', ''])
+})
+
+test('look popup: opening pins the action log to its newest entry', () => {
+  const { el } = page()
+  el('actionsLog').scrollHeight = 500
+  el('lookimg').listeners.click()
+  assert.equal(el('actionsLog').scrollTop, 500)
+})

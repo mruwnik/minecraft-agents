@@ -29,12 +29,12 @@ import { restartAdvice } from './restart.mjs'
 import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
 import { underRoof, walledIn, nightShelter, nightFleeStep, nightFleeGoal, retarget, fightNotFlee, attackerCount, plugCells, holdNote } from './survival/night.mjs'
-import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal } from './talk.mjs'
+import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, chatRefusal, heardWhisper } from './talk.mjs'
 import { WORK_RANGE, noStanding, loadedAround, thinkBudget, goalDistance, THINK_CAP_MS, rimGoal } from './navigation/walk.mjs'
 import { configureTerrainMoves, scaffoldingAvailable, climbableVinesAvailable } from './navigation/terrain-moves.mjs'
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
@@ -111,6 +111,8 @@ export const cancelGuard = () => { const mine = gen; return () => { if (gen !== 
 // A composite may finish restoring one job block after cancellation. This private token cannot be supplied by a CLI caller.
 export const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
+let yieldUntil = 0 // while someone else is logged in as me, I stay off until then
+let reconnectTimer = null
 // when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
 let eatingSince = null
 
@@ -284,6 +286,7 @@ const loginNeeded = () => {
 
 function connect () {
   ready = false
+  yieldUntil = 0
   bot = mineflayer.createBot({
     host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: cfg.auth,
     ...(cfg.auth === 'microsoft' && { profilesFolder: authDir(HOME), onMsaCode: loginNeeded })
@@ -762,6 +765,10 @@ function connect () {
   bot.on('kicked', reason => {
     const say = sayOnce('kicked', typeof reason === 'string' ? reason : JSON.stringify(reason))
     if (say) emit('kicked', { reason: say })
+    const yielded = loginYield(reason, Date.now())
+    if (!yielded) return
+    yieldUntil = Date.parse(yielded.until)
+    emit('yielded', yielded)
   })
   // while the server is down we retry quietly: only the first failure is worth an event
   bot.on('error', err => { if (ready || !waitingForServer) sayError(err.message || err.code || String(err)) })
@@ -775,7 +782,7 @@ function connect () {
     // farm.build job 322 stuck at active= for hours after a creeper-interrupted reconnect).
     cancelTask(`disconnected: ${reason}`, { holdQueue: false })
     scheduler?.abandon(`disconnected: ${reason}`)
-    setTimeout(connect, 10000)
+    reconnectTimer = setTimeout(connect, reconnectDelay(yieldUntil, Date.now()))
   })
 }
 
@@ -3170,6 +3177,13 @@ export const quick = {
     for (const part of parts) bot.whisper(a.player, part)
     return parts.length > 1 ? { parts: parts.length } : {}
   },
+  // the dashboard's: a line typed into an agent's popup, recorded as the whisper it stands for (bot.on('whisper') above)
+  hear (a) {
+    const said = heardWhisper(a)
+    lastDriven = Date.now()
+    emit('whisper', said)
+    return {}
+  },
 
   async equip (a) {
     const item = findItem(a.item)
@@ -3790,7 +3804,8 @@ http.createServer((req, res) => {
       // help is answered even before the body is connected: a driver reads it first of all
       if (name === '' || name === 'help') out = { ok: true, ...quick.help(args) }
       else if (args.queue === false && args.interrupt !== true) out = { ok: false, error: 'queue=false is no longer supported; jobs queue by default. Use interrupt=true to cancel the current job safely before urgent work' }
-      else if (!ready && !['events', 'job', 'jobs', 'cancel', 'resume', 'discard', 'stop'].includes(name)) out = { ok: false, error: 'bot is not connected to the server (retrying every 10s)' }
+      else if (!ready && !['events', 'job', 'jobs', 'cancel', 'resume', 'discard', 'stop'].includes(name)) out = { ok: false, error: offlineError(yieldUntil, Date.now()) }
+      else if (name === 'resume' && !ready && yieldUntil > Date.now()) { clearTimeout(reconnectTimer); connect(); out = { ok: true, reconnecting: true } }
       else if (lacking) out = { ok: false, error: lacking }
       else if (['job', 'jobs', 'cancel', 'resume', 'discard'].includes(name)) out = jobControl(name, args)
       else if (name === 'stop') out = stopAllJobs()
