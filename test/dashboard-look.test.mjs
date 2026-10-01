@@ -422,6 +422,14 @@ test('actions log: lives inside the popup and nowhere else', () => {
   assert.deepEqual([popup.includes('id="actionsLog"'), html.split('id="actionsLog"').length - 1, html.includes('id="actions"')], [true, 1, false])
 })
 
+// the log's lines never wrap, so a flex column sized by its content would be as wide as its longest line and
+// squeeze the picture beside it to nothing; the column's width must not come from its content
+test('look popup: the picture sits beside the log, and the log column cannot take its width', () => {
+  const popup = html.slice(html.indexOf('<div id="lookOverlay"'), html.indexOf('<div id="planOverlay"'))
+  const side = html.match(/#lookSide \{([^}]*)\}/)[1]
+  assert.deepEqual([popup.includes('id="lookBig"'), /min-width: 0/.test(side)], [true, true])
+})
+
 const typeAndEnter = (el, text) => { el('whisper').value = text; el('whisper').listeners.keydown({ key: 'Enter' }) }
 
 test('whisper: Enter posts the trimmed text to the selected body, clears the input, then refreshes the log', async () => {
