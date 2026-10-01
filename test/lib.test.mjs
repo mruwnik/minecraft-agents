@@ -3096,6 +3096,7 @@ const laneAdvice = 'lay a . path or a ~ channel through the rows, eight rows apa
 for (const [name, cells, expected] of [
   ['a lane from the gate down the rows reaches every crop', laneOf('#G##', '#.c#', '#~c#', '#.c#', '####'), {}],
   ['the gate cell serves the rows within reach of it even where no path is laid', laneOf('#G##', '#cc#', '#~~#', '#cc#', '####'), {}],
+  ['a channel the walk reaches only across the rows still serves them', laneOf('#G#####', '#ccc~c#', '#ccc~c#', '#ccc~c#', '#ccc~c#', '#ccc~c#', '#ccc~c#', '#######'), {}],
   ['no lane: rows more than four from the gate are out of reach', laneOf('#G##', '#cc#', '#cc#', '#cc#', '#cc#', '#cc#', '#cc#', '####'),
     { noLane: `5 crop cells have nothing to stand on within 4 of them (2,4 1,5 2,5 1,6 and 1 more): ${laneAdvice}` }],
   ['an open field is worked from its edges', laneOf('www', 'www'), {}],
@@ -3116,8 +3117,8 @@ for (const [name, cells, expected] of [
 // the census reads the same judgement off the plan the field was built from, so `farm.fields` says it about a field
 // that already stands and not only about a plan about to be saved
 test('fieldCensus: a field with no lane through it says so', () => {
-  const cells = planCells({ plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
-  assert.match(fieldCensus(cells, () => null).noLane, /^7 crop cells have nothing to stand on within 4 of them/)
+  const cells = planCells({ plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(fieldCensus(cells, () => null).noLane, /^9 crop cells have nothing to stand on within 4 of them/)
 })
 test('fieldCensus: a field with a lane says nothing about it', () => {
   const cells = planCells({ plan: '#G##\n#.c#\n#~c#\n#.c#\n####', x: 0, y: 63, z: 0 })
@@ -3935,13 +3936,13 @@ test('farm.build: a plan saved at the level you stand on is refused, with the y 
   assert.deepEqual(calls, ['goto x=0 y=65 z=0 range=2'])
 })
 
-// Item 21 (Chani, 09-23): a field with nothing walkable between its gate and its far row cannot be worked at all, and
+// Item 21 (Chani, 09-23): a field with nothing walkable between its gate and its far row (here: no gate at all) cannot be worked, and
 // nothing said so until every walk into it had already answered "no walkable path". A lane-less plan is legal - it is a
 // shape, not a contradiction - so it is saved with a warning rather than refused, and the field says it too.
 test('farm.plan: a plan with no lane through its rows is saved, with the cells nothing can stand within reach of', async () => {
   const { api, calls } = fakeApi({ places: [] })
-  const out = await farmPlan.run(api, { name: 'north-field', map: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
-  assert.match(out.warn, /^7 crop cells have nothing to stand on within 4 of them \(2,4 1,6 2,6 1,7 and 3 more\): lay a \. path/)
+  const out = await farmPlan.run(api, { name: 'north-field', map: '####\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####', x: 0, y: 63, z: 0 })
+  assert.match(out.warn, /^14 crop cells have nothing to stand on within 4 of them \(1,1 2,1 1,2 2,2 and 10 more\): lay a \. path/)
   assert.equal(calls.length, 1)
 })
 
@@ -4056,10 +4057,10 @@ test('farm.plan: saving onto my own place still works', async () => {
 })
 
 test('farm.fields: a field with no lane through it says so on a line of its own', async () => {
-  const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#~~#\n#cc#\n#cc#\n#cc#\n####' }] })
+  const { api } = fakeApi({ places: [{ name: 'north-field', kind: 'farm', x: 0, y: 63, z: 0, plan: '#G##\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n#cc#\n####' }] })
   const out = await farmFields.run(api, {})
   assert.match(out.text, /^north-field 0m crops\(carrots:0\)|^north-field 0m cells=/)
-  assert.match(out.text, /\n {2}lane: 7 crop cells have nothing to stand on within 4 of them \(2,4 1,6 2,6 1,7 and 3 more\): lay a \. path/)
+  assert.match(out.text, /\n {2}lane: 9 crop cells have nothing to stand on within 4 of them \(2,4 1,5 2,5 1,6 and 5 more\): lay a \. path/)
 })
 
 test('farm.fields: a place that is on the map but has no plan is not a field', async () => {

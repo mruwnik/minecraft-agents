@@ -297,18 +297,20 @@ export function planLane (cells) {
   const bounds = ['dx', 'dz'].map(k => [Math.min(...cells.map(c => c[k])) - 1, Math.max(...cells.map(c => c[k])) + 1])
   const inside = (dx, dz) => dx >= bounds[0][0] && dx <= bounds[0][1] && dz >= bounds[1][0] && dz <= bounds[1][1]
   const standable = standableIn(map)
-  // flood in from the ring around the plan, which is all ground the plan never claimed
+  // flood in from the ring around the plan, which is all ground the plan never claimed, crossing crops where the walk
+  // must (a channel with nothing but rows between it and the gate is still walked to); only the cells stood on are lanes
+  const crossable = (dx, dz) => standable(dx, dz) || kindAt(dx, dz) === 'crop'
   const reached = new Set()
   const queue = []
   for (let dx = bounds[0][0]; dx <= bounds[0][1]; dx++) for (const dz of bounds[1]) queue.push([dx, dz])
   for (let dz = bounds[1][0]; dz <= bounds[1][1]; dz++) for (const dx of bounds[0]) queue.push([dx, dz])
   while (queue.length) {
     const [dx, dz] = queue.pop()
-    if (reached.has(key(dx, dz)) || !inside(dx, dz) || !standable(dx, dz)) continue
+    if (reached.has(key(dx, dz)) || !inside(dx, dz) || !crossable(dx, dz)) continue
     reached.add(key(dx, dz))
     for (const [sx, sz] of STEPS) queue.push([dx + sx, dz + sz])
   }
-  const lanes = [...reached].map(k => k.split(',').map(Number)).map(([dx, dz]) => ({ dx, dz }))
+  const lanes = [...reached].map(k => k.split(',').map(Number)).map(([dx, dz]) => ({ dx, dz })).filter(l => standable(l.dx, l.dz))
   const served = crop => lanes.some(lane =>
     (lane.dx - crop.dx) ** 2 + (lane.dz - crop.dz) ** 2 <= LANE_REACH2 && clearBetween(kindAt, lane, crop))
   const stranded = crops.filter(c => !served(c))
