@@ -104,8 +104,10 @@ actually visible (not hidden behind blocks) with the pixel they are centred on a
     ./mc look pano=true            # 360 degrees, 1024x256: north in the middle, west to its left, south at the edges
     options: width= height= fov= dist=<blocks, default 64, max 96> file=<name.png>
 
-It is a software raycaster (`src/vision.mjs`, pure and tested: `node --test test/vision.test.mjs`) over the chunk data mineflayer
-already holds, glued to the bot by `src/eyes.mjs`. No GPU, browser or extra dependency; a frame takes about a second.
+It is a software raycaster (`src/vision/renderer.mjs`, pure and tested: `node --test test/vision.test.mjs`) over the chunk data
+mineflayer already holds, glued to the bot by `src/vision/eyes.mjs`, which draws on a worker thread
+(`src/vision/render-worker.mjs`) so the body keeps ticking. No GPU, browser or extra dependency; a 480x270 frame takes
+about a tenth of a second, so the dashboard's look popup streams ~10 frames a second.
 An image costs the driving LLM roughly width*height/750 tokens (~300 for a PoV shot, ~350 for a panorama), which is
 less than most text descriptions of the same scene. Entities are flat-coloured boxes (players magenta, hostiles red).
 Not drawn: block light (caves render fully lit, which is handy), translucent water, item/entity models, the sun.

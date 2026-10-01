@@ -697,6 +697,19 @@ const select = name => {
   fetchLook()
 }
 
+// a look's caption under its picture, or why there is no picture
+const showLook = (img, meta, look) => {
+  if (look.error) {
+    img.hidden = true
+    meta.className = 'err'
+    meta.textContent = `${selected}: ${look.error}`
+    return
+  }
+  img.hidden = false
+  meta.className = ''
+  meta.textContent = [`${selected} · ${look.view}`, look.blocked, look.seen.length ? `sees: ${look.seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
+}
+
 // one fresh look through the selected body's eyes into img, with its caption in meta; settles when the picture is up
 // or the error is shown. The last picture stays while the next renders: only an empty frame says "rendering…"
 const loadLook = (img, meta) => {
@@ -707,20 +720,11 @@ const loadLook = (img, meta) => {
   const params = new URLSearchParams({ t: String(Date.now()), ...(el('pano').checked ? { pano: '1' } : {}) })
   const url = `/api/look/${encodeURIComponent(selected)}?${params}`
   return fetch(url).then(async res => {
-    if (!res.ok) {
-      const why = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-      img.hidden = true
-      meta.className = 'err'
-      meta.textContent = `${selected}: ${why.error}`
-      return
-    }
-    const seen = JSON.parse(decodeURIComponent(res.headers.get('x-look-seen') || '[]'))
-    const vw = decodeURIComponent(res.headers.get('x-look-view') || '')
-    const blocked = decodeURIComponent(res.headers.get('x-look-blocked') || '')
+    if (!res.ok) return showLook(img, meta, await res.json().catch(() => ({ error: `HTTP ${res.status}` })))
+    const header = name => decodeURIComponent(res.headers.get(name) || '')
     URL.revokeObjectURL(img.src)
     img.src = URL.createObjectURL(await res.blob())
-    img.hidden = false
-    meta.textContent = [`${selected} · ${vw}`, blocked, seen.length ? `sees: ${seen.join(', ')}` : 'sees nothing alive'].filter(Boolean).join('\n')
+    showLook(img, meta, { view: header('x-look-view'), blocked: header('x-look-blocked'), seen: JSON.parse(header('x-look-seen') || '[]') })
   }).catch(e => { meta.className = 'err'; meta.textContent = String(e) })
 }
 const fetchLook = () => loadLook(el('lookimg'), el('lookmeta'))
@@ -743,25 +747,35 @@ const loadInventory = () => {
     .catch(() => { box.textContent = '' })
 }
 
-// the popup: the same picture big, kept fresh, with the inventory beside it. The next look is asked for a second
-// after the last one ARRIVED, not a second after it was asked for, so a slow render never queues up behind itself;
-// lookRun tells a loop that was closed mid-render (and maybe reopened) from the one that should carry on
-const LOOK_LIVE_MS = 1000
-let lookTimer = null
+// the popup: the same view big and live, each frame shown the moment the dashboard pushes it down one event stream.
+// The inventory beside it is asked for a second after the last answer ARRIVED, so a slow body never queues asks up;
+// lookRun tells an inventory loop that was closed mid-ask (and maybe reopened) from the one that should carry on
+const INVENTORY_MS = 1000
+let lookStream = null
+let inventoryTimer = null
 let lookRun = 0
-const liveLook = run => Promise.all([loadLook(el('lookBig'), el('lookBigMeta')), loadInventory()]).then(() => {
-  if (run === lookRun) lookTimer = setTimeout(() => liveLook(run), LOOK_LIVE_MS)
+const liveInventory = run => loadInventory().then(() => {
+  if (run === lookRun) inventoryTimer = setTimeout(() => liveInventory(run), INVENTORY_MS)
 })
 const openLook = () => {
   if (!selected) return
   el('lookOverlay').hidden = false
-  liveLook(++lookRun)
+  if (el('lookBig').hidden) el('lookBigMeta').textContent = 'rendering…'
+  const params = new URLSearchParams(el('pano').checked ? { pano: '1' } : {})
+  lookStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live?${params}`)
+  lookStream.onmessage = e => {
+    const look = JSON.parse(e.data)
+    if (look.png) el('lookBig').src = `data:image/png;base64,${look.png}`
+    showLook(el('lookBig'), el('lookBigMeta'), look)
+  }
+  liveInventory(++lookRun)
 }
 const closeLook = () => {
   el('lookOverlay').hidden = true
-  clearTimeout(lookTimer)
-  lookTimer = null
+  lookStream?.close()
+  lookStream = null
   lookRun++
+  clearTimeout(inventoryTimer)
 }
 el('lookimg').addEventListener('click', openLook)
 el('lookClose').addEventListener('click', closeLook)

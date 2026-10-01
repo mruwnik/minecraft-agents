@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, route, mergeChat, parseEventLines, chatLimit, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -242,6 +242,8 @@ const routes = [
   ['/api/blueprint/../etc', { kind: 'unknown' }],
   ['/api/look/Chani', { kind: 'look', name: 'Chani' }],
   ['/api/look/Chani?fresh=1', { kind: 'look', name: 'Chani' }],
+  ['/api/look/Chani/live', { kind: 'live', name: 'Chani' }],
+  ['/api/look/Chani/live?pano=1', { kind: 'live', name: 'Chani' }],
   ['/api/look/', { kind: 'unknown' }],
   ['/api/look/../../etc/passwd', { kind: 'unknown' }],
   ['/api/inventory/Chani', { kind: 'inventory', name: 'Chani' }],
@@ -251,6 +253,32 @@ const routes = [
 ]
 routes.forEach(([url, expected]) => test(`route: ${url}`, () => {
   assert.deepEqual(route(url), expected)
+}))
+
+// a fake clock: each frame takes `drawMs`, and the stream closes after `frames` have been sent
+const streamed = async ({ drawMs, frames, error }) => {
+  let now = 0
+  const sent = []
+  const waits = []
+  await streamFrames({
+    frame: async () => { now += drawMs; return error ? { error } : { png: `frame${sent.length}` } },
+    send: f => sent.push(f),
+    open: () => sent.length < frames,
+    wait: async ms => { waits.push(ms); now += ms },
+    now: () => now,
+    minMs: 100,
+    retryMs: 1000
+  })
+  return { sent, waits }
+}
+const streamCases = [
+  ['a quick body is held to one frame per 100 ms', { drawMs: 30, frames: 3 }, { sent: ['frame0', 'frame1', 'frame2'], waits: [70, 70, 70] }],
+  ['a slow body is asked again the moment a frame arrives', { drawMs: 250, frames: 2 }, { sent: ['frame0', 'frame1'], waits: [0, 0] }],
+  ['a body that cannot draw is asked again a second later', { drawMs: 10, frames: 2, error: 'no answer' }, { sent: ['no answer', 'no answer'], waits: [990, 990] }]
+]
+streamCases.forEach(([name, given, expected]) => test(`live look: ${name}`, async () => {
+  const { sent, waits } = await streamed(given)
+  assert.deepEqual({ sent: sent.map(f => f.png ?? f.error), waits }, expected)
 }))
 
 test('village views: saved plan intent and only fresh saved inspection evidence become current counts', () => {

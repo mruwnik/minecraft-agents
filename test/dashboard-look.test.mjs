@@ -1,12 +1,12 @@
-// The look popup: a click on the small picture opens it big, and it asks for a fresh look one second after each one
-// arrives (never before, so a slow render does not queue up behind itself) until it is closed.
+// The look popup: a click on the small picture opens it big and live, fed by one event stream of frames from the
+// dashboard until it is closed, its inventory asked for again a second after each answer; the small picture keeps its one look per click.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 
 const html = fs.readFileSync(new URL('../tools/dashboard/index.html', import.meta.url), 'utf8')
-const start = html.indexOf('const loadLook')
+const start = html.indexOf('const showLook')
 const end = html.indexOf('// ---------------------------------------------------------------- the chat log', start)
 const script = html.slice(start, end)
 
@@ -20,7 +20,13 @@ const page = (inventory = { items: {}, freeSlots: 36, armor: {} }) => {
   }
   const fetches = []
   const timers = []
+  const streams = []
+  class EventSource {
+    constructor (url) { this.url = url; this.closed = false; streams.push(this) }
+    close () { this.closed = true }
+  }
   const context = {
+    EventSource,
     el,
     selected: 'Chani',
     snap: { bodies: [{ name: 'Chani', state: { holding: 'iron_pickaxe' } }] },
@@ -39,33 +45,45 @@ const page = (inventory = { items: {}, freeSlots: 36, armor: {} }) => {
   }
   vm.createContext(context)
   vm.runInContext(script, context)
-  return { el, fetches, timers }
+  return { el, fetches, timers, streams }
 }
 
-test('look popup: a click on the picture opens it and keeps the picture and the inventory fresh a second after each look, until closed', async () => {
-  const { el, fetches, timers } = page()
+test('look popup: a click on the picture opens one live stream and a 1 s inventory loop, shows each frame as it comes, and closing stops both', async () => {
+  const { el, fetches, timers, streams } = page()
   assert.ok(start > 0 && end > start, 'the look script is where the test expects it')
 
   el('lookimg').listeners.click()
   assert.equal(el('lookOverlay').hidden, false)
-  assert.equal(fetches.length, 2, 'the picture and the inventory are both asked for at once')
-  assert.match(fetches[0], /^\/api\/look\/Chani\?/)
-  assert.match(fetches[1], /^\/api\/inventory\/Chani\?/)
-  assert.equal(timers.length, 0, 'the next look waits for these to arrive')
+  assert.deepEqual([streams.length, streams[0].url], [1, '/api/look/Chani/live?'])
+  assert.equal(fetches.length, 1, 'only the inventory is fetched; the picture comes down the stream')
+  assert.match(fetches[0], /^\/api\/inventory\/Chani\?/)
+  assert.equal(timers.length, 0, 'the next inventory ask waits for this one to arrive')
+
+  streams[0].onmessage({ data: JSON.stringify({ png: 'AAAA', view: 'north pitch 0', seen: ['cow 3m @px1,2'], blocked: '' }) })
+  assert.equal(el('lookBig').src, 'data:image/png;base64,AAAA')
+  assert.equal(el('lookBig').hidden, false)
+  assert.equal(el('lookBigMeta').textContent, 'Chani · north pitch 0\nsees: cow 3m @px1,2')
 
   await settle()
-  assert.equal(el('lookBig').src, 'blob:look')
-  assert.equal(el('lookBig').hidden, false)
   assert.deepEqual(timers.map(t => t.ms), [1000])
-
   timers[0].fn()
-  assert.equal(fetches.length, 4, 'a second round asks for both again')
+  assert.equal(fetches.length, 2, 'a second later the inventory is asked for again')
+
+  streams[0].onmessage({ data: JSON.stringify({ error: 'the body did not answer' }) })
+  assert.deepEqual([el('lookBig').hidden, el('lookBigMeta').className, el('lookBigMeta').textContent], [true, 'err', 'Chani: the body did not answer'])
 
   el('lookClose').listeners.click()
-  assert.equal(el('lookOverlay').hidden, true)
+  assert.deepEqual([el('lookOverlay').hidden, streams[0].closed, streams.length], [true, true, 1])
   await settle()
-  assert.equal(timers.length, 1, 'no new look is armed after closing')
-  assert.equal(fetches.length, 4)
+  assert.equal(timers.length, 1, 'no new inventory ask is armed after closing')
+  assert.equal(fetches.length, 2)
+})
+
+test('look popup: a panorama streams as a panorama', () => {
+  const { el, streams } = page()
+  el('pano').checked = true
+  el('lookimg').listeners.click()
+  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
 })
 
 test('look popup: the small picture still refreshes on its own through the same loader, without the inventory', async () => {

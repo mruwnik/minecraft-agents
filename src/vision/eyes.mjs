@@ -1,64 +1,53 @@
-// Glue between the bot and vision.mjs: copies nearby chunk data into a grid, loads block textures from
-// ./textures (extracted from a client jar, see README) and writes what the bot sees to ./snapshots/*.png
+// Glue between the bot and the renderer: copies nearby chunk data into a grid, has render-worker.mjs draw it with the
+// block textures in ./textures (extracted from a client jar, see README) and writes what the bot sees to ./snapshots/*.png
 import fs from 'node:fs'
 import path from 'node:path'
-import prismarineBlock from 'prismarine-block'
-import { decodePng, encodePng, makeGrid, render, textureCandidates } from './renderer.mjs'
+import { Worker } from 'node:worker_threads'
+import { makeGrid } from './renderer.mjs'
 
-const GRASS = [124, 189, 107]
-const FOLIAGE = [89, 174, 48]
-const TINTS = [
-  [/^(grass_block_top|short_grass|tall_grass_(top|bottom)|fern|large_fern_(top|bottom))$/, GRASS],
-  [/^birch_leaves$/, [128, 167, 85]],
-  [/^spruce_leaves$/, [97, 153, 97]],
-  [/^(oak|jungle|acacia|dark_oak|mangrove)_leaves$|^vine$|^lily_pad$/, FOLIAGE],
-  [/^water_still$/, [63, 118, 228]]
-]
-const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
-const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
+const MARGIN = 8
 export const YAWS = { north: 0, west: 90, south: 180, east: 270 }
 const rad = deg => deg * Math.PI / 180
 
 export function makeEyes (bot, { textureDir, snapshotDir }) {
-  const Block = prismarineBlock(bot.registry)
-  const images = new Map()
-  const blockInfo = new Map()
-  const faceTextures = new Map()
   let shot = 0
 
-  const image = name => {
-    if (images.has(name)) return images.get(name)
-    const file = path.join(textureDir, `${name}.png`)
-    const decoded = fs.existsSync(file) ? { ...decodePng(fs.readFileSync(file)), tint: TINTS.find(([re]) => re.test(name))?.[1] } : null
-    images.set(name, decoded)
-    return decoded
+  // started on the first look and again after a crash; a crash fails the looks it was drawing, not the body.
+  // It holds the process open only while it draws, so a body (or a test) that is done can exit.
+  let worker = null
+  let asked = 0
+  const pending = new Map()
+  const painter = () => {
+    if (worker) return worker
+    worker = new Worker(new URL('./render-worker.mjs', import.meta.url), { workerData: { version: bot.registry.version.minecraftVersion, textureDir } })
+    worker.on('message', ({ id, error, ...drawn }) => {
+      const asker = pending.get(id)
+      pending.delete(id)
+      if (!pending.size) worker.unref()
+      if (error) asker.reject(new Error(error))
+      else asker.resolve(drawn)
+    })
+    worker.on('error', e => console.error('[eyes] the render worker failed:', e.message))
+    worker.on('exit', () => {
+      pending.forEach(asker => asker.reject(new Error('the render worker stopped')))
+      pending.clear()
+      worker = null
+    })
+    return worker
   }
+  const draw = scene => new Promise((resolve, reject) => {
+    const id = ++asked
+    pending.set(id, { resolve, reject })
+    painter().ref()
+    worker.postMessage({ id, scene })
+  })
 
-  const texture = (block, face, props) => {
-    const key = `${block}|${face}|${props?.half ?? ''}|${props?.age ?? ''}`
-    if (!faceTextures.has(key)) faceTextures.set(key, textureCandidates(block, face, props).map(image).find(Boolean) ?? null)
-    return faceTextures.get(key)
-  }
-
-  const describe = stateId => {
-    const b = Block.fromStateId(stateId, 0)
-    if (AIR.has(b.name)) return null
-    const base = { name: b.name, props: b.getProperties() }
-    if (b.name === 'water' || b.name === 'lava') return { ...base, kind: 'cube' }
-    if (!b.shapes.length) return { ...base, kind: 'cross' }
-    return JSON.stringify(b.shapes) === FULL_CUBE ? { ...base, kind: 'cube' } : { ...base, kind: 'boxes', boxes: b.shapes }
-  }
-  const info = stateId => {
-    if (!blockInfo.has(stateId)) blockInfo.set(stateId, describe(stateId))
-    return blockInfo.get(stateId)
-  }
-
-  function snapshotWorld (eye, radius) {
+  // copies the chunk data in a box round a cell, `across` blocks out each way and `up` blocks above and below
+  function snapshotWorld (centre, across, up) {
     const minY = bot.game.minY ?? -64
     const maxY = minY + (bot.game.height ?? 384) - 1
-    const vertical = Math.min(radius, 48)
-    const origin = { x: Math.floor(eye.x) - radius, y: Math.max(minY, Math.floor(eye.y) - vertical), z: Math.floor(eye.z) - radius }
-    const size = { x: radius * 2 + 1, y: Math.min(maxY, Math.floor(eye.y) + vertical) - origin.y + 1, z: radius * 2 + 1 }
+    const origin = { x: centre.x - across, y: Math.max(minY, centre.y - up), z: centre.z - across }
+    const size = { x: across * 2 + 1, y: Math.min(maxY, centre.y + up) - origin.y + 1, z: across * 2 + 1 }
     const grid = makeGrid(origin, size)
     const local = { x: 0, y: 0, z: 0 }
     for (let cx = origin.x >> 4; cx <= (origin.x + size.x - 1) >> 4; cx++) {
@@ -78,6 +67,20 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     return grid
   }
 
+  // Copying the world is the part of a look the body's own thread pays, so the copy is kept between looks and kept
+  // true by block updates. It reaches MARGIN past the view, so the body can step about before it is copied again.
+  let copy = null
+  const forget = () => { copy = null }
+  bot.on('chunkColumnLoad', forget)
+  bot.on('chunkColumnUnload', forget)
+  bot.on('blockUpdate', (old, now) => copy?.grid.set(now.position.x, now.position.y, now.position.z, now.stateId))
+  const worldAround = (eye, radius) => {
+    const at = { x: Math.floor(eye.x), y: Math.floor(eye.y), z: Math.floor(eye.z) }
+    const fits = copy && copy.world === bot.world && copy.radius === radius && ['x', 'y', 'z'].every(a => Math.abs(at[a] - copy.centre[a]) <= MARGIN)
+    if (!fits) copy = { grid: snapshotWorld(at, radius + MARGIN, Math.min(radius, 48) + MARGIN), world: bot.world, radius, centre: at }
+    return copy.grid
+  }
+
   const visibleEntities = () => Object.values(bot.entities)
     .filter(e => e !== bot.entity && e.position)
     .map(e => ({
@@ -92,7 +95,7 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     }))
 
   // look {pano} | {dir: north|south|east|west} | {yaw, pitch in degrees} | {x,y,z to look towards}; default: where the bot is facing
-  return function look (a = {}) {
+  return async function look (a = {}) {
     const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? 1.62, 0)
     const towards = a.x === undefined ? null : { dx: a.x + 0.5 - eye.x, dy: (a.y ?? eye.y) + 0.5 - eye.y, dz: a.z + 0.5 - eye.z }
     const yaw = towards ? Math.atan2(-towards.dx, -towards.dz) : a.dir ? rad(YAWS[a.dir]) : a.yaw !== undefined ? rad(a.yaw) : bot.entity.yaw
@@ -103,13 +106,14 @@ export function makeEyes (bot, { textureDir, snapshotDir }) {
     const width = a.width ?? (panorama ? 864 : 480)
     const height = a.height ?? (panorama ? 216 : 270)
     const maxDist = Math.min(a.dist ?? 64, 96)
-    const out = render({
-      grid: snapshotWorld(eye, maxDist), info, texture, eye, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
+    const { origin, size, data } = worldAround(eye, maxDist)
+    const out = await draw({
+      grid: { origin, size, data }, eye: { x: eye.x, y: eye.y, z: eye.z }, entities: visibleEntities(), timeOfDay: bot.time.timeOfDay,
       width, height, maxDist, panorama, yaw, pitch, fov: a.fov ?? 100
     })
     fs.mkdirSync(snapshotDir, { recursive: true })
     const file = path.join(snapshotDir, a.file ?? `look-${String(++shot).padStart(3, '0')}.png`)
-    fs.writeFileSync(file, encodePng(width, height, out.rgba))
+    fs.writeFileSync(file, out.png)
     const facing = Object.keys(YAWS).reduce((best, k) => Math.cos(rad(YAWS[k]) - yaw) > Math.cos(rad(YAWS[best]) - yaw) ? k : best)
     return {
       file: path.relative(process.cwd(), file),
