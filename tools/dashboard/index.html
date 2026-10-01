@@ -777,7 +777,6 @@ const setWatching = on => {
   else closeWatch()
 }
 el('relook').addEventListener('click', () => setWatching(!watching))
-el('relook').textContent = 'watch'
 
 // where the game draws each of mineflayer's window slots, as [row, column] of #lookInventory's grid: 5-8 armour, 45 the
 // offhand beside the boots, 9-35 the main grid, 36-44 the hotbar (rows 5 and 9 are the gaps)

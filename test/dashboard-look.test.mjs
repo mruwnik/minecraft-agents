@@ -15,7 +15,8 @@ const settle = () => new Promise(resolve => setImmediate(resolve))
 const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }) => {
   const nodes = new Map()
   const el = id => {
-    if (!nodes.has(id)) nodes.set(id, { id, hidden: true, src: '', textContent: '', innerHTML: '', className: '', style: { setProperty () {} }, listeners: {}, addEventListener (type, fn) { this.listeners[type] = fn } })
+    // relook's initial label comes from the markup itself (<button id="relook">watch</button>), not the script
+    if (!nodes.has(id)) nodes.set(id, { id, hidden: true, src: '', textContent: id === 'relook' ? 'watch' : '', innerHTML: '', className: '', style: { setProperty () {} }, listeners: {}, addEventListener (type, fn) { this.listeners[type] = fn } })
     return nodes.get(id)
   }
   const fetches = []
