@@ -610,6 +610,7 @@ for (const [name, slots, quickBarSlot, expected] of [
 
 for (const [name, attributes, expected] of [
   ['nothing sent yet', {}, 0],
+  ['no attributes object at all (not yet sent)', null, 0],
   ['bare', { 'minecraft:armor': { value: 0, modifiers: [] } }, 0],
   ['an iron helmet and boots as additive modifiers', { 'minecraft:armor': { value: 0, modifiers: [{ amount: 2, operation: 0 }, { amount: 2, operation: 0 }] } }, 4],
   ['the older key', { 'generic.armor': { value: 1, modifiers: [{ amount: 5, operation: 0 }] } }, 6],

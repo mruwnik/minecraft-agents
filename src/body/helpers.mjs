@@ -6,7 +6,7 @@ import { fullSide, transferOutcome, compact, settleVerdict, coordsError, unpenne
 import { rimGoal, walkRefusal } from '../navigation/walk.mjs'
 import { configureEscortMoves, equine, escortAtDestination, runSurfaceEscort } from '../navigation/escort.mjs'
 import { searchSections, enough } from '../blocksearch.mjs'
-import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf, reportPerformance } from '../bot.mjs'
+import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf, reportPerformance, declareOpening } from '../bot.mjs'
 
 // ---------------------------------------------------------------- helpers
 export function matcher (names) {
@@ -231,6 +231,7 @@ export async function craftBatch (recipe, table) {
   await goNear(table.position, 2)
   bot.pathfinder.setGoal(null)
   await bot.lookAt(table.position.offset(0.5, 0.5, 0.5), true)
+  declareOpening({ x: table.position.x, y: table.position.y, z: table.position.z })
   const window = await within(6000, bot.openBlock(table), 'opening the crafting table').catch(() => null)
   if (!window) return
   if (!String(window.type ?? '').startsWith('minecraft:crafting')) {
@@ -270,7 +271,11 @@ export async function containerAt (a, names = ['chest', 'barrel', 'trapped_chest
   const p = a.x !== undefined ? vecOf(a) : findBlockByName(names, 32)[0]
   if (!p) throw new Error('no container found nearby')
   await goNear(p, 2)
-  return bot.blockAt(p)
+  const block = bot.blockAt(p)
+  // the block every caller here opens next: declared so the dashboard's screen reports where the window really
+  // came from, not a nearby-block guess (the previous scan mixed up a chest and a barrel within reach of each other)
+  declareOpening({ x: block.position.x, y: block.position.y, z: block.position.z })
+  return block
 }
 
 // ---- leads (card 43a32481). attach_entity is the leash packet too, so boatLeashHolder maps every leashed entity,

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { watchWindows, containerBlocks, LINGER_MS } from '../src/body/window-watch.mjs'
+import { watchWindows, LINGER_MS } from '../src/body/window-watch.mjs'
 
 const window = (type, slots, inventoryStart, title = '{"translate":"container.chest"}') => Object.assign(new EventEmitter(), { type, title, slots, inventoryStart })
 const bread = { name: 'bread', count: 3 }
@@ -9,17 +9,36 @@ const setup = () => {
   const bot = new EventEmitter()
   let t = 1000
   const clock = { now: () => t, tick: ms => { t += ms } }
-  const open = watchWindows(bot, { nearest: () => ({ x: 96, y: 70, z: -79 }), now: clock.now })
-  return { bot, clock, open }
+  const { open, opening } = watchWindows(bot, { now: clock.now })
+  return { bot, clock, open, opening }
 }
 
 test('no window: nothing', () => assert.equal(setup().open(), null))
 
-test('a chest opens: its stacks by container slot, where it stands, how big it is', () => {
-  const { bot, open } = setup()
+test('a chest opens: its stacks by container slot, at the position the opener declared, how big it is', () => {
+  const { bot, open, opening } = setup()
+  // the opener (containerAt) declares the block it resolved and is about to open, before windowOpen fires
+  opening({ x: 96, y: 70, z: -79 })
   // a real generic_9x3 window is 63 slots (27 container + 36 player): 24 nulls, not 25, puts dirt at the container's last slot (26)
   bot.emit('windowOpen', window('minecraft:generic_9x3', [null, bread, ...Array(24).fill(null), { name: 'dirt', count: 64 }, ...Array(36).fill({ name: 'mine', count: 1 })], 27))
   assert.deepEqual(open(), { type: 'minecraft:generic_9x3', title: 'chest', at: { x: 96, y: 70, z: -79 }, size: 27, open: true, closedAt: null, slots: [{ slot: 1, name: 'bread', count: 3 }, { slot: 26, name: 'dirt', count: 64 }] })
+})
+
+// the bug this guards against: a blind nearby-block scan reported a barrel when a chest and a barrel both stood
+// within range of a chest the body actually opened. There is no scan any more - at is whatever was declared, or null
+test('nobody declared a position: at is null, not a nearby guess', () => {
+  const { bot, open } = setup()
+  bot.emit('windowOpen', window('minecraft:generic_9x3', Array(63).fill(null), 27))
+  assert.equal(open().at, null)
+})
+
+test('a declared position is used once and then cleared: a later window nobody declared gets null', () => {
+  const { bot, open, opening } = setup()
+  opening({ x: 1, y: 2, z: 3 })
+  bot.emit('windowOpen', window('minecraft:furnace', Array(39).fill(null), 3))
+  bot.emit('windowClose')
+  bot.emit('windowOpen', window('minecraft:furnace', Array(39).fill(null), 3))
+  assert.equal(open().at, null)
 })
 
 test('a slot changing while it is open changes the answer; one in my own inventory does not', () => {
@@ -45,11 +64,3 @@ test('closed: kept for LINGER_MS with the time it closed, then gone', () => {
   clock.tick(1)
   assert.equal(open(), null)
 })
-
-for (const [type, name, matches] of [
-  ['minecraft:generic_9x3', 'chest', true], ['minecraft:generic_9x3', 'barrel', true], ['minecraft:generic_9x3', 'red_shulker_box', true],
-  ['minecraft:generic_9x6', 'chest', true], ['minecraft:generic_9x6', 'barrel', false], ['minecraft:furnace', 'furnace', true],
-  ['minecraft:blast_furnace', 'furnace', false], ['minecraft:smoker', 'smoker', true], ['minecraft:hopper', 'hopper', true],
-  ['minecraft:generic_3x3', 'dropper', true], ['minecraft:crafting', 'crafting_table', true]
-]) test(`containerBlocks: ${type} ${matches ? 'is' : 'is not'} a ${name}`, () => assert.equal(containerBlocks(type).test(name), matches))
-test('containerBlocks: an unknown window has no block', () => assert.equal(containerBlocks('minecraft:beacon'), null))

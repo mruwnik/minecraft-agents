@@ -21,8 +21,10 @@ export const inventorySlots = (slots, quickBarSlot) => ({
 })
 
 // the armour the game's HUD shows: the player's armor attribute, base plus the worn pieces' additive modifiers.
-// 0 until the server sends it (it comes with the first armour change)
-export const armorPoints = (attributes = {}) => {
+// 0 until the server sends it (it comes with the first armour change) - entity.attributes can be null, not just
+// undefined, before then
+export const armorPoints = (rawAttributes) => {
+  const attributes = rawAttributes ?? {}
   const key = Object.keys(attributes).find(k => /(^|[.:])armor$/.test(k))
   if (!key) return 0
   const { value, modifiers = [] } = attributes[key]

@@ -2,18 +2,6 @@
 // smelt open and close a chest inside one call, often under a second, so a one-second poll would never see one otherwise
 export const LINGER_MS = 5000
 
-const BLOCKS = {
-  'minecraft:generic_9x3': /^(chest|trapped_chest|barrel|[a-z_]*shulker_box)$/,
-  'minecraft:generic_9x6': /^(chest|trapped_chest)$/,
-  'minecraft:furnace': /^furnace$/,
-  'minecraft:blast_furnace': /^blast_furnace$/,
-  'minecraft:smoker': /^smoker$/,
-  'minecraft:hopper': /^hopper$/,
-  'minecraft:generic_3x3': /^(dispenser|dropper)$/,
-  'minecraft:crafting': /^crafting_table$/
-}
-export const containerBlocks = type => BLOCKS[type] ?? null
-
 // the window's title as the game shows it: a chat component, usually {"translate":"container.chest"}
 const titleOf = title => {
   try {
@@ -23,18 +11,27 @@ const titleOf = title => {
 }
 const stacks = (slots, size) => slots.slice(0, size).flatMap((item, slot) => item ? [{ slot, name: item.name, count: item.count }] : [])
 
-export function watchWindows (bot, { nearest, now = Date.now }) {
+// at: the block the opener (containerAt, craftBatch, the furnace actions) declared with `opening` just before it
+// opened the window - never a nearby-block guess, which once reported a barrel for a chest the body actually opened
+// when both stood within range. Consumed by the next windowOpen and cleared, so a window nobody declared for (the
+// enchanting table, a villager trade) always answers null rather than reusing a stale position.
+export function watchWindows (bot, { now = Date.now } = {}) {
+  let declared = null
   let current = null
   bot.on('windowOpen', window => {
     const size = window.inventoryStart
-    current = { type: window.type, title: titleOf(window.title), at: nearest(window.type), size, open: true, closedAt: null, slots: stacks(window.slots, size) }
+    current = { type: window.type, title: titleOf(window.title), at: declared, size, open: true, closedAt: null, slots: stacks(window.slots, size) }
+    declared = null
     window.on('updateSlot', slot => { if (slot < size) current.slots = stacks(window.slots, size) })
   })
   bot.on('windowClose', () => { if (current) current = { ...current, open: false, closedAt: now() } })
-  return () => {
-    if (!current) return null
-    if (current.open || now() - current.closedAt < LINGER_MS) return current
-    current = null
-    return null
+  return {
+    open: () => {
+      if (!current) return null
+      if (current.open || now() - current.closedAt < LINGER_MS) return current
+      current = null
+      return null
+    },
+    opening: pos => { declared = pos ?? null }
   }
 }
