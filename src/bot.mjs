@@ -609,7 +609,8 @@ function connect () {
       })
       emit('respawned', { ...(plan.why ? { doing: plan.do, note: plan.why } : {}) })
       if (plan.do === 'burrow') holeUp(plan.why)
-      if (plan.do === 'sleep') submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
+      // #147(c): a just-respawned body sleeps in a near or carried bed, never walks one of its own
+      if (plan.do === 'sleep') submitJob('sleep', { timeout: 60, automatic: true, walk: false }, { automatic: true })
     }, () => emit('respawned'))
   })
   bot.on('sleep', () => emit('sleeping'))
@@ -1041,7 +1042,10 @@ setInterval(() => {
   const hostileNear = nearbyHostiles(8).length > 0
   const carried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
   const from = pos()
-  const plan = automaticNightPlan({ near: bedNear, bed: ownBed(readPlaces(), cfg.username, { from }), from, carried, walkFailed: bedWalkFailed, hostileNear })
+  // the shared map is only worth reading once it is night: by day there is no bedtime plan to make
+  const plan = night
+    ? automaticNightPlan({ near: bedNear, bed: ownBed(readPlaces(), cfg.username, { from }), from, carried, walkFailed: bedWalkFailed, hostileNear })
+    : { do: 'stop' }
   const bedWalk = plan.do === 'walk'
   const bedCarried = plan.do === 'place'
   const tired = bedtime({
@@ -2739,6 +2743,7 @@ export const long = {
 
   async sleep (a) {
     if (bot.vehicle) throw new Error('confirm a safe dismount before walking to a bed')
+    const alive = cancelGuard()
     // a taken bed is passed over for the next one I may use (a shared bedroom: "the bed is occupied" was the end of the night)
     const occupied = new Set()
     // no bed within 32 is not the end of the night when one of my own is on the shared map within bed_range (default 200,
@@ -2753,7 +2758,7 @@ export const long = {
         const from = pos()
         const plan = automaticNightPlan({
           near: false, bed: ownBed(readPlaces(), cfg.username, { from }), from,
-          carried: Boolean(carriedBed()) && Boolean(carriedBedPlace()), walkFailed: bedWalkFailed, hostileNear: nearbyHostiles(8).length > 0
+          carried: Boolean(carriedBed()) && Boolean(carriedBedPlace()), walkFailed: bedWalkFailed || a.walk === false, hostileNear: nearbyHostiles(8).length > 0
         })
         if (plan.do === 'walk') {
           walked = true
@@ -2761,7 +2766,8 @@ export const long = {
             await goNear(plan.to, 2)
           } catch (e) {
             bedWalkFailed = true
-            if (/^cancelled/.test(e.message)) throw e
+            alive()
+            if (/goal was changed|path was stopped/i.test(e.message)) throw e
           }
           continue
         }
@@ -2769,6 +2775,7 @@ export const long = {
           const item = carriedBed()
           const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
           if (spot) {
+            alive()
             placed = true
             await placeReflexBed(item.name, spot)
             continue

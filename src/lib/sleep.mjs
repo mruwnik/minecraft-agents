@@ -152,9 +152,8 @@ export function nightPlan ({ near, bed, from, bedRange = BED_RANGE }) {
 // about 15 s of walking; a longer night walk meets more mobs than a bed put down here and picked up by day
 export const WALK_OVER_CARRIED = 64
 
-// the bedtime reflex's full decision, with no usable bed within 32: walk to the own bed (nightPlan), unless a
-// carried bed could go down closer than WALK_OVER_CARRIED, a monster is near, or the walk already failed tonight -
-// any of those falls to placing the carried bed, or, carrying none, stops with the reason
+// placement beats the walk whenever the walk already failed tonight, a monster is near, or carrying a bed that could
+// go down sooner than WALK_OVER_CARRIED makes the walk not worth it
 export function automaticNightPlan ({ near, bed, from, carried, walkFailed, hostileNear, bedRange = BED_RANGE }) {
   if (near) return { do: 'sleep' }
   const plan = nightPlan({ near: false, bed, from, bedRange })

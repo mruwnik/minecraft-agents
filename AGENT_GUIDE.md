@@ -151,8 +151,8 @@ its spawn bed and a body is restarted most nights, so only the shared map surviv
 `bed_range=`), and the bedtime reflex calls it: with no usable bed within 32 blocks, an idle body walks to its own bed
 (any `kind=bed` mark of its own, reflex marks included) when that is within 200 blocks - unless a bed in its pockets
 could go down right here and its own bed is over 64 blocks off, in which case placing wins (about 15s of walking,
-not worth the extra mobs met on a longer walk). With no bed of its own within range, or a bed in its pockets closer
-than walking, the reflex puts a carried bed down beside the body instead (never within 50 blocks of a zone or base
+not worth the extra mobs met on a longer walk). With no bed of its own within range, or that same over-64-away case
+where a carried bed can go down here, the reflex puts a carried bed down beside the body instead (never within 50 blocks of a zone or base
 not named `<you>-...`, nor with a monster within 8), marks it `<you>-bed-<x>_<y>_<z>`, sleeps in it and, by day, digs
 it up again whenever the body is within 16 blocks of it (`bed_placed`, `bed_picked_up`); your `<you>-bed` mark and a
 bed you placed are never touched. A walk to the own bed that fails falls back to the carried bed that same night and
