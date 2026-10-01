@@ -15,7 +15,8 @@ const settle = () => new Promise(resolve => setImmediate(resolve))
 const page = (screen = { hp: 20, food: 20, xp: 0, oxygen: 20, armor: 0, slots: [], selected: 0, window: null }) => {
   const nodes = new Map()
   const el = id => {
-    if (!nodes.has(id)) nodes.set(id, { id, hidden: true, src: '', textContent: '', innerHTML: '', className: '', style: { setProperty () {} }, listeners: {}, addEventListener (type, fn) { this.listeners[type] = fn } })
+    // relook's initial label comes from the markup itself (<button id="relook">watch</button>), not the script
+    if (!nodes.has(id)) nodes.set(id, { id, hidden: true, src: '', textContent: id === 'relook' ? 'watch' : '', innerHTML: '', className: '', style: { setProperty () {} }, listeners: {}, addEventListener (type, fn) { this.listeners[type] = fn } })
     return nodes.get(id)
   }
   const fetches = []
@@ -125,13 +126,51 @@ test('look popup: a panorama streams as a panorama', () => {
   assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
 })
 
-test('look popup: the small picture still refreshes on its own through the same loader, without the inventory', async () => {
-  const { el, fetches } = page()
+test('inline card: the watch button starts a live stream and flips to pause; pause closes it and flips back', () => {
+  const { el, streams } = page()
+  assert.equal(el('relook').textContent, 'watch')
   el('relook').listeners.click()
-  assert.equal(fetches.length, 1)
-  await settle()
-  assert.equal(el('lookimg').src, 'blob:look')
-  assert.equal(el('lookOverlay').hidden, true)
+  assert.equal(el('relook').textContent, 'pause')
+  assert.deepEqual([streams.length, streams[0].url, streams[0].closed], [1, '/api/look/Chani/live?', false])
+  el('relook').listeners.click()
+  assert.equal(el('relook').textContent, 'watch')
+  assert.equal(streams[0].closed, true)
+})
+
+test('inline card: a frame from the watch stream draws the picture and caption, the same as the popup', () => {
+  const { el, streams } = page()
+  el('relook').listeners.click()
+  streams[0].onmessage({ data: JSON.stringify({ png: 'BBBB', view: 'south pitch 0', seen: [], blocked: '' }) })
+  assert.equal(el('lookimg').src, 'data:image/png;base64,BBBB')
+  assert.equal(el('lookimg').hidden, false)
+  assert.equal(el('lookmeta').textContent, 'Chani · south pitch 0\nsees nothing alive')
+})
+
+test('inline card: honours the pano checkbox the same way the popup does', () => {
+  const { el, streams } = page()
+  el('pano').checked = true
+  el('relook').listeners.click()
+  assert.equal(streams[0].url, '/api/look/Chani/live?pano=1')
+})
+
+test('inline card: switching the selected body while watching keeps watching, on the new body', () => {
+  const { el, streams, select } = page()
+  el('relook').listeners.click()
+  select('Bob')
+  assert.deepEqual([streams.length, streams[0].closed, streams[1].url, streams[1].closed], [2, true, '/api/look/Bob/live?', false])
+  assert.equal(el('relook').textContent, 'pause')
+})
+
+test('inline card: switching the selected body while paused does not start a stream', () => {
+  const { el, streams, select } = page()
+  select('Bob')
+  assert.equal(streams.length, 0)
+  assert.equal(el('relook').textContent, 'watch')
+})
+
+test('inline card: no fetch is made for the inline picture - it only ever comes down the stream', () => {
+  const { fetches } = page()
+  assert.equal(fetches.length, 0)
 })
 
 // the inventory screen: one cell per slot, by mineflayer's window slot number, as the game lays them out

@@ -180,7 +180,9 @@ function makeApi (composite, a, alive, jobEvent = () => {}) {
       invFull: bot.inventory.emptySlotCount() === 0,
       canDeposit: Boolean(extra.canDeposit),
       night: night(),
-      bedNear: bedsNear().length > 0,
+      // handBackReason only reads bedNear once it is night; the world scan behind it is real wall-clock time a
+      // library composite pays on every checkpoint (farm.build: once per block), so skip it by day
+      bedNear: night() && bedsNear().length > 0,
       days: a.days,
       elapsedDays: worldDay() - startedDay,
       count: a.count,

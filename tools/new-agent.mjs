@@ -46,7 +46,10 @@ fs.mkdirSync(path.join(home, 'snapshots'), { recursive: true })
 // chattiness 0.5 out of the gate: answers what is asked and greets, without ending its wait for every "morning" (card 2e032c4a)
 fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, character: { name: character.name, source: character.source, note: character.note }, chat: { chattiness: 0.5, allow: [], deny: [], grader: 'rules' } }, null, 1) + '\n')
 script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../../tools/mc.mjs" "$@"')
-script('start', '# start this agent\'s body; it returns once the body is launched, and the body's output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
+script('start', '# start this agent\'s body; it returns once the body is launched, and the body\'s output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
+// for the operator, not drivers: a driver that wants its body back decides for itself when it is safe (./mc quit,
+// then ./start) so it is never signalled mid-task. This is the blunt "it is wedged, bring it back clean" restart
+script('restart', '# cleanly restart this agent\'s body (stop it, then ./start); for the operator - drivers use ./mc quit then ./start themselves\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/restart-body" "$(dirname "$(readlink -f "$0")")" "$@"')
 fs.writeFileSync(path.join(home, 'journal.md'), `# ${character.username}'s journal\n\nNewest entry last. Keep entries short: what you did, what you learned, what you promised, where things are.\n`)
 fs.writeFileSync(path.join(home, 'BRIEFING.md'), `# You are ${character.username}
 
