@@ -1,4 +1,4 @@
-import { automaticBeds } from './lib/sleep.mjs'
+import { automaticBeds, carriedBedSpot, reflexPickups } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
 import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
@@ -981,7 +981,47 @@ setInterval(() => {
 }, 5000)
 // is the MaxListeners warning (11 physicsTick listeners) a plateau or a leak? One line every 10 minutes in bot.log settles it
 setInterval(() => { if (ready) console.log(`[listeners] physicsTick=${bot.listenerCount('physicsTick')} heapMb=${Math.round(process.memoryUsage().heapUsed / 1e6)}`) }, 600000)
-export const automaticSleepBeds = () => automaticBeds(bedsNear(), zones, readPlaces(), cfg.username, Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position))
+const villagers = () => Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position)
+export const automaticSleepBeds = () => automaticBeds(bedsNear(), zones, readPlaces(), cfg.username, villagers())
+const carriedBed = () => bot.inventory.items().find(i => i.name.endsWith('_bed'))
+const carriedBedPlace = () => carriedBedSpot({
+  feet: feetCell(bot.entity.position, bot.entity.onGround), cellAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)),
+  zones, places: readPlaces(), me: cfg.username, residents: villagers()
+})
+// each bed the reflex puts down gets its own mark on the shared map, so a restart still knows to pick it up and a
+// driver's own <me>-bed mark (and bed) is never touched
+const reflexBeds = () => readPlaces().filter(p => p.reflex === true && p.by === cfg.username)
+const unmark = name => savePlaces(readPlaces().filter(p => p.name !== name))
+async function placeReflexBed (item, { x, y, z, facing }) {
+  const name = `${cfg.username}-bed-${x}_${y}_${z}`
+  const mark = () => savePlaces([...readPlaces().filter(p => p.name !== name), { name, kind: 'bed', x, y, z, by: cfg.username, reflex: true, item, note: 'placed by the bedtime reflex' }])
+  try {
+    await long.place({ item, x, y, z, facing })
+  } catch (err) {
+    // the bed went down but a later check failed: an unmarked reflex bed would never be picked up
+    if (cellAt(x, y, z)?.name === item) mark()
+    throw err
+  }
+  mark()
+  emit('bed_placed', { at: `${x},${y},${z}`, item, note: 'no bed of mine nearby: put down the one I carry to sleep in, and pick it up by day' })
+}
+// through the scheduler, so the pick-up queues behind the driver's work instead of racing it. Waited on rather than
+// caught in onTerminal: a job dropped from the queue (stop, discard) never reaches onTerminal
+const FOREVER_MS = 2 ** 31 - 1
+const pickingUp = new Set()
+async function pickUpReflexBed ({ name, x, y, z, item }) {
+  pickingUp.add(name)
+  const before = inventoryCounts()[item] ?? 0
+  await scheduler.wait(submitJob('dig', { x, y, z }, { automatic: true }).id, FOREVER_MS)
+  // judged by the world, not the job's status: a dig that failed after breaking the bed still took it down.
+  // One left standing stays in pickingUp, so it is not retried this run: every failed job holds the driver's queue
+  const cell = cellAt(x, y, z)
+  if (!cell || cell.name === item) return
+  pickingUp.delete(name)
+  unmark(name)
+  const pocketed = (inventoryCounts()[item] ?? 0) > before
+  emit('bed_picked_up', { at: `${x},${y},${z}`, item, note: pocketed ? 'picked up the bed I put down for the night' : 'took down the bed I put down for the night, but it did not reach my pockets: it may lie on the ground there' })
+}
 // bedtime reflex (see bedtime in lib.mjs)
 let lastDriven = Date.now()
 let lastBedTry = 0
@@ -990,15 +1030,22 @@ setInterval(() => {
   if (!ready) return
   const now = Date.now()
   // #147: holed up for the night means staying in the hole, not walking out of it to the bed past what put me there
-  if (!isNight(bot.time.timeOfDay)) holedUp = null
+  const night = isNight(bot.time.timeOfDay)
+  if (!night) holedUp = null
+  for (const { bed, do: step } of reflexPickups({ night, asleep: bot.isSleeping, reflexes, beds: reflexBeds(), cellAt, from: bot.entity.position, inFlight: pickingUp })) {
+    if (step === 'unmark') unmark(bed.name)
+    else pickUpReflexBed(bed)
+  }
+  const bedNear = automaticSleepBeds().length > 0
+  const bedCarried = night && !bedNear && Boolean(carriedBed()) && Boolean(carriedBedPlace())
   const tired = bedtime({
-    night: isNight(bot.time.timeOfDay), busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear: automaticSleepBeds().length > 0,
+    night, busy: !!task || jobShelf.snapshot().active != null || jobShelf.list().queued.length > 0 || Boolean(jobShelf.snapshot().held) || Boolean(holedUp) || Boolean(flee) || Boolean(holingUp) || Boolean(fighting) || surfacing || diggingOut || Boolean(bot.vehicle), asleep: bot.isSleeping, bedNear, bedCarried,
     hostileNear: nearbyHostiles(8).length > 0, reflexes, idleMs: now - lastDriven, sinceTryMs: now - lastBedTry, failures: bedFailures
   })
-  if (!isNight(bot.time.timeOfDay) || bot.isSleeping) bedFailures = 0
+  if (!night || bot.isSleeping) bedFailures = 0
   if (!tired) return
   lastBedTry = now
-  if (bedFailures === 0) emit('bedtime', { note: 'night, no orders, a bed nearby: going to bed by myself' })
+  if (bedFailures === 0) emit('bedtime', { note: bedNear ? 'night, no orders, a bed nearby: going to bed by myself' : 'night, no orders, no bed nearby: placing the bed I carry and going to bed' })
   // say so once a night: the driver is told, and the retries (ever further apart) stay quiet
   submitJob('sleep', { timeout: 60, automatic: true }, { automatic: true })
 }, 10000)
@@ -2687,8 +2734,16 @@ export const long = {
     // no bed within 32 is not the end of the night when one of my own is on the shared map within bed_range (default 200,
     // card bebf3a5f): walk there once (bed=<place>, else my nearest kind=bed mark; src/lib/sleep.mjs ownBed) and look again
     let walked = false
+    let placed = false
     for (;;) {
       const { bed: p, error } = bedChoice(a.automatic ? automaticSleepBeds() : bedsNear(), zones, cfg.username, a.any === true && !a.automatic, occupied)
+      const item = error && a.automatic && !placed ? carriedBed() : null
+      const spot = item && nearbyHostiles(8).length === 0 ? carriedBedPlace() : null
+      if (spot) {
+        placed = true
+        await placeReflexBed(item.name, spot)
+        continue
+      }
       if (error && !a.automatic && !walked && /^no bed within 32/.test(error)) {
         const from = pos()
         const plan = nightPlan({ near: false, bed: ownBed(readPlaces(), cfg.username, { bed: a.bed, from }), from, bedRange: a.bed_range ?? BED_RANGE })

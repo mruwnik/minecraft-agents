@@ -149,7 +149,10 @@ back at dawn. Its own bed is, in order, `bed=<place>`, the nearest mark of `kind
 kind=bed` standing on the bed, once), and where it last woke this run. Nothing else knows its bed: the client never learns
 its spawn bed and a body is restarted most nights, so only the shared map survives. `sleep` does the same (`bed=`,
 `bed_range=`), and the bedtime reflex calls it: an idle body with a `kind=bed` mark of its own within 200 blocks walks to it
-at nightfall by itself, rather than stand outside all night.
+at nightfall by itself, rather than stand outside all night. With no bed of its own within 32 blocks but a bed in its
+pockets, the reflex puts that bed down beside the body (never within 50 blocks of a zone or base not named `<you>-...`,
+nor with a monster within 8), marks it `<you>-bed-<x>_<y>_<z>`, sleeps in it and, by day, digs it up again whenever the
+body is within 16 blocks of it (`bed_placed`, `bed_picked_up`); your `<you>-bed` mark and a bed you placed are never touched.
 
 A farm is a **plan**: a little map saved on the shared map (`farm.plan`), which the composites then read. The legend is
 `*` any farmland crop (available suitable seed), `w` wheat, `c` carrot, `p` potato, `b` beetroot, `s` sugar cane, `m` melon stem, `k` pumpkin stem, `B` bamboo, `~` water,

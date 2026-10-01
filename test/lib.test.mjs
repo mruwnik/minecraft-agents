@@ -830,13 +830,16 @@ for (const [title, text, lines] of reportCases) {
 }
 test('waitReport: consumed counts only whole lines', () => assert.equal(waitReport('{"type":"dawn"}\n{"ty', 'Jizo').consumed, 16))
 
-const tired = { night: true, busy: false, asleep: false, bedNear: true, hostileNear: false, reflexes: true, idleMs: 120000, sinceTryMs: 60000, failures: 0 }
+const tired = { night: true, busy: false, asleep: false, bedNear: true, bedCarried: false, hostileNear: false, reflexes: true, idleMs: 120000, sinceTryMs: 60000, failures: 0 }
 const bedtimeCases = [
   ['night, idle, a bed nearby: go to bed', {}, true],
   ['day', { night: false }, false],
   ['a task is running: the driver decides', { busy: true }, false],
   ['already asleep', { asleep: true }, false],
   ['no bed nearby', { bedNear: false }, false],
+  ['no bed near, but a carried bed with a spot: go to bed', { bedNear: false, bedCarried: true }, true],
+  ['neither a bed near nor a carried bed', { bedNear: false, bedCarried: false }, false],
+  ['carried but a monster close: beds refuse, fight first', { bedNear: false, bedCarried: true, hostileNear: true }, false],
   ['a monster is close: beds refuse, fight first', { hostileNear: true }, false],
   ['reflexes switched off', { reflexes: false }, false],
   ['the driver was busy a moment ago: leave it time to act', { idleMs: 20000 }, false],
