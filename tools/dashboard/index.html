@@ -72,7 +72,7 @@
      the HUD/container/inventory blocks all redraw inside this box instead of resizing it */
   #lookCard { display: flex; gap: 12px; width: min(96vw, 980px); max-height: 94vh; }
   #lookMain { flex: 1 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  #lookSide { flex: 0 0 320px; min-height: 0; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  #lookSide { flex: 0 0 320px; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
   #lookSide h2 { margin: 0; }
   #actionsLog { flex: 1; min-height: 0; overflow-y: auto; }
   #lookBig { width: 100%; height: auto; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
