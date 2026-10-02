@@ -50,3 +50,16 @@ test('src/body/events.mjs evaluates on its own, and emit writes to HOME/events.j
   const { out } = bodyModule('src/body/events.mjs', "(m.emit('probe', { n: 1 }), m.recent.at(-1).type)")
   assert.equal(out, 'probe')
 })
+
+// bot.mjs used to be the body; its parts now import each other in cycles, which is safe only while no module reads an
+// imported binding before the module that declares it has run. Which module runs first depends on which one is
+// imported first, so each is imported first once here (a TDZ shows as "Cannot access 'x' before initialization").
+// None of them connects: only src/bot.mjs calls connect().
+const BODY_MODULES = fs.readdirSync(path.join(ROOT, 'src', 'body'), { recursive: true }).filter(f => f.endsWith('.mjs')).sort()
+for (const file of BODY_MODULES) {
+  test(`src/body/${file} evaluates when it is the first module imported`, () => {
+    const { out, err } = bodyModule(path.join('src', 'body', file), 'Object.keys(m).length > 0')
+    assert.equal(err, '')
+    assert.equal(out, true)
+  })
+}
