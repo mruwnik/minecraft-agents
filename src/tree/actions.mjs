@@ -281,7 +281,9 @@ export async function runTree (api, a, action, { pillar = false, decayRecovery =
       for (const candidate of candidates) {
         const local = { attention: [] }
         let reached
-        const reachStructure = { ...(scaffold ?? { columns: [], platforms: [] }), ...(forestScope ? { forestScope } : {}) }
+        // the live record, not a copy: a pillar's descent reassigns record.cells and record.verified (src/scaffold/pillar.mjs),
+        // and on a copy the next candidate still saw the dug pillar and found no platform at all
+        const reachStructure = scaffold ?? { columns: [], platforms: [], ...(forestScope ? { forestScope } : {}) }
         try { reached = await reachTreePlatform(api, [candidate], local, reachStructure) }
         catch (error) {
           if (!handleCenterWorkRefusal(api, error, local, `work platform ${key(candidate)} refused centering`)) throw error
