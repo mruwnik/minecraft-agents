@@ -40,3 +40,40 @@ test('farm.compost: explicit x=/y=/z= always wins, even over a plan with its own
   assert.equal(result.at, '1,2,3')
   assert.ok(!calls.some(c => c.startsWith('find_blocks')))
 })
+
+// Below: fed= must reflect what the inventory actually lost, not how many 'use' calls resolved without
+// throwing. A right-click can resolve clean on a server that rejected the interaction (range, wrong hand,
+// a composter that did not register the click) and the loop must not report a feed that never happened.
+test('farm.compost: fed counts seeds that actually left the inventory as the composter fills', async () => {
+  const items = { wheat_seeds: 10 }
+  const world = { '8,61,202': 'composter#0' }
+  const { api } = fakeApi({
+    place: COMPOSTER_PLACE, world, items,
+    answers: {
+      use: () => {
+        const level = Number(world['8,61,202'].split('#')[1])
+        if (level === 8) { world['8,61,202'] = 'composter#0'; return {} } // taking the bone meal out
+        items.wheat_seeds--
+        world['8,61,202'] = `composter#${level + 1}`
+        return {}
+      }
+    }
+  })
+  const result = await farmCompost.run(api, { place: 'test-field', items: 'wheat_seeds', keep: 0 })
+  assert.equal(result.fed, 'wheat_seeds:10')
+  assert.equal(items.wheat_seeds, 0, 'every reported feed actually left the inventory')
+  assert.equal(result.boneMeal, 1)
+})
+
+test('farm.compost: a composter that accepts the click but takes nothing is not reported as fed', async () => {
+  const items = { wheat_seeds: 5 }
+  const world = { '8,61,202': 'composter#0' }
+  const { api } = fakeApi({
+    place: COMPOSTER_PLACE, world, items,
+    answers: { use: () => ({}) } // resolves clean, as a rejected server-side use still would; nothing is consumed
+  })
+  const result = await farmCompost.run(api, { place: 'test-field', items: 'wheat_seeds', keep: 0 })
+  assert.equal(items.wheat_seeds, 5, 'no seed left the inventory')
+  assert.equal(result.fed, undefined, 'a use that consumed nothing must not be claimed as a feed')
+  assert.match(result.attention, /did not leave|did not take/)
+})
