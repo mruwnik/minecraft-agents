@@ -5,6 +5,7 @@ import path from 'node:path'
 import { breedPlan } from '../villager/breed.mjs'
 import { woodenGate } from '../enclosure/blocks.mjs'
 import { boatHabitatPlan } from '../boat/habitat.mjs'
+import { nightPlan } from '../lib/sleep.mjs'
 import { eatAllowed, BANNED_FOOD, workRefusal, parsePlan, parsePlacePlan, hasPlan, planCells, planBill, isNight, mayDig, makeUntil, PAUSES, handBackReason, checkArgs } from '../lib.mjs'
 import { carryReport, compositeResult, CompositeHandBack as HandBack, recoverableNavigationTarget, navigationTargetKey } from '../composite.mjs'
 import { scaffoldJournal } from '../scaffold/journal.mjs'
@@ -154,15 +155,25 @@ function makeApi (composite, a, alive, jobEvent = () => {}) {
     alive()
     if (!night()) sleptTonight = false
     if (night() && bot.vehicle) throw new HandBack('night aboard a vehicle; find a checked landing before walking to a bed')
-    if (night() && !sleptTonight && automaticSleepBeds().length) {
+    // routine bed=: the bed every composite of this task sleeps in, never a nearer one (a creeper chased the body out
+    // of an old bed 8 blocks from the one named). Out of range or out of reach is a hand-back, not the nearest bed
+    const ownBed = ownerTask?.nightBed ?? null
+    if (night() && !sleptTonight && (ownBed || automaticSleepBeds().length)) {
       sleptTonight = true
+      if (ownBed) {
+        const { bed } = ownBed
+        const plan = nightPlan({ near: false, bed, from: pos(), bedRange: ownBed.bedRange })
+        if (plan.do !== 'walk') throw new HandBack(`night, and ${plan.why}`)
+        await long.goto({ x: bed.x, y: bed.y, z: bed.z, range: 2 }).catch(e => { throw new HandBack(`night, and the walk to ${bed.name} failed: ${e.message}`) })
+      }
       // said out loud: an agent that saw `asleep doing=mine.get 174s` with nothing moving stopped it as wedged (Chani, twice)
       const mine = task
       if (mine) mine.paused = 'night'
       emit('task_paused', { id: mine?.id, name: composite, why: PAUSES.night })
       if (mine?.jobId) jobEvent('job_waiting', { reason: 'night', why: PAUSES.night })
       try {
-        await long.sleep({ automatic: true }).catch(() => {})
+        await long.sleep(ownBed ? { bed: `${ownBed.bed.x},${ownBed.bed.y},${ownBed.bed.z}` } : { automatic: true })
+          .catch(e => { if (ownBed) notes.push(`${ownBed.bed.name}: ${e.message}`) })
         await until(() => !bot.isSleeping, { timeout: 900, every: 5, what: 'the night never ended' }).catch(() => {})
       } finally {
         if (mine) delete mine.paused
@@ -244,6 +255,8 @@ function makeApi (composite, a, alive, jobEvent = () => {}) {
       report: partial => Object.assign(report, partial),
       // an event of the composite's own (routine_day, routine_stopped), and what it tells the stuck watch about itself
       emit,
+      // routine bed=: the bed every composite of this task sleeps in at its night checkpoint
+      nightBed: (bed, bedRange) => { if (ownerTask) ownerTask.nightBed = { bed, bedRange } },
       progress: data => {
         if (!ownerTask) return
         ownerTask.progress = { ...ownerTask.progress, ...data }

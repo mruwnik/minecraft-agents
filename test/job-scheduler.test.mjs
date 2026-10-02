@@ -131,12 +131,14 @@ test('a result that says the body died holds FIFO on the very first failure', as
   } finally { t.close() }
 })
 
-test('a result that lost carried items holds FIFO even though the job otherwise completed', async () => {
-  const t = setup(async () => ({ ok: true, lost: { iron_pickaxe: 1 } }))
+test('a completed job whose result reports placed blocks as lost does not hold the queue', async () => {
+  const t = setup(async () => ({ ok: true, lost: { crafting_table: 1, cobblestone: 12 } }))
   try {
-    const job = t.scheduler.submit({ name: 'mine.get', args: {} })
-    await until(() => t.shelf.get(job.id).status === 'completed')
-    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${job.id} completed: lost iron_pickaxe`))
+    const first = t.scheduler.submit({ name: 'build', args: {} })
+    const next = t.scheduler.submit({ name: 'build', args: {} })
+    await until(() => t.shelf.get(next.id).status === 'completed')
+    assert.equal(t.shelf.get(first.id).status, 'completed')
+    assert.equal(t.shelf.snapshot().held, null)
   } finally { t.close() }
 })
 

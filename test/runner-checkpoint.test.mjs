@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { handBackReason } from '../src/lib/composite.mjs'
+import { nightPlan } from '../src/lib/sleep.mjs'
 
 // checkpoint() runs between almost every composite step (library/blueprint/build.mjs calls it once per block placed, a
 // 40s profile of farm.build found checkpoint -> bedsNear -> findBlocksNear taking a quarter of the body's wall time).
@@ -13,8 +14,8 @@ const START = 'const checkpoint = async (extra = {}) => {'
 const END = '\n  return {\n    notes,'
 const body = source.split(START)[1].split(END)[0]
 
-function makeCheckpoint ({ night, sleptTonight = true, beds = [] } = {}) {
-  const calls = { bedsNear: 0, automaticSleepBeds: 0 }
+function makeCheckpoint ({ night, sleptTonight = true, beds = [], nightBed, goto = async () => {} } = {}) {
+  const calls = { bedsNear: 0, automaticSleepBeds: 0, acts: [] }
   const env = {
     pendingNavigationFailure: null,
     alive: () => {},
@@ -22,13 +23,20 @@ function makeCheckpoint ({ night, sleptTonight = true, beds = [] } = {}) {
     sleptTonight,
     bot: { vehicle: null, isSleeping: false, health: 20, food: 20, inventory: { emptySlotCount: () => 1 } },
     HandBack: class HandBack extends Error { constructor (reason) { super(reason); this.reason = reason } },
-    automaticSleepBeds: () => { calls.automaticSleepBeds++; return [] },
+    automaticSleepBeds: () => { calls.automaticSleepBeds++; return [{}] },
+    ownerTask: nightBed ? { nightBed } : null,
+    pos: () => ({ x: 0, y: 64, z: 0 }),
+    nightPlan,
+    notes: [],
     task: null,
     emit: () => {},
     composite: 'test.composite',
     PAUSES: { night: 'paused' },
     jobEvent: () => {},
-    long: { sleep: async () => {} },
+    long: {
+      sleep: async args => { calls.acts.push(['sleep', args]) },
+      goto: async args => { calls.acts.push(['goto', args]); return goto(args) }
+    },
     until: async () => {},
     handBackReason,
     edibleCarried: () => true,
@@ -59,3 +67,24 @@ test('checkpoint does not hand back at night with a bed near', async () => {
   const { checkpoint } = makeCheckpoint({ night: true, beds: [{}] })
   await assert.doesNotReject(checkpoint({}))
 })
+
+// routine bed=: a step is its own composite, so its checkpoint is where the night is met. The routine's bed rides on
+// the task they share and wins over a nearer bed
+const hut = { bed: { name: 'the bed at 108,71,-107', x: 108, y: 71, z: -107 }, bedRange: 200 }
+test('at nightfall a task\'s own bed is walked to and slept in, not the nearest one', async () => {
+  const { checkpoint, calls } = makeCheckpoint({ night: true, sleptTonight: false, beds: [{}], nightBed: hut })
+  await checkpoint({})
+  assert.deepEqual(calls.acts, [['goto', { x: 108, y: 71, z: -107, range: 2 }], ['sleep', { bed: '108,71,-107' }]])
+  assert.equal(calls.automaticSleepBeds, 0)
+})
+
+for (const [name, nightBed, goto, error] of [
+  ['beyond bed_range', { ...hut, bedRange: 50 }, undefined, /night, and the bed at 108,71,-107 is \d+ blocks away, beyond bed_range=50$/],
+  ['out of reach', hut, async () => { throw new Error('no path to the goal') }, /night, and the walk to the bed at 108,71,-107 failed: no path to the goal$/]
+]) {
+  test(`a task's own bed ${name} hands back rather than sleeping in a nearer one`, async () => {
+    const { checkpoint, calls } = makeCheckpoint({ night: true, sleptTonight: false, beds: [{}], nightBed, goto })
+    await assert.rejects(checkpoint({}), error)
+    assert.deepEqual(calls.acts.filter(([act]) => act === 'sleep'), [])
+  })
+}
