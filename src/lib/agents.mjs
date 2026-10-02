@@ -35,25 +35,36 @@ export const nextPort = used => {
   for (let port = FIRST_API_PORT; ; port++) if (!taken.has(port)) return port
 }
 
-// new-agent.mjs's command line: an optional name and `--harness <name>` (one of the notes files in harness/, default claude-code).
-// Returns { name, harness } (name null when it should be drawn) or { error }.
+// new-agent.mjs's command line: an optional name, `--harness <name>` (one of the notes files in harness/, default
+// claude-code) and the required `--world <name>` (one of the folders under state/worlds/ with a world.json).
+// Returns { name, harness, world } (name null when it should be drawn) or { error }.
 const DEFAULT_HARNESS = 'claude-code'
-export function newAgentArgs (argv, harnessesAvailable) {
-  const known = harnessesAvailable.join(', ')
+export function newAgentArgs (argv, harnessesAvailable, worldsAvailable) {
+  const knownHarnesses = harnessesAvailable.join(', ')
+  const knownWorlds = worldsAvailable.join(', ') || 'none'
   let name = null
   let harness = DEFAULT_HARNESS
+  let world = null
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--harness' || arg.startsWith('--harness=')) {
       const value = arg === '--harness' ? argv[++i] : arg.slice('--harness='.length)
-      if (!value) return { error: `--harness needs a name: one of ${known}` }
+      if (!value) return { error: `--harness needs a name: one of ${knownHarnesses}` }
       harness = value
       continue
     }
-    if (arg.startsWith('-')) return { error: `unknown option ${arg} (only --harness <name> is understood)` }
+    if (arg === '--world' || arg.startsWith('--world=')) {
+      const value = arg === '--world' ? argv[++i] : arg.slice('--world='.length)
+      if (!value) return { error: `--world needs a name: one of ${knownWorlds}` }
+      world = value
+      continue
+    }
+    if (arg.startsWith('-')) return { error: `unknown option ${arg} (only --harness <name> and --world <name> are understood)` }
     if (name) return { error: `one name only: got "${name}" and "${arg}"` }
     name = arg
   }
-  if (!harnessesAvailable.includes(harness)) return { error: `unknown harness "${harness}": the ones with notes in harness/ are ${known}` }
-  return { name, harness }
+  if (!harnessesAvailable.includes(harness)) return { error: `unknown harness "${harness}": the ones with notes in harness/ are ${knownHarnesses}` }
+  if (!world) return { error: `--world <name> is required: the ones with world.json in state/worlds/ are ${knownWorlds}` }
+  if (!worldsAvailable.includes(world)) return { error: `unknown world "${world}": the ones with world.json in state/worlds/ are ${knownWorlds}` }
+  return { name, harness, world }
 }

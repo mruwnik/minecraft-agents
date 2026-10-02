@@ -21,7 +21,11 @@
   button:hover { background: #2f3742; }
   main { display: flex; height: calc(100vh - 38px); }
   #mapwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #mapview { flex: 1; position: relative; min-height: 0; }
+  #maps { flex: 1; display: flex; flex-direction: column; position: relative; min-height: 0; }
+  .map { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .map + .map { border-top: 1px solid var(--line); }
+  .map h2 { flex: none; margin: 4px 12px 0; }
+  .map .pane { flex: 1; position: relative; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
   #actionsLog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -55,7 +59,7 @@
   #chatempty { color: var(--dim); padding: 6px 4px; }
   aside { width: 360px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
   section { border-bottom: 1px solid var(--line); padding: 10px 12px; }
-  #chatbar h2, section h2, #lookSide h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+  #chatbar h2, section h2, #lookSide h2, .map h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
   section h2 { margin: 0 0 8px; }
   .body { padding: 5px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
   .body:hover { background: #232932; }
@@ -169,8 +173,7 @@
 </header>
 <main>
   <div id="mapwrap">
-    <div id="mapview">
-      <canvas id="map"></canvas>
+    <div id="maps">
       <div id="hint">drag to pan · wheel to zoom · click a body to see through its eyes</div>
     </div>
     <div id="chat">
@@ -254,252 +257,283 @@
 <script type="module">
 import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, hitVillagePlace, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
-const canvas = document.getElementById('map')
-const ctx = canvas.getContext('2d')
 const el = id => document.getElementById(id)
 
-let snap = { bodies: [], places: [], zones: [], humans: [], agents: [] }
-let view = null          // {scale, originX, originZ} in CSS pixels
-let follow = true        // until the viewer pans or zooms, a resize refits the map instead of cropping it
+let snap = { bodies: [], worlds: [], agents: [] }
 let scope = 'bodies'     // what the fit is around: the bodies (and the humans), or every place and zone as well
 let selected = null
-let hover = null
-const size = { w: 0, h: 0 }
 
-// ---------------------------------------------------------------- canvas sizing
-const resize = () => {
-  const r = canvas.getBoundingClientRect()
-  const dpr = window.devicePixelRatio || 1
-  size.w = Math.max(1, Math.round(r.width))
-  size.h = Math.max(1, Math.round(r.height))
-  canvas.width = Math.round(size.w * dpr)
-  canvas.height = Math.round(size.h * dpr)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  if (follow) view = null
-  draw()
+// One map per world: a world is its own server, so its coordinates mean nothing on another world's map.
+const makeMap = name => {
+  const node = document.createElement('div')
+  node.className = 'map'
+  const heading = document.createElement('h2')
+  heading.textContent = name
+  const pane = document.createElement('div')
+  pane.className = 'pane'
+  const canvas = document.createElement('canvas')
+  pane.append(canvas)
+  node.append(heading, pane)
+  const ctx = canvas.getContext('2d')
+  let world = { name, bodies: [], places: [], zones: [], humans: [] }
+  let view = null          // {scale, originX, originZ} in CSS pixels
+  let follow = true        // until the viewer pans or zooms, a resize refits the map instead of cropping it
+  let hover = null
+  const size = { w: 0, h: 0 }
+
+  // ---------------------------------------------------------------- canvas sizing
+  const resize = () => {
+    const r = canvas.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    size.w = Math.max(1, Math.round(r.width))
+    size.h = Math.max(1, Math.round(r.height))
+    canvas.width = Math.round(size.w * dpr)
+    canvas.height = Math.round(size.h * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    if (follow) view = null
+    draw()
+  }
+
+  // The far corners of this world are 2000 blocks apart, and fitting all of them squeezes the huts into one blob:
+  // the default fit is around the bodies themselves, with 96 blocks of ground round them.
+  const refit = () => {
+    const wide = scope === 'all'
+    const points = mapPoints(world.bodies, wide ? world.places : [], wide ? world.zones : [], world.humans)
+    view = fitView(worldBounds(points, wide ? 24 : 96), size.w - 80, size.h - 80)
+    if (!view) return
+    view.originX -= 40 / view.scale
+    view.originZ -= 40 / view.scale
+  }
+
+  // ---------------------------------------------------------------- drawing
+  const GRID_STEPS = [16, 32, 64, 128, 256, 512, 1024, 2048]
+  const gridStep = scale => GRID_STEPS.find(s => s * scale >= 70) ?? GRID_STEPS[GRID_STEPS.length - 1]
+
+  const drawGrid = () => {
+    const step = gridStep(view.scale)
+    const x0 = Math.ceil(view.originX / step) * step
+    const z0 = Math.ceil(view.originZ / step) * step
+    ctx.strokeStyle = '#20252d'
+    ctx.fillStyle = '#4b5462'
+    ctx.lineWidth = 1
+    ctx.font = '10px ui-monospace, monospace'
+    for (let x = x0; project(view, x, 0).px <= size.w; x += step) {
+      const { px } = project(view, x, 0)
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, size.h); ctx.stroke()
+      ctx.fillText(`x${x}`, px + 3, 11)
+    }
+    for (let z = z0; project(view, 0, z).py <= size.h; z += step) {
+      const { py } = project(view, 0, z)
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(size.w, py); ctx.stroke()
+      ctx.fillText(`z${z}`, 3, py - 3)
+    }
+  }
+
+  // a label box in canvas pixels, so fitLabels can drop the ones that would be drawn on top of each other
+  const labelBox = (text, px, py, extra = {}) => ({ text, px, py: py - 9, w: ctx.measureText(text).width + 5, h: 12, ...extra })
+
+  const drawZones = () => {
+    ctx.font = '10px ui-monospace, monospace'
+    return world.zones.map(zone => {
+      const r = zoneRect(view, zone)
+      ctx.fillStyle = 'rgba(91,143,214,0.10)'
+      ctx.strokeStyle = 'rgba(91,143,214,0.65)'
+      ctx.lineWidth = 1
+      ctx.fillRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
+      ctx.strokeRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
+      return labelBox(zone.name, r.px + 2, r.py - 2, { colour: 'rgba(140,180,230,0.85)' })
+    }).filter(b => onCanvas(b, size.w, size.h))
+  }
+
+  // a place with a plan is a footprint, not a point: drawn under its point marker and label, and the thing
+  // the click handler tests hits against so a farm or pen can be opened
+  const drawFootprints = () => {
+    planRects(world.places).forEach(rect => {
+      const a = project(view, rect.x, rect.z)
+      const b = project(view, rect.x + rect.w, rect.z + rect.h)
+      if (!onCanvas(a, size.w, size.h, 60) && !onCanvas(b, size.w, size.h, 60)) return
+      const place = world.places.find(p => p.name === rect.name)
+      const isVillage = Boolean(place?.village)
+      const colour = isVillage ? (place.village.state === 'satisfied' ? '110,231,168' : place.village.state === 'below-target' ? '240,144,126' : '224,160,48') : '217,178,95'
+      ctx.fillStyle = `rgba(${colour},0.10)`
+      ctx.strokeStyle = `rgba(${colour},0.8)`
+      ctx.lineWidth = 1
+      ctx.fillRect(a.px, a.py, b.px - a.px, b.py - a.py)
+      ctx.strokeRect(a.px, a.py, b.px - a.px, b.py - a.py)
+    })
+  }
+
+  const drawPlaces = () => {
+    ctx.font = '10px ui-monospace, monospace'
+    return world.places.map(place => {
+      const at = project(view, place.x, place.z)
+      if (!onCanvas(at, size.w, size.h)) return null
+      const isVillage = Boolean(place.village)
+      ctx.strokeStyle = isVillage ? (place.village.state === 'satisfied' ? '#6ee7a8' : place.village.state === 'below-target' ? '#f0907e' : '#e0a030') : '#d9b25f'
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      ctx.moveTo(at.px - 3, at.py); ctx.lineTo(at.px + 3, at.py)
+      ctx.moveTo(at.px, at.py - 3); ctx.lineTo(at.px, at.py + 3)
+      ctx.stroke()
+      const observed = place.village?.population ? (place.village.fresh ? place.village.observed ?? '?' : place.village.lastObservedPopulation === null ? '?' : `last ${place.village.lastObservedPopulation}`) : '?'
+      const target = place.village?.population?.target ?? '?'
+      const status = isVillage ? (place.village.state === 'satisfied' ? `${observed}/${target} ok` : place.village.state === 'stale' ? `${observed}/${target} stale` : place.village.state === 'not-inspected' ? `?/${target} not checked` : place.village.state === 'unplanned' ? 'no population plan' : `${observed}/${target} ?`) : ''
+      const label = isVillage ? `${place.name} · ${status}` : place.name
+      return labelBox(label, at.px + 5, at.py + 3, { colour: isVillage ? '#6ee7a8' : 'rgba(217,178,95,0.9)' })
+    }).filter(Boolean)
+  }
+
+  const drawLabels = boxes => {
+    ctx.font = '10px ui-monospace, monospace'
+    fitLabels(boxes).filter(b => b.colour).forEach(b => {
+      ctx.fillStyle = b.colour
+      ctx.fillText(b.text, b.px, b.py + 9)
+    })
+  }
+
+  const bodyDots = () => world.bodies
+    .filter(b => b.up && b.state?.pos)
+    .map(b => ({ body: b, ...project(view, b.state.pos.x, b.state.pos.z) }))
+
+  // the bodies are why this page exists: they are drawn over everything and their labels are never dropped
+  const drawBodies = () => bodyDots().map(({ body, px, py }) => {
+    const on = body.name === selected || body.name === hover
+    ctx.fillStyle = '#6ee7a8'
+    ctx.beginPath(); ctx.arc(px, py, on ? 7 : 5, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = on ? '#ffffff' : '#14171c'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.font = '11px ui-monospace, monospace'
+    ctx.fillStyle = '#dfe4ec'
+    ctx.fillText(body.name, px + 10, py - 2)
+    const under = `${body.state.hp}hp ${body.state.food}f${body.state.doing ? ' · ' + body.state.doing : ''}`
+    ctx.fillStyle = '#8b95a5'
+    ctx.fillText(under, px + 10, py + 10)
+    const w = Math.max(ctx.measureText(body.name).width, ctx.measureText(under).width) + 12
+    return { text: body.name, px: px - 8, py: py - 12, w: w + 8, h: 26 }
+  })
+
+  // the humans (every player in sight who is not an agent) are pink diamonds, one each, named
+  const drawHumans = () => world.humans.map(human => {
+    const { px, py } = project(view, human.x, human.z)
+    ctx.fillStyle = '#f08ad0'
+    ctx.beginPath()
+    ctx.moveTo(px, py - 7); ctx.lineTo(px + 7, py); ctx.lineTo(px, py + 7); ctx.lineTo(px - 7, py)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = '#14171c'; ctx.lineWidth = 2; ctx.stroke()
+    ctx.fillStyle = '#f08ad0'
+    ctx.font = '11px ui-monospace, monospace'
+    ctx.fillText(human.name, px + 10, py + 4)
+    return { text: human.name, px: px - 8, py: py - 10, w: ctx.measureText(human.name).width + 22, h: 20 }
+  })
+
+  const draw = () => {
+    ctx.fillStyle = '#14171c'
+    ctx.fillRect(0, 0, size.w, size.h)
+    if (!view) refit()
+    if (!view) {
+      ctx.fillStyle = '#8b95a5'
+      ctx.font = '12px ui-monospace, monospace'
+      ctx.fillText('no body is up and nothing is marked on the map yet', 20, 30)
+      return
+    }
+    drawGrid()
+    drawFootprints()
+    const zones = drawZones()
+    const places = drawPlaces()
+    const humans = drawHumans()
+    const bodies = drawBodies()
+    // offered in the order that decides who keeps their name when two would overlap
+    drawLabels([...bodies, ...humans, ...places, ...zones])
+  }
+
+  // ---------------------------------------------------------------- panning, zooming, picking
+  let drag = null
+  canvas.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, moved: false } })
+  window.addEventListener('mouseup', () => { drag = null })
+  canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect()
+    const at = { px: e.clientX - r.left, py: e.clientY - r.top }
+    if (drag && view) {
+      const dx = e.clientX - drag.x
+      const dy = e.clientY - drag.y
+      if (Math.abs(dx) + Math.abs(dy) > 2) { drag.moved = true; follow = false }
+      view.originX -= dx / view.scale
+      view.originZ -= dy / view.scale
+      drag.x = e.clientX
+      drag.y = e.clientY
+      draw()
+      return
+    }
+    const near = pick(at)
+    const name = near?.body.name ?? null
+    if (name === hover) return
+    hover = name
+    canvas.style.cursor = name ? 'pointer' : 'crosshair'
+    draw()
+  })
+
+  const pick = at => bodyDots()
+    .map(d => ({ ...d, dist: Math.hypot(d.px - at.px, d.py - at.py) }))
+    .filter(d => d.dist <= 14)
+    .sort((a, b) => a.dist - b.dist)[0] ?? null
+
+  canvas.addEventListener('click', e => {
+    if (drag?.moved) return
+    const r = canvas.getBoundingClientRect()
+    const at = { px: e.clientX - r.left, py: e.clientY - r.top }
+    const hit = pick(at)
+    if (hit) { select(hit.body.name); return }
+    if (!view) return
+    const worldX = at.px / view.scale + view.originX
+    const worldZ = at.py / view.scale + view.originZ
+    const villageMark = hitVillagePlace(world.places, worldX, worldZ, 12 / view.scale)
+    if (villageMark) { location.href = `/villages?place=${encodeURIComponent(villageMark)}`; return }
+    const farm = hitPlan(planRects(world.places), worldX, worldZ)
+    if (farm) {
+      const village = world.places.find(p => p.name === farm)?.village
+      if (village) location.href = `/villages?place=${encodeURIComponent(farm)}`
+      else openPlan(farm)
+    }
+  })
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault()
+    if (!view) return
+    follow = false
+    const r = canvas.getBoundingClientRect()
+    const px = e.clientX - r.left
+    const py = e.clientY - r.top
+    const worldX = px / view.scale + view.originX
+    const worldZ = py / view.scale + view.originZ
+    const factor = Math.exp(-e.deltaY * 0.0015)
+    view.scale = Math.min(8, Math.max(0.01, view.scale * factor))
+    view.originX = worldX - px / view.scale
+    view.originZ = worldZ - py / view.scale
+    draw()
+  }, { passive: false })
+
+  const fit = () => { follow = true; view = null; draw() }
+  return { name, node, draw, resize, fit, show: w => { world = w } }
 }
+
+let maps = []
+const draw = () => maps.forEach(m => m.draw())
+const resize = () => maps.forEach(m => m.resize())
 window.addEventListener('resize', resize)
 
-// The far corners of this world are 2000 blocks apart, and fitting all of them squeezes the huts into one blob:
-// the default fit is around the bodies themselves, with 96 blocks of ground round them.
-const refit = () => {
-  const wide = scope === 'all'
-  const points = mapPoints(snap.bodies, wide ? snap.places : [], wide ? snap.zones : [], snap.humans)
-  view = fitView(worldBounds(points, wide ? 24 : 96), size.w - 80, size.h - 80)
-  if (!view) return
-  view.originX -= 40 / view.scale
-  view.originZ -= 40 / view.scale
+// a map is made the first time its world shows up and dropped once the world is gone; the maps share the height, so
+// any change to which maps there are resizes them all. Unchanged, the nodes are left alone so a drag is not cut off.
+const showWorlds = worlds => {
+  const kept = worlds.map(w => maps.find(m => m.name === w.name) ?? makeMap(w.name))
+  kept.forEach((m, i) => m.show(worlds[i]))
+  if (kept.length === maps.length && kept.every((m, i) => m === maps[i])) return
+  maps = kept
+  el('maps').replaceChildren(...maps.map(m => m.node), el('hint'))
+  resize()
 }
 
-// ---------------------------------------------------------------- drawing
-const GRID_STEPS = [16, 32, 64, 128, 256, 512, 1024, 2048]
-const gridStep = scale => GRID_STEPS.find(s => s * scale >= 70) ?? GRID_STEPS[GRID_STEPS.length - 1]
-
-const drawGrid = () => {
-  const step = gridStep(view.scale)
-  const x0 = Math.ceil(view.originX / step) * step
-  const z0 = Math.ceil(view.originZ / step) * step
-  ctx.strokeStyle = '#20252d'
-  ctx.fillStyle = '#4b5462'
-  ctx.lineWidth = 1
-  ctx.font = '10px ui-monospace, monospace'
-  for (let x = x0; project(view, x, 0).px <= size.w; x += step) {
-    const { px } = project(view, x, 0)
-    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, size.h); ctx.stroke()
-    ctx.fillText(`x${x}`, px + 3, 11)
-  }
-  for (let z = z0; project(view, 0, z).py <= size.h; z += step) {
-    const { py } = project(view, 0, z)
-    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(size.w, py); ctx.stroke()
-    ctx.fillText(`z${z}`, 3, py - 3)
-  }
-}
-
-// a label box in canvas pixels, so fitLabels can drop the ones that would be drawn on top of each other
-const labelBox = (text, px, py, extra = {}) => ({ text, px, py: py - 9, w: ctx.measureText(text).width + 5, h: 12, ...extra })
-
-const drawZones = () => {
-  ctx.font = '10px ui-monospace, monospace'
-  return snap.zones.map(zone => {
-    const r = zoneRect(view, zone)
-    ctx.fillStyle = 'rgba(91,143,214,0.10)'
-    ctx.strokeStyle = 'rgba(91,143,214,0.65)'
-    ctx.lineWidth = 1
-    ctx.fillRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
-    ctx.strokeRect(r.px, r.py, Math.max(r.w, 1), Math.max(r.h, 1))
-    return labelBox(zone.name, r.px + 2, r.py - 2, { colour: 'rgba(140,180,230,0.85)' })
-  }).filter(b => onCanvas(b, size.w, size.h))
-}
-
-// a place with a plan is a footprint, not a point: drawn under its point marker and label, and the thing
-// the click handler tests hits against so a farm or pen can be opened
-const drawFootprints = () => {
-  planRects(snap.places).forEach(rect => {
-    const a = project(view, rect.x, rect.z)
-    const b = project(view, rect.x + rect.w, rect.z + rect.h)
-    if (!onCanvas(a, size.w, size.h, 60) && !onCanvas(b, size.w, size.h, 60)) return
-    const place = snap.places.find(p => p.name === rect.name)
-    const isVillage = Boolean(place?.village)
-    const colour = isVillage ? (place.village.state === 'satisfied' ? '110,231,168' : place.village.state === 'below-target' ? '240,144,126' : '224,160,48') : '217,178,95'
-    ctx.fillStyle = `rgba(${colour},0.10)`
-    ctx.strokeStyle = `rgba(${colour},0.8)`
-    ctx.lineWidth = 1
-    ctx.fillRect(a.px, a.py, b.px - a.px, b.py - a.py)
-    ctx.strokeRect(a.px, a.py, b.px - a.px, b.py - a.py)
-  })
-}
-
-const drawPlaces = () => {
-  ctx.font = '10px ui-monospace, monospace'
-  return snap.places.map(place => {
-    const at = project(view, place.x, place.z)
-    if (!onCanvas(at, size.w, size.h)) return null
-    const isVillage = Boolean(place.village)
-    ctx.strokeStyle = isVillage ? (place.village.state === 'satisfied' ? '#6ee7a8' : place.village.state === 'below-target' ? '#f0907e' : '#e0a030') : '#d9b25f'
-    ctx.lineWidth = 1.2
-    ctx.beginPath()
-    ctx.moveTo(at.px - 3, at.py); ctx.lineTo(at.px + 3, at.py)
-    ctx.moveTo(at.px, at.py - 3); ctx.lineTo(at.px, at.py + 3)
-    ctx.stroke()
-    const observed = place.village?.population ? (place.village.fresh ? place.village.observed ?? '?' : place.village.lastObservedPopulation === null ? '?' : `last ${place.village.lastObservedPopulation}`) : '?'
-    const target = place.village?.population?.target ?? '?'
-    const status = isVillage ? (place.village.state === 'satisfied' ? `${observed}/${target} ok` : place.village.state === 'stale' ? `${observed}/${target} stale` : place.village.state === 'not-inspected' ? `?/${target} not checked` : place.village.state === 'unplanned' ? 'no population plan' : `${observed}/${target} ?`) : ''
-    const label = isVillage ? `${place.name} · ${status}` : place.name
-    return labelBox(label, at.px + 5, at.py + 3, { colour: isVillage ? '#6ee7a8' : 'rgba(217,178,95,0.9)' })
-  }).filter(Boolean)
-}
-
-const drawLabels = boxes => {
-  ctx.font = '10px ui-monospace, monospace'
-  fitLabels(boxes).filter(b => b.colour).forEach(b => {
-    ctx.fillStyle = b.colour
-    ctx.fillText(b.text, b.px, b.py + 9)
-  })
-}
-
-const bodyDots = () => snap.bodies
-  .filter(b => b.up && b.state?.pos)
-  .map(b => ({ body: b, ...project(view, b.state.pos.x, b.state.pos.z) }))
-
-// the bodies are why this page exists: they are drawn over everything and their labels are never dropped
-const drawBodies = () => bodyDots().map(({ body, px, py }) => {
-  const on = body.name === selected || body.name === hover
-  ctx.fillStyle = '#6ee7a8'
-  ctx.beginPath(); ctx.arc(px, py, on ? 7 : 5, 0, Math.PI * 2); ctx.fill()
-  ctx.strokeStyle = on ? '#ffffff' : '#14171c'
-  ctx.lineWidth = 2
-  ctx.stroke()
-  ctx.font = '11px ui-monospace, monospace'
-  ctx.fillStyle = '#dfe4ec'
-  ctx.fillText(body.name, px + 10, py - 2)
-  const under = `${body.state.hp}hp ${body.state.food}f${body.state.doing ? ' · ' + body.state.doing : ''}`
-  ctx.fillStyle = '#8b95a5'
-  ctx.fillText(under, px + 10, py + 10)
-  const w = Math.max(ctx.measureText(body.name).width, ctx.measureText(under).width) + 12
-  return { text: body.name, px: px - 8, py: py - 12, w: w + 8, h: 26 }
-})
-
-// the humans (every player in sight who is not an agent) are pink diamonds, one each, named
-const drawHumans = () => snap.humans.map(human => {
-  const { px, py } = project(view, human.x, human.z)
-  ctx.fillStyle = '#f08ad0'
-  ctx.beginPath()
-  ctx.moveTo(px, py - 7); ctx.lineTo(px + 7, py); ctx.lineTo(px, py + 7); ctx.lineTo(px - 7, py)
-  ctx.closePath(); ctx.fill()
-  ctx.strokeStyle = '#14171c'; ctx.lineWidth = 2; ctx.stroke()
-  ctx.fillStyle = '#f08ad0'
-  ctx.font = '11px ui-monospace, monospace'
-  ctx.fillText(human.name, px + 10, py + 4)
-  return { text: human.name, px: px - 8, py: py - 10, w: ctx.measureText(human.name).width + 22, h: 20 }
-})
-
-const draw = () => {
-  ctx.fillStyle = '#14171c'
-  ctx.fillRect(0, 0, size.w, size.h)
-  if (!view) refit()
-  if (!view) {
-    ctx.fillStyle = '#8b95a5'
-    ctx.font = '12px ui-monospace, monospace'
-    ctx.fillText('no body is up and nothing is marked on the map yet', 20, 30)
-    return
-  }
-  drawGrid()
-  drawFootprints()
-  const zones = drawZones()
-  const places = drawPlaces()
-  const humans = drawHumans()
-  const bodies = drawBodies()
-  // offered in the order that decides who keeps their name when two would overlap
-  drawLabels([...bodies, ...humans, ...places, ...zones])
-}
-
-// ---------------------------------------------------------------- panning, zooming, picking
-let drag = null
-canvas.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, moved: false } })
-window.addEventListener('mouseup', () => { drag = null })
-canvas.addEventListener('mousemove', e => {
-  const r = canvas.getBoundingClientRect()
-  const at = { px: e.clientX - r.left, py: e.clientY - r.top }
-  if (drag && view) {
-    const dx = e.clientX - drag.x
-    const dy = e.clientY - drag.y
-    if (Math.abs(dx) + Math.abs(dy) > 2) { drag.moved = true; follow = false }
-    view.originX -= dx / view.scale
-    view.originZ -= dy / view.scale
-    drag.x = e.clientX
-    drag.y = e.clientY
-    draw()
-    return
-  }
-  const near = pick(at)
-  const name = near?.body.name ?? null
-  if (name === hover) return
-  hover = name
-  canvas.style.cursor = name ? 'pointer' : 'crosshair'
-  draw()
-})
-
-const pick = at => bodyDots()
-  .map(d => ({ ...d, dist: Math.hypot(d.px - at.px, d.py - at.py) }))
-  .filter(d => d.dist <= 14)
-  .sort((a, b) => a.dist - b.dist)[0] ?? null
-
-canvas.addEventListener('click', e => {
-  if (drag?.moved) return
-  const r = canvas.getBoundingClientRect()
-  const at = { px: e.clientX - r.left, py: e.clientY - r.top }
-  const hit = pick(at)
-  if (hit) { select(hit.body.name); return }
-  if (!view) return
-  const worldX = at.px / view.scale + view.originX
-  const worldZ = at.py / view.scale + view.originZ
-  const villageMark = hitVillagePlace(snap.places, worldX, worldZ, 12 / view.scale)
-  if (villageMark) { location.href = `/villages?place=${encodeURIComponent(villageMark)}`; return }
-  const farm = hitPlan(planRects(snap.places), worldX, worldZ)
-  if (farm) {
-    const village = snap.places.find(p => p.name === farm)?.village
-    if (village) location.href = `/villages?place=${encodeURIComponent(farm)}`
-    else openPlan(farm)
-  }
-})
-
-canvas.addEventListener('wheel', e => {
-  e.preventDefault()
-  if (!view) return
-  follow = false
-  const r = canvas.getBoundingClientRect()
-  const px = e.clientX - r.left
-  const py = e.clientY - r.top
-  const worldX = px / view.scale + view.originX
-  const worldZ = py / view.scale + view.originZ
-  const factor = Math.exp(-e.deltaY * 0.0015)
-  view.scale = Math.min(8, Math.max(0.01, view.scale * factor))
-  view.originX = worldX - px / view.scale
-  view.originZ = worldZ - py / view.scale
-  draw()
-}, { passive: false })
-
-const fitTo = what => () => { scope = what; follow = true; view = null; draw() }
+const fitTo = what => () => { scope = what; maps.forEach(m => m.fit()) }
 el('fitbodies').addEventListener('click', fitTo('bodies'))
 el('fitall').addEventListener('click', fitTo('all'))
 
@@ -535,8 +569,10 @@ const renderList = () => {
   down.title = off.map(b => `${b.name}: ${b.error}`).join('\n')
 }
 
+const allPlaces = () => snap.worlds.flatMap(w => w.places)
+
 const renderPlaces = () => {
-  el('places').textContent = snap.places.map(p => `${p.name} @${p.x},${p.y},${p.z}`).join('\n')
+  el('places').textContent = snap.worlds.map(w => [w.name, ...w.places.map(p => `  ${p.name} @${p.x},${p.y},${p.z}`)].join('\n')).join('\n\n')
 }
 
 // ---------------------------------------------------------------- the plan popup
@@ -715,7 +751,7 @@ const showPlan = (place, world = null) => {
 
 el('planLayer').addEventListener('change', e => { planLevel = e.target.value === 'birds-eye' ? null : Number(e.target.value); el('planHover').textContent = ''; renderPlanCard() })
 
-const openPlan = name => showPlan(snap.places.find(p => p.name === name))
+const openPlan = name => showPlan(allPlaces().find(p => p.name === name))
 
 const closePlan = () => { el('planOverlay').hidden = true; stopWorldPoll(); planPlace = null; planWorld = null }
 
@@ -1061,13 +1097,16 @@ let farmParam = new URLSearchParams(location.search).get('farm')
 const applyState = s => {
   snap = s
   const up = s.bodies.filter(b => b.up)
+  const total = key => s.worlds.reduce((n, w) => n + w[key].length, 0)
+  const humans = total('humans')
   el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
-  el('counts').textContent = `${up.length}/${s.bodies.length} up · ${s.places.length} places · ${s.zones.length} zones · ${s.humans.length} ${s.humans.length === 1 ? 'human' : 'humans'} in sight${s.villageError ? ` · village data: ${s.villageError}` : ''}`
+  el('counts').textContent = `${up.length}/${s.bodies.length} up · ${total('places')} places · ${total('zones')} zones · ${humans} ${humans === 1 ? 'human' : 'humans'} in sight${s.villageError ? ` · village data: ${s.villageError}` : ''}`
   el('clock').textContent = up[0]?.state?.time ?? 'no body online'
+  showWorlds(s.worlds)
   renderList()
   renderPlaces()
   draw()
-  if (farmParam && s.places.some(p => p.name === farmParam)) {
+  if (farmParam && allPlaces().some(p => p.name === farmParam)) {
     openPlan(farmParam)
     farmParam = null
   }

@@ -1,6 +1,6 @@
 // What went wrong across every agent since a time: died, body_down, kicked, routine_stopped and stuck out of every
 // state/agents/*/events.jsonl, newest last, one line each. `./mc incidents [since=<minutes|ISO>]` (the default is the
-// last hour), or `node tools/incidents.mjs [since]` on its own. Imports nothing but src/cli.mjs, like tools/mc.mjs (#148).
+// last hour), or `node tools/incidents.mjs [since]` on its own. Imports nothing but src/cli.mjs (#148).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

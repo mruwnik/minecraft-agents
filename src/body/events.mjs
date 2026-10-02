@@ -1,23 +1,23 @@
 import { withMapLock, atomicMapWrite } from '../map-store.mjs'
 // The body's own record: events.jsonl and the tail of it that `events` serves, one-line-per-fault error reporting, and
-// the files every body shares (state/zones.json, state/places.json, state/gates.log).
+// the files every body in this world shares (zones.json, places.json, gates.log in WORLD_DIR).
 import fs from 'node:fs'
 import path from 'node:path'
 import { parseEventTail, repeatByType } from '../lib.mjs'
-import { HOME, ROOT } from './home.mjs'
+import { HOME, WORLD_DIR } from './home.mjs'
 
 // ---------------------------------------------------------------- events
 const EVENTS_FILE = path.join(HOME, 'events.jsonl')
 // Boxes the pathfinder must not dig through or scaffold in (it happily tunnels through walls otherwise).
-const ZONES_FILE = path.join(ROOT, 'state', 'zones.json')
+const ZONES_FILE = path.join(WORLD_DIR, 'zones.json')
 const readZones = () => fs.existsSync(ZONES_FILE) ? JSON.parse(fs.readFileSync(ZONES_FILE, 'utf8')) : []
 export const zones = readZones()
 // another bot may protect something while we run
 fs.watchFile(ZONES_FILE, { interval: 2000 }, () => zones.splice(0, zones.length, ...readZones()))
 export const saveZones = () => fs.writeFileSync(ZONES_FILE, JSON.stringify(zones, null, 1))
 // Points of interest shared by every agent (./mc mark / places / unmark, and goto place=<name>).
-const PLACES_FILE = path.join(ROOT, 'state', 'places.json')
-export const GATES_FILE = path.join(ROOT, 'state', 'gates.log')
+const PLACES_FILE = path.join(WORLD_DIR, 'places.json')
+export const GATES_FILE = path.join(WORLD_DIR, 'gates.log')
 export const readPlaces = () => fs.existsSync(PLACES_FILE) ? JSON.parse(fs.readFileSync(PLACES_FILE, 'utf8')) : []
 // every body shares this file: write beside it and rename, so a reader never catches it half written
 export const savePlaces = places => withMapLock(PLACES_FILE, () => atomicMapWrite(PLACES_FILE, places))

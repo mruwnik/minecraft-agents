@@ -152,23 +152,32 @@ for (const [used, expected] of portCases) {
 }
 
 const harnesses = ['claude-code', 'codex']
+const worlds = ['main']
 const newAgentArgCases = [
-  ['nothing: a drawn name on the default harness', [], { name: null, harness: 'claude-code' }],
-  ['a name', ['Lightsong'], { name: 'Lightsong', harness: 'claude-code' }],
-  ['a harness', ['--harness', 'codex'], { name: null, harness: 'codex' }],
-  ['name then harness', ['Lightsong', '--harness', 'codex'], { name: 'Lightsong', harness: 'codex' }],
-  ['harness then name', ['--harness', 'codex', 'Lightsong'], { name: 'Lightsong', harness: 'codex' }],
-  ['--harness=name', ['--harness=codex'], { name: null, harness: 'codex' }],
-  ['a harness with no notes file', ['--harness', 'gemini'], { error: 'unknown harness "gemini": the ones with notes in harness/ are claude-code, codex' }],
+  ['nothing: a drawn name on the default harness', ['--world', 'main'], { name: null, harness: 'claude-code', world: 'main' }],
+  ['a name', ['Lightsong', '--world', 'main'], { name: 'Lightsong', harness: 'claude-code', world: 'main' }],
+  ['a harness', ['--harness', 'codex', '--world', 'main'], { name: null, harness: 'codex', world: 'main' }],
+  ['name then harness', ['Lightsong', '--harness', 'codex', '--world', 'main'], { name: 'Lightsong', harness: 'codex', world: 'main' }],
+  ['harness then name', ['--harness', 'codex', 'Lightsong', '--world', 'main'], { name: 'Lightsong', harness: 'codex', world: 'main' }],
+  ['--harness=name', ['--harness=codex', '--world', 'main'], { name: null, harness: 'codex', world: 'main' }],
+  ['--world=name', ['--world=main'], { name: null, harness: 'claude-code', world: 'main' }],
+  ['--world before the name', ['--world', 'main', 'Lightsong'], { name: 'Lightsong', harness: 'claude-code', world: 'main' }],
+  ['a harness with no notes file', ['--harness', 'gemini', '--world', 'main'], { error: 'unknown harness "gemini": the ones with notes in harness/ are claude-code, codex' }],
   ['--harness without a value', ['Lightsong', '--harness'], { error: '--harness needs a name: one of claude-code, codex' }],
-  ['an option that is not --harness', ['--model', 'sonnet'], { error: 'unknown option --model (only --harness <name> is understood)' }],
-  ['two names', ['Lightsong', 'Nona'], { error: 'one name only: got "Lightsong" and "Nona"' }]
+  ['an option that is not --harness or --world', ['--model', 'sonnet'], { error: 'unknown option --model (only --harness <name> and --world <name> are understood)' }],
+  ['two names', ['Lightsong', 'Nona'], { error: 'one name only: got "Lightsong" and "Nona"' }],
+  ['no --world is an error', ['Lightsong'], { error: '--world <name> is required: the ones with world.json in state/worlds/ are main' }],
+  ['--world without a value', ['--world'], { error: '--world needs a name: one of main' }],
+  ['an unknown world', ['--world', 'atlas'], { error: 'unknown world "atlas": the ones with world.json in state/worlds/ are main' }]
 ]
 for (const [what, argv, expected] of newAgentArgCases) {
-  test(`newAgentArgs: ${what}`, () => assert.deepEqual(newAgentArgs(argv, harnesses), expected))
+  test(`newAgentArgs: ${what}`, () => assert.deepEqual(newAgentArgs(argv, harnesses, worlds), expected))
 }
 test('newAgentArgs: the default harness must have notes too', () => {
-  assert.deepEqual(newAgentArgs([], ['codex']), { error: 'unknown harness "claude-code": the ones with notes in harness/ are codex' })
+  assert.deepEqual(newAgentArgs(['--world', 'main'], ['codex'], worlds), { error: 'unknown harness "claude-code": the ones with notes in harness/ are codex' })
+})
+test('newAgentArgs: no worlds at all still names state/worlds/ in the error', () => {
+  assert.deepEqual(newAgentArgs([], harnesses, []), { error: '--world <name> is required: the ones with world.json in state/worlds/ are none' })
 })
 
 const compactCases = [
@@ -2343,8 +2352,8 @@ for (const [name, home, action, expected] of [
   ['no home: driving a body is refused', undefined, 'goto', true],
   ['no home: state is refused too (it would be somebody else\'s)', undefined, 'state', true],
   ['no home: wait is refused (it reads an agent\'s events)', undefined, 'wait', true],
-  ['the clock needs no body', undefined, 'clock', false],
-  ['dawn needs no body', undefined, 'dawn', false]
+  ['no home: clock is refused too (each world keeps its own)', undefined, 'clock', true],
+  ['no home: dawn is refused too (same clock)', undefined, 'dawn', true]
 ]) {
   test(`noHomeError: ${name}`, () => assert.equal(Boolean(noHomeError(home, action)), expected))
 }
@@ -5883,14 +5892,16 @@ for (const [name, args, expected] of [
   test(`circling: ${name}`, () => assert.equal(circling(args), expected))
 }
 
-// #148: ./mc must keep working while a half-saved lib.mjs breaks the body. It imports only src/cli.mjs, which imports
-// nothing of ours, and lib.mjs re-exports every cli helper so bodies and tests see one function, not two copies
+// #148: ./mc must keep working while a half-saved lib.mjs breaks the body. It imports only src/cli.mjs and
+// src/config.mjs, neither of which imports anything of ours, and lib.mjs re-exports every cli helper so bodies
+// and tests see one function, not two copies
 const ROOT = path.resolve(import.meta.dirname, '..')
 const relativeImports = file => [...fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/^import .* from '(\.[^']+)'/gm)].map(m => m[1])
 for (const [file, expected] of [
-  ['tools/mc.mjs', ['../src/cli.mjs']],
+  ['tools/mc.mjs', ['../src/config.mjs', '../src/cli.mjs']],
   ['tools/check-code.mjs', ['../src/cli.mjs']],
-  ['src/cli.mjs', []]
+  ['src/cli.mjs', []],
+  ['src/config.mjs', []]
 ]) {
   test(`#148 import graph: ${file} imports ${expected.join(', ') || 'none of our files'}`, () => assert.deepEqual(relativeImports(file), expected))
 }

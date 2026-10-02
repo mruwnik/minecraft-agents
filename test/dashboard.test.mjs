@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -23,10 +23,10 @@ const config = (username, apiPort, extra = {}) => JSON.stringify({ username, api
 test('parseAgents: one entry per readable config, sorted by name', () => {
   assert.deepEqual(parseAgents([
     { name: 'Mariel', text: config('Mariel', 3790) },
-    { name: 'Claude', text: config('Claude', 3777, { character: { name: 'Claude', source: 'chosen by hand' } }) }
+    { name: 'Claude', text: config('Claude', 3777, { world: 'main', character: { name: 'Claude', source: 'chosen by hand' } }) }
   ]), [
-    { name: 'Claude', username: 'Claude', apiPort: 3777, harness: 'claude-code', character: 'Claude (chosen by hand)' },
-    { name: 'Mariel', username: 'Mariel', apiPort: 3790, harness: 'claude-code', character: null }
+    { name: 'Claude', username: 'Claude', apiPort: 3777, harness: 'claude-code', character: 'Claude (chosen by hand)', world: 'main' },
+    { name: 'Mariel', username: 'Mariel', apiPort: 3790, harness: 'claude-code', character: null, world: null }
   ])
 })
 
@@ -691,6 +691,47 @@ test('nearestBody: the body that is up and closest on the ground', () => {
 
 test('nearestBody: a body that is down is never picked', () => {
   assert.equal(nearestBody([bodies[2]], -55, -140), null)
+})
+
+// ---------------------------------------------------------------- one map per world
+const worldBody = (name, world, players = {}) => ({ name, world, up: true, at: 1000, state: { pos: { x: 0, y: 64, z: 0 }, players } })
+const twoWorlds = [
+  { name: 'main', places: [{ name: 'hut', x: 1, y: 64, z: 1 }], zones: [{ name: 'pen' }] },
+  { name: 'test', places: [{ name: 'farm', x: 2, y: 64, z: 2 }], zones: [] }
+]
+const everyBody = [
+  worldBody('Claude', 'main', { Steve: { x: 5, y: 64, z: 5 } }),
+  worldBody('Chani', 'test', { Alex: { x: 7, y: 64, z: 7 } }),
+  worldBody('Miles', null, { Herobrine: { x: 9, y: 64, z: 9 } }),
+  worldBody('Rand', 'nether-server', { Logain: { x: 11, y: 64, z: 11 } })
+]
+
+test('groupWorlds: each world gets its own bodies, the humans they see, and its own places and zones', () => {
+  const grouped = groupWorlds(twoWorlds, everyBody, ['Claude', 'Chani', 'Miles', 'Rand'])
+  assert.deepEqual(grouped, [
+    { ...twoWorlds[0], bodies: [everyBody[0]], humans: [{ name: 'Steve', x: 5, y: 64, z: 5, seenBy: 'Claude', at: 1000 }] },
+    { ...twoWorlds[1], bodies: [everyBody[1]], humans: [{ name: 'Alex', x: 7, y: 64, z: 7, seenBy: 'Chani', at: 1000 }] }
+  ])
+  // a body naming a world nobody made (Rand's 'nether-server') lands on no map at all, not just off the other two
+  assert.ok(grouped.every(world => !world.bodies.includes(everyBody[3])))
+})
+
+const lookups = [
+  ['a place in the first world', 'hut', 'main', ['Claude']],
+  ['a place in a later world', 'farm', 'test', ['Chani']]
+]
+lookups.forEach(([why, name, world, bodyNames]) => test(`findPlace: ${why} comes with the world it was found in`, () => {
+  const found = findPlace(groupWorlds(twoWorlds, everyBody, []), name)
+  assert.deepEqual([found.place.name, found.world.name, found.world.bodies.map(b => b.name)], [name, world, bodyNames])
+}))
+
+test('findPlace: a name two worlds share is the first world\'s place', () => {
+  const shared = [{ ...twoWorlds[0], places: [{ name: 'hut', x: 1 }] }, { ...twoWorlds[1], places: [{ name: 'hut', x: 2 }] }]
+  assert.equal(findPlace(shared, 'hut').place.x, 1)
+})
+
+test('findPlace: a name no world holds is null', () => {
+  assert.equal(findPlace(twoWorlds, 'nowhere'), null)
 })
 
 // scan names a waterlogged slab as a plain slab: those are the cells the server asks block_at about, one by one

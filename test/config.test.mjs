@@ -6,12 +6,25 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { readConfig, missingConfig, DEFAULTS } from '../src/config.mjs'
+import { readConfig, readWorld, missingConfig, DEFAULTS } from '../src/config.mjs'
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'config-'))
+const SERVER = { host: '127.0.0.1', port: 25568 }
+
+// the real layout in miniature: <tmp>/agents/Steve beside <tmp>/worlds/<world>/world.json
+const setup = ({ config, worlds = { main: SERVER } } = {}) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'config-'))
+  const home = path.join(root, 'agents', 'Steve')
+  fs.mkdirSync(home, { recursive: true })
+  for (const [name, server] of Object.entries(worlds)) {
+    fs.mkdirSync(path.join(root, 'worlds', name), { recursive: true })
+    if (server) fs.writeFileSync(path.join(root, 'worlds', name, 'world.json'), JSON.stringify(server))
+  }
+  if (config) fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(config))
+  return { root, home }
+}
 
 test('a home without config.json refuses to start and names the folder', () => {
-  const home = tmp()
+  const { home } = setup()
   assert.throws(() => readConfig(home), { message: missingConfig(home) })
 })
 
@@ -29,15 +42,48 @@ const merges = [
 ]
 for (const [name, written, expected] of merges) {
   test(`config.json with ${name} fills in the defaults`, () => {
-    const home = tmp()
-    fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(written))
-    assert.deepEqual(readConfig(home), expected)
+    const { root, home } = setup({ config: { ...written, world: 'main' } })
+    const worldDir = path.join(root, 'worlds', 'main')
+    assert.deepEqual(readConfig(home), { ...expected, world: 'main', ...SERVER, worldDir })
+  })
+}
+
+test('host, port and version come from world.json, and worldDir is the world directory', () => {
+  const { root, home } = setup({ config: { username: 'Steve', world: 'creative' }, worlds: { creative: { host: 'mc.example', port: 25570, version: '1.21.4' } } })
+  const cfg = readConfig(home)
+  assert.deepEqual([cfg.host, cfg.port, cfg.version, cfg.worldDir], ['mc.example', 25570, '1.21.4', path.join(root, 'worlds', 'creative')])
+})
+
+test('readWorld names the world, its directory and the parsed world.json', () => {
+  const { root, home } = setup({ config: { username: 'Steve', world: 'main' } })
+  assert.deepEqual(readWorld(home), { name: 'main', dir: path.join(root, 'worlds', 'main'), server: SERVER })
+})
+
+test('the defaults name no server: that is the world\'s to say', () => {
+  assert.deepEqual(['host' in DEFAULTS, 'port' in DEFAULTS], [false, false])
+})
+
+test('a config.json naming no world is refused, and told how to name one', () => {
+  const { home } = setup({ config: { username: 'Steve' } })
+  assert.throws(() => readWorld(home), err =>
+    [path.join(home, 'config.json'), '"world": "main"', 'state/worlds/'].every(s => err.message.includes(s)))
+})
+
+const missingWorlds = [
+  ['a world with no directory', { main: SERVER, other: SERVER }, 'nowhere', ['main', 'other']],
+  ['a world directory with no world.json', { main: SERVER, bare: null }, 'bare', ['bare', 'main']],
+  ['no worlds at all', {}, 'main', ['none']]
+]
+for (const [name, worlds, world, listed] of missingWorlds) {
+  test(`${name} is refused, naming the world, its world.json and the worlds there are`, () => {
+    const { root, home } = setup({ config: { username: 'Steve', world }, worlds })
+    const expected = [`"${world}"`, path.join(root, 'worlds', world, 'world.json'), ...listed]
+    assert.throws(() => readConfig(home), err => expected.every(s => err.message.includes(s)))
   })
 }
 
 test('a config.json without a username is refused too', () => {
-  const home = tmp()
-  fs.writeFileSync(path.join(home, 'config.json'), '{"apiPort": 3790}')
+  const { home } = setup({ config: { apiPort: 3790, world: 'main' } })
   assert.throws(() => readConfig(home), /username/)
 })
 
@@ -45,20 +91,18 @@ test('the defaults carry no username', () => {
   assert.equal('username' in DEFAULTS, false)
 })
 
-test('auth defaults to offline', () => {
-  const home = tmp()
-  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve"}')
-  assert.equal(readConfig(home).auth, 'offline')
-})
-
-test('auth may be microsoft', () => {
-  const home = tmp()
-  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve", "auth": "microsoft"}')
-  assert.equal(readConfig(home).auth, 'microsoft')
-})
+const auths = [
+  ['defaults to offline', {}, 'offline'],
+  ['may be microsoft', { auth: 'microsoft' }, 'microsoft']
+]
+for (const [name, extra, expected] of auths) {
+  test(`auth ${name}`, () => {
+    const { home } = setup({ config: { username: 'Steve', world: 'main', ...extra } })
+    assert.equal(readConfig(home).auth, expected)
+  })
+}
 
 test('any other auth is refused and the two choices are named', () => {
-  const home = tmp()
-  fs.writeFileSync(path.join(home, 'config.json'), '{"username": "Steve", "auth": "mojang"}')
+  const { home } = setup({ config: { username: 'Steve', world: 'main', auth: 'mojang' } })
   assert.throws(() => readConfig(home), /auth "mojang".*offline.*microsoft/)
 })

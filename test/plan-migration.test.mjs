@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { migrateMapFile } from '../tools/migrate-plans.mjs'
+import { migrateMapFile, resolveMapFile } from '../tools/migrate-plans.mjs'
 import { withMapLock } from '../src/map-store.mjs'
 import { planCells, planSpec } from '../src/lib/plan.mjs'
+const ROOT = path.join(import.meta.dirname, '..')
 const fixture = t => {
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'plan-migration-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
  const file=path.join(dir,'places.json')
@@ -40,3 +41,17 @@ test('invalid legacy map fails before any write or backup',t=>{
  assert.throws(()=>migrateMapFile(file),/unknown/);assert.equal(fs.readFileSync(file,'utf8'),original)
  assert.deepEqual(fs.readdirSync(path.dirname(file)),['places.json'])
 })
+
+// --file= names a map directly; otherwise --world <name> resolves state/worlds/<name>/places.json, the live
+// path a world's bodies actually write
+const resolveRows = [
+  ['--file= wins even with no --world', ['--file=/tmp/x/places.json'], { file: path.resolve('/tmp/x/places.json') }],
+  ['--world name resolves state/worlds/<name>/places.json', ['--world', 'main'], { file: path.join(ROOT, 'state', 'worlds', 'main', 'places.json') }],
+  ['--world=name form', ['--world=test'], { file: path.join(ROOT, 'state', 'worlds', 'test', 'places.json') }]
+]
+for (const [name, args, expected] of resolveRows) {
+  test(`resolveMapFile: ${name}`, () => assert.deepEqual(resolveMapFile(args, ROOT), expected))
+}
+
+test('resolveMapFile: neither --world nor --file= refuses', () =>
+  assert.match(resolveMapFile([], ROOT).error, /--world/))

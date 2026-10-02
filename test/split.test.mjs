@@ -33,20 +33,30 @@ test('src/bot.mjs links: every name it or a module under it imports is exported 
 
 // src/body/ is one folder deeper than bot.mjs was: ROOT is still the bot folder, and HOME the body's own
 const bodyModule = (file, expr) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'split-home-'))
-  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: 'Tester' }))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'split-home-'))
+  const home = path.join(root, 'agents', 'Tester')
+  const worldDir = path.join(root, 'worlds', 'main')
+  fs.mkdirSync(home, { recursive: true })
+  fs.mkdirSync(worldDir, { recursive: true })
+  fs.writeFileSync(path.join(worldDir, 'world.json'), JSON.stringify({ host: '127.0.0.1', port: 25568 }))
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: 'Tester', world: 'main' }))
   const script = `const m = await import(${JSON.stringify(path.join(ROOT, file))}); console.log(JSON.stringify(${expr})); process.exit(0)`
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', script, 'argv1', home], { cwd: home, encoding: 'utf8' })
-  fs.rmSync(home, { recursive: true })
-  return { home, out: run.stdout.trim() && JSON.parse(run.stdout.trim().split('\n').at(-1)), err: run.stderr }
+  fs.rmSync(root, { recursive: true })
+  return { home, worldDir, out: run.stdout.trim() && JSON.parse(run.stdout.trim().split('\n').at(-1)), err: run.stderr }
 }
 
-test('src/body/home.mjs: ROOT is the bot folder, HOME the folder named on the command line, cfg read from it', () => {
-  const { home, out } = bodyModule('src/body/home.mjs', '{ root: m.ROOT, home: m.HOME, username: m.cfg.username }')
-  assert.deepEqual(out, { root: ROOT, home, username: 'Tester' })
+test('src/body/home.mjs: ROOT is the bot folder, HOME the folder named on the command line, cfg and WORLD_DIR read from it', () => {
+  const { home, worldDir, out } = bodyModule('src/body/home.mjs', '{ root: m.ROOT, home: m.HOME, username: m.cfg.username, worldDir: m.WORLD_DIR }')
+  assert.deepEqual(out, { root: ROOT, home, username: 'Tester', worldDir })
 })
 
 test('src/body/events.mjs evaluates on its own, and emit writes to HOME/events.jsonl', () => {
   const { out } = bodyModule('src/body/events.mjs', "(m.emit('probe', { n: 1 }), m.recent.at(-1).type)")
   assert.equal(out, 'probe')
+})
+
+test('src/body/events.mjs keeps the shared files in the world directory', () => {
+  const { worldDir, out } = bodyModule('src/body/events.mjs', "(m.saveZones(), m.savePlaces([]), { gates: m.GATES_FILE, files: (await import('node:fs')).readdirSync((await import('node:path')).dirname(m.GATES_FILE)).sort() })")
+  assert.deepEqual(out, { gates: path.join(worldDir, 'gates.log'), files: ['places.json', 'world.json', 'zones.json'] })
 })

@@ -8,6 +8,17 @@ import { fileURLToPath } from 'node:url'
 import { migrateSavedPlans } from '../src/structure/migrate.mjs'
 import { withMapLock, atomicMapWrite } from '../src/map-store.mjs'
 const hash = text => createHash('sha256').update(text).digest('hex')
+
+// --file= names a map directly (a backup, a test fixture); otherwise --world <name> (or --world=<name>) resolves
+// the map that world's bodies actually write, state/worlds/<name>/places.json
+export function resolveMapFile (args, root) {
+  const fileArg = args.find(a => a.startsWith('--file='))
+  if (fileArg) return { file: path.resolve(fileArg.slice('--file='.length)) }
+  const worldArg = args.find(a => a === '--world' || a.startsWith('--world='))
+  const world = worldArg === '--world' ? args[args.indexOf('--world') + 1] : worldArg?.slice('--world='.length)
+  if (!world) return { error: '--world <name> is required, or --file=<path> to point at a map directly' }
+  return { file: path.join(root, 'state', 'worlds', world, 'places.json') }
+}
 export function migrateMapFile (file, { apply = false, expected } = {}) {
   const run = () => {
     const original = fs.readFileSync(file, 'utf8')
@@ -28,7 +39,11 @@ export function migrateMapFile (file, { apply = false, expected } = {}) {
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2)
-  const fileArg = args.find(a => a.startsWith('--file='))
-  const file = fileArg ? path.resolve(fileArg.slice(7)) : fileURLToPath(new URL('../state/places.json', import.meta.url))
-  try { console.log(JSON.stringify(migrateMapFile(file, { apply: args.includes('--apply'), expected: args.find(a => a.startsWith('--expect='))?.slice(9) }), null, 2)) } catch (error) { console.error(error.message); process.exitCode = 1 }
+  const resolved = resolveMapFile(args, path.join(import.meta.dirname, '..'))
+  if (resolved.error) {
+    console.error(resolved.error)
+    process.exitCode = 1
+  } else {
+    try { console.log(JSON.stringify(migrateMapFile(resolved.file, { apply: args.includes('--apply'), expected: args.find(a => a.startsWith('--expect='))?.slice(9) }), null, 2)) } catch (error) { console.error(error.message); process.exitCode = 1 }
+  }
 }

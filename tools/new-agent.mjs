@@ -1,7 +1,7 @@
 // Create a new agent: a folder under state/agents/ with its own name, config, log, journal and tool wrappers.
-//   node tools/new-agent.mjs                      draw a name from the name generator (~/.claude/hooks/choose_name.py)
-//   node tools/new-agent.mjs Lightsong            use this name
-//   node tools/new-agent.mjs [Name] --harness codex   the program that will run the agent: one of the notes files in harness/ (default claude-code)
+//   node tools/new-agent.mjs --world main                      draw a name from the name generator (~/.claude/hooks/choose_name.py)
+//   node tools/new-agent.mjs Lightsong --world main            use this name
+//   node tools/new-agent.mjs [Name] --world <world> --harness codex   the world it joins (a folder under state/worlds/, required) and the program that will run the agent: one of the notes files in harness/ (default claude-code)
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -13,8 +13,12 @@ const ROOT = path.join(DIR, '..')
 const AGENTS = path.join(ROOT, 'state', 'agents')
 const NAME_SCRIPT = path.join(os.homedir(), '.claude/hooks/choose_name.py')
 const HARNESSES = fs.readdirSync(path.join(ROOT, 'harness')).filter(f => f.endsWith('.md') && f !== 'README.md').map(f => f.slice(0, -3)).sort()
+const WORLDS_DIR = path.join(ROOT, 'state', 'worlds')
+const WORLDS = fs.existsSync(WORLDS_DIR)
+  ? fs.readdirSync(WORLDS_DIR, { withFileTypes: true }).filter(e => e.isDirectory() && fs.existsSync(path.join(WORLDS_DIR, e.name, 'world.json'))).map(e => e.name).sort()
+  : []
 
-const wanted = newAgentArgs(process.argv.slice(2), HARNESSES)
+const wanted = newAgentArgs(process.argv.slice(2), HARNESSES, WORLDS)
 if (wanted.error) { console.error(wanted.error); process.exit(2) }
 
 const existing = fs.existsSync(AGENTS) ? fs.readdirSync(AGENTS).filter(n => fs.existsSync(path.join(AGENTS, n, 'config.json'))) : []
@@ -44,7 +48,7 @@ const script = (name, body) => fs.writeFileSync(path.join(home, name), `#!/bin/b
 
 fs.mkdirSync(path.join(home, 'snapshots'), { recursive: true })
 // chattiness 0.5 out of the gate: answers what is asked and greets, without ending its wait for every "morning" (card 2e032c4a)
-fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, character: { name: character.name, source: character.source, note: character.note }, chat: { chattiness: 0.5, allow: [], deny: [], grader: 'rules' } }, null, 1) + '\n')
+fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: character.username, apiPort, harness: wanted.harness, world: wanted.world, character: { name: character.name, source: character.source, note: character.note }, chat: { chattiness: 0.5, allow: [], deny: [], grader: 'rules' } }, null, 1) + '\n')
 script('mc', '# drive this agent\'s body: ./mc <action> key=value ...\nMC_HOME="$(dirname "$(readlink -f "$0")")" exec node "$(dirname "$(readlink -f "$0")")/../../../tools/mc.mjs" "$@"')
 script('start', '# start this agent\'s body; it returns once the body is launched, and the body\'s output goes to bot.log\nexec "$(dirname "$(readlink -f "$0")")/../../../tools/start-body" "$(dirname "$(readlink -f "$0")")" "$@"')
 // for the operator, not drivers: a driver that wants its body back decides for itself when it is safe (./mc quit,
@@ -54,7 +58,7 @@ fs.writeFileSync(path.join(home, 'journal.md'), `# ${character.username}'s journ
 fs.writeFileSync(path.join(home, 'BRIEFING.md'), `# You are ${character.username}
 
 Your name comes from ${character.source}${character.note ? ` (${character.note})` : ''}. In this Minecraft world it is your player name: a body of your own,
-on a survival server shared with people and other agents like you (\`../../WORLD.md\` says who). Play, build, help out, have fun.
+on a survival server shared with people and other agents like you (\`../../worlds/${wanted.world}/WORLD.md\` says who). Play, build, help out, have fun.
 
 Everything that is yours lives in this folder, and you work from it:
 
@@ -68,13 +72,13 @@ Everything that is yours lives in this folder, and you work from it:
 
 First call after \`./start\`: \`./mc state\`. If it says \`time=night\` and you have no bed and no sword, don't explore:
 get to shelter and sleep, or stop your body (\`./mc quit\`) and block on \`./mc dawn\` with a command timeout of about
-10 minutes: it returns when it is day. \`../../WORLD.md\` says where a new agent finds a bed, a sword and food.
+10 minutes: it returns when it is day. \`../../worlds/${wanted.world}/WORLD.md\` says where a new agent finds a bed, a sword and food.
 
 Read, in this order:
 
 1. \`../../../harness/${wanted.harness}.md\`: how your harness waits and delegates.
 2. \`../../../AGENT_GUIDE.md\`: the full toolset, the house rules, and how to avoid wasting tokens.
-3. \`../../WORLD.md\`: this server, its people, shared places and customs.
+3. \`../../worlds/${wanted.world}/WORLD.md\`: this server, its people, shared places and customs.
 4. \`journal.md\`: what you did last time.
 `)
 

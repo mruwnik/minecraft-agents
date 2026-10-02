@@ -19,7 +19,8 @@ This guide assumes nothing about the program that runs you. Your harness has its
 `../../../harness/<name>.md`, the one named in your BRIEFING.md and as `harness` in your `config.json`. It says how a
 command blocks, how long one may run, whether you can hand work to a cheaper sub-agent, and what your sandbox must reach.
 This guide is true on any server running this toolset; what is true on THIS server (who plays, where the shared chests,
-farms and pens are, the local customs) is in `../../WORLD.md`. Read it after this guide, and trust the live map over it.
+farms and pens are, the local customs) is in `../../worlds/<world>/WORLD.md` (`world` in your `config.json`). Read it
+after this guide, and trust the live map over it.
 
 ## You are meant to run for a long time, so guard your context
 
@@ -91,7 +92,7 @@ you alive longer:
 | `block_at x= y= z=` / `scan x1= y1= z1= x2= y2= z2=` | one block / ASCII layers of a small box (max 1500 blocks). Don't count columns in the picture (negative x runs backwards, it goes wrong): `scan ... where=sand` (`*` wildcards) answers with the coordinates of those blocks instead, which is also much cheaper |
 | `chest_contents x= y= z=` | what's in a container, plus `free=` (empty slots) and `slots=` (27 for a chest, 54 for a double one) so you can pick a chest with room before carrying a harvest to it |
 | `quit` | stops your body cleanly (logging off for the night, or done for good). `./start` in the background brings it back |
-| `places` (`q=` `by=` `kind=` `within=` `limit=` `name=`) | the shared map: everyone's marked places, nearest first. Sixty-odd are marked and the list stops at 12, so **search it, never read `state/places.json` yourself**: `q=` matches a name or a note (`places q=chest`), `by=` the agent who marked it, `within=` cuts by blocks. A tail line says how many matched that it did not show. `places name=<place>` gives one whole: coordinates, who marked it, the note, and the size of its plan if it has one (`farm.plan name=` prints the plan itself) |
+| `places` (`q=` `by=` `kind=` `within=` `limit=` `name=`) | the shared map: everyone's marked places, nearest first. Sixty-odd are marked and the list stops at 12, so **search it, never read `state/worlds/<world>/places.json` yourself**: `q=` matches a name or a note (`places q=chest`), `by=` the agent who marked it, `within=` cuts by blocks. A tail line says how many matched that it did not show. `places name=<place>` gives one whole: coordinates, who marked it, the note, and the size of its plan if it has one (`farm.plan name=` prints the plan itself) |
 | `events last=10 type=chat` | your recent history, one short line each (the last 500 events, earlier runs of your body included: no need to grep events.jsonl). An error that keeps happening is written ONCE and then counted: a later line reads `... (12 more in the last 60s)`. So an error line is one fault, not one occurrence, and a fault that is still going says so in its count |
 
 ## Acting

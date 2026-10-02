@@ -37,10 +37,15 @@ fs.writeFileSync(new URL('./bot.recorded.json', import.meta.url), JSON.stringify
 console.log('[bot] up')
 setInterval(() => {}, 1000)
 `)
+  // readWorld resolves an agent home's world dir as path.resolve(home, '..', '..', 'worlds'); agentDir sits two
+  // levels under agents/, so its world "w" lives at agents/worlds/w
   const agentDir = path.join(root, 'agents', 'x', 'y')
   fs.mkdirSync(agentDir, { recursive: true })
-  fs.writeFileSync(path.join(agentDir, 'config.json'), JSON.stringify({ apiPort: 0 }))
-  return { root, agentDir, toolsDir, srcDir }
+  const worldDir = path.join(root, 'agents', 'worlds', 'w')
+  fs.mkdirSync(worldDir, { recursive: true })
+  fs.writeFileSync(path.join(worldDir, 'world.json'), JSON.stringify({ host: '127.0.0.1', port: 25568 }))
+  fs.writeFileSync(path.join(agentDir, 'config.json'), JSON.stringify({ apiPort: 0, world: 'w' }))
+  return { root, agentDir, toolsDir, srcDir, worldDir }
 }
 
 // patch-deps sleeping briefly gives a window to TERM the supervisor while it is still in that synchronous,
@@ -130,3 +135,32 @@ test('start-body: a relative agent dir and script path bring the body up', async
   assert.ok(alive(pid))
   process.kill(pid)
 })
+
+const runSync = (toolsDir, args) => new Promise(resolve => {
+  const child = spawn(path.join(toolsDir, 'start-body'), args, { stdio: 'ignore' })
+  child.on('close', code => resolve(code))
+})
+
+// readWorld's refusal (no world named, or a world nobody made) is start-gate's first check, before the clock: a
+// body never starts into a world that is not there, and the body_down it leaves carries readWorld's own message
+for (const [name, config, messagePattern] of [
+  ['a config with no world', { apiPort: 0 }, /names no world/],
+  ['a config naming a missing world', { apiPort: 0, world: 'missing' }, /names world "missing", but there is no/]
+]) {
+  test(`start-body: ${name} leaves body_down (exit 5), never starts`, async () => {
+    const { root, agentDir, toolsDir, srcDir } = fixtureRoot()
+    fs.writeFileSync(path.join(agentDir, 'config.json'), JSON.stringify(config))
+
+    const code = await runSync(toolsDir, [agentDir])
+    assert.equal(code, 5)
+
+    const events = eventsOf(agentDir)
+    const down = events.find(e => e.type === 'body_down')
+    assert.ok(down, `expected a body_down event, got: ${JSON.stringify(events)}`)
+    assert.equal(down.exit, 5)
+    assert.match(down.advice, messagePattern)
+    assert.equal(fs.existsSync(path.join(srcDir, 'bot.recorded.json')), false)
+
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+}
