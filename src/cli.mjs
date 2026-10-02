@@ -183,8 +183,8 @@ export const bedtime = s => s.night && !s.busy && !s.asleep && (s.bedNear || s.b
   s.sinceTryMs >= Math.min(30000 * 2 ** s.failures, 300000)
 
 // mc without MC_HOME knows no body. It used to fall back to the first one (Claude's): whoever ran bot/mc from a drifted shell drove
-// somebody else's body. clock and dawn need a home too, now that the clock they read is the agent's own world's, not a shared one;
-// only incidents (every agent's folder, read directly) needs none.
+// somebody else's body. clock and dawn need a home too: the clock they read is that agent's world's; only incidents
+// (every agent's folder) needs none.
 
 export const noHomeError = (home, action) => home || action === 'incidents' ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
 
