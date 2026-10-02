@@ -13,12 +13,21 @@ import { silkTouchTool } from '../tree/hives.mjs'
 import { latestOwnClosedDigHole } from '../survival/recover-hole.mjs'
 import { ROOT, HOME, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
-import { bot, carriedFood, task, Vec3, long, quick, refusalFor, useMoves, setStepsDone, stepsDone, explainFailure, ready, flee, holingUp, fighting, ROLLBACK_PLACE, penAround, censusOf, pos, cancelGuard, reportPerformance, automaticSleepBeds } from '../bot.mjs'
+import { Vec3, reportPerformance, bot, ready, task, cancelGuard, ROLLBACK_PLACE, pos } from './state.mjs'
+import { carriedFood } from './connection.mjs'
+import { fighting, flee, holingUp } from './reflexes.mjs'
+import { automaticSleepBeds } from './bedtime.mjs'
+import { stepsDone, setStepsDone } from './stuck-watch.mjs'
+import { refusalFor } from './jobs.mjs'
+import { explainFailure } from './explain.mjs'
+import { penAround, censusOf } from './pens.mjs'
+import { long, quick } from './actions/tables.mjs'
+import { useMoves } from './actions/move.mjs'
 import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 
 // ---------------------------------------------------------------- the composite runner ("autopilot")
-// src/bot.mjs holds primitives; a composite is one file in library/, `export default { doc, args, run }`. The runner loads
-// them at body start and registers each in `long`, so to a driver a composite is an ordinary action: a new one cancels
+// src/body/actions/ holds primitives; a composite is one file in library/, `export default { doc, args, run }`. src/bot.mjs
+// loads them at body start and registers each in `long` to run here, so to a driver a composite is an ordinary action: a new one cancels
 // the old, `state` shows it as doing=, and one that outlasts timeout= reports through task_done like anything else.
 // The hand-back rules belong to the RUNNER: conversation is observable while a job runs and does not
 // implicitly cancel it; health, food, night, and repeated-step failures still can.
@@ -37,7 +46,7 @@ export const compositeName = file => file.replace(/\.mjs$/, '').split('/').join(
 export const composites = new Map()
 // actions the CLI answers by itself, with no body running
 export const CLI_ONLY = ['wait', 'dawn', 'clock', 'job', 'jobs', 'cancel', 'resume', 'discard']
-// Preserve the runner export used by bot.mjs; the policy itself lives with food logic.
+// Preserve the runner export used by connection.mjs; the policy itself lives with food logic.
 export { BANNED_FOOD }
 const worldDay = () => Math.floor(Number(bot.time.age ?? 0) / 24000)
 // a body below the hunger floor carrying rotten flesh is not a body with nothing edible: it has a meal it is now

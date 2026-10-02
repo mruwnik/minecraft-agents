@@ -82,7 +82,7 @@ const readWorlds = () => (fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR,
   }))
 const allPlaces = worlds => worlds.flatMap(w => w.places)
 
-// the bodies' own HTTP API (src/bot.mjs): POST /<action> with a JSON body
+// the bodies' own HTTP API (src/body/api.mjs): POST /<action> with a JSON body
 const ask = (port, action, args, timeoutMs) => new Promise(resolve => {
   const body = JSON.stringify(args)
   const req = http.request({ host: '127.0.0.1', port, path: `/${action}`, method: 'POST', timeout: timeoutMs }, res => {
@@ -248,7 +248,7 @@ const send = (res, code, type, payload, headers = {}) => {
 }
 const sendJson = (res, code, value) => send(res, code, 'application/json', JSON.stringify(value))
 
-// one PNG through that body's eyes. `look` is a quick action in src/bot.mjs: it reads the chunk data the body already
+// one PNG through that body's eyes. `look` is a quick action in src/body/actions/sense.mjs: it reads the chunk data the body already
 // holds and never turns it, so this cannot interrupt a walk, a build or a composite that is running.
 const lookFrame = async (agent, args) => {
   const r = await ask(agent.apiPort, 'look', args, 30000)
@@ -272,7 +272,7 @@ const serveLook = async (res, name, query) => {
 }
 
 // one body's screen: HUD numbers, inventory slots and the container it has open. `screen` is a quick action
-// (src/bot.mjs): it reads the bot's own state, so this never interrupts whatever the body is doing.
+// (src/body/actions/sense.mjs): it reads the bot's own state, so this never interrupts whatever the body is doing.
 const serveScreen = async (res, name) => {
   const agent = agents.find(a => a.name === name)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })

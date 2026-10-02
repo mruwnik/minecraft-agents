@@ -1,5 +1,5 @@
 // The body-side stuck watch (autopilot card): a sample a second, a verdict over the rolling window, one event and one
-// chat line per episode. Pure: bot.mjs takes the samples and hands them in.
+// chat line per episode. Pure: src/body/stuck-watch.mjs takes the samples and hands them in.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { addSample, stuckVerdict, nextEpisode, stuckField, stuckLine, WINDOW_MS, END_MS, REPEAT_MS } from '../src/navigation/stuck.mjs'

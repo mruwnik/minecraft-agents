@@ -177,7 +177,7 @@ test('wood reach passes through this tree’s leaves without treating leaves as 
 })
 
 test('actual scaffold_extend clicks a horizontal base face and never clicks after cancellation',async()=>{
- const source=fs.readFileSync(new URL('../src/bot.mjs',import.meta.url),'utf8')
+ const source=fs.readFileSync(new URL('../src/body/actions/block.mjs',import.meta.url),'utf8')
  const body=source.slice(source.indexOf('  async scaffold_extend (a) {'),source.indexOf('  async scaffold_side (a) {'))
  const make=new Function('bot','vecOf','Vec3','isAir','refusalFor','digFromHere','cancelGuard','inventoryCounts','findItem',`let handPlacing=0;return ({${body}}).scaffold_extend`)
  class Vec{constructor(x,y,z){Object.assign(this,{x,y,z})}offset(x,y,z){return new Vec(this.x+x,this.y+y,this.z+z)}floored(){return new Vec(Math.floor(this.x),Math.floor(this.y),Math.floor(this.z))}}

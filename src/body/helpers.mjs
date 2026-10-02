@@ -6,7 +6,12 @@ import { fullSide, transferOutcome, compact, settleVerdict, coordsError, unpenne
 import { rimGoal, walkRefusal } from '../navigation/walk.mjs'
 import { configureEscortMoves, equine, escortAtDestination, runSurfaceEscort } from '../navigation/escort.mjs'
 import { searchSections, enough } from '../blocksearch.mjs'
-import { mcData, bot, mealsEaten, Vec3, penAround, goals, isWoodDoor, boatLeashHolder, cancelGuard, setLeading, setFollowing, makeMoves, lastPath, digging, pos, censusOf, reportPerformance, declareOpening } from '../bot.mjs'
+import { goals, Vec3, reportPerformance, bot, mcData, cancelGuard, pos } from './state.mjs'
+import { boatLeashHolder, declareOpening, mealsEaten, lastPath } from './connection.mjs'
+import { isWoodDoor } from './doors.mjs'
+import { penAround, censusOf } from './pens.mjs'
+import { digging, makeMoves } from './actions/move.mjs'
+import { setLeading, setFollowing } from './actions/creature.mjs'
 
 // ---------------------------------------------------------------- helpers
 export function matcher (names) {

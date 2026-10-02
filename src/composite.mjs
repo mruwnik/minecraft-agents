@@ -3,7 +3,7 @@
 // A composite builds its report as it goes (api.report: built=, stage=, dug=), and until now the report reached the
 // driver only when the composite finished or handed the body back by itself. `./mc stop` answered "FAIL blueprint.build
 // 84s error: cancelled: stop" and nothing else, with 25 floor cells dug and the driver reading events.jsonl to learn
-// it. The pure rules live here; the runner in bot.mjs applies them.
+// it. The pure rules live here; the runner in src/body/runner.mjs applies them.
 
 // the report the composite built so far rides on whatever error ends it (a cancel, a death, a step that threw).
 // What the error already carries wins: a composite mid-restoration says so in its own words

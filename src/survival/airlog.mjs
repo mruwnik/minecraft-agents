@@ -4,7 +4,7 @@
 // head in water, either because the bridge hands the client another block there or because the server holds the body
 // somewhere else than the client does. Every change of the number is one `oxygen` event with the evidence that tells
 // those apart: the client's position against where the server last put it and how long ago, the block at the head,
-// and whether the client thinks it is wet. Pure: bot.mjs reads the body and hands the numbers in.
+// and whether the client thinks it is wet. Pure: src/body/connection.mjs reads the body and hands the numbers in.
 //
 // What bot.oxygenLevel reads before the first metadata: UNDEFINED. mineflayer never gives it a default; it is set only
 // in lib/plugins/entities.js (`bot.oxygenLevel = Math.round(metas.air_supply / 15)`, or breath.js on old versions)

@@ -1,5 +1,5 @@
 // Eyes for the bot: a small software raycaster over the chunk data mineflayer already holds.
-// Everything here is pure (no bot, no disk) so it can be tested without a server; bot.mjs feeds it the world.
+// Everything here is pure (no bot, no disk) so it can be tested without a server; the body feeds it the world.
 import zlib from 'node:zlib'
 
 // ---------------------------------------------------------------- png

@@ -1056,6 +1056,9 @@ test('every module that uses a lib.mjs helper imports it', async () => {
       .filter(name => new RegExp(`(^|[^\\w.$])${name}(?![\\w$])`).test(body))
       // a parameter with a default (dropsNear (range = 16)) is declared, not used
       .filter(name => !new RegExp(`(const|let|var|function|class)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*=>|${name}\\s*:|[(,]\\s*${name}\\s*=[^=>]`).test(body))
+      // so is a plain parameter of a function declaration (nearbyHostiles (range)), and a name destructured into a
+      // const ({ far: gatesLeftOpen } = ...): bot.mjs imported both helpers unused, which is all that kept them quiet here
+      .filter(name => !new RegExp(`function\\s*\\w*\\s*\\([^)]*\\b${name}\\b[^)]*\\)|(const|let|var)\\s*\\{[^}]*\\b${name}\\s*\\}\\s*=`).test(body))
       .map(name => `${file}: uses ${name} without importing it`)
   })
   assert.deepEqual(unimported, [])
@@ -2201,7 +2204,7 @@ for (const [name, meal, expected] of [
   test(`uneatenMeal: ${name}`, () => assert.equal(uneatenMeal(meal), expected))
 }
 
-// a helper wired into bot.mjs without its import only blows up when that line runs: 214 "foodAway is not defined" in 20 s on a live body
+// a helper wired into the body without its import only blows up when that line runs: 214 "foodAway is not defined" in 20 s on a live body
 // a helper counts as imported whichever local module it comes from (chatter.mjs, stuck.mjs, ... beside lib.mjs)
 const unimported = (source, lib) => {
   const imports = [...source.matchAll(/import \{([^}]*)\} from '\.[^']*\.mjs'/g)]
@@ -2211,14 +2214,16 @@ const unimported = (source, lib) => {
 }
 const CLI_SOURCE = fs.readFileSync(new URL('../src/cli.mjs', import.meta.url), 'utf8')
 // once lib.mjs becomes a barrel over src/lib/*.mjs, its own exports live in those files: read them all so the
-// unimported() checks below still see every helper bot.mjs/mc.mjs/check-code.mjs might call.
+// unimported() checks below still see every helper the body/mc.mjs/check-code.mjs might call.
 const LIB_DIR = new URL('../src/lib/', import.meta.url)
 const LIB_MODULE_SOURCE = fs.existsSync(LIB_DIR)
   ? fs.readdirSync(LIB_DIR).filter(f => f.endsWith('.mjs')).map(f => fs.readFileSync(new URL(f, LIB_DIR), 'utf8')).join('\n')
   : ''
 const LIB_SOURCE = fs.readFileSync(new URL('../src/lib.mjs', import.meta.url), 'utf8') + LIB_MODULE_SOURCE + CLI_SOURCE
 test('unimported: spots a lib helper that is called but not imported', () => assert.deepEqual(unimported("import { terse } from './lib.mjs'\nfoodAway({})", LIB_SOURCE), ['foodAway']))
-for (const [file, module, source] of [['../src/bot.mjs', 'lib', LIB_SOURCE], ['../tools/mc.mjs', 'cli', CLI_SOURCE], ['../tools/check-code.mjs', 'cli', CLI_SOURCE]]) {
+// the body is src/bot.mjs and the modules it was split into under src/body/
+const BODY_FILES = ['../src/bot.mjs', ...fs.readdirSync(new URL('../src/body/', import.meta.url), { recursive: true }).filter(f => f.endsWith('.mjs')).sort().map(f => `../src/body/${f}`)]
+for (const [file, module, source] of [...BODY_FILES.map(f => [f, 'lib', LIB_SOURCE]), ['../tools/mc.mjs', 'cli', CLI_SOURCE], ['../tools/check-code.mjs', 'cli', CLI_SOURCE]]) {
   test(`${file} imports every ${module} helper it calls`, () => assert.deepEqual(unimported(fs.readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), source), []))
 }
 
@@ -5438,17 +5443,19 @@ test('farm.harvest: with no place= it still harvests where it stands, walking no
 const READ_ONLY = ['state', 'look', 'look_at', 'look_around', 'entity', 'animals', 'find_blocks', 'block_at', 'scan',
   'path_to', 'inventory', 'chest_contents', 'events', 'places', 'zones', 'reflexes', 'watches', 'help']
 const GATES = ['foreignZone', 'inAnyZone', 'invited', 'workRefusal']
-const botSource = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'bot.mjs'), 'utf8')
+// the primitives are one module per help section under src/body/actions/; the watches keep their own beside them
+const ACTION_SOURCES = [...fs.readdirSync(path.join(import.meta.dirname, '..', 'src', 'body', 'actions')).map(f => path.join('actions', f)), 'watches.mjs']
+const actionSource = ACTION_SOURCES.map(f => fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'body', f), 'utf8')).join('\n')
 const actionBody = name => {
-  const header = new RegExp(`^  (?:async )?${name}[ :] *\\(`, 'm').exec(botSource)
-  assert.ok(header, `no action called ${name} in src/bot.mjs: rename it here too`)
-  const from = botSource.indexOf('{', header.index + header[0].length)
+  const header = new RegExp(`^  (?:async )?${name}[ :] *\\(`, 'm').exec(actionSource)
+  assert.ok(header, `no action called ${name} in src/body/actions/ or src/body/watches.mjs: rename it here too`)
+  const from = actionSource.indexOf('{', header.index + header[0].length)
   let depth = 0
-  for (let i = from; i < botSource.length; i++) {
-    depth += botSource[i] === '{' ? 1 : botSource[i] === '}' ? -1 : 0
-    if (depth === 0) return botSource.slice(from, i + 1)
+  for (let i = from; i < actionSource.length; i++) {
+    depth += actionSource[i] === '{' ? 1 : actionSource[i] === '}' ? -1 : 0
+    if (depth === 0) return actionSource.slice(from, i + 1)
   }
-  return botSource.slice(from)
+  return actionSource.slice(from)
 }
 
 for (const name of READ_ONLY) {

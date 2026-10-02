@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { compatibleInventoryStacks, inventoryCompactPair } from '../src/inventory/compact.mjs'
 
 function stack (slot, count, overrides = {}) {
@@ -51,4 +52,11 @@ test('inventory compaction ignores full and unstackable items and stops at 64 pl
   assert.equal(inventoryCompactPair([full, remainder, unstackable], 'bread'), null)
   assert.equal(inventoryCompactPair([unstackable], 'bread'), null)
   assert.equal(full.count + remainder.count + unstackable.count, 69)
+})
+
+test('inventory_compact imports the stack comparison its cursor cleanup calls', () => {
+  const source = fs.readFileSync(new URL('../src/body/actions/item.mjs', import.meta.url), 'utf8')
+  const imported = source.match(/import \{([^}]*)\} from '\.\.\/\.\.\/inventory\/compact\.mjs'/)[1].split(',').map(name => name.trim())
+  assert.ok(source.includes('compatibleInventoryStacks(current, cursor)'))
+  assert.ok(imported.includes('compatibleInventoryStacks'))
 })

@@ -24,7 +24,7 @@ const OPPOSITE = { north: 'south', south: 'north', east: 'west', west: 'east' }
 const FRONT_KEYS = { name: true, title: true, description: true, tags: true, front: true, foundation: true, clearance: false, params: false, source: false, license: false, difficulty: false, notes: false, by: false }
 const FOUNDATIONS = ['flat', 'any', 'dug']
 const LIMITS = { side: 64, minY: -4, maxY: 47, cells: 16384 }
-// the eyes are 1.62 over the feet and the arm reaches 4.5 from them (src/navigation/stand.mjs, bot.mjs DIG_REACH)
+// the eyes are 1.62 over the feet and the arm reaches 4.5 from them (src/navigation/stand.mjs, src/body/actions/block.mjs DIG_REACH)
 export const EYE = 1.62
 export const REACH = 4.5
 // the margin of free slots a build never fills: the drops of a dig, a tool swap

@@ -1,6 +1,6 @@
 import { entityUuid, villagerObservation } from '../villager/observation.mjs'
 // Villager trading and attributed household food delivery runtime.
-// Live body dependencies are injected, keeping client lifecycle in bot.mjs.
+// Live body dependencies are injected, keeping client lifecycle in connection.mjs.
 import { within, offerCost, tradeLine } from '../lib.mjs'
 import { compatibleInventoryStacks } from '../inventory/compact.mjs'
 

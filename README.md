@@ -29,8 +29,9 @@ Never move or rename a folder under `state/` (or `state/` itself) while a body r
 events by an absolute path fixed at start, so the first write after the move kills it. `./mc quit` every body
 first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down this way).
 
-    src/        the body: bot.mjs (reflexes, primitives, the composite runner, the HTTP API), lib.mjs (pure helpers,
-                tested), eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
+    src/        the body: bot.mjs (the process: wires body/ together and connects), body/ (reflexes, primitives in
+                body/actions/, the job wiring, the composite runner, the HTTP API), lib.mjs (pure helpers, tested),
+                eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
     tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), restart-body (behind ./restart),
                 new-agent.mjs, patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs,
@@ -90,14 +91,14 @@ climbing, standing above them or sneaking down. This does not make hazardous ter
 
 ## Protected zones and doors
 
-Walks are walk-only by default (`makeMoves(false)` in `src/bot.mjs`). `mine` and `goto dig=true` use the digging movements, which
+Walks are walk-only by default (`makeMoves(false)` in `src/body/actions/move.mjs`). `mine` and `goto dig=true` use the digging movements, which
 dig through or scaffold over anything in their way, including our own walls and roofs.
 `./mc protect name=<n> x1= y1= z1= x2= y2= z2=` (saved in `state/worlds/<world>/zones.json`) forbids path-digging and scaffolding inside a box;
 `./mc zones` lists them and `./mc unprotect name=<n>` removes one. Explicit `dig`, `mine` and `place` still work there.
 Protect every build, including a layer or two of ground beneath it, or it will tunnel under.
 
-mineflayer-pathfinder only understands fence gates, so `src/bot.mjs` marks wooden doors as walkable and `doorTick`
-opens a closed door as the bot reaches it, then shuts it again once through (only doors it opened itself).
+mineflayer-pathfinder only understands fence gates, so `makeMoves` marks wooden doors as walkable and `doorTick`
+(src/body/doors.mjs) opens a closed door as the bot reaches it, then shuts it again once through (only doors it opened itself).
 A door is oriented by where the bot stands when placing it: stand in front of the doorway, outside.
 
 ## Vision
@@ -152,7 +153,7 @@ The popup shows that body's recent actions beside the picture - job starts/compl
 holing up, chat - newest at the bottom, aging in place. Under the log, a line typed and sent with Enter reaches the
 agent as a whisper from `dashboard`, the same `whisper` event an in-game whisper makes.
 
-Apart from that whisper it only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
+Apart from that whisper it only reads. `state` and `look` are both **quick** actions in `src/body/actions/sense.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
 that agent's driver nothing - no tokens are spent by looking. A port that does not answer is simply a body that is
 down. Its own API, for scripts: `/api/state` (every body, plus per world its bodies, humans, places and zones; one map is drawn per world) and `/api/look/<Name>` (a PNG; what
