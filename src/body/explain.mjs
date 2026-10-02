@@ -3,8 +3,8 @@ import { FLUIDS, feetCell, inAnyZone, explainInterrupt, explainNoPath, boxedIn }
 import { noPathAdvice, inHole, perchedOverField } from '../navigation/cave-exit.mjs'
 import { noFirstMove } from '../lib/path.mjs'
 import { zones } from './events.mjs'
-import { lastWalkGoal } from '../bot.mjs'
 import { Vec3, bot } from './state.mjs'
+import { lastWalkGoal } from './connection.mjs'
 import { lastReflex } from './reflexes.mjs'
 import { digging } from './actions/move.mjs'
 

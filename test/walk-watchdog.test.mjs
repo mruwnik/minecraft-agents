@@ -51,7 +51,7 @@ test('movement still resets the clock while sub-threshold jitter does not', () =
 })
 
 test('actual goal-update listener catches no-goal transitions between watchdog samples without rearming same-goal kicks', () => {
-  const source = fs.readFileSync(new URL('../src/bot.mjs', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../src/body/connection.mjs', import.meta.url), 'utf8')
   const start = source.indexOf("    bot.on('goal_updated', goal => {")
   const end = source.indexOf("    bot.on('path_reset'", start)
   assert.ok(start >= 0 && end > start)
@@ -102,7 +102,7 @@ test('working in place pauses the movement allowance and a new awaited leg start
 })
 
 test('production watchdog settles native nested goto before forage recovers to a different leg', async () => {
-  const source = fs.readFileSync(new URL('../src/bot.mjs', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../src/body/connection.mjs', import.meta.url), 'utf8')
   const walkStart = source.indexOf('    const walk = goal => {')
   const walkEnd = source.indexOf('    const arrived = goal => {', walkStart)
   const watchStart = source.indexOf('  // Every awaited static walk owns this watchdog')
