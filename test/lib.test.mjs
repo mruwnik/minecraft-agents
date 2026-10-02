@@ -4649,7 +4649,7 @@ test('farm.build: the ground is levelled, then the plan is tilled and planted', 
   // sees it, while still within 4 of the bed for the till gate (hydrated, src/lib/jobs.mjs)
   const world = { '0,63,0': 'air', '0,64,0': 'air', '0,65,0': 'air', '4,63,4': 'water' }
   const { api, calls } = fakeApi({
-    place: fakePlace('w'), world, items: { wheat_seeds: 32, dirt: 8 },
+    place: fakePlace('w'), world, items: { wheat_seeds: 32, dirt: 8, stone_hoe: 1 },
     answers: {
       place: ({ item, x, y, z }) => { world[`${x},${y},${z}`] = item === 'wheat_seeds' ? 'wheat' : item; return {} },
       till: ({ x, y, z }) => { world[`${x},${y},${z}`] = 'farmland'; return {} }
@@ -4860,7 +4860,7 @@ test('farm.build: partial=true builds what it can and names the rest', async () 
   // far enough that groundJobs' own footing search (WORK_RANGE) never sees it: see the note on the test above
   const world = { '0,63,0': 'dirt', '1,63,0': 'dirt', '4,63,4': 'water' }
   const { api, calls } = fakeApi({
-    place: fakePlace('ww'), world, items: {},
+    place: fakePlace('ww'), world, items: { stone_hoe: 1 },
     answers: { till: ({ x, y, z }) => { world[`${x},${y},${z}`] = 'farmland'; return {} } }
   })
   const summary = await buildFarm.run(api, { place: 'test-field', partial: true })
