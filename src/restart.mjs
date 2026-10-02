@@ -1,6 +1,6 @@
 // Restarting a body at night. A body started outside after dark dies before its driver can act (13:40Z, a7cd6038):
 // the advice a running body gives with code_updated, and the gate ./start runs before anything else, both read the
-// shared clock (state/clock.json, written by every running body: {day, timeOfDay, by, at}).
+// shared clock (state/worlds/<world>/clock.json, written by every running body: {day, timeOfDay, by, at}).
 const NIGHT_FROM = 12500
 const NIGHT_TO = 23460
 // a clock nobody has written for this long means no body is online, and with nobody online the night is not passing:

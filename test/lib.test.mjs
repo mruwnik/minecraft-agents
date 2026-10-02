@@ -152,23 +152,32 @@ for (const [used, expected] of portCases) {
 }
 
 const harnesses = ['claude-code', 'codex']
+const worlds = ['main']
 const newAgentArgCases = [
-  ['nothing: a drawn name on the default harness', [], { name: null, harness: 'claude-code' }],
-  ['a name', ['Lightsong'], { name: 'Lightsong', harness: 'claude-code' }],
-  ['a harness', ['--harness', 'codex'], { name: null, harness: 'codex' }],
-  ['name then harness', ['Lightsong', '--harness', 'codex'], { name: 'Lightsong', harness: 'codex' }],
-  ['harness then name', ['--harness', 'codex', 'Lightsong'], { name: 'Lightsong', harness: 'codex' }],
-  ['--harness=name', ['--harness=codex'], { name: null, harness: 'codex' }],
-  ['a harness with no notes file', ['--harness', 'gemini'], { error: 'unknown harness "gemini": the ones with notes in harness/ are claude-code, codex' }],
+  ['nothing: a drawn name on the default harness', ['--world', 'main'], { name: null, harness: 'claude-code', world: 'main' }],
+  ['a name', ['Lightsong', '--world', 'main'], { name: 'Lightsong', harness: 'claude-code', world: 'main' }],
+  ['a harness', ['--harness', 'codex', '--world', 'main'], { name: null, harness: 'codex', world: 'main' }],
+  ['name then harness', ['Lightsong', '--harness', 'codex', '--world', 'main'], { name: 'Lightsong', harness: 'codex', world: 'main' }],
+  ['harness then name', ['--harness', 'codex', 'Lightsong', '--world', 'main'], { name: 'Lightsong', harness: 'codex', world: 'main' }],
+  ['--harness=name', ['--harness=codex', '--world', 'main'], { name: null, harness: 'codex', world: 'main' }],
+  ['--world=name', ['--world=main'], { name: null, harness: 'claude-code', world: 'main' }],
+  ['--world before the name', ['--world', 'main', 'Lightsong'], { name: 'Lightsong', harness: 'claude-code', world: 'main' }],
+  ['a harness with no notes file', ['--harness', 'gemini', '--world', 'main'], { error: 'unknown harness "gemini": the ones with notes in harness/ are claude-code, codex' }],
   ['--harness without a value', ['Lightsong', '--harness'], { error: '--harness needs a name: one of claude-code, codex' }],
-  ['an option that is not --harness', ['--model', 'sonnet'], { error: 'unknown option --model (only --harness <name> is understood)' }],
-  ['two names', ['Lightsong', 'Nona'], { error: 'one name only: got "Lightsong" and "Nona"' }]
+  ['an option that is not --harness or --world', ['--model', 'sonnet'], { error: 'unknown option --model (only --harness <name> and --world <name> are understood)' }],
+  ['two names', ['Lightsong', 'Nona'], { error: 'one name only: got "Lightsong" and "Nona"' }],
+  ['no --world is an error', ['Lightsong'], { error: '--world <name> is required: the ones with world.json in state/worlds/ are main' }],
+  ['--world without a value', ['--world'], { error: '--world needs a name: one of main' }],
+  ['an unknown world', ['--world', 'atlas'], { error: 'unknown world "atlas": the ones with world.json in state/worlds/ are main' }]
 ]
 for (const [what, argv, expected] of newAgentArgCases) {
-  test(`newAgentArgs: ${what}`, () => assert.deepEqual(newAgentArgs(argv, harnesses), expected))
+  test(`newAgentArgs: ${what}`, () => assert.deepEqual(newAgentArgs(argv, harnesses, worlds), expected))
 }
 test('newAgentArgs: the default harness must have notes too', () => {
-  assert.deepEqual(newAgentArgs([], ['codex']), { error: 'unknown harness "claude-code": the ones with notes in harness/ are codex' })
+  assert.deepEqual(newAgentArgs(['--world', 'main'], ['codex'], worlds), { error: 'unknown harness "claude-code": the ones with notes in harness/ are codex' })
+})
+test('newAgentArgs: no worlds at all still names state/worlds/ in the error', () => {
+  assert.deepEqual(newAgentArgs([], harnesses, []), { error: '--world <name> is required: the ones with world.json in state/worlds/ are none' })
 })
 
 const compactCases = [

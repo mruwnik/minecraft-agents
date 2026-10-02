@@ -1,16 +1,18 @@
 # The agents' Minecraft bodies
 
-`src/bot.mjs` joins the server named in the `config.json` of the agent folder it runs from (`state/agents/<Name>/`,
-made by `node tools/new-agent.mjs <Name>`): `host`, `port` (default localhost:25565) and `auth`. `auth: "offline"`
-(the default) is for an offline-mode server, where whitelisting the name is all it takes. `auth: "microsoft"` is for
-an online-mode server: the name is a real account's profile name, and a human signs in once with
-`node tools/login.mjs <Name>` (a device code in the browser); the body then refreshes its own tokens, and reports
-`login_needed` if that ever stops working. Without a config.json the body refuses to start, so a stray run can never
-log in under another agent's name.
+`src/bot.mjs` joins the server its agent's world names. `state/agents/<Name>/config.json` (made by
+`node tools/new-agent.mjs <Name> --world <world>`) carries `world` and `auth`, never `host`/`port` directly;
+`state/worlds/<world>/world.json` holds `host`, `port` (default localhost:25565) and optionally `version`.
+`auth: "offline"` (the default) is for an offline-mode server, where whitelisting the name is all it takes.
+`auth: "microsoft"` is for an online-mode server: the name is a real account's profile name, and a human signs in
+once with `node tools/login.mjs <Name>` (a device code in the browser); the body then refreshes its own tokens, and
+reports `login_needed` if that ever stops working. Without a config.json the body refuses to start, so a stray run
+can never log in under another agent's name.
 Mineflayer speaks protocol 26.1; a server newer than that needs ViaVersion + ViaBackwards to bridge it, either as
 plugins on a Paper server or, for a vanilla server, as [ViaProxy](https://github.com/ViaVersion/ViaProxy) running
 beside the body: point its `viaproxy.yml` at the server (`target-version` the server's, `auth-method: ACCOUNT`, the
-Microsoft account added in its window) and give the body `host: 127.0.0.1`, `port: 25568`, `auth: "offline"`.
+Microsoft account added in its window) and give that world's `world.json` `host: 127.0.0.1`, `port: 25568`
+(its agents keep `auth: "offline"`).
 
 - Start: `cd state/agents/<Name> && ./start`; it returns once the body is launched (the body reconnects every 10s if the server is down).
 - `./restart` stops a running body cleanly and starts it again. It is for the operator, not drivers: a driver that
@@ -31,17 +33,20 @@ first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down th
                 tested), eyes.mjs + vision.mjs (what it sees), builder.mjs (plans -> jobs), pens.mjs
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
     tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), restart-body (behind ./restart),
-                new-agent.mjs, patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs
+                new-agent.mjs, patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs,
+                migrate-worlds.mjs (one-time move from the old flat state/ layout to state/worlds/<world>/)
     test/       every *.test.mjs; `npm test` runs them all (`node --test test/*.test.mjs`)
-    state/      everything this world made, and the only folder besides node_modules/ and textures/ that git ignores:
-                agents/<Name>/ (one folder per agent: config.json, BRIEFING.md, journal.md, events.jsonl,
-                snapshots/, its own ./mc and ./start), places.json (the shared map), zones.json (protected
-                boxes), clock.json (the world's time), gates.log (who opened which gate), WORLD.md and BUGS.md
+    state/      everything these worlds made, and the only folder besides node_modules/ and textures/ that git ignores:
+                agents/<Name>/ (one folder per agent: config.json names its world, plus BRIEFING.md, journal.md,
+                events.jsonl, snapshots/, its own ./mc and ./start), worlds/<world>/ (world.json: the server this
+                world runs on - host, port, optionally version; places.json the shared map; zones.json protected
+                boxes; clock.json the world's time; gates.log who opened which gate; WORLD.md) and BUGS.md
     roles/      knowledge and routines an agent can read on demand; harness/ notes per program that runs an agent
     textures/   block textures for `./mc look`, item/ ones for the dashboard's inventory (not checked in; see Vision below)
 
 `./mc`, `./play` and `AGENT_GUIDE.md` stay at the top, with `harness/`: they are true on any server. What belongs to
-THIS world is under `state/`, `WORLD.md` and `BUGS.md` included, so an agent still reads `../../WORLD.md` from its folder.
+one world is under `state/worlds/<world>/`, `WORLD.md` included, so an agent reads `../../worlds/<world>/WORLD.md`
+from its folder (`BUGS.md` stays directly under `state/`, shared across worlds).
 
 ## Keeping the driver's context small
 
@@ -87,7 +92,7 @@ climbing, standing above them or sneaking down. This does not make hazardous ter
 
 Walks are walk-only by default (`makeMoves(false)` in `src/bot.mjs`). `mine` and `goto dig=true` use the digging movements, which
 dig through or scaffold over anything in their way, including our own walls and roofs.
-`./mc protect name=<n> x1= y1= z1= x2= y2= z2=` (saved in `state/zones.json`) forbids path-digging and scaffolding inside a box;
+`./mc protect name=<n> x1= y1= z1= x2= y2= z2=` (saved in `state/worlds/<world>/zones.json`) forbids path-digging and scaffolding inside a box;
 `./mc zones` lists them and `./mc unprotect name=<n>` removes one. Explicit `dig`, `mine` and `place` still work there.
 Protect every build, including a layer or two of ground beneath it, or it will tunnel under.
 
@@ -167,13 +172,13 @@ is `tools/dashboard/blueprint.mjs`, pure like the map module.
 
 ## Agents: one folder each
 
-    node tools/new-agent.mjs             # draws a name from ~/.claude/hooks/choose_name.py (redraws until it is a valid, unused
-    node tools/new-agent.mjs Lightsong   # Minecraft username), or takes the one given
-    node tools/new-agent.mjs Nona --harness codex   # the program that will run it: a notes file in harness/ (default claude-code)
+    node tools/new-agent.mjs --world main             # draws a name from ~/.claude/hooks/choose_name.py (redraws until it is a valid, unused
+    node tools/new-agent.mjs Lightsong --world main   # Minecraft username), or takes the one given; --world <world> is required (a folder under state/worlds/)
+    node tools/new-agent.mjs Nona --world main --harness codex   # the program that will run it: a notes file in harness/ (default claude-code)
 
 creates `state/agents/<Name>/` with everything that agent owns:
 
-    config.json    username, its own apiPort, its harness, and the character the name comes from
+    config.json    username, its own apiPort, its harness, the world it joins, and the character the name comes from
     BRIEFING.md    who the agent is, how its folder works and what to read next; hand this to a new agent as its first read
     journal.md     the agent's own memory between sessions
     start, mc      start its body / drive it (`./mc look pano=true`), no ports or paths to remember
@@ -181,10 +186,18 @@ creates `state/agents/<Name>/` with everything that agent owns:
 
 Shared by everyone, in this directory: the code, `AGENT_GUIDE.md` (toolset, house rules, token habits; true on any
 server and harness), `harness/<name>.md` (what is specific to Claude Code, Codex, ...: waiting, timeouts, delegation),
-`state/WORLD.md` (this server: who plays, shared places, customs; changes often), `state/places.json`
-(the common map of points of interest: `./mc mark`, `./mc places`, `goto place=<name>`), `state/zones.json`
-(protected builds; a change by one bot reaches the others within seconds) and `textures/`.
+`state/worlds/<world>/WORLD.md` (that world: who plays, shared places, customs; changes often),
+`state/worlds/<world>/places.json` (the common map of points of interest: `./mc mark`, `./mc places`,
+`goto place=<name>`), `state/worlds/<world>/zones.json` (protected builds; a change by one bot reaches the others
+within seconds) and `textures/`.
 Each name must be whitelisted once, on the server console: `whitelist add <Name>`.
+
+Adding a world: make `state/worlds/<name>/world.json` (`{"host": "...", "port": ...}`, optionally `version`), then
+point new agents at it with `--world <name>`. The one-time move from the old flat `state/` layout into
+`state/worlds/main/` is `node tools/migrate-worlds.mjs main` (`--state <dir>` to run it against a different copy);
+it refuses (exit 3) if a body is still running for an agent in that state dir, (exit 2) if a world file already
+exists at both the old flat location and the new one, or (exit 2) if `state/worlds/main/world.json` is missing and
+no agent config.json has a `host`/`port` left to seed it from.
 
 ## Starting an agent with one command
 
