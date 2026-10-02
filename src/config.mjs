@@ -31,7 +31,7 @@ export const readWorld = home => {
   const dir = path.join(worlds, name)
   const worldFile = path.join(dir, 'world.json')
   if (!fs.existsSync(worldFile)) {
-    const known = fs.existsSync(worlds) ? fs.readdirSync(worlds, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) : []
+    const known = fs.existsSync(worlds) ? fs.readdirSync(worlds, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort() : []
     throw new Error(`${file} names world "${name}", but there is no ${worldFile}; worlds there are: ${known.join(', ') || 'none'}`)
   }
   return { name, dir, server: readJson(worldFile) }

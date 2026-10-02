@@ -30,7 +30,7 @@ trap 'rm -f body.pid' EXIT
 # and - once the world is known - a body started outside while its world's clock says night (a7cd6038). `./start
 # --now` (or START_NOW=1) is the driver's word that the body spawns into a bed or under a roof, which the clock
 # cannot know; a missing world refuses even then.
-if ! refusal=$(node ../../../tools/start-gate.mjs . "${@:2}" 2>&1); then
+if ! refusal=$(node ../../../tools/start-gate.mjs "$PWD" "${@:2}" 2>&1); then
   echo "$refusal" >&2
   node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 5, advice: `your body was not started: ${process.argv[1].trim()}` }) + "\n")' "$refusal" >> events.jsonl
   exit 5
