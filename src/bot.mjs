@@ -3317,7 +3317,7 @@ export const quick = {
 
 // A reflex cancellation (wedged, stalled, holing up, out of air, a death) no longer freezes the queue by itself:
 // whether it should is now the job-policy.mjs decision job-scheduler.mjs makes once the cancelled job's own result
-// settles (severeFailure: the body died, lost carried items, or the same job failing twice running).
+// settles (severeFailure: the body died, or the same job failing twice running).
 function cancelTask (why) {
   const active = jobShelf.snapshot().active
   if (active != null) jobShelf.markCancelling(active, why)

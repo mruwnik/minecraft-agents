@@ -366,8 +366,8 @@ physics and route-controller patches support it; ordinary digging and building p
   the queue instead (`queue=false` is refused: say `interrupt=true`). `./mc jobs` (`./mc job id=`) lists it, defaulting
   to the last 20 entries (`all=true` for the whole remembered history); `-v` is capped at 20,000 characters, never the
   whole file. `./mc stop` drops everything still queued and cancels the running job.
-- A failure only freezes the queue (`./mc resume` or `./mc discard` needed before later jobs run) when the body died,
-  an action lost carried items, or the same job failed twice running; every other failure - no path, no bed, an
+- A failure only freezes the queue (`./mc resume` or `./mc discard` needed before later jobs run) when the body died
+  or the same job failed twice running; every other failure - no path, no bed, an
   untillable cell, a refused place or dig, a clean disconnect - just reports and the next queued job runs by itself.
   After a reconnect or a body restart the body clears that kind of hold itself, once the world has loaded and no
   monster stands within 8 blocks of it (`queue_waiting reason=hostile` and a retry every 30s otherwise), so a driver
