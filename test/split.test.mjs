@@ -63,3 +63,32 @@ for (const file of BODY_MODULES) {
     assert.equal(out, true)
   })
 }
+
+// an imported binding is read-only: `flee = null` in a module that imports flee parses, links and loads, and throws
+// "Assignment to constant variable" only when that line runs. Reassigning is the declaring module's, through its setX
+const SOURCES = ['src', 'library'].flatMap(function walk (dir) {
+  return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.mjs') ? [path.join(dir, e.name)] : [])
+})
+const importedNames = src => [...src.matchAll(/import\s*(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*'[^']*'/g)]
+  .flatMap(([, def, names]) => [def, ...(names ?? '').split(',').map(n => n.trim().split(/\s+as\s+/).pop().trim())]).filter(Boolean)
+const reassigned = src => {
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
+    .replace(/`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''")
+  return importedNames(src).filter(name =>
+    new RegExp(`(?:^|[{;]|\\)|=>)\\s*${name}\\s*(?:(?:[-+*/%|&]|\\?\\?|\\|\\||&&)?=(?![=>])|\\+\\+|--)`, 'm').test(code))
+}
+for (const [name, src, expected] of [
+  ['a statement', "import { flee } from './reflexes.mjs'\nflee = null", ['flee']],
+  ['after an if', "import { bedWalkFailed } from './bedtime.mjs'\nif (walked) bedWalkFailed = true", ['bedWalkFailed']],
+  ['in a block', "import { fighting } from './reflexes.mjs'\nif (x) { fighting = null }", ['fighting']],
+  ['a count', "import { gen } from './state.mjs'\ngen++", ['gen']],
+  ['through its setter', "import { flee, setFlee } from './reflexes.mjs'\nsetFlee(null)", []],
+  ['a comparison', "import { task } from './state.mjs'\nif (task === mine) setTask(null)", []],
+  ['a property of it', "import { mealsEaten } from './connection.mjs'\nmealsEaten.bread = 1", []]
+]) {
+  test(`reassigned: ${name}`, () => assert.deepEqual(reassigned(src), expected))
+}
+test('no module in src/ or library/ reassigns a binding it imports', () => {
+  assert.deepEqual(SOURCES.flatMap(file => reassigned(fs.readFileSync(path.join(ROOT, file), 'utf8')).map(name => `${file}: ${name}`)), [])
+})
