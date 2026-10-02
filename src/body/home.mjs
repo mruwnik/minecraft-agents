@@ -10,7 +10,9 @@ const DIR = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.resolve(DIR, '..', '..')
 fs.mkdirSync(path.join(ROOT, 'state'), { recursive: true })
 // `node src/bot.mjs <home>` runs the body whose config.json, events.jsonl and snapshots/ live in <home> (default: the
-// working directory), while state/zones.json and textures/ stay here, shared by every body. No config.json, no body:
+// working directory), while textures/ stays here, shared by every body. No config.json, no body:
 // a default name here once logged a stray `node src/bot.mjs` in as another agent and kicked that agent's real body.
 export const HOME = path.resolve(process.argv[2] ?? process.cwd())
 export const cfg = readConfig(HOME)
+// the shared files of the world (server) this body plays in: state/worlds/<world>, named by config.json
+export const WORLD_DIR = cfg.worldDir

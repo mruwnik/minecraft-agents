@@ -64,7 +64,7 @@ import { makeRidingRuntime, horseState } from './body/riding.mjs'
 import { driveHorse } from './navigation/horse.mjs'
 import { makeVillagerRuntime } from './body/villager.mjs'
 import { makeVillagerRosterObserver, saveVillagerObservation } from './villager/roster.mjs'
-import { ROOT, HOME, cfg } from './body/home.mjs'
+import { ROOT, HOME, WORLD_DIR, cfg } from './body/home.mjs'
 import { authDir, profileFile, loginAdvice } from './auth.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
@@ -1095,9 +1095,9 @@ setInterval(() => {
 setInterval(() => {
   if (!ready) return
   // written whole or not at all (own temp file, then rename): every body writes this file and readers caught it empty
-  const fresh = path.join(ROOT, 'state', `clock.${cfg.username}.tmp`)
+  const fresh = path.join(WORLD_DIR, `clock.${cfg.username}.tmp`)
   fs.writeFileSync(fresh, JSON.stringify({ day: !isNight(bot.time.timeOfDay), timeOfDay: bot.time.timeOfDay, by: cfg.username, at: Date.now() }))
-  fs.renameSync(fresh, path.join(ROOT, 'state', 'clock.json'))
+  fs.renameSync(fresh, path.join(WORLD_DIR, 'clock.json'))
 }, 5000)
 // stall watchdog: a task with somewhere to walk that neither moves nor digs is hung; fail it loudly instead of forever
 let stillFrom = null
