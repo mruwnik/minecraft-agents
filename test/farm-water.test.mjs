@@ -203,7 +203,7 @@ test('farm.maintain: a dry till that fails still gets its own checkpoint, seed i
     items,
     answers: {
       'farm.harvest': { harvested: {}, replanted: 0 },
-      till: p => new Error(`till: tilled nothing: 1 still dirt: is there a block on top of it? (first ${p.x},${p.y},${p.z})`)
+      till: p => new Error(`till: tilled nothing: 1 still dirt: nothing is on top of it (first ${p.x},${p.y},${p.z})`)
     }
   })
   made.api.checkpoint = async () => { made.calls.push('checkpoint') }
@@ -310,7 +310,7 @@ test('farm.build: a dry till that fails still gets its own checkpoint, seed in h
   const items = { wheat_seeds: 2, stone_hoe: 1 }
   const world = field('ww', { '0,63,0': 'dirt', '0,64,0': 'air', '1,63,0': 'dirt', '1,64,0': 'air' })
   const made = fakeApi({ place: fakePlace('ww'), world, items, answers: {
-    till: p => new Error(`till: tilled nothing: 1 still dirt: is there a block on top of it? (first ${p.x},${p.y},${p.z})`)
+    till: p => new Error(`till: tilled nothing: 1 still dirt: nothing is on top of it (first ${p.x},${p.y},${p.z})`)
   } })
   made.api.checkpoint = async () => { made.calls.push('checkpoint') }
   await buildFarm.run(made.api, { place: 'test-field', partial: true })

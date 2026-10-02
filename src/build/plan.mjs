@@ -108,6 +108,9 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // never read back as unfinished
   const dryBeds = []
   const dryKeys = new Set()
+  // beds with their own till job in fieldJobs (set once that list is built, below): the plant-time retill fallback
+  // further down is only for a bed that read as farmland when the list was built and so never got a till job at all
+  let tilledBeds = new Set()
   // set true for a dry till that goes ahead because its plant is right behind it, seed in hand: the field loop below
   // skips its own checkpoint once so that plant runs before anything can hand back or sleep the night on the bare bed
   let sowNext = false
@@ -158,6 +161,15 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
         const reason = `unfilled bed ${job.x},${y},${job.z}: ${ground.name} where solid ground is needed`
         if (!blocked.includes(reason)) blocked.push(reason)
         return false
+      }
+      // field() (above) built this job list once, before this loop ever walked the ground: a cell read as farmland
+      // then can trample back to dirt (or grass) by the time its own plant job comes up - the walk crosses it on the
+      // way to another job first. Found that way, it is retilled in place, seed in hand, right here - the same job a
+      // till job would be given - rather than planting onto bare ground or losing the whole run to it elsewhere in
+      // the field (library/farm/maintain.mjs's sweep does the same for farm.maintain)
+      const bed = job.do === 'plant' && !tilledBeds.has(jobGroundKey(job)) ? plan.cells.find(c => c.x === job.x && c.y === y && c.z === job.z) : null
+      if (bed && planSpec(bed)?.ground === 'farmland' && ground && ground.name !== 'farmland') {
+        if (!await tryJob({ do: 'till', x: job.x, y, z: job.z, why: `${ground.name} where farmland should be` }, job)) return false
       }
       // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
       // back instead, and the plant on the same ground held with it - UNLESS the very next job is that plant, seed
@@ -281,6 +293,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // tryJob only sees one job; the next one in this same list is what tells a dry till whether its own plant is
   // right behind it, seed in hand, so the bed goes in at once instead of being held
   const fieldJobs = field()
+  tilledBeds = new Set(fieldJobs.filter(j => j.do === 'till').map(jobGroundKey))
   for (let i = 0; i < fieldJobs.length; i++) {
     const ok = await tryJob(fieldJobs[i], fieldJobs[i + 1])
     // a checkpoint right here could hand back or sleep the night on bare, dry farmland: skipped once, for the till

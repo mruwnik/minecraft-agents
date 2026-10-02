@@ -83,6 +83,34 @@ test('farm.build skips a bed capped with cobblestone and tills and plants the re
   assertAttention(events, 'farm.build')
 })
 
+// A trampled bed (card trampled-retill): farmJobs built the job list before the walk crossed the field, and the
+// walk to bed0's own till trampled bed1's farmland back to dirt on the way. Found dirt there, at job time, bed1
+// is retilled in place and planted - not left bare for the mock's place to refuse, the way a live field found it
+test('farm.build retills a bed trampled back to dirt since the job list was built, and plants it', async () => {
+  const world = { '0,63,0': 'dirt', '1,63,0': 'farmland', '4,63,0': 'water' }
+  const items = { wheat_seeds: 2, stone_hoe: 1 }
+  const { api, calls, events } = fakeApi({ place: field('ww'), world, items, answers: {
+    till: a => {
+      world[`${a.x},${a.y},${a.z}`] = 'farmland'
+      if (a.x === 0) world['1,63,0'] = 'dirt'
+    },
+    place: a => {
+      const ground = world[`${a.x},${a.y - 1},${a.z}`]
+      if (ground !== 'farmland') throw new Error(`place: placed nothing: 1 ${ground} is already there (first ${a.x},${a.y},${a.z})`)
+      world[`${a.x},${a.y},${a.z}`] = 'wheat#0'; items.wheat_seeds--
+    }
+  } })
+  const result = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.equal(result.tilled, 2)
+  assert.equal(result.planted, 2)
+  assert.equal(world['1,63,0'], 'farmland')
+  assert.equal(world['1,64,0'], 'wheat#0')
+  assert.equal(calls.filter(c => c.startsWith('till ')).length, 2)
+  assert.equal(result.stuck, undefined)
+  assert.equal(result.unfinished, undefined)
+  assert.deepEqual(events, [])
+})
+
 for (const failure of [new Error('cancelled'), new Error('died at 1,64,1'), new TypeError('unexpected state'), { stopped: 'hurt' }]) {
   test(`farm.build propagates ${failure.message ?? failure.stopped} before further work`, async () => {
     const { api, calls, events } = fakeApi({ place: field('w'), world: { '0,63,0': 'farmland' }, items: { wheat_seeds: 2 }, answers: { goto: failure } })

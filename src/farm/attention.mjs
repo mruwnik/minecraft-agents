@@ -9,7 +9,7 @@ const REQUIRED_DIG_TOOL = /\b[a-z_]+ needs a [a-z_]+_(?:pickaxe|axe|shovel|hoe) 
 const NO_PLACE_SUPPORT = /\bplaced nothing: \d+ nothing to place against \(first -?\d+,-?\d+,-?\d+\)/i
 const PLACE_OCCUPIED = /\bplaced nothing: \d+ [a-z_]+ is already there \(first -?\d+,-?\d+,-?\d+\)/i
 const FILL_EMPTY = /\bthe bucket is still empty: stand on the shore 1-2 blocks from the source with a clear view of it, not in the water, and fill again\b/i
-const TILL_UNCHANGED = /\btilled nothing: \d+ still (?:dirt|grass_block|dirt_path|coarse_dirt|rooted_dirt): is there a block on top of it\? \(first -?\d+,-?\d+,-?\d+\)/i
+const TILL_UNCHANGED = /\btilled nothing: \d+ still (?:dirt|grass_block|dirt_path|coarse_dirt|rooted_dirt): (?:nothing|[a-z_]+) is on top of it \(first -?\d+,-?\d+,-?\d+\)/i
 // a bed ground made of stone, cobblestone or anything else a hoe cannot turn: one such cell must not fail the whole
 // field (water-source-lead, 2026-10-02); the till (or path's shovel) that found it just skips it instead
 const UNTILLABLE_GROUND = /\b(?:tilled|paved) nothing: \d+ can't turn [a-z_]+ into (?:farmland|dirt_path) \(first -?\d+,-?\d+,-?\d+\)/i

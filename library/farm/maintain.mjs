@@ -273,6 +273,10 @@ export default {
       // and its plant are not tried on air
       const unfilled = new Set()
       const plantJobs = new Map(jobs.filter(job => job.do === 'plant').map(job => [bedKey(job), job]))
+      // a bed with its own till job in this list (whether or not that till is actually tried this round: a seedless
+      // one is held back below) is already handled by the checks above; the retrampled-at-job-time fallback further
+      // down is only for a bed that read as farmland when jobs= was built and so never got a till job of its own
+      const tilledBeds = new Set(jobs.filter(job => job.do === 'till').map(bedKey))
       const stillHole = job => { unfilled.add(bedKey(job)); leave(job, 'unfilled', `${job.x},${job.y},${job.z}`) }
       // what the jobs so far left: said after every job and at the end alike
       const sayJobs = () => {
@@ -323,7 +327,27 @@ export default {
           sowNext = true
         }
         if (job.do === 'plant' && untilled.has(bedKey(job))) continue
-        if (job.do === 'plant' && job.item === 'sugar_cane' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => holdsWater(api.block(job.x + dx, job.y - 1, job.z + dz)))) {
+        // jobs= (above) was built once, before this loop ever walked the ground: a bed read as farmland then can
+        // trample back to dirt (or grass) by the time its own plant job comes up - the sweep's walk crosses it on
+        // the way to another job first. Found that way, it is retilled in place, seed in hand, right here - the
+        // same job a till job in the list would be given - rather than planting onto bare ground (src/build/plan.mjs's
+        // tryJob does the same for farm.build)
+        if (job.do === 'plant' && !tilledBeds.has(bedKey(job))) {
+          const bed = plan.cells.find(c => c.x === job.x && c.y === job.y - 1 && c.z === job.z)
+          const trampled = planSpec(bed)?.ground === 'farmland' ? api.block(job.x, job.y - 1, job.z) : null
+          if (trampled && trampled.name !== 'farmland') {
+            if (!hasHoe(api.inv()) && hadHoe && !rekitTried) {
+              rekitTried = true
+              await kit()
+              summary.rekit = hasHoe(api.inv()) ? 'hoe replaced' : 'hoe broke, no spare'
+            }
+            if (!hasHoe(api.inv())) { untilled.add(bedKey(job)); leave(job, 'untilled', NO_HOE); continue }
+            hadHoe = true
+            const retillFailed = await tryJob({ do: 'till', x: job.x, y: job.y - 1, z: job.z, why: `${trampled.name} where farmland should be` })
+            if (retillFailed) { untilled.add(bedKey(job)); leave(job, 'untilled', retillFailed); continue }
+          }
+        }
+        if (job.do === 'plant' && job.item === 'sugar_cane' &&![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => holdsWater(api.block(job.x + dx, job.y - 1, job.z + dz)))) {
           leave(job, 'water', `no adjacent water at ${job.x},${job.y},${job.z}`)
           continue
         }

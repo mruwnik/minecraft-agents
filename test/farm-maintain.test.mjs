@@ -23,7 +23,7 @@ test('a till that leaves dirt unchanged reports the bed and continues independen
   const items = { stone_hoe: 1, wheat_seeds: 2 }
   const { api, calls, events } = fakeApi({ place: fakePlace('ww'), world, items, answers: {
     'farm.harvest': {},
-    till: new Error('till: tilled nothing: 1 still dirt: is there a block on top of it? (first 0,63,0)'),
+    till: new Error('till: tilled nothing: 1 still dirt: nothing is on top of it (first 0,63,0)'),
     place: p => { world[`${p.x},${p.y},${p.z}`] = 'wheat#0'; items.wheat_seeds-- }
   } })
   const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
@@ -33,6 +33,35 @@ test('a till that leaves dirt unchanged reports the bed and continues independen
   assert.equal(world['1,64,0'], 'wheat#0')
   assert.equal(calls.filter(c => c.startsWith('till ')).length, 1)
   assert.ok(events.some(e => e.type === 'farm_attention' && e.reasons.bare))
+})
+
+// A trampled bed (card trampled-retill): the sweep's job list was built before its own walk crossed the field, and
+// the walk to bed0's till trampled bed1's farmland back to dirt on the way. Found dirt there, at job time, bed1 is
+// retilled in place and planted - not left bare for the mock's place to refuse, the way a live field found it
+test('farm.maintain retills a bed trampled back to dirt since the job list was built, and plants it', async () => {
+  const world = { '0,63,0': 'dirt', '1,63,0': 'farmland', '4,63,0': 'water' }
+  const items = { stone_hoe: 1, wheat_seeds: 2 }
+  const { api, calls, events } = fakeApi({ place: fakePlace('ww'), world, items, answers: {
+    'farm.harvest': {},
+    till: p => {
+      world[`${p.x},${p.y},${p.z}`] = 'farmland'
+      if (p.x === 0) world['1,63,0'] = 'dirt'
+    },
+    place: p => {
+      const ground = world[`${p.x},${p.y - 1},${p.z}`]
+      if (ground !== 'farmland') throw new Error(`place: placed nothing: 1 ${ground} is already there (first ${p.x},${p.y},${p.z})`)
+      world[`${p.x},${p.y},${p.z}`] = 'wheat#0'; items.wheat_seeds--
+    }
+  } })
+  const result = await maintainFarm.run(api, { place: 'test-field', compost: false })
+  assert.equal(result.tilled, 2)
+  assert.equal(result.replanted, 2)
+  assert.equal(world['1,63,0'], 'farmland')
+  assert.equal(world['1,64,0'], 'wheat#0')
+  assert.equal(calls.filter(c => c.startsWith('till ')).length, 2)
+  assert.equal(result.bare, undefined)
+  assert.equal(result.stuck, undefined)
+  assert.deepEqual(events, [])
 })
 
 test('maintenance tills only beds it can seed, then reports the remaining shortage', async () => {
