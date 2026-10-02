@@ -40,7 +40,10 @@ export const chaseBroken = (start, here, { leash = CHASE_LEASH, drop = CHASE_DRO
 // more mob to beat. Nothing this body carries wins that fight, and aiming at its head is what starts it: these are never
 // attacked, never chased, and one that comes within arm's reach is backed away from the way a creeper is.
 export const NEVER_FIGHT = new Set(['enderman', 'warden'])
-export const ENDERMAN_RANGE = 5
+// #live-death 2026-10-02: a dawn hostile scan at 48 blocks showed nothing, and 3 seconds after one teleported in the
+// body was dead; waiting until it was at arm's length (5) left no time to move. 16 moves the body away while there
+// is still ground between them, instead of waiting for the teleport that closes it.
+export const ENDERMAN_RANGE = 16
 export const attackRefusal = name => NEVER_FIGHT.has(name)
   ? `${name}: not a fight this body can win (one killed Ganesha's body in five seconds at its own door, #97). Aiming at its head is what provokes it, so I will not aim at one either. Break the line of sight - a block, a door, deep water - and walk away`
   : null

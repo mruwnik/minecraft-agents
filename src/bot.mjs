@@ -1555,8 +1555,9 @@ function reflexTick () {
   // hole-up falls through to the fight or the run below instead of ending the tick
   const drowning = surfacing || bot.entity.isInWater
   if (holeWhy && !drowning && holeUp(holeWhy.why)) return
-  // #97: an enderman killed Ganesha's body at its own door in five seconds. Nothing here wins that fight, so one that
-  // comes within arm's reach is backed away from exactly as a creeper is, before the reflex below can think of fighting it
+  // #97, #live-death: an enderman killed Ganesha's body at its own door, and one teleported in and killed another
+  // 3s after a 48-block scan saw nothing. Nothing here wins that fight, so one within ENDERMAN_RANGE is backed away
+  // from before the reflex below can think of fighting it, well before a teleport can put it at arm's reach
   const unwinnable = fleeUnwinnable(nearbyHostiles(ENDERMAN_RANGE).map(e => ({ name: e.name, dist: e.position.distanceTo(me), entity: e })))
   // a run refused because this body already gave up on that mob falls THROUGH to the fight reflex: a body that cannot
   // run and will not fight is a body standing still while something kills it

@@ -349,10 +349,11 @@ physics and route-controller patches support it; ordinary digging and building p
   to cross is added to its leash, so the charge lands instead of being broken off a third of the way there.
   A break-off that was a DROP digs and bridges its way back up, and is given fifteen seconds to do it: the body dug
   its way down into the hole, so walking back is not enough. Getting that wrong killed a body once.
-- **Endermen and wardens are not fights.** One killed a body at its own door in five seconds. `attack mob=enderman` is
-  refused, the reflex never starts that fight, and one that comes within 5 blocks is run from like a creeper. Aiming at
-  an enderman's head is what provokes it, so never `look_at` one; `look_around` says `careful=` when one is in sight.
-  Snapshots (`look`) are safe: they use a camera, not the body's head.
+- **Endermen and wardens are not fights.** One killed a body at its own door in five seconds, and another teleported
+  in and killed a body 3s after a 48-block scan had seen nothing. `attack mob=enderman` is refused, the reflex never
+  starts that fight, and one within 16 blocks is run from like a creeper, moving away without facing it rather than
+  waiting for a teleport to close the gap. Aiming at an enderman's head is what provokes it, so never `look_at` one;
+  `look_around` says `careful=` when one is in sight. Snapshots (`look`) are safe: they use a camera, not the body's head.
 - `mine.get` retries by itself when the pathfinder gives up on a block; its result says `got=` and, if short, `gaveUp=why`.
   Don't rerun it blindly: move closer or pick another spot.
 - `mine.get` digs its own way down to ore and often leaves you in a pit no walk can leave (it says `pit=`): come back up with `goto ... dig=true`.
