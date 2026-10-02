@@ -9,11 +9,12 @@ Nothing here is implemented.
 Five mechanisms share the job of "make the body do something for a while", each with its own syntax, loop and
 stop rules.
 
-**Actions.** Primitives are the `long` and `quick` tables in `src/bot.mjs` (`goto` at src/bot.mjs:1797, `sleep` at
-:2752, the quick table from :2849). Composites are one module per verb under `library/`, registered at
-src/bot.mjs:3765-3778 and run by `runComposite` (src/body/runner.mjs:256-265) through the api built in `makeApi`
-(src/body/runner.mjs:62-250). Every `api.act` counts failures per action name (:82-100); `api.checkpoint`
-(:152-197) sleeps the night when a bed is near and otherwise hands the body back for the reasons in
+**Actions.** Primitives are the `long` and `quick` tables (src/body/actions/tables.mjs), filled from one module per
+help section under src/body/actions/ (`goto` at src/body/actions/move.mjs:97, `sleep` at src/body/actions/self.mjs:16)
+and from the runtimes (src/body/runtimes.mjs). Composites are one module per verb under `library/`, registered at
+src/bot.mjs:33-47 and run by `runComposite` (src/body/runner.mjs:278-288) through the api built in `makeApi`
+(src/body/runner.mjs:72-276). Every `api.act` counts failures per action name (:88-112); `api.checkpoint`
+(:162-215) sleeps the night when a bed is near and otherwise hands the body back for the reasons in
 `handBackReason` (src/lib/composite.mjs:42-53): spoken to, health, food, failed twice, inventory full, night with
 no bed, `days`, `count`, `until` minutes. Farm composites classify their own failures with regexes
 (src/farm/attention.mjs:7-17) and emit `farm_attention` (:40-54). Some composites carry their own day loop:
@@ -22,7 +23,7 @@ likewise, `blueprint.build` stops at dusk. Each `./mc` call is one job: the dura
 serialises them, holds the queue on any failure (src/job-scheduler.mjs:105,118) and on every restart
 (src/job-shelf.mjs:22-39), and a foreground action supersedes the running task (AGENT_GUIDE.md:364).
 
-**Flows.** `run steps=` (src/bot.mjs:2717-2750) accepts either a JSON list, run as a plain sequence
+**Flows.** `run steps=` (src/body/actions/control.mjs:15-48) accepts either a JSON list, run as a plain sequence
 (src/flow.mjs:117, :385), or an EDN program of `seq`/`action`/`when`/`any` with read-conditions over a fixed
 observation list (src/flow.mjs:19, :23-70, :278-383). No loop, no retry, abort on first failure, 3600 s cap
 (src/flow.mjs:8). The EDN half pulls in the `edn-data` dependency and 300 lines of tests; until this morning nothing
@@ -41,14 +42,14 @@ as 6dc85b4 this morning). `days=0` has to be deleted from the shared args so the
 `$place`, `$store`, `$places` and `vars=` substitution (src/lib/composite.mjs:88-102). The farmer's whole day is one
 step (roles/farmer/homestead.json). Nothing binds a role to a body; the driver chooses.
 
-**Reflexes.** Flee and fight (src/bot.mjs:1300-1680), the bedtime reflex that sleeps an idle body after nightfall
-(:1033-1073, rule in src/cli.mjs:162), the stuck watch (:1083-1118), the respawn plan (:600-617), hunger and
-health stops inside composites via `handBackReason`. Watches (src/bot.mjs:2812-2847) fire `watch_hit` every 5 s
-without a driver. `./mc wait` (tools/mc.mjs:45-102) blocks on events.jsonl and wakes for the types in
-`wakeWorthy` (src/cli.mjs:84-88).
+**Reflexes.** Flee and fight (src/body/reflexes.mjs), the bedtime reflex that sleeps an idle body after nightfall
+(src/body/bedtime.mjs:59-93, rule in src/cli.mjs:162), the stuck watch (src/body/stuck-watch.mjs), the respawn plan
+(src/body/connection.mjs:499-516), hunger and health stops inside composites via `handBackReason`. Watches
+(src/body/watches.mjs:13-44) fire `watch_hit` every 5 s without a driver. `./mc wait` (tools/mc.mjs:45-102) blocks on
+events.jsonl and wakes for the types in `wakeWorthy` (src/cli.mjs:84-88).
 
 **In flight.** `routine-goal` merged as 6dc85b4 while this was written: the routine's `until='<EDN>'` goal, a
-`chest_count` read that walks to the chest (src/bot.mjs:3072), `bed=x,y,z`, `library/bake.mjs` and
+`chest_count` read that walks to the chest (src/body/actions/sense.mjs:202), `bed=x,y,z`, `library/bake.mjs` and
 roles/farmer/bread.json, documented at AGENT_GUIDE.md:215. `scratchpad/queue-resume` had no diff when read; the
 brief describes it as holding the queue only on death, item loss or a job failing twice, auto-restoring after
 reconnect, and capping `jobs`/`events` output. Both are mechanics the framework absorbs (sections 4 and 5).
@@ -85,8 +86,8 @@ that, so conditions become small JSON objects (section 4) and the EDN parser is 
 
 ## 3. The model in one breath
 
-An **action** is one verb the body does now, written in JS (a primitive in `src/bot.mjs`, a composite in `library/`);
-it returns one result line or fails with a reason, and it does one round of its work, never a day loop.
+An **action** is one verb the body does now, written in JS (a primitive in `src/body/actions/`, a composite in
+`library/`); it returns one result line or fails with a reason, and it does one round of its work, never a day loop.
 A **goal** is a JSON document saying what must become true (`until`) and which actions to run each round until it is;
 while live it is `state/agents/<name>/goal.json`, and templates ship in `roles/<role>/<name>.goal.json`.
 A **role** is a folder `roles/<role>/` holding `ROLE.md` for the driver and the goal templates it ships; `./mc goal
@@ -94,8 +95,9 @@ start name=farmer/bread` binds one to this body, and that binding is the `role` 
 A **reflex** is what the body does unasked (eat, flee, fight, sleep when idle, dig out, hole up); the goal engine is
 written on the assumption that reflexes interrupt it, and resumes after them.
 
-Where each lives: actions in `src/bot.mjs` and `library/`; the engine in `src/goal/`; the live goal in
-`state/agents/<name>/goal.json`; templates in `roles/`; reflexes in `src/bot.mjs` and `src/survival/`.
+Where each lives: actions in `src/body/actions/` and `library/`; the engine in `src/goal/`; the live goal in
+`state/agents/<name>/goal.json`; templates in `roles/`; reflexes in `src/body/reflexes.mjs`, `src/body/bedtime.mjs`
+and `src/survival/`.
 
 ## 4. The goal document
 
@@ -142,12 +144,12 @@ round digest says what could not be read, and three rounds of the same unknown e
 | fact | arguments | answers | reads |
 |---|---|---|---|
 | `carried` | `item` | count in the pockets | `api.inv()` |
-| `chest` | `at` (x,y,z or storage mark), `item` | count in that chest; walks there when out of reach | `chest_contents` (src/bot.mjs:2308), as `chest_count` (:3072) does |
+| `chest` | `at` (x,y,z or storage mark), `item` | count in that chest; walks there when out of reach | `chest_contents` (src/body/actions/sense.mjs:26), as `chest_count` (:202) does |
 | `have` | `item`, `at` | carried plus chest | both of the above |
 | `farm` | `place` | `bare`, `ripe`, `planted` counts over the plan's crop cells | plan cells against `api.block` (the counts `farm.maintain` already derives) |
 | `build` | `place` | `missing` block count | `blueprint.check` |
 | `place` | `kind` or `name`, `by` | `exists`, `count` | `api.places()` |
-| `near` | `mob` or `block`, `within` | count | the watch counter (src/bot.mjs:2822-2835), already pure over the entity list |
+| `near` | `mob` or `block`, `within` | count | the watch counter (src/body/watches.mjs:19-32), already pure over the entity list |
 | `time` | | `day` (boolean), `tick`, `round` | `api.clock()` |
 | `vitals` | | `hp`, `food` | `state` |
 
@@ -164,7 +166,7 @@ walk-back leg deleted: the next round's steps walk to their own places, as the r
 (:95). The engine never loops a step itself: an action that wants retries (`mine.get` rounds, `forage.search` legs,
 `farm.maintain`'s dig walk) keeps them, because they need the world state only the action has.
 
-The supervisor is a 10-second timer in `src/bot.mjs`, beside the bedtime reflex (:1038). It reads goal.json and, when
+The supervisor is a 10-second timer in `src/body/bedtime.mjs`, beside the bedtime reflex (:59). It reads goal.json and, when
 the status is `running`, no job is active, the queue is empty and not held, submits a `goal.run` job. That one rule
 resumes the goal after a body restart, a reconnect (the scheduler's `abandon`, src/job-scheduler.mjs:207-219), a death
 and respawn, a driver's foreground command, and a hold the driver cleared. The job shelf's restart hold
@@ -183,7 +185,7 @@ and the `stop`-then-restart dance the guide recommends (:210). `./mc stop` pause
 |---|---|---|---|
 | transient navigation | no path, search ran out of time, no first move (src/composite.mjs:19-25) | the step is skipped this round and counted as failed; a composite that owns a dig walk already retried | the same step fails 3 rounds running (`goal_stalled`) |
 | resource shortage | no seed, no hoe, kit_short, storage_full, chest_missing, untillable, no water (src/farm/attention.mjs:8-17) | the action skips and reports as now; the round digest carries it; a `kit` guard refills food | the same shortage 3 rounds running, or `until` cannot move for 3 rounds |
-| reflex took the body | fleeing, fighting, surfacing, digging out, holed up (`interrupted: fleeing from zombie`) | wait for the reflex to clear (`isReady`, src/bot.mjs:3715), re-run the same step, up to 3 times in a round | 3 interruptions of one step in one round |
+| reflex took the body | fleeing, fighting, surfacing, digging out, holed up (`interrupted: fleeing from zombie`) | wait for the reflex to clear (`isReady`, src/body/jobs.mjs:178), re-run the same step, up to 3 times in a round | 3 interruptions of one step in one round |
 | night | no bed within 32 | bed walk within range, else carried bed, else hole up and wait for dawn | a walk, a placement and a hole all fail (`goal_paused: night`) |
 | hunger | food at the floor with something edible | the eat reflex eats; the engine only waits | nothing edible carried and no `kit` step can fix it (`goal_paused: food`) |
 | disconnect, restart | kicked, body restart, duplicate login yield | nothing: the supervisor resubmits when the body is back | never |
@@ -191,7 +193,7 @@ and the `stop`-then-restart dance the guide recommends (:210). `./mc stop` pause
 | rule | `on_fail: stop` on a step, a `pause` guard | the goal is paused | always |
 
 The classifier is one pure module, `src/goal/policy.mjs`, built from the three regex sets that exist today
-(src/composite.mjs:19-25, src/farm/attention.mjs:7-17, src/body/runner.mjs:82-100) so that farm composites and the
+(src/composite.mjs:19-25, src/farm/attention.mjs:7-17, src/body/runner.mjs:88-112) so that farm composites and the
 engine stop disagreeing about what is recoverable. `handBackReason` keeps spoken, health, food, failed twice, inventory
 full and night; it loses `days`, `count` stays for `hunt`/`mine.get`, `until` minutes go.
 
@@ -221,7 +223,7 @@ src/cli.mjs:195-202), so nothing new is needed in `tools/mc.mjs`:
 ```
 
 The digest: `goal bread round 4 until=chest bread 410/576 last=farm.maintain ok harvested=38 | bake ok baked=12
-next=dusk status=running`. `state` (src/bot.mjs:2912-2940) gains a `goal:` field with the same line, so the dashboard
+next=dusk status=running`. `state` (src/body/actions/sense.mjs:67-102) gains a `goal:` field with the same line, so the dashboard
 shows it beside `doing=` with no new API. The dashboard popup's whisper line and in-game whispers accept the verbs
 `goal`, `goal pause`, `goal resume`, `goal stop` and are answered by the body, not the driver, when the sender is the
 owner or dashboard; any other whisper wakes the driver as today.
@@ -262,7 +264,7 @@ read=chest bread 576/576`. A hoe that breaks mid-sweep triggers the re-kit and o
 ```
 
 Each round is four spokes from home; `forage.search` keeps its own legs and route retries. At nightfall between legs
-the engine places the carried bed, sleeps, picks it up at dawn (the reflex's pickup rule, src/bot.mjs:1044-1047). When
+the engine places the carried bed, sleeps, picks it up at dawn (the reflex's pickup rule, src/body/bedtime.mjs:65-68). When
 bread falls under 20 the guard aborts the round, walks home, and the next round kits 40 bread again; if the store cannot
 supply 40, `kit_short` is in the digest and three such rounds pause the goal. A `mark` by this body with `kind=village`
 ends it. `forage.search` has to report `at=` for its first sighting; today it reports `found=` as a count (library/
@@ -322,7 +324,7 @@ validate, `$var` substitution, `foreach` expansion, `once`), `condition.mjs` (se
 three-valued), `facts.mjs`, `policy.mjs` (the three regex sets joined), `digest.mjs` (the one line, round events,
 advice). Tests first, all through fakeApi and plain data. `./mc goal start|dry` write and expand goal.json; `./mc
 goal` reads it; nothing moves the body yet. Deleted: the EDN half of `src/flow.mjs` and the `edn-data` dependency;
-`run steps=` keeps the JSON sequence as 15 lines in `src/bot.mjs`; test/flow.test.mjs shrinks to the sequence tests.
+`run steps=` keeps the JSON sequence as 15 lines in `src/body/actions/control.mjs`; test/flow.test.mjs shrinks to the sequence tests.
 Of the merged `routine-goal`: `bake` and `bed=x,y,z` stay, `chest_count` becomes the `chest` fact, and the routine's
 `until=` reads the new JSON condition (`untilGoal` in src/routine.mjs calls `src/goal/condition.mjs`), so the EDN
 parser can go in this phase and AGENT_GUIDE.md:215 changes its one example.
