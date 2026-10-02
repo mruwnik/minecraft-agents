@@ -54,7 +54,7 @@ import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote, ownCellR
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
 import { placeFaces } from './build/cover.mjs'
 import { slabMergeRefusal } from './build/slab-merge.mjs'
-import { executeFlow, executeLegacySteps, parseFlowEDN, resolveFlowAction } from './flow.mjs'
+import { executeFlow, executeLegacySteps, parseFlowEDN, resolveFlowAction, FLOW_OBSERVATIONS as observations } from './flow.mjs'
 import { fetchFailure, stalledSince, fencedRefusal, wedgedIn, wedgedRefusal } from './fetch.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
 import { makeBoatTravelRuntime } from './body/boat-travel.mjs'
@@ -2718,7 +2718,6 @@ export const long = {
     const program = typeof a.steps === 'string'
       ? parseFlowEDN(a.steps)
       : a.steps
-    const observations = ['state', 'entity', 'block_at', 'boat_state', 'inventory', 'look_around', 'scan', 'animals', 'places', 'zones']
     const host = {
       actions: [...new Set([...Object.keys(long), ...Object.keys(quick)])],
       observations,
@@ -3067,6 +3066,12 @@ export const quick = {
     const census = { ...censusOf(found.floor), ...blindGateAdvice(found.floor, found.topsAt) }
     if (found.cells >= 16) return { pen: 'holds', from, cells: found.cells, ...census }
     return { pen: 'holds', from, cells: found.cells, ...census, advice: 'but it is small: an animal led in stops 2.5 blocks from you, so under 16 cells it stops in the gateway' }
+  },
+
+  // one item in one chest, for a flow's goal (routine until=): walks to the chest when it is out of reach
+  async chest_count (a) {
+    const { items } = await long.chest_contents(a)
+    return { item: a.item, count: items[a.item] ?? 0, chest: `${a.x},${a.y},${a.z}` }
   },
 
   block_at (a) {

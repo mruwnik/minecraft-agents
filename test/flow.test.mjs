@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { executeFlow, executeLegacySteps, evaluateFlowCondition, parseFlowEDN, resolveFlowAction, validateFlow } from '../src/flow.mjs'
+import { executeFlow, executeLegacySteps, evaluateFlowCondition, parseFlowEDN, resolveFlowAction, validateFlow, validateFlowCondition, FLOW_OBSERVATIONS } from '../src/flow.mjs'
 import { parseCliArgs } from '../src/cli.mjs'
 
 const actionNames = ['goto', 'toggle', 'say']
@@ -292,4 +292,34 @@ test('unknown block observations never satisfy not, action failures stop the seq
     act: async () => { actions++; throw new Error('action failed') }, observe: async () => ({}), waitTicks: async () => {}
   }), /action failed/)
   assert.equal(actions, 1)
+})
+
+// a goal a routine stops on: (read :obs {args}) with no path reads the observation's own answer, which for chest_count
+// is the number of one item in one chest, so the condition compares it straight to a number
+const BREAD = { x: 114, y: 71, z: -107, item: 'bread' }
+test('a read with no path parses to the empty path', () => {
+  assert.deepEqual(parseFlowEDN('(>= (read :chest_count {:x 114 :y 71 :z -107 :item "bread"}) 576)'), ['gte', ['read', 'chest_count', BREAD, ''], 576])
+})
+
+for (const [name, condition, answer, expected] of [
+  ['the count reaches the goal', ['gte', ['read', 'chest_count', BREAD, ''], 576], { item: 'bread', count: 576 }, true],
+  ['the count is short of it', ['gte', ['read', 'chest_count', BREAD, ''], 576], { item: 'bread', count: 575 }, false],
+  ['an empty chest counts zero', ['eq', ['read', 'chest_count', BREAD, ''], 0], { item: 'bread', count: 0 }, true],
+  ['a path still reads a field', ['eq', ['read', 'chest_count', BREAD, 'item'], 'bread'], { item: 'bread', count: 3 }, true],
+  ['an observation with no count of its own reads whole', ['eq', ['read', 'state', {}, ''], ['literal', { hp: 20 }]], { hp: 20 }, true]
+]) {
+  test(`chest_count condition: ${name}`, async () => {
+    assert.equal(await evaluateFlowCondition(condition, { observe: async () => answer, observations: FLOW_OBSERVATIONS }), expected)
+  })
+}
+
+for (const [name, condition, error] of [
+  ['an observation nobody allows', ['gte', ['read', 'quit', {}, ''], 1], /unknown or disallowed observation "quit"/],
+  ['a path into the prototype', ['eq', ['read', 'chest_count', BREAD, '__proto__'], 1], /safe dotted field path/]
+]) {
+  test(`validateFlowCondition refuses ${name}`, () => assert.throws(() => validateFlowCondition(condition, { observations: FLOW_OBSERVATIONS }), error))
+}
+
+test('validateFlowCondition takes a goal over chest_count', () => {
+  assert.doesNotThrow(() => validateFlowCondition(['gte', ['read', 'chest_count', BREAD, ''], 576], { observations: FLOW_OBSERVATIONS }))
 })

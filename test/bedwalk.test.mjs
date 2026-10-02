@@ -31,7 +31,8 @@ for (const [name, places, opts, expected] of [
   ['bed=<place> nobody marked is nothing', [myBed], { bed: 'nope' }, null],
   ['where I last woke this run, when nothing is marked', [hut], { sleptAt: { x: 40, y: 64, z: 40 } }, { name: 'where you last woke', x: 40, y: 64, z: 40 }],
   ['a mark of mine beats where I last woke', [myBed], { sleptAt: { x: 40, y: 64, z: 40 } }, myBed],
-  ['no map at all', undefined, {}, null]
+  ['no map at all', undefined, {}, null],
+  ['bed=x,y,z is that bed, marked or not, over my own mark', [myBed], { bed: '103,71,-107' }, { name: 'the bed at 103,71,-107', x: 103, y: 71, z: -107 }]
 ]) {
   test(`ownBed: ${name}`, () => assert.deepEqual(ownBed(places, 'Tester', { ...opts, from: FROM }), expected))
 }
@@ -182,4 +183,28 @@ test('routine: where it last woke this run is the bed when nothing is marked', a
 test('routine: takes bed= and bed_range= and says so in its doc', () => {
   assert.deepEqual([routine.args.bed, routine.args.bed_range], ['string', 'number'])
   assert.match(routine.doc, /bed_range/)
+})
+
+// ---------------------------------------------------------------- bed=: that bed, not the nearest
+// the runner's checkpoint sleeps in whichever of its beds is nearest; bed= walks to the one named and lies down there
+const atNight = api => { api.clock = () => ({ time: 14000, night: true, day: false, elapsedDays: 0 }) }
+for (const [name, bed, places, expected] of [
+  ['bed=x,y,z: walks to it and lies down before the first step of the night', '103,71,-107', [farm], ['goto x=103 y=71 z=-107 range=2', 'sleep', 'farm.maintain place=a reserve_for=a']],
+  ['bed=<place> the same', 'tester-bed', [farm, myBed], ['goto x=100 y=64 z=0 range=2', 'sleep', 'farm.maintain place=a reserve_for=a']],
+  ['no bed=: the runner\'s nearest bed, as before', undefined, [farm, myBed], ['farm.maintain place=a reserve_for=a']],
+  ['bed= beyond bed_range: noted, no walk', '0,64,900', [farm], ['farm.maintain place=a reserve_for=a']]
+]) {
+  test(`routine at night: ${name}`, async () => {
+    const { api, calls } = fakeApi({ places, answers })
+    atNight(api)
+    await routine.run(api, { name: 'farmer/homestead', place: 'a', bed })
+    assert.deepEqual(noNotes(calls), expected)
+  })
+}
+
+test('routine at night: a sleep that fails is noted and the night goes on as it always did', async () => {
+  const { api, calls } = fakeApi({ places: [farm], answers: { ...answers, sleep: new Error('sleep: monsters nearby') } })
+  atNight(api)
+  await routine.run(api, { name: 'farmer/homestead', place: 'a', bed: '103,71,-107' })
+  assert.deepEqual(calls.filter(c => c.startsWith('note bed=')), ['note bed=103,71,-107: sleep: monsters nearby'])
 })

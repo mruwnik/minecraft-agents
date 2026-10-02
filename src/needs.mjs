@@ -27,7 +27,8 @@ export const NEEDS = {
   use: { x: [], y: [], z: [] },
   toggle: { x: [], y: [], z: [] },
   unleash: { x: [], y: [], z: [] },
-  look_at: { x: [], y: [], z: [] }
+  look_at: { x: [], y: [], z: [] },
+  chest_count: { x: [], y: [], z: [], item: [] }
 }
 
 const missing = value => value === undefined || value === null
