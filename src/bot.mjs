@@ -8,7 +8,6 @@ import { settleInventory } from './body/inventory-settle.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import mineflayer from 'mineflayer'
 import { installWorldClock } from './world-clock.mjs'
@@ -18,8 +17,7 @@ import pvp from 'mineflayer-pvp'
 import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import AABB from 'prismarine-physics/lib/aabb.js'
-import { restartAdvice } from './restart.mjs'
-import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, isStalled, mayDig, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
+import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, isStalled, mayDig, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -50,6 +48,7 @@ import { zones, GATES_FILE, readPlaces, savePlaces, emit, sayOnce, sayError } fr
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
 import { carried, inventoryCounts, diffCounts, findItem, vecOf, cellAt, goNear, findBlocksNear, bedsNear } from './body/helpers.mjs'
 import { pathfinder, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, setTask, gen, setGen, cancelGuard, pos } from './body/state.mjs'
+import { codeHere } from './body/code-version.mjs'
 import { isWoodDoor, doorsIOpened, heldOpen, myClicks, MY_CLICK_MS, othersToggled, doorAt, doorBusy, gatesPassed, doorTick, shutGatesBehind, shutTrackedGatesAfterCancel, fenceEscape, leaveFenceCell } from './body/doors.mjs'
 import { noPathCounted, watchStuck } from './body/stuck-watch.mjs'
 import { explainFailure } from './body/explain.mjs'
@@ -741,34 +740,6 @@ function tryAutoRestore () {
   }
   scheduler.resume({ recovered: true })
 }
-// the shared code is loaded once, at start: tell the driver when it has changed since, once per batch of edits
-const codeLoaded = Date.now()
-// and WHICH code that was, read from git once at start and said in the join line. A body started between two saves of
-// a shared tree runs half of somebody's change and throws something that is in nobody's diff (#140). Never fatal: a
-// body with no git, or no repo, joins anyway and says it does not know.
-export const codeHere = (() => {
-  const run = args => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] })
-  try {
-    return codeVersion({
-      head: run(['rev-parse', '--short', 'HEAD']).trim(),
-      changed: run(['status', '--porcelain']).split('\n').filter(Boolean).map(line => line.slice(3).trim())
-    })
-  } catch {
-    return codeVersion({ head: null })
-  }
-})()
-let staleTold = ''
-setInterval(() => {
-  if (!ready) return
-  // was a hard-coded list of src/ files: a split into src/lib/ or src/body/ modules would announce nothing for
-  // an edit to any of them, so this now walks src/ itself, the same way tools/check-code.mjs's codeFiles() does
-  const files = [...fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).map(f => path.join('src', f)).filter(f => f.endsWith('.mjs')), ...libraryFiles().map(f => `library/${f}`)]
-  const mtimes = Object.fromEntries(files.map(f => [f, fs.statSync(path.join(ROOT, f), { throwIfNoEntry: false })?.mtimeMs]))
-  const stale = staleCode(codeLoaded, mtimes, Date.now())
-  if (!stale || staleKey(stale, mtimes) === staleTold) return
-  staleTold = staleKey(stale, mtimes)
-  emit('code_updated', { files: stale.join(' '), advice: restartAdvice({ day: !isNight(bot.time.timeOfDay), timeOfDay: bot.time.timeOfDay, at: Date.now() }) })
-}, 60000)
 let lastSteppedOff = 0
 
 export let fighting = null
