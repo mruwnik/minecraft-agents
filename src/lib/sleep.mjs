@@ -145,6 +145,14 @@ export function ownBed (places, me, { bed, sleptAt, from } = {}) {
   return sleptAt ? { name: 'where you last woke', x: sleptAt.x, y: sleptAt.y, z: sleptAt.z } : null
 }
 
+// sleep bed=: the bed at that cell or mark (a base mark stands beside the bed in it), never one further off: the
+// nearest bed to the body is often an old one, and the one named is the one meant
+const NAMED_BED_REACH = 4
+export function namedBed (beds, target) {
+  const near = beds.filter(b => blocksApart(b, target) <= NAMED_BED_REACH).sort((p, q) => blocksApart(p, target) - blocksApart(q, target))
+  return near[0] ?? null
+}
+
 // near: a bed within 32 blocks (the runner sleeps there as it always did). Otherwise the own bed within range is
 // walked to, and beyond it, or unknown, the night is a stop with the reason spelled out
 export function nightPlan ({ near, bed, from, bedRange = BED_RANGE }) {

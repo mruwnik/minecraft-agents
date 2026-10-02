@@ -1,4 +1,4 @@
-import { automaticBeds, carriedBedSpot, reflexPickups } from './lib/sleep.mjs'
+import { automaticBeds, carriedBedSpot, reflexPickups, namedBed } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
 import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
@@ -2775,8 +2775,21 @@ export const long = {
     const alive = cancelGuard()
     // a taken bed is passed over for the next one I may use (a shared bedroom: "the bed is occupied" was the end of the night)
     const occupied = new Set()
+    // bed=<place|x,y,z>: that bed and no other, walked to when it is within bed_range (a routine's bed= arrives here
+    // from every step's night checkpoint, and the nearest bed was an old one a creeper waited by)
+    if (a.bed && !a.automatic) {
+      const target = ownBed(readPlaces(), cfg.username, { bed: a.bed })
+      if (!target) throw new Error(`no place called ${a.bed} on the shared map`)
+      const plan = nightPlan({ near: false, bed: target, from: pos(), bedRange: a.bed_range ?? BED_RANGE })
+      if (plan.do !== 'walk') throw new Error(plan.why)
+      await goNear(target, 2)
+      const p = namedBed(bedsNear(), target)
+      if (!p) throw new Error(`no bed at ${target.name}`)
+      await bot.sleep(bot.blockAt(p))
+      return { trap: bedExit(bedExits(p)) ?? undefined }
+    }
     // no bed within 32 is not the end of the night when one of my own is on the shared map within bed_range (default 200,
-    // card bebf3a5f): walk there once (bed=<place>, else my nearest kind=bed mark; src/lib/sleep.mjs ownBed) and look again
+    // card bebf3a5f): walk there once (my nearest kind=bed mark; src/lib/sleep.mjs ownBed) and look again
     let walked = false
     let placed = false
     for (;;) {
@@ -2814,7 +2827,7 @@ export const long = {
       }
       if (error && !a.automatic && !walked && /^no bed within 32/.test(error)) {
         const from = pos()
-        const plan = nightPlan({ near: false, bed: ownBed(readPlaces(), cfg.username, { bed: a.bed, from }), from, bedRange: a.bed_range ?? BED_RANGE })
+        const plan = nightPlan({ near: false, bed: ownBed(readPlaces(), cfg.username, { from }), from, bedRange: a.bed_range ?? BED_RANGE })
         if (plan.do !== 'walk') throw new Error(`${error} (${plan.why})`)
         walked = true
         await goNear(plan.to, 2)

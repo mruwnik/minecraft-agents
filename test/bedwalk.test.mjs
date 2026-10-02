@@ -3,7 +3,7 @@
 // only acts on it. No block fakes here: a bed is known from the shared map, not from the world.
 import { test as nodeTest } from 'node:test'
 import assert from 'node:assert/strict'
-import { BED_RANGE, ownBed, nightPlan } from '../src/lib/sleep.mjs'
+import { BED_RANGE, ownBed, nightPlan, namedBed } from '../src/lib/sleep.mjs'
 import { stopAdvice, stopEvent, dayEvent } from '../src/routine.mjs'
 import routine from '../library/routine.mjs'
 import { fakeApi } from './helpers.mjs'
@@ -186,25 +186,27 @@ test('routine: takes bed= and bed_range= and says so in its doc', () => {
 })
 
 // ---------------------------------------------------------------- bed=: that bed, not the nearest
-// the runner's checkpoint sleeps in whichever of its beds is nearest; bed= walks to the one named and lies down there
-const atNight = api => { api.clock = () => ({ time: 14000, night: true, day: false, elapsedDays: 0 }) }
-for (const [name, bed, places, expected] of [
-  ['bed=x,y,z: walks to it and lies down before the first step of the night', '103,71,-107', [farm], ['goto x=103 y=71 z=-107 range=2', 'sleep', 'farm.maintain place=a reserve_for=a']],
-  ['bed=<place> the same', 'tester-bed', [farm, myBed], ['goto x=100 y=64 z=0 range=2', 'sleep', 'farm.maintain place=a reserve_for=a']],
-  ['no bed=: the runner\'s nearest bed, as before', undefined, [farm, myBed], ['farm.maintain place=a reserve_for=a']],
-  ['bed= beyond bed_range: noted, no walk', '0,64,900', [farm], ['farm.maintain place=a reserve_for=a']]
+// a step of the routine is a composite of its own, and its checkpoint is where night finds the body: bed= rides on the
+// task (src/body/runner.mjs checkpoint) so every step sleeps there, not in whichever bed is nearest
+for (const [name, args, places, expected] of [
+  ['bed=x,y,z', { bed: '108,71,-107' }, [farm], [{ bed: { name: 'the bed at 108,71,-107', x: 108, y: 71, z: -107 }, bedRange: 200 }]],
+  ['bed=<place>, with its bed_range', { bed: 'tester-bed', bed_range: 40 }, [farm, myBed], [{ bed: myBed, bedRange: 40 }]],
+  ['no bed=: none, the nearest bed as before', {}, [farm, myBed], []]
 ]) {
-  test(`routine at night: ${name}`, async () => {
-    const { api, calls } = fakeApi({ places, answers })
-    atNight(api)
-    await routine.run(api, { name: 'farmer/homestead', place: 'a', bed })
-    assert.deepEqual(noNotes(calls), expected)
+  test(`routine: ${name} is the bed every step's checkpoint sleeps in`, async () => {
+    const { api, nightBeds } = fakeApi({ places, answers })
+    await routine.run(api, { name: 'farmer/homestead', place: 'a', ...args })
+    assert.deepEqual(nightBeds, expected)
   })
 }
 
-test('routine at night: a sleep that fails is noted and the night goes on as it always did', async () => {
-  const { api, calls } = fakeApi({ places: [farm], answers: { ...answers, sleep: new Error('sleep: monsters nearby') } })
-  atNight(api)
-  await routine.run(api, { name: 'farmer/homestead', place: 'a', bed: '103,71,-107' })
-  assert.deepEqual(calls.filter(c => c.startsWith('note bed=')), ['note bed=103,71,-107: sleep: monsters nearby'])
-})
+// sleep bed=: the bed at that cell or mark, the other half of it included; a bed further off is somebody else's night
+const besideMark = { x: 108, y: 71, z: -106 }
+const oldBed = { x: 101, y: 69, z: -110 }
+for (const [name, beds, expected] of [
+  ['the nearest bed is not the named one', [oldBed, besideMark], besideMark],
+  ['only a bed further off', [oldBed], null],
+  ['none at all', [], null]
+]) {
+  test(`namedBed: ${name}`, () => assert.deepEqual(namedBed(beds, { x: 108, y: 71, z: -107 }), expected))
+}
