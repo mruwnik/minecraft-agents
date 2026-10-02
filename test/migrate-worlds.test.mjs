@@ -106,10 +106,60 @@ test('migrate-worlds: refuses when a file exists at both the old and new place, 
   assert.deepEqual(snapshot(state), before)
 })
 
-// #critical-1: the world name sits at argv[0] whenever --state is omitted (the brief's own default-usage
-// invocation); a filter keyed only off --state's index used to drop it there, so the real run silently printed
-// usage and exited 2. Exercised as pure argument parsing, never by spawning the script without --state: that
-// would touch the real repo's state/.
+// a refusal that cannot seed world.json must land before moveWorldFiles moves anything, or a reader in between
+// finds the shared files gone with no world.json to replace them
+test('migrate-worlds: refuses before moving anything when no config has host/port to seed world.json', t => {
+  const { state, agentDir } = fixture(t)
+  const { host, port, ...rest } = readJSON(path.join(agentDir('Aiel'), 'config.json'))
+  fs.writeFileSync(path.join(agentDir('Aiel'), 'config.json'), JSON.stringify(rest, null, 1) + '\n')
+
+  const before = snapshot(state)
+  const result = run('main', state)
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /world\.json/)
+  assert.deepEqual(snapshot(state), before)
+})
+
+// one config's host/port must not become every other agent's world by default: an agent naming a different
+// server is a conflict to settle by hand, not something to fold silently into the same world
+test('migrate-worlds: refuses when configs disagree on host:port, and changes nothing', t => {
+  const { state, agentDir } = fixture(t)
+  fs.mkdirSync(agentDir('Egwene'), { recursive: true })
+  fs.writeFileSync(path.join(agentDir('Egwene'), 'config.json'), JSON.stringify({ username: 'Egwene', apiPort: 0, host: '10.0.0.5', port: 25565 }, null, 1) + '\n')
+
+  const before = snapshot(state)
+  const result = run('main', state)
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /127\.0\.0\.1:25568/)
+  assert.match(result.stderr, /10\.0\.0\.5:25565/)
+  assert.deepEqual(snapshot(state), before)
+})
+
+// version belongs to the world, not to one agent's config: readConfig layers {...config, ...world.server} last,
+// so a version left behind in a config would sit unused at best and diverge from the seeded one at worst
+test('migrate-worlds: a config\'s version is carried into world.json and stripped from the config', t => {
+  const { state, agentDir } = fixture(t)
+  const cfg = readJSON(path.join(agentDir('Aiel'), 'config.json'))
+  fs.writeFileSync(path.join(agentDir('Aiel'), 'config.json'), JSON.stringify({ ...cfg, version: '1.21.4' }, null, 1) + '\n')
+
+  const result = run('main', state)
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(readJSON(path.join(state, 'worlds', 'main', 'world.json')), { ...SERVER, version: '1.21.4' })
+  assert.equal('version' in readJSON(path.join(agentDir('Aiel'), 'config.json')), false)
+})
+
+// port 0 is a legitimate port, not an absent one
+test('migrate-worlds: port 0 still counts as a server to seed world.json from', t => {
+  const { state, agentDir } = fixture(t)
+  const cfg = readJSON(path.join(agentDir('Aiel'), 'config.json'))
+  fs.writeFileSync(path.join(agentDir('Aiel'), 'config.json'), JSON.stringify({ ...cfg, port: 0 }, null, 1) + '\n')
+
+  const result = run('main', state)
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(readJSON(path.join(state, 'worlds', 'main', 'world.json')), { host: '127.0.0.1', port: 0 })
+})
+
+// parsed directly, never by spawning without --state: that would touch the real repo's state/.
 const parseRows = [
   ['world only, no --state: defaults to the repo state/', ['main'], { world: 'main', state: path.join(REPO, 'state') }],
   ['world then --state', ['main', '--state', '/tmp/x'], { world: 'main', state: path.resolve('/tmp/x') }],
@@ -140,5 +190,21 @@ test('migrate-worlds: refuses when an agent body is running, and changes nothing
   const result = run('main', state)
   assert.equal(result.status, 3)
   assert.match(result.stderr, /Aiel/)
+  assert.match(result.stderr, /running/)
+  assert.deepEqual(snapshot(state), before)
+})
+
+// body-lock.mjs exits 3 for a confirmed-running body; any other nonzero exit (a crash on an unparsable
+// config.json, say) is no proof the body is down, only that this could not tell, so it must refuse too
+test('migrate-worlds: refuses when a body-lock check cannot run at all, not just when it reports running', t => {
+  const { state, agentDir } = fixture(t)
+  fs.mkdirSync(agentDir('Broken'), { recursive: true })
+  fs.writeFileSync(path.join(agentDir('Broken'), 'config.json'), 'not valid json')
+
+  const before = snapshot(state)
+  const result = run('main', state)
+  assert.equal(result.status, 3)
+  assert.match(result.stderr, /Broken/)
+  assert.match(result.stderr, /could not check \(exit \d+\)/)
   assert.deepEqual(snapshot(state), before)
 })

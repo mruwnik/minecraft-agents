@@ -12,8 +12,7 @@ const DIR = import.meta.dirname
 const ROOT = path.join(DIR, '..')
 const WORLD_FILES = ['places.json', 'zones.json', 'gates.log', 'clock.json', 'WORLD.md']
 
-// the world name is a positional argument and --state can come before or after it; a hand-rolled index filter
-// used to drop the world name whenever --state was absent (it sits at argv[0], the filter's own default exclusion)
+// the world name is a positional argument and --state can come before or after it
 export const parseArgs = argv => {
   const { values, positionals } = parseNodeArgs({ args: argv, options: { state: { type: 'string' } }, allowPositionals: true })
   const state = values.state ? path.resolve(values.state) : path.join(ROOT, 'state')
@@ -29,11 +28,13 @@ const agentDirs = state => {
 }
 
 // body-lock is the one place that already knows a live pid from a dead one and a listening port from a silent one
-// (#145); re-deriving that here would just be a second, divergent copy of the same refusal.
+// (#145); re-deriving that here would just be a second, divergent copy of the same refusal. Any exit but 0 must
+// refuse: a crash (an unparsable config.json, say) is not proof the body is down, only that this could not tell.
 const runningAgents = state =>
   agentDirs(state)
-    .filter(dir => spawnSync(process.execPath, [path.join(ROOT, 'tools', 'body-lock.mjs'), 'check', dir]).status === 3)
-    .map(dir => path.basename(dir))
+    .map(dir => ({ dir, status: spawnSync(process.execPath, [path.join(ROOT, 'tools', 'body-lock.mjs'), 'check', dir]).status }))
+    .filter(({ status }) => status !== 0)
+    .map(({ dir, status }) => ({ name: path.basename(dir), status }))
 
 const readConfig = dir => JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'))
 const writeConfig = (dir, cfg) => fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(cfg, null, 1) + '\n')
@@ -48,15 +49,22 @@ const moveWorldFiles = (state, worldDir, world, changes) => {
   }
 }
 
-const writeWorldJson = (state, worldDir, world, changes) => {
+// every config.json with a server still in it, one row per distinct host:port: more than one means the configs
+// disagree on which server this world is, which the caller must settle before anything is seeded or rewritten
+const distinctServers = state => {
+  const byKey = new Map()
+  for (const cfg of agentDirs(state).map(readConfig)) {
+    if (!cfg.host || cfg.port == null) continue
+    byKey.set(`${cfg.host}:${cfg.port}`, { host: cfg.host, port: cfg.port, version: cfg.version })
+  }
+  return [...byKey.values()]
+}
+
+const writeWorldJson = (worldDir, world, seed, changes) => {
   const worldFile = path.join(worldDir, 'world.json')
   if (fs.existsSync(worldFile)) return
-  const server = agentDirs(state).map(readConfig).find(cfg => cfg.host && cfg.port)
-  if (!server) {
-    console.error(`REFUSED: no ${worldFile} and no agent config.json has host/port to seed it`)
-    process.exit(2)
-  }
-  fs.writeFileSync(worldFile, JSON.stringify({ host: server.host, port: server.port }, null, 1) + '\n')
+  const { host, port, version } = seed
+  fs.writeFileSync(worldFile, JSON.stringify(version ? { host, port, version } : { host, port }, null, 1) + '\n')
   changes.push(`wrote state/worlds/${world}/world.json`)
 }
 
@@ -68,8 +76,8 @@ const rewriteConfigs = (state, world, changes) => {
       changes.push(`left state/agents/${name}/config.json alone: names world "${cfg.world}"`)
       continue
     }
-    if (cfg.world === world && !('host' in cfg) && !('port' in cfg)) continue
-    const { host, port, ...rest } = cfg
+    if (cfg.world === world && !('host' in cfg) && !('port' in cfg) && !('version' in cfg)) continue
+    const { host, port, version, ...rest } = cfg
     writeConfig(dir, { ...rest, world })
     changes.push(`rewrote state/agents/${name}/config.json: world=${world}`)
   }
@@ -95,7 +103,8 @@ function main () {
 
   const running = runningAgents(state)
   if (running.length) {
-    console.error(`REFUSED: body running for ${running.join(', ')}`)
+    const describe = ({ name, status }) => `${name} (${status === 3 ? 'running' : `could not check (exit ${status})`})`
+    console.error(`REFUSED: body running for ${running.map(describe).join(', ')}`)
     process.exit(3)
   }
 
@@ -106,13 +115,27 @@ function main () {
     process.exit(2)
   }
 
+  // every write below assumes world.json either exists already or can be seeded: both refusals below must land
+  // before moveWorldFiles touches anything, or a refusal leaves the shared files moved with no world.json in sight
+  const servers = distinctServers(state)
+  if (servers.length > 1) {
+    console.error(`REFUSED: configs disagree on server: ${servers.map(s => `${s.host}:${s.port}`).join(', ')}`)
+    process.exit(2)
+  }
+  const worldFile = path.join(worldDir, 'world.json')
+  const seed = fs.existsSync(worldFile) ? null : servers[0] ?? null
+  if (!fs.existsSync(worldFile) && !seed) {
+    console.error(`REFUSED: no ${worldFile} and no agent config.json has host/port to seed it`)
+    process.exit(2)
+  }
+
   const changes = []
   const worldDirExisted = fs.existsSync(worldDir)
   fs.mkdirSync(worldDir, { recursive: true })
   if (!worldDirExisted) changes.push(`created state/worlds/${world}/`)
 
   moveWorldFiles(state, worldDir, world, changes)
-  writeWorldJson(state, worldDir, world, changes)
+  writeWorldJson(worldDir, world, seed, changes)
   rewriteConfigs(state, world, changes)
   rewriteBriefings(state, world, changes)
 
