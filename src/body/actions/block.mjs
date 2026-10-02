@@ -11,9 +11,10 @@ import { slabMergeRefusal } from '../../build/slab-merge.mjs'
 import { cfg } from '../home.mjs'
 import { readPlaces } from '../events.mjs'
 import { inventoryCounts, findItem, vecOf, sweepDrops, walkToDig, cellAt, goNear, findBlocksNear } from '../helpers.mjs'
-import { capBlock, pillarUp, villagerRuntime, refusalFor, amBoxedIn } from '../../bot.mjs'
+import { capBlock, pillarUp, villagerRuntime, refusalFor } from '../../bot.mjs'
 import { goals, Vec3, bot, mcData, cancelGuard, ROLLBACK_PLACE, pos, roundVec } from '../state.mjs'
 import { doorsIOpened, heldOpen } from '../doors.mjs'
+import { amBoxedIn } from '../explain.mjs'
 
 // >0 while the `place` primitive is putting a block down on purpose: what lands then is a build, not scaffolding
 export let handPlacing = 0

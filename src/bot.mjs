@@ -19,7 +19,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
+import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, isStalled, mayDig, boxedIn, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -35,8 +35,7 @@ import { createJobScheduler } from './job-scheduler.mjs'
 import { mayRunBesideOwner } from './job-policy.mjs'
 import { airSample, freshAir } from './survival/airlog.mjs'
 import { surfaceWay, openingProgress, roofAt, SURFACE_SCAN } from './navigation/surface.mjs'
-import { noPathAdvice, inHole, perchedOverField } from './navigation/cave-exit.mjs'
-import { legFlags, stepsOff, noFirstMove, clearGoalOnFailure } from './lib/path.mjs'
+import { legFlags, stepsOff, clearGoalOnFailure } from './lib/path.mjs'
 import { failedResult, deathLine, deathCancel } from './composite.mjs'
 import { makeBoatRuntime } from './body/boat.mjs'
 import { makeBoatTravelRuntime } from './body/boat-travel.mjs'
@@ -53,6 +52,7 @@ import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, edib
 import { carried, inventoryCounts, diffCounts, findItem, vecOf, cellAt, goNear, findBlocksNear, bedsNear } from './body/helpers.mjs'
 import { pathfinder, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, setTask, gen, setGen, cancelGuard, pos } from './body/state.mjs'
 import { isWoodDoor, doorsIOpened, heldOpen, myClicks, MY_CLICK_MS, othersToggled, doorAt, doorBusy, gatesPassed, doorTick, shutGatesBehind, shutTrackedGatesAfterCancel, fenceEscape, leaveFenceCell } from './body/doors.mjs'
+import { explainFailure } from './body/explain.mjs'
 import { straysAt } from './body/pens.mjs'
 import { watchesQuick } from './body/watches.mjs'
 import { long, quick } from './body/actions/tables.mjs'
@@ -1021,7 +1021,7 @@ let nudging = false
 let fencePressed = null // the idle nudge is walking me out of a fence's cell: plan again once I am out
 let walkEndedAt = 0
 // the goal of the last walk: the no-path advice says how far up it was
-let lastWalkGoal = null
+export let lastWalkGoal = null
 let walkEndedBy = null
 let goalSetAt = 0 // a path result from before this goal says nothing about this walk
 let activeWalk = null // the actual awaited goto promise, including composite sub-actions
@@ -1631,7 +1631,7 @@ export const refusalFor = (name, args) => (['trades', 'trade'].includes(name) &&
 
 let taskId = 0
 let lastCancel = null
-let lastReflex = null
+export let lastReflex = null
 export const jobShelf = createJobShelf(path.join(HOME, 'jobs.json'))
 taskId = Math.max(0, ...jobShelf.snapshot().jobs.map(job => Number(job.id) || 0))
 for (const recovered of jobShelf.snapshot().jobs.filter(job => job.status === 'interrupted' && !job.recoveryReported)) {
@@ -1639,48 +1639,6 @@ for (const recovered of jobShelf.snapshot().jobs.filter(job => job.status === 'i
   jobShelf.patch(recovered.id, { recoveryReported: true })
 }
 export let scheduler
-const recentReflex = () => lastReflex && { ...lastReflex, agoMs: Date.now() - lastReflex.at }
-// #128: every goto out of a 1x1 natural shaft fails in a second with "no walkable path", a goto one block away
-// included. True, and useless: read once from the body's own cell, the answer is about the block it is ON
-const passableAboutFeet = (through = () => false) => {
-  const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return (dx, dy, dz) => { const block = bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz)); return block?.boundingBox !== 'block' || through(block) }
-}
-export const amBoxedIn = () => Boolean(bot?.entity) && boxedIn(passableAboutFeet())
-// bamboo the pathfinder reads as walls (a fence-like thicket), though the server's offset stalks leave the body room to walk out between
-export const amBoxedByBamboo = () => amBoxedIn() && !boxedIn(passableAboutFeet(block => block.name === 'bamboo'))
-// a hole one block deep (card 94e6dcb1): the walk out of it is a jump, and a failed one reads as a distant obstacle
-const amInHole = () => Boolean(bot?.entity) && inHole(passableAboutFeet())
-// one block above a field, on a log in the rows (Jizo, 09-26 23:24Z): the way down is a drop onto farmland
-const amPerched = () => {
-  if (!bot?.entity) return false
-  const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return perchedOverField((dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.name)
-}
-// what the body can read off itself when a walk finds no path (src/navigation/cave-exit.mjs): no sky over the head and the goal up
-// on the surface, water in or beside its cell (a dig walk breaks nothing beside a liquid), a protected zone round it
-const noPathEvidence = () => {
-  if (!bot?.entity) return {}
-  const me = bot.entity.position
-  const feet = feetCell(me, bot.entity.onGround)
-  const beside = [[0, 0, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
-  const wet = bot.entity.isInWater || beside.some(([dx, dy, dz]) => FLUIDS.has(bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))?.name ?? ''))
-  const goalY = typeof lastWalkGoal?.y === 'number' ? lastWalkGoal.y : null
-  return { underground: bot.blockAt(me.offset(0, 1, 0))?.skyLight === 0, goalDy: goalY === null ? null : goalY - feet.y, wet, zoned: inAnyZone(zones, new Vec3(feet.x, feet.y, feet.z)) }
-}
-// the search's start with no move the walk keeps (path_to: noPath nodes=0 visited=1), named: src/lib/path.mjs noFirstMove
-export const firstMoveNote = moves => {
-  if (!bot?.entity || !moves?.firstMoves) return null
-  const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  return noFirstMove(moves.firstMoves({ ...feet, remainingBlocks: moves.countScaffoldingItems() }))
-}
-export const explainFailure = message => {
-  const boxed = amBoxedIn()
-  // appended, never instead: the sweeps' dig retry and the stuck count read the no-path words (src/farm/leg.mjs PATH_FAILURE)
-  const stuckHere = /no path to the goal|no walkable path/i.test(message) ? firstMoveNote(bot.pathfinder.movements) : null
-  const advice = noPathAdvice({ text: explainNoPath(explainInterrupt(message, recentReflex()), digging, boxed), dig: digging, boxed, holed: amInHole(), perched: amPerched(), ...noPathEvidence() })
-  return stuckHere ? `${advice}. ${stuckHere}` : advice
-}
 
 // the cells around a bed (both halves), for bedExit
 export function bedExits (bed) {
