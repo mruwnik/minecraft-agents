@@ -6,7 +6,7 @@
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
-import { parsePlan, planBill } from '../src/lib.mjs'
+import { parsePlan, planBill, planSpec } from '../src/lib.mjs'
 import { planCells } from './plan-fixture.mjs'
 import { NO_BUCKET, noWaterLine, waterShortfall } from '../src/build/plan.mjs'
 import { CompositeHandBack } from '../src/composite.mjs'
@@ -400,7 +400,8 @@ test('waterShortfall protects another saved farm, even when it is the closest so
 })
 
 test('waterShortfall widens a search crowded by protected irrigation to find the external pond', async () => {
-  const cells = planCells({ plan: '~'.repeat(32), x: 0, y: 63, z: 0 })
+  // separated cells: no channel cell renews itself, so the whole first batch is off limits
+  const cells = planCells({ plan: '~.'.repeat(32), x: 0, y: 63, z: 0 }).filter(c => planSpec(c)?.kind === 'water')
   const world = Object.fromEntries([...cells, { x: 0, y: 63, z: 8 }].map(p => [`${p.x},${p.y},${p.z}`, 'water']))
   const items = { bucket: 1 }
   const made = fakeApi({ items, world, answers: {
@@ -410,3 +411,18 @@ test('waterShortfall widens a search crowded by protected irrigation to find the
   assert.equal(await waterShortfall(made.api, undefined, cells), null)
   assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'find_blocks block=water maxDistance=32 count=64', 'fill 0,63,8'])
 })
+
+for (const [name, plan, target] of [
+  ['the middle of its own channel, an infinite source, beats a farther pond', '~~~', '1,63,0'],
+  ['a lone channel cell would only move its water: the pond it is', '~', '0,63,20']
+]) {
+  test(`waterShortfall: ${name}`, async () => {
+    const cells = planCells({ plan, x: 0, y: 63, z: 0 })
+    const pond = { x: 0, y: 63, z: 20 }
+    const world = Object.fromEntries([...cells, pond].map(p => [`${p.x},${p.y},${p.z}`, 'water']))
+    const items = { bucket: 1 }
+    const made = fakeApi({ items, world, answers: { ...found([...cells, pond]), fill: pockets(items).fill } })
+    assert.equal(await waterShortfall(made.api, undefined, cells), null)
+    assert.deepEqual(withoutShoreWalks(made.calls), [FIND, `fill ${target}`])
+  })
+}
