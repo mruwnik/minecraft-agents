@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { terse, capOutput, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs, mapArgErrors } from '../src/cli.mjs'
+import { terse, capOutput, renderVerbose, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs, mapArgErrors } from '../src/cli.mjs'
 
 // MC_HOME=<a bot's home dir> picks which body to drive (its config.json names the apiPort); default is the first bot.
 const configFile = path.join(process.env.MC_HOME ?? path.join(import.meta.dirname, '..'), 'config.json')
@@ -62,13 +62,13 @@ if (action === 'wait') {
       if (!result.ok) { console.log(`FAIL ${result.error}`); process.exit(1) }
       const job = result.job
       if (['completed', 'failed', 'cancelled', 'interrupted'].includes(job.status)) {
-        console.log(verbose ? JSON.stringify(job, null, 1) : capOutput(terse({ ok: job.status === 'completed', job: job.id, ...(job.result ?? {}), ...(job.error ? { error: job.error } : {}) })))
+        console.log(verbose ? renderVerbose(job) : capOutput(terse({ ok: job.status === 'completed', job: job.id, ...(job.result ?? {}), ...(job.error ? { error: job.error } : {}) })))
         process.exit(job.status === 'completed' ? 0 : 1)
       }
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
     const result = await poll()
-    console.log(verbose ? JSON.stringify(result.job, null, 1) : `job ${args.job} still ${result.job?.status ?? 'unknown'}; inspect with ./mc job id=${args.job}`)
+    console.log(verbose ? renderVerbose(result.job) : `job ${args.job} still ${result.job?.status ?? 'unknown'}; inspect with ./mc job id=${args.job}`)
     process.exit(0)
   }
   const eventsFile = path.join(home, 'events.jsonl')
@@ -133,5 +133,5 @@ const post = (url, body) => new Promise((resolve, reject) => {
 if (!['dawn', 'wait', 'incidents'].includes(action)) post(`http://127.0.0.1:${apiPort}/${action}`, JSON.stringify(args))
   .then(JSON.parse)
   // the catalogue is long by nature and read once: it is the one answer not cut down to 1500 characters
-  .then(j => console.log(verbose ? JSON.stringify(j, null, 1) : capOutput(terse(j), action === 'help' ? 6000 : undefined)))
+  .then(j => console.log(verbose ? renderVerbose(j) : capOutput(terse(j), action === 'help' ? 6000 : undefined)))
   .catch(e => { console.error('bot process not reachable:', e.message); process.exit(1) })

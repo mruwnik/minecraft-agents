@@ -358,9 +358,18 @@ physics and route-controller patches support it; ordinary digging and building p
   Don't rerun it blindly: move closer or pick another spot.
 - `mine.get` digs its own way down to ore and often leaves you in a pit no walk can leave (it says `pit=`): come back up with `goto ... dig=true`.
   Underground, gravel and sand fall: the body won't tunnel under them and digs its head free if buried (`buried` event).
-- Any foreground `./mc <action>` supersedes the running background task, a routine included (`task_cancelled why=superseded by <action>`).
-  `./mc <action> queue=true` runs it AFTER the current task instead: the reply says `queued=<id> after=<task> position=`, the result comes
-  as a `task_done` event in `./mc wait`, `state` lists `queued=`, and `./mc stop` drops the queue too (`dropped=`).
+- Every `./mc <action>` queues behind whatever the body is already doing by default (`status=queued job=<id>` in the
+  reply, and a `held=` line names any reason the queue is frozen); `interrupt=true` cancels the running job and jumps
+  the queue instead (`queue=false` is refused: say `interrupt=true`). `./mc jobs` (`./mc job id=`) lists it, defaulting
+  to the last 20 entries (`all=true` for the whole remembered history); `-v` is capped at 20,000 characters, never the
+  whole file. `./mc stop` drops everything still queued and cancels the running job.
+- A failure only freezes the queue (`./mc resume` or `./mc discard` needed before later jobs run) when the body died,
+  an action lost carried items, or the same job failed twice running; every other failure - no path, no bed, an
+  untillable cell, a refused place or dig, a clean disconnect - just reports and the next queued job runs by itself.
+  After a reconnect or a body restart the body clears that kind of hold itself, once the world has loaded and no
+  monster stands within 8 blocks of it (`queue_waiting reason=hostile` and a retry every 30s otherwise), so a driver
+  rarely needs to resume that case by hand; `./mc discard` is refused while it is still pending, naming
+  `./mc resume recovered=true` as the way through once the body is safe.
 - A `tool_broke` event (`item=stone_axe slot=hand spare=0`) wakes `./mc wait` when a tool, weapon or armour piece wears out.
   With `spare=0` craft a new one at once: a body whose only weapon broke counts as unarmed and flees every fight.
 - `<action> needs item=` (or `player=`, `x= y= z=`) is the reply to a primitive called without an argument it cannot run without: nothing ran, give the named one. A composite says the same for its `!` arguments.

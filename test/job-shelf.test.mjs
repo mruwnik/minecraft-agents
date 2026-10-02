@@ -43,20 +43,43 @@ test('urgent work runs first, then leaves a held normal queue held', () => {
   } finally { t.close() }
 })
 
-test('failure holds FIFO; queued cancellation and discard have durable terminal results', () => {
+test('finish is a pure state transition: a failure alone never holds FIFO, only an explicit hold does', () => {
   const t = tempShelf()
   try {
     const shelf = createJobShelf(t.file)
     const failing = shelf.accept({ name: 'dig', args: { x: 1 } })
-    const canceled = shelf.accept({ name: 'goto', args: { x: 2 } })
+    const next = shelf.accept({ name: 'goto', args: { x: 2 } })
     const dropped = shelf.accept({ name: 'place', args: { x: 3 } })
     shelf.claim()
     shelf.finish(failing.id, 'failed', { ok: false }, 'no path')
-    assert.equal(shelf.claim(), null)
-    assert.equal(shelf.get(canceled.id).status, 'queued')
-    assert.equal(shelf.cancelQueued(canceled.id, 'operator canceled').status, 'cancelled')
-    assert.equal(shelf.discard()[0].id, dropped.id)
     assert.deepEqual(shelf.get(failing.id).result, { ok: false })
+    assert.equal(shelf.claim().id, next.id) // finish() by itself never freezes the queue
+    shelf.finish(next.id, 'completed', { ok: true })
+    shelf.hold('a policy decided to hold this one')
+    assert.equal(shelf.claim(), null)
+    assert.equal(shelf.discard()[0].id, dropped.id)
+  } finally { t.close() }
+})
+
+test('queued cancellation has a durable terminal result', () => {
+  const t = tempShelf()
+  try {
+    const shelf = createJobShelf(t.file)
+    const canceled = shelf.accept({ name: 'goto', args: { x: 2 } })
+    assert.equal(shelf.cancelQueued(canceled.id, 'operator canceled').status, 'cancelled')
+  } finally { t.close() }
+})
+
+test('list defaults to the last 20 jobs; limit= and all=true widen it', () => {
+  const t = tempShelf()
+  try {
+    const shelf = createJobShelf(t.file)
+    for (let i = 0; i < 25; i++) shelf.accept({ name: `job${i}`, args: {} })
+    const defaulted = shelf.list()
+    assert.equal(defaulted.jobs.length, 20)
+    assert.equal(defaulted.jobs[0].name, 'job5') // the last 20 of 25
+    assert.equal(shelf.list({ limit: 5 }).jobs.length, 5)
+    assert.equal(shelf.list({ all: true }).jobs.length, 25)
   } finally { t.close() }
 })
 

@@ -1,3 +1,5 @@
+import { severeFailure, holdReason, recordOutcome } from './job-policy.mjs'
+
 // Single-owner queue controller. It serializes accepted jobs, but the executor may call nested
 // body actions directly; only submissions entering this controller are queued.
 export function createJobScheduler ({ shelf, execute, emit = () => {}, onTerminal = () => {}, onFailure = () => {}, isReady = () => true }) {
@@ -6,6 +8,8 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
   const waiters = new Map()
   let progressTimer = null
   const lastProgressEvent = new Map()
+  // (c) of the hold policy: consecutive failures per job NAME, across jobs of other names (job-policy.mjs recordOutcome)
+  const failureStreaks = new Map()
   const terminal = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
   const event = (type, job, extra = {}) => emit(`job_${type}`, {
     id: job.id, name: job.name, verbose: Boolean(job.verbose), notify: job.notify !== false, ...extra
@@ -95,16 +99,17 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
       if (!current()) return
       const active = shelf.get(job.id)
       const cancelled = active?.status === 'cancelling' || result?.cancelled === true
-      const cleanupPending = result?.restorationPending || result?.cleanupPending || result?.cleanupFailed
+      const cleanupPending = Boolean(result?.restorationPending || result?.cleanupPending || result?.cleanupFailed)
       const status = cleanupPending ? 'failed' : cancelled ? 'cancelled' : result?.ok === false ? 'failed' : 'completed'
       flushProgress()
       const finished = shelf.finish(job.id, status, result, result?.error) ?? { id: job.id, name: job.name }
       lastProgressEvent.delete(job.id)
       event(status, finished, { result, ...(result?.error ? { error: result.error } : {}) })
-      if (status === 'failed') {
-        const held = shelf.hold(`job ${job.id} failed; inspect the result and explicitly resume, replace, or discard queued jobs`, { blockUrgent: Boolean(cleanupPending) })
+      const streak = recordOutcome(failureStreaks, job.name, status === 'failed')
+      if (status === 'failed') onFailure(finished, result)
+      if (severeFailure({ result, status, streak, cleanupPending })) {
+        const held = shelf.hold(holdReason({ id: job.id, status, result, cleanupPending, streak }), { blockUrgent: cleanupPending })
         emit('jobs_held', { failed: job.id, queued: shelf.list().queued.length, reason: held.reason })
-        onFailure(finished, result)
       }
       onTerminal(finished, result, status)
       settle(job.id)
@@ -115,9 +120,12 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
       const finished = shelf.finish(job.id, 'failed', result, result.error) ?? { id: job.id, name: job.name }
       lastProgressEvent.delete(job.id)
       event('failed', finished, { error: result.error })
-      const held = shelf.hold(`job ${job.id} failed; inspect the result and explicitly resume, replace, or discard queued jobs`, { blockUrgent: shelf.get(job.id)?.cancelReason != null })
-      emit('jobs_held', { failed: job.id, queued: shelf.list().queued.length, reason: held.reason })
+      const streak = recordOutcome(failureStreaks, job.name, true)
       onFailure(finished, result)
+      if (severeFailure({ result, status: 'failed', streak, cleanupPending: false })) {
+        const held = shelf.hold(holdReason({ id: job.id, status: 'failed', result, cleanupPending: false, streak }), { blockUrgent: shelf.get(job.id)?.cancelReason != null })
+        emit('jobs_held', { failed: job.id, queued: shelf.list().queued.length, reason: held.reason })
+      }
       onTerminal(finished, result, 'failed')
       settle(job.id)
     }).finally(() => {
@@ -186,8 +194,12 @@ export function createJobScheduler ({ shelf, execute, emit = () => {}, onTermina
     const dropped = shelf.discard(reason ?? 'discarded by request')
     for (const job of dropped) { event('cancelled', job, { reason: job.cancelReason }); settle(job.id) }
     const existing = shelf.snapshot().held
-    const held = existing?.blockUrgent ? existing : shelf.resume()
-    return { dropped, held, blocked: Boolean(existing?.blockUrgent) }
+    const blocked = Boolean(existing?.blockUrgent)
+    // A quiet one-liner here once left a body standing in the open at nightfall: say plainly what is blocking it
+    // and name the way through, and put the same line where `./mc wait` can see it, not only in the direct reply.
+    if (blocked) emit('jobs_discard_refused', { reason: existing.reason, note: 'resume recovered=true once the body is safe' })
+    const held = blocked ? existing : shelf.resume()
+    return { dropped, held, blocked }
   }
   const stop = cancelOwner => {
     const { dropped } = discard('cleared by stop')

@@ -56,6 +56,23 @@ export const capOutput = (text, limit = 1500) => text.length <= limit
   ? text
   : `${text.slice(0, limit)}\n[+${text.length - limit} chars cut: narrow the query, or delegate reading the full output (-v) to a subagent]`
 
+// `-v` asks for the exact shape a result carries instead of the compact line ./mc normally prints; it is still
+// capped, just at a wider ceiling, since asking for it by name is worth paying more for. `./mc jobs -v` once sent
+// 34k characters into a driver's context (100 stored jobs, each with its full args/result) - this is the second,
+// wider half of that fix; eventLines' own last=20 default (below) is the first half.
+export const VERBOSE_LIMIT = 20000
+export const renderVerbose = value => capOutput(JSON.stringify(value, null, 1), VERBOSE_LIMIT)
+
+// `./mc events [type=] [last=20] [all=true]`: the recent tail (src/body/events.mjs's `recent`, capped at 500 total).
+// Defaults to the last 20 so a long-running body's history does not flood a plain call; `all=true` for every one
+// still remembered.
+export const EVENTS_DEFAULT = 20
+export function eventLines (events, { type, last = EVENTS_DEFAULT, all = false } = {}) {
+  const filtered = events.filter(e => !type || e.type === type)
+  return (all ? filtered : filtered.slice(-last))
+    .map(({ seq, t, type: kind, ...rest }) => `${t.slice(11, 19)} ${kind} ${compact(rest)}`.trim())
+}
+
 export const between = (v, a, b) => v >= Math.min(a, b) && v <= Math.max(a, b)
 
 // `./mc dawn` blocks until morning so that its exit wakes a logged-off agent; it must never wait for ever
@@ -80,7 +97,10 @@ const WAKE_TYPES = new Set(['tool_broke', 'whisper', 'chat_refused', 'died', 'ki
   // a run the body gave up on is the agent's problem now, and an agent asleep in ./mc wait cannot take it (#138)
   'flee_stuck', 'flee_held',
   // a routine on autopilot that ended, and a body its own watch found going nowhere (autopilot card, src/navigation/stuck.mjs)
-  'routine_stopped', 'stuck', 'farm_attention', 'forestry_attention'])
+  'routine_stopped', 'stuck', 'farm_attention', 'forestry_attention',
+  // a discard refused while a restoration is pending used to be a quiet one-liner only the direct caller ever saw
+  // (card: a body stood in the open at nightfall and died); it now wakes the wait too
+  'jobs_discard_refused'])
 export const wakeWorthy = (event, me, { jobActive = false } = {}) => (jobActive && ['night_fell', 'dawn', 'woke_up'].includes(event.type) ? false : WAKE_TYPES.has(event.type)) ||
   (['task_done', 'task_cancelled'].includes(event.type) && event.notify !== false) ||
   (event.type === 'job_completed' && event.notify !== false) ||

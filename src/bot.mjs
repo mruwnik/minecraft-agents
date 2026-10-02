@@ -29,7 +29,7 @@ import { restartAdvice } from './restart.mjs'
 import { createSlowScanReporter, timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, cropNames, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError } from './lib.mjs'
+import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, cropNames, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError, eventLines } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -113,6 +113,7 @@ export const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
 let yieldUntil = 0 // while someone else is logged in as me, I stay off until then
 let reconnectTimer = null
+let restoreTimer = null // retries tryAutoRestore every 30s while a reconnect/restart hold is pending and a monster is near
 // when the current "eating" began, for the jam backstop: module-level so the health handler can end a meal that was hit (#149c)
 let eatingSince = null
 
@@ -528,6 +529,8 @@ function connect () {
     waitingForServer = false
     scheduler?.pump()
     emit('spawned', { pos: pos(), dimension: bot.game.dimension, ...codeHere })
+    // give the spawn chunks a beat to load before trusting a hostile scan (mirrors the respawn plan's own wait)
+    if (jobShelf.snapshot().held?.blockUrgent) bot.waitForTicks(20).then(tryAutoRestore, () => {})
   })
 
   // incoming conversation is recorded for the active job; it never implicitly cancels that job
@@ -780,8 +783,9 @@ function connect () {
     // event again: cancel/stop/discard only ever mark the shelf, none of them can make that promise
     // settle, and without this the owner slot stays wedged until the process itself restarts (card:
     // farm.build job 322 stuck at active= for hours after a creeper-interrupted reconnect).
-    cancelTask(`disconnected: ${reason}`, { holdQueue: false })
+    cancelTask(`disconnected: ${reason}`)
     scheduler?.abandon(`disconnected: ${reason}`)
+    clearTimeout(restoreTimer); restoreTimer = null
     reconnectTimer = setTimeout(connect, reconnectDelay(yieldUntil, Date.now()))
   })
 }
@@ -793,6 +797,23 @@ const isHostile = e => e.type === 'hostile' || e.kind === 'Hostile mobs'
 function nearbyHostiles (range) {
   if (!bot?.entity) return []
   return Object.values(bot.entities).filter(e => e !== bot.entity && isHostile(e) && e.position.distanceTo(bot.entity.position) <= range)
+}
+
+// A reconnect (disconnect, server outage, or a process restart) that interrupted the active job always leaves the
+// queue held with blockUrgent (job-shelf.mjs: the interrupted job's own outcome is unknown). A driver used to have
+// to notice and send `./mc resume recovered=true`; one who didn't left a body standing in the open at nightfall.
+// Once the world is loaded, the body now does that itself, but only when no monster stands within 8 blocks - a
+// hostile scan right after a reconnect is exactly the situation that killed it last time. Not clear: wait and retry.
+function tryAutoRestore () {
+  clearTimeout(restoreTimer); restoreTimer = null
+  if (!ready) return
+  if (!jobShelf.snapshot().held?.blockUrgent) return
+  if (nearbyHostiles(8).length > 0) {
+    emit('queue_waiting', { reason: 'hostile' })
+    restoreTimer = setTimeout(tryAutoRestore, 30000)
+    return
+  }
+  scheduler.resume({ recovered: true })
 }
 
 export const isWoodDoor = b => Boolean(b?.name?.endsWith('_door')) && b.name !== 'iron_door'
@@ -3283,20 +3304,18 @@ export const quick = {
     if (!reflexes) { bot.pvp.stop(); fighting = null; fightStart = null }
     return { reflexes }
   },
-  // recent history without reading the log: events [type=chat] [last=10] (the last 500, earlier runs included)
+  // recent history without reading the log: events [type=chat] [last=20] [all=true] (the last 500, earlier runs included)
   events (a) {
-    const lines = recent.filter(e => !a.type || e.type === a.type).slice(-(a.last ?? 10))
-      .map(({ seq, t, type, ...rest }) => `${t.slice(11, 19)} ${type} ${compact(rest)}`.trim())
-    return { text: lines.join('\n') || 'nothing yet' }
+    return { text: eventLines(recent, { type: a.type, last: a.last, all: a.all === true }).join('\n') || 'nothing yet' }
   }
 }
 
-function cancelTask (why, { holdQueue = true } = {}) {
+// A reflex cancellation (wedged, stalled, holing up, out of air, a death) no longer freezes the queue by itself:
+// whether it should is now the job-policy.mjs decision job-scheduler.mjs makes once the cancelled job's own result
+// settles (severeFailure: the body died, lost carried items, or the same job failing twice running).
+function cancelTask (why) {
   const active = jobShelf.snapshot().active
-  if (active != null) {
-    jobShelf.markCancelling(active, why)
-    if (holdQueue) jobShelf.hold(`job ${active} cancelled by ${why}; explicitly resume or discard queued jobs`)
-  }
+  if (active != null) jobShelf.markCancelling(active, why)
   gen++
   if (task) emit('task_cancelled', { id: task.id, name: task.name, why, ...(task.jobId ? { notify: false } : {}) })
   if (task) lastCancel = { id: task.id, why }
@@ -3725,7 +3744,7 @@ function submitJob (name, args, given = args, { urgent = false, verbose = false,
 }
 
 function stopAllJobs () {
-  const { active, dropped } = scheduler.stop(reason => cancelTask(reason, { holdQueue: false }))
+  const { active, dropped } = scheduler.stop(reason => cancelTask(reason))
   followTarget = null; endFlee()
   const held = jobShelf.snapshot().held
   return { ok: true, stopped: active ?? null, dropped: dropped.map(job => job.id), ...(held ? { restorationPending: held.reason } : {}) }
@@ -3735,12 +3754,12 @@ function cancelAcceptedJob (id, reason = 'cancelled by request') {
   const job = jobShelf.get(id)
   if (!job) return { ok: false, error: `no job ${id}` }
   const cancelled = scheduler.cancel(id, reason)
-  if (cancelled.cleanup === 'pending') cancelTask(reason, { holdQueue: false })
+  if (cancelled.cleanup === 'pending') cancelTask(reason)
   return cancelled
 }
 
 function jobControl (name, args) {
-  if (name === 'jobs') return { ok: true, ...jobShelf.list({ after: args.after ?? 0, limit: args.limit ?? 100 }) }
+  if (name === 'jobs') return { ok: true, ...jobShelf.list({ after: args.after ?? 0, limit: args.limit, all: args.all === true }) }
   if (name === 'job') {
     const job = jobShelf.get(args.id)
     return job ? { ok: true, job } : { ok: false, error: `no job ${args.id}` }
@@ -3752,7 +3771,10 @@ function jobControl (name, args) {
   }
   if (name === 'discard') {
     const { dropped: discarded, held, blocked } = scheduler.discard('discarded by request')
-    return { ok: !blocked, discarded: discarded.map(job => job.id), clearedHold: Boolean(held && !blocked), restorationPending: blocked ? held.reason : undefined }
+    return {
+      ok: !blocked, discarded: discarded.map(job => job.id), clearedHold: Boolean(held && !blocked),
+      ...(blocked ? { restorationPending: held.reason, note: 'resume recovered=true once the body is safe; discard is refused while that restoration is pending' } : {})
+    }
   }
   return null
 }
@@ -3831,7 +3853,7 @@ http.createServer((req, res) => {
         const actionArgs = name === 'smelt' && wait !== undefined ? { ...rest, wait } : rest
         lastDriven = Date.now()
         if (interrupt) {
-          const { job: accepted, afterCleanup } = scheduler.interrupt({ name, args: actionArgs, given: tracked.given }, reason => cancelTask(reason, { holdQueue: false }), { verbose, notify: tracked.given?.automatic !== true })
+          const { job: accepted, afterCleanup } = scheduler.interrupt({ name, args: actionArgs, given: tracked.given }, reason => cancelTask(reason), { verbose, notify: tracked.given?.automatic !== true })
           taskId = Math.max(taskId, accepted.id)
           out = { ok: true, status: 'queued', job: accepted.id, urgent: true, afterCleanup, held: jobShelf.snapshot().held?.reason }
           if (waitForResult) {

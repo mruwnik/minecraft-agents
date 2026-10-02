@@ -1,7 +1,7 @@
 // The one-line result renderer that ./mc prints (src/cli.mjs, imported by nothing but tools/mc.mjs and lib.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP, waitReport, wakeWorthy } from '../src/cli.mjs'
+import { terse, parseCliArgs, mapArgErrors, MAP_ARG_HELP, waitReport, wakeWorthy, eventLines, renderVerbose, VERBOSE_LIMIT, capOutput } from '../src/cli.mjs'
 
 // `eat` answers ate= and gained= (AGENT_GUIDE), the same names a long result renders as +item:n and ate=item:n. The short
 // renderer dropped both as long-result bookkeeping: Chani ate at food 7 and read `ok food=10 health=10`, then reported
@@ -124,6 +124,7 @@ test('job wake policy keeps routine progress quiet, exposes verbose progress, an
   assert.equal(wakeWorthy({ type: 'job_failed' }), true)
   assert.equal(wakeWorthy({ type: 'job_cancelled' }), true)
   assert.equal(wakeWorthy({ type: 'whisper', from: 'Steve', to: 'Jizo' }, 'Jizo'), true)
+  assert.equal(wakeWorthy({ type: 'jobs_discard_refused', reason: 'job 4 was interrupted by disconnected: EPIPE' }), true)
 })
 
 test('waitReport lists only notifications that can end a wait', () => {
@@ -143,6 +144,30 @@ test('waitReport does not wake an owned long job for ordinary night/day transiti
   assert.deepEqual(waitReport(events, 'Jizo', at, {}, [], { jobActive: true }).lines, ['job_failed'])
   assert.deepEqual(waitReport(line(6, 'dawn'), 'Jizo', at).lines, ['dawn'])
 })
+
+// ---------------------------------------------------------------- ./mc jobs / ./mc events: last=20 by default, capped -v (card: a 34k-char jobs -v)
+test('eventLines defaults to the last 20, respects a type filter, and all=true returns the whole tail', () => {
+  const events = Array.from({ length: 25 }, (_, i) => ({ seq: i, t: '2026-10-02T12:00:00Z', type: i % 5 === 0 ? 'died' : 'tick', note: `e${i}` }))
+  const defaulted = eventLines(events)
+  assert.equal(defaulted.length, 20)
+  assert.equal(defaulted[0], '12:00:00 died note=e5') // the last 20 of 25: index 5 is where it starts
+  assert.equal(eventLines(events, { all: true }).length, 25)
+  assert.deepEqual(eventLines(events, { type: 'died' }), [0, 5, 10, 15, 20].map(i => `12:00:00 died note=e${i}`))
+  assert.equal(eventLines(events, { last: 3 }).length, 3)
+})
+
+test('eventLines leaves an empty tail as an empty list, not an error', () => assert.deepEqual(eventLines([]), []))
+
+test('renderVerbose caps at VERBOSE_LIMIT with the same cut-and-say-so tail as capOutput, never unbounded', () => {
+  const huge = { jobs: Array.from({ length: 2000 }, (_, i) => ({ id: i, name: 'goto', args: { x: i } })) }
+  const rendered = renderVerbose(huge)
+  assert.ok(JSON.stringify(huge, null, 1).length > VERBOSE_LIMIT) // the input really is bigger than the cap
+  assert.equal(rendered, capOutput(JSON.stringify(huge, null, 1), VERBOSE_LIMIT))
+  assert.ok(rendered.length <= VERBOSE_LIMIT + 200) // the cap plus its own short "[+N cut]" tail, never the raw size
+  assert.match(rendered, /chars cut/)
+})
+
+test('renderVerbose leaves small output alone', () => assert.equal(renderVerbose({ ok: true }), '{\n "ok": true\n}'))
 
 // ---------------------------------------------------------------- autopilot: a routine that stopped and a body that is stuck wake the wait (autopilot card)
 const autopilotLine = (type, data) => JSON.stringify({ seq: 1, t: new Date(at).toISOString(), type, ...data }) + '\n'

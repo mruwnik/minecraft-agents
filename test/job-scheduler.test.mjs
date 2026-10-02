@@ -89,20 +89,81 @@ test('interrupt holds pending FIFO until explicitly resumed even when there was 
   } finally { t.close() }
 })
 
-test('failure emits a terminal record and holds FIFO until explicit resume', async () => {
-  let fail = true
-  const t = setup(async job => fail && job.name === 'bad' ? { ok: false, error: 'no path' } : { ok: true })
+test('an ordinary (benign) failure emits a terminal record and does NOT hold FIFO: the queue moves on by itself', async () => {
+  const t = setup(async job => job.name === 'bad' ? { ok: false, error: 'no path' } : { ok: true })
   try {
     const bad = t.scheduler.submit({ name: 'bad', args: {} })
-    const waiting = t.scheduler.submit({ name: 'waiting', args: {} })
+    const next = t.scheduler.submit({ name: 'next', args: {} })
     await until(() => t.shelf.get(bad.id).status === 'failed')
-    assert.equal(t.shelf.get(waiting.id).status, 'queued')
-    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${bad.id} failed`))
+    assert.equal(t.shelf.snapshot().held, null)
     assert.ok(t.events.some(event => event.type === 'job_failed' && event.id === bad.id))
+    assert.ok(!t.events.some(event => event.type === 'jobs_held'))
+    await until(() => t.shelf.get(next.id).status === 'completed')
+  } finally { t.close() }
+})
+
+test('the same job name failing twice in a row holds FIFO until explicit resume; a success in between resets it', async () => {
+  let behavior = 'fail'
+  const t = setup(async job => job.name === 'bad' && behavior === 'fail' ? { ok: false, error: 'no path' } : { ok: true })
+  try {
+    const first = t.scheduler.submit({ name: 'bad', args: {} })
+    await until(() => t.shelf.get(first.id).status === 'failed')
+    assert.equal(t.shelf.snapshot().held, null) // one failure alone is benign
+    const other = t.scheduler.submit({ name: 'other', args: {} }) // a different name does not touch bad's streak
+    await until(() => t.shelf.get(other.id).status === 'completed')
+    const second = t.scheduler.submit({ name: 'bad', args: {} })
+    await until(() => t.shelf.get(second.id).status === 'failed')
+    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${second.id} failed twice running`))
     assert.equal(t.scheduler.pumping, false)
-    fail = false
+    behavior = 'ok'
     t.scheduler.resume()
-    await until(() => t.shelf.get(waiting.id).status === 'completed')
+    const third = t.scheduler.submit({ name: 'bad', args: {} })
+    await until(() => t.shelf.get(third.id).status === 'completed')
+  } finally { t.close() }
+})
+
+test('a result that says the body died holds FIFO on the very first failure', async () => {
+  const t = setup(async () => ({ ok: false, cancelled: true, error: 'cancelled: died at 10,65,20 (slain by Zombie)' }))
+  try {
+    const job = t.scheduler.submit({ name: 'farm.maintain', args: {} })
+    await until(() => t.shelf.get(job.id).status === 'cancelled')
+    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${job.id} cancelled: the body died`))
+  } finally { t.close() }
+})
+
+test('a result that lost carried items holds FIFO even though the job otherwise completed', async () => {
+  const t = setup(async () => ({ ok: true, lost: { iron_pickaxe: 1 } }))
+  try {
+    const job = t.scheduler.submit({ name: 'mine.get', args: {} })
+    await until(() => t.shelf.get(job.id).status === 'completed')
+    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${job.id} completed: lost iron_pickaxe`))
+  } finally { t.close() }
+})
+
+test('ordinary benign failures (no path, no bed, untillable, refused) never hold the queue on their own', async () => {
+  for (const error of ['no path to the goal', 'no bed within 32 blocks', 'untillable: stone', 'placement refused']) {
+    const t = setup(async () => ({ ok: false, error }))
+    try {
+      const job = t.scheduler.submit({ name: 'goto', args: {} })
+      await until(() => t.shelf.get(job.id).status === 'failed')
+      assert.equal(t.shelf.snapshot().held, null, error)
+    } finally { t.close() }
+  }
+})
+
+test('discard while a restoration is pending is refused with a clear line and its own event, naming resume recovered=true', async () => {
+  const old = deferred()
+  const t = setup(job => job.name === 'old' ? old.promise : { ok: true })
+  try {
+    t.scheduler.submit({ name: 'old', args: {} })
+    await until(() => t.scheduler.pumping)
+    t.scheduler.abandon('disconnected: socketClosed')
+    const result = t.scheduler.discard('discarded by request')
+    assert.equal(result.blocked, true)
+    assert.match(result.held.reason, /disconnected/)
+    const refused = t.events.find(event => event.type === 'jobs_discard_refused')
+    assert.ok(refused)
+    assert.match(refused.note, /resume recovered=true/)
   } finally { t.close() }
 })
 
@@ -143,14 +204,19 @@ test('cancel of running ID marks cancelling and retains owner until cleanup sett
   } finally { t.close() }
 })
 
-test('wait returns latest durable state and a rejected executor is a held failure', async () => {
+test('wait returns latest durable state; a rejected executor surfaces as an ordinary failure, held only on the second in a row', async () => {
   const t = setup(async () => { throw new Error('cleanup failed') })
   try {
     const job = t.scheduler.submit({ name: 'repair', args: {} })
     const result = await t.scheduler.wait(job.id, 1000)
     assert.equal(result.status, 'failed')
     assert.equal(result.error, 'cleanup failed')
-    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${job.id} failed`))
+    assert.equal(t.shelf.snapshot().held, null) // one rejection alone is benign
+
+    const second = t.scheduler.submit({ name: 'repair', args: {} })
+    const result2 = await t.scheduler.wait(second.id, 1000)
+    assert.equal(result2.status, 'failed')
+    assert.match(t.shelf.snapshot().held.reason, new RegExp(`job ${second.id} failed twice running`))
   } finally { t.close() }
 })
 

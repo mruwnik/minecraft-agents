@@ -73,9 +73,12 @@ export function createJobShelf (file, { maxJobs = 500 } = {}) {
       return clone(record)
     },
     get (id) { const job = find(id); return job ? clone(job) : null },
-    list ({ after = 0, limit = 100 } = {}) {
+    // Defaults to the last 20 (a `./mc jobs -v` once sent 34k characters into a driver's context); `all=true` for
+    // the whole remembered history (at most maxJobs, trimmed above).
+    list ({ after = 0, limit = 20, all = false } = {}) {
+      const matching = state.jobs.filter(job => job.id > Number(after))
       return { active: state.active, held: state.held && clone(state.held), queued: [...state.urgent, ...state.queue],
-        jobs: state.jobs.filter(job => job.id > Number(after)).slice(-Math.max(1, Math.min(500, Number(limit) || 100))).map(clone) }
+        jobs: (all ? matching : matching.slice(-Math.max(1, Math.min(500, Number(limit) || 20)))).map(clone) }
     },
     claim () {
       if (state.active != null) return null
@@ -122,6 +125,9 @@ export function createJobShelf (file, { maxJobs = 500 } = {}) {
       state.held = { ...state.held, blockUrgent: true }
       dirty = true; trim(); persist(); return clone(job)
     },
+    // A pure state transition: it never freezes the queue by itself. Whether this result holds the queue is a
+    // policy decision (job-policy.mjs severeFailure, applied by job-scheduler.mjs) that needs the result's own
+    // content - most failures are routine and must let the next queued job run.
     finish (id, status, result, error) {
       const job = find(id)
       if (!job || !['completed', 'failed', 'cancelled', 'interrupted'].includes(status)) return null
@@ -131,9 +137,6 @@ export function createJobShelf (file, { maxJobs = 500 } = {}) {
       if (result !== undefined) job.result = clone(result)
       if (error !== undefined) job.error = String(error)
       if (state.active === job.id) state.active = null
-      if (status === 'failed' || status === 'interrupted') state.held = {
-        reason: `job ${job.id} ${status}`, at: Date.now(), ...(state.held?.blockUrgent ? { blockUrgent: true } : {})
-      }
       dirty = true; trim(); persist(); return clone(job)
     },
     markCancelling (id, reason) {
