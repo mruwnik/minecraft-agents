@@ -86,7 +86,7 @@ if (action === 'wait') {
   const jobsFile = path.join(home, 'jobs.json')
   const offsetFile = path.join(home, '.wait-offset')
   const { username: me, chat = {} } = JSON.parse(fs.readFileSync(configFile, 'utf8'))
-  // the agent roster (src/players.mjs agentNames, inlined: tools/mc.mjs may import nothing but src/cli.mjs, #148),
+  // the agent roster (src/players.mjs agentNames, inlined: tools/mc.mjs may import nothing but src/cli.mjs and src/config.mjs, #148),
   // so waitReport's chattiness filter can tell a human sender (not one of these) from another agent body
   const agentsDir = path.join(home, '..')
   const agents = fs.existsSync(agentsDir)

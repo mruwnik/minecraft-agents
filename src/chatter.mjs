@@ -1,6 +1,6 @@
 // Chattiness: how much a chat/whisper line asks an agent for an answer, and whether it is loud enough to end
 // ./mc wait. The rules-based half of this (messageWeight, hears, skippedLine) has to live in src/cli.mjs itself:
-// tools/mc.mjs and src/cli.mjs are both restricted (#148) to importing none of our other files, so they cannot
+// tools/mc.mjs and src/cli.mjs are both restricted (#148) to importing none of our other files (mc.mjs: but src/config.mjs), so they cannot
 // reach a separate module. This file re-exports that same code (one function, not two copies) and adds what only
 // needs to run OUTSIDE that restricted path: the outbound chat guard in src/bot.mjs, and the optional haiku grader.
 import { execFileSync } from 'node:child_process'
