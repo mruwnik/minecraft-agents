@@ -5,16 +5,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { parseArgs as parseNodeArgs } from 'node:util'
+import { fileURLToPath } from 'node:url'
 
 const DIR = import.meta.dirname
 const ROOT = path.join(DIR, '..')
 const WORLD_FILES = ['places.json', 'zones.json', 'gates.log', 'clock.json', 'WORLD.md']
 
-const parseArgs = argv => {
-  const stateIdx = argv.indexOf('--state')
-  const state = stateIdx === -1 ? path.join(ROOT, 'state') : path.resolve(argv[stateIdx + 1])
-  const [world] = argv.filter((_, i) => i !== stateIdx && i !== stateIdx + 1)
-  return { world, state }
+// the world name is a positional argument and --state can come before or after it; a hand-rolled index filter
+// used to drop the world name whenever --state was absent (it sits at argv[0], the filter's own default exclusion)
+export const parseArgs = argv => {
+  const { values, positionals } = parseNodeArgs({ args: argv, options: { state: { type: 'string' } }, allowPositionals: true })
+  const state = values.state ? path.resolve(values.state) : path.join(ROOT, 'state')
+  return { world: positionals[0], state }
 }
 
 const agentDirs = state => {
@@ -29,7 +32,7 @@ const agentDirs = state => {
 // (#145); re-deriving that here would just be a second, divergent copy of the same refusal.
 const runningAgents = state =>
   agentDirs(state)
-    .filter(dir => spawnSync('node', [path.join(ROOT, 'tools', 'body-lock.mjs'), 'check', dir]).status === 3)
+    .filter(dir => spawnSync(process.execPath, [path.join(ROOT, 'tools', 'body-lock.mjs'), 'check', dir]).status === 3)
     .map(dir => path.basename(dir))
 
 const readConfig = dir => JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'))
@@ -83,34 +86,38 @@ const rewriteBriefings = (state, world, changes) => {
   }
 }
 
-const { world, state } = parseArgs(process.argv.slice(2))
-if (!world) {
-  console.error('usage: node tools/migrate-worlds.mjs <world-name> [--state <dir>]')
-  process.exit(2)
+function main () {
+  const { world, state } = parseArgs(process.argv.slice(2))
+  if (!world) {
+    console.error('usage: node tools/migrate-worlds.mjs <world-name> [--state <dir>]')
+    process.exit(2)
+  }
+
+  const running = runningAgents(state)
+  if (running.length) {
+    console.error(`REFUSED: body running for ${running.join(', ')}`)
+    process.exit(3)
+  }
+
+  const worldDir = path.join(state, 'worlds', world)
+  const conflicting = WORLD_FILES.filter(name => fs.existsSync(path.join(state, name)) && fs.existsSync(path.join(worldDir, name)))
+  if (conflicting.length) {
+    console.error(`REFUSED: ${conflicting.join(', ')} exist at both state/ and state/worlds/${world}/`)
+    process.exit(2)
+  }
+
+  const changes = []
+  const worldDirExisted = fs.existsSync(worldDir)
+  fs.mkdirSync(worldDir, { recursive: true })
+  if (!worldDirExisted) changes.push(`created state/worlds/${world}/`)
+
+  moveWorldFiles(state, worldDir, world, changes)
+  writeWorldJson(state, worldDir, world, changes)
+  rewriteConfigs(state, world, changes)
+  rewriteBriefings(state, world, changes)
+
+  if (!changes.length) console.log('nothing to do')
+  else changes.forEach(line => console.log(line))
 }
 
-const running = runningAgents(state)
-if (running.length) {
-  console.error(`REFUSED: body running for ${running.join(', ')}`)
-  process.exit(3)
-}
-
-const worldDir = path.join(state, 'worlds', world)
-const conflicting = WORLD_FILES.filter(name => fs.existsSync(path.join(state, name)) && fs.existsSync(path.join(worldDir, name)))
-if (conflicting.length) {
-  console.error(`REFUSED: ${conflicting.join(', ')} exist at both state/ and state/worlds/${world}/`)
-  process.exit(2)
-}
-
-const changes = []
-const worldDirExisted = fs.existsSync(worldDir)
-fs.mkdirSync(worldDir, { recursive: true })
-if (!worldDirExisted) changes.push(`created state/worlds/${world}/`)
-
-moveWorldFiles(state, worldDir, world, changes)
-writeWorldJson(state, worldDir, world, changes)
-rewriteConfigs(state, world, changes)
-rewriteBriefings(state, world, changes)
-
-if (!changes.length) console.log('nothing to do')
-else changes.forEach(line => console.log(line))
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

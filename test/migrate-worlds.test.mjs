@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { parseArgs } from '../tools/migrate-worlds.mjs'
 
 const REPO = path.join(import.meta.dirname, '..')
 const SCRIPT = path.join(REPO, 'tools', 'migrate-worlds.mjs')
@@ -103,6 +104,26 @@ test('migrate-worlds: refuses when a file exists at both the old and new place, 
   assert.equal(result.status, 2)
   assert.match(result.stderr, /places\.json/)
   assert.deepEqual(snapshot(state), before)
+})
+
+// #critical-1: the world name sits at argv[0] whenever --state is omitted (the brief's own default-usage
+// invocation); a filter keyed only off --state's index used to drop it there, so the real run silently printed
+// usage and exited 2. Exercised as pure argument parsing, never by spawning the script without --state: that
+// would touch the real repo's state/.
+const parseRows = [
+  ['world only, no --state: defaults to the repo state/', ['main'], { world: 'main', state: path.join(REPO, 'state') }],
+  ['world then --state', ['main', '--state', '/tmp/x'], { world: 'main', state: path.resolve('/tmp/x') }],
+  ['--state before world', ['--state', '/tmp/x', 'main'], { world: 'main', state: path.resolve('/tmp/x') }]
+]
+for (const [name, argv, expected] of parseRows) {
+  test(`migrate-worlds: parseArgs - ${name}`, () => assert.deepEqual(parseArgs(argv), expected))
+}
+
+test('migrate-worlds: --state placed before the world name still migrates (argument order is not significant)', t => {
+  const { state } = fixture(t)
+  const result = spawnSync(process.execPath, [SCRIPT, '--state', state, 'main'], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(readJSON(path.join(state, 'worlds', 'main', 'world.json')), SERVER)
 })
 
 test('migrate-worlds: refuses when an agent body is running, and changes nothing', async t => {
