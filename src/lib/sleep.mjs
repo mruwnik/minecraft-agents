@@ -131,9 +131,15 @@ export const BED_RANGE = 200
 
 const blocksApart = (a, b) => Math.round(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z))
 
+// bed=x,y,z is that bed whoever marked it, or nobody
+export function bedCell (bed) {
+  const n = String(bed).split(',').map(Number)
+  return n.length === 3 && n.every(Number.isInteger) ? { name: `the bed at ${bed}`, x: n[0], y: n[1], z: n[2] } : null
+}
+
 export function ownBed (places, me, { bed, sleptAt, from } = {}) {
   const map = places ?? []
-  if (bed) return map.find(p => p.name === bed) ?? null
+  if (bed) return bedCell(bed) ?? map.find(p => p.name === bed) ?? null
   const mine = map.filter(p => p.kind === 'bed' && p.by === me).sort((p, q) => blocksApart(p, from) - blocksApart(q, from))
   if (mine.length) return mine[0]
   return sleptAt ? { name: 'where you last woke', x: sleptAt.x, y: sleptAt.y, z: sleptAt.z } : null

@@ -14,6 +14,12 @@ const exactKeys = (value, keys, where) => {
   if (!isObject(value) || Object.keys(value).some(k => !keys.includes(k))) fail(`${where} has unsupported fields`)
 }
 
+// what a flow (run steps=, routine until=) may read: quick actions that only look, plus chest_count, which may walk to
+// the chest it counts
+export const FLOW_OBSERVATIONS = Object.freeze(['state', 'entity', 'block_at', 'boat_state', 'inventory', 'look_around', 'scan', 'animals', 'places', 'zones', 'chest_count'])
+// the field a read with no path gives, for an observation whose answer is one number: (read :chest_count {...}) is the count
+const READ_FIELD = Object.freeze({ chest_count: 'count' })
+
 const CONDITION_OPS = new Set(['read', 'literal', 'and', 'or', 'not', 'truthy', 'eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'contains'])
 const SYMBOL_OPS = Object.freeze({ '=': 'eq', 'not=': 'ne', '<': 'lt', '<=': 'lte', '>': 'gt', '>=': 'gte' })
 
@@ -51,8 +57,8 @@ function ednExpression (form) {
     return ['when', expr(raw[0]), ednData(raw[1]), ednExpression(raw[2])]
   }
   if (op === 'read') {
-    if (raw.length !== 3 || !raw[0] || typeof raw[0].key !== 'string' || !Array.isArray(raw[2])) fail('read syntax is (read :observation {:args ...} [:path :to-field])')
-    const path = raw[2].map(part => {
+    if (![2, 3].includes(raw.length) || !raw[0] || typeof raw[0].key !== 'string' || (raw.length === 3 && !Array.isArray(raw[2]))) fail('read syntax is (read :observation {:args ...} [:path :to-field]); the path may be left out')
+    const path = (raw[2] ?? []).map(part => {
       if (part && typeof part.key === 'string') return part.key
       if (typeof part === 'number' && Number.isInteger(part) && part >= 0) return String(part)
       fail('read path vectors contain only keywords and non-negative indexes')
@@ -130,7 +136,7 @@ function validateCondition (expr, env, depth, seen, counter) {
     const [name, readArgs, path] = args
     if (typeof name !== 'string' || !env.observations.has(name)) fail(`unknown or disallowed observation ${JSON.stringify(name)}`)
     if (!isObject(readArgs) || !jsonValue(readArgs)) fail(`read ${name} needs a JSON args object`)
-    if (typeof path !== 'string' || !/^[A-Za-z][A-Za-z0-9]*(\.(?:[A-Za-z][A-Za-z0-9]*|\d+))*$/.test(path) || path.split('.').some(p => ['__proto__', 'prototype', 'constructor'].includes(p))) fail('read path must be a safe dotted field path')
+    if (typeof path !== 'string' || (path !== '' && !/^[A-Za-z][A-Za-z0-9]*(\.(?:[A-Za-z][A-Za-z0-9]*|\d+))*$/.test(path)) || path.split('.').some(p => ['__proto__', 'prototype', 'constructor'].includes(p))) fail('read path must be a safe dotted field path')
     return
   }
   if (op === 'literal') { arity(1); if (!jsonValue(args[0])) fail('literal must be a JSON value'); return }
@@ -193,6 +199,10 @@ function validateNode (node, env, depth, seen, counter) {
   fail(`unsupported flow node ${JSON.stringify(op)}`)
 }
 
+export function validateFlowCondition (condition, { observations = [], limits = {} } = {}) {
+  validateCondition(condition, { observations: new Set(observations), limits: { ...DEFAULT_LIMITS, ...limits } }, 0, new Set(), { nodes: 0 })
+}
+
 export function validateFlow (program, { actions = [], observations = [], limits = {} } = {}) {
   const env = {
     actions: new Set(actions),
@@ -211,6 +221,7 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : isObjec
 const stable = value => JSON.stringify(canonical(value))
 const equal = (a, b) => Object.is(a, b) || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && stable(a) === stable(b))
 function pathValue (value, path) {
+  if (path === '') return value
   for (const part of path.split('.')) {
     if (value === null || value === undefined || !Object.hasOwn(value, part)) return UNKNOWN
     value = value[part]
@@ -227,7 +238,7 @@ async function valueOf (expr, env) {
       if (value === undefined || value === null || (name === 'block_at' && value.name === null)) return UNKNOWN
       return value
     }))
-    return pathValue(await env.cache.get(key), path)
+    return pathValue(await env.cache.get(key), path || (READ_FIELD[name] ?? ''))
   }
   if (op === 'and' || op === 'or') {
     let unknown = false

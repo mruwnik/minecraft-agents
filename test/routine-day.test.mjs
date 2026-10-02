@@ -99,10 +99,18 @@ for (const [name, args, expected] of [
 
 test('every shipped routine that stores its produce takes the store from store=', async () => {
   const { default: fs } = await import('node:fs')
-  const roles = ['farmer/homestead', 'rancher/sheep', 'rancher/cattle', 'rancher/pigs', 'rancher/chickens', 'beekeeper/apiary']
+  const roles = ['farmer/homestead', 'farmer/bread', 'rancher/sheep', 'rancher/cattle', 'rancher/pigs', 'rancher/chickens', 'beekeeper/apiary']
   const stores = roles.map(role => JSON.parse(fs.readFileSync(new URL(`../roles/${role}.json`, import.meta.url), 'utf8'))
     .filter(step => 'deposit' in step).map(step => step.deposit))
-  assert.deepEqual(stores, [['$store'], ['$store'], ['$store'], ['$store'], ['$store'], ['$store']])
+  assert.deepEqual(stores, [['$store'], ['$store'], ['$store'], ['$store'], ['$store'], ['$store'], ['$store']])
+})
+
+test('the bread routine bakes into the same store the field fills', async () => {
+  const { default: fs } = await import('node:fs')
+  const readRole = name => fs.readFileSync(new URL(`../roles/${name}.json`, import.meta.url), 'utf8')
+  const { steps } = routinePlan({ name: 'farmer/bread', place: 'mruwnik-farm', store: '114,71,-107' }, readRole)
+  assert.deepEqual(steps.map(({ action, deposit, store, keep }) => [action, deposit ?? store, keep]),
+    [['farm.maintain', '114,71,-107', undefined], ['bake', '114,71,-107', 16]])
 })
 
 // the stuck watch is told which days ended with a full store (src/navigation/stuck.mjs raises the alert after two in a row)
