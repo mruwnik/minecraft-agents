@@ -155,7 +155,7 @@ agent as a whisper from `dashboard`, the same `whisper` event an in-game whisper
 Apart from that whisper it only reads. `state` and `look` are both **quick** actions in `src/bot.mjs`: they answer without taking the task
 slot and without turning the body, so watching a body cannot cancel or disturb the work it is doing, and it costs
 that agent's driver nothing - no tokens are spent by looking. A port that does not answer is simply a body that is
-down. Its own API, for scripts: `/api/state` (every body, plus places and zones) and `/api/look/<Name>` (a PNG; what
+down. Its own API, for scripts: `/api/state` (every body, plus per world its bodies, humans, places and zones; one map is drawn per world) and `/api/look/<Name>` (a PNG; what
 the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers) and
 `/api/screen/<Name>` (the `screen` action as JSON: HUD, inventory slots and the open container) and
 `POST /api/whisper/<Name>` (`{"message": "..."}`, whispered to that body's driver from `dashboard`).

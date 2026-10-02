@@ -15,8 +15,8 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
-import { mergeBodies, humanSightings, parsePlan } from './dashboard/map.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { mergeBodies, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
@@ -29,6 +29,7 @@ import { villageViews, attachVillageStatus } from './dashboard/villages.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
+const WORLDS_DIR = path.join(ROOT, 'state', 'worlds')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
 const BLUEPRINTS_PAGE = path.join(import.meta.dirname, 'dashboard', 'blueprints.html')
@@ -69,6 +70,18 @@ const readAgents = () => {
   return parseAgents(dirs.map(e => ({ name: e.name, text: readText(path.join(AGENTS_DIR, e.name, 'config.json')) })))
 }
 
+// re-read every ask, like the agents: a world appears while this runs. A folder is a world once it holds world.json.
+const readWorlds = () => (fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR, { withFileTypes: true }) : [])
+  .filter(e => e.isDirectory() && fs.existsSync(path.join(WORLDS_DIR, e.name, 'world.json')))
+  .map(e => e.name)
+  .sort()
+  .map(name => ({
+    name,
+    places: readJson(path.join(WORLDS_DIR, name, 'places.json'), []),
+    zones: readJson(path.join(WORLDS_DIR, name, 'zones.json'), [])
+  }))
+const allPlaces = worlds => worlds.flatMap(w => w.places)
+
 // the bodies' own HTTP API (src/bot.mjs): POST /<action> with a JSON body
 const ask = (port, action, args, timeoutMs) => new Promise(resolve => {
   const body = JSON.stringify(args)
@@ -104,16 +117,14 @@ const pollOnce = async () => {
 
 const snapshot = () => {
   const bodies = mergeBodies(agents, polls)
-  const villageData = villageSnapshot(), villages = villageData.villages
-  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
+  const worlds = readWorlds()
+  const villageData = villageSnapshot(worlds), villages = villageData.villages
   return {
     at: Date.now(),
     agents: agentNames(),
     bodies,
-    humans: humanSightings(bodies, agentNames()),
-    places: attachVillageStatus(places, villages),
-    villageError: villageData.error,
-    zones: readJson(path.join(ROOT, 'state', 'zones.json'), [])
+    worlds: groupWorlds(worlds.map(w => ({ ...w, places: attachVillageStatus(w.places, villages) })), bodies, agentNames()),
+    villageError: villageData.error
   }
 }
 
@@ -125,8 +136,8 @@ const villagers = () => {
 
 // Village summaries are snapshots written by village.check / village.maintain.
 // The dashboard never polls a body or scans world blocks to manufacture one.
-const villageSnapshot = () => {
-  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
+const villageSnapshot = (worlds = readWorlds()) => {
+  const places = allPlaces(worlds)
   const manifests = [], manifestErrors = []
   for (const place of places) {
     if (!String(place.note ?? '').startsWith('bp2:')) continue
@@ -180,12 +191,13 @@ const chatLog = limit => {
 const worlds = {}
 
 const lookAtPlace = async name => {
-  const place = readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === name)
-  if (!place) return { error: `no place called ${name}` }
+  const found = findPlace(groupWorlds(readWorlds(), mergeBodies(agents, polls), agentNames()), name)
+  if (!found) return { error: `no place called ${name}` }
+  const { place, world } = found
   const parsed = parsePlacePlan(place)
   if (parsed.error) return { error: `${name} has no plan to compare the world against` }
-  const body = nearestBody(mergeBodies(agents, polls), place.x, place.z)
-  if (!body) return { error: 'no body is up to look' }
+  const body = nearestBody(world.bodies, place.x, place.z)
+  if (!body) return { error: `no body is up in ${world.name} to look` }
   const levels = [...new Set(parsed.cells.map(c => place.y + c.dy))]
   const boxes = levels.flatMap(y => scanBoxes({ x: place.x, y, z: place.z, w: parsed.width, h: parsed.height }, scanCap()))
   const scans = await Promise.all(boxes.map(box => ask(body.apiPort, 'scan', box, 10000)))
@@ -226,7 +238,7 @@ const blueprintFor = file => {
   return details[file.name]
 }
 const library = () => {
-  const places = readJson(path.join(ROOT, 'state', 'places.json'), [])
+  const places = allPlaces(readWorlds())
   return { at: Date.now(), blueprints: loadBlueprintDocuments(BLUEPRINT_DIR).map(file => ({ ...file, hash: semanticBlueprintHash(file.document) })).map(file => ({ ...blueprintFor(file), builds: blueprintBuilds(file.name, file.hash, places) })) }
 }
 
@@ -343,7 +355,7 @@ const inline = value => JSON.stringify(value).replace(/</g, '\\u003c')
 const renderPage = async query => {
   const farm = query.get('farm')
   const view = query.get('view')
-  const place = farm ? readJson(path.join(ROOT, 'state', 'places.json'), []).find(p => p.name === farm) ?? null : null
+  const place = farm ? findPlace(readWorlds(), farm)?.place ?? null : null
   const chat = { at: Date.now(), agents: agentNames(), messages: chatLog(CHAT_PAGE_LINES) }
   const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm) : null
   const preload = `<script>window.__PRELOAD_STATE__=${inline(snapshot())};window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`

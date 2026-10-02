@@ -10,6 +10,7 @@ import { compileBlueprintStructure, concreteBlueprint } from '../../src/blueprin
 import { allocateBlueprintMaterials } from '../../src/blueprint/materials.mjs'
 import { readBlueprintManifest } from '../../src/blueprint/manifest.mjs'
 import { bill, lint, counts, parseNote } from '../../src/blueprint/format.mjs'
+import { humanSightings } from './map.mjs'
 
 const PreviewBlock = prismarineBlock('26.1')
 const previewRegistry = minecraftData('26.1')
@@ -49,7 +50,8 @@ export const parseAgents = entries => entries
     username: cfg.username ?? name,
     apiPort: cfg.apiPort,
     harness: cfg.harness ?? null,
-    character: describeCharacter(cfg.character)
+    character: describeCharacter(cfg.character),
+    world: cfg.world ?? null
   }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -271,6 +273,18 @@ export const nearestBody = (bodies, x, z) => bodies
   .filter(b => b.up && b.state?.pos)
   .map(b => ({ body: b, dist: Math.hypot(b.state.pos.x - x, b.state.pos.z - z) }))
   .sort((a, b) => a.dist - b.dist)[0]?.body ?? null
+
+// worlds: [{ name, places, zones }]. A body whose world is none of these is left off every map (it still has its row in
+// the side list): there is no map to draw it on.
+export const groupWorlds = (worlds, bodies, agentNames) => worlds.map(world => {
+  const own = bodies.filter(b => b.world === world.name)
+  return { ...world, bodies: own, humans: humanSightings(own, agentNames) }
+})
+
+// coordinates mean nothing outside their own world, so a place comes with the world (and bodies) it belongs to
+export const findPlace = (worlds, name) => worlds
+  .map(world => ({ world, place: world.places.find(p => p.name === name) }))
+  .find(found => found.place) ?? null
 
 // scan names a waterlogged slab as a plain slab: the ~ cells whose ground is neither water, air nor unloaded need block_at
 export const unsureWater = (place, worldCells) => {
