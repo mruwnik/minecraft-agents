@@ -19,7 +19,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, realCell, wedgeReplant, herdPassed, gatesByReach, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, openNow, shutNow, didYouMean, eatBelow, foodAway, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, GATE_OTHERS_NEAR, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, gatesLeftOpen, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
+import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -52,6 +52,7 @@ import { zones, GATES_FILE, readPlaces, savePlaces, emit, sayOnce, sayError } fr
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
 import { carried, inventoryCounts, diffCounts, findItem, vecOf, cellAt, goNear, findBlocksNear, bedsNear } from './body/helpers.mjs'
 import { pathfinder, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, setTask, gen, setGen, cancelGuard, pos } from './body/state.mjs'
+import { isWoodDoor, doorsIOpened, heldOpen, myClicks, MY_CLICK_MS, othersToggled, doorAt, doorBusy, gatesPassed, doorTick, shutGatesBehind, shutTrackedGatesAfterCancel, fenceEscape, leaveFenceCell } from './body/doors.mjs'
 import { straysAt } from './body/pens.mjs'
 import { watchesQuick } from './body/watches.mjs'
 import { long, quick } from './body/actions/tables.mjs'
@@ -60,7 +61,7 @@ import { mapQuick } from './body/actions/map.mjs'
 import { digging, makeMoves, useMoves, moveLong, moveQuick } from './body/actions/move.mjs'
 import { handPlacing, blockLong } from './body/actions/block.mjs'
 import { compactingInventory, itemLong, itemQuick } from './body/actions/item.mjs'
-import { leading, following, luring, feeding, setFeeding, creatureLong, creatureQuick } from './body/actions/creature.mjs'
+import { feeding, setFeeding, creatureLong, creatureQuick } from './body/actions/creature.mjs'
 import { selfLong, selfQuick } from './body/actions/self.mjs'
 import { controlLong, controlQuick } from './body/actions/control.mjs'
 
@@ -740,20 +741,6 @@ function tryAutoRestore () {
   }
   scheduler.resume({ recovered: true })
 }
-
-export const isWoodDoor = b => Boolean(b?.name?.endsWith('_door')) && b.name !== 'iron_door'
-export const doorsIOpened = new Set()
-export const heldOpen = new Set() // gates opened with `toggle`: they stay open until toggled shut
-const myClicks = new Map() // block -> when my own hand last clicked it
-const MY_CLICK_MS = 1500 // a gate that moves this soon after my own click on it moved because of me
-const othersToggled = new Map() // gate -> when a change that was not my doing last moved it: hands off for a minute
-// everyone on the server but this body: bot.players is the tab list, so it holds players out of sight too
-export const onlinePlayers = () => Object.keys(bot.players).filter(n => n !== bot.username)
-const otherPlayerNear = at => Object.values(bot.players).some(p => p.entity && p.username !== bot.username && p.entity.position.distanceTo(at) <= GATE_OTHERS_NEAR)
-const doorAt = n => {
-  const b = bot.blockAt(new Vec3(Math.floor(n.x), Math.floor(n.y), Math.floor(n.z)))
-  return isWoodDoor(b) ? { x: b.position.x, y: b.position.y, z: b.position.z, half: b.getProperties().half } : null
-}
 // the shared code is loaded once, at start: tell the driver when it has changed since, once per batch of edits
 const codeLoaded = Date.now()
 // and WHICH code that was, read from git once at start and said in the join line. A body started between two saves of
@@ -782,46 +769,7 @@ setInterval(() => {
   staleTold = staleKey(stale, mtimes)
   emit('code_updated', { files: stale.join(' '), advice: restartAdvice({ day: !isNight(bot.time.timeOfDay), timeOfDay: bot.time.timeOfDay, at: Date.now() }) })
 }, 60000)
-let doorBusy = false
 let lastSteppedOff = 0
-const gatesPassed = new Set() // fence gates this task walked through: their pens get a look for strays when it ends
-// open wooden doors as we walk up to them, and shut the ones we opened once we're through
-async function doorTick () {
-  if (doorBusy) return
-  const doorIds = mcData.blocksArray.filter(isWoodDoor).map(b => b.id)
-  // fence gates: the pathfinder opens them itself but never shuts them, and an open gate empties a pen. A gate is mine to
-  // shut only when my own walk or click opened it (the gates.log listener decides that): "any open gate I pass" shut the
-  // gate the human had just opened, 16 ms after, again and again (Perrin's idle body, 13:30Z)
-  const gateIds = mcData.blocksArray.filter(b => b.name.endsWith('_fence_gate')).map(b => b.id)
-  const doors = findBlocksNear({ matching: [...doorIds, ...gateIds], maxDistance: 5, count: 8 }).map(p => bot.blockAt(p)).filter(b => (b.getProperties().half ?? 'lower') === 'lower')
-  if (foodAway({ held: bot.heldItem?.name, luring, feeding, gateNear: doors.some(d => d.name.endsWith('_fence_gate')), eating: Boolean(bot.autoEat?.isEating) })) {
-    console.log('[food away] tempting food in hand at a gate: put away, or the animals follow me out')
-    doorBusy = true
-    await bot.unequip('hand').catch(() => {})
-    doorBusy = false
-  }
-  const todo = doors.find(d => {
-    const near = d.position.offset(0.5, 0, 0.5).distanceTo(bot.entity.position) < 1.6
-    const open = d.getProperties().open
-    // doors too, not only gates: a door found open and walked through stayed open behind me all night (my hut; Miles's cottage let a zombie in)
-    const otherNear = otherPlayerNear(d.position)
-    if (near && open && isWoodDoor(d) && !otherNear && !heldOpen.has(String(d.position))) doorsIOpened.add(String(d.position))
-    if (near && open && d.name.endsWith('_fence_gate')) gatesPassed.add(String(d.position))
-    // moving = the walk still has a goal: the pathfinder stands still while it works a gate, and "stopped" then shut the gate in my own face, for ever
-    const feet = bot.entity.position.floored()
-    const inDoorway = feet.x === d.position.x && feet.z === d.position.z
-    const moving = Boolean(bot.pathfinder.goal) || bot.pathfinder.isMoving()
-    return openNow({ near, open, door: isWoodDoor(d), moving, inDoorway }) || shutNow({ near, open, mine: doorsIOpened.has(String(d.position)), held: heldOpen.has(String(d.position)), leading: leading && !herdPassed(bot.entity.position.toArray(), d.position.offset(0.5, 0, 0.5).toArray(), following.filter(e => e.isValid).map(e => e.position.toArray())), moving, inDoorway, reflexes, otherNear, otherToggledMsAgo: Date.now() - (othersToggled.get(String(d.position)) ?? -Infinity) })
-  })
-  if (!todo) return
-  doorBusy = true
-  await bot.activateBlock(todo).catch(() => {})
-  await bot.waitForTicks(3).catch(() => {})
-  // believe the gate, not the click: a click that failed (out of reach at a sprint) used to strike the gate off my list, and it stayed open
-  if (bot.blockAt(todo.position)?.getProperties().open) doorsIOpened.add(String(todo.position))
-  else doorsIOpened.delete(String(todo.position))
-  doorBusy = false
-}
 
 export let fighting = null
 export const setFighting = v => { fighting = v }
@@ -830,7 +778,7 @@ export let fightStart = null
 export const setFightStart = v => { fightStart = v }
 let chaseHeldUntil = 0
 let chaseLeash = CHASE_LEASH
-let surfacing = false
+export let surfacing = false
 let swimStepTarget = null
 // what the surfacing reflex is doing now (src/navigation/surface.mjs: up, sideways to an opening, or a pocket dug in the ceiling),
 // judged again every reflex tick as the body moves
@@ -887,7 +835,7 @@ const sidesAround = pos => [[1, 0], [-1, 0], [0, 1], [0, -1]].flatMap(([dx, dz])
 // card 0f110bb5 (1): under a roof or in a walled room at night the body chases and charges nothing; it holds where it is
 const inShelter = me => nightShelter({ night: isNight(bot.time.timeOfDay), roofed: underRoof(columnAbove(me)), walled: walledIn(sidesAround(me)) })
 let floating = false
-let diggingOut = false
+export let diggingOut = false
 let resets = 0
 let lastNudge = 0
 let basesOwed = []
@@ -1742,59 +1690,6 @@ export function bedExits (bed) {
   const open = p => { const b = bot.blockAt(p); return !b || b.boundingBox === 'empty' || isWoodDoor(b) }
   return halves.flatMap(h => sides.map(([dx, dz]) => h.offset(dx, 0, dz))).filter(p => !isBed(p))
     .map(p => ({ at: `${p.x},${p.y},${p.z}`, free: open(p) && open(p.offset(0, 1, 0)), lintel: bot.blockAt(p.offset(0, 2, 0))?.boundingBox === 'block' }))
-}
-async function shutGatesBehind () {
-  const open = gatesLeftOpen(doorsIOpened, heldOpen, key => bot.blockAt(new Vec3(...key.match(/-?\d+/g).map(Number)))?.getProperties().open)
-  const { near, far } = gatesByReach(open, bot.entity.position.toArray())
-  for (const [x, y, z] of near) await long.toggle({ x, y, z, open: false })
-  // a far one is named, not walked to: the body once crossed the map for two gates and left the cow it had just brought home
-  return { shut: near.length, far: far && `${far}: still open and more than 32 blocks back: go and shut them (toggle x= y= z= open=false)` }
-}
-async function shutTrackedGatesAfterCancel () {
-  const tracked = [...doorsIOpened].filter(key => !heldOpen.has(key))
-  if (!tracked.length) return {}
-  const open = []
-  const unknown = []
-  for (const key of tracked) {
-    const block = bot.blockAt(new Vec3(...key.match(/-?\d+/g).map(Number)))
-    if (!block) unknown.push(key)
-    else if (block.getProperties?.().open === true) open.push(key)
-    else doorsIOpened.delete(key)
-  }
-  if (!open.length && !unknown.length) return {}
-  const safeToWalk = ready && bot.entity && bot.health > 0 && !bot.isSleeping && !bot.vehicle &&
-    !flee && !holingUp && !fighting && !surfacing && !diggingOut
-  if (!safeToWalk) return { restorationPending: `job was cancelled with tracked gate state unresolved (${[...open, ...unknown].join('; ')}); close it after the body is safe` }
-  let result = {}
-  if (open.length) {
-    try { result = await shutGatesBehind() }
-    catch (error) { return { restorationPending: `could not close a tracked gate after cancellation: ${error.message}` } }
-  }
-  const unresolved = [
-    ...(result.far ? [result.far] : []),
-    ...(unknown.length ? [`gate state is unloaded at ${unknown.join('; ')}`] : [])
-  ]
-  return { ...result, ...(unresolved.length ? { restorationPending: unresolved.join('; ') } : {}) }
-}
-// pressed against a fence, a wall or a shut gate my centre lies inside ITS cell, and every plan starts on the wrong side of it (see realCell): three steps
-// back into the cell I really stand in, before any task plans a walk
-// the cell I really stand in when my centre lies in a fence's cell, else null
-function fenceEscape () {
-  const here = bot.entity.position
-  const mine = bot.blockAt(here.floored())
-  if (mine?.boundingBox !== 'block' || !bot.pathfinder.movements?.fences.has(mine.type)) return null
-  return realCell(here, (x, y, z) => [0, 1].every(up => bot.blockAt(new Vec3(x, y + up, z))?.boundingBox === 'empty'))
-}
-async function leaveFenceCell () {
-  const here = bot.entity.position
-  const mine = bot.blockAt(here.floored())
-  const cell = fenceEscape()
-  if (!cell) return
-  await bot.lookAt(new Vec3(cell.x + 0.5, here.y + 1.6, cell.z + 0.5), true)
-  bot.setControlState('forward', true)
-  for (let i = 0; i < 12 && (Math.floor(bot.entity.position.x) !== cell.x || Math.floor(bot.entity.position.z) !== cell.z); i++) await bot.waitForTicks(1)
-  bot.setControlState('forward', false)
-  console.log(`[left fence cell] ${mine.name} -> ${cell.x},${cell.y},${cell.z}`)
 }
 
 // One shelf slot owns all body-changing work. Submission persists before this pump claims it;

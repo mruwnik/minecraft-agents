@@ -6,8 +6,9 @@ import { addressedTo, whisperHint, offlineWhisper, splitSay, sayLimit, heardWhis
 import { cfg } from '../home.mjs'
 import { zones, readPlaces, emit } from '../events.mjs'
 import { inventoryCounts, inventoryQuiet, goNear, bedsNear } from '../helpers.mjs'
-import { carriedFood, eatOnce, nearbyHostiles, onlinePlayers, automaticSleepBeds, carriedBed, carriedBedPlace, placeReflexBed, lastDriven, setLastDriven, bedWalkFailed, setBedWalkFailed, leaveBed, bedExits } from '../../bot.mjs'
+import { carriedFood, eatOnce, nearbyHostiles, automaticSleepBeds, carriedBed, carriedBedPlace, placeReflexBed, lastDriven, setLastDriven, bedWalkFailed, setBedWalkFailed, leaveBed, bedExits } from '../../bot.mjs'
 import { bot, cancelGuard, pos } from '../state.mjs'
+import { onlinePlayers } from '../doors.mjs'
 
 export const selfLong = {
   async sleep (a) {

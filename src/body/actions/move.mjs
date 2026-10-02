@@ -9,8 +9,9 @@ import { spareTest } from '../../farm/leg.mjs'
 import { climbShaft, climbBlocks, inPocket, descendingLeg, descentNote } from '../../navigation/climb.mjs'
 import { zones, readPlaces } from '../events.mjs'
 import { inventoryCounts, cellAt } from '../helpers.mjs'
-import { followTarget, setFollowTarget, walkMoves, digMoves, isWoodDoor, resumeFollow, surfaceWalkRuntime, amBoxedIn, amBoxedByBamboo } from '../../bot.mjs'
+import { followTarget, setFollowTarget, walkMoves, digMoves, resumeFollow, surfaceWalkRuntime, amBoxedIn, amBoxedByBamboo } from '../../bot.mjs'
 import { Movements, goals, Vec3, bot, cancelGuard, pos } from '../state.mjs'
+import { isWoodDoor } from '../doors.mjs'
 import { long } from './tables.mjs'
 
 export let digging = false
