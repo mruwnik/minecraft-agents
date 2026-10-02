@@ -10,11 +10,14 @@ const NO_PLACE_SUPPORT = /\bplaced nothing: \d+ nothing to place against \(first
 const PLACE_OCCUPIED = /\bplaced nothing: \d+ [a-z_]+ is already there \(first -?\d+,-?\d+,-?\d+\)/i
 const FILL_EMPTY = /\bthe bucket is still empty: stand on the shore 1-2 blocks from the source with a clear view of it, not in the water, and fill again\b/i
 const TILL_UNCHANGED = /\btilled nothing: \d+ still (?:dirt|grass_block|dirt_path|coarse_dirt|rooted_dirt): is there a block on top of it\? \(first -?\d+,-?\d+,-?\d+\)/i
+// a bed ground made of stone, cobblestone or anything else a hoe cannot turn: one such cell must not fail the whole
+// field (water-source-lead, 2026-10-02); the till (or path's shovel) that found it just skips it instead
+const UNTILLABLE_GROUND = /\b(?:tilled|paved) nothing: \d+ can't turn [a-z_]+ into (?:farmland|dirt_path) \(first -?\d+,-?\d+,-?\d+\)/i
 const HARD_ERROR = new RegExp(String.raw`\bcancel(?:led|ed)\b|\baborted\b|\bsuperseded\b|\bdied\b|\bdead\b(?!\s+end\b)|\boffline\b|\bdisconnected\b|\bhealth\b|\bsleeping\b|spoken to|night and no bed|nothing edible|does not invite work|protected zone|not where its plan says|no (?:place|plan) called|no action called|not a function|not defined|cannot (?:read|set) propert`, 'i')
 const RECOVERABLE = new RegExp(String.raw`no (?:walkable |path|seed|hoe|water|bucket|chest|composter|cell|standing|recipe|cobblestone|stick|plank|pen|enclosure)|nowhere to stand|not a spot to stand on|ran out of time|too far|out of reach|unreachable|(?:inventory|chest|storage)(?: is)? full|chest.*empty|chest has less than asked|empty (?:bucket|chest)|short by \d+|missing (?:tool|seed|hoe|bucket|chest|material)|cannot (?:reach|stand|place|dig|see)|could not (?:reach|find)|not enough (?:seed|material|dirt|wood|cobblestone|stick|plank)|nothing (?:left|found|to (?:harvest|collect|plant|feed))|did not take|placing .* failed|place.*refused|no .* (?:carried|within|left|available)|neither a block nor an entity|no first move|the search found nothing|stone where farmland should be`, 'i')
 
 export function assertFarmRecoverable (error) {
-  if (error instanceof CompositeHandBack || error?.reason || error instanceof TypeError || error instanceof SyntaxError || error instanceof ReferenceError || HARD_ERROR.test(error?.message ?? '') || (!RECOVERABLE.test(error?.message ?? '') && !REQUIRED_DIG_TOOL.test(error?.message ?? '') && !NO_PLACE_SUPPORT.test(error?.message ?? '') && !PLACE_OCCUPIED.test(error?.message ?? '') && !TILL_UNCHANGED.test(error?.message ?? '') && !FILL_EMPTY.test(error?.message ?? ''))) throw error
+  if (error instanceof CompositeHandBack || error?.reason || error instanceof TypeError || error instanceof SyntaxError || error instanceof ReferenceError || HARD_ERROR.test(error?.message ?? '') || (!RECOVERABLE.test(error?.message ?? '') && !REQUIRED_DIG_TOOL.test(error?.message ?? '') && !NO_PLACE_SUPPORT.test(error?.message ?? '') && !PLACE_OCCUPIED.test(error?.message ?? '') && !TILL_UNCHANGED.test(error?.message ?? '') && !UNTILLABLE_GROUND.test(error?.message ?? '') && !FILL_EMPTY.test(error?.message ?? ''))) throw error
 }
 
 export const recoverFarm = handler => error => {

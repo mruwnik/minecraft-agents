@@ -60,6 +60,29 @@ test('farm.build skips an unfilled grassy dip and plants an independent ready be
   assertAttention(events, 'farm.build')
 })
 
+test('farm.build skips a bed capped with cobblestone and tills and plants the rest', async () => {
+  const world = { '0,63,0': 'grass_block', '1,63,0': 'cobblestone' }
+  const items = { wheat_seeds: 2, stone_hoe: 1 }
+  const { api, calls, events } = fakeApi({ place: field('ww'), world, items, answers: {
+    till: a => {
+      if (world[`${a.x},${a.y},${a.z}`] === 'cobblestone') throw new Error(`till: tilled nothing: 1 can't turn cobblestone into farmland (first ${a.x},${a.y},${a.z})`)
+      world[`${a.x},${a.y},${a.z}`] = 'farmland'
+    },
+    place: a => { world[`${a.x},${a.y},${a.z}`] = 'wheat#0'; items.wheat_seeds-- }
+  } })
+  const result = await buildFarm.run(api, { place: 'test-field', partial: true })
+  assert.equal(result.tilled, 1)
+  assert.equal(result.planted, 1)
+  assert.match(result.unfinished, /cobblestone where farmland should be/)
+  assert.match(result.unfinished, /1,63,0/)
+  assert.equal(world['0,63,0'], 'farmland')
+  assert.equal(world['0,64,0'], 'wheat#0')
+  assert.equal(world['1,63,0'], 'cobblestone')
+  assert.equal(world['1,64,0'], undefined)
+  assert.equal(calls.filter(c => c.startsWith('till ')).length, 2)
+  assertAttention(events, 'farm.build')
+})
+
 for (const failure of [new Error('cancelled'), new Error('died at 1,64,1'), new TypeError('unexpected state'), { stopped: 'hurt' }]) {
   test(`farm.build propagates ${failure.message ?? failure.stopped} before further work`, async () => {
     const { api, calls, events } = fakeApi({ place: field('w'), world: { '0,63,0': 'farmland' }, items: { wheat_seeds: 2 }, answers: { goto: failure } })
