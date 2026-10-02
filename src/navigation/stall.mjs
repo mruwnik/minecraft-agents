@@ -2,7 +2,7 @@
 // every one during flock.lead, a valid path each time, block_at showing nothing but leaf_litter and air). The 12 s
 // stall alarm says only "the legs were pressing forward". These are the pieces of evidence that say why: where the
 // head faces against where the path goes, what the legs push into, who is pressed against the body, and where the
-// SERVER last put it. Pure: bot.mjs reads the body and hands the numbers in.
+// SERVER last put it. Pure: src/body/connection.mjs reads the body and hands the numbers in.
 
 import { progressed } from '../lib/path.mjs'
 

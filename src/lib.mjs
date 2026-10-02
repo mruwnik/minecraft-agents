@@ -1,4 +1,4 @@
-// Pure helpers, kept apart from bot.mjs so they can be tested without a server.
+// Pure helpers, kept apart from the body (src/bot.mjs, src/body/) so they can be tested without a server.
 export * from './cli.mjs'
 export * from './players.mjs'
 export * from './lib/world.mjs'

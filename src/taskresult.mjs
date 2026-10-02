@@ -1,4 +1,4 @@
-// Which event a task's result is written under. The runner (src/bot.mjs runLong) returns a result that lands inside
+// Which event a task's result is written under. The runner (src/body/jobs.mjs runLong) returns a result that lands inside
 // args.timeout straight to the caller, and used to log nothing for it: five 29 s flock.lead attempts left only their
 // `[task N]` start lines, and nobody could reconstruct from bot.log why the cows never followed. Now every result is
 // written once, under one of two types:

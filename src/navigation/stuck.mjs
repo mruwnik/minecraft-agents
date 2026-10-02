@@ -1,5 +1,5 @@
 // The stuck watch (autopilot card): a role on autopilot runs for days with no driver reading its results, so the body
-// itself must say when it is going nowhere. bot.mjs takes one sample a second and keeps the last WINDOW_MS of them:
+// itself must say when it is going nowhere. src/body/stuck-watch.mjs takes one sample a second and keeps the last WINDOW_MS of them:
 //   { t, pos, taskId, taskName, taskProgress, sleeping, night, health, food, edible, oxygen, holedUp, buried, boxed,
 //     frozenWalks, failedWalks (running counts), routine: { lastDayStartedAt, day, failedSteps: [{ day, step }], storageFull: [day], phase } | null }
 // stuckVerdict reads the window and names the most urgent condition that holds; nextEpisode turns a run of verdicts

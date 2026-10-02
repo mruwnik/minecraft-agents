@@ -1,7 +1,7 @@
 // The way out of the water when the air runs low, judged before the body swims. A body drowned at -129.3,33.2,-138.3
 // (card a164bbfd) under a rock ceiling with an air cell two blocks away: the reflex read an open column over its head,
 // then pressed forward as well as jump, and in water forward moves along the yaw whatever the pitch (prismarine-physics
-// applyHeading), so it drifted two blocks sideways under the roof and pushed against stone until it died. Pure: bot.mjs
+// applyHeading), so it drifted two blocks sideways under the roof and pushed against stone until it died. Pure: src/body/reflexes.mjs
 // reads the column, the openings and the ceiling off the world and hands them in.
 import { openAbove } from '../lib.mjs'
 

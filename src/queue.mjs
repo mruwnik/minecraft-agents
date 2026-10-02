@@ -1,6 +1,6 @@
 // ./mc <action> queue=true: a chore that waits for the current task instead of superseding it. A driver on 09-26 issued
 // a side `craft item=stone_hoe` while a routine ran, and the routine was cancelled for it (card 6cf481c0). Pure order;
-// src/bot.mjs holds the queue and starts the next chore when a task ends, so a routine keeps its body until it is done.
+// src/body/jobs.mjs holds the queue and starts the next chore when a task ends, so a routine keeps its body until it is done.
 export const withoutQueue = ({ queue, ...args }) => args
 
 export const enqueue = (queue, { name, args }, id) => [...queue, { id, name, args: withoutQueue(args ?? {}) }]

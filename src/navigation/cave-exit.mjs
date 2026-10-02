@@ -3,7 +3,7 @@
 // from a 1-wide shaft got the same (card 5e16aff9). The causes are readable off the body: no sky over the head with
 // the goal up on the surface (a walk neither digs nor climbs); water touching the cell (mineflayer-pathfinder's
 // safeToBreak refuses any block beside a liquid, dontCreateFlow, so from a pool a dig walk digs nothing); a protected
-// zone or built blocks round it (exclusionAreasBreak 100, never broken); a 1-wide shaft. Pure: bot.mjs hands the evidence in.
+// zone or built blocks round it (exclusionAreasBreak 100, never broken); a 1-wide shaft. Pure: src/body/explain.mjs hands the evidence in.
 import { breaksUnderfoot } from '../lib/path.mjs'
 
 const NO_PATH = /no path to the goal|no walkable path|took to long to decide/i

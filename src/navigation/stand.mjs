@@ -13,10 +13,10 @@ import { WORK_RANGE, cellsWithin, dryStandable } from './walk.mjs'
 import { cellOf } from '../farm/field.mjs'
 import { breaksUnderfoot, isAir, FLUIDS, jobCall } from '../lib.mjs'
 
-// the eyes are 1.62 over the feet; a full bucket reaches 4.5 (bot.mjs's pour looks 5 out, the server 4.5)
+// the eyes are 1.62 over the feet; a full bucket reaches 4.5 (src/body/actions/block.mjs's pour looks 5 out, the server 4.5)
 export const EYE = 1.62
 export const REACH = 4.5
-// how near the pour primitive walks to its block (bot.mjs goNear(at, 3)): a spot inside that keeps the body where it was put
+// how near the pour primitive walks to its block (src/body/actions/block.mjs goNear(at, 3)): a spot inside that keeps the body where it was put
 export const POUR_RANGE = 3
 // the ray is sampled this often along its length
 const STEP = 0.05

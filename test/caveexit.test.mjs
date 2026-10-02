@@ -2,7 +2,7 @@
 // (card a164bbfd) after three of them, and a goto dig=true from a 1-wide shaft answered the same (card 5e16aff9).
 // The search fails fast in these cases for reasons the body can read off itself: no sky over the head with the goal up
 // on the surface; water touching the cell (a dig walk never breaks a block beside water, dontCreateFlow); a protected
-// zone or built blocks round it (exclusionAreasBreak 100); or a 1-wide shaft. Pure: bot.mjs hands the evidence in.
+// zone or built blocks round it (exclusionAreasBreak 100); or a 1-wide shaft. Pure: src/body/explain.mjs hands the evidence in.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { noPathAdvice } from '../src/navigation/cave-exit.mjs'
