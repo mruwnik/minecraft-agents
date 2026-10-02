@@ -21,31 +21,23 @@ import { watchWindows } from './body/window-watch.mjs'
 import { mobHit } from './survival/holeup.mjs'
 import { chatRefusal } from './talk.mjs'
 import { thinkBudget, goalDistance, THINK_CAP_MS } from './navigation/walk.mjs'
-import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
 import { walkStandstill, walkProgress, WALK_PROGRESS_MS, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
 import { neededArgs } from './needs.mjs'
 import { mayRunBesideOwner } from './job-policy.mjs'
 import { airSample, freshAir } from './survival/airlog.mjs'
 import { legFlags, stepsOff, clearGoalOnFailure } from './lib/path.mjs'
 import { deathCancel } from './composite.mjs'
-import { makeBoatRuntime } from './body/boat.mjs'
-import { makeBoatTravelRuntime } from './body/boat-travel.mjs'
-import { driveBoat } from './navigation/boat-travel.mjs'
-import { makeTravelRuntime } from './body/travel.mjs'
-import { makeRidingRuntime } from './body/riding.mjs'
-import { driveHorse } from './navigation/horse.mjs'
-import { makeVillagerRuntime } from './body/villager.mjs'
-import { makeVillagerRosterObserver, saveVillagerObservation } from './villager/roster.mjs'
 import { ROOT, HOME, cfg } from './body/home.mjs'
 import { authDir, profileFile, loginAdvice } from './auth.mjs'
 import { zones, GATES_FILE, emit, sayOnce, sayError } from './body/events.mjs'
-import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
-import { carried, inventoryCounts, findItem, vecOf, goNear, bedsNear } from './body/helpers.mjs'
-import { pathfinder, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, cancelGuard, pos } from './body/state.mjs'
+import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, runComposite } from './body/runner.mjs'
+import { carried, vecOf, bedsNear } from './body/helpers.mjs'
+import { pathfinder, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, pos } from './body/state.mjs'
 import { codeHere } from './body/code-version.mjs'
 import { isWoodDoor, doorsIOpened, heldOpen, myClicks, MY_CLICK_MS, othersToggled, doorAt, doorBusy, doorTick, fenceEscape } from './body/doors.mjs'
-import { reflexes, isHostile, nearbyHostiles, fighting, surfacing, surfaceWayNow, columnAbove, flee, setFlee, lastFleeReturn, setLastFleeReturn, fleeGaveUp, setFleeGaveUp, holedUp, setHoledUp, holeUp, reflexTick, lastReflex } from './body/reflexes.mjs'
+import { reflexes, nearbyHostiles, fighting, surfacing, surfaceWayNow, flee, setFlee, lastFleeReturn, setLastFleeReturn, fleeGaveUp, setFleeGaveUp, holedUp, setHoledUp, holeUp, reflexTick, lastReflex } from './body/reflexes.mjs'
 import { noPathCounted, watchStuck } from './body/stuck-watch.mjs'
+import { swimStepTarget, boatRuntime, boatTravelRuntime, villagerRoster, travelRuntime, ridingRuntime, villagerRuntime } from './body/runtimes.mjs'
 import { followTarget, setFollowTarget, scaffolded, cancelTask, taskId, setTaskId, jobShelf, scheduler, submitJob, stopAllJobs, jobControl } from './body/jobs.mjs'
 import { watchesQuick } from './body/watches.mjs'
 import { long, quick } from './body/actions/tables.mjs'
@@ -54,7 +46,7 @@ import { mapQuick } from './body/actions/map.mjs'
 import { makeMoves, useMoves, moveLong, moveQuick } from './body/actions/move.mjs'
 import { handPlacing, blockLong } from './body/actions/block.mjs'
 import { compactingInventory, itemLong, itemQuick } from './body/actions/item.mjs'
-import { feeding, setFeeding, creatureLong, creatureQuick } from './body/actions/creature.mjs'
+import { creatureLong, creatureQuick } from './body/actions/creature.mjs'
 import { selfLong, selfQuick } from './body/actions/self.mjs'
 import { controlLong, controlQuick } from './body/actions/control.mjs'
 
@@ -723,7 +715,6 @@ function tryAutoRestore () {
   scheduler.resume({ recovered: true })
 }
 let lastSteppedOff = 0
-export let swimStepTarget = null
 let resets = 0
 let lastNudge = 0
 export let basesOwed = []
@@ -871,40 +862,6 @@ setInterval(() => {
 export let lives = 0 // deaths so far: a hole-up dug by a body that has since died must stop, not cap a hole at the respawn point
 export let lastMobHurt = 0 // the last hit a mob could have given: what the hole-up refusal counts, not a fall or the water
 export let lastHurt = 0
-export const surfaceWalkRuntime = makeSurfaceWalkRuntime({
-  getBot: () => bot, Vec3, goals, makeMoves, cancelGuard,
-  reportPerformance: (...args) => reportPerformance(...args),
-  report: data => emit('surface_walk', data),
-  dangerous: p => isNight(bot.time.timeOfDay) || Object.values(bot.entities).some(e => e.isValid && isHostile(e) && e.position.distanceTo(p ? new Vec3(p.x, p.y, p.z) : bot.entity.position) < 12)
-})
-export const boatRuntime = makeBoatRuntime({
-  getBot: () => bot, getBoatLeashHolder: () => boatLeashHolder,
-  Vec3, vecOf, goNear, findItem, inventoryCounts, pos, columnAbove, cancelGuard,
-  getSwimStepTarget: () => swimStepTarget, setSwimStepTarget: value => { swimStepTarget = value }
-})
-const boatTravelRuntime = makeBoatTravelRuntime({
-  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveBoat,
-  readBoatState: a => boatRuntime.quick.boat_state(a),
-  getLeashHolder: id => boatLeashHolder.get(id),
-  reportPerformance: (...args) => reportPerformance(...args),
-  report: progress => emit('boat_progress', progress)
-})
-const villagerRosterFile = path.join(ROOT, 'state', 'villagers.json')
-const villagerRoster = makeVillagerRosterObserver({ file: villagerRosterFile, by: cfg.username })
-const travelRuntime = makeTravelRuntime({ getBot: () => bot, Vec3, cancelGuard, edibleCarried, reportPerformance: (...args) => reportPerformance(...args) })
-const ridingRuntime = makeRidingRuntime({
-  getBot: () => bot, Vec3, cancelGuard, edibleCarried, driveHorse, surfaceWalk: surfaceWalkRuntime,
-  reportPerformance: (...args) => reportPerformance(...args),
-  goNear: async (entity, check) => { check(); await goNear(entity.position, 2.5); check() },
-  report: progress => emit('riding_progress', progress)
-})
-export const villagerRuntime = makeVillagerRuntime({
-  getBot: () => bot, Vec3, goNear, findItem, inventoryCounts, cancelGuard, emit,
-  by: cfg.username,
-  recordVillagerObservation: input => saveVillagerObservation(villagerRosterFile, input),
-  getFeeding: () => feeding, setFeeding: value => { setFeeding(value) },
-  currentVehicleId: boatRuntime.currentVehicleId
-})
 Object.assign(long, boatRuntime.long, boatTravelRuntime.long, travelRuntime.long, ridingRuntime.long, villagerRuntime.long, senseLong, moveLong, blockLong, itemLong, creatureLong, selfLong, controlLong)
 Object.assign(quick, boatRuntime.quick, boatTravelRuntime.quick, travelRuntime.quick, ridingRuntime.quick, villagerRuntime.quick, watchesQuick, senseQuick, mapQuick, moveQuick, itemQuick, creatureQuick, selfQuick, controlQuick)
 
