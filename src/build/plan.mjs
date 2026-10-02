@@ -1,7 +1,7 @@
 import { hasPlan, jobGroundKey } from '../lib/plan.mjs'
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, hasWaterSource, hydrated, jobsBill, needsWaterLine, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
+import { billShortfall, farmJobs, groundJobs, hasHoe, hasWaterSource, hydrated, jobsBill, needsWaterLine, NO_HOE, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { standingSpots, workFrom } from '../navigation/stand.mjs'
 import { digGuard, fieldLeg, footprintOf } from '../farm/leg.mjs'
@@ -110,6 +110,8 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // set true for a dry till that goes ahead because its plant is right behind it, seed in hand: the field loop below
   // skips its own checkpoint once so that plant runs before anything can hand back or sleep the night on the bare bed
   let sowNext = false
+  // a till that fails (no hoe, or anything else) holds its own bed's plant back too, same ground, grass or dirt underneath
+  const failedKeys = new Set()
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
   // a cell the plan's own water stands over is never dug (dig refuses it, rightly): it is reported as skipped= instead
   const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip').filter(notKept)
@@ -165,7 +167,14 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
         if (!sownAtOnce) { dryKeys.add(jobGroundKey(job)); return false }
         sowNext = true
       }
-      if (job.do === 'plant' && dryKeys.has(jobGroundKey(job))) return false
+      // a bed sown at once is tilled anyway, hoe or not - the till below fails the same way the primitive would.
+      // Any other till with no hoe carried is never walked to: this body cannot tool up from here
+      if (job.do === 'till' && !sowNext && !hasHoe(api.inv())) {
+        failedKeys.add(jobGroundKey(job))
+        counts.stuck = counts.stuck ?? NO_HOE
+        return false
+      }
+      if (job.do === 'plant' && (dryKeys.has(jobGroundKey(job)) || failedKeys.has(jobGroundKey(job)))) return false
     }
     // a missing water_bucket is fetched, not just reported: see fetchWaterBucket above
     if (job.item === 'water_bucket' && (api.inv().water_bucket ?? 0) < 1) {
@@ -192,7 +201,11 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
     // from a cell that sees the target (src/navigation/stand.mjs): a pour from wherever "within 3" landed the body looked at the
     // next slab or a crop instead, twice on jizo-melon-patch (09-26)
     const failed = await workFrom(api, job, spot => leg({ ...spot, range: 0 })).then(() => null, recover(e => e.message))
-    if (failed) { counts.stuck = counts.stuck ?? failed; return false }
+    if (failed) {
+      counts.stuck = counts.stuck ?? failed
+      if (job.do === 'till') failedKeys.add(jobGroundKey(job))
+      return false
+    }
     counts[countOf(job)] = (counts[countOf(job)] ?? 0) + 1
     return true
   }
@@ -231,6 +244,8 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // cell with none becomes a 'skip' job, not a 'pour' one, and no amount of fetching water inside tryJob later
   // reaches a job list that never named the cell. So this is tried once up front, before that list is built, not
   // down in tryJob - the one there is only a fallback for a bucket a pour used up earlier in the same run
+  // no hoe at all beats a dry channel: without one, not a single bed in the field can be tilled regardless of water
+  if (!hasHoe(api.inv()) && field().some(j => j.do === 'till')) counts.stuck = counts.stuck ?? NO_HOE
   water = await waterShortfall(api, undefined, plan.cells)
   if (water && drowned().some(j => j.item === 'water_bucket')) counts.stuck = counts.stuck ?? water
   const todo = [...ground(), ...drainJobs(plan.cells, api.block), ...field()]

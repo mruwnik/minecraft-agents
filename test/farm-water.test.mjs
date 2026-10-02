@@ -4,6 +4,7 @@
 // again whenever a pour has emptied the bucket. A channel stays dry for exactly two reasons, and the skipped= line
 // says which: no bucket at all (and how to make one), or no water within range.
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { parsePlan, planBill } from '../src/lib.mjs'
 import { planCells } from './plan-fixture.mjs'
@@ -318,6 +319,24 @@ test('farm.build: a dry till that fails still gets its own checkpoint, seed in h
   const tillAt = x => made.calls.indexOf(`till ${x},63,0`)
   assert.equal(made.calls[tillAt(0) + 1], 'checkpoint')
   assert.equal(made.calls[tillAt(1) + 1], 'checkpoint')
+})
+
+// job 720 (2026-10-02): one seed, no hoe (lost in a death), grass where every bed goes, no water near. The till of
+// the first bed failed for want of a hoe, a failure farm.build steps past, and its plant ran on the grass anyway:
+// place refused it outright and the whole build died there
+test('farm.build on the live mruwnik-farm plan: a till that fails for want of a hoe never plants its bed on grass', async () => {
+  const items = { wheat_seeds: 1 }
+  const made = fakeApi({ place: JSON.parse(readFileSync(new URL('./fixtures/mruwnik-farm.json', import.meta.url))), items, answers: {
+    till: () => new Error('no hoe: craft item=wooden_hoe (2 planks + 2 sticks)'),
+    place: p => made.api.block(p.x, p.y - 1, p.z).name === 'farmland' || p.item !== 'wheat_seeds'
+      ? {}
+      : new Error(`placed nothing: 1 wheat_seeds needs farmland under it, and there is ${made.api.block(p.x, p.y - 1, p.z).name}: till that block first (first ${p.x},${p.y},${p.z})`)
+  } })
+  made.api.block = (x, y, z) => ({ name: y < 70 ? 'dirt' : y === 70 ? 'grass_block' : 'air', solid: y <= 70, properties: {} })
+  const summary = await buildFarm.run(made.api, { place: 'mruwnik-farm', partial: true })
+  assert.ok(made.calls.includes('till 104,70,-106'))
+  assert.equal(made.calls.some(c => c.startsWith('place item=wheat_seeds')), false)
+  assert.match(summary.stuck, /no hoe/)
 })
 
 test('farm.build: no seed means no till on the dry bed, and farm_needs_water says why', async () => {
