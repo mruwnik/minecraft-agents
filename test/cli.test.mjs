@@ -17,6 +17,23 @@ for (const [name, result, expected] of [
 test('terse (long result): gained, lost and ate keep the +/- notation', () =>
   assert.equal(terse({ ok: true, task: 3, action: 'goto', seconds: 4, gained: { mutton: 1 }, lost: { bread: 1 }, ate: { bread: 1 }, pos: { x: 1, y: 2, z: 3 } }), 'ok goto 4s +mutton:1 -bread:1 ate=bread:1 @1,2,3'))
 
+// `./mc eat` queues a job and carries `action` on its result once it completes (executeAcceptedJob), but never
+// `seconds`: it is not a composite task. terse() used to treat any `action` as the long-result shape and ran
+// signed() (an Object.entries map walk) over eat's plain ate= string, reading "bread" as {0:'b',1:'r',...} and
+// printing "undefineds ate=0:b,1:r,...": a driver reading `./mc job id=` or `./mc wait job=` for an eat job saw
+// garbage instead of what it ate (2026-10-02)
+test('terse (job result): a quick job action (eat) carries `action` with no `seconds`, and ate/gained stay scalars', () =>
+  assert.equal(terse({ ok: true, job: 7, action: 'eat', ate: 'bread', gained: 2, food: 12, health: 9 }), 'ok job=7 ate=bread gained=2 food=12 health=9'))
+
+// farm.harvest IS a composite task (real `seconds`), but `lost` there is a sentence naming what never reached the
+// pockets (#142), not a count map like mealTally's. The same signed() walk read it character by character too:
+// "-0:2 -1:  -2:s -3:t ..." for "2 still lying (...)". A non-map lost/gained/ate reads as key=value instead
+test('terse (long result): a prose `lost` (farm.harvest) reads as lost=, not exploded character by character', () =>
+  assert.equal(
+    terse({ ok: true, task: 9, action: 'farm.harvest', seconds: 12, harvested: { wheat: 3 }, lost: '2 still lying (wheat at 0,64,0): I stood on it and it did not come' }),
+    'ok farm.harvest 12s lost=2 still lying (wheat at 0,64,0): I stood on it and it did not come harvested(wheat:3)'
+  ))
+
 // ---------------------------------------------------------------- items= and its shorthand
 // `withdraw items=bread:7,oak_planks:2` used to reach the body as a string, which withdrawPlan walked character by
 // character ("6:0/7 19:0/2"). The CLI now reads that shorthand as the JSON it stands for, and a string that is
