@@ -399,7 +399,7 @@ test('waterShortfall protects another saved farm, even when it is the closest so
   assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'fill 8,63,0'])
 })
 
-test('waterShortfall widens a search crowded by protected irrigation to find the external pond', async () => {
+test('waterShortfall widens a search crowded by protected irrigation, then still prefers its own channel over the external pond', async () => {
   const cells = planCells({ plan: '~'.repeat(32), x: 0, y: 63, z: 0 })
   const world = Object.fromEntries([...cells, { x: 0, y: 63, z: 8 }].map(p => [`${p.x},${p.y},${p.z}`, 'water']))
   const items = { bucket: 1 }
@@ -408,5 +408,20 @@ test('waterShortfall widens a search crowded by protected irrigation to find the
     fill: pockets(items).fill
   } })
   assert.equal(await waterShortfall(made.api, undefined, cells), null)
-  assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'find_blocks block=water maxDistance=32 count=64', 'fill 0,63,8'])
+  // the search still widens (every cell in the first batch is protected), but a channel this long renews its own
+  // interior cells, and the nearest of those beats the farther pond
+  assert.deepEqual(withoutShoreWalks(made.calls), [FIND, 'find_blocks block=water maxDistance=32 count=64', 'fill 1,63,0'])
 })
+
+const atKey = p => `${p.x},${p.y},${p.z}`
+for (const [plan, target] of [['~~~', '1,63,0'], ['~', '0,63,20']]) {
+  test(`waterShortfall fills from its own channel's infinite source over an external pond (${plan})`, async () => {
+    const cells = planCells({ plan, x: 0, y: 63, z: 0 })
+    const pond = { x: 0, y: 63, z: 20 }
+    const world = Object.fromEntries([...cells, pond].map(p => [atKey(p), 'water']))
+    const items = { bucket: 1 }
+    const made = fakeApi({ items, world, answers: { ...found([...cells, pond]), fill: pockets(items).fill } })
+    assert.equal(await waterShortfall(made.api, undefined, cells), null)
+    assert.deepEqual(withoutShoreWalks(made.calls), [FIND, `fill ${target}`])
+  })
+}

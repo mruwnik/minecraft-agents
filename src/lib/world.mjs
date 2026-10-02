@@ -65,3 +65,12 @@ export const holdsWater = block => Boolean(block) && (block.name === 'water' || 
 // this is read, before the cover lands, leaving a slab capping ground that is not really wet. Only a settled source
 // (level 0, or already waterlogged) is safe to cap
 export const hasWaterSource = block => Boolean(block) && (block.name === 'water' ? Number(block.properties?.level ?? 0) === 0 : String(block.properties?.waterlogged) === 'true')
+// an infinite source in vanilla terms: plain still water (never a waterlogged block - that never re-waterlogs once
+// bucketed), fed by at least two plain still-water neighbours, standing on solid ground or more of the same water
+const isStillWater = block => Boolean(block) && block.name === 'water' && Number(block.properties?.level ?? 0) === 0
+export const renewsWater = (blockAt, p) => {
+  if (!isStillWater(blockAt(p.x, p.y, p.z))) return false
+  if (STEPS.filter(([dx, dz]) => isStillWater(blockAt(p.x + dx, p.y, p.z + dz))).length < 2) return false
+  const below = blockAt(p.x, p.y - 1, p.z)
+  return Boolean(below) && (below.solid || isStillWater(below))
+}

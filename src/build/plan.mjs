@@ -1,7 +1,7 @@
 import { hasPlan, jobGroundKey } from '../lib/plan.mjs'
 // The engine both build composites run on: a saved plan is a job list, and the same list builds a farm from bare ground
 // and raises a pen. Only the pure judgements live in lib.mjs; this is the part that walks, digs and places.
-import { billShortfall, farmJobs, groundJobs, hasHoe, hasWaterSource, hydrated, jobsBill, needsWaterLine, NO_HOE, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, sameFamily, shortLine } from '../lib.mjs'
+import { billShortfall, farmJobs, groundJobs, hasHoe, hasWaterSource, hydrated, jobsBill, needsWaterLine, NO_HOE, openingJobs, outOfSight, penOpenRefusal, penProbes, planAnchor, planBeside, planCells, PLAN_LEGEND, planSpec, renewsWater, sameFamily, shortLine } from '../lib.mjs'
 import { lowSlabs, lowSlabLine } from './cover.mjs'
 import { standingSpots, workFrom } from '../navigation/stand.mjs'
 import { digGuard, fieldLeg, footprintOf } from '../farm/leg.mjs'
@@ -12,9 +12,9 @@ import { missingGround } from '../lib/fill.mjs'
 const WATER_RANGE = 32
 const WATER_CANDIDATES = 32
 
-// A bucket may be refilled from external water, never by borrowing a source the
-// current or another saved plan needs. Otherwise each pour merely moves the same
-// water between channels and a maintenance pass can never finish irrigation.
+// A bucket may be refilled from external water, or from an infinite source inside the
+// current or another saved plan's own channel - taking from it leaves the channel full.
+// An isolated single source stays off limits: bucketing it would just move it elsewhere.
 const waterKey = p => `${p.x},${p.y},${p.z}`
 const irrigationSources = (api, cells) => new Set([
   ...cells,
@@ -35,10 +35,11 @@ export async function waterShortfall (api, range = WATER_RANGE, cells = []) {
   if (positions.length >= WATER_CANDIDATES && positions.some(p => protectedSources.has(waterKey(p)))) {
     positions = await find(Math.min(512, WATER_CANDIDATES + protectedSources.size))
   }
-  const preserved = positions.some(p => protectedSources.has(waterKey(p)) && hasWaterSource(api.block(p.x, p.y, p.z)))
+  const renewable = p => renewsWater(api.block, p)
+  const preserved = positions.some(p => protectedSources.has(waterKey(p)) && hasWaterSource(api.block(p.x, p.y, p.z)) && !renewable(p))
   const here = api.pos()
   const away = p => Math.hypot(p.x - here.x, p.y - here.y, p.z - here.z)
-  const sources = positions.filter(p => !protectedSources.has(waterKey(p)) && hasWaterSource(api.block(p.x, p.y, p.z))).sort((p, q) => away(p) - away(q))
+  const sources = positions.filter(p => hasWaterSource(api.block(p.x, p.y, p.z)) && (!protectedSources.has(waterKey(p)) || renewable(p))).sort((p, q) => away(p) - away(q))
   let inaccessible = null
   for (const p of sources) {
     // A range-only fill can stop below a bank and aim into its wall. Work from
