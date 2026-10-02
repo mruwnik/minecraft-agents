@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
+import { readWorld } from '../src/config.mjs'
 import { terse, capOutput, renderVerbose, describeClock, dawnVerdict, waitReport, parseClock, noHomeError, parseCliArgs, mapArgErrors } from '../src/cli.mjs'
 
 // MC_HOME=<a bot's home dir> picks which body to drive (its config.json names the apiPort); default is the first bot.
@@ -21,8 +22,17 @@ if (/^blueprint\.(show|check|build)$/.test(action) && args.file !== undefined) {
 }
 if (mapArgErrors(args)) { console.error(`FAIL ${mapArgErrors(args)}`); process.exit(1) }
 
-const clockFile = path.join(import.meta.dirname, '..', 'state', 'clock.json')
-const readClock = () => fs.existsSync(clockFile) ? parseClock(fs.readFileSync(clockFile, 'utf8')) : null
+// clock and dawn read the agent's own world's clock (readWorld), not a shared one, so a readWorld refusal is this
+// command's own refusal: print it and exit, same as every other action's "bot process not reachable"
+const worldClockFile = () => {
+  try {
+    return path.join(readWorld(process.env.MC_HOME).dir, 'clock.json')
+  } catch (error) {
+    console.error(`FAIL ${error.message}`)
+    process.exit(1)
+  }
+}
+const readClockFrom = file => fs.existsSync(file) ? parseClock(fs.readFileSync(file, 'utf8')) : null
 // the morning ping for a logged-off agent: run in the background, it exits (and so notifies you) when it is day
 const DAWN_ENDINGS = {
   day: 'MORNING: start your body (./start) and play on',
@@ -30,13 +40,14 @@ const DAWN_ENDINGS = {
   long: 'STILL NIGHT after 8 minutes (someone is awake): run ./mc dawn again'
 }
 if (action === 'dawn') {
+  const clockFile = worldClockFile()
   const started = Date.now()
   const tick = () => {
     // caught mid-write by a body on older code: look again in a second rather than call the world empty
-    if (fs.existsSync(clockFile) && !readClock()) return setTimeout(tick, 1000)
-    const verdict = dawnVerdict(readClock(), Date.now(), (Date.now() - started) / 1000)
+    if (fs.existsSync(clockFile) && !readClockFrom(clockFile)) return setTimeout(tick, 1000)
+    const verdict = dawnVerdict(readClockFrom(clockFile), Date.now(), (Date.now() - started) / 1000)
     if (verdict === 'wait') return setTimeout(tick, 5000)
-    console.log(`${DAWN_ENDINGS[verdict]} (${describeClock(readClock(), Date.now())})`)
+    console.log(`${DAWN_ENDINGS[verdict]} (${describeClock(readClockFrom(clockFile), Date.now())})`)
     process.exit(0)
   }
   tick()
@@ -113,9 +124,9 @@ if (action === 'incidents') {
     .catch(e => { console.error(`FAIL ${e.message}`); process.exit(1) })
 }
 
-// the one action that needs no body: what time is it in the world, as last seen by any running body
+// needs no body of its own, but still an agent (to know which world): what time is it there, as last seen by any running body
 if (action === 'clock') {
-  console.log(describeClock(readClock(), Date.now()))
+  console.log(describeClock(readClockFrom(worldClockFile()), Date.now()))
   process.exit(0)
 }
 

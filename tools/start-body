@@ -26,10 +26,11 @@ node ../../../tools/body-lock.mjs check .
 # passed the lock and traded logins (the body's own pid replaces it once it is up)
 node ../../../tools/body-lock.mjs write . $$
 trap 'rm -f body.pid' EXIT
-# a body started outside at night dies before its driver can act (a7cd6038): refuse while the shared clock says night,
-# before the log rotation below touches anything. `./start --now` (or START_NOW=1) is the driver's word that the body
-# spawns into a bed or under a roof, which the clock cannot know
-if ! refusal=$(node ../../../tools/start-gate.mjs ../../../state/clock.json "${@:2}" 2>&1); then
+# two refusals, before the log rotation below touches anything: a config.json with no usable world (readWorld),
+# and - once the world is known - a body started outside while its world's clock says night (a7cd6038). `./start
+# --now` (or START_NOW=1) is the driver's word that the body spawns into a bed or under a roof, which the clock
+# cannot know; a missing world refuses even then.
+if ! refusal=$(node ../../../tools/start-gate.mjs . "${@:2}" 2>&1); then
   echo "$refusal" >&2
   node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 5, advice: `your body was not started: ${process.argv[1].trim()}` }) + "\n")' "$refusal" >> events.jsonl
   exit 5

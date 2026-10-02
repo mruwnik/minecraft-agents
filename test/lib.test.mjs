@@ -2343,8 +2343,8 @@ for (const [name, home, action, expected] of [
   ['no home: driving a body is refused', undefined, 'goto', true],
   ['no home: state is refused too (it would be somebody else\'s)', undefined, 'state', true],
   ['no home: wait is refused (it reads an agent\'s events)', undefined, 'wait', true],
-  ['the clock needs no body', undefined, 'clock', false],
-  ['dawn needs no body', undefined, 'dawn', false]
+  ['no home: clock is refused too (each world keeps its own)', undefined, 'clock', true],
+  ['no home: dawn is refused too (same clock)', undefined, 'dawn', true]
 ]) {
   test(`noHomeError: ${name}`, () => assert.equal(Boolean(noHomeError(home, action)), expected))
 }
@@ -5883,14 +5883,16 @@ for (const [name, args, expected] of [
   test(`circling: ${name}`, () => assert.equal(circling(args), expected))
 }
 
-// #148: ./mc must keep working while a half-saved lib.mjs breaks the body. It imports only src/cli.mjs, which imports
-// nothing of ours, and lib.mjs re-exports every cli helper so bodies and tests see one function, not two copies
+// #148: ./mc must keep working while a half-saved lib.mjs breaks the body. It imports only src/cli.mjs and
+// src/config.mjs, neither of which imports anything of ours, and lib.mjs re-exports every cli helper so bodies
+// and tests see one function, not two copies
 const ROOT = path.resolve(import.meta.dirname, '..')
 const relativeImports = file => [...fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/^import .* from '(\.[^']+)'/gm)].map(m => m[1])
 for (const [file, expected] of [
-  ['tools/mc.mjs', ['../src/cli.mjs']],
+  ['tools/mc.mjs', ['../src/config.mjs', '../src/cli.mjs']],
   ['tools/check-code.mjs', ['../src/cli.mjs']],
-  ['src/cli.mjs', []]
+  ['src/cli.mjs', []],
+  ['src/config.mjs', []]
 ]) {
   test(`#148 import graph: ${file} imports ${expected.join(', ') || 'none of our files'}`, () => assert.deepEqual(relativeImports(file), expected))
 }

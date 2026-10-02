@@ -1,6 +1,6 @@
-// What ./mc needs, and nothing it does not (#148). tools/mc.mjs imports only this file, and this file imports nothing, so a
-// half-saved lib.mjs or bot.mjs breaks bodies (which the start gate then refuses to start) but never the command that reports it.
-// lib.mjs re-exports all of it: one copy of each helper for bodies, tests and mc alike
+// What ./mc needs, and nothing it does not (#148). tools/mc.mjs imports only this file and src/config.mjs, and neither of those
+// imports anything else, so a half-saved lib.mjs or bot.mjs breaks bodies (which the start gate then refuses to start) but
+// never the command that reports it. lib.mjs re-exports all of it: one copy of each helper for bodies, tests and mc alike
 
 // This file's own location on disk, with no import needed to find it: file:///.../bot/src/cli.mjs -> /.../bot
 const BOT_ROOT = import.meta.url.replace(/^file:\/\//, '').replace(/\/src\/cli\.mjs$/, '')
@@ -182,9 +182,11 @@ export function waitReport (text, me, now = Date.now(), chat = {}, agents = [], 
 export const bedtime = s => s.night && !s.busy && !s.asleep && (s.bedNear || s.bedCarried || s.bedWalk) && !s.hostileNear && s.reflexes && s.idleMs >= 90000 &&
   s.sinceTryMs >= Math.min(30000 * 2 ** s.failures, 300000)
 
-// mc without MC_HOME knows no body. It used to fall back to the first one (Claude's): whoever ran bot/mc from a drifted shell drove somebody else's body
+// mc without MC_HOME knows no body. It used to fall back to the first one (Claude's): whoever ran bot/mc from a drifted shell drove
+// somebody else's body. clock and dawn need a home too, now that the clock they read is the agent's own world's, not a shared one;
+// only incidents (every agent's folder, read directly) needs none.
 
-export const noHomeError = (home, action) => home || ['clock', 'dawn', 'incidents'].includes(action) ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
+export const noHomeError = (home, action) => home || action === 'incidents' ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
 
 // clock.json as read from disk; null when it was caught mid-write (the next look, a few seconds on, finds it whole)
 export function parseClock (text) {

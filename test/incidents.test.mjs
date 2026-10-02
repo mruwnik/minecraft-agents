@@ -1,5 +1,5 @@
 // ./mc incidents (autopilot card): what went wrong across every agent since a time, for a resumed lead session.
-// The line shaping is pure and lives in src/cli.mjs (tools/mc.mjs may import nothing else); tools/incidents.mjs reads the folders.
+// The line shaping is pure and lives in src/cli.mjs (tools/mc.mjs may import nothing else but src/config.mjs); tools/incidents.mjs reads the folders.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -55,7 +55,7 @@ for (const [name, since, expected] of [
 
 test('sinceTime: words that are no time say so', () => assert.throws(() => sinceTime('yesterday', now), /since=yesterday is neither minutes nor an ISO time/))
 
-test('noHomeError: incidents needs no agent chosen, like clock and dawn', () => assert.equal(noHomeError(undefined, 'incidents'), null))
+test('noHomeError: incidents needs no agent chosen; every other action (clock and dawn included) does', () => assert.equal(noHomeError(undefined, 'incidents'), null))
 
 test('incidentsReport: reads every agent folder with an events.jsonl, and says when nothing happened', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'incidents-'))

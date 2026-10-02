@@ -1,7 +1,7 @@
 // Chattiness: messageWeight (how much a line asks for an answer), hears (allow/deny/threshold), the skipped-count
 // line, and the haiku grader's cache. The rules-based half is canonically in src/cli.mjs (tools/mc.mjs and cli.mjs
-// itself may import none of our other files, #148); this module re-exports that same function, so these tests also
-// stand in for chatter.mjs's public API.
+// itself may import nothing of ours but src/config.mjs, #148); this module re-exports that same function, so these
+// tests also stand in for chatter.mjs's public API.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
