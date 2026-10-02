@@ -188,7 +188,7 @@ const chatLog = limit => {
 // The dashboard has no world of its own: a running body has, for the chunks around itself. The nearest body that is
 // up scans the footprint two levels deep (read-only, a quick action that never moves it), and the ~ cells that came
 // back as a slab are asked one by one with block_at, since scan cannot say whether a slab is waterlogged.
-const worlds = {}
+const scansByPlace = {}
 
 const lookAtPlace = async name => {
   const found = findPlace(groupWorlds(readWorlds(), mergeBodies(agents, polls), agentNames()), name)
@@ -219,10 +219,10 @@ const lookAtPlace = async name => {
 
 // one look per place per 10 s, shared by every open popup: the page polls while its popup shows the world
 const worldFor = name => {
-  const cached = worlds[name]
+  const cached = scansByPlace[name]
   if (cached && Date.now() - cached.at < WORLD_TTL_MS) return cached.promise
   const promise = lookAtPlace(name).catch(e => ({ error: e.message }))
-  worlds[name] = { at: Date.now(), promise }
+  scansByPlace[name] = { at: Date.now(), promise }
   return promise
 }
 

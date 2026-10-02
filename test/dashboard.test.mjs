@@ -702,24 +702,27 @@ const twoWorlds = [
 const everyBody = [
   worldBody('Claude', 'main', { Steve: { x: 5, y: 64, z: 5 } }),
   worldBody('Chani', 'test', { Alex: { x: 7, y: 64, z: 7 } }),
-  worldBody('Miles', null, { Herobrine: { x: 9, y: 64, z: 9 } })
+  worldBody('Miles', null, { Herobrine: { x: 9, y: 64, z: 9 } }),
+  worldBody('Rand', 'nether-server', { Logain: { x: 11, y: 64, z: 11 } })
 ]
 
 test('groupWorlds: each world gets its own bodies, the humans they see, and its own places and zones', () => {
-  assert.deepEqual(groupWorlds(twoWorlds, everyBody, ['Claude', 'Chani', 'Miles']), [
+  const grouped = groupWorlds(twoWorlds, everyBody, ['Claude', 'Chani', 'Miles', 'Rand'])
+  assert.deepEqual(grouped, [
     { ...twoWorlds[0], bodies: [everyBody[0]], humans: [{ name: 'Steve', x: 5, y: 64, z: 5, seenBy: 'Claude', at: 1000 }] },
     { ...twoWorlds[1], bodies: [everyBody[1]], humans: [{ name: 'Alex', x: 7, y: 64, z: 7, seenBy: 'Chani', at: 1000 }] }
   ])
+  // a body naming a world nobody made (Rand's 'nether-server') lands on no map at all, not just off the other two
+  assert.ok(grouped.every(world => !world.bodies.includes(everyBody[3])))
 })
 
 const lookups = [
-  ['a place in the first world', 'hut', 'main'],
-  ['a place in a later world', 'farm', 'test']
+  ['a place in the first world', 'hut', 'main', ['Claude']],
+  ['a place in a later world', 'farm', 'test', ['Chani']]
 ]
-lookups.forEach(([why, name, world]) => test(`findPlace: ${why} comes with the world it was found in`, () => {
-  const grouped = groupWorlds(twoWorlds, everyBody, [])
-  const found = findPlace(grouped, name)
-  assert.deepEqual([found.place.name, found.world.name, found.world.bodies.map(b => b.name)], [name, world, grouped.find(w => w.name === world).bodies.map(b => b.name)])
+lookups.forEach(([why, name, world, bodyNames]) => test(`findPlace: ${why} comes with the world it was found in`, () => {
+  const found = findPlace(groupWorlds(twoWorlds, everyBody, []), name)
+  assert.deepEqual([found.place.name, found.world.name, found.world.bodies.map(b => b.name)], [name, world, bodyNames])
 }))
 
 test('findPlace: a name two worlds share is the first world\'s place', () => {
