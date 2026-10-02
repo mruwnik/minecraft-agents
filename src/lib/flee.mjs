@@ -97,7 +97,7 @@ export function rangedThreat (s) {
   if (s.hurtMsAgo > 5000 || s.fighting || s.meleeNear || !s.archerNear) return null
   return s.armed && s.health >= 14 && !s.inWater ? 'charge' : 'flee'
 }
-// a neutral enderman keeps its distance and teleports about; one standing next to the body has almost always been
-// provoked already, and by then the body has about five seconds
+// a neutral enderman teleports, so waiting for it to be adjacent before moving leaves no time to put ground or a
+// wall between it and the body; one within ENDERMAN_RANGE is moved away from now, aimed at never, provoked or not
 export const fleeUnwinnable = (mobs, range = ENDERMAN_RANGE) =>
   mobs.filter(m => NEVER_FIGHT.has(m.name) && m.dist <= range).sort((a, b) => a.dist - b.dist)[0] ?? null
