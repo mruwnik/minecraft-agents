@@ -74,9 +74,14 @@ export default {
       const equipped = await api.act('equip', { item: item.name }).then(() => true, recoverFarm(e => { problems.add(e.message); return false }))
       if (!equipped) continue
       for (let n = 0; n < item.count; n++) {
+        const before = api.inv()[item.name] ?? 0
         const used = await api.act('use', { x: at.x, y: at.y, z: at.z }).then(() => true, recoverFarm(e => { problems.add(e.message); return false }))
         if (!used) break
-        fed[item.name] = (fed[item.name] ?? 0) + 1
+        // a clean resolve is not proof the composter took it: the server can reject the use (range, wrong hand,
+        // a stale block state) and still answer without error, so only an item that actually left the inventory counts
+        const consumed = before - (api.inv()[item.name] ?? 0)
+        if (consumed <= 0) { problems.add(`${item.name} did not leave my inventory feeding the composter at ${summary.at}: check range and that it is equipped`); break feeding }
+        fed[item.name] = (fed[item.name] ?? 0) + consumed
         if (!await emptyFull()) break feeding
         api.report(progress())
         await api.checkpoint()

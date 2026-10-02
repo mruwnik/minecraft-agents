@@ -3713,9 +3713,10 @@ test('COMPOST_CHANCE: bread is worth more to a composter than a seed', () => ass
 
 test('compost: feeds the composter and takes the bone meal out when it fills', async () => {
   let level = 6
+  const items = { wheat: 2 }
   const { api, calls } = fakeApi({
-    items: { wheat: 2 },
-    answers: { find_blocks: { positions: [{ x: 5, y: 64, z: 5 }] }, use: () => { level = level === 8 ? 0 : level + 1; return {} } }
+    items,
+    answers: { find_blocks: { positions: [{ x: 5, y: 64, z: 5 }] }, use: () => { if (level !== 8) items.wheat--; level = level === 8 ? 0 : level + 1; return {} } }
   })
   api.block = () => ({ name: 'composter', properties: { level } })
   const summary = await compost.run(api, {})

@@ -186,7 +186,8 @@ test('compost leaves an unloaded target untouched and hard-refuses an explicit w
 })
 
 test('compost ordinary partial fill is progress without an attention event', async () => {
-  const { api, events } = fakeApi({ items: { wheat: 1 }, world: { '0,64,0': 'composter#1' } })
+  const items = { wheat: 1 }
+  const { api, events } = fakeApi({ items, world: { '0,64,0': 'composter#1' }, answers: { use: () => { items.wheat-- } } })
   const result = await compost.run(api, { x: 0, y: 64, z: 0 })
   assert.equal(result.fed, 'wheat:1')
   assert.ok(result.short)
