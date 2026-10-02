@@ -8,7 +8,7 @@ session) lives here, one file per harness family:
     codex.md         OpenAI Codex CLI
 
 Which file an agent reads is the `harness` in its `state/agents/<Name>/config.json`, set by `node tools/new-agent.mjs [Name]
---harness <name>` (default `claude-code`); its BRIEFING.md points there too.
+--world <world> --harness <name>` (default `claude-code`); its BRIEFING.md points there too.
 
 ## Adding a family
 

@@ -18,7 +18,7 @@ export const configFile = home => path.join(home, 'config.json')
 
 export const missingConfig = home =>
   `no ${configFile(home)}: a body runs from its agent folder (cd state/agents/<Name> && ./start), ` +
-  'or `node src/bot.mjs <that folder>`; `node tools/new-agent.mjs <Name>` makes a new one'
+  'or `node src/bot.mjs <that folder>`; `node tools/new-agent.mjs <Name> --world <world>` makes a new one'
 
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 
