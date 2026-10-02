@@ -684,23 +684,21 @@ test('fleeOscillating: a shorter window is the give-up hold', () => assert.deepE
 
 // #147: Perrin starved into a skeleton. 16 bread gone in 35 minutes of leading, then "starving: eat" every 4 s from health 20 to 1
 // while the flee reflex worked exactly as designed, handed control back twice, and nobody answered in the 40 s it bought.
-// A body with nothing to eat and nowhere safe now does the reflex memory's own escape by itself instead of waiting for an agent.
+// On this server (easy) hunger alone never kills, so the hole fixes a hostile in reach, not an empty belly: a boxed-in run
+// or a body too hurt to heal digs in; a starving body at night, or with a mob near, does not.
 for (const [name, s, expected] of [
   ['fed and whole: nothing to do', {}, false],
-  ['starving with food in the pack is auto-eat\'s job, not a hole', { food: 0, hasFood: true, night: true }, false],
-  ['starving, nothing to eat, night', { food: 0, hasFood: false, night: true }, true],
-  ['starving, nothing to eat, a mob in reach by day', { food: 0, hasFood: false, mobNear: true }, true],
-  ['starving in broad daylight with nothing near: keep working', { food: 0, hasFood: false }, false],
+  ['starving, nothing to eat, at night is not a hole: hunger alone never digs in', { food: 0, hasFood: false, night: true }, false],
+  ['starving, nothing to eat, with a mob in reach is not the hole fix either: the stuck run and the night respawn are the hostile triggers', { food: 0, hasFood: false, mobNear: true }, false],
   ['(e) six health and nothing to eat: it cannot heal, day or night', { health: 6, hasFood: false }, true],
   ['seven health with nothing to eat is still a working body', { health: 7, hasFood: false }, false],
   ['six health with food in the pack heals itself', { health: 6, hasFood: true }, false],
   ['the run gave up where it stood: hole up there', { stuck: true }, true],
-  ['stuck outranks a full stomach', { stuck: true, food: 20, hasFood: true, health: 20 }, true]
+  ['stuck outranks a full stomach', { stuck: true, hasFood: true, health: 20 }, true]
 ]) {
   test(`holeUpVerdict: ${name}`, () => assert.equal(Boolean(holeUpVerdict(s)), expected))
 }
 for (const [name, s, pattern] of [
-  ['starving says what ran out', { food: 0, hasFood: false, night: true }, /nothing.*to eat/i],
   ['half dead says why waiting will not help', { health: 6, hasFood: false }, /cannot heal|no food to heal/i],
   ['the boxed-in run says so', { stuck: true }, /boxed in|nowhere to run/i]
 ]) {

@@ -1,9 +1,8 @@
 // Holing up: the site checks and verdict for burrowing into the ground to wait something out.
 
-// #147. Perrin starved into a skeleton: 16 bread gone in 35 minutes of leading, then "starving: eat" every 4 s from health 20
-// to 1 while the flee reflex worked exactly as designed, handed control back twice, and no agent answered in the 40 s it bought.
-// A body that cannot eat and cannot win has one move left, the one the reflex memory already knew: go under the ground and
-// close the hole. It does that itself now. These verdicts decide WHETHER and WHAT; nothing here touches a block.
+// #147. A body that is boxed in with nowhere to run, or too hurt to heal, has one move left, the one the reflex memory
+// already knew: go under the ground and close the hole. It does that itself now. Hunger alone is never the reason: on
+// this server starvation does not kill. These verdicts decide WHETHER and WHAT; nothing here touches a block.
 export const HOLE_DEPTH = 3
 export const HOLE_HEALTH = 6
 // what must not be under the feet before digging down: the cave, the lava and the water this is meant to avoid
@@ -19,11 +18,10 @@ export const HOLE_HURT_MS = 3000
 export const holeUpRefusal = ({ armed, hostileDist, hurtMsAgo = Infinity }) =>
   armed && (hostileDist <= HOLE_MELEE || hurtMsAgo <= HOLE_HURT_MS) ? 'fight' : null
 
-export function holeUpVerdict ({ food = 20, hasFood = true, health = 20, night = false, mobNear = false, stuck = false } = {}) {
+export function holeUpVerdict ({ hasFood = true, health = 20, stuck = false } = {}) {
   if (stuck) return { why: 'the run is boxed in and there is nowhere to run to' }
   // a full pack is auto-eat's business, however low the food bar is
   if (hasFood) return null
-  if (food <= 0 && (night || mobNear)) return { why: `food 0 and nothing at all to eat${night ? ' at night' : ' with a mob in reach'}: standing here is starving to death` }
   // (e) a body with no food cannot heal: at 6 health waiting does not get better, day or night
   if (health <= HOLE_HEALTH) return { why: `health ${health} and nothing to eat: it cannot heal, so waiting in the open only ends one way` }
   return null
