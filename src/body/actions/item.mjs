@@ -2,8 +2,8 @@
 import { inventoryCompactPair } from '../../inventory/compact.mjs'
 import { enchantNames, itemsArg, enchantChoice, smeltWait, giveReport, craftRoom, craftReport, craftShortfall, furnaceReport, depositWanted, equipSlot, pickFuel, isNight, withdrawPlan, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH } from '../../lib.mjs'
 import { countsOf, chestTransfer, inventoryCounts, inventoryQuiet, findItem, dropsNear, sweepDrops, goNear, findBlockByName, craftBatch, containerAt } from '../helpers.mjs'
-import { fighting, flee, holingUp } from '../../bot.mjs'
 import { goals, bot, mcData, ready } from '../state.mjs'
+import { fighting, flee, holingUp } from '../reflexes.mjs'
 
 export let compactingInventory = false
 

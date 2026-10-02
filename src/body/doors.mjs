@@ -1,8 +1,8 @@
 // Doors and fence gates on the way: opened walking up, shut behind me, and the ones a task opened shut when it ends.
 import { realCell, herdPassed, gatesByReach, openNow, shutNow, foodAway, GATE_OTHERS_NEAR, gatesLeftOpen } from '../lib.mjs'
 import { findBlocksNear } from './helpers.mjs'
-import { reflexes, fighting, surfacing, diggingOut, flee, holingUp } from '../bot.mjs'
 import { Vec3, bot, mcData, ready } from './state.mjs'
+import { reflexes, fighting, surfacing, diggingOut, flee, holingUp } from './reflexes.mjs'
 import { long } from './actions/tables.mjs'
 import { leading, following, luring, feeding } from './actions/creature.mjs'
 
