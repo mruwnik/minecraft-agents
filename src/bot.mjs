@@ -1,15 +1,15 @@
+// Claude's Minecraft body.
+// Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
+// small localhost HTTP API (see README.md) and everything notable that happens is
+// appended to events.jsonl so the planning side can follow along.
 import { automaticBeds, carriedBedSpot, reflexPickups, namedBed } from './lib/sleep.mjs'
 import { scaffoldSide } from './scaffold/side.mjs'
 import { centerStand } from './navigation/center-stand.mjs'
 import { stalkShape, groveExit, steer } from './navigation/bamboo.mjs'
 import { forestHiveClaim, hiveSmokeCampfire, silkTouchTool } from './tree/hives.mjs'
-import { resolveLegend, hasPlan, parsePlacePlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
+import { hasPlan, parseStructurePlan, legacyPlanStructure } from './lib/plan.mjs'
 import { controlTrace } from './body/control-trace.mjs'
 import { settleInventory } from './body/inventory-settle.mjs'
-// Claude's Minecraft body.
-// Fast reflexes (eating, armour, self-defence) live here; decisions arrive over a
-// small localhost HTTP API (see README.md) and everything notable that happens is
-// appended to events.jsonl so the planning side can follow along.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -18,18 +18,16 @@ import { pathToFileURL } from 'node:url'
 import mineflayer from 'mineflayer'
 import { installWorldClock } from './world-clock.mjs'
 import { installTickEnd } from './tick-end.mjs'
-import pf from 'mineflayer-pathfinder'
 import collectBlock from 'mineflayer-collectblock'
 import pvp from 'mineflayer-pvp'
 import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
-import vec3 from 'vec3'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { createSlowScanReporter, timedScan } from './performance.mjs'
+import { timedScan } from './performance.mjs'
 import { isGreeting } from './chatter.mjs'
 import { inventoryCompactPair } from './inventory/compact.mjs'
-import { HOLE_HURT_MS, openGateWalk, markMove, planStands, doingText, tillWarning, parsePlan, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, leadTargetError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, holesLeft, penShaftRefusal, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, errorRepeat, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, progressed, crowdSize, dryCells, cropNames, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, gateLeak, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, holeUpRefusal, mealTally, routeSummary, circling, CIRCLING_MS, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, mineTargets, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, openAbove, surfacingStalled, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeStep, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, burrowPlan, holedUpNote, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError, eventLines } from './lib.mjs'
+import { openGateWalk, markMove, planStands, doingText, tillWarning, planCells, planErrors, RENAMED, helpText, argsUsage, docText, PRIMITIVES, compositeError, blindGates, enchantNames, itemsArg, enchantChoice, fencedIn, gateChange, fencePush, realCell, besideNames, noFooting, pitAdvice, chatText, wedgeReplant, thicketCost, leadPick, herdPassed, gatesByReach, staleKey, bedExit, gateStepCost, eatJammed, eatFailure, uneatenMeal, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, penStance, stanceNote, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, outOfSight, herdOrder, ledReport, tagalongs, ledExtra, waterWary, stackTop, isBaby, crowdSize, dryCells, cropNames, openNow, strays, shutNow, didYouMean, scanCap, eatBelow, withDefaultItem, foodAway, smeltWait, giveReport, wedgeBreakable, wakeStep, bedtimeReport, deepestCell, unpenned, penCensus, droppedWalk, hurtCause, scanWhere, craftRoom, craftReport, GATE_OTHERS_NEAR, mealTally, routeSummary, coordsError, digRefusal, fluidsLeft, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, nightPlan, automaticNightPlan, BED_RANGE, bedTrap, idleNudge, isGroundCover, looksBuilt, craftShortfall, placeObstacle, deadWalk, fillOutcome, penLeak, gatesLeftOpen, oversleeping, staleCode, codeVersion, mapRefusal, leadVerdict, clampedOffset, nudgeAway, creatureFood, CREATURE_FOOD, breedingFood, BREEDING_FOOD, flushCells, airReflex, furnaceReport, trackReads, ignoredParams, depositWanted, peacefulTool, chaseVerdict, chaseBroken, fleeGoal, DIG_REACH, digFromHere, digPlan, chargeLeash, breakOffDigs, CHASE_LEASH, attackRefusal, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, placeOutcome, placeMissed, strayFluid, equipSlot, inventorySlots, armorPoints, shouldFlee, ARCHERS, rangedThreat, plansFromOwnCell, missingTool, stepOffChoice, bedtime, feetCell, overMemory, placeAgainst, arrivalError, renderScan, inAnyZone, describePlaces, describePlace, markFields, matchPlaces, compact, pickFuel, isWedged, matchesProps, checkWatch, within, refuseReason, canPlaceFromHere, ignorableMob, explainInterrupt, isStalled, mayDig, explainNoPath, boxedIn, doorwayNode, buriedIn, nextSheep, occupiedBy, isNight, withdrawPlan, agentNames, splitPlayers, lateMeal, givePlan, shortNote, tooFarToGive, lyingFrom, GIVE_REACH, chestFree, leashable, leashPlan, leashedLine, loginYield, reconnectDelay, offlineError, eventLines } from './lib.mjs'
 import { makeEyes, YAWS } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -69,20 +67,14 @@ import { authDir, profileFile, loginAdvice } from './auth.mjs'
 import { zones, saveZones, GATES_FILE, readPlaces, savePlaces, recent, emit, sayOnce, sayError } from './body/events.mjs'
 import { LIBRARY_DIR, libraryFiles, compositeName, composites, CLI_ONLY, BANNED_FOOD, edibleCarried, runComposite } from './body/runner.mjs'
 import { matcher, countsOf, chestTransfer, carried, inventoryCounts, inventoryQuiet, diffCounts, findItem, vecOf, dropsNear, sweepDrops, walkToDig, cellAt, goNear, findBlocksNear, findBlockByName, bedsNear, craftBatch, containerAt, leashHolderOf, onMyLeads, leadsCarried, leashCandidate, leashOne, unleashOne, leadWalk } from './body/helpers.mjs'
+import { pathfinder, Movements, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, setTask, gen, setGen, cancelGuard, ROLLBACK_PLACE, pos, roundVec } from './body/state.mjs'
 
 // the physics engine's own box comparison lets a hitbox that rounds 1e-14 past a block face walk into the block (see clampedOffset in lib.mjs)
 const corners = box => ({ min: [box.minX, box.minY, box.minZ], max: [box.maxX, box.maxY, box.maxZ] })
 for (const [axis, method] of ['computeOffsetX', 'computeOffsetY', 'computeOffsetZ'].entries()) {
   AABB.prototype[method] = function (other, offset) { return clampedOffset(corners(this), corners(other), axis, offset) }
 }
-
-export const { pathfinder, Movements, goals } = pf
-export const { Vec3 } = vec3
-export const reportPerformance = createSlowScanReporter({ emit })
 const armorManager = armorManagerMod.default ?? armorManagerMod
-
-// ---------------------------------------------------------------- bot lifecycle
-export let bot = null
 export let boatLeashHolder = new Map()
 let eatTimer = null
 // item 13 (#109): what a death line needs and cannot work out after the fact. The server's own words, the last wound,
@@ -94,8 +86,6 @@ let lastCarried = null
 // the last death: when, where the body fell and what fell with it, for the result of the task it ended (src/composite.mjs)
 let lastDeath = null
 let diedAt = 0
-export let mcData = null
-export let ready = false
 let reflexes = true
 let eyes = null
 let openWindow = () => null
@@ -103,13 +93,6 @@ let openWindow = () => null
 // the block they actually opened rather than a nearby-block guess (helpers.mjs imports this to call it)
 export let declareOpening = () => {}
 let followTarget = null
-export let task = null // { id, name, gen, started }
-let gen = 0
-// a long action calls `const alive = cancelGuard()` when it starts and `alive()` in every loop: once it has been cancelled
-// or superseded it must stop, or it keeps fighting the next command for the body
-export const cancelGuard = () => { const mine = gen; return () => { if (gen !== mine) throw new Error('cancelled') } }
-// A composite may finish restoring one job block after cancellation. This private token cannot be supplied by a CLI caller.
-export const ROLLBACK_PLACE = Symbol('rollback-place')
 let waitingForServer = false
 let yieldUntil = 0 // while someone else is logged in as me, I stay off until then
 let reconnectTimer = null
@@ -286,12 +269,12 @@ const loginNeeded = () => {
 }
 
 function connect () {
-  ready = false
+  setReady(false)
   yieldUntil = 0
-  bot = mineflayer.createBot({
+  setBot(mineflayer.createBot({
     host: cfg.host, port: cfg.port, username: cfg.username, version: cfg.version, auth: cfg.auth,
     ...(cfg.auth === 'microsoft' && { profilesFolder: authDir(HOME), onMsaCode: loginNeeded })
-  })
+  }))
   installWorldClock(bot)
   installTickEnd(bot)
   villagerRoster.attach(bot)
@@ -317,7 +300,7 @@ function connect () {
   })
 
   bot.once('spawn', () => {
-    mcData = bot.registry
+    setMcData(bot.registry)
     eyes = makeEyes(bot, { textureDir: path.join(ROOT, 'textures'), snapshotDir: path.join(HOME, 'snapshots') })
     const windows = watchWindows(bot, { now: Date.now })
     openWindow = windows.open
@@ -525,7 +508,7 @@ function connect () {
       bot.autoEat._eating = false
       eatingSince = null
     }, 5000)
-    ready = true
+    setReady(true)
     waitingForServer = false
     scheduler?.pump()
     emit('spawned', { pos: pos(), dimension: bot.game.dimension, ...codeHere })
@@ -778,7 +761,7 @@ function connect () {
   bot.on('end', reason => {
     if (ready || !waitingForServer) emit('disconnected', { reason })
     waitingForServer = !ready
-    ready = false
+    setReady(false)
     // Whatever primitive/composite was mid-await is now bound to a socket that will never deliver its
     // event again: cancel/stop/discard only ever mark the shelf, none of them can make that promise
     // settle, and without this the owner slot stays wedged until the process itself restarts (card:
@@ -789,10 +772,6 @@ function connect () {
     reconnectTimer = setTimeout(connect, reconnectDelay(yieldUntil, Date.now()))
   })
 }
-
-// ---------------------------------------------------------------- reflexes
-export const pos = () => bot?.entity ? roundVec(bot.entity.position) : null
-const roundVec = v => ({ x: Math.round(v.x * 10) / 10, y: Math.round(v.y * 10) / 10, z: Math.round(v.z * 10) / 10 })
 const isHostile = e => e.type === 'hostile' || e.kind === 'Hostile mobs'
 function nearbyHostiles (range) {
   if (!bot?.entity) return []
@@ -3334,12 +3313,12 @@ export const quick = {
 function cancelTask (why) {
   const active = jobShelf.snapshot().active
   if (active != null) jobShelf.markCancelling(active, why)
-  gen++
+  setGen(gen + 1)
   if (task) emit('task_cancelled', { id: task.id, name: task.name, why, ...(task.jobId ? { notify: false } : {}) })
   if (task) lastCancel = { id: task.id, why }
   task?.releaseFollow?.()
   followTarget = null
-  task = null
+  setTask(null)
   fighting = null
   fightStart = null
   bot.pathfinder.setGoal(null)
@@ -3639,7 +3618,7 @@ async function runLong (name, args, given = args, queuedAs = null) {
   if (task) return { ok: false, error: `body owner invariant violated: ${task.name} (${task.id}) is still active` }
   followTarget = null
   const mine = { id: queuedAs ?? ++taskId, name, gen, started: Date.now() }
-  task = mine
+  setTask(mine)
   mine.jobId = queuedAs ?? null
   console.log(`[task ${mine.id}] ${name} ${JSON.stringify(given)}`)
   gatesPassed.clear()
@@ -3660,7 +3639,7 @@ async function runLong (name, args, given = args, queuedAs = null) {
     const vitals = bot.health <= 10 || bot.food <= 8 ? { hp: Math.round(bot.health), food: bot.food } : {}
     const result = { task: mine.id, action: name, seconds, ...mealTally({ ...diffCounts(before, inventoryCounts()), ate: diffCounts(mealsAtStart, mealsEaten).gained }), pos: pos(), ...vitals, ...extra }
     // back to walking, so a later flee or follow doesn't tunnel
-    if (task === mine) { task = null; useMoves(false); bot.setControlState('sneak', false) }
+    if (task === mine) { setTask(null); useMoves(false); bot.setControlState('sneak', false) }
     return result
   }
   // inventory updates trail the action by a few ticks; wait so gained/lost are accurate
@@ -3727,7 +3706,7 @@ async function executeAcceptedJob (job) {
   if (long[name]) return runLong(name, args, given, id)
   if (!quick[name]) return { ok: false, error: `unknown action ${name}` }
   const mine = { id, name, gen, started: Date.now(), jobId: id, progress: {} }
-  task = mine
+  setTask(mine)
   try {
     const refusal = refusalFor(name, args)
     if (refusal) return { ok: false, error: refusal }
@@ -3736,7 +3715,7 @@ async function executeAcceptedJob (job) {
     if (name === 'follow') await new Promise(resolve => { mine.releaseFollow = resolve })
     return { ok: true, action: name, ...result }
   } finally {
-    if (task === mine) { task = null; useMoves(false); bot.setControlState('sneak', false) }
+    if (task === mine) { setTask(null); useMoves(false); bot.setControlState('sneak', false) }
   }
 }
 
