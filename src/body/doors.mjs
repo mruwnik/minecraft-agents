@@ -58,6 +58,8 @@ export async function doorTick () {
   else doorsIOpened.delete(String(todo.position))
   doorBusy = false
 }
+// the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
+// An open gate empties a pen (the human's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
 export async function shutGatesBehind () {
   const open = gatesLeftOpen(doorsIOpened, heldOpen, key => bot.blockAt(new Vec3(...key.match(/-?\d+/g).map(Number)))?.getProperties().open)
   const { near, far } = gatesByReach(open, bot.entity.position.toArray())

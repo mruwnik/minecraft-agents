@@ -63,6 +63,7 @@ export let scheduler
 
 // One shelf slot owns all body-changing work. Submission persists before this pump claims it;
 // nested composite/flow api.act calls still invoke their registered action directly.
+// given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
 async function runLong (name, args, given = args, queuedAs = null) {
   const refusal = refusalFor(name, args)
   if (refusal) return { ok: false, error: refusal }

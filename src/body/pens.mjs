@@ -2,9 +2,6 @@
 import { blindGates, fencedIn, strays, penCensus, penLeak, BREEDING_FOOD } from '../lib.mjs'
 import { Vec3, bot } from './state.mjs'
 
-// given: the plain arguments, for the log (printing the tracked ones would count as reading them all)
-// the gate reflex only reaches 5 blocks and can miss at a sprint: whatever I opened and is still open when a task ends gets shut now.
-// An open gate empties a pen (the human's sheep after lead, Kettricken's after flock.breed, Miles' after shear and goto)
 // gates on the ring of this pen (floor: "x,y,z" keys) that nothing can walk through: see blindGates. topsAt is penAround's own column
 // reader, the one penLeak walks by: heights an animal can stand at, so a step up outside a gate reads as the step it is (Chani's report, 2026-09-24)
 export function blindGateAdvice (floor, topsAt) {
