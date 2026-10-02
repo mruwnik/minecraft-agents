@@ -1047,6 +1047,9 @@ test('every module that uses a lib.mjs helper imports it', async () => {
       .filter(name => new RegExp(`(^|[^\\w.$])${name}(?![\\w$])`).test(body))
       // a parameter with a default (dropsNear (range = 16)) is declared, not used
       .filter(name => !new RegExp(`(const|let|var|function|class)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*=>|${name}\\s*:|[(,]\\s*${name}\\s*=[^=>]`).test(body))
+      // so is a plain parameter of a function declaration (nearbyHostiles (range)), and a name destructured into a
+      // const ({ far: gatesLeftOpen } = ...): bot.mjs imported both helpers unused, which is all that kept them quiet here
+      .filter(name => !new RegExp(`function\\s*\\w*\\s*\\([^)]*\\b${name}\\b[^)]*\\)|(const|let|var)\\s*\\{[^}]*\\b${name}\\s*\\}\\s*=`).test(body))
       .map(name => `${file}: uses ${name} without importing it`)
   })
   assert.deepEqual(unimported, [])
@@ -5429,17 +5432,19 @@ test('farm.harvest: with no place= it still harvests where it stands, walking no
 const READ_ONLY = ['state', 'look', 'look_at', 'look_around', 'entity', 'animals', 'find_blocks', 'block_at', 'scan',
   'path_to', 'inventory', 'chest_contents', 'events', 'places', 'zones', 'reflexes', 'watches', 'help']
 const GATES = ['foreignZone', 'inAnyZone', 'invited', 'workRefusal']
-const botSource = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'bot.mjs'), 'utf8')
+// the primitives are one module per help section under src/body/actions/; the watches keep their own beside them
+const ACTION_SOURCES = [...fs.readdirSync(path.join(import.meta.dirname, '..', 'src', 'body', 'actions')).map(f => path.join('actions', f)), 'watches.mjs']
+const actionSource = ACTION_SOURCES.map(f => fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'body', f), 'utf8')).join('\n')
 const actionBody = name => {
-  const header = new RegExp(`^  (?:async )?${name}[ :] *\\(`, 'm').exec(botSource)
-  assert.ok(header, `no action called ${name} in src/bot.mjs: rename it here too`)
-  const from = botSource.indexOf('{', header.index + header[0].length)
+  const header = new RegExp(`^  (?:async )?${name}[ :] *\\(`, 'm').exec(actionSource)
+  assert.ok(header, `no action called ${name} in src/body/actions/ or src/body/watches.mjs: rename it here too`)
+  const from = actionSource.indexOf('{', header.index + header[0].length)
   let depth = 0
-  for (let i = from; i < botSource.length; i++) {
-    depth += botSource[i] === '{' ? 1 : botSource[i] === '}' ? -1 : 0
-    if (depth === 0) return botSource.slice(from, i + 1)
+  for (let i = from; i < actionSource.length; i++) {
+    depth += actionSource[i] === '{' ? 1 : actionSource[i] === '}' ? -1 : 0
+    if (depth === 0) return actionSource.slice(from, i + 1)
   }
-  return botSource.slice(from)
+  return actionSource.slice(from)
 }
 
 for (const name of READ_ONLY) {

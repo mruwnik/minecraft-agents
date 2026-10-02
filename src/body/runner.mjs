@@ -13,8 +13,10 @@ import { silkTouchTool } from '../tree/hives.mjs'
 import { latestOwnClosedDigHole } from '../survival/recover-hole.mjs'
 import { ROOT, HOME, cfg } from './home.mjs'
 import { readPlaces, emit, zones } from './events.mjs'
-import { carriedFood, useMoves, fighting, automaticSleepBeds, stepsDone, setStepsDone, flee, holingUp, long, quick, refusalFor, explainFailure, penAround, censusOf } from '../bot.mjs'
+import { carriedFood, fighting, automaticSleepBeds, stepsDone, setStepsDone, flee, holingUp, refusalFor, explainFailure, penAround, censusOf } from '../bot.mjs'
 import { Vec3, reportPerformance, bot, ready, task, cancelGuard, ROLLBACK_PLACE, pos } from './state.mjs'
+import { long, quick } from './actions/tables.mjs'
+import { useMoves } from './actions/move.mjs'
 import { bedsNear, inventoryCounts, dropsNear } from './helpers.mjs'
 
 // ---------------------------------------------------------------- the composite runner ("autopilot")

@@ -274,7 +274,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 const { Vec3 } = createRequire(import.meta.url)('vec3')
 test('registered animals discovers horse family within range with version-aware adult metadata', () => {
-  const source = fs.readFileSync(new URL('../src/bot.mjs', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../src/body/actions/sense.mjs', import.meta.url), 'utf8')
   const begin = source.indexOf('  animals (a) {')
   const end = source.indexOf('\n  // x= y= z= anchors', begin)
   const build = new Function('bot', 'CREATURE_FOOD', 'matcher', 'penAround', 'vecOf', 'unpenned', 'isBaby', 'horseState', `return ({${source.slice(begin, end)}}).animals`)

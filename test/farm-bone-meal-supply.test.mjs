@@ -126,7 +126,7 @@ test('inaccessible configured output produces attention while independent harves
 
 // Execute the actual use primitive with a fake body; the empty hand guarantee
 // must hold after movement and cancellation, not merely in the caller's args.
-const source = fs.readFileSync(new URL('../src/bot.mjs', import.meta.url), 'utf8')
+const source = fs.readFileSync(new URL('../src/body/actions/block.mjs', import.meta.url), 'utf8')
 const body = source.slice(source.indexOf('  async use (a) {') + '  async use (a) {'.length, source.indexOf('\n  async toggle')).replace(/},\s*$/, '')
 const useWith = (bot, walk, alive) => new Function('bot', 'goNear', 'cancelGuard', 'vecOf', 'compact', 'findItem', `return async a => {${body}}`)(bot, walk, () => alive, x => x, () => '', () => ({}))
 for (const cancelled of [false, true]) {
