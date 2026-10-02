@@ -107,6 +107,9 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // never read back as unfinished
   const dryBeds = []
   const dryKeys = new Set()
+  // set true for a dry till that goes ahead because its plant is right behind it, seed in hand: the field loop below
+  // skips its own checkpoint once so that plant runs before anything can hand back or sleep the night on the bare bed
+  let sowNext = false
   const ground = () => groundJobs({ cells: plan.cells, worldAt: api.block, solid: api.solid }).filter(notKept)
   // a cell the plan's own water stands over is never dug (dig refuses it, rightly): it is reported as skipped= instead
   const field = () => farmJobs({ cells: plan.cells, worldAt: api.block, items: api.inv() }).filter(j => j.do !== 'skip').filter(notKept)
@@ -138,7 +141,7 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
     }
   }
 
-  const tryJob = async job => {
+  const tryJob = async (job, next) => {
     if (job.do === 'place' && job.item === 'torch' && !sameFamily('oak_fence', api.block(job.x, job.y - 1, job.z)?.name)) {
       counts.stuck = counts.stuck ?? `torch ${job.x},${job.y},${job.z}: support missing; place the fence post first`
       return false
@@ -154,8 +157,14 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
         return false
       }
       // a bed tilled before its channel holds water dries back to dirt and re-tills forever (card 72e49b3d): held
-      // back instead, and the plant on the same ground held with it
-      if (job.do === 'till' && !hydrated(api.block, job)) { dryBeds.push(job); dryKeys.add(jobGroundKey(job)); return false }
+      // back instead, and the plant on the same ground held with it - UNLESS the very next job is that plant, seed
+      // in hand, which goes in at once and makes the bed safe. Either way it counts for farm_needs_water
+      if (job.do === 'till' && !hydrated(api.block, job)) {
+        dryBeds.push(job)
+        const sownAtOnce = next?.do === 'plant' && jobGroundKey(next) === jobGroundKey(job) && (api.inv()[next.item] ?? 0) > 0
+        if (!sownAtOnce) { dryKeys.add(jobGroundKey(job)); return false }
+        sowNext = true
+      }
       if (job.do === 'plant' && dryKeys.has(jobGroundKey(job))) return false
     }
     // a missing water_bucket is fetched, not just reported: see fetchWaterBucket above
@@ -255,7 +264,19 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   reopen.kept.forEach(line => keptColumns.add(line.match(/^-?\d+,-?\d+,-?\d+/)?.[0]))
   for (const job of reopen.open) { await tryJob(job); await api.checkpoint() }
   for (const job of ground()) { await tryJob(job); await api.checkpoint() }
-  for (const job of field()) { await tryJob(job); await api.checkpoint() }
+  // tryJob only sees one job; the next one in this same list is what tells a dry till whether its own plant is
+  // right behind it, seed in hand, so the bed goes in at once instead of being held
+  const fieldJobs = field()
+  for (let i = 0; i < fieldJobs.length; i++) {
+    const ok = await tryJob(fieldJobs[i], fieldJobs[i + 1])
+    // a checkpoint right here could hand back or sleep the night on bare, dry farmland: skipped once, for the till
+    // just above, so its own plant (the very next job in this list) runs before any of that can happen - but only
+    // when that till actually went in. A till that failed never gets its plant (dryKeys sends it straight past,
+    // below) and still needs its own checkpoint, or a run of failing dry tills loses every checkpoint in between
+    const sowing = sowNext && ok
+    sowNext = false
+    if (!sowing) await api.checkpoint()
+  }
   const unfinished = left()
   // one look back: a build says what it could not finish rather than running the whole list again
   if (unfinished.length) counts.unfinished = unfinished.map(j => `${j.do} ${j.x},${j.y},${j.z} (${j.why})`).join('; ')

@@ -36,7 +36,8 @@ test('a till that leaves dirt unchanged reports the bed and continues independen
 })
 
 test('maintenance tills only beds it can seed, then reports the remaining shortage', async () => {
-  const world = { ...Object.fromEntries([0, 1, 2, 3].map(x => [`${x},63,0`, 'dirt'])), '-2,63,0': 'water' }
+  // water within 4 of every bed in the row (0..3): none of them is the dry case this file leaves to farm-water.test.mjs
+  const world = { ...Object.fromEntries([0, 1, 2, 3].map(x => [`${x},63,0`, 'dirt'])), '1,63,4': 'water' }
   const items = { stone_hoe: 1, wheat_seeds: 1, carrot: 1 }
   const { api, calls, events } = fakeApi({ place: fakePlace('wwcc'), world, items, answers: {
     'farm.harvest': {},
