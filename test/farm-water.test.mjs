@@ -278,7 +278,7 @@ test('farm.maintain: a channel already holding water means no water work, and th
 })
 
 test('farm.build: a dry bed is tilled anyway when its seed is in hand, and sown at once', async () => {
-  const items = { wheat_seeds: 1 }
+  const items = { wheat_seeds: 1, stone_hoe: 1 }
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
   const made = fakeApi({ place: fakePlace('w~'), world, items, answers: {
     till: p => { world[cellKey(p)] = 'farmland' },
@@ -292,7 +292,7 @@ test('farm.build: a dry bed is tilled anyway when its seed is in hand, and sown 
 })
 
 test('farm.build: a checkpoint right after the dry till is skipped, so its plant runs before any hand-back', async () => {
-  const items = { wheat_seeds: 1 }
+  const items = { wheat_seeds: 1, stone_hoe: 1 }
   const world = field('w~', { '0,63,0': 'dirt', '0,64,0': 'air' })
   const made = fakeApi({ place: fakePlace('w~'), world, items, answers: {
     till: p => { world[cellKey(p)] = 'farmland' },
@@ -307,7 +307,7 @@ test('farm.build: a checkpoint right after the dry till is skipped, so its plant
 })
 
 test('farm.build: a dry till that fails still gets its own checkpoint, seed in hand or not', async () => {
-  const items = { wheat_seeds: 2 }
+  const items = { wheat_seeds: 2, stone_hoe: 1 }
   const world = field('ww', { '0,63,0': 'dirt', '0,64,0': 'air', '1,63,0': 'dirt', '1,64,0': 'air' })
   const made = fakeApi({ place: fakePlace('ww'), world, items, answers: {
     till: p => new Error(`till: tilled nothing: 1 still dirt: is there a block on top of it? (first ${p.x},${p.y},${p.z})`)
@@ -319,6 +319,7 @@ test('farm.build: a dry till that fails still gets its own checkpoint, seed in h
   const tillAt = x => made.calls.indexOf(`till ${x},63,0`)
   assert.equal(made.calls[tillAt(0) + 1], 'checkpoint')
   assert.equal(made.calls[tillAt(1) + 1], 'checkpoint')
+  assert.equal(made.calls.some(c => c.startsWith('place item=wheat_seeds')), false)
 })
 
 // job 720 (2026-10-02): one seed, no hoe (lost in a death), grass where every bed goes, no water near. The till of
@@ -334,8 +335,7 @@ test('farm.build on the live mruwnik-farm plan: a till that fails for want of a 
   } })
   made.api.block = (x, y, z) => ({ name: y < 70 ? 'dirt' : y === 70 ? 'grass_block' : 'air', solid: y <= 70, properties: {} })
   const summary = await buildFarm.run(made.api, { place: 'mruwnik-farm', partial: true })
-  assert.ok(made.calls.includes('till 104,70,-106'))
-  assert.equal(made.calls.some(c => c.startsWith('place item=wheat_seeds')), false)
+  assert.equal(made.calls.some(c => /^(till|place item=wheat_seeds) /.test(c)), false)
   assert.match(summary.stuck, /no hoe/)
 })
 
