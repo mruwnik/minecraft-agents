@@ -2,10 +2,11 @@
 // `routine` is itself a composite, so a role can ship one (roles/farmer/homestead.json) and `routine name=farmer/homestead` runs it.
 import fs from 'node:fs'
 import path from 'node:path'
-import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict, outcomeText, outcomeStalled } from '../src/routine.mjs'
+import { routinePlan, unmarkedPlaces, placesRefusal, stepLabel, stopEvent, dayEvent, bedWalkEvent, nightLine, rekitVerdict, outcomeText, outcomeStalled, untilGoal, readText } from '../src/routine.mjs'
 import { toolsLost, toolList } from '../src/inventory/kit.mjs'
-import { ownBed, nightPlan, BED_RANGE } from '../src/lib/sleep.mjs'
+import { ownBed, bedCell, nightPlan, BED_RANGE } from '../src/lib/sleep.mjs'
 import { farmAct } from '../src/farm/attention.mjs'
+import { evaluateFlowCondition, FLOW_OBSERVATIONS } from '../src/flow.mjs'
 
 const ROLES_DIR = path.join(import.meta.dirname, '..', 'roles')
 const readRole = name => {
@@ -14,9 +15,9 @@ const readRole = name => {
 }
 
 export default {
-  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [store=<place|x,y,z>] [bed=<place>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day (a kit step first, when the role ships one: its tools are watched through the day, and a step that wears one out gets the kit again and one more try), sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, $store from store= (where the produce goes), any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; dry=true only prints the expanded steps',
-  stops: 'days= done (a step that fails is noted, and the next one still runs); every stop writes a routine_stopped event with its reason and advice, every day a routine_day one',
-  args: { steps: 'any', name: 'string', place: 'string', store: 'string', vars: 'any', days: 'number', until: 'number', bed: 'string', bed_range: 'number', dry: 'boolean' },
+  doc: 'routine steps=|name= [place=a,b,c] [vars=\'{"compost":"shared-composter"}\'] [days=1] [until=<EDN goal>|<minutes>] [store=<place|x,y,z>] [bed=<place|x,y,z>] [bed_range=200] [dry=true]: run a list of steps in order, once per game day (a kit step first, when the role ships one: its tools are watched through the day, and a step that wears one out gets the kit again and one more try), sleeping through the nights (a bed within 32 blocks as always; otherwise it walks to its own bed when that is within bed_range blocks: bed=<place>, else the nearest mark of kind=bed by this body, else where it last woke this run); several places run the routine once per place, in order; $place in a step is filled from place=, $places with the whole place= list, $store from store= (where the produce goes), any other $name from vars= (a JSON object; a $name nobody gave in vars= is dropped, so the step\'s own default holds); days=0 runs until stopped; until=\'(>= (read :chest_count {:x 1 :y 64 :z 2 :item "bread"}) 576)\' is a goal read after each day\'s steps, and the routine stops with reason until when it reads true (no days= with a goal runs until it is met; until=<number> is minutes, as for any composite); bed=x,y,z or bed=<place> is the bed it walks to and lies down in at nightfall, over whichever bed is nearer; dry=true only prints the expanded steps',
+  stops: 'days= done, or the until= goal met (a step that fails is noted, and the next one still runs); every stop writes a routine_stopped event with its reason and advice, every day a routine_day one',
+  args: { steps: 'any', name: 'string', place: 'string', store: 'string', vars: 'any', days: 'number', until: 'any', bed: 'string', bed_range: 'number', dry: 'boolean' },
 
   async run (api, a) {
     const { steps, places, error } = routinePlan(a, readRole)
@@ -27,13 +28,17 @@ export default {
     const refusal = a.dry ? unmarkedPlaces(api.places(), places) : placesRefusal(api.places(), places, api.me?.())
     if (refusal) throw new Error(refusal)
     // bed=<place> is walked to at nightfall, days from now: a mark nobody made is refused now, like a place
-    const noBed = a.bed ? unmarkedPlaces(api.places(), [a.bed]) : null
+    const noBed = a.bed && !bedCell(a.bed) ? unmarkedPlaces(api.places(), [a.bed]) : null
     if (noBed) throw new Error(noBed)
+    const goal = untilGoal(a.until)
+    if (goal?.error) throw new Error(goal.error)
     if (a.dry) return { dry: true, places, steps }
     // days=0 runs until stopped. The runner's own days rule (handBackReason) reads a.days at every checkpoint and would
     // end the routine at once, so the number comes off the args the routine shares with the runner
-    const forever = a.days === 0
+    const forever = a.days === 0 || (goal !== null && a.days === undefined)
     if (forever) delete a.days
+    // the runner reads until= as minutes at every checkpoint: a goal is the routine's own, like days=0
+    if (goal) delete a.until
     const summary = { days: 0, ran: 0 }
     // the day's kit step (roles ship one first): the tools it lists are watched through every other step, and when a
     // step ends with fewer of a kind than it began, a tool wore out under it. The kit runs again, and a step that
@@ -110,8 +115,37 @@ export default {
       await walkBack(plan.to, from)
       away = false
     }
+    // bed=: that bed, not whichever the runner's checkpoint finds nearest. At the first checkpoint of a night the body
+    // walks to it and lies down, and sleeps there until day; a walk or a sleep that fails is noted, and the night goes
+    // the way it always did. The walk keeps to the path rows of a field it crosses: the pathfinder prices a crop
+    // cell at ten steps (src/lib/path.mjs CROP_STEP)
+    let tucked = false // the bed= walk was tried tonight
+    const bedtime = async () => {
+      if (!a.bed) return
+      if (!api.clock().night) { tucked = false; return }
+      if (tucked) return
+      tucked = true
+      const bed = ownBed(api.places(), api.me?.(), { bed: a.bed })
+      const plan = nightPlan({ near: false, bed, from: api.pos(), bedRange: a.bed_range ?? BED_RANGE })
+      if (plan.do !== 'walk') return api.note(`bed=${a.bed}: ${plan.why}`)
+      progress('bed')
+      const asleep = await walk(plan.to).then(() => api.act('sleep', {})).then(() => true, e => { api.note(`bed=${a.bed}: ${e.message}`); return false })
+      if (asleep) await api.until(() => api.clock().day, { timeout: 1200, every: 10, what: 'the night never ended' }).catch(() => {})
+    }
     // every checkpoint of the routine's own goes through the night rule
-    const checkpoint = () => api.checkpoint().catch(nightfall)
+    const checkpoint = async () => { await bedtime(); return api.checkpoint().catch(nightfall) }
+
+    // until=<goal>: read after each day's steps; a read that fails is noted, and a chest that stays out of reach ends
+    // the routine through the runner's twice-in-a-row rule
+    const goalRead = async () => {
+      const reads = []
+      const observe = (name, args) => api.act(name, args).then(value => { reads.push(readText(name, args, value)); return value })
+      const met = await evaluateFlowCondition(goal.condition, { observe, observations: FLOW_OBSERVATIONS })
+        .catch(e => { api.note(`until= could not be read: ${e.message}`); return false })
+      const read = reads.join('; ')
+      if (!met && read) api.note(`until= not yet: ${read}`)
+      return met ? read : null
+    }
 
     const day = async () => {
       const dayNo = summary.days + 1
@@ -159,11 +193,13 @@ export default {
     }
 
     // every way out writes routine_stopped: the routine's own days, and whatever the runner or ./mc stop threw
-    const stopped = reason => api.emit('routine_stopped', stopEvent({ reason, ...current, days: a.days ?? 1, bed: bedStop }))
+    const stopped = (reason, read) => api.emit('routine_stopped', stopEvent({ reason, ...current, days: a.days ?? 1, bed: bedStop, read }))
     try {
       for (;;) {
         await day()
         await checkpoint()
+        const met = goal ? await goalRead() : null
+        if (met) { summary.until = met; stopped('until', met); return summary }
         if (!forever && !((a.days ?? 1) > summary.days)) { stopped('days'); return summary }
         progress('dusk')
         await nextDay()

@@ -4,6 +4,7 @@
 import { routineSteps, placeRefusal, compact } from './lib.mjs'
 import { carriedOfKind } from './inventory/kit.mjs'
 import { FARM_ISSUE_FIELDS, farmIssues } from './farm/attention.mjs'
+import { parseFlowEDN, validateFlowCondition, FLOW_OBSERVATIONS } from './flow.mjs'
 
 // place=a,b,c as the CLI hands it over (one string), or a list already
 export const placeList = place => (Array.isArray(place) ? place : String(place ?? '').split(','))
@@ -59,7 +60,7 @@ export const stepLabel = (action, args = {}) => `${action}${args.place ? ` place
 export function stopAdvice (reason, days) {
   if (reason === 'days') return `the routine ran its ${days} day${days === 1 ? '' : 's'}: start it again (days=0 runs until stopped) or move on`
   if (reason === 'cancelled') return 'stopped from outside (./mc stop, or a stall or circling cancel: events type=task_cancelled last=1 says which): fix what it names and start the routine again'
-  if (reason === 'until') return 'its until= minutes are up: start it again when there is time for another'
+  if (reason === 'until') return 'its until= goal is met (read= says what it read), or its until= minutes are up: set a new goal or move on'
   if (/^health /.test(reason)) return 'the body is hurt: eat to food 18 and rest until health is back, then start the routine again'
   if (/^food /.test(reason)) return 'nothing edible carried: fetch or grow food (WORLD.md says where the shared food is), then start the routine again'
   if (/broke|tool|no (\w+_)?(pickaxe|axe|hoe|shovel|shears|sword)\b/i.test(reason)) return 'a tool broke or is missing: craft another and carry a spare, then start the routine again'
@@ -71,7 +72,21 @@ export function stopAdvice (reason, days) {
 }
 
 // bed: at a night stop, which bed the routine knew of and why it did not walk there (library/routine.mjs)
-export const stopEvent = ({ reason, step = null, place = null, days, bed = null }) => ({ reason, step, place, advice: stopAdvice(reason, days), ...(bed ? { bed } : {}) })
+// read: what an until= goal read when it stopped the routine
+export const stopEvent = ({ reason, step = null, place = null, days, bed = null, read = null }) => ({ reason, step, place, advice: stopAdvice(reason, days), ...(bed ? { bed } : {}), ...(read ? { read } : {}) })
+
+// until= is two things: a number is the runner's minutes, EDN text a goal the routine reads after each day's steps
+export function untilGoal (until) {
+  if (typeof until !== 'string') return null
+  try {
+    const condition = parseFlowEDN(until)
+    validateFlowCondition(condition, { observations: FLOW_OBSERVATIONS })
+    return { condition }
+  } catch (e) {
+    return { error: `until=${until}: ${e.message}` }
+  }
+}
+export const readText = (name, args, value) => `${name} ${compact(args, false)}: ${value !== null && typeof value === 'object' ? compact(value, false) : value}`
 
 // what each step reported, per place ("here" for a step with no place), short enough for one event line. What went
 // wrong comes first and is never cut: on 09-26 a farm's stuck= and missing= stood behind lowSlabs= and clutter=, past

@@ -300,3 +300,52 @@ for (const [name, lost, items, expected] of [
 ]) {
   test(`rekitVerdict: ${name}`, () => assert.deepEqual(rekitVerdict(lost, items), expected))
 }
+
+// ---------------------------------------------------------------- until=<EDN goal>: stop when the goal is met
+const GOAL = '(>= (read :chest_count {:x 114 :y 71 :z -107 :item "bread"}) 576)'
+// the store's bread after each day: the fake answers chest_count from this list, one day at a time
+const breadByDay = counts => () => ({ item: 'bread', count: counts.shift() ?? 0, chest: '114,71,-107' })
+
+test('routine: until= stops on the day the goal reads true, saying what it read', async () => {
+  const { api, events } = fakeApi({ places: marked, answers: { ...answers, chest_count: breadByDay([200, 400, 600]) } })
+  const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', until: GOAL, days: 0 })
+  assert.deepEqual([summary.days, events.map(e => e.type)], [3, ['routine_day', 'routine_day', 'routine_day', 'routine_stopped']])
+  assert.deepEqual(events.at(-1), {
+    type: 'routine_stopped', reason: 'until', step: null, place: null, advice: stopAdvice('until'),
+    read: 'chest_count x=114 y=71 z=-107 item=bread: item=bread count=600 chest=114,71,-107'
+  })
+})
+
+for (const [name, args, days] of [
+  ['days= comes first', { days: 2 }, 2],
+  ['the goal comes first', { days: 5 }, 3],
+  ['no days= with a goal runs until the goal', {}, 3]
+]) {
+  test(`routine: until= and days=, whichever first: ${name}`, async () => {
+    const { api } = fakeApi({ places: marked, answers: { ...answers, chest_count: breadByDay([0, 0, 576]) } })
+    const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', until: GOAL, ...args })
+    assert.equal(summary.days, days)
+  })
+}
+
+for (const [name, until, kept] of [['a goal is the routine’s own', GOAL, false], ['minutes stay the runner’s', 30, true]]) {
+  test(`routine: until= on the args it shares with the runner: ${name}`, async () => {
+    const { api } = fakeApi({ places: marked, answers: { ...answers, chest_count: breadByDay([576]) } })
+    const a = { name: 'farmer/homestead', place: 'a', until }
+    await routine.run(api, a)
+    assert.equal('until' in a, kept)
+  })
+}
+
+test('routine: a goal that does not parse is refused before day one', async () => {
+  const { api, calls } = fakeApi({ places: marked, answers })
+  await assert.rejects(routine.run(api, { name: 'farmer/homestead', place: 'a', until: '(>= (read :quit {}) 1)' }), /until=.*disallowed observation "quit"/)
+  assert.deepEqual(calls, [])
+})
+
+test('routine: a goal it cannot read is noted and the days go on', async () => {
+  const { api, calls } = fakeApi({ places: marked, answers: { ...answers, chest_count: new Error('chest_count: no path to the goal') } })
+  const summary = await routine.run(api, { name: 'farmer/homestead', place: 'a', until: GOAL, days: 2 })
+  assert.equal(summary.days, 2)
+  assert.deepEqual(calls.filter(c => c.startsWith('note until=')), Array(2).fill('note until= could not be read: chest_count: no path to the goal'))
+})
