@@ -6,9 +6,12 @@
 const BOT_ROOT = import.meta.url.replace(/^file:\/\//, '').replace(/\/src\/cli\.mjs$/, '')
 
 const LONG_FIELDS = ['task', 'action', 'seconds', 'gained', 'lost', 'ate', 'pos', 'ok', 'error']
-// a short result (no action) renders only these itself: the rest of LONG_FIELDS are ordinary fields there. `eat` answers
-// ate= and gained= (numbers, not the long result's count maps), and the long list swallowed both: "ok food=10 health=10"
-const SHORT_FIELDS = ['pos', 'ok', 'error']
+// Only a finished composite task (runLong) carries real elapsed `seconds` together with count-map gained/lost/ate;
+// that is the long shape. A queued job action (eat, equip, ...) carries `action` too, once job polling needs to
+// say what ran, but never `seconds`, and its gained/lost/ate are plain scalars, not maps - keying this split on
+// `action` instead of `seconds` ran the long formatting (signed(), below) over those scalars and over `${r.seconds}s`
+// with no seconds to show, which is where "undefineds" and a string read character by character both came from
+const SHORT_FIELDS = ['action', 'pos', 'ok', 'error']
 const isPos = v => Object.keys(v).length === 3 && ['x', 'y', 'z'].every(k => typeof v[k] === 'number')
 const isEmpty = v => v == null || v === false || v === '' || (typeof v === 'object' && Object.keys(v).length === 0)
 const bracket = v => typeof v === 'object' && !Array.isArray(v) && !isPos(v) ? `(${compact(v)})` : compact(v)
@@ -26,7 +29,11 @@ export function compact (v, counts = true) {
   return entries.map(([k, val]) => val === true ? k : typeof val === 'object' && !Array.isArray(val) && !isPos(val) ? `${k}(${compact(val)})` : `${k}=${compact(val)}`).join(' ')
 }
 
+const isMap = v => v != null && typeof v === 'object' && !Array.isArray(v)
 const signed = (sign, obj = {}) => Object.entries(obj).map(([k, n]) => `${sign}${k}:${n}`)
+// gained/lost are usually a count map (+item:n/-item:n); a composite with no count to give instead names what
+// happened in a sentence (farm.harvest's `lost`: what never reached the pockets, with coordinates) - key=value then
+const diff = (sign, key, v) => isEmpty(v) ? [] : isMap(v) ? signed(sign, v) : [`${key}=${v}`]
 
 // One short line per API result: every token of output costs the driver context.
 export function terse (r) {
@@ -36,12 +43,13 @@ export function terse (r) {
   const error = r.error ? [`error: ${r.error}`] : []
   if (r.status === 'running' && r.task !== undefined) return `ok running task=${r.task} (still going: block on ./mc wait for its task_done, do not end your turn)`
   if (r.status === 'running' || r.status === 'queued') return `ok ${r.status} job=${r.job ?? r.task} (inspect with ./mc job id=${r.job ?? r.task}; block with ./mc wait job=${r.job ?? r.task})`
-  const hidden = r.action ? LONG_FIELDS : SHORT_FIELDS
+  const long = r.seconds !== undefined
+  const hidden = long ? LONG_FIELDS : SHORT_FIELDS
   const extras = compact(Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))), false)
-  if (!r.action) return [head, ...(extras ? [extras] : []), ...(r.pos ? [`pos=${compact(r.pos)}`] : []), ...error].join(' ')
+  if (!long) return [head, ...(extras ? [extras] : []), ...(r.pos ? [`pos=${compact(r.pos)}`] : []), ...error].join(' ')
   const at = r.pos ? [`@${compact(r.pos)}`] : []
-  const ate = r.ate ? [`ate=${signed('', r.ate).join(',')}`] : []
-  return [head, r.action, `${r.seconds}s`, ...signed('+', r.gained), ...signed('-', r.lost), ...ate, ...at, ...(extras ? [extras] : []), ...error].join(' ')
+  const ate = isEmpty(r.ate) ? [] : [`ate=${isMap(r.ate) ? signed('', r.ate).join(',') : r.ate}`]
+  return [head, r.action, `${r.seconds}s`, ...diff('+', 'gained', r.gained), ...diff('-', 'lost', r.lost), ...ate, ...at, ...(extras ? [extras] : []), ...error].join(' ')
 }
 
 export const capOutput = (text, limit = 1500) => text.length <= limit
