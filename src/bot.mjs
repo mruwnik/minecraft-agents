@@ -19,7 +19,7 @@ import armorManagerMod from 'mineflayer-armor-manager'
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import AABB from 'prismarine-physics/lib/aabb.js'
 import { restartAdvice } from './restart.mjs'
-import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, isStalled, mayDig, boxedIn, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
+import { RENAMED, PRIMITIVES, compositeError, gateChange, fencePush, wedgeReplant, staleKey, bedExit, eatJammed, eatFailure, eatRefusal, eatAllowed, eatHold, eatBackoff, mealToDrop, mealFailed, foodSort, noFoodEdge, eatRetryDue, afterTheMeal, deathBy, deathReport, deathUnannounced, deathKit, stackTop, crowdSize, didYouMean, eatBelow, wedgeBreakable, wakeStep, bedtimeReport, droppedWalk, hurtCause, mealTally, FLUIDS, scaffoldNote, scaffoldTakeBack, scaffoldBuilt, isAir, bedChoice, ownBed, automaticNightPlan, bedTrap, idleNudge, deadWalk, oversleeping, staleCode, codeVersion, clampedOffset, nudgeAway, flushCells, airReflex, trackReads, ignoredParams, peacefulTool, chaseBroken, fleeGoal, digFromHere, chargeLeash, breakOffDigs, CHASE_LEASH, fleeUnwinnable, fleeOscillating, fleeRange, fleeIntoCave, holeCells, holeUpVerdict, respawnPlan, FLEE_HOME, FLEE_GIVEUP_MS, NEVER_FIGHT, ENDERMAN_RANGE, brokenSlot, shouldFlee, ARCHERS, rangedThreat, stepOffChoice, bedtime, feetCell, overMemory, arrivalError, inAnyZone, isWedged, within, refuseReason, ignorableMob, isStalled, mayDig, doorwayNode, buriedIn, isNight, loginYield, reconnectDelay, offlineError } from './lib.mjs'
 import { makeEyes } from './vision/eyes.mjs'
 import { watchWindows } from './body/window-watch.mjs'
 import { burrowSite, capChoice, holeUpAborted, mobHit, holeUpBlock, refusalNote, shelterNote, HOLE_STEP, HOLE_DEPTH, HOLE_MELEE } from './survival/holeup.mjs'
@@ -28,7 +28,6 @@ import { chatRefusal } from './talk.mjs'
 import { thinkBudget, goalDistance, THINK_CAP_MS } from './navigation/walk.mjs'
 import { makeSurfaceWalkRuntime } from './navigation/surface-walk.mjs'
 import { walkStandstill, walkProgress, WALK_PROGRESS_MS, blockName, frozenWalk, facingOff, aheadCells, serverSide, nearBy, frozenAdvice } from './navigation/stall.mjs'
-import { addSample, stuckVerdict, nextEpisode, stuckLine } from './navigation/stuck.mjs'
 import { neededArgs } from './needs.mjs'
 import { createJobShelf } from './job-shelf.mjs'
 import { createJobScheduler } from './job-scheduler.mjs'
@@ -52,6 +51,7 @@ import { LIBRARY_DIR, libraryFiles, compositeName, composites, BANNED_FOOD, edib
 import { carried, inventoryCounts, diffCounts, findItem, vecOf, cellAt, goNear, findBlocksNear, bedsNear } from './body/helpers.mjs'
 import { pathfinder, goals, Vec3, reportPerformance, bot, setBot, mcData, setMcData, ready, setReady, task, setTask, gen, setGen, cancelGuard, pos } from './body/state.mjs'
 import { isWoodDoor, doorsIOpened, heldOpen, myClicks, MY_CLICK_MS, othersToggled, doorAt, doorBusy, gatesPassed, doorTick, shutGatesBehind, shutTrackedGatesAfterCancel, fenceEscape, leaveFenceCell } from './body/doors.mjs'
+import { noPathCounted, watchStuck } from './body/stuck-watch.mjs'
 import { explainFailure } from './body/explain.mjs'
 import { straysAt } from './body/pens.mjs'
 import { watchesQuick } from './body/watches.mjs'
@@ -971,43 +971,7 @@ setInterval(() => {
 }, 5000)
 // stall watchdog: a task with somewhere to walk that neither moves nor digs is hung; fail it loudly instead of forever
 let stillFrom = null
-// the stuck watch (src/navigation/stuck.mjs, autopilot card): one sample a second over a rolling window, one `stuck` event and one
-// chat line per episode, stuck=<reason> in `state` while it lasts
-let stuckSamples = []
-export let stuckNow = null
-let frozenWalks = 0 // every frozen_walk said, for the watch's five-minute window
-let failedWalks = 0 // every walk that ended with no path, for the watch's walks verdict (a body that cannot leave its cell)
-const noPathCounted = e => { if (/no path to the goal|no walkable path|took to long to decide/i.test(e.message)) failedWalks++; return e }
-export let stepsDone = 0 // composite steps finished: the task progress the watch reads
-export const setStepsDone = n => { stepsDone = n }
-const stuckSample = () => ({
-  t: Date.now(), pos: bot.entity.position.clone(), taskId: task?.id ?? null, taskName: task?.name ?? null, taskProgress: stepsDone,
-  waiting: task?.jobId ? jobShelf.get(task.jobId)?.progress?.waiting ?? null : null,
-  sleeping: bot.isSleeping, night: isNight(bot.time.timeOfDay), health: bot.health, food: bot.food, edible: edibleCarried(),
-  oxygen: bot.oxygenLevel, holedUp: Boolean(holedUp) || holingUp, buried: diggingOut, boxed: trappedIn(), frozenWalks, failedWalks,
-  routine: task?.progress?.routine ?? null
-})
-// boxed in for the watch: amBoxedIn (#128) is about solid shafts and reads the cell over a fence as a ledge to step up
-// onto, but a fence or wall is a block and a half tall, so a body fenced into a 1x1 cell has no way out either
-const TALL = /_fence$|_wall$|_fence_gate$/
-const openGate = b => /_fence_gate$/.test(b?.name ?? '') && String(b?.getProperties?.().open) === 'true'
-const trappedIn = () => {
-  if (!bot?.entity) return false
-  const feet = feetCell(bot.entity.position, bot.entity.onGround)
-  const at = (dx, dy, dz) => bot.blockAt(new Vec3(feet.x + dx, feet.y + dy, feet.z + dz))
-  const passable = (dx, dy, dz) => { const b = at(dx, dy, dz); return openGate(b) || b?.boundingBox !== 'block' }
-  return boxedIn((dx, dy, dz) => passable(dx, dy, dz) && !(dy === 1 && (dx || dz) && TALL.test(at(dx, 0, dz)?.name ?? '') && !openGate(at(dx, 0, dz))))
-}
-function watchStuck () {
-  stuckSamples = addSample(stuckSamples, stuckSample())
-  const { episode, started, ended } = nextEpisode(stuckNow, stuckVerdict(stuckSamples), Date.now())
-  stuckNow = episode
-  // free again (the verdict clear for END_MS): said once, in the log only
-  if (ended) emit('stuck_end', { pos: pos(), reason: episode.reason, seconds: Math.round((episode.over - episode.since) / 1000) })
-  if (!started) return
-  emit('stuck', { pos: pos(), reason: episode.reason, advice: episode.advice })
-  bot.chat(stuckLine(bot.entity.position, episode.reason))
-}
+export let frozenWalks = 0 // every frozen_walk said, for the watch's five-minute window
 let kickedFor = null // the stand-still (a stillFrom) whose walk I already restarted once
 // bot.controlState has no enumerable keys (getters): Object.entries on it is always empty, which made every stall report say keys=[] until 09-19
 const keysDown = () => ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak'].filter(k => bot.getControlState(k))
@@ -1205,7 +1169,7 @@ function stepFlee (me) {
 const HOLE_AGAIN_MS = 300000
 const HOLE_STEP_MS = 3000 // a creeper refusal moves the body once per this
 const HOLE_WALK_MS = 4000 // the step to a sounder cell gets this long, not a search
-let holedUp = null // { at, why }: one hole per emergency, or the reflex digs a fresh one every tick it is still hungry
+export let holedUp = null // { at, why }: one hole per emergency, or the reflex digs a fresh one every tick it is still hungry
 export let holingUp = false
 let lives = 0 // deaths so far: a hole-up dug by a body that has since died must stop, not cap a hole at the respawn point
 let holeRefusedAt = 0
