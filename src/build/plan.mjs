@@ -268,11 +268,14 @@ export async function buildFromPlan (api, a, { farm = false } = {}) {
   // right behind it, seed in hand, so the bed goes in at once instead of being held
   const fieldJobs = field()
   for (let i = 0; i < fieldJobs.length; i++) {
-    await tryJob(fieldJobs[i], fieldJobs[i + 1])
+    const ok = await tryJob(fieldJobs[i], fieldJobs[i + 1])
     // a checkpoint right here could hand back or sleep the night on bare, dry farmland: skipped once, for the till
-    // just above, so its own plant (the very next job in this list) runs before any of that can happen
-    if (sowNext) sowNext = false
-    else await api.checkpoint()
+    // just above, so its own plant (the very next job in this list) runs before any of that can happen - but only
+    // when that till actually went in. A till that failed never gets its plant (dryKeys sends it straight past,
+    // below) and still needs its own checkpoint, or a run of failing dry tills loses every checkpoint in between
+    const sowing = sowNext && ok
+    sowNext = false
+    if (!sowing) await api.checkpoint()
   }
   const unfinished = left()
   // one look back: a build says what it could not finish rather than running the whole list again
