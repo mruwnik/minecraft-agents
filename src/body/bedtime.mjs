@@ -6,9 +6,10 @@ import { ownBed, automaticNightPlan, bedtime, feetCell, isNight } from '../lib.m
 import { ROOT, cfg } from './home.mjs'
 import { zones, readPlaces, savePlaces, emit } from './events.mjs'
 import { inventoryCounts, cellAt, bedsNear } from './helpers.mjs'
-import { lastDriven, bedFailures, setBedFailures, jobShelf, scheduler, submitJob } from '../bot.mjs'
+import { lastDriven } from '../bot.mjs'
 import { Vec3, bot, ready, task, pos } from './state.mjs'
 import { reflexes, nearbyHostiles, fighting, surfacing, diggingOut, flee, holedUp, setHoledUp, holingUp } from './reflexes.mjs'
+import { bedFailures, setBedFailures, jobShelf, scheduler, submitJob } from './jobs.mjs'
 import { long } from './actions/tables.mjs'
 
 const villagers = () => Object.values(bot.entities).filter(e => e.name === 'villager').map(e => e.position)

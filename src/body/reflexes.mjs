@@ -7,8 +7,9 @@ import { surfaceWay, openingProgress, roofAt, SURFACE_SCAN } from '../navigation
 import { emit } from './events.mjs'
 import { edibleCarried } from './runner.mjs'
 import { findItem, findBlocksNear, bedsNear } from './helpers.mjs'
-import { lastWound, followTarget, EAT_SAFE_RANGE, dropMeal, swimStepTarget, lives, lastMobHurt, lastHurt, cancelTask } from '../bot.mjs'
+import { lastWound, EAT_SAFE_RANGE, dropMeal, swimStepTarget, lives, lastMobHurt, lastHurt } from '../bot.mjs'
 import { goals, Vec3, bot, task, pos } from './state.mjs'
+import { followTarget, cancelTask } from './jobs.mjs'
 import { digging, useMoves } from './actions/move.mjs'
 
 export let reflexes = true

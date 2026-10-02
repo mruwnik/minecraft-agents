@@ -3,9 +3,10 @@ import { feetCell, boxedIn, isNight } from '../lib.mjs'
 import { addSample, stuckVerdict, nextEpisode, stuckLine } from '../navigation/stuck.mjs'
 import { emit } from './events.mjs'
 import { edibleCarried } from './runner.mjs'
-import { frozenWalks, jobShelf } from '../bot.mjs'
+import { frozenWalks } from '../bot.mjs'
 import { Vec3, bot, task, pos } from './state.mjs'
 import { diggingOut, holedUp, holingUp } from './reflexes.mjs'
+import { jobShelf } from './jobs.mjs'
 
 // the stuck watch (src/navigation/stuck.mjs, autopilot card): one sample a second over a rolling window, one `stuck` event and one
 // chat line per episode, stuck=<reason> in `state` while it lasts
