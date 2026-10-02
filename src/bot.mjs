@@ -1549,14 +1549,8 @@ function reflexTick () {
   if (holingUp) return
   // a run already going owns the legs until it ends: one run at a time, and it ends itself (#138)
   if (flee) { stepFlee(me); return }
-  // #147: nothing to eat and nowhere safe. Running costs food this body has not got, so the answer is the ground, not the legs
-  const holeWhy = holeUpVerdict({
-    food: bot.food,
-    hasFood: edibleCarried(),
-    health: bot.health,
-    night: isNight(bot.time.timeOfDay),
-    mobNear: nearbyHostiles(7).length > 0
-  })
+  // #147: boxed in with nowhere to run, or too hurt to heal with nothing to eat: the answer is the ground, not the legs
+  const holeWhy = holeUpVerdict({ hasFood: edibleCarried(), health: bot.health })
   // in the water the problem is air, not shelter (17:46Z: a body drowning at health 5 was told to hole up); and a refused
   // hole-up falls through to the fight or the run below instead of ending the tick
   const drowning = surfacing || bot.entity.isInWater

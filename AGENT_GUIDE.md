@@ -328,10 +328,10 @@ physics and route-controller patches support it; ordinary digging and building p
   nothing out of the door and charges no archer: a mob in reach is swung at from where it stands, a skeleton shooting
   through a gap gets the gap plugged with a block from the pack (event `holding`, with `plugged=` when it did, else
   the note says to step out of its line of sight). It does not run out either, unless the mob is in the room with it.
-- **With nothing left to eat, the body goes to ground by itself.** At food 0 with no food carried, at night or with a mob
-  in reach, or at health 6 or less with nothing to eat (it cannot heal), or when a run is boxed in (`flee_stuck`), it
-  reads the three cells under its feet and the four beside each of them, digs down three and caps the shaft over its
-  head with a full solid block (`holing_up`, then `holed_up` with `at=` and the command that brings it back up). A
+- **When it cannot heal or cannot run, the body goes to ground by itself.** Hunger alone never does this: on this server
+  starvation does not kill. At health 6 or less with nothing to eat (it cannot heal), or when a run is boxed in
+  (`flee_stuck`), it reads the three cells under its feet and the four beside each of them, digs down three and caps
+  the shaft over its head with a full solid block (`holing_up`, then `holed_up` with `at=` and the command that brings it back up). A
   column over a cave, water or lava, or with water or lava beside it (a farm channel pours into the shaft), is not dug:
   it steps to the nearest sound cell within two and digs there (`holing_up step=`), or with three blocks in the pack
   pillars up three instead (`way=pillar`), and only with neither walls itself in where it stands. A shaft that fills
