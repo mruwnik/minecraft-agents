@@ -1,0 +1,173 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { createFake } from './fake.mjs'
+
+const at = (x, y, z) => ({ x, y, z })
+
+const owned = (spec = {}) => {
+  const p = createFake(spec)
+  p.setOwner('t1')
+  return p
+}
+
+test('self reports position, vitals, time and inventory', () => {
+  const p = createFake({ self: { pos: at(1, 64, 2), health: 15, food: 9, username: 'F' }, time: 13000, inventory: [{ name: 'bread', count: 2 }] })
+  const s = p.self()
+  assert.deepEqual(s.pos, at(1, 64, 2))
+  assert.equal(s.health, 15)
+  assert.equal(s.food, 9)
+  assert.equal(s.isDay, false)
+  assert.equal(s.username, 'F')
+  assert.deepEqual(s.inventory.map(i => [i.name, i.count]), [['bread', 2]])
+})
+
+
+for (const [time, isDay] of [[1000, true], [12000, true], [13000, false], [23000, false], [23500, true]]) {
+  test(`isDay at ${time} is ${isDay}`, () => {
+    assert.equal(createFake({ time }).self().isDay, isDay)
+  })
+}
+
+test('entities are filtered by radius and kind and sorted by distance', () => {
+  const p = createFake({
+    entities: [
+      { id: 1, name: 'zombie', kind: 'hostile', pos: at(10, 64, 0) },
+      { id: 2, name: 'cow', kind: 'passive', pos: at(2, 64, 0) },
+      { id: 3, name: 'skeleton', kind: 'hostile', pos: at(4, 64, 0) },
+      { id: 4, name: 'creeper', kind: 'hostile', pos: at(40, 64, 0) }
+    ]
+  })
+  assert.deepEqual(p.entities({ radius: 16, kind: 'hostile' }).map(e => e.id), [3, 1])
+  assert.deepEqual(p.entities({ radius: 16 }).map(e => e.id), [2, 3, 1])
+  assert.deepEqual(p.entities({ names: ['cow'] }).map(e => e.id), [2])
+  assert.equal(p.entities({ radius: 16, max: 1 }).length, 1)
+})
+
+test('blocks match by names or predicate, sorted by distance', () => {
+  const p = createFake({ blocks: { '5,64,0': 'oak_log', '2,64,0': 'birch_log', '1,63,0': 'dirt', '50,64,0': 'oak_log' } })
+  assert.deepEqual(p.blocks({ names: ['oak_log', 'birch_log'] }).map(b => b.name), ['birch_log', 'oak_log'])
+  assert.deepEqual(p.blocks({ match: n => n.endsWith('_log'), radius: 100 }).map(b => b.pos.x), [2, 5, 50])
+  assert.equal(p.blockAt(at(1, 63, 0)).name, 'dirt')
+  assert.equal(p.blockAt(at(9, 9, 9)).name, 'air')
+})
+
+test('acting with a stale token rejects with cut', async () => {
+  const p = owned()
+  await assert.rejects(p.moveTo('other', { pos: at(1, 64, 0) }), { code: 'cut' })
+})
+
+test('changing the owner cuts a held call', async () => {
+  const p = owned()
+  p.world.hold('moveTo')
+  const walk = p.moveTo('t1', { pos: at(3, 64, 0) })
+  p.setOwner('t2')
+  await assert.rejects(walk, { code: 'cut' })
+  assert.deepEqual(p.self().pos, at(0, 64, 0))
+})
+
+test('a released hold runs the default implementation, or returns the given result', async () => {
+  const p = owned()
+  const release = p.world.hold('moveTo')
+  const walk = p.moveTo('t1', { pos: at(3, 64, 0) })
+  release()
+  assert.equal((await walk).status, 'arrived')
+  const release2 = p.world.hold('dig')
+  const dig = p.dig('t1', { pos: at(1, 64, 0) })
+  release2({ status: 'cannot' })
+  assert.equal((await dig).status, 'cannot')
+})
+
+test('moveTo arrives, goes partial past maxDistance, and is blocked when unreachable', async () => {
+  const p = owned({ unreachable: ['9,64,9'] })
+  assert.equal((await p.moveTo('t1', { pos: at(3, 64, 4) })).status, 'arrived')
+  assert.deepEqual(p.self().pos, at(3, 64, 4))
+  const far = await p.moveTo('t1', { pos: at(103, 64, 4), maxDistance: 10 })
+  assert.equal(far.status, 'partial')
+  assert.deepEqual(far.pos, at(13, 64, 4))
+  assert.equal((await p.moveTo('t1', { pos: at(9, 64, 9) })).status, 'blocked')
+})
+
+test('dig removes the block and drops an item entity', async () => {
+  const p = owned({ blocks: { '1,64,0': 'stone', '20,64,0': 'stone' }, drops: { stone: 'cobblestone' } })
+  const r = await p.dig('t1', { pos: at(1, 64, 0) })
+  assert.equal(r.status, 'dug')
+  assert.equal(r.block, 'stone')
+  assert.equal(r.drops[0].name, 'cobblestone')
+  assert.equal(p.blockAt(at(1, 64, 0)).name, 'air')
+  assert.equal(p.entities({ kind: 'item' })[0].item.name, 'cobblestone')
+  assert.equal((await p.dig('t1', { pos: at(1, 64, 0) })).status, 'missing')
+  assert.equal((await p.dig('t1', { pos: at(20, 64, 0) })).status, 'unreachable')
+})
+
+test('collect moves a dropped item into the inventory', async () => {
+  const p = owned({ blocks: { '1,64,0': 'oak_log' } })
+  const { drops } = await p.dig('t1', { pos: at(1, 64, 0) })
+  const r = await p.collect('t1', { id: drops[0].id })
+  assert.equal(r.status, 'collected')
+  assert.deepEqual(r.gained, [{ name: 'oak_log', count: 1 }])
+  assert.equal(p.self().inventory.find(i => i.name === 'oak_log').count, 1)
+  assert.equal((await p.collect('t1', { id: drops[0].id })).status, 'gone')
+})
+
+test('place uses an inventory item on an empty cell', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 1 }], blocks: { '1,64,0': 'stone' } })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'dirt' })).status, 'occupied')
+  assert.equal((await p.place('t1', { pos: at(2, 64, 0), item: 'dirt' })).status, 'placed')
+  assert.equal(p.blockAt(at(2, 64, 0)).name, 'dirt')
+  assert.equal((await p.place('t1', { pos: at(3, 64, 0), item: 'dirt' })).status, 'no-item')
+})
+
+test('containers can be inspected and transferred to and from', async () => {
+  const p = owned({ inventory: [{ name: 'oak_log', count: 5 }], containers: { '1,64,1': [{ name: 'cobblestone', count: 10 }] } })
+  const dep = await p.transfer('t1', { pos: at(1, 64, 1), direction: 'deposit', item: 'oak_log', count: 3 })
+  assert.deepEqual([dep.status, dep.moved], ['ok', 3])
+  const wd = await p.transfer('t1', { pos: at(1, 64, 1), direction: 'withdraw', item: 'cobblestone', count: 20 })
+  assert.deepEqual([wd.status, wd.moved], ['ok', 10])
+  const seen = await p.inspectContainer('t1', { pos: at(1, 64, 1) })
+  assert.deepEqual(seen.items.map(i => [i.name, i.count]), [['oak_log', 3]])
+  assert.equal((await p.inspectContainer('t1', { pos: at(30, 64, 1) })).status, 'missing')
+})
+
+test('equip and eat use the inventory', async () => {
+  const p = owned({ self: { food: 10 }, inventory: [{ name: 'bread', count: 1 }, { name: 'iron_axe', count: 1 }] })
+  assert.equal((await p.equip('t1', { item: 'iron_axe' })).status, 'equipped')
+  assert.equal(p.self().held, 'iron_axe')
+  assert.equal((await p.equip('t1', { item: 'diamond' })).status, 'no-item')
+  const ate = await p.eat('t1', {})
+  assert.deepEqual([ate.status, ate.item, ate.food], ['ate', 'bread', 15])
+  assert.equal((await p.eat('t1', {})).status, 'no-food')
+})
+
+test('attack hits then kills', async () => {
+  const p = owned({ entities: [{ id: 5, name: 'zombie', kind: 'hostile', pos: at(2, 64, 0), health: 6 }] })
+  assert.equal((await p.attack('t1', { id: 5 })).status, 'hit')
+  assert.equal((await p.attack('t1', { id: 5 })).status, 'killed')
+  assert.equal((await p.attack('t1', { id: 5 })).status, 'gone')
+})
+
+test('sleep works at night on a bed and makes it morning', async () => {
+  const p = owned({ time: 1000, blocks: { '1,64,0': 'red_bed' } })
+  assert.equal((await p.sleep('t1', { pos: at(1, 64, 0) })).status, 'not-night')
+  p.world.setTime(14000)
+  assert.equal((await p.sleep('t1', { pos: at(2, 64, 0) })).status, 'missing')
+  assert.equal((await p.sleep('t1', { pos: at(1, 64, 0) })).status, 'sleeping')
+  assert.equal(p.self().isDay, true)
+})
+
+test('calls are logged and overrides replace an implementation', async () => {
+  const p = owned()
+  p.world.override('look', async (token, args, impl) => ({ status: 'odd', viaDefault: (await impl(token, args)).status }))
+  const r = await p.look('t1', { yaw: 0, pitch: 0 })
+  assert.deepEqual(r, { status: 'odd', viaDefault: 'ok' })
+  assert.deepEqual(p.world.calls.map(c => [c.name, c.token]), [['look', 't1']])
+})
+
+test('body events reach listeners until unsubscribed', () => {
+  const p = createFake()
+  const seen = []
+  const off = p.onBodyEvent(e => seen.push(e.kind))
+  p.world.emit({ kind: 'hurt', health: 5 })
+  off()
+  p.world.emit({ kind: 'chat' })
+  assert.deepEqual(seen, ['hurt'])
+})
