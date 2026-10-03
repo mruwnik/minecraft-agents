@@ -357,6 +357,20 @@
           (is (= "dirt" (block-at s 0 63 0)) "the ground is intact")
           (is (finished? s)))))))
 
+(deftest no-drops-with-dug-ground-under-the-start-mends-it-from-the-carried-filler
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "dirt" :count 4}
+                                 {:blocks floor :drops {"dirt" nil} :inventory [{:name "dirt" :count 10}]} 80))
+              dug-ground (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))]
+          (is (= :no-drops (:reason (done-event s))))
+          (is (pos? (dig-count s)) "ground cells were dug")
+          (is (pos? (:mended (done-event s))))
+          (is (pos? (+ (count (calls s "place")) (count (calls s "jumpPlace")))) "the mend placed")
+          (is (every? #(= "dirt" %) dug-ground) "the ground is solid again")
+          (is (finished? s)))))))
+
 (deftest a-custom-dry-digs-bound-is-honoured
   (async done
     (tu/run-async done
