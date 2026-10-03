@@ -2,33 +2,45 @@
   (:require [reagent.core :as r]
             [re-frame.core :as rf]
             [dashboard.mapview :as mv]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.ui.mapmodel :as mm]
+            [dashboard.ui.plansmodel :as pm]
+            [dashboard.ui.trouble :as trouble]))
 
 (def pick-radius 10)
 (def label-font "11px ui-monospace, Menlo, monospace")
+(def body-font "bold 12px ui-monospace, Menlo, monospace")
+(def zone-label-scale 3)
 
-(def colors {:up "#3fb950" :down "#6e7681" :human "#f08ad0" :place "#d9b25f" :zone "#5b8fd6" :ink "#dfe4ec"})
+(def human-color "#f08ad0")
+(def zone-color "#5b8fd6")
 
-(defn body-pos [b] (get-in b [:state :pos]))
-
-(defn projected [view x z] (mv/project view x z))
+(defn plan-rect [view plan now-summary]
+  (-> (mv/zone-rect view (mm/plan-box plan))
+      (mm/min-size 8)
+      (assoc :kind :plan :name (:name plan) :color (pm/completion-color now-summary) :percent (:percent now-summary))))
 
 (defn layout
   "Everything drawable with pixel positions, bodies first (so their labels win space)."
-  [{:keys [view bodies places zones humans selected]}]
-  {:zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
-   :plans (for [p (mv/plan-rects places)] (assoc (mv/zone-rect view {:x1 (:x p) :z1 (:z p) :x2 (+ (:x p) (:w p)) :z2 (+ (:z p) (:h p))}) :name (:name p)))
-   :bodies (for [b bodies :let [pos (body-pos b)] :when pos]
-             (assoc (projected view (:x pos) (:z pos)) :kind :body :name (:name b) :up (boolean (:up b))
-                    :selected? (= selected {:kind :body :name (:name b)})))
-   :humans (for [h humans] (assoc (projected view (:x h) (:z h)) :kind :human :name (:name h)))
+  [{:keys [view bodies places zones humans selected plans now]}]
+  {:scale (:scale view)
+   :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
+   :plans (for [p plans] (plan-rect view p (:summary p)))
+   :bodies (for [b bodies :let [pos (mm/body-pos b)] :when pos]
+             (let [status (trouble/status b (or now 0))]
+               (assoc (mv/project view (:x pos) (:z pos)) :kind :body :name (:name b) :up (boolean (:up b))
+                      :status status :color (mm/status-color status)
+                      :selected? (= selected {:kind :body :name (:name b)}))))
+   :humans (for [h humans] (assoc (mv/project view (:x h) (:z h)) :kind :human :name (:name h)))
    :places (for [p places]
-             (assoc (projected view (:x p) (:z p)) :kind :place :name (:name p)
+             (assoc (mv/project view (:x p) (:z p)) :kind :place :name (:name p) :place-kind (:kind p)
+                    :color (mm/kind-color (:kind p))
                     :selected? (= selected {:kind :place :name (:name p)})))})
 
 (defn pick [lay x y]
   (or (logic/pick-nearest (:bodies lay) x y pick-radius)
-      (logic/pick-nearest (:places lay) x y pick-radius)))
+      (logic/pick-nearest (:places lay) x y pick-radius)
+      (mm/pick-plan (:plans lay) x y)))
 
 (defn dot! [ctx {:keys [px py]} color radius]
   (.beginPath ctx)
@@ -43,23 +55,66 @@
   (set! (.-lineWidth ctx) 2)
   (.stroke ctx))
 
+(defn body-dot! [ctx {:keys [up color] :as b}]
+  (.save ctx)
+  (set! (.-globalAlpha ctx) (if up 1 0.55))
+  (dot! ctx b "#0b0d11" (if up 7 5))
+  (dot! ctx b color (if up 5.5 3.5))
+  (.restore ctx))
+
 (defn diamond! [ctx {:keys [px py]} color]
   (.beginPath ctx)
-  (.moveTo ctx px (- py 5)) (.lineTo ctx (+ px 5) py) (.lineTo ctx px (+ py 5)) (.lineTo ctx (- px 5) py)
+  (.moveTo ctx px (- py 3.5)) (.lineTo ctx (+ px 3.5) py) (.lineTo ctx px (+ py 3.5)) (.lineTo ctx (- px 3.5) py)
   (.closePath ctx)
   (set! (.-fillStyle ctx) color)
   (.fill ctx))
 
-(defn label-box [ctx {:keys [px py name] :as item} color]
-  (assoc item :label-color color
-         :px (+ px 8) :py (- py 6) :w (.-width (.measureText ctx name)) :h 12
+(defn label-box [ctx {:keys [px py name] :as item} color font]
+  (set! (.-font ctx) font)
+  (assoc item :label-color color :label-font font
+         :px (+ px 9) :py (- py 6) :w (.-width (.measureText ctx name)) :h 12
          :anchor-x px :anchor-y py))
 
 (defn draw-labels! [ctx boxes]
   (set! (.-textBaseline ctx) "top")
-  (doseq [{:keys [px py name label-color]} (mv/fit-labels boxes)]
+  (doseq [{:keys [px py name label-color label-font]} (mv/fit-labels boxes)]
+    (set! (.-font ctx) label-font)
+    (set! (.-lineWidth ctx) 3)
+    (set! (.-strokeStyle ctx) "rgba(11,13,17,0.85)")
+    (.strokeText ctx name px py)
     (set! (.-fillStyle ctx) label-color)
     (.fillText ctx name px py)))
+
+(defn draw-plan! [ctx {:keys [px py w h color]}]
+  (set! (.-fillStyle ctx) color)
+  (set! (.-globalAlpha ctx) 0.18)
+  (.fillRect ctx px py w h)
+  (set! (.-globalAlpha ctx) 1)
+  (set! (.-strokeStyle ctx) color)
+  (set! (.-lineWidth ctx) 1.5)
+  (.strokeRect ctx px py w h))
+
+(defn draw-zone! [ctx {:keys [px py w h]}]
+  (set! (.-fillStyle ctx) "rgba(91,143,214,0.07)")
+  (.fillRect ctx px py w h)
+  (set! (.-strokeStyle ctx) "rgba(91,143,214,0.35)")
+  (set! (.-lineWidth ctx) 1)
+  (.strokeRect ctx px py w h))
+
+(defn plan-label [{:keys [name percent]}] (str name " " percent "%"))
+
+(defn labels [ctx lay]
+  (let [scale (:scale lay)]
+    (concat
+     (for [b (:bodies lay) :when (:up b)] (label-box ctx b (:color b) body-font))
+     (for [p (:plans lay)] (label-box ctx (assoc p :name (plan-label p)) (:color p) label-font))
+     (for [h (:humans lay)] (label-box ctx h human-color label-font))
+     (when (mm/show-place-labels? scale)
+       (for [p (:places lay)] (label-box ctx p (:color p) label-font)))
+     (for [b (:bodies lay) :when (not (:up b))] (label-box ctx b "#6e7681" label-font))
+     (when (>= scale zone-label-scale)
+       (for [z (:zones lay) :when (:name z)]
+         (assoc (label-box ctx z zone-color label-font) :px (+ (:px z) 2) :py (+ (:py z) 2)))))))
 
 (defn draw! [canvas model]
   (let [{:keys [w h]} (:canvas model)
@@ -73,26 +128,26 @@
       (.clearRect ctx 0 0 w h)
       (set! (.-font ctx) label-font)
       (let [lay (layout model)]
-        (doseq [z (concat (:plans lay) (:zones lay))]
-          (set! (.-strokeStyle ctx) (:zone colors))
-          (set! (.-lineWidth ctx) 1)
-          (set! (.-fillStyle ctx) "rgba(91,143,214,0.10)")
-          (.fillRect ctx (:px z) (:py z) (:w z) (:h z))
-          (.strokeRect ctx (:px z) (:py z) (:w z) (:h z)))
-        (doseq [p (:places lay)] (diamond! ctx p (:place colors)))
-        (doseq [h (:humans lay)] (dot! ctx h (:human colors) 4))
-        (doseq [b (:bodies lay)] (dot! ctx b (if (:up b) (:up colors) (:down colors)) 5))
-        (doseq [x (concat (:bodies lay) (:places lay)) :when (:selected? x)] (ring! ctx x 9))
-        (draw-labels! ctx (concat
-                           (for [b (:bodies lay)] (label-box ctx b (if (:up b) (:up colors) (:down colors))))
-                           (for [h (:humans lay)] (label-box ctx h (:human colors)))
-                           (for [p (:places lay)] (label-box ctx p (:place colors)))
-                           (for [z (:zones lay) :when (:name z)]
-                             (assoc (label-box ctx z (:zone colors)) :px (+ (:px z) 2) :py (+ (:py z) 2)))))))))
+        (doseq [z (:zones lay)] (draw-zone! ctx z))
+        (doseq [p (:plans lay)] (draw-plan! ctx p))
+        (doseq [p (:places lay)] (diamond! ctx p (:color p)))
+        (doseq [h (:humans lay)] (dot! ctx h human-color 4))
+        (doseq [b (sort-by :up (:bodies lay))] (body-dot! ctx b))
+        (doseq [x (concat (:bodies lay) (:places lay)) :when (:selected? x)] (ring! ctx x 10))
+        (draw-labels! ctx (labels ctx lay))))))
 
 (defn canvas-pos [e node]
   (let [rect (.getBoundingClientRect node)]
     [(- (.-clientX e) (.-left rect)) (- (.-clientY e) (.-top rect))]))
+
+(def legend-items
+  [["body: working" (mm/status-color :working)] ["idle" (mm/status-color :idle)] ["trouble" (mm/status-color :trouble)]
+   ["offline" (mm/status-color :offline)] ["plan: done" pm/green] ["half" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
+
+(defn legend []
+  (into [:div#maplegend]
+        (for [[label color] legend-items]
+          ^{:key label} [:span [:i {:style {:background color}}] label])))
 
 (defn map-view []
   (let [wrap (atom nil)
@@ -135,5 +190,6 @@
                                   [x y] (canvas-pos e @canvas)]
                               (reset! drag nil)
                               (when (< (:moved d 0) 4)
-                                (rf/dispatch [:select (some-> (pick (layout @model) x y) (select-keys [:kind :name]))]))))}]
-         [:div#hint "drag to pan · wheel to zoom · click a body or place to select it"]])})))
+                                (rf/dispatch [:map-click (some-> (pick (layout @model) x y) (select-keys [:kind :name]))]))))}]
+         [legend]
+         [:div#hint "drag to pan · wheel to zoom · click a body for its view, a plan for its page"]])})))

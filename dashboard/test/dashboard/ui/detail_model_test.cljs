@@ -44,3 +44,11 @@
 
 (deftest no-pos
   (is (= "-" (:pos-text (m/detail-model (assoc online :view nil :engine {:up true}) now nil)))))
+
+(deftest embed-css-hides-the-view-chrome
+  (are [stats? expected-hidden] (= expected-hidden (m/hidden-selectors stats?))
+    false ["#overlay" "#bar" "#drive-banner"]
+    true ["#bar" "#drive-banner"])
+  (are [stats? expected] (= expected (m/embed-css stats?))
+    false "#overlay, #bar, #drive-banner { display: none !important; }"
+    true "#bar, #drive-banner { display: none !important; }"))

@@ -374,7 +374,7 @@
           (.end res (.readFileSync fs file))))))
 
 (def route-list
-  "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
+  "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/plans, /api/plan/<name>, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
 
 (defn read-body [req limit on-done]
   (let [chunks (atom []) size (atom 0)]
@@ -399,15 +399,36 @@
 (defn blueprint-library []
   (legacy/library repo-root (all-places-js (read-worlds))))
 
-(defn handle-world-scoped! [res kind world-name query]
+;; ---------------------------------------------------------------- plans (js/plans-service.mjs)
+(def plans-module (or (.-PLANS_MODULE js/process.env) (.join path dashboard-dir "js" "plans-service.mjs")))
+
+(defn load-plans-service []
+  (-> (import-esm (.-href (.pathToFileURL url plans-module)))
+      (.then (fn [m] ((.-createPlansService m) #js {:stateDir (.join path root "state")})))))
+
+(defonce plans-service (delay (load-plans-service)))
+
+(defn send-plans! [res world-name plan-name]
+  (-> @plans-service
+      (.then (fn [svc]
+               (if-not plan-name
+                 (send-json-js! res 200 (.list svc world-name))
+                 (if-let [plan (.get svc world-name plan-name)]
+                   (send-json-js! res 200 plan)
+                   (send-json! res 404 {:error (str "no plan called " plan-name " in " world-name)})))))
+      (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))
+
+(defn handle-world-scoped! [res kind world-name query plan-name]
   (case kind
     :state (send-json! res 200 (snapshot world-name))
+    :plans-api (send-plans! res world-name nil)
+    :plan-api (send-plans! res world-name plan-name)
     :chat (send-json! res 200 (chat-log (chat/chat-limit (.get query "limit")) world-name))
     :world (send-json! res 501 {:error "unsupported for engine bodies: world scan (needs a body's HTTP API)"})
     :villages-api (let [snap (village-snapshot (filterv #(= world-name (:name %)) (read-worlds)))]
                     (send-json-js! res 200 (doto (to-js (select-keys snap [:error])) (aset "villages" (:villages snap)) (aset "readOnly" true))))))
 
-(def world-kinds #{:state :chat :world :villages-api})
+(def world-kinds #{:state :chat :world :villages-api :plans-api :plan-api})
 
 (defn handle! [req res]
   (let [{:keys [kind] blueprint-name :name request-path :path} (routes/route (.-url req))
@@ -415,7 +436,7 @@
         choice (when (world-kinds kind) (choose-world query))]
     (cond
       (:error choice) (send-json! res 400 choice)
-      (world-kinds kind) (handle-world-scoped! res kind (:name choice) query)
+      (world-kinds kind) (handle-world-scoped! res kind (:name choice) query blueprint-name)
       :else
       (case kind
         :page (send-file! res (.join path public-dir "index.html"))

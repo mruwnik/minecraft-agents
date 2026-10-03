@@ -312,3 +312,41 @@ main.bp textarea.stock { min-height: 48px; }
 main.bp aside { width: 380px; flex: none; border-right: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
 #hint { position: absolute; left: 10px; bottom: 8px; color: var(--dim); pointer-events: none; }
 #content:has(> main.bp) { overflow: hidden; }
+
+/* map: legend */
+#maplegend { position: absolute; right: 10px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: 720px; justify-content: flex-end; padding: 5px 9px; background: rgba(22,26,33,.85); border: 1px solid var(--line); border-radius: 5px; color: var(--dim); font-size: 11px; pointer-events: none; }
+#maplegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+
+/* plans page */
+.plans-page { display: flex; height: 100%; min-height: 0; }
+.plan-list { width: 340px; flex: none; border-right: 1px solid var(--line); overflow-y: auto; background: var(--panel); padding: 10px 8px; }
+.plan-list h2 { margin: 2px 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+.plan-row { padding: 7px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px; }
+.plan-row:hover { background: var(--panel2); }
+.plan-row.sel { background: var(--panel2); border-color: var(--accent); }
+.prow1 { display: flex; justify-content: space-between; gap: 8px; }
+.pname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ppct { font-family: var(--mono); color: var(--dim); }
+.ppct.big { font-size: 20px; color: var(--ink); margin-left: auto; }
+.prow2 { display: flex; gap: 10px; color: var(--dim); font-size: 11px; margin-top: 3px; }
+.cbar { display: flex; height: 7px; border-radius: 4px; overflow: hidden; background: var(--bg); margin-top: 4px; }
+.cbar .match { background: var(--working); } .cbar .wrong { background: var(--danger); }
+.cbar .missing { background: var(--trouble); } .cbar .unknown { background: var(--offline); }
+.pempty { padding: 14px 8px; }
+.plan-detail { flex: 1; min-width: 0; overflow: auto; padding: 14px 18px 24px; }
+.plan-detail .cbar { height: 10px; max-width: 760px; }
+.phead { display: flex; align-items: center; gap: 12px; max-width: 760px; }
+.phead h2 { margin: 0; font-size: 18px; }
+.pfacts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; align-items: baseline; }
+.pnote { margin: 6px 0; color: var(--ink); max-width: 80ch; }
+.layers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 6px; }
+.plan-legend { display: flex; gap: 14px; color: var(--dim); font-size: 11px; margin: 4px 0 8px; }
+.plan-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.gridwrap { max-width: 100%; }
+canvas.plan-grid { cursor: default; border: 1px solid var(--line); image-rendering: pixelated; }
+.cellinfo { min-height: 1.6em; margin-top: 6px; }
+.plan-bill { margin-top: 14px; }
+.plan-bill h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+.bill { display: grid; grid-template-columns: max-content max-content; gap: 2px 12px; }
+.bill .n { text-align: right; color: var(--dim); font-family: var(--mono); }
+.stats.on { background: #243245; border-color: var(--accent); }

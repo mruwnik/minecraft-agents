@@ -39,6 +39,10 @@
        :none (when online? [:<> [:span.hint drive/hint]
                             [:button.take {:on-click #(rf/dispatch [:drive-take])} "Take control"]])
        [banner])
+     [:span.spacer]
+     (when online?
+       [:button.stats {:class (when @(rf/subscribe [:detail-stats?]) "on") :title "show the view page's debug overlay"
+                       :on-click #(rf/dispatch [:detail-stats])} "stats"])
      (when error [:span.derr error])]))
 
 (defn view-box [{:keys [name online? iframe-src thumb offline-text]}]
@@ -46,7 +50,8 @@
     [:div.viewarea
      [:div.viewbox {:class [(when driven? "driven") (when-not online? "offline")]}
       (if online?
-        ^{:key name} [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"}]
+        ^{:key name} [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"
+                                  :on-load #(rf/dispatch [:frame-loaded])}]
         [:<>
          (if thumb [:img {:src thumb :alt (str "last view of " name)}] [:div.noview "no view"])
          [:div.offline-note offline-text]])]]))

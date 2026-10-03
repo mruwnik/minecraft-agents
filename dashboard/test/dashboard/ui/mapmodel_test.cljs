@@ -1,0 +1,61 @@
+(ns dashboard.ui.mapmodel-test
+  (:require [cljs.test :refer [deftest are is]]
+            [dashboard.ui.mapmodel :as mm]))
+
+(deftest body-position
+  (are [body expected] (= expected (mm/body-pos body))
+    {:view {:pos {:x 1.5 :z 2.5}} :state {:pos {:x 1 :z 2}}} {:x 1.5 :z 2.5}
+    {:state {:pos {:x 1 :z 2}}} {:x 1 :z 2}
+    {:engine {:pos {:x 7 :z 8}}} {:x 7 :z 8}
+    {:view {:pos {:x nil :z 2}} :state {:pos {:x 1 :z 2}}} {:x 1 :z 2}
+    {} nil))
+
+(deftest kind-colors
+  (are [kind expected] (= expected (mm/kind-color kind))
+    "base" mm/base-color
+    "farm" mm/farm-color
+    "danger" mm/danger-color
+    "enemy" mm/danger-color
+    "who-knows" mm/place-color
+    nil mm/place-color))
+
+(deftest status-colors
+  (are [status expected] (= expected (mm/status-color status))
+    :working "#3fb950" :idle "#8b949e" :trouble "#d29922" :offline "#6e7681"))
+
+(deftest zoom-labels
+  (are [scale expected] (= expected (mm/show-place-labels? scale))
+    0.1 false
+    0.49 false
+    0.5 true
+    4 true))
+
+(deftest min-rect
+  (are [rect expected] (= expected (select-keys (mm/min-size rect 6) [:px :py :w :h]))
+    {:px 10 :py 10 :w 20 :h 30} {:px 10 :py 10 :w 20 :h 30}
+    {:px 10 :py 10 :w 2 :h 30} {:px 8 :py 10 :w 6 :h 30}
+    {:px 10 :py 10 :w 0 :h 0} {:px 7 :py 7 :w 6 :h 6}))
+
+(deftest rect-hit
+  (are [x y expected] (= expected (mm/in-rect? {:px 10 :py 10 :w 20 :h 20} x y))
+    10 10 true
+    30 30 true
+    9 15 false
+    15 31 false))
+
+(deftest pick-plan-smallest-first
+  (let [plans [{:name "big" :px 0 :py 0 :w 100 :h 100} {:name "small" :px 10 :py 10 :w 10 :h 10}]]
+    (are [x y expected] (= expected (:name (mm/pick-plan plans x y)))
+      15 15 "small"
+      50 50 "big"
+      200 200 nil)))
+
+(deftest bodies-bounds
+  (are [bodies expected] (= expected (mm/body-points bodies))
+    [{:up true :state {:pos {:x 1 :z 2}}} {:up false :state {:pos {:x 50 :z 50}}} {:up true}]
+    [{:x 1 :z 2}]
+    [] []))
+
+(deftest plan-rect
+  (is (= {:x1 10 :z1 -70 :x2 21 :z2 -60}
+         (mm/plan-box {:bounds {:x1 10 :z1 -70 :x2 20 :z2 -61}}))))

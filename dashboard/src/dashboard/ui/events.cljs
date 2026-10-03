@@ -71,11 +71,12 @@
    {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :detail-body nil :status "connecting..."
                :villages nil)
     :push-url (logic/with-world (.-pathname js/location) world)
-    :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]]
+    :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]] [:dispatch [:plans/world-changed]]
          (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])]}))
 
 (rf/reg-event-db :canvas-size (fn [db [_ w h]] (assoc db :canvas {:w w :h h})))
 (rf/reg-event-db :fit (fn [db _] (assoc db :user-view nil)))
+(rf/reg-event-db :fit-bodies (fn [db _] (assoc db :user-view (db/bodies-view db))))
 
 (rf/reg-event-db
  :pan
@@ -96,6 +97,15 @@
        db))))
 
 (rf/reg-event-db :select (fn [db [_ selection]] (assoc db :selected selection)))
+
+;; a body opens its popup, a plan its page, anything else is just selected
+(rf/reg-event-fx
+ :map-click
+ (fn [_ [_ {:keys [kind name] :as selection}]]
+   (case kind
+     :body {:fx [[:dispatch [:select selection]] [:dispatch [:open-detail name]]]}
+     :plan {:dispatch [:plans/open name]}
+     {:dispatch [:select selection]})))
 (rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
 (rf/reg-event-db :hide-whispers (fn [db [_ on?]] (assoc db :hide-whispers? on?)))

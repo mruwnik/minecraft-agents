@@ -30,12 +30,15 @@
 
 (deftest map-points-collects-everything
   (is (= [{:x 60.5 :z -151.6} {:x 116 :z -141} {:x 100 :z -150} {:x 110 :z -140} {:x 0 :z 0}]
-         (m/map-points [(seer "Claude" {} 1)] places zones [{:name "Steve" :x 0 :y 64 :z 0}]))))
+         (m/map-points [(seer "Claude" {} 1)] places zones [{:name "Steve" :x 0 :y 64 :z 0}] []))))
 
 (deftest map-points-down-body-and-village-bounds
-  (is (= [] (m/map-points [{:name "Perrin" :up false :state nil}] [] [] [])))
+  (is (= [] (m/map-points [{:name "Perrin" :up false :state nil}] [] [] [] [])))
   (is (= [{:x 10 :z 20} {:x 14 :z 27}]
-         (m/map-points [] [{:name "v" :x 10 :z 20 :village {:bounds {:x 10 :z 20 :width 4 :depth 7}}}] [] []))))
+         (m/map-points [] [{:name "v" :x 10 :z 20 :village {:bounds {:x 10 :z 20 :width 4 :depth 7}}}] [] [] []))))
+
+(deftest map-points-include-plan-boxes
+  (is (= [{:x 1 :z 2} {:x 5 :z 9}] (m/map-points [] [] [] [] [{:x1 1 :z1 2 :x2 5 :z2 9}]))))
 
 (deftest world-bounds-cases
   (is (= {:min-x -5 :max-x 15 :min-z -9 :max-z 5} (m/world-bounds [{:x 0 :z 0} {:x 10 :z -4}] 5)))
@@ -85,3 +88,7 @@
            ["a zone" {:bodies [] :places [] :zones [zone]} false]]]
     (testing why
       (is (= expected (m/empty-world? world))))))
+
+(deftest world-bounds-default-pad-grows-with-span
+  (is (= {:min-x -16 :max-x 26 :min-z -16 :max-z 26} (m/world-bounds [{:x 0 :z 0} {:x 10 :z 10}])))
+  (is (= {:min-x -40 :max-x 1040 :min-z -40 :max-z 40} (m/world-bounds [{:x 0 :z 0} {:x 1000 :z 0}]))))

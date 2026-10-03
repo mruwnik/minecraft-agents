@@ -8,6 +8,7 @@
             [dashboard.ui.logic :as logic]
             [dashboard.ui.placeholder :as placeholder]
             [dashboard.ui.pages.blueprints :as blueprints]
+            [dashboard.ui.pages.plans :as plans]
             [dashboard.ui.pages.villagers :as villagers]
             [dashboard.ui.pages.villages :as villages]
             [dashboard.ui.subs]
@@ -16,7 +17,7 @@
 (defn page-content [page]
   (case page
     :map [views/map-page]
-    :plans [placeholder/page "Plans"]
+    :plans [plans/page]
     :jobs [placeholder/page "Jobs"]
     :villages [villages/page]
     :villagers [villagers/page]
@@ -34,4 +35,8 @@
     (.addEventListener js/document "keydown" on-key)
     (.addEventListener js/window "message" detail-events/on-message)
     (rf/dispatch-sync [:init (.-search js/location) page])
+    (case page
+      :plans (rf/dispatch [:plans/start true])
+      :map (rf/dispatch [:plans/start false])
+      nil)
     (.render (rdom/create-root (js/document.getElementById "app")) (r/as-element [root page]))))

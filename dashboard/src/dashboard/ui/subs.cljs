@@ -9,7 +9,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats?]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -70,8 +70,11 @@
  :<- [:zones]
  :<- [:humans]
  :<- [:selected]
- (fn [[view canvas bodies places zones humans selected] _]
-   {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :selected selected}))
+ :<- [:now]
+ :<- [:plan-items]
+ (fn [[view canvas bodies places zones humans selected now plans] _]
+   {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :selected selected
+    :now now :plans plans}))
 
 (rf/reg-sub
  :detail-model

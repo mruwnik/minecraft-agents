@@ -25,10 +25,11 @@
              :when (and (finite-pos? width) (finite-pos? depth))]
          {:name (:name p) :x (or x (:x p)) :z (or z (:z p)) :w width :h depth})))
 
-(defn map-points [bodies places zones humans]
+(defn map-points [bodies places zones humans plan-boxes]
   (vec (concat
         (for [b bodies :when (and (:up b) (get-in b [:state :pos]))]
           {:x (get-in b [:state :pos :x]) :z (get-in b [:state :pos :z])})
+        (mapcat (fn [z] [{:x (:x1 z) :z (:z1 z)} {:x (:x2 z) :z (:z2 z)}]) plan-boxes)
         (mapcat (fn [p] (cons {:x (:x p) :z (:z p)}
                               (map (fn [r] {:x (+ (:x r) (:w r)) :z (+ (:z r) (:h r))}) (plan-rects [p]))))
                 places)
@@ -41,7 +42,12 @@
        (empty? (:zones world))))
 
 (defn world-bounds
-  ([points] (world-bounds points 16))
+  "Bounds of the points, padded by pad blocks (default: 16, or 4% of the longer side when that is more)."
+  ([points]
+   (when (seq points)
+     (let [span (max (- (apply max (map :x points)) (apply min (map :x points)))
+                     (- (apply max (map :z points)) (apply min (map :z points))))]
+       (world-bounds points (max 16 (* 0.04 span))))))
   ([points pad]
    (when (seq points)
      (let [pad (or pad 16)

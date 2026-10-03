@@ -41,7 +41,9 @@
      [:span.spacer]
      [:span.dim.mono @(rf/subscribe [:clock-text])]
      [:span.dim @(rf/subscribe [:status])]
-     (when (= page :map) [:button {:on-click #(rf/dispatch [:fit])} "fit everything"])]))
+     (when (= page :map)
+       [:<> [:button {:on-click #(rf/dispatch [:fit])} "fit all"]
+        [:button {:on-click #(rf/dispatch [:fit-bodies])} "fit bodies"]])]))
 
 (defn map-page []
   [:main.map-page

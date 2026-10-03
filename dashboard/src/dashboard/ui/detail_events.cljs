@@ -3,6 +3,7 @@
   (a 1 s poll of /drive/<name>, postMessage from the view page, take and release requests)."
   (:require [re-frame.core :as rf]
             [dashboard.ui.api :as api]
+            [dashboard.ui.detail-model :as detail-model]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.logic :as logic]))
 
@@ -107,6 +108,30 @@
  :drive-error
  (fn [{:keys [db]} [_ text]]
    {:db (assoc-in db [:drive :error] text)}))
+
+(def embed-style-id "dashboard-embed-style")
+
+(defn apply-embed-style!
+  "Hide the view page's own chrome inside our same-origin iframe (one <style> element, replaced when the toggle moves)."
+  [stats?]
+  (when-let [doc (some-> (js/document.getElementById frame-id) .-contentDocument)]
+    (when-let [head (.-head doc)]
+      (let [style (or (.getElementById doc embed-style-id) (.createElement doc "style"))]
+        (set! (.-id style) embed-style-id)
+        (set! (.-textContent style) (detail-model/embed-css stats?))
+        (.appendChild head style)))))
+
+(rf/reg-fx :embed-style apply-embed-style!)
+
+(rf/reg-event-fx
+ :frame-loaded
+ (fn [{:keys [db]} _] {:embed-style (boolean (:detail-stats? db))}))
+
+(rf/reg-event-fx
+ :detail-stats
+ (fn [{:keys [db]} _]
+   (let [on? (not (:detail-stats? db))]
+     {:db (assoc db :detail-stats? on?) :embed-style on?})))
 
 (defn frame-drive
   "window.__drive of the view page in our iframe (same origin), when it has one."

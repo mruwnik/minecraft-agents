@@ -1,6 +1,7 @@
 (ns dashboard.ui.detail-model
   "Everything the body popup's header, view and side panels show, as plain data."
-  (:require [dashboard.ui.logic :as logic]
+  (:require [clojure.string]
+            [dashboard.ui.logic :as logic]
             [dashboard.ui.trouble :as trouble]))
 
 (defn pos-text [pos]
@@ -40,3 +41,11 @@
        :hud (:hud view)
        :jobs (:jobs engine)
        :reflexes (:reflexes engine)})))
+
+;; The view page draws a debug overlay, a button bar and a takeover banner; the popup has its own chrome. The stats
+;; toggle brings the overlay back.
+(defn hidden-selectors [stats?]
+  (if stats? ["#bar" "#drive-banner"] ["#overlay" "#bar" "#drive-banner"]))
+
+(defn embed-css [stats?]
+  (str (clojure.string/join ", " (hidden-selectors stats?)) " { display: none !important; }"))
