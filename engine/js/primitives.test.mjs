@@ -439,7 +439,7 @@ test('entities finds the pose index through the registry', () => {
 
 test('entities does not put sleeping or username on mobs', () => {
   const [zombie] = rig(world).p.entities({ kind: 'hostile' })
-  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'id', 'kind', 'name', 'pos', 'visible'])
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'hittable', 'id', 'kind', 'name', 'pos', 'visible'])
 })
 
 const mobCases = [
@@ -1070,6 +1070,23 @@ test('glass and unloaded cells do not block sight', () => {
 test('only hostiles carry visible', () => {
   const { p } = rig({ blocks: wall, entities: { ...zombieAt5, 7: { id: 7, name: 'cow', type: 'passive', position: at(5, 64, 1) } } })
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
+})
+
+// the stub's blocks carry no collision shapes: give the solid ones their shapes for the melee check
+const withShapes = (r, shapesByName) => {
+  const blockAt = r.bot.blockAt
+  r.bot.blockAt = v => { const b = blockAt(v); return b && { ...b, shapes: shapesByName[b.name] ?? [[0, 0, 0, 1, 1, 1]] } }
+  return r
+}
+const hittableFrom = (r, id = 9) => r.p.entities({ kind: 'hostile' }).find(e => e.id === id).hittable
+
+test('hittable: a wall of full cubes blocks the swing, a fence post the line passes over does not, beyond 6 blocks it is absent', () => {
+  const fence = { 'oak_fence': [[0.375, 0, 0.375, 0.625, 1.5, 0.625]] }
+  assert.equal(hittableFrom(withShapes(rig({ blocks: wall, entities: zombieAt5 }), {})), false)
+  assert.equal(hittableFrom(withShapes(rig({ blocks: { '2,64,0': 'oak_fence' }, entities: zombieAt5 }), fence)), true)
+  assert.equal(hittableFrom(withShapes(rig({ blocks: {}, entities: zombieAt5 }), {})), true)
+  const far = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(8, 64, 0), height: 1.9 } }
+  assert.equal('hittable' in rig({ blocks: wall, entities: far }).p.entities({ kind: 'hostile' })[0], false)
 })
 
 test('wait resolves ok after its time, scaled by timeScale', async () => {

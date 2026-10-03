@@ -23,3 +23,29 @@ export function lineClear (from, to, solidAt) {
   }
   return true
 }
+
+// Whether the segment from `from` to `to` meets the box [x0, y0, z0, x1, y1, z1] (world coordinates): slab method.
+function segmentHitsBox (from, to, box) {
+  const [lo, hi] = [box.slice(0, 3), box.slice(3)]
+  const o = [from.x, from.y, from.z]
+  const d = [to.x - from.x, to.y - from.y, to.z - from.z]
+  const span = [0, 1]
+  for (let i = 0; i < 3; i++) {
+    if (d[i] === 0) {
+      if (o[i] < lo[i] || o[i] > hi[i]) return false
+      continue
+    }
+    const [t0, t1] = [(lo[i] - o[i]) / d[i], (hi[i] - o[i]) / d[i]]
+    span[0] = Math.max(span[0], Math.min(t0, t1))
+    span[1] = Math.min(span[1], Math.max(t0, t1))
+    if (span[0] > span[1]) return false
+  }
+  return true
+}
+
+// Like lineClear, but a crossed cell blocks only where the segment meets one of its collision boxes.
+// `shapesAt({x, y, z})` gives the cell's boxes in local coordinates (0..1 across the cell; a fence post reaches 1.5).
+export function rayClear (from, to, shapesAt) {
+  return lineClear(from, to, cell => shapesAt(cell).some(b =>
+    segmentHitsBox(from, to, [b[0] + cell.x, b[1] + cell.y, b[2] + cell.z, b[3] + cell.x, b[4] + cell.y, b[5] + cell.z])))
+}

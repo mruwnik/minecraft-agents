@@ -346,6 +346,35 @@ test('only hostiles carry visible, and a spec can force it', () => {
   assert.equal(p.entities({ kind: 'hostile' })[0].visible, true)
 })
 
+const fakeCow = { id: 1, name: 'cow', kind: 'passive', pos: at(5, 64, 0) }
+const hittableOf = (blocks, e = fakeCow) => createFake({ blocks, entities: [e] }).entities()[0].hittable
+
+for (const [name, blocks, expected] of [
+  ['open air', {}, true],
+  ['a glass wall', { '2,64,0': 'glass', '2,65,0': 'glass' }, false],
+  ['a stone wall', fakeWall, false],
+  ['water between', { '2,64,0': 'water', '2,65,0': 'water' }, true],
+  ['tall grass between', { '2,64,0': 'tall_grass' }, true],
+  ['a fence post the ray passes over', { '2,64,0': 'oak_fence' }, true],
+  ['a glass pane the ray goes through', { '2,64,0': 'glass_pane', '2,65,0': 'glass_pane' }, false],
+  ['an unknown-to-the-map block name', { '2,64,0': 'weird_thing', '2,65,0': 'weird_thing' }, false]
+]) {
+  test(`entities hittable: ${name}`, () => assert.equal(hittableOf(blocks), expected))
+}
+
+test('hittable is on every non-item entity within 6 blocks, absent beyond and on items, and a spec can force it', () => {
+  const p = createFake({ blocks: fakeWall, entities: [
+    { ...fakeCow, hittable: true },
+    { id: 2, name: 'zombie', kind: 'hostile', pos: at(5, 64, 1), hittable: false },
+    { id: 3, name: 'cow', kind: 'passive', pos: at(8, 64, 0) },
+    { id: 4, name: 'dropped', kind: 'item', pos: at(3, 64, 0) }] })
+  const by = Object.fromEntries(p.entities().map(e => [e.id, e]))
+  assert.equal(by[1].hittable, true)
+  assert.equal(by[2].hittable, false)
+  assert.equal('hittable' in by[3], false)
+  assert.equal('hittable' in by[4], false)
+})
+
 test('wait returns ok at once and a held wait is cut by an owner change', async () => {
   const p = owned()
   assert.deepEqual(await p.wait('t1', { ms: 2000 }), { status: 'ok' })

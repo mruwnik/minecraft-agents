@@ -10,7 +10,10 @@
   only by username, never by type; items never match; the body never targets
   itself. Each round takes the nearest target not given up on, holds the best
   weapon carried (equipped once), walks within reach (moveTo range 2,
-  :walk-timeout-s) and swings once, at most one swing per :attack-gap-ms (nil:
+  :walk-timeout-s) and swings once, but only when the entity's `hittable`
+  sensing is not false (a clear line from the eye to some point of its hitbox:
+  the server would accept a swing through glass, the job does not make one;
+  instead it walks closer, moveTo range 1, and counts that as a blocked walk), at most one swing per :attack-gap-ms (nil:
   the held weapon's cooldown, combat/attack-gap-ms). A target is given up on
   (warn attack.gave-up with :reason) after three blocked walks or out-of-reach
   swings in a row (:unreachable; a landed hit resets the count; an out-of-reach swing right after a walk that arrived means the target moved on and does not count), after :no-damage-hits swings in a row that did no
@@ -187,6 +190,19 @@
                   (note-hit! c target a))
         nil))))
 
+(defn ^:async close-in!
+  "Walk right up to a target that cannot be hit from here, and count a failure."
+  [c target]
+  (await (ctx/act c :moveTo (clj->js {:pos (u/pos-of (.-pos target)) :range 1 :timeoutS (:walk-timeout-s (:args c))})))
+  (fail! c target))
+
+(defn ^:async swing-or-close-in!
+  "Swing at target unless it reports hittable false (a block in the way): then close in."
+  [c target walked?]
+  (if (false? (.-hittable target))
+    (await (close-in! c target))
+    (await (swing! c target walked?))))
+
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c reason]
@@ -224,8 +240,8 @@
   [c target]
   (await (combat/equip-best! c (combat/best-weapon (:primitives c) (:weapons (:args c)))))
   (case (await (walk! c target))
-    :there (await (swing! c target false))
-    :arrived (await (swing! c target true))
+    :there (await (swing-or-close-in! c target false))
+    :arrived (await (swing-or-close-in! c target true))
     :partial nil
     (fail! c target))
   :continue)

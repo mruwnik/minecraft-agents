@@ -162,6 +162,34 @@
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :unreachable} (:given-up (done-event s)))))))))
 
+(defn wall-of [block xs] (into {} (for [x xs y [64 65 66]] [(str x "," y ",0") block])))
+
+(deftest a-target-behind-glass-is-never-swung-at-and-is-given-up-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)] :blocks (wall-of "glass" [1 2]) :unreachable ["3,64,0"]} 8))]
+          ;; the fake teleports a walker, so the walk to the walled-off cell is answered blocked, as a real one would be
+          (is (zero? (count (attacked s))))
+          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
+          (is (finished? s))
+          (is (= :gave-up (:reason (done-event s)))))))))
+
+(deftest a-target-the-line-passes-over-a-fence-is-swung-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)] :blocks {"1,64,0" "oak_fence"}} 2))]
+          (is (= [7 7] (attacked s)))
+          (is (empty? (events-of s :attack.gave-up))))))))
+
+(deftest a-target-in-the-open-is-swung-at-and-a-missing-hittable-swings-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 2))]
+          (is (= [7 7] (attacked s))))))))
+
 (deftest gives-up-on-a-target-that-takes-no-damage
   (async done
     (tu/run-async done

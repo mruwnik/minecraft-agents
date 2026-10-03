@@ -6,7 +6,7 @@ import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
 import { createView } from './view.mjs'
-import { lineClear } from './sight.mjs'
+import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { craftItem } from './craft.mjs'
 import { say, cleanMessage, PLAYER_NAME, CHAT_MAX } from './chat.mjs'
@@ -72,6 +72,7 @@ const SETTLE_CAP_MS = 1500 // ...or this long in all
 const DEFAULT_RADIUS = 16
 const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
+const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
 const JUMP_PLACE_MAX = 8
@@ -465,6 +466,14 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // eye to the middle of the entity; the walk is bounded by that segment, which the caller keeps within its radius
   const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, blocksSight)
 
+  // collision boxes of a cell, for melee: a block's shapes when it is solid; an unloaded cell has none
+  const shapesAt = p => {
+    const block = bot.blockAt(vec(p))
+    return block?.boundingBox === 'block' ? block.shapes ?? [] : []
+  }
+  const canHit = e => [0.2, (e.height ?? 1.8) / 2, (e.height ?? 1.8) - 0.1].some(dy =>
+    rayClear(eye(), { x: e.position.x, y: e.position.y + dy, z: e.position.z }, shapesAt))
+
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
     if (isOffline()) return []
     const me = here()
@@ -482,6 +491,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         distance,
         ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
         ...(k === 'hostile' && { visible: canSee(e) }),
+        ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })

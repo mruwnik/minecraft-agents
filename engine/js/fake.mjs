@@ -1,7 +1,7 @@
 // A scriptable fake world exposing the primitives interface from README.md.
 // Engine and job tests drive it; it never talks to a server.
 
-import { lineClear } from './sight.mjs'
+import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
@@ -16,6 +16,11 @@ const clone = (v) => structuredClone(v)
 const REACH = 4.5
 const EYE = 1.62
 const BODY_MIDDLE = 0.9
+const NO_SHAPE = new Set(['air', 'cave_air', 'water', 'lava', 'fire', 'short_grass', 'tall_grass', 'snow'])
+const FENCE_POST = [0.375, 0, 0.375, 0.625, 1.5, 0.625]
+const PANE_POST = [0.4375, 0, 0.4375, 0.5625, 1, 0.5625]
+const ENTITY_HEIGHT = 1.8
+const HIT_RANGE = 6
 const SEE_THROUGH = new Set(['air', 'water', 'lava', 'fire', 'short_grass', 'tall_grass', 'snow', 'glass', 'glass_pane'])
 const CROPS = { wheat_seeds: 'wheat', carrot: 'carrots', potato: 'potatoes', beetroot_seeds: 'beetroots' }
 const FOODS = ['cooked_beef', 'cooked_porkchop', 'bread', 'baked_potato', 'cooked_chicken', 'carrot', 'apple', 'sweet_berries', 'beef', 'porkchop', 'mutton', 'chicken', 'rabbit']
@@ -377,6 +382,18 @@ export function createFake (spec = {}) {
     { x: s.self.pos.x + 0.5, y: s.self.pos.y + EYE, z: s.self.pos.z + 0.5 },
     { x: e.pos.x + 0.5, y: e.pos.y + BODY_MIDDLE, z: e.pos.z + 0.5 },
     blocksSight)
+  // a melee swing needs a clear line from the eye to some point of the target's hitbox; blocks by name
+  const shapesAt = (cell) => {
+    const name = s.blocks.get(key(cell)) ?? 'air'
+    if (NO_SHAPE.has(name) || s.unloaded.has(key(cell))) return []
+    if (name.endsWith('_fence')) return [FENCE_POST]
+    if (name === 'glass_pane') return [PANE_POST]
+    return [[0, 0, 0, 1, 1, 1]]
+  }
+  const canHit = (e) => [0.2, ENTITY_HEIGHT / 2, ENTITY_HEIGHT - 0.1].some(dy => rayClear(
+    { x: s.self.pos.x + 0.5, y: s.self.pos.y + EYE, z: s.self.pos.z + 0.5 },
+    { x: e.pos.x + 0.5, y: e.pos.y + dy, z: e.pos.z + 0.5 },
+    shapesAt))
   const holds = new Map() // name -> array of pending hold records
   const pending = new Set() // { token, reject }
   const overrides = new Map()
@@ -478,6 +495,7 @@ export function createFake (spec = {}) {
       if (s.offline) return []
       return s.entities
         .map(e => ({ ...clone(e), distance: dist(s.self.pos, e.pos), ...(e.kind === 'hostile' && { visible: e.visible ?? canSee(e) }) }))
+        .map(e => (e.kind === 'item' || e.distance > HIT_RANGE ? e : { ...e, hittable: e.hittable ?? canHit(e) }))
         .filter(e => e.distance <= radius && (!kind || e.kind === kind) && (!names || names.includes(e.name)))
         .sort((a, b) => a.distance - b.distance)
         .slice(0, max)
