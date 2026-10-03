@@ -2,7 +2,8 @@
   "Trigger definitions. :job is the default job spec (an expression, see
   engine.expr); :args are the trigger's own. See README.md, Triggers and the
   register."
-  (:require [engine.memory :as mem]))
+  (:require [engine.memory :as mem]
+            [engine.triggers.burning :as burning]))
 
 (def default-health 8)
 
@@ -73,4 +74,5 @@
 (def all
   "Every trigger by name."
   (into {} (map (juxt :name identity))
-        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval]))
+        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval
+         burning/burning]))
