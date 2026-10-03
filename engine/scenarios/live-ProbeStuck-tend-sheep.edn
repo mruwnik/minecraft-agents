@@ -1,0 +1,5 @@
+;; ProbeStuck live case: jobs.animals.tend on a sheep pen (shears, chest)
+{:register []
+ :queue [(jobs.animals.tend {:mob "sheep" :target 4
+                             :box {:min {:x 8000 :y 99 :z 8000} :max {:x 8010 :y 104 :z 8010}}
+                             :chest {:x 8002 :y 100 :z 8002}})]}
