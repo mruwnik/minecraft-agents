@@ -72,8 +72,11 @@ values are never converted wholesale; read fields with `.-field` or `aget`.
   object with a `status` string. A domain failure (blocked path, no item) is a
   status, never a rejection.
 - **Rejections** happen only for a cut (`err.code === 'cut'`) and for
-  programming errors (bad args, `err.code === 'bad-args'`). The engine treats
-  any other rejection as a job failure.
+  programming errors (bad args, `err.code === 'bad-args'`). A mineflayer
+  rejection inside an acting call (a refused `placeBlock`, an aborted `dig`,
+  a failed `equip`) resolves `{status: 'failed', reason}` with the library's
+  message, at most 200 characters. The only other throw is `offline` when
+  every reconnect try fails.
 - **Time bounds** below are hard. A method that reaches its bound stops what it
   was doing and resolves with `status: 'timeout'` (or `partial` for `moveTo`).
   Nothing in a primitive runs for minutes; long waits are declining checks.

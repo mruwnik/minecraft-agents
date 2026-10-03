@@ -39,6 +39,9 @@ const vec = p => new Vec3(p.x, p.y, p.z)
 const codedError = (code, message) => Object.assign(new Error(message), { code, [code === 'cut' ? 'cut' : 'badArgs']: true })
 export const cutError = () => codedError('cut', 'cut: the ownership token no longer matches')
 const badArgs = message => codedError('bad-args', message)
+const isCut = err => err?.code === 'cut'
+// a mineflayer rejection is a domain failure: a status, never a throw (only cut and bad-args reject)
+const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
 const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
 const entityKind = e => {
@@ -109,7 +112,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // Runs `body(ctx)` as one call owned by `token`. The call ends the moment the owner changes (rejects with cut), or
   // when its time bound passes (resolves onTimeout(), default {status: 'timeout'}); both run the aborts the body
-  // registered, and `ctx.alive()` then throws so the body stops reaching the bot. Entry with a stale token throws.
+  // registered, and `ctx.alive()` then throws so the body stops reaching the bot. Any other throw from the body (a
+  // mineflayer rejection) resolves {status: 'failed', reason}. Entry with a stale token throws.
   const act = (token, { boundS, onTimeout = () => ({ status: 'timeout' }) }, body) => {
     if (!isOwner(token)) return Promise.reject(cutError())
     return new Promise((resolve, reject) => {
@@ -130,7 +134,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       }
       const timer = setTimeout(() => { if (settled) return; runAborts(); settle(resolve)(onTimeout()) }, Math.max(1, boundS * 1000 * timeScale))
       inflight.add(call)
-      Promise.resolve().then(() => body(ctx)).then(settle(resolve), err => settled ? undefined : settle(reject)(err))
+      Promise.resolve().then(() => body(ctx)).then(settle(resolve), err => settled ? undefined : (isCut(err) ? settle(reject)(err) : settle(resolve)(failed(err))))
     })
   }
 

@@ -628,3 +628,28 @@ test('without a connection to remake, a down body resolves acting calls disconne
   bot.emit('end', 'gone')
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })
 })
+
+// ---- mineflayer rejections are statuses ----
+
+const rejecting = [
+  { name: 'dig', args: { pos: at(2, 64, 0) }, call: 'dig', message: 'Digging aborted' },
+  { name: 'place', args: { pos: at(1, 64, 0), item: 'cobblestone' }, call: 'placeBlock', message: 'No block has been placed' },
+  { name: 'equip', args: { item: 'bread' }, call: 'equip', message: 'cannot equip' },
+  { name: 'eat', args: {}, call: 'consume', message: 'Consuming cancelled due to calling bot.consume() again' },
+  { name: 'attack', args: { id: 8 }, call: 'attack', message: 'invalid entity' },
+  { name: 'look', args: { pos: at(1, 64, 1) }, call: 'lookAt', message: 'look failed' },
+  { name: 'transfer', args: { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }, call: 'deposit', message: 'Server rejected transaction' },
+  { name: 'sleep', args: { pos: at(2, 64, 1) }, call: 'sleep', message: 'it is not night', over: { entities: {} } },
+  { name: 'inspectContainer', args: { pos: at(3, 64, 0) }, call: 'openContainer', message: 'chest is blocked' }
+]
+for (const c of rejecting) {
+  test(`${c.name} resolves failed with the reason when mineflayer rejects`, async () => {
+    const { p } = rig({ ...world, ...c.over, reject: { [c.call]: c.message } })
+    assert.deepEqual(await p[c.name]('t1', c.args), { status: 'failed', reason: c.message })
+  })
+}
+
+test('a rejection does not hide a cut: the token check still wins', async () => {
+  const { p } = rig({ ...world, reject: { dig: 'Digging aborted' } })
+  await assert.rejects(p.dig('old', { pos: at(2, 64, 0) }), cutError)
+})

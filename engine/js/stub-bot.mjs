@@ -1,5 +1,6 @@
 // A minimal stand-in for a mineflayer bot, enough for primitives.mjs tests. Never connects to anything.
-// Every method that talks to the world is recorded in `calls`; methods listed in `hang` never settle.
+// Every method that talks to the world is recorded in `calls`; methods listed in `hang` never settle and
+// methods named in `reject` ({name: message}) reject with an Error carrying that message.
 import vec3 from 'vec3'
 import { EventEmitter } from 'node:events'
 
@@ -8,12 +9,13 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
   const act = (name, impl = () => undefined) => (...args) => {
     calls.push({ name, args })
+    if (name in reject) return Promise.reject(new Error(reject[name]))
     return hangs.has(name) ? never() : Promise.resolve(impl(...args))
   }
   const blockAt = v => {
