@@ -1019,7 +1019,7 @@ const HOLE_SCALE = 0.05
 const START_Y = 63
 const holeRig = ({ pathNode = at(1.5, 64, 0.5), raises = true, startX = 0.5, resolveAfter = Infinity } = {}) => {
   const bot = stubBot({ pos: [startX, START_Y, 0.5] })
-  const pos = bot.entity.position
+  const live = () => bot.entity.position
   const p = createPrimitivesFromBot(bot, { timeScale: HOLE_SCALE })
   p.setOwner('t1')
   const gotos = []
@@ -1032,8 +1032,13 @@ const holeRig = ({ pathNode = at(1.5, 64, 0.5), raises = true, startX = 0.5, res
   }
   const record = bot.setControlState
   const jumpAt = []
-  bot.setControlState = (control, state) => { sequence.push(`${control}:${state}`); if (control === 'jump' && state) jumpAt.push(pos.x); return record(control, state) }
+  bot.setControlState = (control, state) => { sequence.push(`${control}:${state}`); if (control === 'jump' && state) jumpAt.push(live().x); return record(control, state) }
+  // a server correction (forcedMove) replaces the position object: do it once, as the step-up starts
+  const setGoal = bot.pathfinder.setGoal
+  let replaced = false
+  bot.pathfinder.setGoal = goal => { if (!replaced) { replaced = true; bot.entity.position = new Vec3(live().x, live().y, live().z) } return setGoal(goal) }
   const simulate = setInterval(() => {
+    const pos = live()
     const cs = bot.controlState
     const ground = pos.x >= 1 ? START_Y + 1 : START_Y
     if (cs.forward && (pos.y >= START_Y + 1 || pos.x >= 1 || !cs.jump)) pos.x += cs.sneak ? 0.03 : 0.2

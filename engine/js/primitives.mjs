@@ -179,11 +179,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // Out of a 1-deep hole: the server rejects every jump while the body is flush against a wall, so centre in the cell
   // first, then hold jump alone, and press forward only once the feet are a block above where they started.
   const stepUp = async (ctx, body, target) => {
-    const pos = body.entity.position
-    const centre = cell(pos)
-    const startY = pos.y
-    const toCentre = () => Math.hypot(centre.x + 0.5 - pos.x, centre.z + 0.5 - pos.z)
-    const onTick = () => { if (pos.y >= startY + STEP_RISE) body.setControlState('forward', true) }
+    // a server correction replaces the position object, so it is read fresh at every use
+    const live = () => body.entity.position
+    const centre = cell(live())
+    const startY = live().y
+    const toCentre = () => Math.hypot(centre.x + 0.5 - live().x, centre.z + 0.5 - live().z)
+    const onTick = () => { if (live().y >= startY + STEP_RISE) body.setControlState('forward', true) }
     const onCentre = () => {
       const off = toCentre() >= CENTRE_TOLERANCE
       if (off) faceCentre(body, centre).catch(() => {})
@@ -204,7 +205,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       ctx.alive()
       body.setControlState('jump', true)
       body.on('physicsTick', onTick)
-      const landed = () => { const now = cell(pos); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
+      const landed = () => { const now = cell(live()); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
       await waitUntil(ctx, landed, STEP_S)
     } finally {
       body.off('physicsTick', onCentre)
