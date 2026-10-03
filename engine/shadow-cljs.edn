@@ -7,10 +7,12 @@
          :main engine.main/main
          :output-to "out/body.cjs"
          :output-dir "out/body"
+         :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}
   :test {:target :node-test
          :output-to "out/test.cjs"
          :output-dir "out/test"
          :ns-regexp "-test$"
          :autorun false
+         :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}}}
