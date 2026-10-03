@@ -93,7 +93,7 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
   }
 }
 
-const sectionIds = container => {
+export const sectionIds = container => {
   const ids = new Uint16Array(VOLUME)
   if (container.value !== undefined && container.palette === undefined && container.data === undefined) return ids.fill(container.value)
   for (let i = 0; i < VOLUME; i++) ids[i] = container.get(i)

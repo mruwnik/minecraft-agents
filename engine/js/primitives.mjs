@@ -12,6 +12,7 @@ import { craftItem } from './craft.mjs'
 import { say, cleanMessage, PLAYER_NAME, CHAT_MAX } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
+import { createSteer } from './steer.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
@@ -1231,10 +1232,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
+  const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, unequip, sleep, look, swim, useOn })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, unequip, sleep, look, swim, useOn, steer })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

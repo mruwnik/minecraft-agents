@@ -7,6 +7,7 @@ import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
+import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
@@ -402,6 +403,7 @@ export function createFake (spec = {}) {
   const acts = defaultActs(s, event => primitives.world.emit(event))
   acts.interact = fakeInteract(s)
   acts.unequip = fakeUnequip(s)
+  acts.steer = fakeSteer(s, () => owner, CutError)
   acts.furnace = fakeFurnace(s, spec)
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
@@ -520,6 +522,8 @@ export function createFake (spec = {}) {
       if (s.unloaded.has(key(pos))) return null
       return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)), ...propsOf(key(pos)) }
     },
+
+    pathWorld: () => fakePathWorld(s),
 
     onBodyEvent (listener) {
       listeners.add(listener)

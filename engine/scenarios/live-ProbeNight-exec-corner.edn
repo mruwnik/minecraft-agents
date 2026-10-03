@@ -1,0 +1,9 @@
+;; live: jobs.debug.walk-plan along a closed 1-wide lane (z 3019 then 3020, x -998..-984, floor y 69): one corner slide
+;; past the wall end (-990 3019) over the deep hole (-991 3020): 3 runs each way
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-985 70 3020]})
+         (jobs.debug.walk-plan {:to [-998 70 3019]})
+         (jobs.debug.walk-plan {:to [-985 70 3020]})
+         (jobs.debug.walk-plan {:to [-998 70 3019]})
+         (jobs.debug.walk-plan {:to [-985 70 3020]})
+         (jobs.debug.walk-plan {:to [-998 70 3019]})]}

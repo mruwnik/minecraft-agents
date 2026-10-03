@@ -1,0 +1,3 @@
+;; live should-fail: jobs.debug.walk-plan to (-985 70 3010), the inside of a hollow stone box x -986..-984 z 3009..3011 y 69..85 (its roof out of reach)
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-985 70 3010]})]}

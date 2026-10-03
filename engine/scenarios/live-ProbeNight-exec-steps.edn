@@ -1,0 +1,9 @@
+;; live: jobs.debug.walk-plan in a closed 1-wide lane (z 3014, x -987..-981, floor y 69, walls at x -988 and -980): up a
+;; 2-step stair (x -986 one up, -985..-983 two up), down one (-982) and one more: no room for a gap jump; 3 runs each way
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-981 70 3014]})
+         (jobs.debug.walk-plan {:to [-987 70 3014]})
+         (jobs.debug.walk-plan {:to [-981 70 3014]})
+         (jobs.debug.walk-plan {:to [-987 70 3014]})
+         (jobs.debug.walk-plan {:to [-981 70 3014]})
+         (jobs.debug.walk-plan {:to [-987 70 3014]})]}

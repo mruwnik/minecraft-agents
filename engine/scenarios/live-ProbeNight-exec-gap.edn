@@ -1,0 +1,4 @@
+;; live should-fail: from the top of platform x -988..-985 z 3005..3007 (stand y 73) to the twin platform x -982..-979
+;; across a 2-wide gap: the only way is a gap jump, which the executor refuses
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-980 73 3006]})]}

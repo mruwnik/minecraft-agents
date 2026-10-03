@@ -1,0 +1,9 @@
+;; live: jobs.debug.walk-plan up and down a 8-high ladder (x -976 z 3014 y 70..77, facing west, on a 3x3 stone tower
+;; x -975..-973 z 3013..3015 y 70..77): from the ground at (-978 70 3011) to the tower top (-974 78 3014), 3 times each way
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-974 78 3014]})
+         (jobs.debug.walk-plan {:to [-978 70 3011]})
+         (jobs.debug.walk-plan {:to [-974 78 3014]})
+         (jobs.debug.walk-plan {:to [-978 70 3011]})
+         (jobs.debug.walk-plan {:to [-974 78 3014]})
+         (jobs.debug.walk-plan {:to [-978 70 3011]})]}

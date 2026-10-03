@@ -1,0 +1,12 @@
+;; live: jobs.debug.walk-plan on a flat 30-block lane (-1000..-970, z 3001, y 70), 3 runs east and 2 back,
+;; then go-to (moveTo) on the same lane for the speed comparison
+{:register []
+ :queue [(jobs.debug.walk-plan {:to [-970 70 3001]})
+         (jobs.debug.walk-plan {:to [-1000 70 3001]})
+         (jobs.debug.walk-plan {:to [-970 70 3001]})
+         (jobs.debug.walk-plan {:to [-1000 70 3001]})
+         (jobs.debug.walk-plan {:to [-970 70 3001]})
+         (jobs.movement.go-to {:pos {:x -1000 :y 70 :z 3001} :range 0.5})
+         (jobs.movement.go-to {:pos {:x -970 :y 70 :z 3001} :range 0.5})
+         (jobs.movement.go-to {:pos {:x -1000 :y 70 :z 3001} :range 0.5})
+         (jobs.movement.go-to {:pos {:x -970 :y 70 :z 3001} :range 0.5})]}
