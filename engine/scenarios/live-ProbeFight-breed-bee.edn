@@ -1,0 +1,4 @@
+;; batch-entity live case: breed two bees with a flower (daylight, no rain)
+{:register []
+ :queue [(jobs.animals.breed {:mob "bee"})
+         (repeat (jobs.movement.look-around))]}
