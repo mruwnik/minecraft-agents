@@ -66,7 +66,7 @@
     (if (nil? table)
       (no-table! c made)
       (do (ctx/update-mem! c assoc :table table)
-          (if (<= (u/dist (u/self-pos c) table) 3)
+          (if (u/within? (u/self-pos c) table 3)
             (give-up! c made "unreachable")
             (case (await (u/walk-near! c table 3))
               :blocked (give-up! c made "unreachable")

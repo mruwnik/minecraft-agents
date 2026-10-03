@@ -11,7 +11,7 @@
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.storage.deposit jobs.storage.withdraw jobs.items.craft jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box
      jobs.combat.hunt jobs.gather.get-seeds
-     jobs.movement.go-to jobs.movement.pace jobs.movement.look-around
+     jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify})
 
 (deftest the-registry-holds-every-job-namespace

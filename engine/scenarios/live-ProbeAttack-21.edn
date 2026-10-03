@@ -1,0 +1,4 @@
+;; batch-craft live: follow ProbeMove standing on top of a pillar the body cannot climb (three blocked walks end it unreachable)
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+                    (jobs.movement.follow {:player "ProbeMove" :range 2})))]}
