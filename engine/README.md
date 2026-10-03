@@ -949,7 +949,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `equip` | `bot.equip(item, dest)` |
 | `toss` | with `slot`: `bot.tossStack(bot.inventory.slots[slot])`. Otherwise sums the carried stacks of the item, `bot.toss(typeId, null, count)` with `count = min(count ?? total, total)`; nothing carried is `no-item` without touching the bot. Throws where the body looks |
 | `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
-| `attack` | one `bot.attack`, then waits up to 300 ms for `entityHurt` on the target or its removal; `killed` when the entity is gone or its health is 0, `hurt` when that event came or it was killed |
+| `attack` | one `bot.attack`, then waits up to 300 ms for `entityHurt` on the target or its removal; `killed` when the entity is gone, its health is 0, or an `entityDead` for it arrived, `hurt` when that event came or it was killed |
 | `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |
 | `look` | `lookAt` or `look` with force, then waits for the next `physicsTick` (mineflayer sends the rotation right after emitting it), at most 100 ms |
 

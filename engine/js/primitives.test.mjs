@@ -143,6 +143,8 @@ const hurtCases = [
   ['an entityHurt for the target', bot => bot.emit('entityHurt', bot.entities[8]), { status: 'hit', hurt: true }],
   ['no entityHurt', () => {}, { status: 'hit', hurt: false }],
   ['an entityHurt for another entity', bot => bot.emit('entityHurt', { id: 99 }), { status: 'hit', hurt: false }],
+  ['an entityDead for the target', bot => bot.emit('entityDead', bot.entities[8]), { status: 'killed', hurt: true }],
+  ['an entityDead for another entity', bot => bot.emit('entityDead', { id: 99 }), { status: 'hit', hurt: false }],
   ['the target removed', bot => { delete bot.entities[8] }, { status: 'killed', hurt: true }]
 ]
 for (const [label, onSwing, expected] of hurtCases) {
@@ -153,6 +155,7 @@ for (const [label, onSwing, expected] of hurtCases) {
     assert.equal(result.status, expected.status)
     assert.equal(result.hurt, expected.hurt)
     assert.equal(bot.listenerCount('entityHurt'), 0)
+    assert.equal(bot.listenerCount('entityDead'), 0)
   })
 }
 
@@ -173,11 +176,23 @@ test('attack resolves well under the 300 ms wait when entityHurt arrives, at tim
   assert.ok(Date.now() - started < 150)
 })
 
+test('attack resolves well under the 300 ms wait when entityDead arrives, at timeScale 1', async () => {
+  const bot = stubBot(ownWorld())
+  const p = createPrimitivesFromBot(bot)
+  p.setOwner('t1')
+  bot.attack = async () => { setTimeout(() => bot.emit('entityDead', bot.entities[8]), 10) }
+  const started = Date.now()
+  assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
+  assert.ok(Date.now() - started < 150)
+  assert.equal(bot.listenerCount('entityDead'), 0)
+})
+
 test('attack drops its listener when the swing throws', async () => {
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => { throw new Error('boom') }
   assert.equal((await p.attack('t1', { id: 8 })).status, 'failed')
   assert.equal(bot.listenerCount('entityHurt'), 0)
+  assert.equal(bot.listenerCount('entityDead'), 0)
 })
 
 const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }]]

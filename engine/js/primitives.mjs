@@ -747,21 +747,25 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > ATTACK_REACH) return { status: 'out-of-reach' }
       let hurtSeen = false
       const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }
+      let deadSeen = false
+      const onDead = entity => { if (entity?.id === a.id) deadSeen = true }
+      bot.on('entityDead', onDead)
       bot.on('entityHurt', onHurt) // before the swing, so a fast event is not missed
       try {
         await bot.attack(target)
         ctx.alive()
         const deadline = Date.now() + HURT_WAIT_MS * timeScale
-        while (!hurtSeen && bot.entities[a.id] && Date.now() < deadline) {
+        while (!hurtSeen && !deadSeen && bot.entities[a.id] && Date.now() < deadline) {
           await sleepMs(POLL_MS * timeScale)
           ctx.alive()
         }
       } finally {
         bot.removeListener('entityHurt', onHurt)
+        bot.removeListener('entityDead', onDead)
       }
       const now = bot.entities[a.id]
       const health = typeof now?.health === 'number' ? now.health : undefined
-      const killed = !now || (health !== undefined && health <= 0)
+      const killed = deadSeen || !now || (health !== undefined && health <= 0)
       return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }), hurt: hurtSeen || killed }
     })
   }
