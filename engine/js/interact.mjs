@@ -4,6 +4,7 @@ import vec3 from 'vec3'
 
 export const INTERACT_WAIT_MS = 500
 export const LOVE_STATUS = 18
+export const LOVE_GRACE_MS = 150
 const POLL_MS = 50
 const DEFAULT_EYE = 1.62
 const WOOL_SHEARED = 0x10
@@ -114,8 +115,17 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
       }
     }
     const seen = r => r.consumed > 0 || r.worn > 0 || r.love || r.leash !== null || Object.keys(r.changed).length > 0
+    // a feed's love status and slot update are separate packets: a bare consumption waits a grace for love
+    const onlyConsumed = r => r.consumed > 0 && !r.love && r.worn === 0 && r.leash === null && Object.keys(r.changed).length === 0
+    let consumedAt = null
+    const settled = r => {
+      if (!seen(r)) return false
+      if (!onlyConsumed(r)) return true
+      consumedAt ??= Date.now()
+      return Date.now() - consumedAt >= LOVE_GRACE_MS * timeScale
+    }
     let r = read()
-    while (!seen(r) && !r.gone && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
+    while (!settled(r) && !r.gone && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
       await sleepMs(POLL_MS * timeScale)
       ctx.alive()
       r = read()

@@ -224,3 +224,34 @@ test('set_passengers for another vehicle, or still carrying the body, does not c
     assert.deepEqual(bot.vehicle, { id: 9 })
   }
 })
+
+// love and the inventory update arrive as separate packets, in either order
+const slowOpts = { timeScale: 0.2, reach: REACH }
+
+test('a consumption seen before love waits for the love status', async () => {
+  const items = [wheat()]
+  const bot = makeBot({
+    target: entity('cow'),
+    items,
+    held: items[0],
+    onUse: bot => {
+      items.length = 0
+      setTimeout(() => bot._client.emit('entity_status', { entityId: 5, entityStatus: 18 }), 60 * slowOpts.timeScale)
+    }
+  })
+  const r = await interactWith(bot, ctx, { id: 5, item: 'wheat' }, slowOpts)
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 2)
+  assert.equal(r.love, true)
+})
+
+test('a consumption with no love waits out the grace and reports love false', async () => {
+  const items = [wheat()]
+  const bot = makeBot({ target: entity('cow'), items, held: items[0], onUse: () => { items.length = 0 } })
+  const start = Date.now()
+  const r = await interactWith(bot, ctx, { id: 5, item: 'wheat' }, slowOpts)
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 2)
+  assert.equal(r.love, false)
+  assert.ok(Date.now() - start >= 150 * slowOpts.timeScale - 2)
+})
