@@ -377,6 +377,43 @@
     (is (= [:hostile-near :health-low :night-and-bed-known] (mapv :trigger (:register s))))
     (is (= [:harvest-wood :deposit] (mapv :job (:queue s))))))
 
+;; ---------------------------------------------------------------------- pace
+
+(def pace-args {:a {:x 5 :y 64 :z 0} :b {:x 10 :y 64 :z 0} :laps 3 :rounds 2})
+
+(defn move-xs [p] (mapv #(.-x (.-pos (.-args %))) (calls p "moveTo")))
+
+(deftest pace-walks-a-b-a-b-in-order-and-continues
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})]
+          (core/submit! eng :pace pace-args {})
+          (await (core/tick! eng))
+          (is (= [5 10 5 10 5 10] (move-xs p)))
+          (is (= 1 (count (:list (core/state eng)))) "still listed after round one"))))))
+
+(deftest pace-stops-the-round-early-on-a-blocked-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:unreachable ["10,64,0"]})]
+          (core/submit! eng :pace pace-args {})
+          (await (core/tick! eng))
+          (is (= [5 10] (move-xs p)) "ends at the blocked leg")
+          (is (= 1 (count (:list (core/state eng)))) "a blocked leg does not throw or finish"))))))
+
+(deftest pace-is-done-after-the-given-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})]
+          (core/submit! eng :pace pace-args {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= 12 (count (calls p "moveTo")))))))))
+
 ;; ------------------------------------------------- look-around, every-interval
 
 (deftest look-around-looks-once-and-records-when
@@ -428,6 +465,12 @@
     (is (= {:trigger :every-interval :args {:seconds 45}} (first (:register s))))
     (is (= (:register base) (rest (:register s))))
     (is (= (:queue base) (:queue s)))))
+
+(deftest pace-cuts-scenario-puts-every-interval-first-and-queues-pace
+  (let [s (scenario/parse (fs/readFileSync "scenarios/pace-cuts.edn" "utf8"))]
+    (is (= [] (scenario/problems catalog/catalog s)))
+    (is (= [:every-interval :hostile-near :health-low] (mapv :trigger (:register s))))
+    (is (= [:pace] (mapv :job (:queue s))))))
 
 (deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging
   (async done

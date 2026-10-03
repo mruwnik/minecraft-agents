@@ -369,6 +369,7 @@ memory as `:failures`; after three the job emits a warn and ends.
 |---|---|---|---|---|
 | `:fell-tree` | `{:species nil :radius 16}` | `:not-yet` until a tree (log column with leaves near its top) is in radius, or the column is already chosen | `:column {:x :z}`, `:species`, `:base` pos | `[:debts :replant]` gets `{:pos base :species}` once, when the tree is chosen |
 | `:collect-drops` | `{:radius 16 :filter [names] or nil}` | none | `:skipped` ids of unreachable items | none |
+| `:pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | none | `:rounds-run` | none |
 | `:plant-sapling` | `{:at pos or nil :species nil}` | `:not-yet` without a matching sapling carried, or while the target still holds a log | none | removes the planted debt from `[:debts :replant]` |
 | `:deposit` | `{:chest pos or nil :items [names] or nil}` | `false` while no chest is known | none | none |
 | `:harvest-wood` | `{:species nil :radius 16 :filter nil}` | none | children under slots `:fell`, `:collect`, `:plant` | as its children |

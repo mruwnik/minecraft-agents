@@ -64,3 +64,22 @@
     :done))
 
 (def look-around {:name :look-around :round look-around-round})
+
+(defn ^:async pace-round
+  "args {:a pos :b pos :laps 3 :rounds 8 :range 1}. One round walks a, b, a, b
+  (:laps times each) with a moveTo per leg, stopping early on any status but
+  \"arrived\". Continues until :rounds rounds have run. A harmless long round
+  for showing a reflex cut a running job; a cut throws out of ctx/act."
+  [c]
+  (let [{:keys [a b laps rounds range] :or {laps 3 rounds 8 range 1}} (:args c)
+        legs (take (* 2 laps) (cycle [a b]))]
+    (loop [legs legs]
+      (when-let [pos (first legs)]
+        (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
+          (when (= "arrived" (.-status r))
+            (recur (rest legs))))))
+    (let [done-rounds (inc (:rounds-run (ctx/mem c) 0))]
+      (ctx/commit! c {:rounds-run done-rounds})
+      (if (>= done-rounds rounds) :done :continue))))
+
+(def pace {:name :pace :round pace-round})

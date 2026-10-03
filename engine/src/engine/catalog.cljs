@@ -10,7 +10,7 @@
   (into {} (map (juxt :name identity)) defs))
 
 (def catalog
-  {:jobs (by-name [samples/go-to samples/wait-for-day samples/eat samples/look-around
+  {:jobs (by-name [samples/go-to samples/wait-for-day samples/eat samples/look-around samples/pace
                    forestry/fell-tree forestry/collect-drops forestry/plant-sapling forestry/harvest-wood
                    storage/deposit
                    survival/retreat survival/sleep])

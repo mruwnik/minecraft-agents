@@ -1,0 +1,7 @@
+;; A long, harmless job under the every-interval reflex, first in the register.
+;; The coordinates are inside the ClaudeProbe test cell; the scenario exists to
+;; show a reflex cutting a long round (pace walks between two points).
+{:register [{:trigger :every-interval :args {:seconds 20}}
+            {:trigger :hostile-near}
+            {:trigger :health-low}]
+ :queue [{:job :pace :args {:a {:x -80 :y 69 :z -41} :b {:x -76 :y 69 :z -38} :laps 3 :rounds 12}}]}
