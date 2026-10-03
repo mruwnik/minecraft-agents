@@ -23,3 +23,26 @@ export const serialQueue = () => {
     return result
   }
 }
+
+const WHO_PATTERN = /^[A-Za-z0-9:_-]{1,40}$/
+export const whoFrom = (search, fallback = 'view') => {
+  const who = new URLSearchParams(search).get('who')
+  return who !== null && WHO_PATTERN.test(who) ? who : fallback
+}
+
+// embedded in the dashboard a click on the canvas takes over, unless someone else holds the body
+export const shouldTakeOnClick = ({ embed, driving, manual, me }) => embed && !driving && (!manual || manual.who === me)
+
+// the first Esc only exits pointer lock (the browser eats it); an Esc with no lock left releases
+export const shouldReleaseOnEscape = ({ code, driving, pointerLocked }) => code === 'Escape' && driving && !pointerLocked
+
+// fetch that aborts after ms, so a hung request cannot hold the serial queue
+export const withTimeout = (fetchFn, ms) => async (url, init = {}) => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetchFn(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}

@@ -353,3 +353,66 @@ test('a socket path over 100 bytes rejects listen', async () => {
   const { control } = makeRig({ socketPath })
   await assert.rejects(control.listen(), /too long for a unix socket/)
 })
+
+test('idle defaults to 15 s', async () => {
+  const { control, clock, names } = await taken()
+  clock.t += 14999
+  control.tick()
+  assert.equal(names('release').length, 0)
+  clock.t += 1
+  control.tick()
+  assert.equal(names('release')[0][1].reason, 'idle')
+})
+
+test('take idleS overrides the idle limit for that takeover', async () => {
+  const rig = makeRig()
+  await rig.post({ op: 'take', who: 'claude', why: 'x', idleS: 120 })
+  rig.clock.t += 119999
+  rig.control.tick()
+  assert.equal(rig.names('release').length, 0)
+  rig.clock.t += 1
+  rig.control.tick()
+  assert.equal(rig.names('release')[0][1].reason, 'idle')
+})
+
+for (const idleS of [0, 0.5, 3601, '5', null, NaN, true]) {
+  test(`take with idleS ${String(idleS)} is bad-args and takes nothing`, async () => {
+    const { post, names, get } = makeRig()
+    const r = await post({ op: 'take', who: 'claude', why: 'x', idleS })
+    assert.equal(r.json.reason, 'bad-args')
+    assert.equal(names('take').length, 0)
+    assert.equal((await get()).json.manual, null)
+  })
+}
+
+test('the lease view reports idleMs, expiresAt and idleLeftS, counting down from the last op', async () => {
+  const rig = makeRig()
+  const r = await rig.post({ op: 'take', who: 'claude', why: 'x', idleS: 30 })
+  assert.equal(r.json.manual.idleMs, 30000)
+  assert.equal(r.json.manual.expiresAt, 31000)
+  assert.equal(r.json.manual.idleLeftS, 30)
+  rig.clock.t += 12340
+  const g = (await rig.get()).json.manual
+  assert.equal(g.expiresAt, 31000)
+  assert.equal(g.idleLeftS, 17.7)
+  const p = (await rig.post({ op: 'ping', who: 'claude' })).json.manual
+  assert.equal(p.expiresAt, 43340)
+  assert.equal(p.idleLeftS, 30)
+})
+
+test('idleLeftS never goes below zero', async () => {
+  const { clock, get } = await taken()
+  clock.t += 20000
+  assert.equal((await get()).json.manual.idleLeftS, 0)
+})
+
+test('GET does not touch the lease: it leaves the silence clock and expiry alone', async () => {
+  const { control, clock, get, names } = await taken()
+  clock.t += 14000
+  await get()
+  await get()
+  assert.equal((await get()).json.manual.expiresAt, 16000)
+  clock.t += 1000
+  control.tick()
+  assert.equal(names('release')[0][1].reason, 'idle')
+})

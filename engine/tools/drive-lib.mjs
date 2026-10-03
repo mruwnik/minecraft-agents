@@ -7,7 +7,7 @@ const CONTROLS = ['forward', 'back', 'left', 'right', 'jump', 'sneak', 'sprint']
 export const defaultStateDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'state')
 
 export const usage = `usage: drive.mjs <agent> <op> [args] [--who claude] [--state <dir>]
-  take --why "<text>" | hold <control>[,<control>...] <ms> | look <yaw> <pitch>
+  take --why "<text>" [--idle-s <n>] | hold <control>[,<control>...] <ms> | look <yaw> <pitch>
   turn <dyaw> [dpitch] | jump | stop | ping | state | release [--force]
   controls: ${CONTROLS.join(' ')}`
 
@@ -17,7 +17,8 @@ const options = {
   who: { type: 'string', default: 'claude' },
   state: { type: 'string', default: defaultStateDir },
   why: { type: 'string', default: '' },
-  force: { type: 'boolean', default: false }
+  force: { type: 'boolean', default: false },
+  'idle-s': { type: 'string' }
 }
 
 // parseArgs would read "-10" as a short option, so hide negative numbers from it
@@ -29,7 +30,12 @@ const num = (s) => (s !== undefined && s.trim() !== '' && Number.isFinite(Number
 const post = (body) => ({ method: 'POST', path: '/drive', body })
 
 const builders = {
-  take: ({ who, why }) => post({ op: 'take', who, why }),
+  take: ({ who, why, 'idle-s': idleText }) => {
+    if (idleText === undefined) return post({ op: 'take', who, why })
+    const idleS = num(idleText)
+    if (idleS === null) return { error: '--idle-s must be a number' }
+    return post({ op: 'take', who, why, idleS })
+  },
   stop: ({ who }) => post({ op: 'stop', who }),
   ping: ({ who }) => post({ op: 'ping', who }),
   release: ({ who, force }) => post({ op: 'release', who, ...(force ? { force: true } : {}) }),

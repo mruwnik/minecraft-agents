@@ -6,6 +6,7 @@ const LOOK_KEYS = ['yaw', 'pitch', 'dyaw', 'dpitch']
 const MAX_SOCKET_PATH = 100
 const MAX_BODY = 16 * 1024
 const MAX_MS = 10000
+const MAX_IDLE_S = 3600
 
 const allFalse = () => Object.fromEntries(CONTROLS.map(c => [c, false]))
 const reply = (json, status = 200) => ({ status, json })
@@ -30,7 +31,7 @@ function validateSet (req) {
   return null
 }
 
-export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60000, checkMs = 250, now = Date.now }) {
+export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 15000, checkMs = 250, now = Date.now }) {
   let lease = null
   let server = null
   let timer = null
@@ -41,7 +42,10 @@ export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60
     since: lease.since,
     controls: { ...lease.controls },
     yaw: lease.yaw,
-    pitch: lease.pitch
+    pitch: lease.pitch,
+    idleMs: lease.idleMs,
+    expiresAt: lease.lastOp + lease.idleMs,
+    idleLeftS: Math.round(Math.max(0, lease.lastOp + lease.idleMs - now()) / 100) / 10
   }
 
   const touch = () => {
@@ -64,7 +68,10 @@ export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60
 
   const take = (req) => {
     if (typeof req.who !== 'string' || req.who === '') return refuse('bad-args', { text: 'who is required' })
+    const idleOk = req.idleS === undefined || (typeof req.idleS === 'number' && req.idleS >= 1 && req.idleS <= MAX_IDLE_S)
+    if (!idleOk) return badArgs(`idleS must be a number 1..${MAX_IDLE_S}`)
     if (lease && lease.who === req.who) {
+      if (req.idleS !== undefined) lease.idleMs = req.idleS * 1000
       touch()
       return reply({ ok: true, manual: manualView() })
     }
@@ -84,6 +91,7 @@ export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60
       yaw: null,
       pitch: null,
       lastOp: now(),
+      idleMs: req.idleS === undefined ? idleMs : req.idleS * 1000,
       deadmanFired: false
     }
     return reply({ ok: true, manual: manualView() })
@@ -159,7 +167,7 @@ export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60
     }
     const t = now()
     const silent = t - lease.lastOp
-    if (silent >= idleMs) {
+    if (silent >= lease.idleMs) {
       endTakeover('idle')
       return
     }

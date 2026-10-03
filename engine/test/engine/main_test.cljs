@@ -6,9 +6,9 @@
             ["path" :as path]))
 
 (deftest parse-args-reads-flags
-  (is (= {:agent "Claude" :scenario "s.edn" :fresh? true :state-dir nil :drive-idle-s 60}
+  (is (= {:agent "Claude" :scenario "s.edn" :fresh? true :state-dir nil :drive-idle-s 15}
          (main/parse-args ["--agent" "Claude" "--scenario" "s.edn" "--fresh"])))
-  (is (= {:agent nil :scenario nil :fresh? false :state-dir "/x" :drive-idle-s 60}
+  (is (= {:agent nil :scenario nil :fresh? false :state-dir "/x" :drive-idle-s 15}
          (main/parse-args ["--state-dir" "/x"])))
   (is (= 5 (:drive-idle-s (main/parse-args ["--drive-idle-s" "5"])))))
 

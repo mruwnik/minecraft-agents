@@ -108,7 +108,16 @@ The page can take over a body and drive it by hand (movement only). The "take ov
 
 A red banner, shown to every viewer while anyone drives, names who. Losing focus, a hidden tab or losing pointer lock
 sends stop; closing the page sends release. The page pings every 500 ms (the body releases untimed controls after 1 s of
-silence). Requests are serialised, so a key-up never overtakes its key-down.
+silence). Requests are serialised, so a key-up never overtakes its key-down. Every POST times out after 1500 ms, so a
+hung request cannot hold the queue (a queued stop must not sit behind it); the body's 1 s dead-man covers the gap.
+
+- `?who=<name>` sets the driver name (default `view`; must match `[A-Za-z0-9:_-]{1,40}`, else `view`).
+- Esc while driving, once pointer lock is off, releases (the first Esc only exits pointer lock, which the browser handles).
+- `?embed=1` (the dashboard embeds the page same-origin in an iframe): a click on the canvas takes over when this page is
+  not driving and nobody else holds the body; while driving, a click requests pointer lock as usual.
+- When framed, every render posts `{type: 'drive', driving, manual, expiresAt}` to the parent (`manual` is the lease view
+  or null, `expiresAt` epoch ms or null), target origin `location.origin`. `window.__drive` offers `take()`, `release()`
+  and `state()`.
 
 Server route `GET|POST /drive/<name>` relays to the body's control socket (`engine/README.md`, Manual takeover); `who`
 defaults to `view`. It is the first write route of the view server. The server stays bound to 127.0.0.1 and answers 403 to

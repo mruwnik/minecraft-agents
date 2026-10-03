@@ -12,7 +12,7 @@
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 60}]
+         opts {:agent nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 15}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))

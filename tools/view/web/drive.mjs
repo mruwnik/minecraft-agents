@@ -1,8 +1,8 @@
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue } from './drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, withTimeout } from './drive-keys.mjs'
 
-const ME = 'view'
+const REQUEST_TIMEOUT_MS = 1500
 const POLL_MS = 1000
 const PING_MS = 500
 const LOOK_FLUSH_MS = 50
@@ -10,7 +10,11 @@ const ERROR_MS = 3000
 const SENT_KEEP = 200
 const LOST = ['not-taken', 'not-driver']
 
-const agent = new URLSearchParams(location.search).get('agent')
+const params = new URLSearchParams(location.search)
+const agent = params.get('agent')
+const ME = whoFrom(location.search)
+const EMBED = params.get('embed') === '1'
+const timedFetch = withTimeout(fetch, REQUEST_TIMEOUT_MS)
 
 const start = () => {
   const bar = document.getElementById('bar')
@@ -38,6 +42,7 @@ const start = () => {
     button.textContent = driving ? 'release (G)' : 'take over (G)'
     button.disabled = Boolean(other)
     button.title = other ? `driven by ${manual.who}` : ''
+    if (parent !== window) parent.postMessage({ type: 'drive', driving, manual, expiresAt: manual?.expiresAt ?? null }, location.origin)
   }
 
   const showError = (text) => {
@@ -56,7 +61,7 @@ const start = () => {
   const post = async (msg, init = {}) => {
     sent.push({ t: performance.now(), op: msg.op })
     if (sent.length > SENT_KEEP) sent.shift()
-    const reply = await fetch('/drive/' + agent, {
+    const reply = await timedFetch('/drive/' + agent, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg),
@@ -101,6 +106,10 @@ const start = () => {
       if (!manual || manual.who === ME) toggle()
       return
     }
+    if (shouldReleaseOnEscape({ code: e.code, driving, pointerLocked: document.pointerLockElement === canvas })) {
+      release()
+      return
+    }
     if (!driving || !handled(e.code)) return
     e.preventDefault()
     e.stopImmediatePropagation()
@@ -120,6 +129,7 @@ const start = () => {
 
   canvas.addEventListener('click', () => {
     if (driving) canvas.requestPointerLock?.()
+    else if (shouldTakeOnClick({ embed: EMBED, driving, manual, me: ME })) take()
   })
   addEventListener('mousemove', (e) => {
     if (!driving || document.pointerLockElement !== canvas) return
@@ -156,7 +166,7 @@ const start = () => {
   setInterval(poll, POLL_MS)
 
   button.addEventListener('click', toggle)
-  window.__drive = { state: () => ({ driving, manual, lastReply }), sent }
+  window.__drive = { state: () => ({ driving, manual, lastReply, expiresAt: manual?.expiresAt ?? null }), sent, take, release }
   render()
   poll()
 }

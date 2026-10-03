@@ -765,7 +765,13 @@ For rescuing a stuck body by hand. Movement only: no dig, place or use yet. The 
 `state/agents/<name>/engine/control.sock` (mode 0600, HTTP + JSON), created at start and removed at shutdown. If it
 cannot listen (for example a path over 100 bytes) the body emits `system.control_unavailable` (error) and runs without it.
 
-Ops (`POST /drive`, body `{op, who, ...}`; `GET /drive` returns the state): `take` (`why`), `set`, `stop`, `ping`,
+The control socket is the body's first outside input channel, and it is deliberately minimal: only the `/drive` routes.
+There are no list or register edits through it; whether to add any is a separate design decision. It relates to
+`docs/design.md`'s assumption of a single input source ("There is a single input source. Which agent gets to call what is
+the agents' problem, not the engine's.") like this: while the driver lease is held it is that single source for movement,
+and who drives is decided by whoever holds the lease, first come (`take` is refused with `held-by <who>` otherwise).
+
+Ops (`POST /drive`, body `{op, who, ...}`; `GET /drive` returns the state): `take` (`why`, optional `idleS`, a number 1..3600: this takeover's idle limit instead of the default), `set`, `stop`, `ping`,
 `release` (`force` reclaims another driver's hold). A refusal is `{ok:false, reason}` with reason `offline`, `settling`,
 `held-by <who>`, `not-taken`, `not-driver` or `bad-args`. `set` fields:
 
@@ -781,7 +787,11 @@ latch clears, and reflex ends are deferred. Nothing about it is written to `engi
 going offline.
 
 Dead-man: untimed controls are released after 1 s without any op from the driver (warn `system.drive_deadman`). The
-takeover itself ends after `--drive-idle-s` (default 60) seconds of silence, reason `idle`. Timed holds end on their own.
+takeover itself ends after 15 s of silence by default (`--drive-idle-s`, or `idleS` on `take`), reason `idle`. Timed
+holds end on their own. Every reply's `manual` (and `GET /drive`) carries `idleMs` (the lease's idle limit), `expiresAt`
+(epoch ms, last op plus `idleMs`) and `idleLeftS` (seconds left, one decimal). `GET` is read-only: it does not count as an
+op and does not reset the silence clock. An agent driving step by step must keep its commands under the idle limit apart,
+or take with a longer `--idle-s` (a `ping` keeps the lease alive without moving).
 The timers run in the body, so a dead CLI, view server or browser tab cannot leave it walking.
 
 Events: `system.takeover_started` `{who why}`; `system.takeover_ended` `{who reason held-ms}` with reason `released`,

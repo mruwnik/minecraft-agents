@@ -8,6 +8,7 @@ const post = (body) => ({ method: 'POST', path: '/drive', body })
 for (const [argv, expected] of [
   [['Bob', 'take', '--why', 'poking'], post({ op: 'take', who: 'claude', why: 'poking' })],
   [['Bob', 'take'], post({ op: 'take', who: 'claude', why: '' })],
+  [['Bob', 'take', '--idle-s', '120', '--why', 'x'], post({ op: 'take', who: 'claude', why: 'x', idleS: 120 })],
   [['Bob', 'hold', 'forward', '500', '--who', 'view'], post({ op: 'set', who: 'view', controls: { forward: true }, ms: 500 })],
   [['Bob', 'hold', 'forward,sprint', '1000'], post({ op: 'set', who: 'claude', controls: { forward: true, sprint: true }, ms: 1000 })],
   [['Bob', 'look', '180', '-10'], post({ op: 'set', who: 'claude', look: { yaw: 180, pitch: -10 } })],
@@ -69,5 +70,11 @@ for (const [reply, code] of [
 ]) {
   test(`exitCodeFor ${reply.status} ${JSON.stringify(reply.json)}`, () => {
     assert.equal(exitCodeFor(reply), code)
+  })
+}
+
+for (const argv of [['Bob', 'take', '--idle-s', 'abc'], ['Bob', 'take', '--idle-s', '']]) {
+  test(`requestFor ${argv.join(' ')} is an error`, () => {
+    assert.match(requestFor(argv).error, /idle-s/)
   })
 }
