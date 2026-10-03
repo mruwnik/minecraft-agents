@@ -34,3 +34,7 @@
   (doseq [[why text] [["empty" ""] ["nil" nil] ["whitespace" "  \n"] ["unbalanced" "{:list ["] ["not a map" "[1 2]"]]]
     (testing why
       (is (string? (:error (edn/summarize text 0)))))))
+
+(deftest older-register-entries-name-the-job-with-a-keyword
+  (let [s (edn/summarize "{:instances {}, :list [], :register [{:id :hungry, :trigger :hungry, :job :eat, :persistence :cooldown, :cooldown-s 90}]}" 0)]
+    (is (= ["eat"] (mapv :job (:reflexes s))))))

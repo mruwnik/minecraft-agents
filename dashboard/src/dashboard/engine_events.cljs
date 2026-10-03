@@ -109,3 +109,27 @@
 
 (defn parse-event-lines [text]
   (into [] (mapcat parse-line) (remove empty? (.split text "\n"))))
+
+;; ---------------------------------------------------------------- agents and bodies
+;; entries: [{:name :text raw config.json}]. No apiPort is needed (the engine serves none).
+(defn parse-engine-agents [entries]
+  (->> entries
+       (map (fn [{:keys [name text]}]
+              (let [cfg (let [c (try (js->clj (js/JSON.parse text) :keywordize-keys true) (catch :default _ nil))]
+                          (when (map? c) c))]
+                {:name name :username (or (:username cfg) name) :world (:world cfg)})))
+       (sort-by :name)
+       vec))
+
+;; the shape every body in /api/state has, so scoping, grouping and the map treat all alike
+(defn engine-body [agent view]
+  (assoc agent
+         :up (:up view)
+         :error (:error view)
+         :at (:at view)
+         :state (when (:pos view) {:pos (:pos view)})
+         :engine view))
+
+;; an agent folder with no engine/events.jsonl is an old HTTP-API body: listed, never contacted
+(defn unsupported-body [agent]
+  (assoc agent :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil))

@@ -160,3 +160,29 @@
 
 (deftest decode-bytes-roundtrip
   (is (= "héllo" (ee/decode-bytes (enc "héllo")))))
+
+(deftest parse-engine-agents-tolerates-bad-config
+  (is (= [{:name "Broken" :username "Broken" :world nil}
+          {:name "NoConfig" :username "NoConfig" :world nil}
+          {:name "NoPort" :username "NoPort" :world "claude"}
+          {:name "ProbeWater" :username "PW" :world "claude"}]
+         (ee/parse-engine-agents
+          [{:name "ProbeWater" :text "{\"username\":\"PW\",\"world\":\"claude\",\"apiPort\":3804}"}
+           {:name "NoPort" :text "{\"world\":\"claude\"}"}
+           {:name "NoConfig" :text ""}
+           {:name "Broken" :text "{"}]))))
+
+(deftest engine-body-shape
+  (let [agent {:name "P" :username "P" :world "claude"}
+        up (ee/engine-body agent (view [(ev 1 {:name "a"})] (+ t0 2000)))
+        down (ee/engine-body agent (view [(ev 1)] (+ t0 99000)))
+        none (ee/engine-body agent (ee/engine-view ee/empty-engine t0))]
+    (is (= {:name "P" :username "P" :world "claude" :up true :error nil :at (+ t0 1000) :state {:pos {:x 1 :y 64 :z -1}}}
+           (dissoc up :engine)))
+    (is (= "a" (get-in up [:engine :job :name])))
+    (is (= [false "last event 98s ago"] [(:up down) (:error down)]))
+    (is (= [false nil nil] [(:up none) (:state none) (:at none)]))))
+
+(deftest unsupported-body-is-down
+  (is (= {:name "Old" :username "O" :world "claude" :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil}
+         (ee/unsupported-body {:name "Old" :username "O" :world "claude"}))))

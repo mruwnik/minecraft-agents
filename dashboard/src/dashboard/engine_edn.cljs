@@ -7,7 +7,8 @@
     {:value (reader/read-string text)}
     (catch :default e {:error (str "unreadable engine.edn: " (ex-message e))})))
 
-(defn job-name [sym] (str sym))
+(defn job-name [sym]
+  (if (keyword? sym) (name sym) (str sym)))
 
 (defn label [spec]
   (case (:op spec)
@@ -26,7 +27,7 @@
 (defn summarize-reflex [reflex-state now entry]
   {:id (:id entry)
    :trigger (:trigger entry)
-   :job (job-name (first (:job entry)))
+   :job (job-name (if (sequential? (:job entry)) (first (:job entry)) (:job entry)))
    :persistence (:persistence entry)
    :cooldown-s (:cooldown-s entry)
    :cooling? (> (or (get-in reflex-state [(:id entry) :cooldown-until]) 0) now)})
