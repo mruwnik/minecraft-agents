@@ -131,3 +131,13 @@
           (is (= ["bread"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread is back")
           (is (not-any? #(and (= :error (:level %)) (not= :body (:source %))) @seen)
               "no errors besides the death itself"))))))
+
+(def survival-cooldowns
+  {:suffocating 2 :burning 2 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :stuck 60 :died 30})
+
+(deftest survival-triggers-wait-a-cooldown-after-their-job-ends
+  (let [{:keys [eng]} (boot "scenarios/survival.edn" {})
+        by-id (into {} (map (juxt :id identity)) (:register (core/state eng)))]
+    (doseq [[id cooldown] survival-cooldowns]
+      (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (by-id id))) (str id " in the register"))
+      (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (triggers/all id))) (str id " by default")))))

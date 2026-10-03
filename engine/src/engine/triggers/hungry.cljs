@@ -21,4 +21,4 @@
    :job '(jobs.survival.get-food)
    :args {:food default-food :food-when-hurt default-food-when-hurt}
    :persistence :cooldown
-   :cooldown-s 60})
+   :cooldown-s 90})

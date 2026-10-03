@@ -58,12 +58,12 @@
 (def suffocating
   "Holds when situation says the body is drowning or enclosed. :min-oxygen
   (default 12 of 20) is the drowning threshold. The job's own :min-oxygen is
-  set in the entry's :job spec. Persistence is :retry: this reflex must get
-  the body back at once, and a spent job fires again while the condition lasts."
+  set in the entry's :job spec. Persistence is :cooldown, 2 s
+  from the job ending: a spent or declined job fires again soon, but not every tick."
   {:name :suffocating
    :when (fn [world _memory args]
            (some? (situation world (:min-oxygen args default-min-oxygen))))
    :job '(jobs.survival.breathe)
    :args {:min-oxygen default-min-oxygen}
-   :persistence :retry
-   :cooldown-s 0})
+   :persistence :cooldown
+   :cooldown-s 2})

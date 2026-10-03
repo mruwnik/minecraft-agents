@@ -759,24 +759,39 @@
           (is (= {:n 2} (job-mem eng "j2")) "the round ran both times")
           (is (= {} (job-mem eng "j1")) "the listed job waits"))))))
 
-(deftest a-reflex-whose-child-declines-keeps-the-body-until-preempted
+(def flag-b (atom true))
+
+(def declining-reflexes
+  "Reflex triggers whose job is a combinator whose children all decline."
+  (into {} (for [[k job] {:gated-any '(any (gated))
+                          :gated-seq '(seq (gated) (count))
+                          :gated-repeat '(repeat (gated))}]
+             [k {:name k :job job :persistence :cooldown :cooldown-s 10 :when (constantly true)}])))
+
+(defn declined-setup []
+  (let [s (setup)]
+    (update s :eng assoc :triggers (merge triggers declining-reflexes))))
+
+(deftest a-declining-reflex-job-is-dropped-and-refires-only-after-its-cooldown
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:health 5}})]
-          (reset! flag false)
-          (core/submit! eng '(count) {})
-          (core/register-reflex! eng {:trigger :gated-child})
-          (core/register-reflex! eng {:trigger :hurt})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= ["j2" "j2" "j2"] (ran seen)) "the parent re-polls its declining child each tick")
-          (is (= {} (job-mem eng "j1")) "the listed job waits")
-          (core/move! eng :hurt {:above :gated-child} 60)
-          (await (core/tick! eng))
-          (is (= "dropped" (some #(when (and (= :ended (:kind %)) (= "j2" (:job %))) (name (:how %))) @seen))
-              "a higher reflex takes the body"))))))
+        (doseq [trigger [:gated-any :gated-seq :gated-repeat]]
+          (let [{:keys [eng seen clock]} (declined-setup)]
+            (reset! flag false)
+            (core/register-reflex! eng {:trigger trigger})
+            (await (core/tick! eng))
+            (is (= ["j1"] (ran seen)) (str trigger " fired"))
+            (is (nil? (get-in (core/state eng) [:instances "j1"])) (str trigger " is gone"))
+            (is (= 1 (count (filter #(= [:reflex :declined trigger] [(:source %) (:kind %) (:reflex %)]) @seen)))
+                "one reflex.declined event")
+            (is (nil? (core/tick! eng)) "cooling down: it does not fire again")
+            (swap! clock + 9000)
+            (is (nil? (core/tick! eng)) "still cooling down")
+            (swap! clock + 1000)
+            (await (core/tick! eng))
+            (is (= ["j1" "j2"] (ran seen)) (str trigger " fires again after the cooldown"))))))))
 
-(def flag-b (atom true))
 
 (def expr-registry
   (merge registry {'twice {:check always :round twice-round}

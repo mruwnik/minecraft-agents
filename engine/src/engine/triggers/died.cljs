@@ -22,4 +22,4 @@
    :job '(jobs.survival.recover-drops)
    :args {}
    :persistence :cooldown
-   :cooldown-s 0})
+   :cooldown-s 30})

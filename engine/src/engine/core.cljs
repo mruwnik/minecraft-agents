@@ -112,9 +112,9 @@
         (update :instances #(apply dissoc % reflex-ids)))))
 
 (defn normalize-result [r]
-  (if (#{:done :continue} r)
+  (if (#{:done :continue :declined} r)
     {:status r}
-    {:status :error :error (js/Error. (str "a round returned " (pr-str r) ", not :done or :continue"))}))
+    {:status :error :error (js/Error. (str "a round returned " (pr-str r) ", not :done, :continue or :declined"))}))
 
 ;; ------------------------------------------------------------------ engine plumbing
 
@@ -373,6 +373,11 @@
 (defn settle-reflex! [eng run {:keys [status error]}]
   (case status
     :continue (swap! (:state eng) assoc :pending-reflex (:id run))
+    :declined
+    (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
+                    :text (str "reflex " (name (:reflex run)) ": job " (:id run)
+                               " declined; dropped, it may fire again after the trigger's cooldown")})
+        (end-reflex! eng run))
     (:error :cut)
     (do (emit! eng {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run)
                     :error (str error)})

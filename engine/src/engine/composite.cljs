@@ -18,7 +18,8 @@
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next
-  unfinished child. Check: that child's check. Done when the last is done."
+  unfinished child. Check: that child's check. Done when the last is done.
+  Declined when that child declines in its round (a reflex job is then dropped)."
   [kids]
   (let [at (fn [c] (:at (ctx/mem c) 0))
         last-i (dec (count kids))]
@@ -28,20 +29,22 @@
                     [def args] (kids i)
                     r (await (ctx/call-child c (slot i) def args))]
                 (cond
+                  (= :declined r) :declined
                   (not= :done r) :continue
                   (= i last-i) :done
                   :else (do (ctx/update-mem! c assoc :at (inc i)) :continue))))}))
 
 (defn any-def
   "Each round, the first child whose check passes gets one call. Check: any
-  child's check. Done when the child that ran is done."
+  child's check. Done when the child that ran is done. Declined when no
+  child's check passes, so a reflex job whose children all decline is dropped."
   [kids]
   (let [first-passing (fn [c] (first (filter #(passes? c kids %) (range (count kids)))))]
     {:check (fn [c] (some? (first-passing c)))
      :round (fn ^:async any-round [c]
               (let [i (first-passing c)]
                 (if (nil? i)
-                  :continue
+                  :declined
                   (let [[def args] (kids i)
                         r (await (ctx/call-child c (slot i) def args))]
                     (if (= :done r) :done :continue)))))}))
@@ -49,7 +52,7 @@
 (defn repeat-def
   "The child in slot :c0; when it is done call-child drops its memory, so the
   next call starts it fresh, and :runs counts the runs. Never done. Check:
-  the child's check."
+  the child's check. Declined when the child declines, so it never spins."
   [kid]
   (let [[def args] kid]
     {:check (fn [c] (boolean (ctx/check-child c (slot 0) def args)))
@@ -57,7 +60,7 @@
               (let [r (await (ctx/call-child c (slot 0) def args))]
                 (when (= :done r)
                   (ctx/update-mem! c update :runs (fnil inc 0)))
-                :continue))}))
+                (if (= :declined r) :declined :continue)))}))
 
 (defn job
   "[def args] for node: a registry job with its args, or a combinator."

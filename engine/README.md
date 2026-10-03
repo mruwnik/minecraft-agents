@@ -469,19 +469,43 @@ down.
 - The cut listed job stays on the list and is the next to run (if its check
   passes) once no reflex holds the body. A cut reflex job is dropped; it
   fires again from the world if its condition still holds.
-- A reflex job's check is never asked: the trigger is its check. The engine
-  starts its first round in the tick the trigger fires and gives it the next
-  round in every later tick, whatever the job's own `check` would say; it
-  keeps the body while its rounds return `:continue`. `:done` or a throw ends
-  it. So a job meant for a register entry must cope in its round with a world
-  in which its check would decline: most survival jobs return `:done` at the
-  top of the round when there is nothing to do. A combinator reflex whose
-  children all decline (say `(any (a) (b))`) returns `:continue` every round
-  and keeps the body until a higher reflex cuts it; register leaf jobs, or
-  combinators whose children cannot all decline. If the condition
-  still holds, persistence decides: `:retry` fires again next tick,
-  `:cooldown` waits `:cooldown-s`, `:stop` waits until the condition has been
-  false once.
+- A reflex job gets one chance. Its check is never asked: the trigger is its
+  check. The engine starts its first round in the tick the trigger fires and
+  gives it the next round in every later tick, whatever the job's own `check`
+  would say, while its rounds return `:continue`. When a round returns `:done`
+  or `:declined`, or throws, the job is removed from the list and the body is
+  free; a `:declined` also emits an info event `reflex.declined` naming the
+  reflex and the job. The job never lingers: if the trigger still holds, it
+  fires the job again as a new instance, subject to persistence. So a job
+  meant for a register entry must cope in its round with a world in which its
+  check would decline: return `:done` (or `:declined`) at the top of the round
+  when there is nothing to do.
+- Combinators follow the rule: `any` returns `:declined` when no child's
+  check passes in its round, `seq` returns `:declined` when the next
+  unfinished child declines (its check is that child's check), and `repeat`
+  returns `:declined` when its child declines, so none of them holds the
+  body. A listed combinator is unaffected, because its check already keeps it
+  from running when it would decline; a round returning `:declined` just
+  yields like `:continue`.
+- Persistence, when the trigger still holds as the job ends: `:retry` fires
+  again next tick, `:cooldown` waits `:cooldown-s` **counted from the job
+  ending** (not from firing), and `:stop` waits until the condition has been
+  false once. If the trigger no longer holds at the end, there is no wait. A
+  register entry's own `:persistence` and `:cooldown-s` override the
+  trigger's.
+
+  The survival scenario sets, explicitly, `:persistence :cooldown` and:
+
+  | trigger | cooldown (s) | why |
+  |---|---|---|
+  | suffocating | 2 | back on the body almost at once |
+  | burning | 2 | same |
+  | health-low | 10 | |
+  | hostile-near | 5 | |
+  | hungry | 90 | a body with no food does not retry every tick |
+  | night-unsafe | 10 | keep trying through the night |
+  | stuck | 60 | must outlast the 60 s window of the moves that fired it |
+  | died | 30 | |
 - Agent-only edits (functions in `engine.core`): `register-reflex!`,
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
   (`{:above id}` or `{:below id}`, with TTL), `clear-change!`. Each property

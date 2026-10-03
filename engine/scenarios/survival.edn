@@ -1,22 +1,24 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
 ;; order, most urgent first: air, fire, health, hostiles, food, night, being
 ;; stuck, then a death's drops. Between reflexes the body looks around, one
-;; look per round, so it visibly idles.
-{:register [{:trigger :suffocating :args {:min-oxygen 12}
+;; look per round, so it visibly idles. A reflex job gets one chance: when its
+;; round declines or is done it is dropped, and the trigger fires it again once
+;; its cooldown (counted from the job ending) has passed.
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
              :job (jobs.survival.breathe {:min-oxygen 12})}
-            {:trigger :burning
+            {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
-            {:trigger :health-low :args {:health 7}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7}
              :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
-            {:trigger :hostile-near :args {:radius 8}
+            {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8}
              :job (jobs.survival.respond-to-hostile {:radius 8 :fight-health 12 :min-health 8})}
-            {:trigger :hungry :args {:food 6 :food-when-hurt 14}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
              :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
-            {:trigger :night-unsafe :args {:roof-height 4}
+            {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}
-            {:trigger :stuck
+            {:trigger :stuck :persistence :cooldown :cooldown-s 60
              :job (jobs.maintenance.unstick)}
-            {:trigger :died
+            {:trigger :died :persistence :cooldown :cooldown-s 30
              :job (jobs.survival.recover-drops {:collect-radius 6})}
             {:trigger :inventory-nearly-full}]
  :queue [(repeat (jobs.movement.look-around))]}

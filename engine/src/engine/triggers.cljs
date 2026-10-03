@@ -20,7 +20,7 @@
    :job '(jobs.survival.recover)
    :args {:health default-health}
    :persistence :cooldown
-   :cooldown-s 30})
+   :cooldown-s 10})
 
 (def hostile-radius 8)
 
