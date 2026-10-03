@@ -191,3 +191,49 @@ test('createLimiter wouldAllow counts only lines inside the window', () => {
   t = 30000
   assert.equal(l.wouldAllow(5), true)
 })
+
+test('a later part that starts with a slash refuses the whole public message and sends nothing', async () => {
+  const bot = chatBot()
+  const text = `${'a'.repeat(254)} /tell Someone hi`
+  assert.ok(text.length > CHAT_MAX)
+  assert.deepEqual(await say(bot, ctx(), { message: text }, OPTS()), { status: 'cannot', reason: 'command' })
+  assert.deepEqual(bot.sent, [])
+})
+
+test('a later whisper part that starts with a slash is refused too', async () => {
+  const bot = chatBot()
+  const text = `${'a'.repeat(244)} /op me`
+  assert.deepEqual(await say(bot, ctx(), { message: text, to: 'Steve' }, OPTS()), { status: 'cannot', reason: 'command' })
+  assert.deepEqual(bot.sent, [])
+})
+
+test('no public part ever begins with a slash across split messages', async () => {
+  const bot = chatBot()
+  const messages = [long, 'word '.repeat(120), 'x'.repeat(500), `${'a'.repeat(100)}. ${'b'.repeat(200)}`]
+  for (const message of messages) await say(bot, ctx(), { message }, OPTS())
+  assert.ok(bot.sent.length > 4)
+  assert.ok(bot.sent.every(s => !s.args[0].startsWith('/')))
+})
+
+test('say refuses bad whisper targets and prototype names', async () => {
+  const cases = [
+    ['constructor', { status: 'gone', to: 'constructor' }],
+    ['toString', { status: 'gone', to: 'toString' }],
+    ['__proto__', { status: 'gone', to: '__proto__' }],
+    ['@a', { status: 'cannot', reason: 'bad-name' }],
+    ['Name extra', { status: 'cannot', reason: 'bad-name' }],
+    ['ab', { status: 'cannot', reason: 'bad-name' }]
+  ]
+  for (const [to, expected] of cases) {
+    const bot = chatBot()
+    assert.deepEqual(await say(bot, ctx(), { message: 'hi', to }, OPTS()), expected, to)
+    assert.deepEqual(bot.sent, [], to)
+  }
+})
+
+test('every whisper part fits the budget with the validated name', async () => {
+  const bot = chatBot({ players: { Steve_1234567890: {} } })
+  await say(bot, ctx(), { message: 'word '.repeat(100), to: 'Steve_1234567890' }, OPTS())
+  assert.ok(bot.sent.length > 1)
+  assert.ok(bot.sent.every(s => `/tell ${s.args[0]} ${s.args[1]}`.length <= CHAT_MAX))
+})

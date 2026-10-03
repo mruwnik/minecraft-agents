@@ -67,11 +67,17 @@ const waitGap = async (ctx, limiter, timeScale) => {
   }
 }
 
+// last guard at the send: a public part that starts with a slash would be a command, so it is never sent
+export const sendPublic = (bot, part) => {
+  if (part.startsWith('/')) throw new Error('refusing to send a chat line that starts with a slash')
+  bot.chat(part)
+}
+
 const sendParts = async (bot, ctx, to, parts, limiter, timeScale) => {
   for (const part of parts) {
     await waitGap(ctx, limiter, timeScale)
     limiter.record()
-    to ? bot.whisper(to, part) : bot.chat(part)
+    to ? bot.whisper(to, part) : sendPublic(bot, part)
   }
 }
 
@@ -79,8 +85,10 @@ export async function say (bot, ctx, a, { timeScale = 1, listenMs = 1000, limite
   const message = cleanMessage(a.message)
   const to = a.to
   if (message.startsWith('/')) return { status: 'cannot', reason: 'command' }
-  if (to && !bot.players?.[to]) return { status: 'gone', to }
+  if (to && !PLAYER_NAME.test(to)) return { status: 'cannot', reason: 'bad-name' }
+  if (to && !Object.hasOwn(bot.players ?? {}, to)) return { status: 'gone', to }
   const parts = splitSay(message, to ? CHAT_MAX - `/tell ${to} `.length : CHAT_MAX)
+  if (parts.some(part => part.startsWith('/'))) return { status: 'cannot', reason: 'command' }
   if (parts.length > limiter.max) return { status: 'cannot', reason: 'too-long', parts: parts.length }
   if (!limiter.wouldAllow(parts.length)) return { status: 'blocked', reason: 'rate', retryMs: limiter.retryMs(parts.length) }
   const refusals = []

@@ -593,3 +593,12 @@ test('fake chat to a player who is not there is gone and records nothing', async
   assert.deepEqual(await p.chat('t1', { message: 'psst', to: 'Nobody' }), { status: 'gone', to: 'Nobody' })
   assert.deepEqual(p.world.state.chat, [])
 })
+
+test('fake chat applies the real rules: command, bad name, prototype names', async () => {
+  const p = owned({ entities: [{ id: 1, name: 'Steve', kind: 'player', pos: at(1, 64, 0) }] })
+  assert.deepEqual(await p.chat('t1', { message: ' /op me' }), { status: 'cannot', reason: 'command' })
+  assert.deepEqual(await p.chat('t1', { message: 'hi', to: '@a' }), { status: 'cannot', reason: 'bad-name' })
+  assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'ab' }), { status: 'cannot', reason: 'bad-name' })
+  assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'constructor' }), { status: 'gone', to: 'constructor' })
+  assert.deepEqual(p.world.state.chat, [])
+})

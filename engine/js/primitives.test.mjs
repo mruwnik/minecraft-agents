@@ -1873,6 +1873,15 @@ test('chat through the wrapper refuses a command and sends nothing', async () =>
   assert.deepEqual(sent, [])
 })
 
+test('chat through the wrapper rejects bad whisper names and resolves gone for prototype names', async () => {
+  const { bot, p } = rig()
+  const sent = []
+  Object.assign(bot, { chat: m => sent.push(m), whisper: (...a) => sent.push(a), players: { Steve: {} } })
+  for (const to of ['@a', 'Name extra', 'ab']) await assert.rejects(p.chat('t1', { message: 'hi', to }), { code: 'bad-args' }, to)
+  assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'constructor' }), { status: 'gone', to: 'constructor' })
+  assert.deepEqual(sent, [])
+})
+
 test('body events: chat from the body itself is not reported, chat from others is', () => {
   const { bot, p } = rig()
   const seen = []
