@@ -1,5 +1,5 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
-;; order, most urgent first: air, fire, hostiles, health, food, night, being
+;; order, most urgent first: air, fire, hostiles, health, food, night (shelter, then logging out when another player sleeps), being
 ;; stuck, then a death's drops, then a full inventory. Between reflexes the
 ;; body looks around, one look per round, so it visibly idles. A reflex job gets one chance: when its
 ;; round declines or is done it is dropped, and the trigger fires it again once
@@ -18,6 +18,7 @@
              :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
             {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}
+            {:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30 :job (jobs.survival.log-out)}
             {:trigger :stuck :persistence :cooldown :cooldown-s 60
              :job (jobs.maintenance.unstick)}
             {:trigger :died :persistence :cooldown :cooldown-s 30

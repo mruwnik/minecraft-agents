@@ -585,6 +585,7 @@ down.
   | hostile-near | 5 | |
   | hungry | 90 | a body with no food does not retry every tick |
   | night-unsafe | 10 | keep trying through the night |
+  | player-sleeping-nearby | 30 | after a log-out returns, log out again if the sleeper still sleeps |
   | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
   | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
@@ -744,9 +745,9 @@ after three the job emits a warn and ends.
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
 | `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips remembered sources and returns `:declined` when nothing is in sight |
-| `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3 :offline-allowed true :offline-ms 300000 :player-radius 128}` | the night-unsafe condition; a round ends `:done` when asleep, roofed within `:roof-height` or not night, and `:declined` when no child could do anything | `:sleep-failed`, children `:sleep`, `:log-out`, `:dig-in` | reads `:slept`; writes `:needs-bed` (cap 1, 1 day; the once-a-day `needs_bed` warn flag); dig-in writes `:shelter`, which nothing reads) |
+| `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3}` | the night-unsafe condition; a round ends `:done` when asleep, roofed within `:roof-height` or not night, and `:declined` when no child could do anything | `:sleep-failed`, children `:sleep`, `:dig-in` | reads `:slept`; writes `:needs-bed` (cap 1, 1 day; the once-a-day `needs_bed` warn flag); dig-in writes `:shelter`, which nothing reads) |
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` (and `:roof`, `:target-y` in dig mode), `:placed` | writes `:shelter` (cap 10, 1 day) `{:pos :roof :state :built}` from the current feet and the cells it placed, plus `:door` in walls mode (history only), and `:dig-in-futile` `{:pos}` (cap 5, 10 min) when a dig yields nothing to roof the pit with; its check then declines while no block is carried and one lies within 8 blocks. Walls mode recomputes its cells from the current feet each round; dig mode rechooses if the body leaves its column and stops (`dig_in_failed`) when a dig yields nothing to roof the pit with |
-| `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 300000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping | none | writes `:log-out` (cap 10, 1 day) |
+| `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 20000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping (fired by the `:player-sleeping-nearby` reflex; the next firing logs out again if the night is not over) | none | writes `:log-out` (cap 10, 1 day) |
 | `jobs.survival.recover-drops` | `{:margin 0 :danger-radius 8 :collect-radius 6}` | a `:died` with no newer `:recovered` | `:death-t` (the death it is about; a different death resets the rest), `:decided`, `:phase`, children `:go`, `:collect` | reads `:died`, `:respawned` (waits 2 s after a respawn before estimating); writes `:recovered` `{:decision :collected/:skip/:abandoned ...}` (cap 10, 1 day); emits info `:recover-drops.decided` with the decision and a `:text` |
 | `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; each attempt ends with a `moveTo` toward the stored goal (range 1, `:maxDistance` 3), then an uncapped retry (`:timeoutS` 6) if the body did not move over `:min-move` (displacement, not status, decides); pillars out of pits with `jumpPlace` (depth-many blocks of the largest placeable stack) or digs; writes `:stuck` (cap 10, 1 h) when it gives up, the `unstick.failed` warn carrying `:reasons` and a `:text` naming them; equips the best pickaxe before digging |
 
@@ -830,8 +831,8 @@ after three the job emits a warn and ends.
   to eat; `:respond-to-hostile` fights (`fight-back`) when healthy, armed,
   not facing a creeper and outnumbered by at most `:max-fight`, else retreats;
   `:get-food` climbs a ladder of eat, known source, hunt or harvest, then
-  gives up with a `food.none` warn; `:shelter` tries sleep, then log-out,
-  then dig-in, ends once the body is roofed (or asleep, or it is day) and declines
+  gives up with a `food.none` warn; `:shelter` tries sleep, then dig-in
+  (logging out for a sleeping player is the `:player-sleeping-nearby` reflex's own job), ends once the body is roofed (or asleep, or it is day) and declines
   when none of them can act; `:recover-drops` weighs the
   drops' value (`engine.value`) against the trip and goes back for them or
   skips; `:unstick` escalates from stepping back to pillaring out of a pit (`jumpPlace`) or digging.
@@ -850,6 +851,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 10 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 90 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
+| `:player-sleeping-nearby` | night, another player within `:player-radius` (default 128) asleep, no `:bed` remembered within `:bed-radius` (default 48), `:offline-allowed` not false, the last `:log-out` not `unsupported`; being roofed does not matter | `(jobs.survival.log-out)` | cooldown 30 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 30 s |
