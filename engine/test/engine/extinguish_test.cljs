@@ -83,7 +83,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:onFire true}
-                                      :blocks (merge (floor 12) {"9,64,0" "water"})})]
+                                      :blocks (merge (floor 12) {"9,64,0" "water" "1,64,0" "fire"})})]
           (core/submit! eng '(jobs.survival.extinguish {:water-radius 6}) {})
           (await (core/tick! eng))
           (let [target (:pos (call-args (first (calls p "moveTo"))))]
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/capture-sink)
-              p (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone"}})
+              p (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -176,4 +176,31 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [] (calls p "place")))
+          (is (= 1 (count (calls p "moveTo")))))))))
+
+(deftest burning-on-bare-stone-with-no-water-or-hazards-stands-still
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/capture-sink)
+              p (tu/fake {:self {:onFire true} :blocks (floor 8)})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "moveTo")) "does not walk")
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))))
+          (is (not-any? #(= :warn (:level %)) @seen)))))))
+
+(deftest burning-next-to-a-fire-block-still-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :blocks (merge (floor 8) {"1,64,0" "fire"})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
           (is (= 1 (count (calls p "moveTo")))))))))

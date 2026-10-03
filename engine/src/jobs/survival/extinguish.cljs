@@ -11,7 +11,11 @@
   something solid and is not fire, lava, magma or a campfire, scored by
   distance from those hazards (up to 4 blocks), a bonus for each block of
   height gained, and a small cost per block walked; when on fire with water
-  within :water-radius, into the nearest water. Lava seen within :scan-radius
+  within :water-radius, into the nearest water. On fire (not in lava) with no
+  bucket use, no water within :water-radius and no fire, lava, magma or
+  campfire within 1.5 blocks of the feet cell, there is nothing useful to do:
+  it stands still, emits info :extinguish_wait and is done (the trigger fires
+  it again after its cooldown while the body still burns). Lava seen within :scan-radius
   is written to memory as :hazard entries (cap 50, 6 hours) for retreat logic.
   If there is no safe cell, or the walk is blocked while still burning, that
   is a failed round; after three the job warns :extinguish_stuck once and
@@ -35,6 +39,7 @@
 (def hazard-reach 4)
 (def height-bonus 2)
 (def walk-cost 0.5)
+(def hazard-touch 1.5)
 
 (defn check [c] (burning/burning? (.self (:primitives c))))
 
@@ -90,6 +95,11 @@
     (doseq [{:keys [pos]} fresh]
       (ctx/remember! c :hazard {:kind :lava :pos pos} hazard-policy))))
 
+(defn hazard-near?
+  "Whether any scanned hazard lies within hazard-touch blocks of the feet cell."
+  [pos scanned]
+  (boolean (some #(<= (u/dist pos (:pos %)) hazard-touch) scanned)))
+
 (defn clear? [c] (not (check c)))
 
 (defn finish
@@ -124,6 +134,10 @@
           water
           (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
               (finish c))
+
+          (and (not lava?) (not (hazard-near? pos scanned)))
+          (do (ctx/emit! c :extinguish_wait :info {:text "no water near; waiting for the fire to go out"})
+              :done)
 
           :else
           (let [target (best-cell p pos step (map :pos scanned))]
