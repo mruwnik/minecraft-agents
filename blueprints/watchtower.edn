@@ -1,0 +1,25 @@
+;; A 3x3 cobblestone shaft with a ladder, a door in the south wall and a fenced 5x5 lookout on top, torches at its corners.
+;; Converted from watchtower.blueprint.json (never built; first candidates). The old file left the ring around the shaft
+;; as "do not care": above the floor it is :clear here, and in the floor it is cobblestone (a plinth), so that the
+;; tower does not ask for a trench around its foot.
+{:id "watchtower" :front :south
+ :key {"S" "cobblestone" "J" "jack_o_lantern" "P" "oak_planks" "#" "oak_fence" "i" "torch" "." :clear
+       "H" {:block "ladder" :facing :south}
+       "D" {:block "oak_door" :facing :north :half :lower}
+       "d" {:block "oak_door" :facing :north :half :upper}
+       "^" {:block "oak_trapdoor" :facing :south :half :top}}
+ :layers [["SSSSS" "SSSSS" "SSJSS" "SSSSS" "SSSSS"]
+          ["....." ".SSS." ".SHS." ".SDS." "....."]
+          ["....." ".SSS." ".SHS." ".SdS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["....." ".SSS." ".SHS." ".SSS." "....."]
+          ["PPPPP" "PPPPP" "PP^PP" "PPPPP" "PPPPP"]
+          ["#####" "#...#" "#...#" "#...#" "#####"]
+          ["i...i" "....." "....." "....." "i...i"]]
+ :spots {"door" [2 1 3] "hatch" [2 11 2] "lookout" [2 12 2]}}

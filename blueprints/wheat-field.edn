@@ -1,0 +1,11 @@
+;; An 11x7 fenced wheat field: four rows of nine wheat on farmland either side of a covered water channel (waterlogged
+;; top slabs), a gate at the east end of the channel row, torches on the corner posts. Converted from
+;; wheat-field.blueprint.json (as built at hollis-field); the "do not care" cells over the crops are :clear here.
+{:id "wheat-field" :front :east
+ :key {"r" "dirt" "f" "farmland" "w" "wheat" "#" "oak_fence" "i" "torch" "." :clear
+       "=" {:block "oak_slab" :type :top :waterlogged true}
+       "G" {:block "oak_fence_gate" :facing :east}}
+ :layers [["rrrrrrrrrrr" "rfffffffffr" "rfffffffffr" "r=========r" "rfffffffffr" "rfffffffffr" "rrrrrrrrrrr"]
+          ["###########" "#wwwwwwwww#" "#wwwwwwwww#" "#.........G" "#wwwwwwwww#" "#wwwwwwwww#" "###########"]
+          ["i.........i" "..........." "..........." "..........." "..........." "..........." "i.........i"]]
+ :spots {"gate" [10 1 3]}}

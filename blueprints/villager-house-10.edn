@@ -1,0 +1,23 @@
+;; A 10x10 one-storey house with ten beds for villagers, torches between them, fence gates as doors (one in the west
+;; wall, two in the south-east corner room). Converted from villager-house-10.blueprint.json: walls and roof are oak
+;; planks as built at claudeprobe-village-five and claudeprobe-breeder; the floor was never built there, so it keeps the
+;; first candidate, cobblestone.
+{:id "villager-house-10" :front :south
+ :key {"S" "cobblestone" "W" "oak_planks" "T" "torch" "." :clear
+       "G" {:block "oak_fence_gate" :facing :east}
+       "B" {:block "white_bed" :facing :south :part :foot}
+       "H" {:block "white_bed" :facing :south :part :head}}
+ :layers [["SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"
+           "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"]
+          ["WWWWWWWWWW" "W.B.B.B.BW" "W.H.H.H.HW" "W.T...T.TW" "W.B.B.B.BW"
+           "G.H.H.H.HW" "W.T...T.TW" "W.B.B.WWWW" "W.H.H.G..G" "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "W........W" "W........W" "W........W" "W........W"
+           ".........W" "W........W" "W.....WWWW" "W........." "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "W........W" "W........W" "W........W" "W........W"
+           "W........W" "W........W" "W.....WWWW" "W.....W..W" "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW"
+           "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW"]]
+ :spots {"bed-1" [2 1 1] "bed-2" [4 1 1] "bed-3" [6 1 1] "bed-4" [8 1 1]
+         "bed-5" [2 1 4] "bed-6" [4 1 4] "bed-7" [6 1 4] "bed-8" [8 1 4]
+         "bed-9" [2 1 7] "bed-10" [4 1 7]
+         "gate-west" [0 1 5] "gate-inner" [6 1 8] "gate-east" [9 1 8]}}

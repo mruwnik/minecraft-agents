@@ -1,0 +1,22 @@
+;; The ten-bed villager house with job blocks for five professions: two composters, two lecterns and a fletching table.
+;; Converted from examples/village-five.blueprint.json (never built as drawn; first candidates).
+{:id "village-five" :front :south
+ :key {"S" "cobblestone" "W" "cobblestone" "T" "torch" "A" "composter" "C" "lectern" "E" "fletching_table" "." :clear
+       "G" {:block "oak_fence_gate" :facing :east}
+       "F" {:block "white_bed" :facing :south :part :foot}
+       "H" {:block "white_bed" :facing :south :part :head}}
+ :layers [["SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"
+           "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"]
+          ["WWWWWWWWWW" "W.F.F.F.FW" "W.H.H.H.HW" "W.TAACT.TW" "W.F.F.F.FW"
+           "G.H.H.H.HW" "W.TE.CT.TW" "W.F.F.WWWW" "W.H.H.G..G" "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "W........W" "W........W" "W........W" "W........W"
+           ".........W" "W........W" "W.....WWWW" "W........." "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "W........W" "W........W" "W........W" "W........W"
+           "W........W" "W........W" "W.....WWWW" "W.....W..W" "WWWWWWWWWW"]
+          ["WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW"
+           "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW" "WWWWWWWWWW"]]
+ :spots {"bed-1" [2 1 1] "bed-2" [4 1 1] "bed-3" [6 1 1] "bed-4" [8 1 1]
+         "bed-5" [2 1 4] "bed-6" [4 1 4] "bed-7" [6 1 4] "bed-8" [8 1 4]
+         "bed-9" [2 1 7] "bed-10" [4 1 7]
+         "composter-1" [3 1 3] "composter-2" [4 1 3] "lectern-1" [5 1 3] "lectern-2" [5 1 6] "fletching" [3 1 6]
+         "gate-west" [0 1 5] "gate-inner" [6 1 8] "gate-east" [9 1 8]}}
