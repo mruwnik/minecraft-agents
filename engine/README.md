@@ -104,7 +104,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 | method | args | returns |
 |---|---|---|
 | `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
-| `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
+| `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
 
@@ -132,7 +132,18 @@ hostile mobs; creepers additionally carry `creeper: true` (their `name` is `cree
 `blocks()` and `blockAt()` carry `age` (a number) when the block has an `age` state: the crop growth stage of wheat,
 carrots and potatoes (ripe at 7), beetroots (ripe at 3) and sweet berry bushes (berries from 2). Other blocks have no `age`.
 
-Sensing has no line of sight: `entities()` and `blocks()` see through walls, so a hostile behind a wall is "near".
+Line of sight: every hostile entity carries `visible`, true when a block raycast from the body's eye to the middle of the
+entity crosses no sight-blocking block. A block blocks sight when its bounding box is a full cube, except glass, water,
+fire, grass, snow, vines, ladders, torches and lava; an unloaded cell never blocks, so a gap in the map cannot hide a
+threat. The walk is bounded by the segment, so its length is at most the scan radius, and it is computed for hostiles
+only (other kinds have no `visible` field). `entities()` and `blocks()` themselves still list things behind walls with
+their distances; only `visible` tells them apart. The fake computes `visible` the same way over its cells (a spec
+entity may force it with `visible: true|false`).
+
+The `:hostile-near` trigger uses it: it holds only for a visible hostile within `:radius` (trigger arg `:visible-only`,
+default true; false restores the old behaviour). The trigger is wrong, not the job, when a hostile behind a wall fires
+the response. `engine.jobs.combat/hostiles` takes an optional third argument `{:sight :only|:prefer}`: `:only` keeps the
+visible ones, `:prefer` lists them first (each group nearest first); two arguments ignore sight as before.
 
 Remembered places (a known bed, a known chest) are not primitives. They are
 `:bed` and `:chest` entries in body memory; see `engine.memory/place` below.
@@ -752,7 +763,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:suffocating` | in water with oxygen below `:min-oxygen` (default 12) and the head not in air, or the head cell holds a suffocating block | `(jobs.survival.breathe)` | retry |
 | `:burning` | on fire or in lava | `(jobs.survival.extinguish)` | retry |
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 30 s |
-| `:hostile-near` | a hostile mob within `:radius` (default 8), walls included; set the job's own `:radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
+| `:hostile-near` | a hostile mob within `:radius` (default 8) that the body can see (`:visible-only false` counts hidden ones too); set the job's own `:radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
@@ -788,8 +799,8 @@ server and mineflayer, none of it checked live:
   `dig_in_failed`.
 - `onFire` and the sleeping pose are read from metadata indices found through
   the registry's `metadataKeys` (see Sensing); the fallback indices are guesses.
-- Sensing has no line of sight, so hostiles behind walls count for
-  `:hostile-near` and `respond-to-hostile`.
+- `:hostile-near` needs a visible hostile, but `respond-to-hostile` still picks its targets with `combat/hostiles`
+  without `{:sight ...}`, so once it runs it may choose one behind a wall.
 - Wheat is not food raw; `get-food` harvests it but cannot eat it (no
   crafting yet).
 

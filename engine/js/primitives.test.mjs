@@ -295,7 +295,7 @@ test('entities finds the pose index through the registry', () => {
 
 test('entities does not put sleeping or username on mobs', () => {
   const [zombie] = rig(world).p.entities({ kind: 'hostile' })
-  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'id', 'kind', 'name', 'pos'])
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'id', 'kind', 'name', 'pos', 'visible'])
 })
 
 const mobCases = [
@@ -688,3 +688,33 @@ test('a bucket not carried is no-item', async () => {
   const { p } = bucketRig({ blocks: {}, item: 'bread', onActivate: () => {} })
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'no-item')
 })
+
+// ---- line of sight: entities reports `visible` for hostiles ----
+
+const wall = Object.fromEntries([2, 3].flatMap(x => [64, 65, 66].map(y => [`${x},${y},0`, 'stone'])))
+const zombieAt5 = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(5, 64, 0), height: 1.9, health: 20 } }
+
+test('a hostile behind a two-thick wall is not visible, and is once the wall is gone', () => {
+  const behind = rig({ blocks: wall, entities: zombieAt5 }).p.entities({ kind: 'hostile' })
+  assert.equal(behind.length, 1)
+  assert.equal(behind[0].visible, false)
+  const open = rig({ blocks: {}, entities: zombieAt5 }).p.entities({ kind: 'hostile' })
+  assert.equal(open[0].visible, true)
+})
+
+test('a hostile seen across a diagonal is blocked by a pillar on the line', () => {
+  const pillar = Object.fromEntries([64, 65, 66].map(y => ['2,' + y + ',2', 'stone']))
+  const e = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(4, 64, 4), height: 1.9 } }
+  assert.equal(rig({ blocks: pillar, entities: e }).p.entities({ kind: 'hostile' })[0].visible, false)
+})
+
+test('glass and unloaded cells do not block sight', () => {
+  const glass = Object.fromEntries([64, 65].map(y => ['2,' + y + ',0', 'glass']))
+  assert.equal(rig({ blocks: glass, entities: zombieAt5 }).p.entities({ kind: 'hostile' })[0].visible, true)
+})
+
+test('only hostiles carry visible', () => {
+  const { p } = rig({ blocks: wall, entities: { ...zombieAt5, 7: { id: 7, name: 'cow', type: 'passive', position: at(5, 64, 1) } } })
+  assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
+})
+

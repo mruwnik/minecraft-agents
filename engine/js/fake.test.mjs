@@ -313,3 +313,20 @@ test('place with a water bucket pours water and swaps in an empty bucket; bucket
   assert.deepEqual(p.self().inventory.map(i => i.name), ['water_bucket'])
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'missing')
 })
+
+const fakeWall = Object.fromEntries([2, 3].flatMap(x => [64, 65, 66].map(y => [`${x},${y},0`, 'stone'])))
+const fakeZombie = { id: 9, name: 'zombie', kind: 'hostile', pos: at(5, 64, 0) }
+
+test('entities marks a hostile behind a wall not visible, and visible once the wall is gone', () => {
+  const walled = createFake({ blocks: fakeWall, entities: [fakeZombie] })
+  assert.equal(walled.entities({ kind: 'hostile' })[0].visible, false)
+  Object.keys(fakeWall).forEach(k => walled.world.state.blocks.delete(k))
+  assert.equal(walled.entities({ kind: 'hostile' })[0].visible, true)
+})
+
+test('only hostiles carry visible, and a spec can force it', () => {
+  const p = createFake({ blocks: fakeWall, entities: [{ id: 1, name: 'cow', kind: 'passive', pos: at(5, 64, 0) }, { ...fakeZombie, visible: true }] })
+  assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
+  assert.equal(p.entities({ kind: 'hostile' })[0].visible, true)
+})
+

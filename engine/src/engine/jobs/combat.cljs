@@ -9,9 +9,17 @@
   ["_sword" "_axe"])
 
 (defn hostiles
-  "The hostile mobs within radius of the body, nearest first, as JS entities."
-  [p radius]
-  (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16})))
+  "The hostile mobs within radius of the body, nearest first, as JS entities.
+  opts {:sight mode}: :only keeps the ones the body can see (the `visible`
+  field of sensing), :prefer lists the visible ones first, each group nearest
+  first; without opts sight is ignored."
+  ([p radius] (hostiles p radius {}))
+  ([p radius {:keys [sight]}]
+   (let [all (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16}))]
+     (case sight
+       :only (filterv #(.-visible %) all)
+       :prefer (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)
+       all))))
 
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))

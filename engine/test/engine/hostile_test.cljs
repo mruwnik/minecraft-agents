@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.jobs.combat :as combat]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -233,3 +234,20 @@
 
 (deftest hostile-near-fires-the-chooser
   (is (= '(jobs.survival.respond-to-hostile) (:job triggers/hostile-near))))
+
+;; ------------------------------------------------------------- line of sight
+
+(def wall
+  (into {} (for [x [2 3] y [64 65 66]] [(str x "," y ",0") "stone"])))
+
+(deftest hostile-near-ignores-a-hostile-behind-a-wall
+  (is (not (holds? {:blocks wall :entities [(zombie 5 0)]} {:radius 8})) "behind two blocks of stone: silent")
+  (is (holds? {:entities [(zombie 5 0)]} {:radius 8}) "the same hostile with no wall: fires")
+  (is (holds? {:blocks wall :entities [(zombie 5 0)]} {:radius 8 :visible-only false}) "visible-only false counts it again"))
+
+(deftest combat-hostiles-can-filter-or-prefer-visible
+  (let [p (tu/fake {:blocks wall :entities [(zombie 1 3 3) (zombie 2 4 0)]})
+        ids (fn [hs] (mapv #(.-id %) hs))]
+    (is (= [2 1] (ids (combat/hostiles p 8))) "two arguments: unchanged, nearest first, sight ignored")
+    (is (= [1] (ids (combat/hostiles p 8 {:sight :only}))))
+    (is (= [1 2] (ids (combat/hostiles p 8 {:sight :prefer}))) "prefer: visible first, then the rest")))

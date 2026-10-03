@@ -3,6 +3,7 @@
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
+import { lineClear } from './sight.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -16,6 +17,7 @@ const POLL_MS = 50
 const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
+const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
@@ -175,6 +177,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
+  // Whether a block stops the eye: a full-cube bounding box, except glass. An unloaded cell never blocks, so a
+  // threat is not hidden by a gap in the map.
+  const blocksSight = p => {
+    const block = bot.blockAt(vec(p))
+    return Boolean(block) && block.boundingBox === 'block' && !SEE_THROUGH.test(block.name)
+  }
+  // eye to the middle of the entity; the walk is bounded by that segment, which the caller keeps within its radius
+  const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, blocksSight)
+
     const me = here()
     return Object.values(bot.entities)
       .filter(e => e !== bot.entity && e.position)
@@ -189,6 +200,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         pos: xyz(e.position),
         distance,
         ...(k === 'item' && { item: droppedItem(bot, e) }),
+        ...(k === 'hostile' && { visible: canSee(e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))

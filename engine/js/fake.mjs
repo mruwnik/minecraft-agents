@@ -1,12 +1,17 @@
 // A scriptable fake world exposing the primitives interface from README.md.
 // Engine and job tests drive it; it never talks to a server.
 
+import { lineClear } from './sight.mjs'
+
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const clone = (v) => structuredClone(v)
 
 const REACH = 4.5
+const EYE = 1.62
+const BODY_MIDDLE = 0.9
+const SEE_THROUGH = new Set(['air', 'water', 'lava', 'fire', 'short_grass', 'tall_grass', 'snow', 'glass', 'glass_pane'])
 const FOODS = ['cooked_beef', 'cooked_porkchop', 'bread', 'baked_potato', 'cooked_chicken', 'carrot', 'apple', 'sweet_berries', 'beef', 'porkchop', 'mutton', 'chicken', 'rabbit']
 
 export const isDayAt = (t) => t < 12542 || t > 23460
@@ -227,6 +232,8 @@ function defaultActs (s) {
 
     async look () {
       return { status: 'ok' }
+    },
+
     }
   }
 }
@@ -238,6 +245,12 @@ export function createFake (spec = {}) {
   const calls = []
   const holds = new Map() // name -> array of pending hold records
   const pending = new Set() // { token, reject }
+  // a cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not
+  const blocksSight = (cell) => !SEE_THROUGH.has(s.blocks.get(key(cell)) ?? 'air') && !s.unloaded.has(key(cell))
+  const canSee = (e) => lineClear(
+    { x: s.self.pos.x + 0.5, y: s.self.pos.y + EYE, z: s.self.pos.z + 0.5 },
+    { x: e.pos.x + 0.5, y: e.pos.y + BODY_MIDDLE, z: e.pos.z + 0.5 },
+    blocksSight)
   const overrides = new Map()
   const acts = defaultActs(s)
   let owner = null
@@ -303,7 +316,7 @@ export function createFake (spec = {}) {
 
     entities ({ radius = 16, kind, names, max = 32 } = {}) {
       return s.entities
-        .map(e => ({ ...clone(e), distance: dist(s.self.pos, e.pos) }))
+        .map(e => ({ ...clone(e), distance: dist(s.self.pos, e.pos), ...(e.kind === 'hostile' && { visible: e.visible ?? canSee(e) }) }))
         .filter(e => e.distance <= radius && (!kind || e.kind === kind) && (!names || names.includes(e.name)))
         .sort((a, b) => a.distance - b.distance)
         .slice(0, max)

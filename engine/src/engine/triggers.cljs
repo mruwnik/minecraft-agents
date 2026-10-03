@@ -25,14 +25,18 @@
 (def hostile-radius 8)
 
 (def hostile-near
-  "Holds when a hostile mob is within :radius (args, default 8). Players and
-  passive mobs are other entity kinds and never count. Sensing has no line of
-  sight, so a hostile behind a wall counts. The job's own :radius (default 8)
-  is set in the entry's :job spec."
+  "Holds when a hostile mob the body can see is within :radius (args, default
+  8). Sight is a block raycast from the eye to the mob (the `visible` field of
+  sensing), so a hostile behind a wall is silent; :visible-only false counts
+  every hostile again. Players and passive mobs are other entity kinds and
+  never count. The job's own :radius (default 8) is set in the entry's :job
+  spec."
   {:name :hostile-near
    :when (fn [world _memory args]
-           (let [radius (:radius args hostile-radius)]
-             (pos? (.-length (.entities world #js {:radius radius :kind "hostile" :max 1})))))
+           (let [radius (:radius args hostile-radius)
+                 seen? (:visible-only args true)]
+             (boolean (some #(or (not seen?) (.-visible %))
+                            (array-seq (.entities world #js {:radius radius :kind "hostile" :max 32}))))))
    :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius}
    :persistence :cooldown
