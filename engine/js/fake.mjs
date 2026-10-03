@@ -33,8 +33,13 @@ const defaultSelf = {
   dimension: 'overworld'
 }
 
-// players are awake and have a username unless the spec says otherwise
-const withEntityDefaults = (e) => ({ health: 20, ...(e.kind === 'player' && { sleeping: false, username: e.name }), ...e })
+// players are awake and have a username, and creepers carry creeper: true, unless the spec says otherwise
+const withEntityDefaults = (e) => ({
+  health: 20,
+  ...(e.kind === 'player' && { sleeping: false, username: e.name }),
+  ...(e.name === 'creeper' && { creeper: true }),
+  ...e
+})
 
 function initialState (spec) {
   return {

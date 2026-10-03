@@ -302,21 +302,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
+        (let [{:keys [eng p clock]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
           (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
           (await (core/tick! eng))
           (is (< (.-x (.-pos (.self p))) 0) "moved away from the zombie, along x")
+          (swap! clock + 6000)
           (await (run-until-empty eng 4))
           (is (= [] (:list (core/state eng)))))))))
 
-(deftest retreat-is-bounded-when-the-hostile-keeps-up
+(deftest retreat-is-bounded-when-the-way-is-blocked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "arrived"}))
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
           (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
-          (is (<= (await (run-until-empty eng 20)) 6) "gives up after a bounded number of moves"))))))
+          (is (<= (await (run-until-empty eng 20)) 6) "gives up after a bounded number of blocked walks"))))))
 
 (deftest sleep-walks-to-the-bed-and-sleeps-at-night
   (async done
@@ -340,7 +341,7 @@
 
 ;; ----------------------------------------------------------------- triggers
 
-(deftest hostile-near-fires-retreat-from-a-scenario
+(deftest hostile-near-fires-the-chooser-from-a-scenario
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -348,7 +349,7 @@
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hostile-near}]}"))
           (await (core/tick! eng))
           (is (some #(= :fired (:kind %)) @seen))
-          (is (some #(= "jobs.survival.retreat" (:name %)) @seen)))))))
+          (is (some #(= "jobs.survival.respond-to-hostile" (:name %)) @seen)))))))
 
 (deftest night-and-bed-known-fires-sleep
   (async done
