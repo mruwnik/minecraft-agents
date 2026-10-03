@@ -1021,6 +1021,7 @@ after three the job emits a warn and ends.
   slots are free. Protection: tools, weapons and armour (deposit's `tool?`)
   and the three buckets are never put away or thrown. Food (`jobs.survival.eat/edible`)
   is never thrown and is put away only above `:keep-food` (best food-points
+| `jobs.debug.access-check` | `{:cells [[x y z]] or :from [x y z] :to [x y z] (at most 400) :zones [] :footprints [] :ledger []}` | always | none | none; digs and places nothing; hands over `{:verdicts [{:cell :block :dig :place}]}` (each verdict `{:ok true}` or `{:ok false :reason kw ...}` from `engine.access.rules`, whose docstring gives the input shape and the order of checks) and emits `:access-check.result` with the dig and place counts; `:zones nil` means no zone list loaded (every verdict then refused `:no-zones` unless a more specific reason comes first); bad args hand over `{:status :bad-args}` |
   first); building blocks (`jobs.survival.dig-in/building-blocks`, in that
   order) are put away or thrown only above `:keep-blocks`. Steps: (1) a
   `:chest` within `:chest-range` of the body with no `:chest-unusable` entry
