@@ -1,5 +1,5 @@
 (ns engine.fsutil
-  "Small synchronous file helpers: atomic JSON and EDN writes."
+  "Small synchronous file helpers: JSON reads (agent config) and atomic EDN writes."
   (:require ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]))
@@ -9,9 +9,6 @@
   (let [tmp (str file ".tmp")]
     (fs/writeFileSync tmp text)
     (fs/renameSync tmp file)))
-
-(defn write-json! [file data]
-  (write-atomic! file (js/JSON.stringify (clj->js data) nil 1)))
 
 (defn read-json [file]
   (when (fs/existsSync file)

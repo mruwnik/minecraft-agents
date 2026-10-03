@@ -31,12 +31,12 @@ Layout:
 
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub bot for the primitive tests.
 - `js/fake.mjs` a scriptable fake world with the same interface, for tests.
-- `src/engine/` `core` (list, register, scheduler), `memory`, `events`,
-  `ctx` (helpers job rounds call), `conditions` (data conditions for yields),
-  `catalog` (every job and trigger by name), `scenario`, `main`.
-- `src/engine/jobs/` job definitions; `engine.jobs.samples` holds three tiny
-  ones (`:go-to`, `:wait-for-day`, `:eat`) that prove the contract.
-  `src/engine/triggers.cljs` triggers (`:health-low`). Register new jobs and
+- `src/engine/` `core` (list, register, scheduler, act wrapper,
+  call-child), `memory` (the body store), `events`, `ctx` (helpers checks and
+  rounds call), `catalog` (every job and trigger by name), `scenario`, `main`.
+- `src/engine/jobs/` job definitions; `engine.jobs.samples` holds small ones
+  (`:go-to`, `:wait-for-day`, `:eat`, `:look-around`, `:pace`).
+  `src/engine/triggers.cljs` holds the triggers. Register new jobs and
   triggers in `engine.catalog`.
 - `scenarios/sample.edn` a scenario using the samples.
 - `test/engine/` cljs tests. Test helpers live in `engine.test-util`.
@@ -73,9 +73,9 @@ values are never converted wholesale; read fields with `.-field` or `aget`.
   any other rejection as a job failure.
 - **Time bounds** below are hard. A method that reaches its bound stops what it
   was doing and resolves with `status: 'timeout'` (or `partial` for `moveTo`).
-  Nothing in a primitive runs for minutes; long waits are yields.
+  Nothing in a primitive runs for minutes; long waits are declining checks.
 - **Sensing methods** are synchronous, take no token, and never wait for a
-  turn. Triggers and preconditions call them every tick, so they must stay
+  turn. Triggers and checks call them every tick, so they must stay
   cheap: scans are bounded by radius and `max`, and run on the JS side.
 
 ### Ownership token
@@ -85,7 +85,7 @@ primitives.setOwner(token)   // sync; token is a string or null
 ```
 
 The engine calls `setOwner` before each round with a fresh token and passes
-that token to the round. A call whose token is not the current owner rejects
+that token to the round; jobs reach the primitives only through `ctx/act`. A call whose token is not the current owner rejects
 at once with `code: 'cut'`. When `setOwner` changes the owner, every in-flight
 call made with the old token stops what it was doing within one game tick
 (pathfinder goal cleared, `stopDigging`, window closed, controls released)
@@ -102,8 +102,8 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos}`, or `null` when the chunk is not loaded |
 
-Remembered places (a known bed, a known chest) are not primitives. They live
-in common memory; see `engine.memory/places` below.
+Remembered places (a known bed, a known chest) are not primitives. They are
+`:bed` and `:chest` entries in body memory; see `engine.memory/place` below.
 
 ### Acting (async, token first)
 
@@ -146,7 +146,7 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 `listener` receives plain objects `{kind, ...}` for momentary events:
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`), `respawned`, `chat`
 (`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`). The engine
-turns each into a record in body memory (see Memory).
+turns each into an entry of that kind in body memory (see Memory).
 
 ### Lifecycle
 
@@ -186,111 +186,134 @@ owner changes, exactly as the real layer must.
 
 ## Jobs
 
-A job definition is a map:
+A job definition is a map of a name, a check and a round:
 
 ```clojure
-{:name         :go-to                         ; keyword, unique in the catalog
- :precondition (fn [world memory args] ...)   ; optional; true | :not-yet | false
- :round        go-to-round}                   ; a (defn ^:async go-to-round [ctx] ...); results below
+{:name  :go-to                    ; keyword, unique in the catalog
+ :check (fn [ctx] bool)           ; required; (constantly true) is fine
+ :round go-to-round}              ; (defn ^:async go-to-round [ctx] ...) => :done | :continue
 ```
 
-- `world` is the primitives object (sensing methods only, by convention).
-- `memory` is `{:common {...} :body {...} :job {...}}`, the job's own memory
-  under `:job`.
-- Precondition results: `true` runs the round. `:not-yet` skips it silently
-  (waiting, as designed). `false` skips it and emits one `job.blocked` warn
-  until it next holds: use it for "this cannot happen without someone else
-  acting".
-
-Round results:
-
-| result | meaning |
-|---|---|
-| `:done` | the job is finished; it leaves the list, its memory is deleted |
-| `:continue` | more to do; ready again whenever its precondition holds |
-| `:not-ready` | could do nothing this round; recorded as no progress. Without a wake the job is not stepped again for a minimum re-check interval (engine option `:min-recheck-ms`, default 5000 ms) |
-| `{:status :continue :wake [:day]}` | a yield with a per-round precondition (a data condition, see `engine.conditions`); it overrides the definition's precondition until the job next runs |
-
-A round may also throw; the job is then dropped with a `job.failed` warn.
-A reflex job keeps the body between its rounds while it returns `:continue`;
-`:done`, `:not-ready` or a throw ends it.
+- **The check** says whether the job can usefully run now. It reads sensing
+  and memory through the ctx, returns a boolean, and is cheap and side-effect
+  free: its ctx has no token, so `act`, `update-mem!` and `remember!` throw.
+  Checks are asked every tick; a declined job costs nothing. A check that
+  throws declines (with a `system.error` warn). The engine refuses a job
+  definition without a `:check`.
+- **The round** returns `:done` (the job leaves the list and its memory is
+  deleted) or `:continue`. Anything else, or a throw, drops the job with a
+  `job.failed` warn. A cut is never a failure: the job stays listed with its
+  memory.
+- Long waits are not loops: a job waiting for daylight returns `:continue`
+  and declines in its check until the sun is up (`:wait-for-day`).
 
 ### ctx
 
-The round's single argument. Use the helpers in `engine.ctx` rather than the
-keys directly.
+The single argument of a check and a round. Use the helpers in `engine.ctx`.
 
-| key | helper | what |
-|---|---|---|
-| `:primitives` | | the primitives object |
-| `:token` | | this round's ownership token; pass it to every acting call |
-| `:args` | | the instance's args (EDN map) |
-| `:id` | | instance id, for example `"j4"` or `"j4/walk"` for a child |
-| `:memory` | `(ctx/mem ctx)`, `(ctx/mem ctx :body)`, `(ctx/mem ctx :common)` | read a scope now |
-| | `(ctx/commit! ctx m-or-f)`, `(ctx/commit! ctx :body m-or-f)` | replace the scope with `m`, or with `(f current)`; written to disk at once; throws `cut` if this round was cut |
-| `:step-child` | `(await (ctx/step-child ctx slot job-name args))` | run one round of a child; returns `:done`, `:continue` or `:not-ready`, or `{:status :not-ready :wake w}` when the child yielded a wake condition (return it as your own result to pass the wake up) |
-| `:submit` | `(ctx/submit! ctx job-name args {:hold? false})` | put a new job at the end of the list; returns its id |
-| `:emit` | `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
-| | `(ctx/act ctx :moveTo #js {...})` | call a primitive with the token: `(.moveTo p token args)` |
-
-Children: a child's memory lives inside its parent's, under the slot name, and
-its id is `<parent-id>/<slot>`. Stepping the same slot again resumes it; once
-it returned `:done`, stepping that slot again returns `:done` without running
-it, so a fresh child needs a fresh slot. A child's precondition is checked
-before its round; when it does not hold, `step-child` returns `:not-ready`.
-Children share the parent's token and round. The parent's `:done` deletes the
-children's memory with its own.
-
-Instance ids are deterministic: top-level instances are `j1`, `j2`, ... from
-a persisted counter, in the order they are created (scenario queue first,
-then reflex firings and submits as they happen).
-
-### Memory
-
-Three scopes, each a JSON object on disk, keys read back as keywords. Store
-strings, numbers, booleans, vectors and maps; keywords come back as strings.
-
-| scope | file under `state/agents/<name>/engine/` |
+| helper | what |
 |---|---|
-| common | `common.json` (per agent for now; shared across bodies once multi-body exists) |
-| body | `body.json` |
-| job | `jobs/<id>.json`, children inside their parent's file |
+| `(:args ctx)`, `(:id ctx)`, `(:primitives ctx)` | args, instance id (`"j4"`, or `"j4/fell"` for a child), the primitives for sensing |
+| `(ctx/mem ctx)` | this job's memory map (its sub-map, for a child) |
+| `(ctx/update-mem! ctx f & args)` | apply `f` to it, in RAM; saved by the next `act` or at round end. Throws `cut` if the round was cut |
+| `(ctx/view ctx)`, `(ctx/now ctx)` | a body-memory view `{:data :now}`, the engine clock |
+| `(ctx/latest ctx kind)`, `entries`, `since`, `count-in` | time-filtered body-memory reads (see Memory) |
+| `(ctx/remember! ctx kind data policy?)` | append an entry to body memory |
+| `(ctx/forget-where! ctx kind pred)`, `(ctx/forget-until! ctx kind t)` | drop entries whose data matches, or written at or before `t` |
+| `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive through the act wrapper |
+| `(await (ctx/call-child ctx slot def args))` | one round of a child job (below) |
+| `(ctx/check-child ctx slot def args)` | the child's check against its sub-map, for a parent's check |
+| `(ctx/submit! ctx job-name args opts)` | put a peer job at the end of the list; returns its id |
+| `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
 
-Body memory has `:records`, a vector of momentary events the engine recorded:
-`{:kind "hurt" :t <ms> ...fields}` for each body event, plus `{:kind
-"restart" :t ...}` at every start. Triggers read records; the job that handles
-one removes it with `(ctx/commit! ctx :body f)`. Helpers in `engine.memory`:
-`records` (of a kind), `drop-records`, `places` (`(places memory :bed)` reads
-`[:common :places :bed]`, a vector of `{:pos {...}}`).
+**act.** Every acting primitive call goes through `act`. It checks the
+ownership token (a stale token rejects with `cut` before the primitive is
+called), saves memory, emits `action.started` (debug), calls the primitive,
+saves memory again and emits `action.done` (debug) with the status. There is
+no commit: a job updates its memory map and calls `act`, so a cut loses at
+most the work since the last save. Write a debt or an intent with
+`update-mem!` before the `act` it protects.
+
+**call-child.** `(ctx/call-child ctx slot def args)` takes a slot keyword, a
+job definition (the map, not a catalog name) and args. The child's memory is
+the parent's `[:children slot]` sub-map, created as `{:args args :children {}}`
+when missing. The engine runs the child's check against it (false resolves
+to `:declined`, no round run), else one child round with the parent's token,
+resolving to `:done` or `:continue`. The same slot resumes the same child
+(its memory is kept after `:done`, for the parent to read); a new slot is a
+fresh child. Children can call children, recursion included, with no depth
+cap. A cut anywhere ends the whole chain's round. Cancel and done take the
+subtree, since it lives inside the parent's memory. `submit!` is delegation:
+a peer on the list, not a child.
+
+## Memory
+
+One EDN store per body, `memory.edn` under `state/agents/<name>/engine/`,
+read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
+`{:entries {kind [entry]} :policies {kind policy}}`:
+
+- An **entry** is `{:t wall-clock-ms :wt world-time :data ...}`, newest
+  last. `:wt` is the body's `timeOfDay` when written. No provenance field.
+- **Kinds** are an open vocabulary keyed by what the observation is about:
+  `:hurt`, `:died`, `:chat`, `:restart`, `:bed`, `:chest`, `:looked`,
+  `:forestry/replant`, `:job/j7`.
+- **Policy** `{:cap n :ttl ms}` is passed with a write and stored beside the
+  kind. A new kind written without one gets the default, cap 50 and ttl one
+  hour; a later write without one keeps the kind's policy. Forever is the
+  keyword `:forever`; an omitted ttl is an error, not forever. Forever kinds
+  keep their cap. The cap drops the oldest.
+- **Sweep**, on boot, every `:sweep-ms` (default 60 s) of ticks, and before
+  every save: drops expired entries, kinds with no entries left, and any
+  `:job/<id>` kind whose instance is not live (listed, or the running reflex
+  job).
+- **Saves** happen around every `act`, at every round end and whenever the
+  engine writes (body events, `:restart`, listing, done, cancel).
+- **Reads** (`engine.memory`) take a view `{:data :now}` and are
+  time-filtered, so an expired entry never reaches a check or trigger:
+  `entries`, `latest`, `since` (written at or after `t`), `count-in` (within
+  the last `ms`), `policy`, and `place` (`(mem/place view :bed)` is the
+  `:pos` of the latest `:bed` entry; places use `mem/place-policy`, cap 1,
+  forever).
+- **Body events** become entries of their kind (`:hurt` with
+  `{:health :food}`, `:died`, `:chat`, ...). Every start appends `:restart`.
+  The handling job clears them with `forget-until!` up to a timestamp, so a
+  hit during the job is kept.
+- **Job memory**: a listed (or running reflex) instance owns kind `:job/<id>`,
+  cap 1, `:forever`, created when listed and deleted on done, cancel or drop.
+  Its single entry's data is `{:args ... :children {slot child-map}}` plus
+  the job's own keys (phase, debts, intents); children nest the same way.
 
 ## Triggers and the register
 
 A trigger definition:
 
 ```clojure
-{:name        :health-low
- :when        (fn [world memory args] bool) ; memory is {:common :body :now ms}; args are the entry's
- :job         :eat                        ; default job (a catalog name)
- :args        {}
+{:name        :hostile-near
+ :when        (fn [world view args] bool) ; view is a memory view; args are the entry's
+ :job         :retreat                    ; default job (a catalog name)
+ :args        {:radius 8}                 ; defaults, merged under the entry's :args
  :persistence :cooldown                   ; :retry | :cooldown | :stop
- :cooldown-s  30}
+ :cooldown-s  5}
 ```
 
 The register is an ordered vector of entries `{:id :trigger :job :args
-:persistence :cooldown-s :builtin?}`; the id defaults to the trigger name.
-The engine evaluates the effective order every tick and fires the first
-entry whose `:when` holds and which is not muted or cooling down.
+:persistence :cooldown-s :builtin?}`; the id defaults to the trigger name and
+`:args` is the trigger's defaults merged with the scenario's. The same args
+go to the reflex job. The engine evaluates the effective order every tick and
+fires the first entry whose `:when` holds and which is not muted or cooling
+down.
 
 - A firing reflex cuts a running listed job. It cuts a running reflex job
   only if it sits above that reflex. A reflex whose own job is running does
   not fire again.
-- The cut listed job stays on the list and is the next to run once no reflex
-  holds the body. A cut reflex job is dropped; it fires again from the world
-  if its condition still holds.
-- A reflex job runs rounds until it returns `:done` or `:not-ready`, then
-  ends. If its condition still holds, persistence decides: `:retry` fires
-  again next tick, `:cooldown` waits `:cooldown-s`, `:stop` waits until the
-  condition has been false once.
+- The cut listed job stays on the list and is the next to run (if its check
+  passes) once no reflex holds the body. A cut reflex job is dropped; it
+  fires again from the world if its condition still holds.
+- A reflex job has no check (a trigger always fires); it keeps the body while
+  its rounds return `:continue`. `:done` or a throw ends it. If the condition
+  still holds, persistence decides: `:retry` fires again next tick,
+  `:cooldown` waits `:cooldown-s`, `:stop` waits until the condition has been
+  false once.
 - Agent-only edits (functions in `engine.core`): `register-reflex!`,
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
   (`{:above id}` or `{:below id}`, with TTL), `clear-change!`. Each property
@@ -299,13 +322,38 @@ entry whose `:when` holds and which is not muted or cooling down.
   `reflex.reverted`. A move whose anchor is gone puts the reflex at the bottom.
   Jobs cannot reach these.
 
-## The list
+## The scheduler
 
-Round-robin: after a round, the next job whose precondition holds, after the
-last one that ran, wrapping. A holding job (`:hold? true`) is always chosen
-while it is on the list, without checking preconditions. A cut job is next
-when the body is free again. `submit!` and `cancel!` (agent) edit the list;
-`do-now!` (agent) is cut + submit at the front with `:hold? true`.
+`tick!` (every 250 ms from `start!`):
+
+1. Expire register changes; sweep memory if `:sweep-ms` has passed.
+2. Evaluate the register; a firing entry that preempts the holder cuts by
+   rotating the ownership token and runs a round of its job.
+3. Otherwise, if a round is in flight, nothing. A reflex job between rounds
+   gets its next round.
+4. Otherwise the list: a holding job runs if its check passes, else the body
+   idles (holding keeps the body); else the cut job, if its check passes;
+   else round-robin from the job after the last one run, to the next job
+   whose check passes. Whatever a round returns, the list moves on. If every
+   check declines, nothing runs until the next tick.
+
+`submit!` and `cancel!` (agent) edit the list; `do-now!` (agent) cuts the
+running listed job and submits at the front with `:hold? true`.
+
+The list, register and changes are written to `engine.edn` on every change;
+memory as above. On boot both are reloaded, reflex instances are dropped, the
+in-flight job resumes first, and a `:restart` entry is appended.
+
+**Shutdown** (`core/shutdown!`, called by `main` on SIGINT/SIGTERM before the
+primitives close) rotates the token so the in-flight round's outcome is never
+booked; the job stays on the persisted list with its memory. A primitive
+rejecting with `cut` while the token is still current is also a cut, not a
+failure.
+
+**No progress.** After each round of a holding listed job, the engine
+compares its act-call count and its memory with before the round. After
+`:stall-rounds` (default 20) rounds with neither, it emits one `job.stalled`
+warn with `:rounds`; any progress resets the count. Nothing is capped.
 
 ## Events
 
@@ -329,11 +377,13 @@ JSON lines, one per event, on stdout and appended to
 | `text` | optional one-line prose |
 
 Plus kind-specific fields. Kinds the engine emits: `job.queued`,
-`job.round_started`, `job.yielded`, `job.cut`, `job.completed`,
-`job.failed`, `job.blocked`, `job.cancelled`, `reflex.fired`,
-`reflex.ended` (`how`: `cleared`, `completed_not_cleared`, `dropped`),
-`reflex.changed`, `reflex.reverted`, `body.<kind>` for body events,
-`system.started`, `system.restored`.
+`job.round_started`, `job.yielded` (a `:continue`), `job.cut`,
+`job.completed`, `job.failed`, `job.cancelled`, `job.stalled` (warn),
+`job.memory_written` (debug, `memory` is the kind), `action.started` and
+`action.done` (debug), `reflex.fired`, `reflex.ended` (`how`: `cleared`,
+`completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,
+`body.<kind>` for body events, `system.started`, `system.restored`,
+`system.stopping`.
 
 ## Scenarios
 
@@ -341,6 +391,7 @@ EDN, read with `cljs.reader`:
 
 ```clojure
 {:register [{:trigger :health-low}                                  ; trigger defaults
+            {:trigger :hostile-near :args {:radius 12}}             ; args merged over the defaults
             {:trigger :health-low :id :health-low-2 :job :eat
              :persistence :retry}]                                  ; overrides
  :queue    [{:job :go-to :args {:pos {:x 10 :y 64 :z 0}}}
@@ -353,83 +404,90 @@ EDN, read with `cljs.reader`:
 It refuses to start, with a message, when `js/primitives.mjs` does not exist.
 If `state/agents/<name>/engine/engine.edn` exists the saved list and register
 are restored and the scenario is ignored; pass `--fresh` to discard saved
-engine state and start from the scenario. The scenario is validated against
-the catalog before connecting. `--state-dir <dir>` overrides the
-repo's `state/`.
+engine state and start from the scenario (memory is kept; job kinds of the
+discarded list are swept). The scenario is validated against the catalog
+before connecting. `--state-dir <dir>` overrides the repo's `state/`.
+
+`test/engine/scenarios_test.cljs` runs `woodcutter.edn` and `pace-cuts.edn`
+end to end against the fake primitives.
 
 ## Job library
 
-Jobs live in `engine.jobs.forestry`, `engine.jobs.storage` and
-`engine.jobs.survival`, helpers in `engine.jobs.util`. All are registered in
-`engine.catalog`. Every round re-reads the world and does a bounded piece.
-Positions in memory are `{:x :y :z}` maps. Failed rounds are counted in job
-memory as `:failures`; after three the job emits a warn and ends.
+Jobs live in `engine.jobs.forestry`, `engine.jobs.storage`,
+`engine.jobs.survival` and `engine.jobs.samples`, helpers in
+`engine.jobs.util`. All are registered in `engine.catalog`. Every round
+re-reads the world and does a bounded piece. Positions in memory are
+`{:x :y :z}` maps. Failed rounds are counted in job memory as `:failures`;
+after three the job emits a warn and ends.
 
-| job | args | precondition | job memory | commits to common |
+| job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `:fell-tree` | `{:species nil :radius 16}` | `:not-yet` until a tree (log column with leaves near its top) is in radius, or the column is already chosen | `:column {:x :z}`, `:species`, `:base` pos | `[:debts :replant]` gets `{:pos base :species}` once, when the tree is chosen |
-| `:collect-drops` | `{:radius 16 :filter [names] or nil}` | none | `:skipped` ids of unreachable items | none |
-| `:pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | none | `:rounds-run` | none |
-| `:plant-sapling` | `{:at pos or nil :species nil}` | `:not-yet` without a matching sapling carried, or while the target still holds a log | none | removes the planted debt from `[:debts :replant]` |
-| `:deposit` | `{:chest pos or nil :items [names] or nil}` | `false` while no chest is known | none | none |
-| `:harvest-wood` | `{:species nil :radius 16 :filter nil}` | none | children under slots `:fell`, `:collect`, `:plant` | as its children |
-| `:retreat` | `{:radius 8 :step 8}` | none | `:moves` count | none |
-| `:sleep` | none | `false` without a known bed, `:not-yet` by day | none | none |
+| `:go-to` | `{:pos :range 1}` | always | `:blocked` count | none |
+| `:wait-for-day` | none | it is day | none | none |
+| `:eat` | `{:item?}` | always | none | none |
+| `:look-around` | none | always | none | writes `:looked` (cap 1, forever) |
+| `:pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
+| `:fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
+| `:collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items | none |
+| `:plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
+| `:harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
+| `:deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
+| `:retreat` | `{:radius 8 :step 8}` | always | `:moves` count | none |
+| `:sleep` | none | a `:bed` is known and it is night | none | reads `:bed` |
 
 - `:fell-tree` digs up to two logs per round of the chosen column, lowest
   first, and is done when the column has no logs. It walks with `moveTo`
-  directly (range 3) rather than a `:go-to` child, since one walk and one dig
-  are a single round.
+  directly (range 3). A tree whose walk is blocked, partial three times in a
+  row, or whose logs cannot be dug, is remembered as unreachable and the next
+  candidate is chosen; with none left it warns `tree_blocked` and finishes.
 - `:collect-drops` calls `collect` once per round for the nearest matching
   item entity (the primitive walks itself). Done when none match in radius.
 - `:plant-sapling` without `:at` plants at the first debt (of `:species` when
   given), walks within 3, equips, places. `occupied` counts as planted.
-  With no debt and no `:at` it is done at once.
-- `:deposit` takes the chest from `:chest`, else the first `[:places :chest]`
-  in common memory. Without `:items` it deposits everything except tools and
-  armour (suffixes `_pickaxe _axe _shovel _hoe _sword _helmet _chestplate
-  _leggings _boots`, plus shears, bow, crossbow, fishing_rod, flint_and_steel,
-  shield, trident), one stack per round. Warn kind `chest_unusable`.
-- `:harvest-wood` steps `:fell-tree`, `:collect-drops` (filter defaults to the
-  species' log, sapling, stick and apple) and `:plant-sapling` in order and
-  returns the first child result that is not `:done`. It waits (`:not-ready`)
-  while no sapling is carried, so a tree with no sapling drop stalls it on the
-  list rather than failing.
+- `:harvest-wood` is phase-driven: each round calls the current phase's child
+  once (`:fell-tree`, then `:collect-drops` with the species' log, sapling,
+  stick and apple, then `:plant-sapling`) and advances the phase when the
+  child is done. Its check is the current child's check, so it declines
+  (rather than spinning) while no tree is in sight or no sapling is carried.
+- `:deposit` puts away every carried stack except tools and armour (suffixes
+  `_pickaxe _axe _shovel _hoe _sword _helmet _chestplate _leggings _boots`,
+  plus shears, bow, crossbow, fishing_rod, flint_and_steel, shield, trident),
+  one stack per round. Saplings included: on a shared list with
+  `:harvest-wood` it can take the sapling the replant needs. Warn kind
+  `chest_unusable`.
 - `:retreat` walks `:step` blocks directly away from the nearest hostile per
   round, at most five walks, then gives up with a `retreat_gave_up` warn.
-- `:sleep` walks within 2 of the first `[:places :bed]` and calls `sleep`.
-  `sleeping` and `not-night` are done; a taken bed or nearby monster retries
-  three times; a missing bed warns `bed_missing` and ends.
+- `:sleep` walks within 2 of the known bed and calls `sleep`. `sleeping` and
+  `not-night` are done; a taken bed or nearby monster retries three times; a
+  missing bed warns `bed_missing` and ends.
 
-Triggers (`engine.triggers`; `:when` receives the register entry's `:args` as
-its third argument, and `:now`, the engine clock in ms, in its memory):
+Triggers (`engine.triggers`; `:when` receives the world, a memory view and
+the register entry's `:args`):
 
 | trigger | holds when | job | persistence |
 |---|---|---|---|
-| `:health-low` | health at most 8 | `:eat` | cooldown 30 s |
-| `:hostile-near` | a hostile within 8 blocks; the radius is fixed in the trigger, the job's `:radius` arg is overridable | `:retreat` `{:radius 8}` | cooldown 5 s |
-| `:night-and-bed-known` | not day and a `[:places :bed]` is known | `:sleep` | cooldown 60 s |
-| `:inventory-nearly-full` | 30 or more carried stacks and a `[:places :chest]` is known | `:deposit` | cooldown 60 s |
-| `:every-interval` | no `[:body :every-interval-last]` record, or it is at least `:seconds` (args, default 60) old | `:look-around` | cooldown 0 |
+| `:health-low` | health at most `:health` (default 8) | `:eat` | cooldown 30 s |
+| `:hostile-near` | a hostile within `:radius` (default 8); the same `:radius` goes to the job | `:retreat` | cooldown 5 s |
+| `:night-and-bed-known` | not day and a `:bed` entry exists | `:sleep` | cooldown 60 s |
+| `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `:deposit` | cooldown 60 s |
+| `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `:look-around` | cooldown 0 |
 
-`:every-interval` is a wall-clock reflex: the `:look-around` job looks at a
-point three blocks ahead and commits the engine time as `:every-interval-last`
-to body memory (so it survives a restart), which makes the trigger stop
-holding. With no record it fires at once, so the first look comes at engine
-start. Register it with `{:trigger :every-interval :args {:seconds 45}}`;
+`:every-interval` is a wall-clock reflex: `:look-around` looks at a point
+three blocks ahead and writes `:looked`, which survives a restart and makes
+the trigger stop holding. With no entry it fires at once.
 `scenarios/woodcutter-cuts.edn` is the woodcutter with it first in the
-register.
+register; `scenarios/pace-cuts.edn` puts it above a long `:pace` job.
 
 `:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
 total; the real inventory has 36 main slots, so 30 is a threshold, not a
-measurement. `scenarios/woodcutter.edn` uses the first three triggers plus
-`[:harvest-wood :deposit]`.
+measurement.
 
 ## Not built (hooks only)
 
-Claims, no-touch regions, flapping counters, no-progress detectors, the HTTP
-API, multi-body, soft pathfinding weights, a reflex pointing at a listed
-instance (a register entry may carry `:instance` later).
+Claims, no-touch regions, flapping counters, the per-body no-progress
+detector, progress events, the HTTP API, multi-body, world memory, soft
+pathfinding weights, a reflex pointing at a listed instance (a register entry
+may carry `:instance` later).
 
 ## Primitives: implementation notes
 
