@@ -17,8 +17,9 @@
   warn naming what was searched and the nearest known source, write a
   :hungry entry and finish. For :ask-cooldown-ms after that the round still
   eats and still does step 3 (what is in sight), but does not walk to
-  remembered sources, say food.none or write :hungry again; with nothing in
-  sight it returns :declined. Wheat is skipped (not edible raw, no
+  remembered sources it already knew when it gave up (one learned since is
+  tried first), say food.none or write :hungry again; with nothing to do it
+  returns :declined. Wheat is skipped (not edible raw, no
   crafting). A source found empty or unreachable is forgotten.
   Hungry is food below :food (default 6), or below :food-when-hurt (default
   14) while health is below full; the same test as the hungry trigger.")
@@ -71,6 +72,16 @@
     (when (and source
                (<= (u/dist (u/self-pos c) pos) (:source-radius (:args c)))
                (not= pos (:dead-source (ctx/mem c))))
+      source)))
+
+(defn fresh-source
+  "known-source, when its entry is strictly newer than the latest :hungry
+  entry: a source the last fruitless search never had in front of it."
+  [c]
+  (let [source (known-source c)
+        learned (:t (ctx/latest c :food-source))
+        gave-up (:t (ctx/latest c :hungry))]
+    (when (and source learned gave-up (> learned gave-up))
       source)))
 
 (defn bury-source!
@@ -237,11 +248,20 @@
         (await (hunt! c))
         (none! c))))
 
+(defn ^:async decline-or-hunt!
+  "The ask cooldown: a source learned since giving up, else what is in sight,
+  else :declined."
+  [c]
+  (let [source (fresh-source c)]
+    (or (when source (await (use-source! c source)))
+        (await (hunt! c))
+        :declined)))
+
 (defn ^:async round [c]
   (let [eaten (await (ctx/call-child c :eat 'jobs.survival.eat {}))]
     (ctx/update-mem! c assoc :eating (= :continue eaten))
     (cond
       (= :continue eaten) :continue
       (not (hungry-now? c)) :done
-      (gave-up-recently? c) (or (await (hunt! c)) :declined)
+      (gave-up-recently? c) (await (decline-or-hunt! c))
       :else (await (search! c)))))

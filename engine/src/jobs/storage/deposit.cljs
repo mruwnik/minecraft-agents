@@ -5,8 +5,9 @@
             [engine.memory :as mem]))
 
 (def doc
-  "Walk to the chest and deposit one stack per round: the named items, or
-  everything but tools and armour (saplings included). :keep leaves at least
+  "Walk to the chest and deposit one stack per round: the named items, in the
+  order named, or everything but tools and armour (saplings included), in
+  inventory order. :keep leaves at least
   that many of a name carried (the stack moved is cut short to respect it).
   Ends with a result {:gave-up false} when nothing is left to put away, or
   {:gave-up true :reason r} (the transfer status, or \"unreachable\") when
@@ -14,7 +15,7 @@
 
 (def args
   {:chest {:doc "chest position; the known :chest place when nil" :default nil}
-   :items {:doc "item names to put away; everything but tools and armour when nil" :default nil}
+   :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}})
 
 (def gear-suffixes ["_pickaxe" "_axe" "_shovel" "_hoe" "_sword" "_helmet" "_chestplate" "_leggings" "_boots"])
@@ -35,20 +36,20 @@
   (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 items))
 
 (defn to-deposit
-  "The first carried stack to put away and how many of it: {:stack s :count n}
-  or nil. The stack is of the wanted names when given, otherwise anything that
-  is not a tool or armour, and its name's carried total must exceed its keep
-  (a map of name to count, default 0); n is the stack count, cut so the keep
-  stays carried."
+  "The next carried stack to put away and how many of it: {:stack s :count n}
+  or nil. With wanted names, the first carried stack of the first name (in
+  wanted's order) that has spare; with none (nil), the first stack in
+  inventory order that is not a tool or armour and has spare. A name has spare
+  when its carried total exceeds its keep (a map of name to count, default 0);
+  n is the stack count, cut so the keep stays carried."
   ([items wanted] (to-deposit items wanted {}))
   ([items wanted keep]
-   (let [wanted (some-> wanted set)
-         spare (fn [stack] (- (carried items (:name stack)) (get keep (:name stack) 0)))]
-     (some (fn [stack]
-             (when (and (if wanted (wanted (:name stack)) (not (tool? (:name stack))))
-                        (pos? (spare stack)))
-               {:stack stack :count (min (:count stack) (spare stack))}))
-           items))))
+   (let [spare (fn [stack] (- (carried items (:name stack)) (get keep (:name stack) 0)))
+         pick (fn [stack] (when (pos? (spare stack))
+                            {:stack stack :count (min (:count stack) (spare stack))}))]
+     (if wanted
+       (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
+       (some #(when-not (tool? (:name %)) (pick %)) items)))))
 
 (defn check
   "A chest is known."

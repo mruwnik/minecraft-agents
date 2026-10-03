@@ -304,3 +304,55 @@
           (is (= [] (calls p "moveTo")) "does not walk to remembered sources")
           (is (= 1 (count (entries eng :hungry))))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+
+(def bread-chest {"20,64,0" [{:name "cobblestone" :count 30} {:name "bread" :count 4}]})
+
+(defn write-hungry! [eng]
+  (mem/write! (:store eng) :hungry {:food 1} {:cap 10 :ttl 3600000}))
+
+(deftest get-food-uses-a-source-learned-after-it-gave-up-during-its-ask-cooldown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:self {:food 0} :containers bread-chest})]
+          (write-hungry! eng)
+          (swap! clock + 60000)
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (swap! clock + 1000)
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 20))
+          (is (seq (calls p "moveTo")) "walks to the new chest")
+          (is (= ["bread"] (call-args p "transfer" "item")))
+          (is (= 20 (food p)) "eats the bread")
+          (is (= 1 (count (entries eng :hungry))))
+          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+
+(deftest get-food-skips-a-source-known-before-it-gave-up-during-its-ask-cooldown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:self {:food 0} :containers bread-chest})]
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (swap! clock + 1000)
+          (write-hungry! eng)
+          (swap! clock + 60000)
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "moveTo")))
+          (is (= 1 (count (entries eng :hungry))))
+          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+
+(deftest get-food-forgets-a-fresh-source-found-empty-during-its-ask-cooldown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
+          (write-hungry! eng)
+          (swap! clock + 60000)
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (swap! clock + 1000)
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 20))
+          (is (= [] (entries eng :food-source)))
+          (is (= 1 (count (entries eng :hungry))))
+          (is (not-any? #(= :food.none (:kind %)) @seen)))))))

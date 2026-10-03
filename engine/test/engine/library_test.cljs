@@ -9,7 +9,8 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.storage.deposit :as dep]))
 
 (defn setup
   ([world] (setup world (tu/tmp-dir)))
@@ -335,6 +336,16 @@
           (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (run-until-empty eng 6))
           (is (= {"oak_log" 5 "stone_axe" 1} (inv p))))))))
+
+(deftest to-deposit-honours-the-order-of-the-wanted-names
+  (let [items [{:name "bread" :count 5} {:name "dirt" :count 7} {:name "cobblestone" :count 9}]]
+    (are [wanted keep expected] (= expected (some-> (dep/to-deposit items wanted keep) (update :stack :name)))
+      ["cobblestone" "bread"] {} {:stack "cobblestone" :count 9}
+      ["dirt" "bread"] {} {:stack "dirt" :count 7}
+      ["cobblestone" "bread"] {"cobblestone" 9} {:stack "bread" :count 5}
+      ["cobblestone" "bread"] {"cobblestone" 4} {:stack "cobblestone" :count 5}
+      nil {} {:stack "bread" :count 5}
+      ["gravel"] {} nil)))
 
 (deftest deposit-gives-up-when-the-chest-is-full
   (async done

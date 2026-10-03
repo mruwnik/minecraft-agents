@@ -745,7 +745,7 @@ after three the job emits a warn and ends.
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
 | `jobs.combat.attack` | `{:targets [] :radius 16 :weapons :attack-gap-ms nil :lost-s 5 :timeout-s 120 :no-damage-hits 4 :max-hits 40 :walk-timeout-s 5}` | a listed target within `:radius`, or started | `:started :last-seen :last-attack :hits :quiet :health :fails :given-up :struck :killed :killed-players` | none; hands over `{:reason :killed :given-up}`; emits info `attack.done`, warns `attack.gave-up`, `attack.timeout` |
-| `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips remembered sources and returns `:declined` when nothing is in sight |
+| `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips the remembered sources it already knew when it gave up (one learned since is still tried first) and returns `:declined` when nothing is in sight |
 | `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3}` | the night-unsafe condition; a round ends `:done` when asleep, roofed within `:roof-height` or not night, and `:declined` when no child could do anything | `:sleep-failed`, children `:sleep`, `:dig-in` | reads `:slept`; writes `:needs-bed` (cap 1, 1 day; the once-a-day `needs_bed` warn flag); dig-in writes `:shelter`, which nothing reads) |
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` (and `:roof`, `:target-y` in dig mode), `:placed` | writes `:shelter` (cap 10, 1 day) `{:pos :roof :state :built}` from the current feet and the cells it placed, plus `:door` in walls mode (history only), and `:dig-in-futile` `{:pos}` (cap 5, 10 min) when a dig yields nothing to roof the pit with; its check then declines while no block is carried and one lies within 8 blocks. Walls mode recomputes its cells from the current feet each round; dig mode rechooses if the body leaves its column and stops (`dig_in_failed`) when a dig yields nothing to roof the pit with |
 | `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 20000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping (fired by the `:player-sleeping-nearby` reflex; the next firing logs out again if the night is not over) | none | writes `:log-out` (cap 10, 1 day) |
@@ -772,8 +772,9 @@ after three the job emits a warn and ends.
   one stack per round. Saplings included: on a shared list with
   `:harvest-wood` it can take the sapling the replant needs. Warn kind
   `chest_unusable`. `:keep` (`{item-name count}`) leaves at least that many of
-  a name carried: the first stack of a wanted name whose carried total is over
-  its keep is moved, cut to `total - keep` when it is bigger. The job hands its
+  a name carried: with `:items` the names are taken in the order given (first
+  stack of the first name whose carried total is over its keep; without it,
+  the first stack in inventory order) and the stack is moved, cut to `total - keep` when it is bigger. The job hands its
   parent `{:gave-up false}` when nothing was left to put away and `{:gave-up
   true :reason r}` when the failed attempts ended it (`r` the transfer status
   `full`, `missing`, `unreachable`, ... or `"unreachable"` for a walk that
@@ -786,7 +787,10 @@ after three the job emits a warn and ends.
   first); building blocks (`jobs.survival.dig-in/building-blocks`, in that
   order) are put away or thrown only above `:keep-blocks`. Steps: (1) a
   `:chest` within `:chest-range` of the body with no `:chest-unusable` entry
-  for its position takes the names above their keep (deposit with `:keep`; a
+  for its position takes the names above their keep, least worth keeping first (names
+  without a floor before food and building blocks, then the cheapest by
+  `engine.value/item-worth`, then the name picked up longest ago): deposit with
+  `:keep` and `:items` in that order; a
   chest that gives up is remembered unusable for 10 minutes and the job goes
   on without it); (2) with no slot free, the nearest item within
   `:swap-radius` whose `engine.value/item-worth` is above that of the first
@@ -902,9 +906,12 @@ server and mineflayer, none of it checked live:
 - Wheat is not food raw and there is no crafting yet, so `get-food` skips it.
 - `make-room`: a tossed stack lands outside the pickup range of the body, so it
   does not take the stack straight back (the walk-away is the guard);
-  `playerCollect` fires for the body's own pick-ups,
-  including items given with `/give`, and its dropped item is readable (the
-  `picked-up` event is skipped when it is not).
+  `playerCollect` fires for the body's own ground pick-ups (verified live) and
+  its dropped item is readable (the `picked-up` event is skipped when it is
+  not), but not for `/give` (verified live: 0 `picked-up` events after about
+  150 `/give`s). Items that arrived any way but a pick-up (`/give`, withdrawn
+  from a chest) have no `:picked-up` entry and count as picked up longest ago
+  (recency 0) in the toss and deposit orders.
 
 ## Not built (hooks only)
 

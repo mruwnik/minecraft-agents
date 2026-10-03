@@ -17,7 +17,8 @@
   building blocks (the dig-in list, in its order) only above :keep-blocks.
   Steps, in order: a chest known within :chest-range (and not marked
   :chest-unusable) takes what deposit may put away (jobs.storage.deposit with
-  :keep); a chest that fails is remembered as :chest-unusable for ten minutes
+  :keep), least worth keeping first: names without a floor before food and
+  building blocks, then the cheapest, then the one picked up longest ago; a chest that fails is remembered as :chest-unusable for ten minutes
   and the job goes on without it. Without a usable chest the stack of least
   worth is thrown: engine.value/item-worth below :toss-below, cheapest first,
   the one picked up longest ago first among equals (:picked-up entries), then
@@ -117,15 +118,26 @@
                    candidates))))
 
 (defn deposit-names
-  "Distinct carried names, not protected, whose total exceeds their keep."
-  [inventory keep]
-  (let [totals (totals inventory)]
-    (->> inventory
-         (map :name)
-         distinct
-         (remove protected?)
-         (filter #(> (totals %) (get keep % 0)))
-         vec)))
+  "Distinct carried names, not protected, whose total exceeds their keep, in
+  the order to put them away: least worth keeping first. Names without a floor
+  (keep 0) before names with one (food, building blocks), then the lowest
+  engine.value/item-worth among the name's stacks, then when the name was last
+  picked up (recency {name t}; never is 0, oldest first), then its lowest slot
+  (the stack's index when it has no :slot)."
+  [inventory keep recency]
+  (let [totals (totals inventory)
+        stacks (map-indexed (fn [i s] (assoc s :slot (or (:slot s) i))) inventory)
+        order-key (fn [[n ss]]
+                    [(if (pos? (get keep n 0)) 1 0)
+                     (apply min (map value/item-worth ss))
+                     (get recency n 0)
+                     (apply min (map :slot ss))])]
+    (->> stacks
+         (remove #(protected? (:name %)))
+         (filter #(> (totals (:name %)) (get keep (:name %) 0)))
+         (group-by :name)
+         (sort-by order-key)
+         (mapv first))))
 
 ;; ------------------------------------------------------------------ world
 
@@ -254,7 +266,7 @@
         free-now (u/free-slots (:primitives c))
         {:keys [inventory keep recency] :as st} (state c)
         chest (usable-chest c)
-        names (deposit-names inventory keep)
+        names (deposit-names inventory keep recency)
         order (toss-order inventory keep recency toss-below)
         swap (when (zero? free-now) (swap-target c st))]
     (cond

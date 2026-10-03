@@ -25,6 +25,11 @@
 
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 
+(defn carried
+  "{name total} over all stacks (inv keeps only the last stack of a name)."
+  [p]
+  (reduce (fn [m s] (update m (.-name s) (fnil + 0) (.-count s))) {} (.-inventory (.self p))))
+
 (defn stack-count [p] (.-length (.-inventory (.self p))))
 
 (defn many
@@ -138,16 +143,25 @@
       [40 30] 30 [1]
       [10 64] 64 [0])))
 
-(deftest deposit-names-lists-the-names-above-their-keep
+(deftest deposit-names-lists-the-names-above-their-keep-least-worth-keeping-first
   (let [inventory [{:name "iron_pickaxe" :count 1}
                    {:name "bread" :count 20}
                    {:name "cobblestone" :count 64}
                    {:name "cobblestone" :count 64}
                    {:name "dirt" :count 3}
                    {:name "water_bucket" :count 1}]]
-    (is (= ["bread" "cobblestone" "dirt"] (mr/deposit-names inventory {"bread" 16 "cobblestone" 64 "dirt" 0 "iron_pickaxe" 1})))
-    (is (= ["dirt"] (mr/deposit-names inventory {"bread" 20 "cobblestone" 128 "dirt" 0})))
-    (is (= [] (mr/deposit-names inventory {"bread" 20 "cobblestone" 128 "dirt" 3})))))
+    (are [keep expected] (= expected (mr/deposit-names inventory keep {}))
+      {"bread" 16 "cobblestone" 64 "dirt" 0 "iron_pickaxe" 1} ["dirt" "cobblestone" "bread"]
+      {"bread" 20 "cobblestone" 128 "dirt" 0} ["dirt"]
+      {"bread" 20 "cobblestone" 128 "dirt" 3} [])))
+
+(deftest deposit-names-puts-the-older-pick-up-first-among-equal-worth
+  (let [inventory [{:name "gravel" :count 64} {:name "sand" :count 64} {:name "dirt" :count 64}]
+        keep {"gravel" 0 "sand" 0 "dirt" 0}]
+    (are [recency expected] (= expected (mr/deposit-names inventory keep recency))
+      {} ["gravel" "sand" "dirt"]
+      {"gravel" 5} ["sand" "dirt" "gravel"]
+      {"gravel" 5 "sand" 3 "dirt" 9} ["sand" "gravel" "dirt"])))
 
 ;; ------------------------------------------------------------------ the job
 
@@ -168,7 +182,7 @@
                 {:name "cobblestone" :count 64} {:name "cobblestone" :count 64} {:name "cobblestone" :count 64}]
                (many "junk" 26))))
 
-(deftest a-chest-in-range-takes-what-may-be-put-away-and-nothing-is-tossed
+(deftest a-chest-in-range-puts-away-the-least-worth-keeping-first-and-nothing-is-tossed
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -176,13 +190,30 @@
           (know-chest! eng chest-pos)
           (await (run-reflex eng {:free 6} {}))
           (is (= 0 (count (calls p "toss"))) "no toss")
-          (is (= 4 (count (calls p "transfer"))) "bread, two cobblestone stacks, one junk")
-          (is (= {"iron_pickaxe" 1 "iron_chestplate" 1 "water_bucket" 1 "cooked_beef" 16 "cobblestone" 64}
-                 (select-keys (inv p) ["iron_pickaxe" "iron_chestplate" "water_bucket" "cooked_beef" "cobblestone"])))
-          (is (nil? (get (inv p) "bread")) "the bread went")
+          (is (= 4 (count (calls p "transfer"))) "four junk stacks")
+          (is (= {"iron_pickaxe" 1 "iron_chestplate" 1 "water_bucket" 1 "cooked_beef" 16 "bread" 10 "cobblestone" 192}
+                 (select-keys (carried p) ["iron_pickaxe" "iron_chestplate" "water_bucket" "cooked_beef" "bread" "cobblestone"]))
+              "bread and the building blocks stay")
           (is (= 6 (- 36 (stack-count p))) "six slots are free")
           (is (contains? (event-kinds seen) :make-room.done))
           (is (not (declined? seen))))))))
+
+;; The live case: bread and cobblestone sit in low slots, junk after them.
+(deftest a-chest-takes-the-junk-and-not-the-bread-and-cobblestone-in-low-slots
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inventory (vec (concat [{:name "iron_pickaxe" :count 1} {:name "iron_sword" :count 1}]
+                                     (same "bread" 2 64) (same "cobblestone" 3 64)
+                                     (same "gravel" 14 64) (same "sand" 13 64)))
+              {:keys [eng p]} (setup {:inventory inventory :containers {"10,64,0" []}})]
+          (know-chest! eng chest-pos)
+          (await (run-reflex eng {:free 4} {}))
+          (is (= 0 (count (calls p "toss"))))
+          (is (= {"bread" 128 "cobblestone" 192 "iron_pickaxe" 1 "iron_sword" 1}
+                 (select-keys (carried p) ["bread" "cobblestone" "iron_pickaxe" "iron_sword"])))
+          (is (seq (calls p "transfer")))
+          (is (every? #{"gravel" "sand"} (map #(arg-of "item" %) (calls p "transfer")))))))))
 
 (deftest a-chest-beyond-chest-range-is-not-used
   (async done
