@@ -148,12 +148,20 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   // a walk toward `goal`, abortable; resolves true when the pathfinder reached it, false when it gave up
+  // The goal is cleared on every way out (arrived, gave up, timed out, cut): a goal left set makes the pathfinder
+  // walk the body back on its own, e.g. after a respawn.
+  const stopWalking = target => { target.pathfinder?.setGoal(null); target.clearControlStates?.() }
   const walk = async (ctx, goal) => {
-    ctx.onAbort(() => { bot.pathfinder.setGoal(null); bot.clearControlStates() })
-    ctx.alive()
-    const reached = await bot.pathfinder.goto(goal).then(() => true, () => false)
-    ctx.alive()
-    return reached
+    const walking = bot
+    ctx.onAbort(() => stopWalking(walking))
+    try {
+      ctx.alive()
+      const reached = await walking.pathfinder.goto(goal).then(() => true, () => false)
+      ctx.alive()
+      return reached
+    } finally {
+      stopWalking(walking)
+    }
   }
 
   // ---- sensing ----
@@ -546,13 +554,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         lastHealth = target.health
       },
       // bot.experience still holds the pre-death values here; the server resets it in a later packet.
-      death: () => emit({
+      death: () => { stopWalking(target); emit({
         kind: 'died',
         pos: here(),
         inventory: inventoryNow(),
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 }
-      }),
-      respawn: () => { respawning = true },
+      }) },
+      respawn: () => { stopWalking(target); respawning = true },
       chat: (from, message) => emit({ kind: 'chat', from, message }),
       wake: () => emit({ kind: 'woke' }),
       spawn: () => {

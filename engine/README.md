@@ -211,6 +211,10 @@ Only `createPrimitives`, which owns the connection params, supports it; `createP
 number, negative) with `bad-args`. The fake behaves the same: `isOffline()`, the offline sensing above, and a cut ends
 its wait early with the body back (online event) before the call resolves `cut`.
 
+The pathfinder goal never outlives a walk: `moveTo` and `collect` clear it (and the control states) on every way out, and the
+body's `death` and `respawn` events clear it too, so the body does not walk back to an old goal after a respawn. A reconnected
+bot starts with no goal.
+
 An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
 bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the
 body is down, the next acting call (`moveTo`, `dig`, `place`, `collect`, `inspectContainer`, `transfer`, `equip`,

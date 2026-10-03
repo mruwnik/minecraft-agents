@@ -810,3 +810,35 @@ test('place into a cell of a solid block, or a plant that is not replaceable, st
     assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })).status, 'occupied')
   }
 })
+
+// ---- the pathfinder goal never outlives a walk ----
+
+const goalCleared = bot => bot.calls.some(c => c.name === 'setGoal' && c.args[0] === null)
+
+for (const [label, spec] of [['arrives', {}], ['is refused', { reject: { goto: 'No path' } }]]) {
+  test(`moveTo clears the pathfinder goal when the walk ${label}`, async () => {
+    const { bot, p } = rig({ ...world, ...spec })
+    await p.moveTo('t1', { pos: at(3, 64, 0) })
+    assert.equal(goalCleared(bot), true)
+  })
+}
+
+test('moveTo clears the pathfinder goal on a timeout and on a cut', async () => {
+  const timed = rig({ ...world, hang: ['goto'] })
+  await timed.p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 1 })
+  assert.equal(goalCleared(timed.bot), true)
+  const cut = rig({ ...world, hang: ['goto'] })
+  const pending = cut.p.moveTo('t1', { pos: at(30, 64, 0) })
+  cut.p.setOwner('t2')
+  await assert.rejects(pending, cutError)
+  assert.equal(goalCleared(cut.bot), true)
+})
+
+for (const event of ['death', 'respawn']) {
+  test(`a ${event} event clears the pathfinder goal and the controls`, () => {
+    const { bot } = rig(world)
+    bot.emit(event)
+    assert.equal(goalCleared(bot), true)
+    assert.ok(names(bot).includes('clearControlStates'))
+  })
+}
