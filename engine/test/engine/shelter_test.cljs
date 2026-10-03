@@ -110,12 +110,14 @@
 (deftest player-sleeping-nearby-does-not-hold-after-an-unsupported-log-out
   (is (false? (sleeping-nearby-after-unsupported? {:time night :entities [sleeper]}))))
 
-(defn sleeping-nearby-after-log-out-ago? [ago-s args]
+(defn sleeping-nearby-after-log-out-ago?
+  ([ago-s args] (sleeping-nearby-after-log-out-ago? ago-s args "returned"))
+  ([ago-s args status]
   (let [{:keys [eng clock]} (setup {})]
-    (mem/write! (:store eng) :log-out {:ms 20000 :status "returned"} {:cap 10 :ttl day-ms})
+    (mem/write! (:store eng) :log-out {:ms 20000 :status status} {:cap 10 :ttl day-ms})
     (swap! clock + (* 1000 ago-s))
     (boolean ((:when (get triggers/all :player-sleeping-nearby))
-              (tu/fake {:time night :entities [sleeper]}) (mem/view (:store eng)) args))))
+              (tu/fake {:time night :entities [sleeper]}) (mem/view (:store eng)) args)))))
 
 (deftest player-sleeping-nearby-waits-out-the-gap-since-the-latest-log-out
   (are [ago-s args held] (= held (sleeping-nearby-after-log-out-ago? ago-s args))
@@ -123,6 +125,15 @@
     31 {} true
     10 {:gap-s 5} true
     31 {:gap-s 60} false))
+
+(deftest a-failed-log-out-blocks-only-for-the-gap-but-unsupported-is-permanent
+  (are [status ago-s held] (= held (sleeping-nearby-after-log-out-ago? ago-s {} status))
+    "closed" 10 false
+    "closed" 31 true
+    "cut" 10 false
+    "cut" 31 true
+    "unsupported" 31 false
+    "unsupported" 1100 false))
 
 (deftest player-sleeping-nearby-is-registered-and-fires-log-out
   (let [t (get triggers/all :player-sleeping-nearby)]
