@@ -32,7 +32,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
   })
   Object.assign(bot, {
     username: 'Stub',
-    entity: { position: new Vec3(...pos), height: 1.62, onGround: true, effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
+    entity: { position: new Vec3(...pos), height: 1.62, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
     entities,
     health: 20,
     food,
@@ -58,6 +58,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     dig: act('dig'),
     stopDigging: act('stopDigging'),
     placeBlock: act('placeBlock'),
+    _placeBlockWithOptions: act('_placeBlockWithOptions'),
     equip: act('equip'),
     toss: act('toss'),
     tossStack: act('tossStack'),
@@ -67,8 +68,11 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     attack: act('attack'),
     sleep: act('sleep'),
     wake: act('wake'),
-    lookAt: act('lookAt'),
-    look: act('look'),
+    lookAt: act('lookAt', point => {
+      const delta = point.minus(bot.entity.position.offset(0, bot.entity.height, 0))
+      Object.assign(bot.entity, { yaw: Math.atan2(-delta.x, -delta.z), pitch: Math.atan2(delta.y, Math.hypot(delta.x, delta.z)) })
+    }),
+    look: act('look', (yaw, pitch) => { Object.assign(bot.entity, { yaw, pitch }) }),
     closeWindow: act('closeWindow'),
     openContainer: act('openContainer', block => windowOf(key(block.position.x, block.position.y, block.position.z))),
     quit: act('quit')

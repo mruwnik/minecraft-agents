@@ -39,7 +39,8 @@ const POSE_SLEEPING = 2
 const STEP_RISE = 1.0
 const CENTRE_TOLERANCE = 0.1
 const CENTRE_S = 1
-const PILLAR_CENTRE_TOLERANCE = 0.03
+const CENTRE_SPEED = 0.005 // blocks per tick: centred means within tolerance and (nearly) stopped
+const LOOK_TICK_MS = 100 // a look waits for the next physics tick (the rotation goes out there), at most this long
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
@@ -187,6 +188,18 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return adjacent && to.y === from.y + 1 ? to : null
   }
   const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.height ?? 1.62), c.z + 0.5), true)
+  // A forced look only sets the rotation locally; mineflayer writes it to the server in the physics tick that follows,
+  // synchronously after emitting 'physicsTick'. So resolve on the next tick (bounded, physics may be off). Always
+  // wait, even when the rotation did not change: another forced look (faceCentre, jumpPlace, swim) may have set it
+  // already without a tick having sent it yet.
+  const lookNow = async aim => {
+    await aim()
+    await new Promise(resolve => {
+      const done = () => { clearTimeout(timer); bot.off('physicsTick', done); resolve() }
+      const timer = setTimeout(done, Math.max(1, LOOK_TICK_MS * timeScale))
+      bot.on('physicsTick', done)
+    })
+  }
   const waitUntil = async (ctx, done, boundS) => {
     const deadline = Date.now() + boundS * 1000 * timeScale
     while (!done() && Date.now() < deadline) {
@@ -195,13 +208,17 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     }
   }
   // Sneaks to the middle of `centre` (a cell), forward held only while off-centre: sneaking is slow enough not to
-  // overshoot into the far wall. True when centred within `tolerance` (already or after), false after CENTRE_S;
-  // always leaves sneak and forward released.
+  // overshoot into the far wall. True when within `tolerance` and stopped (already or after), false after CENTRE_S;
+  // always leaves sneak and forward released. Forward is released as soon as the body is within tolerance, and the
+  // body is only done once it has coasted to a stop: it would otherwise drift ~0.1 further during a jump.
+  // The wait is a body's `velocity` (blocks per tick); a body without one counts as stopped.
   const centreBody = async (ctx, body, centre, tolerance = CENTRE_TOLERANCE) => {
     // a server correction replaces the position object, so it is read fresh at every use
     const live = () => body.entity.position
     const toCentre = () => Math.hypot(centre.x + 0.5 - live().x, centre.z + 0.5 - live().z)
-    if (toCentre() < tolerance) return true
+    const speed = () => Math.hypot(body.entity.velocity?.x ?? 0, body.entity.velocity?.z ?? 0)
+    const centred = () => toCentre() < tolerance && speed() < CENTRE_SPEED
+    if (centred()) return true
     const onCentre = () => {
       const off = toCentre() >= tolerance
       if (off) faceCentre(body, centre).catch(() => {})
@@ -210,8 +227,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     body.setControlState('sneak', true)
     body.on('physicsTick', onCentre)
     try {
-      await waitUntil(ctx, () => toCentre() < tolerance, CENTRE_S)
-      return toCentre() < tolerance
+      await waitUntil(ctx, centred, CENTRE_S)
+      return centred()
     } finally {
       body.off('physicsTick', onCentre)
       body.setControlState('forward', false)
@@ -294,6 +311,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       onFire: burning(bot, bot.entity),
       inWater: bot.entity.isInWater ?? feetIn('water'),
       inLava: bot.entity.isInLava ?? feetIn('lava'),
+      onGround: Boolean(bot.entity.onGround),
       isSleeping: Boolean(bot.isSleeping),
       effects: effects(),
       experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
@@ -469,8 +487,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           const below = bot.blockAt(vec({ ...start, y: start.y - 1 }))
           if (below?.boundingBox !== 'block') return outcome('no-support')
           if (solidAt({ ...start, y: start.y + 2 })) return outcome('no-headroom')
-          // the server refuses the placement when the body is off-centre (seen live at 0.09), so centre first
-          if (!await centreBody(ctx, bot, start, PILLAR_CENTRE_TOLERANCE)) return outcome('not-centred')
+          // centring gets the body off a wall, where the jump never happens; the server does not refuse an off-centre
+          // placement, so a failure to centre is ignored (a body that cannot jump ends not-raised)
+          await centreBody(ctx, bot, start)
           await bot.equip(item, 'hand')
           ctx.alive()
           await bot.look(bot.entity.yaw ?? 0, -Math.PI / 2, true)
@@ -480,7 +499,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           const riseDeadline = Date.now() + RISE_WAIT_MS * timeScale
           while (bot.entity.position.y < start.y + 1.01 && Date.now() < riseDeadline) await pause(20)
           if (bot.entity.position.y < start.y + 1.01) return outcome('not-raised')
-          const failure = await bot.placeBlock(below, new Vec3(0, 1, 0)).then(() => null, err => err)
+          // placeBlock's own unforced lookAt turns gradually when the body is slightly off-centre and delays the packet
+          // ~1 s, until the body has fallen back into the cell and the server refuses; 'ignore' sends it at once
+          const failure = await bot._placeBlockWithOptions(below, new Vec3(0, 1, 0), { swingArm: 'right', forceLook: 'ignore' }).then(() => null, err => err)
           ctx.alive()
           release()
           if (failure) return outcome(`place-failed: ${String(failure.message ?? failure).slice(0, 100)}`)
@@ -547,7 +568,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     ctx.alive()
     await bot.equip(item, 'hand')
     ctx.alive()
-    await bot.lookAt(aim.position.offset(0.5, 0.5, 0.5), true)
+    await lookNow(() => bot.lookAt(aim.position.offset(0.5, 0.5, 0.5), true))
     ctx.alive()
     await bot.activateItem()
     // The block update can arrive after the window while the inventory already changed, so either one counts: the
@@ -767,7 +788,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos) || (isNum(a.yaw) && isNum(a.pitch)), 'look needs pos {x, y, z} or yaw and pitch')
     return act(token, { boundS: 1 }, async ctx => {
-      await (isPos(a.pos) ? bot.lookAt(vec(a.pos), true) : bot.look(a.yaw, a.pitch, true))
+      await lookNow(() => isPos(a.pos) ? bot.lookAt(vec(a.pos), true) : bot.look(a.yaw, a.pitch, true))
       return { status: 'ok' }
     })
   }

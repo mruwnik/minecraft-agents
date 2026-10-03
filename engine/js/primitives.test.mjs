@@ -191,7 +191,7 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'oxygen', 'pos', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -276,6 +276,12 @@ const withBot = (patch, spec = world) => {
   return createPrimitivesFromBot(bot, { timeScale: SCALE })
 }
 const keysFor = metadataKeys => ({ entitiesByName: { player: { metadataKeys } } })
+
+test('self().onGround follows entity.onGround', () => {
+  const { bot, p } = rig(world)
+  const states = [true, false].map(onGround => { bot.entity.onGround = onGround; return p.self().onGround })
+  assert.deepEqual(states, [true, false])
+})
 
 test('self reports active effects by snake_case registry name, empty when none', () => {
   assert.deepEqual(withBot(() => {}).self().effects, [])
@@ -699,7 +705,7 @@ test('an error on the bot is reported as a body event and never thrown', async (
 
 test('after the connection ends an acting call reconnects first and then runs on the new bot', async () => {
   const bots = []
-  const { p, seen } = await online({ connect: connectOnce(bots) })
+  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 0.01 })
   bots[0].emit('end', 'socket closed')
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
   assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online'])
@@ -1164,6 +1170,65 @@ test('moveTo: a goto that teleports the body into a pit away from the goal and r
   assert.deepEqual(result.pos, at(20.5, 54, 0.5))
 })
 
+// ---- look resolves only once the server has the rotation (the next physics tick sends it) ----
+
+// real-sized fallback (100 ms) so a tick the test emits by hand comes well before it
+const slowRig = spec => {
+  const bot = stubBot(spec)
+  const p = createPrimitivesFromBot(bot, { timeScale: 1 })
+  p.setOwner('t1')
+  return { bot, p }
+}
+
+test('look resolves only after the bot emits a physics tick', async () => {
+  const { bot, p } = slowRig(world)
+  const events = []
+  const call = p.look('t1', { yaw: 1, pitch: 0 }).then(() => events.push('resolved'))
+  await sleep(20)
+  assert.deepEqual(events, [])
+  events.push('tick')
+  bot.emit('physicsTick')
+  await call
+  assert.deepEqual(events, ['tick', 'resolved'])
+})
+
+test('look to a rotation already applied client-side but not yet sent still waits for a physics tick', async () => {
+  const { bot, p } = slowRig(world)
+  await bot.look(1, 0, true) // someone else's forced look, no tick since
+  const events = []
+  const call = p.look('t1', { yaw: 1, pitch: 0 }).then(() => events.push('resolved'))
+  await sleep(20)
+  assert.deepEqual(events, [])
+  bot.emit('physicsTick')
+  await call
+  assert.deepEqual(events, ['resolved'])
+})
+
+test('look resolves after the fallback when no physics tick comes', async () => {
+  const { p } = rig(world)
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
+})
+
+test('a bucket is used only after a physics tick has sent the look at the support', async () => {
+  const all = { '0,63,0': 'stone', '1,63,0': 'stone' }
+  const { bot, p } = slowRig({ blocks: all, items: [{ name: 'water_bucket', count: 1, slot: 36 }], onActivate: () => { all['1,64,0'] = 'water' } })
+  const events = []
+  const looked = new Promise(resolve => {
+    const lookAt = bot.lookAt
+    bot.lookAt = (...args) => { resolve(); return lookAt(...args) }
+  })
+  bot.on('physicsTick', () => events.push('tick'))
+  const activate = bot.activateItem
+  bot.activateItem = (...args) => { events.push('activate'); return activate(...args) }
+  const result = p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })
+  await looked
+  await sleep(20)
+  assert.deepEqual(events, [])
+  bot.emit('physicsTick')
+  await result
+  assert.deepEqual(events, ['tick', 'activate'])
+})
+
 // ---- jumpPlace: pillar up by jumping and placing the block under the feet ----
 
 // A stub body that rises when jump goes on, lets placeBlock fill the cell it left, and lands one block higher when
@@ -1188,12 +1253,12 @@ const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }]
     }
     return result
   }
-  const place = bot.placeBlock
-  bot.placeBlock = (ref, face) => {
+  const place = bot._placeBlockWithOptions
+  bot._placeBlockWithOptions = (ref, face, options) => {
     all[`${ref.position.x + face.x},${ref.position.y + face.y},${ref.position.z + face.z}`] = items[0].name
     items[0].count -= 1
     if (items[0].count === 0) items.shift()
-    return place(ref, face)
+    return place(ref, face, options)
   }
   return { bot, p, all, items }
 }
@@ -1204,14 +1269,14 @@ test('jumpPlace raises the body one block per repetition: look down, jump, place
   assert.equal(bot.entity.position.y, 66)
   assert.deepEqual([all['0,64,0'], all['0,65,0']], ['dirt', 'dirt'])
   assert.equal(items[0].count, 1)
-  const placeCalls = bot.calls.filter(c => c.name === 'placeBlock').map(c => [c.args[0].position.y, c.args[1].y])
+  const placeCalls = bot.calls.filter(c => c.name === '_placeBlockWithOptions').map(c => [c.args[0].position.y, c.args[1].y])
   assert.deepEqual(placeCalls, [[63, 1], [64, 1]], 'against the block under the start cell, on its top face')
   assert.deepEqual(bot.calls.filter(c => c.name === 'look').map(c => c.args[1]), [-Math.PI / 2, -Math.PI / 2])
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false], ['jump', true], ['jump', false]])
 })
 
 test('jumpPlace centres an off-centre body in its cell, sneaking, before it jumps', async () => {
-  const { bot, p } = pillarRig({ pos: [0.41, 64, 0.5] })
+  const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5] })
   const ticker = setInterval(() => bot.emit('physicsTick'), 2)
   try {
     assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'done', placed: 1 })
@@ -1223,18 +1288,45 @@ test('jumpPlace centres an off-centre body in its cell, sneaking, before it jump
   assert.ok(order.indexOf('sneak:false') < order.indexOf('jump:true'), 'sneak released before the jump')
 })
 
-test('jumpPlace fails not-centred, without jumping, when the body cannot be centred', async () => {
-  const { bot, p } = pillarRig({ pos: [0.41, 64, 0.5], pinned: true })
+test('jumpPlace places with forceLook ignore, never through placeBlock (its unforced look delays the packet ~1 s)', async () => {
+  const { bot, p } = pillarRig()
+  await p.jumpPlace('t1', { item: 'dirt', count: 2 })
+  assert.deepEqual(bot.calls.filter(c => c.name === '_placeBlockWithOptions').map(c => c.args[2]), [{ swingArm: 'right', forceLook: 'ignore' }, { swingArm: 'right', forceLook: 'ignore' }])
+  assert.deepEqual(names(bot).filter(n => n === 'placeBlock'), [])
+})
+
+test('jumpPlace ignores a failure to centre: a body that cannot be centred still jumps and places', async () => {
+  const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5], pinned: true })
   const ticker = setInterval(() => bot.emit('physicsTick'), 2)
   try {
-    assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'not-centred' })
+    assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'done', placed: 1 })
   } finally {
     clearInterval(ticker)
   }
   const order = controls(bot).map(c => c.join(':'))
-  assert.equal(order.includes('jump:true'), false)
-  assert.equal(order.lastIndexOf('sneak:false') > order.lastIndexOf('sneak:true'), true)
+  assert.equal(order.includes('jump:true'), true)
   assert.equal(order.lastIndexOf('forward:false') > order.lastIndexOf('forward:true'), true)
+})
+
+test('jumpPlace ends not-raised when the body cannot be centred and cannot rise', async () => {
+  const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5], pinned: true, rise: false })
+  const ticker = setInterval(() => bot.emit('physicsTick'), 2)
+  try {
+    assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'not-raised' })
+  } finally {
+    clearInterval(ticker)
+  }
+})
+
+test('jumpPlace waits for a body inside the tolerance to stop moving before it jumps', async () => {
+  const { bot, p } = pillarRig({ pos: [0.5, 64, 0.5] })
+  bot.entity.velocity = new Vec3(-0.014, 0, 0)
+  setTimeout(() => { bot.entity.velocity = new Vec3(0, 0, 0) }, 5)
+  const startedAt = Date.now()
+  await p.jumpPlace('t1', { item: 'dirt' })
+  const jumpedAt = bot.calls.findIndex(c => c.name === 'setControlState' && c.args[0] === 'jump' && c.args[1])
+  assert.ok(jumpedAt > bot.calls.findIndex(c => c.name === 'setControlState' && c.args[0] === 'sneak' && c.args[1]))
+  assert.ok(Date.now() - startedAt >= 5)
 })
 
 test('jumpPlace does not move a body that is already centred', async () => {
@@ -1271,14 +1363,14 @@ test('jumpPlace that never leaves the ground reports not-raised and releases jum
 
 test('jumpPlace reports place-failed when the server refuses the block, and releases jump', async () => {
   const { bot, p } = pillarRig()
-  bot.placeBlock = () => Promise.reject(new Error('blockUpdate did not fire'))
+  bot._placeBlockWithOptions = () => Promise.reject(new Error('blockUpdate did not fire'))
   const result = await p.jumpPlace('t1', { item: 'dirt' })
   assert.deepEqual([result.status, result.placed, result.reason], ['failed', 0, 'place-failed: blockUpdate did not fire'])
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
 })
 
 test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async () => {
-  const { bot, p } = pillarRig({ hang: ['placeBlock'] })
+  const { bot, p } = pillarRig({ hang: ['_placeBlockWithOptions'] })
   const call = p.jumpPlace('t1', { item: 'dirt' })
   await new Promise(resolve => setTimeout(resolve, 15))
   p.setOwner('t2')

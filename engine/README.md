@@ -104,7 +104,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
@@ -159,7 +159,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress; `reason: 'noPath'` when the pathfinder gave up with no path and the body is not there) | `timeoutS`, at most 60 | goal cleared, controls released |
 | `dig(token, a)` | `{pos}` | `dug`, `missing` (air), `unreachable` (more than 4.5 away), `cannot` (unbreakable) | 10 s | `stopDigging` |
 | `place(token, a)` | `{pos, item}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable` | 5 s | nothing placed after the cut |
-| `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-centred`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
+| `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
 | `collect(token, a)` | `{id, timeoutS = 10}` | `collected`, `gone`, `unreachable`, `timeout` | `timeoutS`, at most 20 | as `moveTo` |
 | `inspectContainer(token, a)` | `{pos}` | `ok`, `missing`, `unreachable` | 5 s | window closed |
 | `transfer(token, a)` | `{pos, direction, item, count}`; `direction` is `deposit` or `withdraw` | `ok` (`moved` may be less than `count`), `missing`, `unreachable`, `no-item`, `full` | 5 s | window closed |
@@ -168,7 +168,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `eat(token, a)` | `{item?}`; without `item`, the best food carried | `ate`, `no-food`, `full` | 5 s | `deactivateItem` |
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
-| `look(token, a)` | `{pos}` or `{yaw, pitch}` | `ok` | 1 s | none needed |
+| `look(token, a)` | `{pos}` or `{yaw, pitch}`; resolves after the next physics tick (the rotation has been sent to the server), at most ~50 ms later, bounded by 100 ms; | `ok` | 1 s | none needed |
 | `wait(token, a)` | `{ms}`, clamped to 0..10000 | `ok` | `ms` (scaled by `timeScale`) | none needed; a cut rejects at once |
 | `swim(token, a)` | `{ms = 3000, toward?}`, at most 10000; `toward` is `{x, y, z}` | `surfaced` (head out of water), `landed` (with `toward`), `timeout` | `ms`, at most 10 s | jump and forward released |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
@@ -231,7 +231,7 @@ arriving meanwhile share it), emits `online` and runs on the new bot. If every t
 reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
 resolves `disconnected` at once. A stale token still rejects with `cut` first.
 
-`jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it first sneaks to the centre of its cell (within 0.03, up to 1 s, else `failed`/`not-centred`: the server refuses the placement when the body is off-centre, seen live at 0.09 off), looks straight down, jumps, and once the feet clear
+`jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it first sneaks to the centre of its cell (within 0.1 and until it has stopped, up to 1 s; this gets the body off a wall, where the jump never happens, and a failure to centre is not fatal: a body that cannot jump ends `not-raised`), looks straight down, jumps, and once the feet clear
 the cell it stood in places `item` there against the block below that cell, releases jump and waits to stand one block
 higher. It checks before each jump that something solid is under the feet (`no-support`) and that the cell two above the
 feet is not solid (`no-headroom`), and stops at the first failure, reporting `placed`, the blocks it did raise. `not-raised`
@@ -942,7 +942,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `swim` | `setControlState('jump', true)` while `blockAt(eye cell)` is water, `false` on every exit |
 | `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
 | `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
-| `jumpPlace` | per block: needs the item, a full block under the feet and the cell two above the feet not solid; sneaks to the cell centre (within 0.03, up to 1 s, else `not-centred`); equips, looks straight down (`look(yaw, -pi/2)`), `setControlState('jump', true)`, polls every 20 ms until the feet are 1.01 above the start cell (clear of it), `placeBlock(block under the start cell, +y)` into the cell just left, releases jump, waits up to 1 s for `onGround` and checks the body now stands a block higher. Cleanup: jump released |
+| `jumpPlace` | per block: needs the item, a full block under the feet and the cell two above the feet not solid; sneaks to the cell centre (within 0.1 and until it has stopped, up to 1 s; a failure to centre is ignored); equips, looks straight down (`look(yaw, -pi/2)`), `setControlState('jump', true)`, polls every 20 ms until the feet are 1.01 above the start cell (clear of it), `_placeBlockWithOptions(block under the start cell, +y, {swingArm: 'right', forceLook: 'ignore'})` into the cell just left (`placeBlock`'s own unforced look turns gradually when the body is slightly off-centre and delays the packet ~1 s, by which time the body has fallen back into the cell and the server refuses: seen live), releases jump, waits up to 1 s for `onGround` and checks the body now stands a block higher. Cleanup: jump released |
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
 | `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
 | `equip` | `bot.equip(item, dest)` |
@@ -950,7 +950,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
 | `attack` | one `bot.attack`, then waits up to 300 ms for `entityHurt` on the target or its removal; `killed` when the entity is gone or its health is 0, `hurt` when that event came or it was killed |
 | `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |
-| `look` | `lookAt` or `look` with force |
+| `look` | `lookAt` or `look` with force, then waits for the next `physicsTick` (mineflayer sends the rotation right after emitting it), at most 100 ms |
 
 Sensing reads `bot.entities`, `bot.findBlocks` and `bot.blockAt` directly and never waits. Body events come from the
 bot's `health` (a drop is `hurt`), `death`, `respawn` (remembered, then reported as `respawned` at the next `spawn`),
