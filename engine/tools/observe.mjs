@@ -9,6 +9,16 @@ export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
 export const usage = `usage: observe.mjs <agent> [status [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
 
+export function unsupportedObserveRoute (response) {
+  return response.status === 404 && /^application\/edn(?:;|$)/i.test(response.contentType ?? '') &&
+    /^\s*\{\s*:ok\s+false\s*,?\s*:reason\s+:not-found\s*\}\s*$/.test(response.text)
+}
+
+export function legacyEngineNotice (request) {
+  const endpoint = request.path.split('?')[0]
+  return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build :fallback {:op :status :raw true :state ${JSON.stringify(request.state)}}}`
+}
+
 export function requestFor (argv) {
   let parsed
   try {
@@ -145,6 +155,12 @@ export async function main (argv = process.argv.slice(2)) {
     if (!/^application\/edn(?:;|$)/i.test(response.contentType ?? '')) {
       process.stdout.write(`{:ok false :reason :bad-response :detail :unexpected-content-type}\n`)
       return 1
+    }
+    if (request.path.startsWith('/status') || request.path.startsWith('/job') || request.path.startsWith('/catalog')) {
+      if (unsupportedObserveRoute(response)) {
+        process.stdout.write(`${legacyEngineNotice(request)}\n`)
+        return 2
+      }
     }
     process.stdout.write(response.text.endsWith('\n') ? response.text : `${response.text}\n`)
     return response.status >= 200 && response.status < 300 ? 0 : 1
