@@ -19,6 +19,7 @@ import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEve
 import { mergeBodies, parsePlan } from './dashboard/map.mjs'
 import { foldEngine, engineView, emptyEngine, parseEngineAgents, engineBody, completeLines, dropTornHead, parseEngineLines, decodeBytes } from './dashboard/engine.mjs'
 import { scanCap } from '../src/lib.mjs'
+import { renderView } from './view/render.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
@@ -459,7 +460,14 @@ const handlers = {
   unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name> (state, chat, world and villages take ?world=<name>, default the first world), /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> or /api/icon/<item>' })
 }
 
+// one PNG of what a body sees, drawn from the view files it dumps (tools/view-render.mjs), not through the body
+const serveView = (res, name) => {
+  try { return send(res, 200, 'image/png', renderView({ agentName: name }).png) } catch (e) { return sendJson(res, 404, { error: e.message }) }
+}
+
 http.createServer(async (req, res) => {
+  const view = /^\/api\/view\/(\w+)\.png(\?|$)/.exec(req.url)
+  if (view) return serveView(res, view[1])
   const r = route(req.url)
   if (r.kind === 'bppreview') {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST a structured plan to preview' })
