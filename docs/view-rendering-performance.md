@@ -76,6 +76,60 @@ Compared with the CPU path at 720p, this is 60 fps (vsync-bound) against about 1
 The orientation was checked against the Node PNG for the same frozen pose at 640x360, front view and top-down: the
 same landmarks appear on the same side and the horizon sits at the same height.
 
+### Pose interpolation (`tools/view/web/interp.mjs`)
+
+Without interpolation the camera snaps to each pose. Poses come at the body's write rate and arrive 0–50 ms late
+because of the server's mtime poll, so the camera sits still most frames and then jumps. The page now plays poses back
+a short delay behind the body's clock and blends between the two poses around that moment. `?interp=0` turns this off,
+and the overlay shows `interp <delay> ms`.
+
+How it works:
+- **Clock mapping.** Poses are keyed by their own `t` (the body's clock), so poll jitter does not move them.
+  offset = a running minimum of (arrival − t). It rises by 2 ms/s so it can follow clock skew, and it falls toward a
+  new minimum at no more than 20 ms/s. A late arrival never moves the playhead, and the playhead never steps.
+- **Delay.** target = interval + p90 of the arrival jitter (skew − offset) over the last 20 arrivals + 10 ms, clamped to
+  50–200 ms. The interval is the 25th percentile of the last 12 gaps that are ≤ 500 ms, so heartbeats and pauses don't
+  count. The delay rises at ≤ 20 %/s, falls at ≤ 100 %/s, and has a deadband. It settles at about 150 ms at 10 Hz and
+  about 100 ms at 20 Hz.
+- **Blending.**
+  - eye and pos are interpolated linearly, yaw along the shortest arc, pitch linearly. All other fields come from the
+    newer pose.
+  - Entities are blended by id. An entity only in the newer pose appears at its new position; one only in the older
+    pose vanishes.
+- **Special cases.**
+  - A jump of more than 8 blocks (a teleport or respawn) snaps instead of blending. A body moved by smaller `tp` hops
+    glides each hop over one pose interval.
+  - When a gap is longer than 2 intervals (a standstill before a write), the camera holds the older pose until one
+    interval before the newer one.
+  - Underrun: if no newer pose has arrived, the camera holds the newest pose. It does not extrapolate, because the pose
+    velocity is mineflayer's per-tick value and correcting an extrapolation causes rubber-banding. An offline pose
+    freezes the camera.
+
+Measured with `tools/view-pose-replay.mjs --synthetic`: a body walking a straight line at 4.317 blocks/s, back and
+forth over 20 blocks, with exact `t` and real timer jitter on the writes. The run served from a temp state directory
+and used `tools/view-web-bench.mjs --trace 30` at 1280x720 with vsync, on the same input for both modes. Columns:
+- **cv**: the coefficient of variation of the camera speed per frame, over the frames where the camera moves.
+- **still frames**: frames with no camera motion while the body walks.
+- **shown latency**: from the pose file's mtime to the first frame whose playback time has reached that pose.
+
+| Pose rate | interp | cv | max/median speed | still frames (of 1800) | underruns | file→frame p50/p95 | shown latency p50/p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 10 Hz | off | (0.010 over only ~300 moving frames) | 1.03 | 1495 | – | 36 / 54 ms | 36 / 54 ms |
+| 10 Hz | on | 0.054 | 1.32 | 0 | 0 | 35 / 52 ms | 153 / 169 ms |
+| 20 Hz | off | 0.093 | 1.97 | 1202 | – | 34 / 51 ms | 34 / 51 ms |
+| 20 Hz | on | 0.069 | 1.59 | 0 | 0 | 32 / 50 ms | 99 / 117 ms |
+
+Interpolation adds about 115 ms of shown latency at 10 Hz and about 65 ms at 20 Hz. The remaining cv comes from the
+turnaround every 4.6 s and from the 50 ms poll, which merges two 20 Hz writes into one. A recorded ProbeMove go-to walk
+(`tools/view-pose-record.mjs`, then replay) shows the same pattern: still frames drop from 973 to 15, and shown latency
+goes from 40 to 159 ms.
+
+Most of what is left of the latency and jitter is the server's 50 ms mtime poll. Replacing it with `fs.watch` on the
+view directory, keeping a slow poll as a fallback, is the next step.
+
+Column decoding on the main thread takes p50 9–12 ms and up to 34–62 ms per column. A burst of new columns can drop
+one or two frames (one 33 ms frame was seen during a load); the decoding should move to a Worker.
+
 ### Known gaps
 - 'partial' blocks (slabs, snow layers, stairs) are drawn as full cubes, which makes snow layers look like walls at eye
   level. The fix is to send per-state heights or boxes in the material table.
