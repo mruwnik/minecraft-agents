@@ -24,6 +24,12 @@
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
                 :default sh/default-bed-radius}})
 
+(def backoff
+  "Off: its retries are already bounded (three tries of go-to, then
+  :bed-unreachable), and at night a backoff would only delay the switch to
+  dig-in by about a minute."
+  false)
+
 (def slept-policy {:cap 10 :ttl (* 7 sh/ms-per-day)})
 
 (def unreachable-policy {:cap 5 :ttl 600000})

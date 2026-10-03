@@ -37,6 +37,11 @@
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :default 128}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :default 3}})
 
+(def backoff
+  "Off: it bounds itself (declines when no child can act) and is time-critical
+  at night, so a backoff would leave the body unsheltered longer."
+  false)
+
 (defn check [c]
   (sh/unsafe-night? (:primitives c) (:roof-height (:args c))))
 

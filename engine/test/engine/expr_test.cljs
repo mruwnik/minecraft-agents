@@ -1,5 +1,5 @@
 (ns engine.expr-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is are]]
             [cljs.reader :as reader]
             [engine.expr :as expr]))
 
@@ -28,6 +28,14 @@
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? true} (expr/parse-spec reg '(hold (jobs.b)))))
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? false} (expr/parse-spec reg '(jobs.b)))))
 
+(deftest backoff-wraps-the-top-in-either-order-with-hold
+  (let [node {:op :leaf :job 'jobs.b :args {}}]
+    (are [form expected] (= expected (expr/parse-spec reg form))
+      '(backoff {:after 2} (jobs.b)) {:node node :hold? false :backoff {:after 2}}
+      '(backoff false (jobs.b)) {:node node :hold? false :backoff false}
+      '(hold (backoff {:after 2} (jobs.b))) {:node node :hold? true :backoff {:after 2}}
+      '(backoff {:after 2} (hold (jobs.b))) {:node node :hold? true :backoff {:after 2}})))
+
 (deftest specs-read-from-edn
   (is (= {:op :seq :children [{:op :leaf :job 'jobs.a :args {:n 3 :m 2}}]}
          (expr/parse reg (reader/read-string "(seq (jobs.a {:n 3}))")))))
@@ -38,6 +46,10 @@
   (is (re-find #"hold is only allowed" (problem '(seq (hold (jobs.a))))))
   (is (re-find #"repeat takes exactly one" (problem '(repeat (jobs.a) (jobs.b)))))
   (is (re-find #"hold takes exactly one" (problem '(hold))))
+  (is (re-find #"backoff is only allowed" (problem '(seq (backoff {} (jobs.a))))))
+  (is (re-find #"backoff takes a config map" (problem '(backoff (jobs.a)))))
+  (is (re-find #":backoff must be" (problem '(backoff {:after 0} (jobs.a)))))
+  (is (re-find #"backoff is not allowed here" (try (expr/parse reg '(backoff {} (jobs.a))) (catch :default e (ex-message e)))))
   (is (re-find #"seq takes at least one" (problem '(seq))))
   (is (re-find #"any takes at least one" (problem '(any))))
   (is (re-find #"args of jobs.a must be a map" (problem '(jobs.a 5))))

@@ -524,3 +524,14 @@ for (const [label, clear] of [['stopDriving', p => p.stopDriving()], ['an owner 
     assert.deepEqual(p.world.state.controls, {})
   })
 }
+
+test('fakes do not share nested default self objects', () => {
+  const first = createFake()
+  first.world.state.self.pos.x = 99
+  first.world.state.self.experience.level = 7
+  first.world.state.self.effects.push('speed')
+  const second = createFake()
+  assert.equal(second.world.state.self.pos.x, 0)
+  assert.equal(second.world.state.self.experience.level, 0)
+  assert.deepEqual(second.world.state.self.effects, [])
+})

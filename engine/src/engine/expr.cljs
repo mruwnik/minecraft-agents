@@ -7,12 +7,16 @@
     (any e1 e2 ...)                     the first child whose check passes
     (repeat e)                          e again, fresh, each time it is done
     (hold e)                            e, holding the body; top level only
+    (backoff cfg e)                     e with its own backoff config (a map, or
+                                        false for none); top level only, and it
+                                        nests with hold in either order
 
   Nodes: {:op :leaf :job sym :args map}, {:op :seq|:any :children [node]},
   {:op :repeat :child node}. They are plain EDN, so they persist."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [engine.backoff :as backoff]))
 
-(def combinators #{'seq 'any 'repeat 'hold})
+(def combinators #{'seq 'any 'repeat 'hold 'backoff})
 
 (defn defaults
   "The default args of a registry entry: {k default} from its :args spec."
@@ -34,8 +38,8 @@
   (throw (ex-info msg {:form form})))
 
 (defn parse-form
-  "The node for form; top? says whether hold is allowed here."
-  [registry form top?]
+  "The node for form (the wrappers hold and backoff are peeled off before)."
+  [registry form]
   (let [head (when (and (seq? form) (seq form)) (first form))
         parts (when (seq? form) (rest form))
         n (count parts)]
@@ -44,19 +48,19 @@
       (fail (str "a job spec is a list such as (jobs.survival.eat) or (seq ...), not " (pr-str form)) form)
 
       (= 'hold head)
-      (cond
-        (not top?) (fail "hold is only allowed around a whole job spec, not inside one" form)
-        (not= 1 n) (fail "hold takes exactly one job spec" form)
-        :else (parse-form registry (first parts) false))
+      (fail "hold is only allowed around a whole job spec, not inside one" form)
+
+      (= 'backoff head)
+      (fail "backoff is only allowed around a whole job spec, not inside one" form)
 
       (= 'repeat head)
       (if (= 1 n)
-        {:op :repeat :child (parse-form registry (first parts) false)}
+        {:op :repeat :child (parse-form registry (first parts))}
         (fail "repeat takes exactly one job spec" form))
 
       (#{'seq 'any} head)
       (if (pos? n)
-        {:op (keyword head) :children (mapv #(parse-form registry % false) parts)}
+        {:op (keyword head) :children (mapv #(parse-form registry %) parts)}
         (fail (str head " takes at least one job spec") form))
 
       (not (contains? registry head))
@@ -70,22 +74,46 @@
 
       :else {:op :leaf :job head :args (second (leaf registry head (first parts)))})))
 
+(defn peel
+  "Unwrap the top-level (hold e) and (backoff cfg e) wrappers of form, in any
+  order: {:form inner :hold? bool} plus :backoff (a map or false) when given."
+  [form]
+  (let [head (when (seq? form) (first form))
+        parts (when (seq? form) (rest form))]
+    (cond
+      (= 'hold head)
+      (if (= 1 (count parts))
+        (assoc (peel (first parts)) :hold? true)
+        (fail "hold takes exactly one job spec" form))
+
+      (= 'backoff head)
+      (let [[cfg inner] parts]
+        (when-not (and (= 2 (count parts)) (or (map? cfg) (false? cfg)))
+          (fail "backoff takes a config map (or false) and one job spec" form))
+        (backoff/validate! cfg)
+        (assoc (peel inner) :backoff cfg))
+
+      :else {:form form :hold? false})))
+
 (defn parse-spec
-  "{:node node :hold? bool} for a job spec form; throws with a message naming
-  the problem and the whole spec."
+  "{:node node :hold? bool} for a job spec form, plus :backoff when it is
+  wrapped in (backoff cfg ...); throws with a message naming the problem and
+  the whole spec."
   [registry form]
-  (let [hold? (and (seq? form) (= 'hold (first form)))
-        node (try
-               (parse-form registry form true)
-               (catch :default e
-                 (throw (ex-info (str (ex-message e) ", in " (pr-str form)) {:form form} e))))]
-    {:node node :hold? (boolean hold?)}))
+  (try
+    (let [{:keys [form hold?] :as peeled} (peel form)]
+      (-> peeled
+          (select-keys [:backoff])
+          (assoc :node (parse-form registry form) :hold? hold?)))
+    (catch :default e
+      (throw (ex-info (str (ex-message e) ", in " (pr-str form)) {:form form} e)))))
 
 (defn parse
   "The node for a job spec form that must not hold."
   [registry form]
-  (let [{:keys [node hold?]} (parse-spec registry form)]
+  (let [{:keys [node hold? backoff]} (parse-spec registry form)]
     (when hold? (fail (str "hold is not allowed here, in " (pr-str form)) form))
+    (when (some? backoff) (fail (str "backoff is not allowed here, in " (pr-str form)) form))
     node))
 
 (defn problem

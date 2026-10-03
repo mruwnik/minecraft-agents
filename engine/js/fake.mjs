@@ -51,7 +51,7 @@ const withEntityDefaults = (e) => ({
 
 function initialState (spec) {
   return {
-    self: { ...defaultSelf, ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
+    self: { ...clone(defaultSelf), ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
     time: spec.time ?? 1000,
     blocks: new Map(Object.entries(spec.blocks ?? {})),
     unloaded: new Set(spec.unloaded ?? []), // "x,y,z" cells in an unloaded chunk: blockAt returns null there

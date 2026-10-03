@@ -321,7 +321,7 @@ otherwise. `dig` clears a cell's crop age.
 ## Jobs
 
 A job is a namespace under `src/jobs/` exporting `check` and `round`,
-optionally `doc` and `args`. Directories nest freely; the namespace follows
+optionally `doc`, `args` and `backoff`. Directories nest freely; the namespace follows
 the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
@@ -343,7 +343,7 @@ the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 There is no protocol and no catalog to edit: adding the file adds the job.
 
 **The registry.** `engine.registry/jobs` is `{ns-symbol {:check :round :doc
-:args}}`, built at compile time:
+:args :backoff}}`, built at compile time:
 
 1. The build hook `engine.build-hooks/add-job-namespaces` (in both builds'
    `:build-hooks`) runs at the `:compile-prepare` stage of every compile. It
@@ -386,6 +386,9 @@ are untested.
 - **`args`** maps each arg key to `{:doc :default}`. The engine merges the
   spec's args over the defaults, so a round can read `(:args ctx)` without
   its own defaults. Undeclared keys are passed through.
+- **`backoff`** (optional) is the job's own backoff config, `{:after :first-s
+  :max-s}` or `false`; see Backoff. It applies to a job whose spec is that
+  leaf, not to a combinator around it.
 
 ## Job expressions
 
@@ -539,7 +542,7 @@ A trigger definition:
 ```
 
 The register is an ordered vector of entries `{:id :trigger :job :args
-:persistence :cooldown-s :builtin?}`; the id defaults to the trigger name and
+:persistence :cooldown-s :backoff :builtin?}`; the id defaults to the trigger name and
 `:args` is the trigger's defaults merged with the scenario's; they are the
 trigger's only. `:job` is a job spec without `hold`; the reflex job's args
 are in it. The engine evaluates the effective order every tick and
@@ -644,6 +647,8 @@ exists; none does yet, so today the flag does nothing.
 eng id)`, true when `id` was marked failed) clears a failed mark and emits
 `job.retried`; `do-now!` (agent) cuts the
 running listed job and submits at the front with `:hold? true`.
+`submit!` opts: `:hold?`, `:backoff` (a config map or `false`, over any
+`(backoff cfg e)` wrapper), `:front?`, `:by`.
 
 The list, register and changes are written to `engine.edn` on every change;
 memory as above. On boot both are reloaded, reflex instances are dropped, the
@@ -659,6 +664,53 @@ failure.
 compares its act-call count and its memory with before the round. After
 `:stall-rounds` (default 20) rounds with neither, it emits one `job.stalled`
 warn with `:rounds`; any progress resets the count. Nothing is capped.
+
+**Backoff.** A job whose rounds keep failing at once would spin: every
+tick a round, each act answering `blocked`. The engine backs such a job off;
+it never removes it, and it alerts.
+
+- *Act results.* `act!` classifies every act result of a round (the acts of
+  children count for the top-level job). Failures are the statuses `blocked
+  failed unreachable cannot timeout gone out-of-reach no-item no-support
+  no-headroom occupied full disconnected unsupported not-night monsters-near`;
+  any other status (`arrived partial dug placed ok hit ...`) is progress. An
+  act that throws counts as neither. *Neutral acts* neither count nor
+  reset: `look`, `wait` and `equip` (a job that looks and then gets a blocked
+  `moveTo` each round still backs off), and a `moveTo` with a failure status
+  (`timeout`, `blocked`...) that moved the body at least 1 block (straight
+  line, from where the act started to where it ended). A round of only
+  neutral acts is not fruitless and does not reset.
+- *Fruitless round.* It ran at least one act and every act failed. A round
+  with no act, a cut round and a round that threw neither count nor reset.
+  The first progress act resets the count and the delay at once, mid-round.
+- *Schedule.* `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless
+  rounds in a row the job gets no round for `:first-s` seconds; each further
+  fruitless round (after the wait) doubles the delay, up to `:max-s`.
+- *Listed jobs* are counted per instance id, so a `(repeat ...)` keeps its
+  count across child restarts. A job in backoff is passed over in
+  `choose-listed` exactly as if its check declined (a holder in backoff
+  leaves the body idle) and stays listed.
+- *Reflexes* are counted per reflex id across firings. On reaching backoff a
+  job whose round continued ends with `reflex.ended` outcome `backoff`; one
+  whose round ended it (`done`, `declined`, failed, cut) keeps that outcome.
+  Either way the reflex cannot fire until the delay ends.
+- *State* is the engine's `:backoffs` atom `{key {:fruitless :last :delay-ms
+  :until :since :alerted}}` (key: instance id, or the reflex id keyword). It
+  is not persisted: a restart starts with none, and every count and delay is
+  cleared on the first tick after the engine leaves a pause (offline,
+  settling or manual control; `reset-backoff!`), since what failed before
+  says nothing about the body afterwards.
+- *Config*, most specific wins: engine default (`create` opt `:backoff`, else
+  the defaults above) < the job namespace's `backoff` var (leaf specs) <
+  the register entry's `:backoff` or the listed job's (`submit!` opt
+  `:backoff`, or a top-level `(backoff cfg e)` wrapper, which nests with
+  `hold` in either order). A map is merged over the level below; `false`
+  turns backoff off.
+- *Events.* warn `job.backoff` (`reflex.backoff` for a reflex) when it starts:
+  `act`, `status`, `reason` of the last failing act, `delay-ms`, `fruitless`,
+  `passes` (scheduler passes that skipped it), `since`, `text`; again at most
+  every `:backoff-alert-ms` (default 300000) while it lasts. Info
+  `job.recovered` (`reflex.recovered`) when a progress act ends it.
 
 ## Events
 
@@ -684,8 +736,9 @@ JSON lines, one per event, on stdout and appended to
 Plus kind-specific fields. Kinds the engine emits: `job.queued`,
 `job.round_started`, `job.yielded` (a `:continue`), `job.cut`,
 `job.completed`, `job.failed`, `job.retried`, `job.cancelled`, `job.stalled` (warn),
+`job.backoff` (warn), `job.recovered` (see Backoff; `reflex.` for reflexes),
 `job.memory_written` (debug, `memory` is the kind), `action.started` and
-`action.done` (debug), `reflex.fired` and `reflex.ended` (both with `text` "reflex → job"; ended carries `outcome`: `done`, `declined`, `cut`, `failed` or `dropped`, exactly one per fired job, including on shutdown and for jobs a crash left behind; `how`: `cleared`,
+`action.done` (debug), `reflex.fired` and `reflex.ended` (both with `text` "reflex → job"; ended carries `outcome`: `done`, `declined`, `cut`, `failed`, `dropped` or `backoff`, exactly one per fired job, including on shutdown and for jobs a crash left behind; `how`: `cleared`,
 `completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,
 `body.<kind>` for body events, `system.started`, `system.restored`,
 `system.stopping`.
