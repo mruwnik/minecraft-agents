@@ -81,6 +81,21 @@
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the debt is recorded once"))))))
 
+(deftest fell-tree-writes-the-replant-debt-before-digging-the-base-log
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:blocks (tree 3 0 "oak" 4)})
+              first-index (fn [pred] (first (keep-indexed (fn [i e] (when (pred e) i)) @seen)))]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10}) {})
+          (await (core/tick! eng))
+          (let [debt (first-index #(and (= :memory_written (:kind %)) (= :forestry/replant (:memory %))))
+                dig (first-index #(and (= :started (:kind %)) (= "dig" (:name %))
+                                       (= {"x" 3 "y" 64 "z" 0} (get (:args %) "pos"))))]
+            (is (some? debt))
+            (is (some? dig))
+            (is (< debt dig) "write-ahead: a cut during the dig must not lose the debt")))))))
+
 (deftest fell-tree-nearest-species-and-no-tree
   (async done
     (tu/run-async done

@@ -6,7 +6,7 @@
 
 (def doc
   "Fell the nearest tree (a log column with leaves near its top), two logs a
-  round, lowest first; write a :forestry/replant debt when the base log is dug.")
+  round, lowest first; write a :forestry/replant debt before the base log is dug.")
 
 (def args
   {:species {:doc "log species such as \"oak\"; any when nil" :default nil}
@@ -20,15 +20,20 @@
        (sort-by #(get-in % [:pos :y]))))
 
 (defn record-debt!
-  "Write the replant debt for the tree this job chose, once."
+  "Write the replant debt for the tree this job chose, once. True when it wrote one."
   [c]
   (let [{:keys [base species]} (ctx/mem c)]
     (when-not (some #(= base (:pos %)) (debts c))
-      (ctx/remember! c replant-kind {:pos base :species species} replant-policy))))
+      (ctx/remember! c replant-kind {:pos base :species species} replant-policy)
+      true)))
+
+(def untouched-statuses
+  "Dig statuses that leave the log standing, so the debt written ahead is void."
+  #{"unreachable" "cannot"})
 
 (defn ^:async dig-up!
   "Dig the logs in order, walking in reach first. Commits the replant debt
-  when the base log is dug. Resolves to :ok, :partial (the walk made progress
+  before the base log is dug (write-ahead; withdrawn when the dig leaves the log standing). Resolves to :ok, :partial (the walk made progress
   but is not in reach yet; call again) or a non-ok walk or dig status for the
   caller to count as a failure (:unreachable, :cannot and :out-of-reach mean
   the tree cannot be dug from here and are marked unreachable by the round)."
@@ -40,11 +45,13 @@
         (case w
           :blocked :blocked
           :partial :partial
-          (let [r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
+          (let [base? (= (:pos l) (:base (ctx/mem c)))
+                wrote? (and base? (record-debt! c))
+                r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
+            (when (and wrote? (untouched-statuses (.-status r)))
+              (ctx/forget-where! c replant-kind #(= (:pos l) (:pos %))))
             (if (#{"dug" "missing"} (.-status r))
-              (do (when (and (= "dug" (.-status r)) (= (:pos l) (:base (ctx/mem c))))
-                    (record-debt! c))
-                  (recur more))
+              (recur more)
               (keyword (.-status r)))))))))
 
 (defn choose-tree!
