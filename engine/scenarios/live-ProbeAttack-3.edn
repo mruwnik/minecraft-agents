@@ -1,0 +1,4 @@
+;; ProbeAttack live case: type zombie: four zombies, two skeletons left alone
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "zombie"}))
+         (repeat (jobs.movement.look-around))]}

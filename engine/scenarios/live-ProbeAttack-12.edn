@@ -1,0 +1,4 @@
+;; ProbeAttack live case: a pig that leaves the radius (teleported away mid-fight)
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "pig"}))
+         (repeat (jobs.movement.look-around))]}

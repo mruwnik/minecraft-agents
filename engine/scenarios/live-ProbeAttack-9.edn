@@ -1,0 +1,4 @@
+;; ProbeAttack live case: a zombie on a 5-high pillar and one in a glass box (unreachable)
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets [26953 26954]}))
+         (repeat (jobs.movement.look-around))]}

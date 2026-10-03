@@ -1,0 +1,4 @@
+;; ProbeAttack live case: a type with none in radius (should decline)
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "blaze"}))
+         (repeat (jobs.movement.look-around))]}

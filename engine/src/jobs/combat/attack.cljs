@@ -16,8 +16,9 @@
   swings (:unreachable), after :no-damage-hits swings in a row that did no
   damage (:no-damage: the attack reported hurt false, or a known health that
   did not drop), or after :max-hits hits without a kill (:too-many-hits). A
-  target hit within the last 2 s that vanishes counts as killed; a killed
-  player is not attacked again in this run, even after respawning. Done (info
+  kill is booked only when the attack reports killed (a target that merely
+  vanishes is not); a killed target or player is not attacked again in this
+  run, even after respawning. Done (info
   attack.done, and hands over {:reason :killed [ids] :given-up {id reason}})
   with :reason :cleared once no target has been within :radius for :lost-s,
   :gave-up when every target present has been given up on, or :timeout after
@@ -39,7 +40,6 @@
    :walk-timeout-s {:doc "bound of one walk towards a target" :default 5}})
 
 (def reach 3)
-(def struck-window-ms 2000)
 
 (defn target-list
   "targets as a vector: nil is empty, a bare id or name is one target."
@@ -68,14 +68,17 @@
       :else (boolean (some match targets)))))
 
 (defn present
-  "The entities matching :targets within :radius, nearest first."
+  "The entities matching :targets within :radius, nearest first; ones already
+  killed (their id stays after a respawn) are left out."
   [c]
   (let [p (:primitives c)
         {:keys [targets radius]} (:args c)
-        killed (set (:killed-players (ctx/mem c)))
+        {:keys [killed killed-players]} (ctx/mem c)
+        dead-ids (set killed)
         self-name (.-username (.self p))]
     (->> (array-seq (.entities p #js {:radius radius :max 64}))
-         (filterv #(matches? (target-list targets) self-name killed %)))))
+         (remove #(contains? dead-ids (.-id %)))
+         (filterv #(matches? (target-list targets) self-name (set killed-players) %)))))
 
 (defn candidates
   "The present targets not given up on."
@@ -87,29 +90,22 @@
   (boolean (or (:started (ctx/mem c)) (seq (candidates c)))))
 
 (defn book-kill!
-  "Move id from :struck to :killed; its username, if any, is not attacked again."
+  "Add id to :killed; its username, if any, is not attacked again."
   [c id username]
   (ctx/update-mem! c (fn [m]
-                       (cond-> (-> m
-                                   (update :killed (fnil conj []) id)
-                                   (update :struck dissoc id))
+                       (cond-> (update m :killed (fnil conj []) id)
                          username (update :killed-players (fnil conj #{}) username)))))
 
-(defn book-kills!
-  "Struck targets hit recently that are no longer around died."
-  [c]
-  (let [now (ctx/now c)
-        around (into #{} (map #(.-id %))
-                     (array-seq (.entities (:primitives c) #js {:radius (* 2 (:radius (:args c))) :max 64})))]
-    (doseq [[id s] (:struck (ctx/mem c))
-            :when (and (<= (- now (:t s)) struck-window-ms) (not (contains? around id)))]
-      (book-kill! c id (:username s)))))
+(defn display-name
+  "A player's username, else the entity's name."
+  [target]
+  (or (.-username target) (.-name target)))
 
 (defn give-up!
   [c target reason]
   (ctx/update-mem! c assoc-in [:given-up (.-id target)] reason)
-  (ctx/emit! c :attack.gave-up :warn {:target (.-id target) :name (.-name target) :reason reason
-                                      :text (str "giving up on " (.-name target) " " (.-id target) ": " (name reason))}))
+  (ctx/emit! c :attack.gave-up :warn {:target (.-id target) :name (display-name target) :reason reason
+                                      :text (str "giving up on " (display-name target) " " (.-id target) ": " (name reason))}))
 
 (defn fail!
   "Count a blocked walk or out-of-reach swing at target; give up at u/max-failures."
@@ -130,13 +126,11 @@
   [c target result]
   (let [id (.-id target)
         h (.-health result)
-        quiet? (quiet-hit? result (get-in (ctx/mem c) [:health id]))
-        now (ctx/now c)]
+        quiet? (quiet-hit? result (get-in (ctx/mem c) [:health id]))]
     (ctx/update-mem! c (fn [m]
                          (cond-> (-> m
                                      (update-in [:hits id] (fnil inc 0))
-                                     (assoc-in [:quiet id] (if quiet? (inc (get-in m [:quiet id] 0)) 0))
-                                     (assoc-in [:struck id] {:t now :username (or (.-username target) nil)}))
+                                     (assoc-in [:quiet id] (if quiet? (inc (get-in m [:quiet id] 0)) 0)))
                            (number? h) (assoc-in [:health id] h))))
     (let [{:keys [hits quiet]} (ctx/mem c)
           {:keys [no-damage-hits max-hits]} (:args c)]
@@ -203,7 +197,6 @@
   (let [now (ctx/now c)
         {:keys [timeout-s lost-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
-    (book-kills! c)
     (let [m (ctx/mem c)
           targets (candidates c)]
       (cond

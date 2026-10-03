@@ -1,0 +1,4 @@
+;; ProbeAttack live case: its own username only (never swings at itself)
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets ["ProbeAttack"]}))
+         (repeat (jobs.movement.look-around))]}

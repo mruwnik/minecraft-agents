@@ -1,0 +1,4 @@
+;; ProbeAttack live case: a fleeing cow (with AI) by type
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "cow"}))
+         (repeat (jobs.movement.look-around))]}

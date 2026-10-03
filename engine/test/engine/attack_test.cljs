@@ -242,15 +242,45 @@
           (is (finished? s))
           (is (= :cleared (:reason (done-event s)))))))))
 
-(deftest a-recently-struck-target-that-vanishes-counts-as-killed
+(deftest a-target-that-vanishes-after-a-hit-is-not-booked-as-killed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[wait killed] [[700 [7]] [3000 []]]]
-          (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-            (set! (.. p -world -state -entities) #js [])
-            (swap! clock + wait)
-            (await (core/tick! eng))
+        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
+          (set! (.. p -world -state -entities) #js [])
+          (swap! clock + 700)
+          (await (core/tick! eng))
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (finished? s))
+          (is (= :cleared (:reason (done-event s))))
+          (is (= [] (:killed (done-event s)))))))))
+
+(deftest a-player-is-named-by-username-when-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]}
+                                 {:inventory h/sword
+                                  :entities [(ent 7 "player" "player" 2 {:username "Alex" :invulnerable true})]} 5))
+              gave-up (first (events-of s :attack.gave-up))]
+          (is (= "Alex" (:name gave-up)))
+          (is (re-find #"Alex" (:text gave-up)))
+          (is (not (re-find #"player" (:text gave-up)))))))))
+
+(deftest a-killed-entity-that-stays-listed-is-not-attacked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [targets [[9] ["Alex"]]]
+          (let [{:keys [p clock eng] :as s} (h/setup {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]})]
+            (.override (.-world p) "attack"
+                       (fn [_token _args _impl] (js/Promise.resolve #js {:status "killed" :health 0 :hurt true})))
+            (core/submit! eng (spec {:targets targets}) {})
+            (await (run-ticks s 3 700))
+            (is (= [9] (attacked s)) (str targets " one swing, then left alone"))
             (swap! clock + 6000)
             (await (core/tick! eng))
-            (is (= killed (:killed (done-event s))) (str wait))))))))
+            (is (finished? s) (str targets))
+            (is (= :cleared (:reason (done-event s))) (str targets))
+            (is (= [9] (:killed (done-event s))) (str targets))))))))
