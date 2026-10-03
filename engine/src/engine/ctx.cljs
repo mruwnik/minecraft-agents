@@ -13,7 +13,7 @@
   ([ctx scope m-or-f] ((get-in ctx [:memory :commit]) scope m-or-f)))
 
 (defn step-child
-  "Run one round of the child in slot; a promise of :done, :continue or :not-ready."
+  "Run one round of the child in slot; a promise of :done, :continue or :declined (its check failed)."
   [ctx slot job args]
   ((:step-child ctx) slot job args))
 

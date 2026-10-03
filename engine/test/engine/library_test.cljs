@@ -16,7 +16,7 @@
    (let [clock (atom 1000000)
          [seen sink] (tu/capture-sink)
          p (tu/fake world)
-         eng (core/create {:primitives p :catalog catalog/catalog :dir dir :now #(deref clock) :min-recheck-ms 0
+         eng (core/create {:primitives p :catalog catalog/catalog :dir dir :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock})))
 

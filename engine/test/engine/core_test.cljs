@@ -33,10 +33,8 @@
 (defn ^:async fail-round [_]
   (throw (js/Error. "nope")))
 
-(defn ^:async night-round [c]
-  (if (.-isDay (.self (:primitives c)))
-    :done
-    {:status :continue :wake [:day]}))
+(defn ^:async bad-result-round [_]
+  :not-ready)
 
 (defn ^:async child-round [c]
   (let [n (:n (ctx/mem c) 0)]
@@ -52,34 +50,30 @@
   (ctx/submit! c :count {} {})
   :done)
 
-(defn ^:async idle-round [c]
-  (ctx/commit! c #(update % :n (fnil inc 0)))
-  :not-ready)
+(defn ^:async declined-parent-round [c]
+  (let [r (await (ctx/step-child c :a :gated {}))]
+    (ctx/commit! c {:child r})
+    :continue))
 
-(defn ^:async waking-child-round [_]
-  {:status :not-ready :wake [:after 1005000]})
+(def flag (atom false))
 
-(defn ^:async waking-parent-round [c]
-  (await (ctx/step-child c :a :waking-child {})))
-
-(def flag (atom :not-yet))
+(def always (constantly true))
 
 (def catalog
-  {:jobs {:count {:name :count :round count-round}
-          :walk {:name :walk :round walk-round}
-          :parent-walk {:name :parent-walk :round parent-walk-round}
-          :eat {:name :eat :round eat-round}
-          :fail {:name :fail :round fail-round}
-          :night {:name :night :round night-round}
-          :child {:name :child :round child-round}
-          :parent {:name :parent :round parent-round}
-          :submitter {:name :submitter :round submit-round}
+  {:jobs {:count {:name :count :check always :round count-round}
+          :walk {:name :walk :check always :round walk-round}
+          :parent-walk {:name :parent-walk :check always :round parent-walk-round}
+          :eat {:name :eat :check always :round eat-round}
+          :fail {:name :fail :check always :round fail-round}
+          :bad-result {:name :bad-result :check always :round bad-result-round}
+          :child {:name :child :check always :round child-round}
+          :parent {:name :parent :check always :round parent-round}
+          :declined-parent {:name :declined-parent :check always :round declined-parent-round}
+          :submitter {:name :submitter :check always :round submit-round}
           :look-around samples/look-around
-          :idle {:name :idle :round idle-round}
-          :waking-child {:name :waking-child :round waking-child-round}
-          :waking-parent {:name :waking-parent :round waking-parent-round}
           :gated {:name :gated :round count-round
-                  :precondition (fn [_ _ _] @flag)}}
+                  :check (fn [_] @flag)}
+          :no-check {:name :no-check :round count-round}}
    :triggers {:hurt {:name :hurt :job :eat :persistence :retry
                      :when (fn [w _ _] (<= (.-health (.self w)) 8))}
               :hungry {:name :hungry :job :eat :persistence :cooldown :cooldown-s 30
@@ -137,6 +131,73 @@
           (is (= {:n 2} (job-mem eng "j1")))
           (is (= {:n 1} (job-mem eng "j3"))))))))
 
+(deftest a-declining-job-is-skipped-and-costs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (reset! flag false)
+          (core/submit! eng :gated {} {})
+          (is (nil? (core/tick! eng)) "every check declines: idle")
+          (core/submit! eng :count {} {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= ["j2" "j2"] (ran seen)))
+          (reset! flag true)
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= ["j2" "j2" "j1" "j2"] (ran seen)) "round-robin once it passes")
+          (is (not-any? #(= :blocked (:kind %)) @seen)))))))
+
+(deftest the-check-sees-the-job-memory-and-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen-ctx (atom nil)
+              cat (assoc-in catalog [:jobs :peek] {:name :peek :round count-round
+                                                   :check (fn [c] (reset! seen-ctx [(:args c) (ctx/mem c)]) true)})
+              {:keys [eng]} (setup)
+              eng (assoc eng :catalog cat)]
+          (core/submit! eng :peek {:a 1} {})
+          (await (core/tick! eng))
+          (core/tick! eng)
+          (is (= [{:a 1} {:n 1}] @seen-ctx)))))))
+
+(deftest a-job-without-a-check-is-refused
+  (let [{:keys [eng]} (setup)]
+    (is (thrown? js/Error (core/submit! eng :no-check {} {})))))
+
+(deftest a-round-returning-anything-else-fails-the-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng :bad-result {} {})
+          (await (core/tick! eng))
+          (is (= [] (listed eng)))
+          (is (some #(= :failed (:kind %)) @seen)))))))
+
+(deftest a-holding-job-whose-check-declines-idles-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (reset! flag false)
+          (core/submit! eng :count {} {})
+          (core/submit! eng :gated {} {:hold? true})
+          (is (nil? (core/tick! eng)) "the holder declines; the others wait")
+          (reset! flag true)
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= ["j2" "j2"] (ran seen))))))))
+
+(deftest a-declining-child-returns-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (reset! flag false)
+          (core/submit! eng :declined-parent {} {})
+          (await (core/tick! eng))
+          (is (= "declined" (name (:child (job-mem eng "j1"))))))))))
+
 (deftest done-removes-the-job-and-its-memory
   (async done
     (tu/run-async done
@@ -150,79 +211,6 @@
           (is (some #(= [:completed "j1"] [(:kind %) (:job %)]) @seen))
           (await (core/tick! eng))
           (is (= ["j1" "j2"] (ran seen))))))))
-
-(deftest preconditions-skip-and-false-warns-once
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (reset! flag :not-yet)
-          (core/submit! eng :gated {} {})
-          (is (nil? (core/tick! eng)))
-          (reset! flag false)
-          (core/tick! eng)
-          (core/tick! eng)
-          (is (= 1 (count (filter #(= :blocked (:kind %)) @seen))))
-          (reset! flag true)
-          (await (core/tick! eng))
-          (is (= ["j1"] (ran seen))))))))
-
-(deftest a-yield-wake-overrides-until-it-holds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen p]} (setup {:time 14000})]
-          (core/submit! eng :night {} {})
-          (await (core/tick! eng))
-          (is (= [:day] (:wake (get-in (core/state eng) [:instances "j1"]))))
-          (is (nil? (core/tick! eng)))
-          (.setTime (.-world p) 1000)
-          (await (core/tick! eng))
-          (is (= [] (listed eng)))
-          (is (= ["j1" "j1"] (ran seen))))))))
-
-(deftest a-not-ready-round-without-a-wake-backs-off-for-the-recheck-interval
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup)]
-          (core/submit! eng :idle {} {})
-          (core/submit! eng :count {} {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= ["j1" "j2" "j2"] (ran seen)) "the idle job is skipped while backing off")
-          (swap! clock + 5000)
-          (await (core/tick! eng))
-          (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
-          (is (= 2 (:n (job-mem eng "j1")))))))))
-
-(deftest a-lone-not-ready-job-is-stepped-again-only-after-the-interval
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup)]
-          (core/submit! eng :idle {} {})
-          (await (core/tick! eng))
-          (swap! clock + 4999)
-          (is (nil? (core/tick! eng)))
-          (swap! clock + 1)
-          (await (core/tick! eng))
-          (is (= ["j1" "j1"] (ran seen)))
-          (is (nil? (core/tick! eng))))))))
-
-(deftest a-child-wake-is-booked-on-the-parent
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng clock]} (setup)]
-          (core/submit! eng :waking-parent {} {})
-          (await (core/tick! eng))
-          (let [inst (get-in (core/state eng) [:instances "j1"])]
-            (is (= [:after 1005000] (:wake inst)))
-            (is (nil? (:not-before inst)) "a wake replaces the back-off"))
-          (is (nil? (core/tick! eng)))
-          (swap! clock + 5000)
-          (await (core/tick! eng))
-          (is (= 2 (:round (get-in (core/state eng) [:instances "j1"])))))))))
 
 (deftest a-holding-job-is-always-chosen
   (async done

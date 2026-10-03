@@ -26,21 +26,21 @@
           (let [tries (inc (:blocked (ctx/mem c) 0))]
             (ctx/commit! c {:blocked tries})
             (if (< tries max-blocked)
-              :not-ready
+              :continue
               (do (ctx/emit! c :unreachable :warn {:target pos :tries tries
                                                     :text (str "gave up walking to " pos)})
                   :done))))))))
 
-(def go-to {:name :go-to :round go-to-round})
+(def go-to {:name :go-to :check (constantly true) :round go-to-round})
+
+(defn day? [c] (.-isDay (.self (:primitives c))))
 
 (defn ^:async wait-for-day-round
-  "Done once it is day; otherwise yields until day."
-  [c]
-  (if (.-isDay (.self (:primitives c)))
-    :done
-    {:status :continue :wake [:day]}))
+  "Runs only by day (its check declines at night), so it is done at once."
+  [_c]
+  :done)
 
-(def wait-for-day {:name :wait-for-day :round wait-for-day-round})
+(def wait-for-day {:name :wait-for-day :check day? :round wait-for-day-round})
 
 (defn ^:async eat-round
   "Eat the best food carried, once. args {:item name} picks one."
@@ -50,7 +50,7 @@
       (ctx/emit! c :no_food :info {:text "nothing to eat"}))
     :done))
 
-(def eat {:name :eat :round eat-round})
+(def eat {:name :eat :check (constantly true) :round eat-round})
 
 (def look-ahead 3)
 
@@ -63,7 +63,7 @@
     (ctx/commit! c :body #(assoc % :every-interval-last ((:now (:engine c)))))
     :done))
 
-(def look-around {:name :look-around :round look-around-round})
+(def look-around {:name :look-around :check (constantly true) :round look-around-round})
 
 (defn ^:async pace-round
   "args {:a pos :b pos :laps 3 :rounds 8 :range 1}. One round walks a, b, a, b
@@ -82,4 +82,4 @@
       (ctx/commit! c {:rounds-run done-rounds})
       (if (>= done-rounds rounds) :done :continue))))
 
-(def pace {:name :pace :round pace-round})
+(def pace {:name :pace :check (constantly true) :round pace-round})

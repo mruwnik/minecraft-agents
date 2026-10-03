@@ -1,11 +1,11 @@
 (ns engine.core
-  "The scheduler: the job list (round-robin with preconditions and holding),
+  "The scheduler: the job list (round-robin over checks, with holding),
   the reflex register (ordered triggers with TTL mutes and moves), cuts by
   ownership-token rotation, and persistence of both to engine.edn.
 
   The state atom holds plain EDN, written on every change:
     :list [id]              listed instance ids, in cycle order
-    :instances {id inst}    {:id :job :args :round :hold? :wake :not-before :blocked? :reflex}
+    :instances {id inst}    {:id :job :args :round :hold? :reflex}
     :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :builtin?}
     :changes {rid {prop {:value v :until ms-or-nil}}}  prop is :mute or :position
     :reflex-state {rid {:cooldown-until ms :stopped? bool}}
@@ -15,15 +15,10 @@
     :pending-reflex id      a reflex job between its rounds; it keeps the body
     :next-id n
   The in-flight round itself ({:id :token :reflex :round}) is not persisted."
-  (:require [engine.conditions :as conditions]
-            [engine.events :as events]
+  (:require [engine.events :as events]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             ["path" :as path]))
-
-(def default-min-recheck-ms
-  "How long a :not-ready round with no wake keeps its job from being stepped again."
-  5000)
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
@@ -107,10 +102,9 @@
   (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances saved)))
 
 (defn normalize-result [r]
-  (cond
-    (#{:done :continue :not-ready} r) {:status r}
-    (and (map? r) (#{:done :continue :not-ready} (:status r :continue))) (merge {:status :continue} r)
-    :else {:status :error :error (js/Error. (str "a round returned " (pr-str r)))}))
+  (if (#{:done :continue} r)
+    {:status r}
+    {:status :error :error (js/Error. (str "a round returned " (pr-str r) ", not :done or :continue"))}))
 
 ;; ------------------------------------------------------------------ engine plumbing
 
@@ -119,8 +113,11 @@
 (defn now [eng] ((:now eng)))
 
 (defn job-def [eng job]
-  (or (get-in eng [:catalog :jobs job])
-      (throw (ex-info (str "unknown job " job) {:job job}))))
+  (let [def (get-in eng [:catalog :jobs job])]
+    (cond
+      (nil? def) (throw (ex-info (str "unknown job " job) {:job job}))
+      (not (fn? (:check def))) (throw (ex-info (str "job " job " has no :check") {:job job}))
+      :else def)))
 
 (defn trigger-def [eng trigger]
   (or (get-in eng [:catalog :triggers trigger])
@@ -179,8 +176,7 @@
 
 (defn ^:async step-child
   "One round of the child job in slot under parent; see README.md. Resolves
-  to the child's status keyword, or {:status :not-ready :wake w} when the
-  child asked to wait for a wake condition."
+  to :declined when the child's check fails, else the child's :done or :continue."
   [eng parent slot job args]
   (let [store (:store eng)
         p (:primitives eng)
@@ -188,17 +184,16 @@
     (if (mem/done? store child-path)
       :done
       (let [def (job-def eng job)
-            pre (if-let [f (:precondition def)] (f p (memory-view eng child-path) args) true)]
-        (if-not (true? pre)
-          :not-ready
-          (let [id (mem/path->id child-path)
-                c (make-ctx eng (assoc parent :id id :path child-path :args args
-                                       :chain (conj (:chain parent) id)))
-                {:keys [status error wake]} (normalize-result (await ((:round def) c)))]
+            id (mem/path->id child-path)
+            c (make-ctx eng (assoc parent :id id :path child-path :args args
+                                   :chain (conj (:chain parent) id)))]
+        (if-not ((:check def) c)
+          :declined
+          (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
             (when-not (.isOwner p (:token parent)) (throw (cut-error)))
             (when (= status :error) (throw error))
             (when (= status :done) (mem/mark-done! store child-path))
-            (if wake {:status status :wake wake} status)))))))
+            status))))))
 
 (defn ^:async run-round [eng run inst]
   (let [def (job-def eng (:job inst))
@@ -220,61 +215,38 @@
       (emit! eng {:source :system :kind :error :level :warn :text (str what " threw: " e)})
       fallback)))
 
-(defn backing-off?
-  "Whether inst's last round was a :not-ready with no wake, and the re-check interval has not passed."
+(defn check-ctx
+  "The ctx a listed job's check receives: memory and sensing, no token."
   [eng inst]
-  (some-> (:not-before inst) (> (now eng))))
+  (make-ctx eng {:id (:id inst) :path [(:id inst)] :chain [(:id inst)] :token nil
+                 :args (:args inst) :round (:round inst) :reflex (:reflex inst)}))
 
-(defn readiness [eng inst]
-  (let [def (job-def eng (:job inst))
-        p (:primitives eng)
-        view (memory-view eng [(:id inst)])]
-    (cond
-      (backing-off? eng inst) :not-yet
-      (:wake inst) (if (conditions/holds? (:wake inst) p view (now eng)) true :not-yet)
-      (:precondition def) (call-guarded eng (str "precondition of " (:job inst)) false
-                                        #((:precondition def) p view (:args inst)))
-      :else true)))
-
-(defn ready?
-  "Whether listed instance id may run now; emits job.blocked once per spell of false."
+(defn check-passes?
+  "Whether listed instance id's check passes now. A throwing check declines."
   [eng id]
   (let [inst (get-in (state eng) [:instances id])
-        r (readiness eng inst)]
-    (cond
-      (true? r)
-      (do (when (:blocked? inst) (swap! (:state eng) assoc-in [:instances id :blocked?] false))
-          true)
-
-      (false? r)
-      (do (when-not (:blocked? inst)
-            (swap! (:state eng) assoc-in [:instances id :blocked?] true)
-            (emit! eng (merge (job-fields eng id)
-                              {:source :job :kind :blocked :level :warn
-                               :text (str (name (:job inst)) " cannot run: its precondition is false")})))
-          false)
-
-      :else false)))
+        check (:check (job-def eng (:job inst)))]
+    (boolean (call-guarded eng (str "check of " (:job inst)) false
+                           #(check (check-ctx eng inst))))))
 
 (defn choose-listed
-  "The listed job to run next: a holder, else the cut job, else round-robin."
+  "The listed job to run next: a holder (or nothing, while its check declines),
+  else the cut job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
         holder (some #(when (:hold? (instances %)) %) list)]
     (cond
-      holder (when-not (backing-off? eng (instances holder)) holder)
-      (and resume (some #{resume} list) (ready? eng resume)) resume
+      holder (when (check-passes? eng holder) holder)
+      (and resume (some #{resume} list) (check-passes? eng resume)) resume
       (zero? n) nil
-      :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (ready? eng id) id)))
+      :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (check-passes? eng id) id)))
                   (range n)))))
 
 ;; ------------------------------------------------------------------ settling a round
 
-(defn settle-listed! [eng {:keys [id]} {:keys [status error wake]}]
-  (let [idx (.indexOf (:list (state eng)) id)
-        not-before (when (and (= :not-ready status) (nil? wake))
-                     (+ (now eng) (:min-recheck-ms eng default-min-recheck-ms)))]
+(defn settle-listed! [eng {:keys [id]} {:keys [status error]}]
+  (let [idx (.indexOf (:list (state eng)) id)]
     (case status
       :done
       (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
@@ -293,12 +265,9 @@
           (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
                       :error (str error) :text (str "dropped: " error)}))
 
-      (do (swap! (:state eng) #(-> %
-                                   (assoc :cursor (inc idx) :current nil)
-                                   (assoc-in [:instances id :wake] wake)
-                                   (assoc-in [:instances id :not-before] not-before)))
+      (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
-                            {:source :job :kind :yielded :level :info :status status :wake wake}))))))
+                            {:source :job :kind :yielded :level :info :status status}))))))
 
 (defn trigger-holds?
   "Whether entry's trigger holds: (:when world memory args), where memory is
@@ -352,10 +321,7 @@
         _ (set-owner! eng token)
         s (swap! (:state eng)
                  (fn [s] (let [inst (get-in s [:instances id])]
-                           (cond-> (-> s
-                                       (update-in [:instances id :round] inc)
-                                       (assoc-in [:instances id :wake] nil)
-                                       (assoc-in [:instances id :not-before] nil))
+                           (cond-> (update-in s [:instances id :round] inc)
                              (not (:reflex inst)) (assoc :current id)
                              (= id (:resume s)) (assoc :resume nil)
                              (= id (:pending-reflex s)) (assoc :pending-reflex nil)))))
@@ -553,15 +519,14 @@
 
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
-  memory when present. Options: :primitives :catalog :dir :now :events :body :min-recheck-ms."
-  [{:keys [primitives catalog dir now events body min-recheck-ms] :or {now js/Date.now}}]
+  memory when present. Options: :primitives :catalog :dir :now :events :body."
+  [{:keys [primitives catalog dir now events body] :or {now js/Date.now}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
         ev (or events (events/make {:body username :file (path/join dir "events.jsonl") :stdout? true
                                     :now now :pos-fn #(self-pos primitives)}))
         eng {:primitives primitives :catalog catalog :dir dir :now now :events ev
-             :min-recheck-ms (or min-recheck-ms default-min-recheck-ms)
              :store (mem/open dir)
              :state (atom (if saved (restore saved) empty-state))
              :running (atom nil)

@@ -17,7 +17,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/fake world)
-        eng (core/create {:primitives p :catalog catalog/catalog :dir (tu/tmp-dir) :now #(deref clock) :min-recheck-ms 0
+        eng (core/create {:primitives p :catalog catalog/catalog :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -38,7 +38,7 @@
           (await (core/tick! eng))
           (is (= {:x 30 :y 64 :z 0} (core/self-pos p)) "go-to walked")
           (await (core/tick! eng))
-          (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-day yielded")
+          (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-day declines at night")
           (is (nil? (core/tick! eng)) "night: nothing ready")
           (set! (.. world -state -self -health) 6)
           (set! (.. world -state -self -food) 10)
@@ -48,7 +48,7 @@
           (.setTime world 1000)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= [:go-to :wait-for-day :eat :wait-for-day]
+          (is (= [:go-to :eat :wait-for-day]
                  (->> @seen (filter #(= :round_started (:kind %))) (mapv :name)))))))))
 
 (deftest go-to-gives-up-after-three-blocked-walks

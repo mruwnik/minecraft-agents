@@ -24,8 +24,10 @@
   (let [wanted (some-> wanted set)]
     (first (filter #(if wanted (wanted (:name %)) (not (tool? (:name %)))) items))))
 
-(defn deposit-ready? [_p memory args]
-  (boolean (chest-of memory args)))
+(defn deposit-check
+  "A chest is known."
+  [c]
+  (boolean (chest-of {:common (ctx/mem c :common)} (:args c))))
 
 (defn ^:async deposit-round
   "args {:chest pos-or-nil :items names-or-nil}. Walks to the chest (args, or
@@ -38,7 +40,7 @@
         stack (to-deposit (u/inventory (:primitives c)) (:items (:args c)))]
     (cond
       (nil? stack) :done
-      (nil? chest) :not-ready
+      (nil? chest) :continue
       :else
       (let [w (await (u/walk-near! c chest 3))]
         (case w
@@ -50,4 +52,4 @@
               :continue
               (u/fail! c :chest_unusable (str "chest not usable: " (.-status r))))))))))
 
-(def deposit {:name :deposit :round deposit-round :precondition deposit-ready?})
+(def deposit {:name :deposit :check deposit-check :round deposit-round})

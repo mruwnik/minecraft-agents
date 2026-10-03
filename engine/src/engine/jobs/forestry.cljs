@@ -137,7 +137,7 @@
       (do (ctx/emit! c :tree_blocked :warn {:text "no reachable tree"})
           :done)
 
-      (not chosen) :not-ready
+      (not chosen) :continue
 
       :else
       (let [logs (column-logs (:primitives c) radius (ctx/mem c))]
@@ -150,13 +150,17 @@
               (:unreachable :cannot :out-of-reach) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
 
-(defn fell-tree-ready? [p memory args]
-  (let [m (:job memory)]
-    (or (boolean (:column m))
-        (boolean (seq (:unreachable m)))
-        (if (tree-near p (:radius args default-radius) (:species args)) true :not-yet))))
+(defn fell-tree-check
+  "A tree is chosen, or every candidate was unreachable (the round warns and
+  finishes), or a tree is in sight."
+  [c]
+  (let [m (ctx/mem c)
+        {:keys [radius species] :or {radius default-radius}} (:args c)]
+    (boolean (or (:column m)
+                 (seq (:unreachable m))
+                 (tree-near (:primitives c) radius species)))))
 
-(def fell-tree {:name :fell-tree :round fell-tree-round :precondition fell-tree-ready?})
+(def fell-tree {:name :fell-tree :check fell-tree-check :round fell-tree-round})
 
 ;; ------------------------------------------------------------ collect-drops
 
@@ -179,7 +183,7 @@
           (ctx/commit! c #(update % :skipped (fnil conj []) (.-id item))))
         :continue))))
 
-(def collect-drops {:name :collect-drops :round collect-drops-round})
+(def collect-drops {:name :collect-drops :check (constantly true) :round collect-drops-round})
 
 ;; ------------------------------------------------------------ plant-sapling
 
@@ -208,13 +212,16 @@
 (defn clear-debt [debts pos]
   (filterv #(not= pos (:pos %)) debts))
 
-(defn plant-sapling-ready? [p memory args]
-  (let [t (target-of memory args)
-        sapling (sapling-for (u/inventory p) (:species t))]
+(defn plant-sapling-check
+  "Nothing to plant (the round finishes), or a matching sapling is carried
+  and the spot no longer holds a log."
+  [c]
+  (let [p (:primitives c)
+        t (target-of {:common (ctx/mem c :common)} (:args c))]
     (cond
       (nil? t) true
-      (nil? sapling) :not-yet
-      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) :not-yet
+      (nil? (sapling-for (u/inventory p) (:species t))) false
+      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) false
       :else true)))
 
 (defn ^:async plant-sapling-round
@@ -227,7 +234,7 @@
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))]
     (cond
       (nil? t) :done
-      (nil? sapling) :not-ready
+      (nil? sapling) :continue
       :else
       (let [w (await (u/walk-near! c (:pos t) 3))]
         (case w
@@ -240,7 +247,7 @@
                       :done)
                   (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))
 
-(def plant-sapling {:name :plant-sapling :round plant-sapling-round :precondition plant-sapling-ready?})
+(def plant-sapling {:name :plant-sapling :check plant-sapling-check :round plant-sapling-round})
 
 ;; -------------------------------------------------------------- harvest-wood
 
@@ -249,8 +256,9 @@
 
 (defn ^:async harvest-wood-round
   "args {:species name-or-nil :radius 16 :filter names-or-nil}. Steps three
-  children in order, in slots :fell, :collect and :plant. Returns the first
-  child result that is not :done, or :done when all three are."
+  children in order, in slots :fell, :collect and :plant. Returns :continue
+  at the first child that is not :done (a declined child included), or :done
+  when all three are."
   [c]
   (let [{:keys [species radius filter] :or {radius default-radius}} (:args c)
         steps [[:fell :fell-tree {:species species :radius radius}]
@@ -262,6 +270,6 @@
         (let [r (await (ctx/step-child c slot job args))]
           (if (= :done r)
             (recur more)
-            r))))))
+            :continue))))))
 
-(def harvest-wood {:name :harvest-wood :round harvest-wood-round})
+(def harvest-wood {:name :harvest-wood :check (constantly true) :round harvest-wood-round})

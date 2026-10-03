@@ -40,18 +40,18 @@
       (let [target (away-from (u/self-pos c) (u/pos-of (.-pos threat)) step)
             r (await (ctx/act c :moveTo (clj->js {:pos target :range 1})))]
         (ctx/commit! c #(assoc % :moves (inc moves)))
-        (if (= "blocked" (.-status r)) :not-ready :continue)))))
+        :continue))))
 
-(def retreat {:name :retreat :round retreat-round})
+(def retreat {:name :retreat :check (constantly true) :round retreat-round})
 
 (defn bed-of [memory]
   (:pos (first (mem/places memory :bed))))
 
-(defn sleep-ready? [p memory _args]
-  (cond
-    (nil? (bed-of memory)) false
-    (.-isDay (.self p)) :not-yet
-    :else true))
+(defn sleep-check
+  "A bed is known and it is night."
+  [c]
+  (and (some? (bed-of {:common (ctx/mem c :common)}))
+       (not (.-isDay (.self (:primitives c))))))
 
 (defn ^:async sleep-round
   "Walks to the first known bed in common places and sleeps. Done once asleep,
@@ -70,4 +70,4 @@
                         :done)
           (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r))))))))
 
-(def sleep {:name :sleep :round sleep-round :precondition sleep-ready?})
+(def sleep {:name :sleep :check sleep-check :round sleep-round})
