@@ -69,8 +69,10 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       }
       // The block update can arrive before the inventory slot update; give the count a moment to follow.
       const countMoved = () => carried(item) !== countBefore
+      // Tools with durability never drop in count, so only other items are worth the wait.
+      const countCanDrop = !(bot.registry?.itemsByName?.[item]?.maxDurability > 0)
       const consumeDeadline = Date.now() + CONSUME_WAIT_MS * timeScale
-      while (item !== undefined && !same(now(), before) && !countMoved() && Date.now() < consumeDeadline) {
+      while (item !== undefined && countCanDrop && !same(now(), before) && !countMoved() && Date.now() < consumeDeadline) {
         await sleepMs(POLL_MS * timeScale)
         ctx.alive()
       }

@@ -188,3 +188,20 @@ test('useOn before and after report integer states as numbers', async () => {
   const r = await p.useOn('t1', dirt)
   assert.deepEqual([r.before.properties, r.after.properties], [typedProps, typedProps])
 })
+
+test('a tool with durability never waits for a count change after the block changed', async () => {
+  const props = {}
+  const { bot, p } = rig({ onUseBlock: () => { props.done = true } })
+  bot.registry.itemsByName.diamond_hoe = { id: 9, maxDurability: 1561 }
+  const blockAt = bot.blockAt
+  let polls = 0
+  bot.blockAt = v => {
+    if (!props.done) return blockAt(v)
+    polls += 1
+    return { name: 'farmland', getProperties: () => ({}) }
+  }
+  const r = await p.useOn('t1', { ...dirt, item: 'diamond_hoe' })
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 0)
+  assert.equal(polls, 3) // the change check, the status check and the after snapshot; no extra wait polls
+})
