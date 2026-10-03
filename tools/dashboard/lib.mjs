@@ -330,3 +330,39 @@ export function blueprintDocumentDetail (document, stock) {
     return { name: document.id, hash: ir.hash, bp, document, palette: allocated ? 'resolved-declared-stock' : 'representative', allocation: allocated, materialObjects: ir.objects.map(({ id, material, block }) => ({ id, material, block })), materials: document.materials, relationships: document.relationships ?? [], preview: previewCells(bp), bill: bill(bp), lint: lintOf(bp), counts: counts(bp), errors: [], builds: [] }
   } catch (error) { return { name: document?.id ?? 'draft', hash: null, bp: null, document, errors: [error.message], builds: [], palette: 'unresolved' } }
 }
+
+// ---------------------------------------------------------------- the world selector
+// world.json is {host, port}; a world whose file cannot be read is still listed, so it can be picked and seen empty
+export const parseWorldList = entries => entries
+  .map(({ name, text }) => {
+    const info = parseConfig(text)
+    return { name, host: info?.host ?? null, port: info?.port ?? null }
+  })
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+// The only way a requested world name becomes a world: strict equality against the directory listing, never a path.
+// Nothing asked -> the first world (null when there are none); anything not listed -> undefined.
+export const resolveWorld = (names, requested) => {
+  if (requested === null || requested === undefined || requested === '') return names[0] ?? null
+  return names.find(name => name === requested)
+}
+
+export const scopeSnapshot = (snapshot, worldName) => {
+  const bodies = snapshot.bodies.filter(b => b.world === worldName)
+  return {
+    ...snapshot,
+    agents: snapshot.agents.filter(name => bodies.some(b => b.name === name || b.username === name)),
+    bodies,
+    worlds: snapshot.worlds.filter(w => w.name === worldName)
+  }
+}
+
+// the chat is read per agent folder: keep the folders whose agent plays in the world (a folder with no config is no one's)
+export const scopeChatSources = (sources, agents, worldName) => sources
+  .filter(({ agent }) => agents.some(a => a.name === agent && a.world === worldName))
+
+// per-agent endpoints: with no world asked they behave as before; with one, the agent must play in it
+export const agentInWorld = (agents, name, worldName) => {
+  if (worldName === null || worldName === undefined) return true
+  return agents.some(a => a.name === name && a.world === worldName)
+}

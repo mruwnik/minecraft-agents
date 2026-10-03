@@ -23,12 +23,14 @@
 </style>
 </head>
 <body>
-<header><h1>villages</h1><a href="/">world map →</a><a href="/villagers">villager roster →</a><span id="status" class="muted">loading…</span></header>
+<header><h1>villages</h1><a href="/" id="maplink">world map →</a><a href="/villagers">villager roster →</a><span id="status" class="muted">loading…</span></header>
 <main>
   <div class="toolbar"><input id="filter" type="search" placeholder="filter village, profession or role"><button id="refresh">refresh</button><small>Read-only saved observations. This page does not query or move agents.</small></div>
   <div id="list"></div>
 </main>
 <script>
+const world=new URLSearchParams(location.search).get('world')
+document.querySelector('#maplink').href=world?`/?world=${encodeURIComponent(world)}`:'/'
 const list=document.querySelector('#list'),status=document.querySelector('#status'),filter=document.querySelector('#filter')
 let villages=[]
 const el=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value??'unknown';if(cls)n.className=cls;return n}
@@ -76,7 +78,7 @@ function render(){
     detail.append(people);card.append(detail);list.append(card)
   }
 }
-async function load(){status.textContent='updating…';try{const r=await fetch('/api/villages'),data=await r.json();if(!r.ok)throw Error(data.error??'village request failed');villages=data.villages??[];render();status.textContent=`${villages.length} places · refreshed ${new Date().toLocaleTimeString()}${data.error?` · ${data.error}`:''}`}catch(e){status.textContent=e.message}}
+async function load(){status.textContent='updating…';try{const r=await fetch(`/api/villages${world?`?world=${encodeURIComponent(world)}`:''}`),data=await r.json();if(!r.ok)throw Error(data.error??'village request failed');villages=data.villages??[];render();status.textContent=`${villages.length} places · refreshed ${new Date().toLocaleTimeString()}${data.error?` · ${data.error}`:''}`}catch(e){status.textContent=e.message}}
 filter.addEventListener('input',render);document.querySelector('#refresh').addEventListener('click',load)
 const selected=new URLSearchParams(location.search).get('place');load().then(()=>{if(selected){const card=[...list.querySelectorAll('.card')].find(n=>n.textContent.includes(selected));card?.scrollIntoView({block:'center'})}});setInterval(load,15000)
 </script>

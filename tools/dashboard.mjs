@@ -15,7 +15,7 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, parseWorldList, resolveWorld, scopeSnapshot, scopeChatSources, agentInWorld, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, parsePlan } from './dashboard/map.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
@@ -80,6 +80,17 @@ const readWorlds = () => (fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR,
     places: readJson(path.join(WORLDS_DIR, name, 'places.json'), []),
     zones: readJson(path.join(WORLDS_DIR, name, 'zones.json'), [])
   }))
+// the worlds a viewer may pick, with the host and port from each world.json
+const readWorldList = () => parseWorldList((fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR, { withFileTypes: true }) : [])
+  .filter(e => e.isDirectory() && fs.existsSync(path.join(WORLDS_DIR, e.name, 'world.json')))
+  .map(e => ({ name: e.name, text: readText(path.join(WORLDS_DIR, e.name, 'world.json')) })))
+// ?world=<name>: {name} (null when no world exists and none was asked for) or {error, worlds}. The name only ever
+// comes out of the directory listing, never from the query.
+const worldChoice = query => {
+  const worlds = readWorldList().map(w => w.name)
+  const name = resolveWorld(worlds, query.get('world'))
+  return name === undefined ? { error: `no world called ${query.get('world')}`, worlds } : { name }
+}
 const allPlaces = worlds => worlds.flatMap(w => w.places)
 
 // the bodies' own HTTP API (src/body/api.mjs): POST /<action> with a JSON body
@@ -115,17 +126,18 @@ const pollOnce = async () => {
   }))
 }
 
-const snapshot = () => {
+const snapshot = worldName => {
   const bodies = mergeBodies(agents, polls)
   const worlds = readWorlds()
   const villageData = villageSnapshot(worlds), villages = villageData.villages
-  return {
+  const full = {
     at: Date.now(),
     agents: agentNames(),
     bodies,
     worlds: groupWorlds(worlds.map(w => ({ ...w, places: attachVillageStatus(w.places, villages) })), bodies, agentNames()),
     villageError: villageData.error
   }
+  return { ...scopeSnapshot(full, worldName), worldList: readWorldList(), selected: worldName }
 }
 
 const villagers = () => {
@@ -179,9 +191,9 @@ const eventsTail = agent => {
 
 // the folders are read afresh (not taken from `agents`): a folder with no config.json still holds the whispers
 // its body received, and the log is about who said what, not about which bodies can be polled
-const chatLog = limit => {
+const chatLog = (limit, worldName) => {
   const dirs = fs.existsSync(AGENTS_DIR) ? fs.readdirSync(AGENTS_DIR, { withFileTypes: true }).filter(e => e.isDirectory()) : []
-  return mergeChat(dirs.map(e => ({ agent: e.name, lines: eventsTail(e.name) })), limit)
+  return mergeChat(scopeChatSources(dirs.map(e => ({ agent: e.name, lines: eventsTail(e.name) })), agents, worldName), limit)
 }
 
 // ---------------------------------------------------------------- what stands on a plan's footprint
@@ -190,8 +202,8 @@ const chatLog = limit => {
 // back as a slab are asked one by one with block_at, since scan cannot say whether a slab is waterlogged.
 const scansByPlace = {}
 
-const lookAtPlace = async name => {
-  const found = findPlace(groupWorlds(readWorlds(), mergeBodies(agents, polls), agentNames()), name)
+const lookAtPlace = async (name, worldName) => {
+  const found = findPlace(groupWorlds(readWorlds().filter(w => w.name === worldName), mergeBodies(agents, polls), agentNames()), name)
   if (!found) return { error: `no place called ${name}` }
   const { place, world } = found
   const parsed = parsePlacePlan(place)
@@ -218,11 +230,12 @@ const lookAtPlace = async name => {
 }
 
 // one look per place per 10 s, shared by every open popup: the page polls while its popup shows the world
-const worldFor = name => {
-  const cached = scansByPlace[name]
+const worldFor = (name, worldName) => {
+  const key = `${worldName}/${name}`
+  const cached = scansByPlace[key]
   if (cached && Date.now() - cached.at < WORLD_TTL_MS) return cached.promise
-  const promise = lookAtPlace(name).catch(e => ({ error: e.message }))
-  scansByPlace[name] = { at: Date.now(), promise }
+  const promise = lookAtPlace(name, worldName).catch(e => ({ error: e.message }))
+  scansByPlace[key] = { at: Date.now(), promise }
   return promise
 }
 
@@ -352,13 +365,14 @@ const serveIcon = (res, name) => {
 const inline = value => JSON.stringify(value).replace(/</g, '\\u003c')
 // The bodies' state is inlined too, so the map is drawn on the first paint; ?view=world|diff with ?farm= inlines
 // the world answer as well, so the popup opens already comparing.
-const renderPage = async query => {
+const renderPage = async (query, worldName) => {
   const farm = query.get('farm')
   const view = query.get('view')
-  const place = farm ? findPlace(readWorlds(), farm)?.place ?? null : null
-  const chat = { at: Date.now(), agents: agentNames(), messages: chatLog(CHAT_PAGE_LINES) }
-  const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm) : null
-  const preload = `<script>window.__PRELOAD_STATE__=${inline(snapshot())};window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
+  const place = farm ? findPlace(readWorlds().filter(w => w.name === worldName), farm)?.place ?? null : null
+  const state = snapshot(worldName)
+  const chat = { at: Date.now(), agents: agentNames(), messages: chatLog(CHAT_PAGE_LINES, worldName) }
+  const world = place && (view === 'world' || view === 'diff') ? await worldFor(farm, worldName) : null
+  const preload = `<script>window.__PRELOAD_STATE__=${inline(state)};window.__PRELOAD_PLACE__=${inline(place)};window.__PRELOAD_CHAT__=${inline(chat)};window.__PRELOAD_WORLD__=${inline(world)};window.__PRELOAD_VIEW__=${inline(view)}</script>\n`
   return fs.readFileSync(PAGE, 'utf8').replace('</head>', `${preload}</head>`)
 }
 // the library is inlined for the same reason: the list and the chosen blueprint (?name=) are drawn on the first paint
@@ -366,19 +380,22 @@ const renderBlueprintsPage = () => fs.readFileSync(BLUEPRINTS_PAGE, 'utf8').repl
 const renderVillagersPage = () => fs.readFileSync(VILLAGERS_PAGE, 'utf8')
 const renderVillagesPage = () => fs.readFileSync(VILLAGES_PAGE, 'utf8')
 
+const WORLD_KINDS = new Set(['page', 'state', 'chat', 'world', 'villagesApi'])
+const AGENT_KINDS = new Set(['look', 'live', 'screen', 'actions', 'whisper'])
+
 const handlers = {
-  page: async (res, query) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query)),
-  world: async (res, query) => {
+  page: async (res, query, r, worldName) => send(res, 200, 'text/html; charset=utf-8', await renderPage(query, worldName)),
+  world: async (res, query, r, worldName) => {
     const name = query.get('place')
     if (!name) return sendJson(res, 400, { error: 'say which place: /api/world?place=<name>' })
-    const answer = await worldFor(name)
+    const answer = await worldFor(name, worldName)
     return sendJson(res, answer.error ? 404 : 200, answer)
   },
   villagers: (res) => send(res, 200, 'text/html; charset=utf-8', renderVillagersPage()),
   villagersApi: (res) => sendJson(res, 200, villagers()),
   villages: (res) => send(res, 200, 'text/html; charset=utf-8', renderVillagesPage()),
-  villagesApi: (res) => sendJson(res, 200, { ...villageSnapshot(), readOnly: true }),
-  state: (res) => sendJson(res, 200, snapshot()),
+  villagesApi: (res, query, r, worldName) => sendJson(res, 200, { ...villageSnapshot(readWorlds().filter(w => w.name === worldName)), readOnly: true }),
+  state: (res, query, r, worldName) => sendJson(res, 200, snapshot(worldName)),
   blueprints: (res) => send(res, 200, 'text/html; charset=utf-8', renderBlueprintsPage()),
   bplist: (res) => sendJson(res, 200, library()),
   blueprint: (res, query, r) => {
@@ -386,13 +403,13 @@ const handlers = {
     return found ? sendJson(res, 200, found) : sendJson(res, 404, { error: `no blueprint called ${r.name}: /api/blueprints lists them` })
   },
   bpscript: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(BLUEPRINT_MODULE)),
-  chat: (res, query) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit'))) }),
+  chat: (res, query, r, worldName) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit')), worldName) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
   screen: (res, query, r) => serveScreen(res, r.name),
   actions: (res, query, r) => serveActions(res, r.name),
   icon: (res, query, r) => serveIcon(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name>, /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> or /api/icon/<item>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name> (state, chat, world and villages take ?world=<name>, default the first world), /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> or /api/icon/<item>' })
 }
 
 http.createServer(async (req, res) => {
@@ -405,10 +422,18 @@ http.createServer(async (req, res) => {
     try { const input = JSON.parse(body); const detail = blueprintDocumentDetail(input.plan, input.stock); return sendJson(res, detail.errors.length ? 400 : 200, detail) } catch (error) { return sendJson(res, 400, { error: error.message }) }
   }
   const query = new URL(req.url, 'http://dashboard').searchParams
+  // world data is scoped to ?world= (default: the first world); an invalid name is a 400, never a path
+  const choice = worldChoice(query)
+  if (WORLD_KINDS.has(r.kind) && choice.error) return sendJson(res, 400, choice)
+  // a per-agent endpoint keeps working without ?world=; with it, the agent must play in that world
+  if (AGENT_KINDS.has(r.kind) && query.has('world')) {
+    if (choice.error) return sendJson(res, 400, choice)
+    if (!agentInWorld(agents, r.name, choice.name)) return sendJson(res, 404, { error: `${r.name} does not play in ${choice.name}` })
+  }
   if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
   if (r.kind === 'whisper') return serveWhisper(req, res, r.name).catch(e => sendJson(res, 500, { error: e.message }))
   if (r.kind === 'live') return streamLook(req, res, r.name).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
-  return Promise.resolve(handlers[r.kind](res, query, r)).catch(e => sendJson(res, 500, { error: e.message }))
+  return Promise.resolve(handlers[r.kind](res, query, r, choice.name)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()
   setInterval(() => pollOnce().catch(e => console.error('[poll]', e.message)), POLL_MS)

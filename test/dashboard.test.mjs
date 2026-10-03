@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater as rawUnsureWater } from '../tools/dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater as rawUnsureWater, parseWorldList, resolveWorld, scopeSnapshot, scopeChatSources, agentInWorld } from '../tools/dashboard/lib.mjs'
 import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
@@ -1036,3 +1036,75 @@ test('blueprintRow over the real library: the hut is 5x5x5 in five layers of 102
   const bp = resolve(parseBlueprint(hutFile.text))
   assert.deepEqual(blueprintRow({ name: 'starter-hut', bp, bill: bill(bp), lint: lint(bp), errors: [], builds: [] }), { name: 'starter-hut', title: 'Starter hut', kind: 'shelter, storage', footprint: '5x5x5', layers: 5, blocks: 102, status: 'ok', builds: 0 })
 })
+
+// ---------------------------------------------------------------- the world selector
+test('parseWorldList: sorted by name, host and port from world.json, unreadable JSON still listed', () => {
+  assert.deepEqual(parseWorldList([
+    { name: 'test', text: '{"host":"h2","port":25566}' },
+    { name: 'claude', text: '{"host":"localhost","port":25565}' },
+    { name: 'broken', text: '{nope' },
+    { name: 'empty', text: '' }
+  ]), [
+    { name: 'broken', host: null, port: null },
+    { name: 'claude', host: 'localhost', port: 25565 },
+    { name: 'empty', host: null, port: null },
+    { name: 'test', host: 'h2', port: 25566 }
+  ])
+})
+
+const resolutions = [
+  ['null picks the first', ['claude', 'test'], null, 'claude'],
+  ['empty string picks the first', ['claude', 'test'], '', 'claude'],
+  ['no worlds and nothing asked is null', [], null, null],
+  ['an exact name', ['claude', 'test'], 'test', 'test'],
+  ['a case difference is invalid', ['claude'], 'Claude', undefined],
+  ['a traversal is invalid', ['claude'], '../x', undefined],
+  ['a sibling directory is invalid', ['claude'], '../agents', undefined],
+  ['a slash is invalid', ['claude'], 'a/b', undefined],
+  ['a nested traversal is invalid', ['claude'], 'claude/../claude', undefined],
+  ['a name when no worlds exist is invalid', [], 'claude', undefined],
+  ['an absolute path is invalid', ['claude'], '/etc/passwd', undefined]
+]
+resolutions.forEach(([why, names, requested, expected]) => test(`resolveWorld: ${why}`, () => {
+  assert.equal(resolveWorld(names, requested), expected)
+}))
+
+test('scopeSnapshot: only the chosen world, its bodies and the names of those bodies', () => {
+  const snapshot = {
+    at: 5,
+    agents: ['Claude', 'Claude2', 'Chani', 'Chani2'],
+    bodies: [{ name: 'Claude', username: 'Claude2', world: 'main' }, { name: 'Chani', username: 'Chani2', world: 'test' }],
+    worlds: [{ name: 'main', bodies: [] }, { name: 'test', bodies: [] }],
+    villageError: null
+  }
+  assert.deepEqual(scopeSnapshot(snapshot, 'test'), {
+    at: 5,
+    agents: ['Chani', 'Chani2'],
+    bodies: [snapshot.bodies[1]],
+    worlds: [snapshot.worlds[1]],
+    villageError: null
+  })
+})
+
+const chatSources = [{ agent: 'Claude', lines: [1] }, { agent: 'Chani', lines: [2] }, { agent: 'Orphan', lines: [3] }]
+const chatScopes = [
+  ['agents of the world', 'main', ['Claude']],
+  ['another world', 'test', ['Chani']],
+  ['a world nobody plays in', 'nether', []]
+]
+chatScopes.forEach(([why, world, expected]) => test(`scopeChatSources: ${why}`, () => {
+  const agents = [{ name: 'Claude', world: 'main' }, { name: 'Chani', world: 'test' }]
+  assert.deepEqual(scopeChatSources(chatSources, agents, world).map(s => s.agent), expected)
+}))
+
+const membership = [
+  ['no world asked keeps the agent', 'Claude', null, true],
+  ['the agent\'s world', 'Claude', 'main', true],
+  ['another world', 'Claude', 'test', false],
+  ['an unknown agent', 'Nobody', 'main', false],
+  ['an agent with no world', 'Free', 'main', false]
+]
+membership.forEach(([why, name, world, expected]) => test(`agentInWorld: ${why}`, () => {
+  const agents = [{ name: 'Claude', world: 'main' }, { name: 'Free', world: null }]
+  assert.equal(agentInWorld(agents, name, world), expected)
+}))

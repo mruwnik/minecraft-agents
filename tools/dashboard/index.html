@@ -17,6 +17,7 @@
   header a { color: var(--zone); text-decoration: none; }
   header a:hover { text-decoration: underline; }
   header .spacer { flex: 1; }
+  header select { font: inherit; color: var(--ink); background: #252b34; border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
   button { font: inherit; color: var(--ink); background: #252b34; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
   button:hover { background: #2f3742; }
   main { display: flex; height: calc(100vh - 38px); }
@@ -161,8 +162,9 @@
 <body>
 <header>
   <h1>agent bodies</h1>
+  <select id="world" title="which world to show: the map, chat and bodies are per world; blueprints and villagers are global"></select>
   <a href="/blueprints">blueprints →</a>
-  <a href="/villages">villages →</a>
+  <a href="/villages" id="villageslink">villages →</a>
   <a href="/villagers">villagers →</a>
   <span class="muted" id="clock">—</span>
   <span class="muted" id="counts">—</span>
@@ -258,6 +260,21 @@
 import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, hitVillagePlace, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
 const el = id => document.getElementById(id)
+
+// ---------------------------------------------------------------- which world
+// ?world=<name> picks the world; the server inlines the one it resolved (the first world when none was asked for).
+// Everything fetched from the dashboard carries it. The blueprint library and the villager roster are global.
+let chosenWorld = window.__PRELOAD_STATE__?.selected ?? new URLSearchParams(location.search).get('world')
+const withWorld = url => chosenWorld ? `${url}${url.includes('?') ? '&' : '?'}world=${encodeURIComponent(chosenWorld)}` : url
+const villagesUrl = place => withWorld(`/villages${place ? `?place=${encodeURIComponent(place)}` : ''}`)
+const showWorldList = list => {
+  const labels = list.map(w => `${w.name}${w.host ? ` (${w.host}${w.port ? `:${w.port}` : ''})` : ''}`)
+  const select = el('world')
+  const same = [...select.options].map(o => o.textContent).join('\n') === labels.join('\n')
+  if (!same) select.replaceChildren(...list.map((w, i) => Object.assign(document.createElement('option'), { value: w.name, textContent: labels[i] })))
+  select.value = chosenWorld ?? ''
+  el('villageslink').href = villagesUrl()
+}
 
 let snap = { bodies: [], worlds: [], agents: [] }
 let scope = 'bodies'     // what the fit is around: the bodies (and the humans), or every place and zone as well
@@ -488,11 +505,11 @@ const makeMap = name => {
     const worldX = at.px / view.scale + view.originX
     const worldZ = at.py / view.scale + view.originZ
     const villageMark = hitVillagePlace(world.places, worldX, worldZ, 12 / view.scale)
-    if (villageMark) { location.href = `/villages?place=${encodeURIComponent(villageMark)}`; return }
+    if (villageMark) { location.href = villagesUrl(villageMark); return }
     const farm = hitPlan(planRects(world.places), worldX, worldZ)
     if (farm) {
       const village = world.places.find(p => p.name === farm)?.village
-      if (village) location.href = `/villages?place=${encodeURIComponent(farm)}`
+      if (village) location.href = villagesUrl(farm)
       else openPlan(farm)
     }
   })
@@ -697,7 +714,7 @@ const renderPlanCard = () => {
 const fetchWorld = () => {
   if (!planPlace || planView === 'plan') return
   const asked = planPlace.name
-  fetch(`/api/world?place=${encodeURIComponent(asked)}`)
+  fetch(withWorld(`/api/world?place=${encodeURIComponent(asked)}`))
     .then(r => r.json())
     .then(w => { if (planPlace?.name === asked) { planWorld = w; renderPlanCard() } })
     .catch(e => { if (planPlace?.name === asked) { planWorld = { error: `no answer from the dashboard: ${e.message}` }; renderPlanCard() } })
@@ -830,7 +847,7 @@ let actionsRequest = 0
 const refreshActions = () => {
   const id = ++actionsRequest
   if (!selected) { actionsEntries = []; return renderActions() }
-  fetch(`/api/actions/${encodeURIComponent(selected)}`)
+  fetch(withWorld(`/api/actions/${encodeURIComponent(selected)}`))
     .then(r => r.ok ? r.json() : { entries: [] })
     .then(a => { if (id === actionsRequest) { actionsEntries = a.entries ?? []; renderActions() } })
     .catch(() => {})
@@ -846,7 +863,7 @@ el('whisper').addEventListener('keydown', e => {
   el('whisper').value = ''
   el('whisperErr').textContent = ''
   const failed = error => { el('whisperErr').textContent = error; el('whisper').value ||= message }
-  fetch(`/api/whisper/${encodeURIComponent(selected)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message }) })
+  fetch(withWorld(`/api/whisper/${encodeURIComponent(selected)}`), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message }) })
     .then(r => r.ok ? refreshActions() : r.json().then(a => failed(a.error ?? 'not sent'), () => failed('not sent')))
     .catch(e => failed(e.message))
 })
@@ -886,7 +903,7 @@ const startWatch = () => {
   closeWatch()
   el('lookmeta').className = ''
   if (el('lookimg').hidden) el('lookmeta').textContent = 'rendering…'
-  watchStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live`)
+  watchStream = new EventSource(withWorld(`/api/look/${encodeURIComponent(selected)}/live`))
   watchStream.onmessage = e => {
     const look = JSON.parse(e.data)
     if (look.png) el('lookimg').src = `data:image/png;base64,${look.png}`
@@ -963,7 +980,7 @@ const showScreen = screen => {
 }
 const loadScreen = () => {
   if (!selected) return Promise.resolve()
-  return fetch(`/api/screen/${encodeURIComponent(selected)}?t=${Date.now()}`).then(res => (res.ok ? res.json() : null)).then(showScreen).catch(() => showScreen(null))
+  return fetch(withWorld(`/api/screen/${encodeURIComponent(selected)}?t=${Date.now()}`)).then(res => (res.ok ? res.json() : null)).then(showScreen).catch(() => showScreen(null))
 }
 
 // the popup: the same view big and live, each frame shown the moment the dashboard pushes it down one event stream.
@@ -983,7 +1000,7 @@ const openLook = () => {
   // that it is visible, instead of leaving it at the top where that zero left it
   el('actionsLog').scrollTop = el('actionsLog').scrollHeight
   if (el('lookBig').hidden) el('lookBigMeta').textContent = 'rendering…'
-  lookStream = new EventSource(`/api/look/${encodeURIComponent(selected)}/live`)
+  lookStream = new EventSource(withWorld(`/api/look/${encodeURIComponent(selected)}/live`))
   lookStream.onmessage = e => {
     const look = JSON.parse(e.data)
     if (look.png) el('lookBig').src = `data:image/png;base64,${look.png}`
@@ -1071,7 +1088,7 @@ const renderChat = () => {
   if (pinned) log.scrollTop = log.scrollHeight
 }
 
-const refreshChat = () => fetch('/api/chat?limit=300')   // the same 300 lines the server inlined on load
+const refreshChat = () => fetch(withWorld('/api/chat?limit=300'))   // the same 300 lines the server inlined on load
   .then(r => r.json())
   .then(c => { chatLast = c; renderChat() })
   .catch(() => {})
@@ -1096,6 +1113,8 @@ let farmParam = new URLSearchParams(location.search).get('farm')
 
 const applyState = s => {
   snap = s
+  chosenWorld = s.selected ?? chosenWorld
+  showWorldList(s.worldList ?? [])
   const up = s.bodies.filter(b => b.up)
   const total = key => s.worlds.reduce((n, w) => n + w[key].length, 0)
   const humans = total('humans')
@@ -1112,7 +1131,7 @@ const applyState = s => {
   }
 }
 
-const refresh = () => fetch('/api/state')
+const refresh = () => fetch(withWorld('/api/state'))
   .then(r => r.json())
   .then(applyState)
   .catch(e => { el('status').textContent = `no answer from the dashboard: ${e.message}` })
@@ -1122,6 +1141,25 @@ const refresh = () => fetch('/api/state')
 if (VIEWS.includes(window.__PRELOAD_VIEW__)) planView = window.__PRELOAD_VIEW__
 if (window.__PRELOAD_PLACE__) showPlan(window.__PRELOAD_PLACE__, window.__PRELOAD_WORLD__)
 if (window.__PRELOAD_CHAT__) { chatLast = window.__PRELOAD_CHAT__; snap = { ...snap, agents: chatLast.agents }; renderChat() }
+
+el('world').addEventListener('change', () => {
+  chosenWorld = el('world').value
+  const params = new URLSearchParams(location.search)
+  params.set('world', chosenWorld)
+  params.delete('farm')
+  history.pushState(null, '', `${location.pathname}?${params}`)
+  el('villageslink').href = villagesUrl()
+  chatLast = { agents: [], messages: [] }
+  renderChat()
+  refresh()
+  refreshChat()
+  refreshActions()
+})
+window.addEventListener('popstate', () => {
+  chosenWorld = new URLSearchParams(location.search).get('world') ?? chosenWorld
+  refresh()
+  refreshChat()
+})
 
 resize()
 if (window.__PRELOAD_STATE__) applyState(window.__PRELOAD_STATE__)
