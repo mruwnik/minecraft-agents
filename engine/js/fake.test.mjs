@@ -206,6 +206,12 @@ test('self carries the survival fields with healthy defaults', () => {
   assert.deepEqual(s.experience, { level: 0, points: 0, progress: 0 })
 })
 
+test('self effects default to none and come from the spec', () => {
+  assert.deepEqual(createFake().self().effects, [])
+  const effects = [{ name: 'fire_resistance', amplifier: 0, duration: 600 }]
+  assert.deepEqual(createFake({ self: { effects } }).self().effects, effects)
+})
+
 test('self survival fields come from the spec', () => {
   const s = createFake({ self: { oxygen: 3, onFire: true, inLava: true, dimension: 'the_nether', experience: { level: 2, points: 20, progress: 0.5 } } }).self()
   assert.deepEqual([s.oxygen, s.onFire, s.inLava, s.dimension, s.experience.level], [3, true, true, 'the_nether', 2])

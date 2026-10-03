@@ -50,6 +50,16 @@
                            [{} false]]]
     (is (= expected (extinguish/check {:primitives (tu/fake {:self self})})) (pr-str self))))
 
+(def fire-resistance [{:name "fire_resistance" :amplifier 0 :duration 600}])
+
+(deftest a-fire-resistant-body-is-not-burning
+  (doseq [[self expected] [[{:onFire true :effects fire-resistance} false]
+                           [{:inLava true :effects fire-resistance} false]
+                           [{:onFire true :effects [{:name "speed" :amplifier 0 :duration 600}]} true]
+                           [{:onFire true} true]]]
+    (is (= expected (extinguish/check {:primitives (tu/fake {:self self})})) (pr-str self))
+    (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
+
 (deftest burning-trigger-holds-on-fire-or-in-lava
   (doseq [[self expected] [[{:onFire true} true] [{:inLava true} true] [{} false]]]
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))

@@ -168,6 +168,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const feetIn = name => bot.blockAt(vec(cell(here())))?.name === name
 
+  // "FireResistance" (registry) or "minecraft:fire_resistance" -> "fire_resistance"
+  const effectName = id => {
+    const name = bot.registry?.effects?.[id]?.name
+    if (!name) return String(id)
+    return name.replace(/^minecraft:/, '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+  }
+  const effects = () => Object.values(bot.entity.effects ?? {})
+    .map(e => ({ name: effectName(e.id), amplifier: e.amplifier, duration: e.duration }))
+
   const self = () => {
     if (isOffline()) return { status: 'offline' }
     const timeOfDay = bot.time.timeOfDay
@@ -182,6 +191,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       inWater: bot.entity.isInWater ?? feetIn('water'),
       inLava: bot.entity.isInLava ?? feetIn('lava'),
       isSleeping: Boolean(bot.isSleeping),
+      effects: effects(),
       experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
       dimension: bot.game?.dimension,
       timeOfDay,

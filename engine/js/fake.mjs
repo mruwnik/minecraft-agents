@@ -35,6 +35,7 @@ const defaultSelf = {
   inWater: false,
   inLava: false,
   isSleeping: false,
+  effects: [],
   experience: { level: 0, points: 0, progress: 0 },
   dimension: 'overworld'
 }
@@ -316,6 +317,7 @@ export function createFake (spec = {}) {
         inWater: s.self.inWater,
         inLava: s.self.inLava,
         isSleeping: s.self.isSleeping,
+        effects: s.self.effects.map(e => ({ ...e })),
         experience: { ...s.self.experience },
         dimension: s.self.dimension,
         timeOfDay: s.time,

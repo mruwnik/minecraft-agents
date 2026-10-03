@@ -141,7 +141,7 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'oxygen', 'pos', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'oxygen', 'pos', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -226,6 +226,15 @@ const withBot = (patch, spec = world) => {
   return createPrimitivesFromBot(bot, { timeScale: SCALE })
 }
 const keysFor = metadataKeys => ({ entitiesByName: { player: { metadataKeys } } })
+
+test('self reports active effects by snake_case registry name, empty when none', () => {
+  assert.deepEqual(withBot(() => {}).self().effects, [])
+  const effects = [{ id: 11, name: 'FireResistance', amplifier: 0, duration: 600 }, { id: 1, name: 'Speed', amplifier: 1, duration: 40 }]
+  assert.deepEqual(withBot(() => {}, { ...world, effects }).self().effects, [
+    { name: 'speed', amplifier: 1, duration: 40 },
+    { name: 'fire_resistance', amplifier: 0, duration: 600 }
+  ])
+})
 
 test('self reports vitals from the bot', () => {
   const p = withBot(bot => Object.assign(bot, { health: 7, food: 3, foodSaturation: 1.5, oxygenLevel: 11, isSleeping: true, game: { dimension: 'the_nether' }, experience: { level: 4, points: 90, progress: 0.25 } }))

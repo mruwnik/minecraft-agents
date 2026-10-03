@@ -103,7 +103,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
@@ -112,6 +112,9 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 - `health` 0..20 and `food` 0..20; `foodSaturation` is the hidden saturation (0..20).
 - `oxygen` 0..20 bubbles (`bot.oxygenLevel`; 20 until the server reports air).
+- `effects`: the active status effects, `[{name, amplifier, duration}]` (`[]` when none), from `bot.entity.effects`
+  with the name looked up in `bot.registry.effects` and normalised to snake_case without namespace (the registry
+  says `FireResistance`; `self()` says `fire_resistance`). The burning trigger ignores a body with `fire_resistance`.
 - `onFire`: bit `0x01` of the entity's shared-flags metadata byte. mineflayer 4.39 has no `onFire` field, so this
   reads `bot.entity.metadata[i]` where `i` is the index of `shared_flags` in the registry's `metadataKeys` for the
   entity (0 if the registry does not know it). The server only sends the byte when it changes, so it is accurate
@@ -257,7 +260,7 @@ turns each into an entry of that kind in body memory (see Memory).
 ### The fake
 
 `createFake(spec)` in `js/fake.mjs` returns the primitives plus a `world`
-handle for tests. It has the same sensing fields as above (`spec.self` may set `oxygen`, `onFire`, `inWater`,
+handle for tests. It has the same sensing fields as above (`spec.self` may set `oxygen`, `effects` (default `[]`), `onFire`, `inWater`,
 `inLava`, `isSleeping`, `foodSaturation`, `experience`, `dimension`; player entities default to `sleeping: false` and
 `username` equal to `name`). Its `offline` flips `world.state.offline` (what `isOffline()` reads), emits `offline` and `online`, and waits
 `ms * spec.offlineScale` (default 0.001, so 5 minutes is 0.3 s) before resolving the same results; a cut ends the wait early. The handle:
@@ -718,8 +721,8 @@ after three the job emits a warn and ends.
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
 | `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 24 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
 | `jobs.survival.sleep` | `{:bed-radius}` | night and a `:bed` within `:bed-radius` | child `:go` | reads `:bed`; writes `:slept`, retracts a missing `:bed` |
-| `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10}` | drowning (swims up, or walks sideways to a column with air) or enclosed (the suffocating condition) | `:noted` | writes `:breathe` (cap 20, 1 h) |
-| `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
+| `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10 :shore-radius 6}` | drowning (swims up, or walks sideways to a column with air, then heads for the nearest land within `:shore-radius`), enclosed (the suffocating condition: a sideways step first, else dig), or surfaced and still in water | `:noted`, `:surfaced`, `:side-tried`, `:failures` | writes `:breathe` (cap 20, 1 h) |
+| `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava, without fire resistance; stands still (info `:extinguish_wait`, done) when on fire with no bucket use, no water in `:water-radius` and no hazard within 1.5 blocks | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
@@ -765,7 +768,8 @@ after three the job emits a warn and ends.
   (`bed_unreachable`, `bed_unusable`); a missing bed warns `bed_missing`,
   retracts the `:bed` and ends.
 - The survival jobs' docstrings (`(:doc (registry/jobs 'jobs.survival.x))`)
-  give the full rules; in short: `:breathe` swims up to air or digs the head
+  give the full rules; in short: `:breathe` swims up to air then walks to land (info
+  `:no_shore_near` when none is in reach), or steps sideways, else digs the head
   cell free, one move per round; `:extinguish` pours a carried water bucket at
   its feet, else walks into water or to the safest dry cell nearby;
   `:recover` flees, walks to a bed or home, eats and waits (a 2 s `wait` per
@@ -787,7 +791,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | trigger | holds when | job | persistence |
 |---|---|---|---|
 | `:suffocating` | in water with oxygen below `:min-oxygen` (default 12) and the head not in air, or the head cell holds a suffocating block | `(jobs.survival.breathe)` | retry |
-| `:burning` | on fire or in lava | `(jobs.survival.extinguish)` | retry |
+| `:burning` | on fire or in lava, and no `fire_resistance` effect | `(jobs.survival.extinguish)` | retry |
 | `:hostile-near` | a hostile mob within `:radius` (default 8), or a ranged one (skeleton, stray, bogged, pillager, witch) within `:ranged-radius` (default 16), that the body can see (`:visible-only false` counts hidden ones too); set the job's own `:radius` and `:ranged-radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 30 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
