@@ -17,6 +17,7 @@ export const HAZARD_AVOID = 1 // forbidden by default
 export const DAMAGE_STAND = 2 // hurts when stood on
 export const DAMAGE_TOUCH = 3 // hurts when walked into
 export const SLOW = 4 // slows walking
+export const PORTAL = 5 // nether portal, end portal, end gateway: stepping in sends the body elsewhere
 
 const MC_VERSION = '26.1'
 
@@ -29,6 +30,7 @@ const NARROW_NAMES = /^bamboo$|_pane$|_bars$|(^|_)fence$|_wall$|(^|_)chain$|^end
 const AVOID_NAMES = new Set(['lava', 'fire', 'soul_fire', 'powder_snow', 'cobweb'])
 const TOUCH_NAMES = new Set(['sweet_berry_bush', 'wither_rose', 'cactus'])
 const SLOW_NAMES = new Set(['soul_sand', 'honey_block'])
+const PORTAL_NAMES = new Set(['nether_portal', 'end_portal', 'end_gateway'])
 const LIT_CAMPFIRES = new Set(['campfire', 'soul_campfire'])
 
 // the direction code a body walks to climb a bottom straight stairs block, as the planner numbers its cardinal moves:
@@ -89,6 +91,7 @@ const hazardOf = (name, props) => {
   if (name === 'magma_block' || LIT_CAMPFIRES.has(name) && props.lit === true) return DAMAGE_STAND
   if (TOUCH_NAMES.has(name)) return DAMAGE_TOUCH
   if (SLOW_NAMES.has(name)) return SLOW
+  if (PORTAL_NAMES.has(name)) return PORTAL
   return HAZARD_NONE
 }
 
@@ -109,6 +112,9 @@ export function buildStateTable (registry) {
   const facing = new Uint8Array(size) // ladder and trapdoor facing: 1 east, 2 west, 3 south, 4 north
   const special = new Uint8Array(size) // partial collision or climbable: the states a search must look closer at near a cell
   const floor = new Uint8Array(size) // height a body can stand on, 1/16 of the cell: the top, but none for a ladder
+  const flowing = new Uint8Array(size) // water that is not a source: it pushes the body
+  const bubble = new Uint8Array(size) // bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
+  const dripleaf = new Uint8Array(size) // a big dripleaf leaf with collision: a floor that tilts under a body
   const floats = []
   for (const block of registry.blocksArray) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) {
@@ -131,10 +137,17 @@ export function buildStateTable (registry) {
       facing[id] = climbName[id] === LADDER || TRAPDOOR.test(block.name) ? FACING[props.facing] ?? 0 : 0
       floor[id] = block.name === 'scaffolding' ? WHOLE : climbName[id] === 0 ? top[id] : 0
       special[id] = partial[id] | (climb[id] === CLIMB_NONE ? 0 : 1)
+      flowing[id] = block.name === 'water' && Number(props.level) !== 0 ? 1 : 0
+      bubble[id] = block.name === 'bubble_column' ? (props.drag === true ? 2 : 1) : 0
+      if (block.name === 'big_dripleaf' && top[id] > 0) {
+        // the leaf's box is 11..15/16 (or lower tilted): a body stands on its top, so for the planner it is a low block like a carpet
+        dripleaf[id] = 1
+        base[id] = 0
+      }
       if (STAIRS.test(block.name) && props.half === 'bottom' && props.shape === 'straight') stairUp[id] = STAIR_UP[props.facing] ?? 0
     }
   }
-  return { top, base, kind, hazard, stairUp, climb, climbName, facing, floor, special, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
+  return { top, base, kind, hazard, stairUp, climb, climbName, facing, floor, special, flowing, bubble, dripleaf, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
 }
 
 let shared

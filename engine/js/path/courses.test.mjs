@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
 import { fixtureSnapshot } from './fixture.mjs'
-import { applyCommands, courseSnapshot, courseNames } from './courses.mjs'
+import { applyCommands, courseSnapshot, courseNames, laneSnapshot } from './courses.mjs'
 import { COURSES } from './courses-data.mjs'
 
 const registry = prismarineRegistry('26.1')
@@ -89,7 +89,23 @@ const cells = [
   ['stream3', [2879, 160, 3216], { name: 'air' }],
   ['stream3', [2879, 160, 3213], { name: 'stone' }],
   ['stream3', [2879, 161, 3213], { name: 'glass' }],
-  ['stream3', [2870, 160, 3207], { name: 'stone' }]
+  ['stream3', [2870, 160, 3207], { name: 'stone' }],
+  // water as the server settles it: a source at the top spills into a waterfall, spreads 7 blocks over the floor, bubble columns
+  ['waterfall-up', [2880, 170, 3216], { name: 'water', level: '8' }],
+  ['waterfall-up', [2880, 180, 3216], { name: 'water', level: '0' }],
+  ['waterfall-up', [2879, 180, 3216], { name: 'water', level: '1' }],
+  ['waterfall-up', [2879, 170, 3216], { name: 'water', level: '8' }],
+  ['waterfall-up', [2872, 161, 3216], { name: 'water', level: '7' }],
+  ['waterfall-up', [2871, 161, 3216], { name: 'air' }],
+  ['waterfall-up', [2881, 180, 3216], { name: 'stone' }],
+  ['dropshaft-1deep', [2878, 161, 3216], { name: 'water', level: '1' }],
+  ['dropshaft-1deep', [2872, 161, 3216], { name: 'water', level: '7' }],
+  ['dropshaft-1deep', [2871, 161, 3216], { name: 'air' }],
+  ['water20-up', [2880, 170, 3216], { name: 'water', level: '0' }],
+  ['bubble-up', [2880, 170, 3216], { name: 'bubble_column', drag: false }],
+  ['bubble-up', [2880, 161, 3216], { name: 'bubble_column', drag: false }],
+  ['magma-down', [2880, 170, 3216], { name: 'bubble_column', drag: true }],
+  ['bubble-up', [2879, 161, 3216], { name: 'oak_sign' }]
 ]
 for (const [course, [x, y, z], expected] of cells) {
   test(`course ${course} at ${x} ${y} ${z} is ${expected.name}`, () => {
@@ -128,3 +144,32 @@ test('every course builds, and every course name is known', () => {
 test('an unknown course is an error', () => {
   assert.throws(() => courseSnapshot('no-such-course'), /unknown course/)
 })
+
+// ---- attached blocks the server drops when their support is gone: replayed commands must drop them too ----
+
+const attached = [
+  ['a ladder whose wall was filled with air', ['fill 2871 161 3216 2871 165 3216 stone', 'fill 2870 161 3216 2870 164 3216 ladder[facing=west]', 'fill 2871 162 3216 2871 163 3216 air'], [[2870, 161], [2870, 162], [2870, 163], [2870, 164]], ['ladder', 'air', 'air', 'ladder']],
+  ['a ladder facing north, support at z+1', ['setblock 2870 161 3217 stone', 'setblock 2870 161 3216 ladder[facing=north]', 'setblock 2870 162 3216 ladder[facing=north]'], [[2870, 161], [2870, 162]], ['ladder', 'air']],
+  ['a ladder against glass is kept', ['setblock 2871 161 3216 glass', 'setblock 2870 161 3216 ladder[facing=west]'], [[2870, 161]], ['ladder']],
+  ['a ladder against a fence is not supported', ['setblock 2871 161 3216 oak_fence', 'setblock 2870 161 3216 ladder[facing=west]'], [[2870, 161]], ['air']],
+  ['a wall vine whose block is gone', ['setblock 2871 161 3216 stone', 'setblock 2870 161 3216 vine[east=true]', 'setblock 2871 161 3216 air'], [[2870, 161]], ['air']],
+  ['a wall vine on its block', ['setblock 2871 161 3216 stone', 'setblock 2870 161 3216 vine[east=true]'], [[2870, 161]], ['vine']],
+  ['a vine hanging under a supported vine', ['setblock 2871 163 3216 stone', 'setblock 2870 163 3216 vine[east=true]', 'setblock 2870 162 3216 vine[east=true]', 'setblock 2870 161 3216 vine[east=true]'], [[2870, 161], [2870, 162], [2870, 163]], ['vine', 'vine', 'vine']],
+  ['a top vine under a block', ['setblock 2870 162 3216 stone', 'setblock 2870 161 3216 vine[up=true]'], [[2870, 161]], ['vine']],
+  ['cocoa whose log is gone (facing north: z-1)', ['setblock 2870 161 3215 jungle_log', 'setblock 2870 161 3216 cocoa[age=2,facing=north]', 'setblock 2870 161 3215 air'], [[2870, 161]], ['air']],
+  ['cocoa on its log', ['setblock 2870 161 3215 jungle_log', 'setblock 2870 161 3216 cocoa[age=2,facing=north]'], [[2870, 161]], ['cocoa']],
+  ['cocoa on a stone block is not supported', ['setblock 2870 161 3215 stone', 'setblock 2870 161 3216 cocoa[age=2,facing=north]'], [[2870, 161]], ['air']],
+  ['a torch with nothing under it', ['setblock 2870 162 3216 torch', 'setblock 2870 161 3216 stone', 'setblock 2870 161 3216 air'], [[2870, 162]], ['air']],
+  ['a torch on the lane floor', ['setblock 2870 161 3216 torch'], [[2870, 161]], ['torch']],
+  ['a wall torch whose wall is gone', ['setblock 2871 161 3216 stone', 'setblock 2870 161 3216 wall_torch[facing=west]', 'setblock 2871 161 3216 air'], [[2870, 161]], ['air']],
+  ['a wall button whose wall is gone', ['setblock 2871 161 3216 stone', 'setblock 2870 161 3216 stone_button[face=wall,facing=west]', 'setblock 2871 161 3216 air'], [[2870, 161]], ['air']],
+  ['a wall button on its wall', ['setblock 2871 161 3216 stone', 'setblock 2870 161 3216 stone_button[face=wall,facing=west]'], [[2870, 161]], ['stone_button']],
+  ['a floor lever on the lane floor', ['setblock 2870 161 3216 lever[face=floor,facing=north]'], [[2870, 161]], ['lever']],
+  ['a ceiling lever with no ceiling', ['setblock 2870 163 3216 lever[face=ceiling,facing=north]'], [[2870, 163]], ['air']]
+]
+for (const [what, cmds, spots, names] of attached) {
+  test(`replay: ${what}`, () => {
+    const snapshot = laneSnapshot('tricky', cmds)
+    assert.deepEqual(spots.map(([x, y]) => blockAt(snapshot, x, y, 3216).name), names)
+  })
+}

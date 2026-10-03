@@ -64,7 +64,9 @@ test('an open trapdoor over a ladder of its facing costs no OPEN', () => {
 // [course, blocks climbed]: ladder cells 161..166 are 5 climbs and the step up; the 20 high shafts are 19 or 20
 test('the cost vector counts blocks climbed, up and down', () => {
   assert.equal(planCourse('ladder-up').path.cost.climbed, 5)
-  assert.equal(planCourse('ladder-down').path.cost.climbed, 5)
+  // (with drops over 1 refused: a fall of 3 off the ladder's front is free, so by default the body steps off the ladder and falls;
+  // even then it steps off the last rung, a drop of 1 out of the ladder's tight cell, so 4 of the 5 rungs are climbed)
+  assert.equal(planCourse('ladder-down', { maxDrop: 1 }).path.cost.climbed, 4)
   assert.equal(planCourse('weeping').path.cost.climbed, 0)
 })
 
@@ -102,12 +104,24 @@ test('default costs are the vanilla rates', () => {
   )
 })
 
-// the tunnel opens on the ladder's back, where its own 3/16 strip of collision stands: a 0.62 body cannot pass it
-test('lad-midlanding: no way east out of the ladder cell, through the ladder strip', () => {
-  assert.notEqual(planCourse('lad-midlanding').status, 'found')
+// the live server pops the ladders whose wall the tunnel's fill removed (y 171 and 172): the replay drops them too, so the
+// body climbs to 170 and steps up into the tunnel
+test('lad-midlanding: the ladder cells in the tunnel are gone, the climb ends at 170 and the tunnel is entered', () => {
+  const r = planCourse('lad-midlanding')
+  assert.equal(verdict(r), 'found')
+  assert.match(r.path.summary, /ladder up/)
+  const into = r.path.steps.findIndex(s => s.x === 2881 && s.y === 171)
+  assert.ok(into > 0 && r.path.steps[into - 1].x === 2880 && r.path.steps[into - 1].y === 170)
 })
 
 // ---- the ladder with a gap ----
+
+test('ladder-down by default: stepping off the ladder into a fall of 3 (no damage) is cheaper than climbing all the way', () => {
+  const r = planCourse('ladder-down')
+  assert.equal(verdict(r), 'found')
+  assert.equal(r.path.cost.risk, 0)
+  assert.ok(r.path.cost.maxDrop === 3)
+})
 
 test('lad-gap going up: refused through the one block gap, with its own reason', () => {
   const r = planCourse('lad-gap')

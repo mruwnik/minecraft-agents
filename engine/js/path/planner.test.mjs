@@ -23,7 +23,7 @@ test('flat walk of 10 blocks: found, 11 steps, walking speed, no risk', () => {
   assert.deepEqual(lastCell(r), [12, 64, 2])
   assert.equal(r.path.steps.length, 11)
   assert.ok(Math.abs(r.path.cost.seconds - 10 / 4.317) < 0.01)
-  assert.deepEqual({ ...r.path.cost, seconds: 0 }, { seconds: 0, risk: 0, maxDrop: 0, jumps: 0, climbed: 0, opens: 0, unknown: 0 })
+  assert.deepEqual({ ...r.path.cost, seconds: 0 }, { seconds: 0, risk: 0, maxDrop: 0, jumps: 0, climbed: 0, opens: 0, unknown: 0, waterSeconds: 0, airMin: 15, waterDrop: 0 })
   assert.ok(r.expanded > 0 && r.ms >= 0)
 })
 
@@ -220,12 +220,6 @@ test('a drop of 4 is refused at the default maxDrop and costs 1 hp of risk when 
   const allowed = run(platform(4), near(8, 64, 2), { maxDrop: 6 }, onPlatform(4))
   assert.equal(allowed.status, 'found')
   assert.deepEqual({ risk: allowed.path.cost.risk, maxDrop: allowed.path.cost.maxDrop }, { risk: 1, maxDrop: 4 })
-})
-
-test('a drop into water is forbidden in stage 1', () => {
-  const pond = world({ fill: [[0, 64, 0, 4, 66, 4, 'stone'], [5, 61, -2, 40, 63, 40, 'water']] })
-  const r = run(pond, near(8, 63, 2), {}, { x: 2, y: 67, z: 2 })
-  assert.equal(r.status, 'none')
 })
 
 test('a gap of 1, 2 or 3 cells is jumped; 4 is not', () => {

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import prismarineRegistry from 'prismarine-registry'
 import { stateId } from './fixture.mjs'
-import { buildStateTable, OPEN, SOLID, WATER, LAVA, CLIMB, OPENABLE, NARROW, HAZARD_NONE, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW } from './blocks.mjs'
+import { buildStateTable, OPEN, SOLID, WATER, LAVA, CLIMB, OPENABLE, NARROW, HAZARD_NONE, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL } from './blocks.mjs'
 
 const registry = prismarineRegistry('26.1')
 const table = buildStateTable(registry)
@@ -49,7 +49,13 @@ const cases = [
   ['white_carpet', {}, 1, 0, SOLID, HAZARD_NONE],
   ['dirt_path', {}, 15, 0, SOLID, HAZARD_NONE],
   ['farmland', {}, 15, 0, SOLID, HAZARD_NONE],
-  ['mud', {}, 14, 0, SOLID, HAZARD_NONE]
+  ['mud', {}, 14, 0, SOLID, HAZARD_NONE],
+  ['nether_portal', { axis: 'x' }, 0, 16, OPEN, PORTAL],
+  ['end_portal', {}, 0, 16, OPEN, PORTAL],
+  ['end_gateway', {}, 0, 16, OPEN, PORTAL],
+  ['tall_seagrass', {}, 0, 16, WATER, HAZARD_NONE],
+  ['kelp', {}, 0, 16, WATER, HAZARD_NONE],
+  ['big_dripleaf', { tilt: 'none', waterlogged: false }, 15, 0, SOLID, HAZARD_NONE]
 ]
 
 for (const [name, props, top, base, kind, hazard] of cases) {
@@ -166,3 +172,29 @@ test('scaffolding has no collision for a body inside it, but is a floor to stand
   const id = stateId('scaffolding', {})
   assert.deepEqual({ top: table.top[id], boxes: boxesOf(id), kind: table.kind[id] }, { top: 0, boxes: [], kind: CLIMB })
 })
+
+// [block, props, flowing, bubble]: currents push where the water is not a source; a bubble column lifts (drag=false) or drags (drag=true)
+const fluids = [
+  ['water', { level: 0 }, 0, 0],
+  ['water', { level: 1 }, 1, 0],
+  ['water', { level: 8 }, 1, 0],
+  ['seagrass', {}, 0, 0],
+  ['bubble_column', { drag: false }, 0, 1],
+  ['bubble_column', { drag: true }, 0, 2],
+  ['stone', {}, 0, 0]
+]
+for (const [name, props, flowing, bubble] of fluids) {
+  test(`fluid tables: ${name} ${JSON.stringify(props)}`, () => {
+    const id = stateId(name, props)
+    assert.deepEqual({ flowing: table.flowing[id], bubble: table.bubble[id] }, { flowing, bubble })
+  })
+}
+
+// [tilt, a floor?]: a big dripleaf leaf holds a body until it tilts
+const leaves = [['none', 1], ['unstable', 1], ['partial', 1], ['full', 0]]
+for (const [tilt, floor] of leaves) {
+  test(`big dripleaf tilt ${tilt}: dripleaf flag ${floor}`, () => {
+    const id = stateId('big_dripleaf', { tilt, waterlogged: false })
+    assert.equal(table.dripleaf[id], floor)
+  })
+}

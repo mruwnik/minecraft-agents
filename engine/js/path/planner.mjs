@@ -6,8 +6,8 @@
 // tops at 16/16 (h = 0) or above (a closed gate: h = top - 16). Fences, walls, panes, bars and bamboo (NARROW) are never a
 // floor and never walked through. Between nodes a rise of up to STEP is a walk, up to JUMP_UP a jump. A bottom straight stairs
 // block entered in its climbing direction is a walk up its whole block, as vanilla's step-up makes it. The body's column,
-// 29/16 tall from the stand height, must have no collision, no fluid and no AVOID hazard. Water is not entered at
-// all in stage 1 (drops into it are refused too), but a diagonal may brush past it.
+// 29/16 tall from the stand height, must have no collision, no fluid and no AVOID hazard. A portal (nether, end, gateway) is
+// never entered (feet or head, or crossed in a gap jump) unless the cell is within the goal: the goal is the portal.
 //
 // Climbing: a feet cell holding a climbable (ladder, vines, scaffolding; an open trapdoor directly above a ladder of its facing;
 // a closed wooden trapdoor above a ladder, which costs an OPEN to enter) is a climb node: standable with no floor, h = 0.
@@ -16,23 +16,52 @@
 // refused (the feet leave the ladder), down through one is a short fall caught below. Every cost the policy might want to
 // change is in DEFAULT_COSTS, overridable by options.costs.
 //
+// Water (vanilla 26.1, as modelled here): a feet cell holding water, a bubble column or a no-collision waterlogged block (kelp,
+// seagrass) is a SWIM node, h = 0, no floor needed; its head cell (feet + 1) must be water or open air. Moves: SWIM sideways
+// (cardinal; a diagonal costs sqrt 2 and follows the walking side rule), SWIM_UP and SWIM_DOWN a cell, EXIT onto a bank. A bank
+// stand cell up to the top water cell + 1 is flush with the surface (costs.exit); one more (costs.exitRise = 2, costs.exitHigh)
+// is a climb out the body can make in vanilla by a jump in the water against the wall: about 55% sure, it is what the live lake
+// course needs. Water that is not a source (level != 0, a waterfall included) adds costs.current per block entered; a bubble
+// column lifts (drag=false, soul sand: up at costs.bubbleUp, down refused) or drags (drag=true, magma: down at
+// costs.bubbleDown, up refused). A body breathes 15 s: seconds with the head in water (not in a bubble column) accumulate
+// along the path in `airs` (the current's extra is a penalty, not time, so it does not count), a head out of water or in a
+// bubble column refills at once, and a move that would pass costs.airLimit is refused (reason 'air' when that ends the search).
+// The cost therefore depends on the path, not only the node: a node already reached keeps its record, and an arrival with at
+// least AIR_STEP seconds less air used (or a cheaper one with that much more air used) is added as a rival record that
+// replaces the first in the hash, so no record is ever overwritten under the nodes that grew from it. A drop of up to
+// costs.maxWaterDrop into water through a clear column is a DROP with no fall damage (vanilla resets the fall in water, even one
+// block deep); a drop onto land is still limited by maxDrop. Gap jumps never land in water or cross it. Swimming through or
+// into a tight cell (a lily pad over the water, say) goes by masks like walking, except a diagonal, which never touches one.
+// A big dripleaf leaf holds the body (it tilts after about a second): costs.dripleaf extra seconds and costs.dripleafRisk hp of
+// risk for each leaf entered, the chance of the fall.
+//
 // Tight cells: where a block that leaves part of its cell empty (fence, bamboo, cocoa, wall, ladder...: `partial`) lies within
 // one cell of the body, rows y-1..y+2, whether the 0.62 wide body fits depends on where in the cell it stands. There the
 // cell is not one node but one per region of the free-position mask (space.mjs: 17x17 positions at 1/16, 4-connected
 // regions), node key (x, y, z, region), position the region's point nearest the cell centre. A cardinal move joins region
 // RA of cell A to RB of cell B when a point of their shared boundary is free in both masks (body at the higher of the two
 // stand heights) and lies in RA and in RB; that point is the crossing. Diagonals touching a tight cell are refused (the
-// cardinal chain covers them), as are drops and gap jumps out of or into one. A search box (margin, yMargin) bounds
-// the nodes, and a backward flood from the goal, run only once the search has spent floodAfter expansions, reports a goal nothing can reach.
+// cardinal chain covers them). A drop out of or into a tight cell falls straight down from the crossing point: it must be free in
+// the takeoff mask, in the neighbour column at takeoff height and in the landing cell's mask, and the landing node is that
+// point's region. Gap jumps out of or into a tight cell are refused. A search box (margin, yMargin) bounds
+// the nodes, and a backward flood from the goal, run only once the search has spent floodAfter expansions, reports a goal nothing can reach
+// (it declines to when it meets water: a drop into water starts further up than the flood looks).
 import { UNLOADED } from './snapshot.mjs'
-import { defaultStateTable, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING } from './blocks.mjs'
+import { defaultStateTable, OPEN, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING } from './blocks.mjs'
 import { boxesNear, freeMask, labelRegions, GRID } from './space.mjs'
 
-export const MOVE = { START: 0, WALK: 1, DIAGONAL: 2, JUMP: 3, DROP: 4, GAP: 5, CORNER: 6, CLIMB_UP: 7, CLIMB_DOWN: 8, JUMP_CLIMB: 9, OPEN: 10 }
+export const MOVE = { START: 0, WALK: 1, DIAGONAL: 2, JUMP: 3, DROP: 4, GAP: 5, CORNER: 6, CLIMB_UP: 7, CLIMB_DOWN: 8, JUMP_CLIMB: 9, OPEN: 10, SWIM: 11, SWIM_UP: 12, SWIM_DOWN: 13, EXIT: 14 }
 
 // seconds for the moves climbing adds: per block climbed up and down, a jump from the floor into a ladder one block up, and
-// opening a trapdoor by hand
-export const DEFAULT_COSTS = { climbUp: 0.43, climbDown: 0.33, jumpClimb: 0.5, open: 1.0 }
+// opening a trapdoor by hand; water, in seconds: swimming a block sideways, up, down, getting out onto a bank flush with the
+// surface and onto one a block higher (up to exitRise cells over the top water cell), the extra for a block of flowing water,
+// a block in a bubble column up (soul sand) and down (magma), the breath (supply and the margin kept under it), the highest
+// drop into water and, for a big dripleaf leaf, the extra seconds and the hp of risk
+export const DEFAULT_COSTS = {
+  climbUp: 0.43, climbDown: 0.33, jumpClimb: 0.5, open: 1.0,
+  swimH: 0.5, swimUp: 0.3, swimDown: 0.35, exit: 0.6, exitHigh: 1.0, exitRise: 2, current: 0.3, bubbleUp: 0.08, bubbleDown: 0.12,
+  airSupply: 15, airLimit: 12, maxWaterDrop: 64, dripleaf: 0.2, dripleafRisk: 0.5
+}
 
 const BODY = 29 // 1.8 blocks in 1/16, rounded up
 const STEP = 9 // 0.6 blocks
@@ -57,6 +86,7 @@ const MIN_CLOSER = 2 // an exhausted search is a partial result only when it got
 const WHOLE = 16 // a full block in 1/16
 const BODY_BLOCKS = 1.8
 const REGIONS = 16 // regions of one cell that can be nodes (4 bits of the key); a cell never has this many in practice
+const AIR_STEP = 1 // seconds of air that make an arrival at a node already reached worth a record of its own
 const CENTRE = { px: 8, pz: 8 } // the representative point of an ordinary cell, in 1/16
 
 // What a node knows beyond its cell, in one Uint32 (0 for an ordinary cell reached from an ordinary one): bits 0-3 region,
@@ -81,7 +111,7 @@ export function createSearch (snapshot, query, options = {}) {
     goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48
   } = options
   const costs = { ...DEFAULT_COSTS, ...options.costs }
-  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special } = table
+  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, dripleaf } = table
   const { stateAt, minY } = snapshot
   const rawAt = stateAt
   const { from, goal } = query
@@ -115,6 +145,12 @@ export function createSearch (snapshot, query, options = {}) {
   } }
   let allowShut = false // standH refuses a shut trapdoor's cell unless the caller pays for opening it
 
+  // a cell the body must not be in: an AVOID hazard, or a portal unless the cell (or the one under it, the head cell) is in the goal
+  const avoids = (id, x, y, z) => {
+    const hz = hazard[id]
+    return hz === HAZARD_AVOID || hz === PORTAL && !inGoal(x, y, z)
+  }
+
   // is the column at x,z free for a body spanning lo..hi (1/16 absolute)? Also false for fluid, NARROW, AVOID, unloaded.
   const clear = (x, z, lo, hi) => {
     const last = (hi - 1) >> 4
@@ -124,7 +160,7 @@ export function createSearch (snapshot, query, options = {}) {
       const t = top[id]
       if (t > 0 && y * 16 + t > lo && y * 16 + base[id] < hi) return false
       const k = kind[id]
-      if (k === WATER || k === LAVA || k === NARROW || hazard[id] === HAZARD_AVOID) return false
+      if (k === WATER || k === LAVA || k === NARROW || avoids(id, x, y, z)) return false
     }
     return true
   }
@@ -136,7 +172,7 @@ export function createSearch (snapshot, query, options = {}) {
     let blocked = 0
     for (let y = lo >> 4; y <= last; y++) {
       const id = stateAt(x, y, z)
-      if (id === UNLOADED || kind[id] === LAVA || hazard[id] === HAZARD_AVOID) return 2
+      if (id === UNLOADED || kind[id] === LAVA || avoids(id, x, y, z)) return 2
       const t = top[id]
       if (kind[id] === NARROW || (t > 0 && y * 16 + t > lo && y * 16 + base[id] < hi)) blocked = 1
     }
@@ -157,7 +193,7 @@ export function createSearch (snapshot, query, options = {}) {
       if (cid === UNLOADED) return false
       const ct = top[cid]
       const kd = kind[cid]
-      if (kd === WATER || kd === LAVA || hazard[cid] === HAZARD_AVOID) return false
+      if (kd === WATER || kd === LAVA || avoids(cid, x, k, z)) return false
       if (!partial[cid] && (ct > 0 && k * 16 + ct > lo && k * 16 + base[cid] < hi || kd === NARROW)) return false
       if (hazard[cid] === DAMAGE_TOUCH) touched++
     }
@@ -227,14 +263,17 @@ export function createSearch (snapshot, query, options = {}) {
 
   let enterRisk = 0 // set by landing()
   let enterSlow = 0
+  let enterExtra = 0 // seconds a big dripleaf leaf adds
 
   // standH plus what arriving there costs; -1 when not standable
   const landing = (x, y, z) => {
     const h = standH(x, y, z)
     if (h < 0) return -1
     const hz = hazard[support]
-    enterRisk = touch + (hz === DAMAGE_STAND ? 1 : 0) + (lavaNear(x, y, z) ? LAVA_ADJACENT : 0)
+    const leaf = dripleaf[support] === 1
+    enterRisk = touch + (hz === DAMAGE_STAND ? 1 : 0) + (lavaNear(x, y, z) ? LAVA_ADJACENT : 0) + (leaf ? costs.dripleafRisk : 0)
     enterSlow = hz === SLOW ? 1 : 0
+    enterExtra = leaf ? costs.dripleaf : 0
     return h
   }
 
@@ -244,6 +283,8 @@ export function createSearch (snapshot, query, options = {}) {
   const reached = near
     ? (x, y, z) => (x - goal.x) ** 2 + (y - goal.y) ** 2 + (z - goal.z) ** 2 <= goalRange * goalRange
     : (x, y, z) => (x - goal.x) ** 2 + (z - goal.z) ** 2 <= goalRange * goalRange
+  // the cell, or the one under it (a head cell), is within the goal: where a portal may be entered
+  const inGoal = (x, y, z) => reached(x, y, z) || reached(x, y - 1, z)
   const distanceTo = (x, z) => {
     const a = Math.abs(x - goal.x)
     const b = Math.abs(z - goal.z)
@@ -279,6 +320,9 @@ export function createSearch (snapshot, query, options = {}) {
   let parent = new Int32Array(cap)
   let secs = new Float64Array(cap)
   let risks = new Float64Array(cap)
+  let airs = new Float64Array(cap) // seconds of air used since the last breath
+  let peaks = new Float64Array(cap) // the most air used at any point of the path to the node
+  let wsecs = new Float64Array(cap) // seconds of the path spent swimming
   let gs = new Float64Array(cap)
   let fs = new Float64Array(cap)
   let heapPos = new Int32Array(cap) // index in heap, -2 once expanded
@@ -296,11 +340,12 @@ export function createSearch (snapshot, query, options = {}) {
 
   const grow = () => {
     cap = Math.min(maxNodes, cap * 2)
-    ;[keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, gs, fs, heapPos, heap] =
-      [keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, gs, fs, heapPos, heap].map(a => grown(a, cap))
+    ;[keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, gs, fs, heapPos, heap] =
+      [keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, gs, fs, heapPos, heap].map(a => grown(a, cap))
     slots = nextPow2(cap * 2)
     hashTable = new Int32Array(slots).fill(-1)
-    for (let i = 0; i < count; i++) {
+    // newest first: a rival record of a node (same key) sits ahead of the one it rivals in the probe, so lookups find it
+    for (let i = count - 1; i >= 0; i--) {
       let s = hashOf(xs[i], ys[i], zs[i], shapes[i] & 15) & (slots - 1)
       while (hashTable[s] !== -1) s = (s + 1) & (slots - 1)
       hashTable[s] = i
@@ -344,8 +389,15 @@ export function createSearch (snapshot, query, options = {}) {
 
   let overBudget = false
 
+  // What the swim move being made adds to the node: the air used by the end of it, the most air used while it lasted, the
+  // seconds in water. Set around the edge call by swimEdge (0 for every other move).
+  let moveAir = 0
+  let movePeak = 0
+  let moveWater = 0
+
   // relax the edge to a node: insert it, or lower its cost if this way is cheaper
   // a tight cell's node also has its region, the region's point and the crossing the move came in by: `shape`
+  // A node reached again with a very different air use gets a record of its own (see the header): the hash points at the newest.
   const consider = (x, y, z, h, move, parentNode, dsec, drisk, slowTo, corner = 0, shape = 0) => {
     const region = shape & 15
     const rx = x - from.x + HALF
@@ -363,12 +415,20 @@ export function createSearch (snapshot, query, options = {}) {
     const risk = risks[parentNode] + drisk
     const g = sec + riskWeight * risk
     let node = found
+    if (found !== -1) {
+      const dAir = moveAir - airs[found]
+      if (g < gs[found] && dAir <= AIR_STEP) {
+        if (heapPos[found] === -2) return
+      } else if (g < gs[found] || dAir < -AIR_STEP) {
+        node = -1
+      } else return
+    }
     if (node === -1) {
       if (count === maxNodes) { overBudget = true; return }
       if (count === cap) {
         grow()
         s = hashOf(x, y, z, region) & (slots - 1)
-        while (hashTable[s] !== -1) s = (s + 1) & (slots - 1)
+        while (hashTable[s] !== -1 && (found === -1 || keys[hashTable[s]] !== key)) s = (s + 1) & (slots - 1)
       }
       node = count++
       hashTable[s] = node
@@ -377,7 +437,7 @@ export function createSearch (snapshot, query, options = {}) {
       ys[node] = y
       zs[node] = z
       heapPos[node] = -1
-    } else if (heapPos[node] === -2 || g >= gs[node]) return
+    }
     hs[node] = h
     moves[node] = move
     slow[node] = slowTo
@@ -386,6 +446,9 @@ export function createSearch (snapshot, query, options = {}) {
     parent[node] = parentNode
     secs[node] = sec
     risks[node] = risk
+    airs[node] = moveAir
+    peaks[node] = Math.max(peaks[parentNode], movePeak)
+    wsecs[node] = wsecs[parentNode] + moveWater
     gs[node] = g
     fs[node] = g + weight * heuristic(x, z)
     if (heapPos[node] === -1) {
@@ -496,7 +559,7 @@ export function createSearch (snapshot, query, options = {}) {
 
   // the cardinal move c from cell A (region `region`, or every region when -1) to cell B, either of them tight: one edge per
   // region of B that a boundary point free for both leads to. Costs are those of the plain move, plus TIGHT_S into a tight cell.
-  const tightMove = (i, x, y, z, h, region, c, x2, y2, z2, h1, move, dsec, drisk, slowTo, snapA = SNAP) => {
+  const tightMove = (i, x, y, z, h, region, c, x2, y2, z2, h1, move, dsec, drisk, slowTo, snapA = SNAP, snapB = SNAP) => {
     const loA = y * 16 + h
     const loB = y2 * 16 + h1
     const top = Math.max(loA, loB) // the body straddles the boundary at the higher of the two heights
@@ -506,6 +569,9 @@ export function createSearch (snapshot, query, options = {}) {
     const ownB = shapeOf(x2, y2, z2, loB)
     const jointA = loA === top ? ownA : shapeOf(x, Math.max(y, y2), z, top)
     const jointB = loB === top ? ownB : shapeOf(x2, Math.max(y, y2), z2, top)
+    // a drop falls straight down the neighbour column: every tight cell between must be free at the crossing point too
+    const fallMasks = []
+    if (move === MOVE.DROP) for (let k = y2 + 1; k < y; k++) if (isTight(x2, k, z2)) fallMasks.push(shapeOf(x2, k, z2, k * 16).mask)
     const first = region < 0 ? 0 : region
     const last = region < 0 ? (tightA ? ownA.regs.length - 1 : 0) : region
     const sec = dsec + (tightB ? TIGHT_S : 0)
@@ -517,8 +583,8 @@ export function createSearch (snapshot, query, options = {}) {
       for (let t = 0; t <= 16; t++) {
         const pa = indexA(c, t)
         const pb = indexB(c, t)
-        if (!jointA.mask[pa] || !jointB.mask[pb] || regionNear(ownA, pa, snapA) !== label) continue
-        const lb = regionNear(ownB, pb, move === MOVE.DROP ? GRID : SNAP)
+        if (!jointA.mask[pa] || !jointB.mask[pb] || regionNear(ownA, pa, snapA) !== label || fallMasks.some(m => !m[pb])) continue
+        const lb = regionNear(ownB, pb, snapB)
         const rb = tightB ? lb : lb === ownB.centre ? 0 : -1
         if (rb < 0 || rb >= REGIONS) continue
         const repB = tightB ? ownB.regs[rb] : CENTRE
@@ -579,6 +645,167 @@ export function createSearch (snapshot, query, options = {}) {
     }
   }
 
+  // ---- water ----
+
+  const isWater = (x, y, z) => {
+    const id = stateAt(x, y, z)
+    return id !== UNLOADED && kind[id] === WATER
+  }
+  // a body floating in the water cell (feet at its floor, h = 0): the cell over it is water or open and unhazardous
+  const swimAt = (x, y, z) => {
+    const id = stateAt(x, y, z)
+    if (id === UNLOADED || kind[id] !== WATER) return -1
+    const head = stateAt(x, y + 1, z)
+    if (head === UNLOADED) return -1
+    if (kind[head] === WATER) return 0
+    return kind[head] === OPEN && top[head] === 0 && hazard[head] === 0 ? 0 : -1
+  }
+  // head in water that is not a bubble column: the breath runs
+  const submerged = (x, y, z) => {
+    const head = stateAt(x, y + 1, z)
+    return head !== UNLOADED && kind[head] === WATER && bubble[head] === 0
+  }
+  // Dominance: a submerged sideways move in open water is never better than swimming at the surface over it, so the lake's
+  // volume is not searched. A cell's column is open when its water reaches plain air (no collision); then surfaceY is the top
+  // water cell. Ending at a ceiling, a collision block or an unloaded cell is a passage under something (NONE), where diving is
+  // the only way. The surface only stands in for the cell when both ends have the same one: a waterfall's foot, whose column
+  // rises out of a shallow pool, is entered sideways. Cached per cell.
+  const NONE = -1e9
+  const surfaceCache = new Map()
+  const surfaceY = (x, y, z) => {
+    const key = keyOf(x, y, z)
+    const hit = surfaceCache.get(key)
+    if (hit !== undefined) return hit
+    let y2 = y + 1
+    let id = stateAt(x, y2, z)
+    while (id !== UNLOADED && kind[id] === WATER) id = stateAt(x, ++y2, z)
+    const top2 = id !== UNLOADED && kind[id] === OPEN && top[id] === 0 ? y2 - 1 : NONE
+    surfaceCache.set(key, top2)
+    return top2
+  }
+  const openWater = (x, y, z) => surfaceY(x, y, z) !== NONE
+  const divesOpen = (x, y, z) => submerged(x, y, z) && openWater(x, y, z)
+  // a sideways swim move into (x, y, z) that dominance refuses: the body is at surface level `srcSurface` (NONE: in a covered
+  // passage, where the open water is the way on) and the target is submerged under the same surface
+  const refuses = (x, y, z, srcSurface) => srcSurface !== NONE && submerged(x, y, z) && surfaceY(x, y, z) === srcSurface
+  // Swimming down from the surface into open water leads nowhere but more cells of the same column, unless something down it is
+  // worth the dive: the goal, a bubble column, a bank to climb onto at that depth, or a covered passage beside it. Cached per cell
+  // like openWater.
+  const diveCache = new Map()
+  const worthDiving = (x, y, z) => {
+    const key = keyOf(x, y, z)
+    const hit = diveCache.get(key)
+    if (hit !== undefined) return hit === 1
+    let found = false
+    for (let y2 = y; !found && isWater(x, y2, z); y2--) {
+      found = reached(x, y2, z) || bubble[stateAt(x, y2, z)] !== 0
+      for (let c = 0; !found && c < 4; c++) {
+        const x2 = x + CARDINAL[c][0]
+        const z2 = z + CARDINAL[c][1]
+        found = isWater(x2, y2, z2) ? swimAt(x2, y2, z2) >= 0 && !divesOpen(x2, y2, z2) : standH(x2, y2, z2) >= 0
+      }
+    }
+    diveCache.set(key, found ? 1 : 2)
+    return found
+  }
+  // swimming beside lava, or down onto magma
+  const swimRisk = (x, y, z) => (lavaNear(x, y, z) ? LAVA_ADJACENT : 0) + (hazard[stateAt(x, y - 1, z)] === DAMAGE_STAND ? 1 : 0)
+  // a stand height at a feet cell: on land, or floating in water (h = 0); -1 for neither
+  const nodeH = (x, y, z) => {
+    const h = standH(x, y, z)
+    return h >= 0 ? h : swimAt(x, y, z)
+  }
+
+  let airSeen = false // a swim move was refused for lack of air
+
+  // one swim or exit edge, made by `emit(dsec)` (a plain edge, a tight-cell move or a vertical one): `base` seconds of swimming
+  // (they count for the air), `extra` seconds of current (a cost, not breath). srcSub: the body starts the move with its head in
+  // water; targetWater: it ends in a water cell.
+  const swimEdge = (i, targetWater, x2, y2, z2, base, extra, srcSub, emit) => {
+    const targetSub = targetWater && submerged(x2, y2, z2)
+    const use = (i >= 0 ? airs[i] : 0) + base
+    if ((srcSub || targetSub) && use > costs.airLimit) { airSeen = true; return }
+    moveAir = targetSub ? use : 0
+    movePeak = srcSub || targetSub ? use : 0
+    moveWater = base + extra
+    emit(base + extra)
+    moveAir = movePeak = moveWater = 0
+  }
+
+  // a node floating in water: up, down, sideways and onto the bank; sideways moves and exits may cross tight cells (masks), a
+  // diagonal never does
+  const expandSwim = (x, y, z, i, region) => {
+    quiet = sectionsClear(x, y, z, 2, 2, 3)
+    const tightSrc = tightAt(x, y, z)
+    const srcB = bubble[stateAt(x, y, z)]
+    const srcSub = submerged(x, y, z)
+    const srcSurface = srcSub ? surfaceY(x, y, z) : y
+    const currentAt = (cx, cy, cz) => flowing[stateAt(cx, cy, cz)] === 1 ? costs.current : 0
+
+    // a lifting column (1) cannot be swum down, a dragging one (2) cannot be swum up
+    for (const dy of [1, -1]) {
+      const y2 = y + dy
+      if (swimAt(x, y2, z) < 0) continue
+      const tb = bubble[stateAt(x, y2, z)]
+      if (dy === 1 ? srcB === 2 || tb === 2 : srcB === 1 || tb === 1) continue
+      if (dy === -1 && divesOpen(x, y2, z) && !worthDiving(x, y2, z)) continue
+      const lift = srcB === 1 || tb === 1
+      const drag = srcB === 2 || tb === 2
+      const move = dy === 1 ? MOVE.SWIM_UP : MOVE.SWIM_DOWN
+      const base = dy === 1 ? (lift ? costs.bubbleUp : costs.swimUp) : (drag ? costs.bubbleDown : costs.swimDown)
+      const risk = swimRisk(x, y2, z)
+      swimEdge(i, true, x, y2, z, base, currentAt(x, y2, z), srcSub, dsec => verticalMove(i, x, y, z, 0, region, y2, 0, move, dsec, risk, 0))
+    }
+
+    // out of the water onto a bank: at the same level, or up to exitRise cells over the top water cell of this column
+    const topWater = isWater(x, y + 1, z)
+    const nearSurface = !topWater || !isWater(x, y + 2, z)
+    const yt = topWater ? y + 1 : y
+    const lastTy = nearSurface ? Math.max(y, yt + costs.exitRise) : y
+    for (let c = 0; c < 4; c++) {
+      const x2 = x + CARDINAL[c][0]
+      const z2 = z + CARDINAL[c][1]
+      if (swimAt(x2, y, z2) >= 0) {
+        if (refuses(x2, y, z2, srcSurface)) continue
+        const risk = swimRisk(x2, y, z2)
+        const tight = tightSrc || tightAt(x2, y, z2)
+        swimEdge(i, true, x2, y, z2, costs.swimH, currentAt(x2, y, z2), srcSub, dsec => tight
+          ? tightMove(i, x, y, z, 0, region, c, x2, y, z2, 0, MOVE.SWIM, dsec, risk, 0)
+          : edge(x2, y, z2, 0, MOVE.SWIM, i, dsec, risk, 0))
+        continue
+      }
+      for (let ty = y; ty <= lastTy; ty++) {
+        const h1 = landing(x2, ty, z2)
+        if (h1 < 0) continue
+        const base = (ty === y ? costs.swimH : ty - yt >= 2 ? costs.exitHigh : costs.exit) + enterExtra
+        const risk = enterRisk
+        const slowTo = enterSlow
+        const tight = tightSrc || tightAt(x2, ty, z2)
+        swimEdge(i, false, x2, ty, z2, base, 0, srcSub, dsec => tight
+          ? tightMove(i, x, y, z, 0, region, c, x2, ty, z2, h1, MOVE.EXIT, dsec, risk, slowTo)
+          : edge(x2, ty, z2, h1, MOVE.EXIT, i, dsec, risk, slowTo))
+      }
+    }
+    if (tightSrc) return
+
+    // diagonals, with the walking side rule: the body brushes both side cells
+    for (let c = 0; c < 4; c++) {
+      const dx = DIAGONAL[c][0]
+      const dz = DIAGONAL[c][1]
+      const x2 = x + dx
+      const z2 = z + dz
+      if (swimAt(x2, y, z2) < 0 || tightAt(x2, y, z2) || refuses(x2, y, z2, srcSurface)) continue
+      const lo = y * 16
+      const hi = lo + BODY
+      const sa = side(x + dx, z, lo, hi)
+      const sb = side(x, z + dz, lo, hi)
+      if (sa === 2 || sb === 2 || (sa === 1 && sb === 1)) continue
+      const slide = sa + sb
+      const risk = swimRisk(x2, y, z2)
+      swimEdge(i, true, x2, y, z2, costs.swimH * SQRT2 + slide * CORNER_S, currentAt(x2, y, z2), srcSub, dsec => edge(x2, y, z2, 0, slide ? MOVE.CORNER : MOVE.SWIM, i, dsec, risk, 0, slide))
+    }
+  }
+
   // ---- moves ----
 
   let edge = consider // where moves go: into the search, or the goal flood's probe
@@ -606,6 +833,7 @@ export function createSearch (snapshot, query, options = {}) {
 
   // region -1: every region of a tight cell (the goal flood does not know which one it comes from)
   const expandAt = (x, y, z, h, slowFrom, i, region = -1) => {
+    if (kind[rawAt(x, y, z)] === WATER) return expandSwim(x, y, z, i, region)
     const h0 = y * 16 + h
     // when no section near the cell holds a partial block, no cell this expansion looks at is tight
     quiet = sectionsClear(x, y, z, 2, 2, 3)
@@ -633,10 +861,19 @@ export function createSearch (snapshot, query, options = {}) {
         const walks = delta <= STEP || climbs || (climbing && delta <= JUMP_UP)
         // a jump needs headroom over the start column; a tight start's mask checks that itself
         if (!walks && !(delta <= JUMP_UP && (tightSrc || clear(x, z, h0, ty * 16 + h1 + BODY)))) continue
-        const sec = walks ? walk : walk + JUMP_S
+        const sec = (walks ? walk : walk + JUMP_S) + enterExtra
         const move = walks ? MOVE.WALK : MOVE.JUMP
         if (tightSrc || tightAt(x2, ty, z2)) tightMove(i, x, y, z, h, region, c, x2, ty, z2, h1, move, sec, enterRisk, enterSlow, climbing && delta > STEP ? GRID : SNAP)
         else edge(x2, ty, z2, h1, move, i, sec, enterRisk, enterSlow)
+        continue
+      }
+      // water ahead at our level: walk in and swim
+      if (swimAt(x2, y, z2) >= 0) {
+        const risk = swimRisk(x2, y, z2)
+        const tight = tightSrc || tightAt(x2, y, z2)
+        swimEdge(i, true, x2, y, z2, costs.swimH, flowing[rawAt(x2, y, z2)] === 1 ? costs.current : 0, false, dsec => tight
+          ? tightMove(i, x, y, z, h, region, c, x2, y, z2, 0, MOVE.SWIM, dsec, risk, 0)
+          : edge(x2, y, z2, 0, MOVE.SWIM, i, dsec, risk, 0))
         continue
       }
       // no ground ahead at our level: the body must at least fit in the column to leave the edge
@@ -670,7 +907,7 @@ export function createSearch (snapshot, query, options = {}) {
       const slide = sa + sb // 1 when exactly one side is blocked
       const walk = WALK_S * SQRT2 * (1 + SLOW_EXTRA * (slowFrom + enterSlow)) + slide * CORNER_S
       const code = jump ? MOVE.JUMP : slide ? MOVE.CORNER : MOVE.DIAGONAL
-      edge(x2, y2, z2, h1, code, i, jump ? walk + JUMP_S : walk, enterRisk, enterSlow, slide)
+      edge(x2, y2, z2, h1, code, i, (jump ? walk + JUMP_S : walk) + enterExtra, enterRisk, enterSlow, slide)
     }
   }
 
@@ -712,11 +949,11 @@ export function createSearch (snapshot, query, options = {}) {
       return
     }
     const free = stateAt(x, y - 1, z)
-    if (free === UNLOADED || top[free] > 0 || kind[free] === WATER || kind[free] === LAVA || hazard[free] === HAZARD_AVOID) return
+    if (free === UNLOADED || top[free] > 0 || kind[free] === WATER || kind[free] === LAVA || avoids(free, x, y - 1, z)) return
     const from16 = y * 16 + h
     for (let y3 = y - 2; y3 >= y - maxDrop - 1; y3--) {
       const id = stateAt(x, y3, z)
-      if (id === UNLOADED || kind[id] === LAVA || kind[id] === WATER || hazard[id] === HAZARD_AVOID) return
+      if (id === UNLOADED || kind[id] === LAVA || kind[id] === WATER || avoids(id, x, y3, z)) return
       const h3 = landing(x, y3, z)
       if (h3 < 0) {
         if (top[id] > 0) return
@@ -738,26 +975,35 @@ export function createSearch (snapshot, query, options = {}) {
     verticalMove(i, x, y, z, h, region, y + 1, h2, MOVE.JUMP_CLIMB, costs.jumpClimb, enterRisk, enterSlow)
   }
 
-  // walk off an edge into the first standable cell below the neighbour column
-  // (out of a tight cell, or into one, only onto a climbable: the body grabs it as it falls past)
+  // walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
+  // (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which the
+  // masks must leave free all the way (a climbable below is grabbed as it falls past, so it takes any position of its cell).
   const expandDrop = (i, x, y, z, h, region, c, x2, z2, h0, slowFrom, tightSrc) => {
-    for (let y2 = y - 1; y2 >= y - maxDrop - 1; y2--) {
+    for (let y2 = y - 1; y2 >= y - costs.maxWaterDrop - 1; y2--) {
       const id = stateAt(x2, y2, z2)
-      if (id === UNLOADED || kind[id] === LAVA || kind[id] === WATER || hazard[id] === HAZARD_AVOID) return
+      if (id === UNLOADED || kind[id] === LAVA || avoids(id, x2, y2, z2)) return
+      if (kind[id] === WATER) return dropIntoWater(i, x, y, z, h, region, c, x2, y2, z2, h0, slowFrom, tightSrc)
       const h1 = landing(x2, y2, z2)
       if (h1 < 0) {
         if (top[id] > 0) return
         continue
       }
       const tightDrop = tightSrc || isTight(x2, y2, z2)
-      if (tightDrop && !climbHere(x2, y2, z2)) return
       const fall = h0 - (y2 * 16 + h1)
       if (fall > maxDrop * 16) return
-      const sec = WALK_S * (1 + SLOW_EXTRA * (slowFrom + enterSlow)) + 0.25 * Math.sqrt(Math.max(0, fall) / 16)
-      if (tightDrop) tightMove(i, x, y, z, h, region, c, x2, y2, z2, h1, MOVE.DROP, sec, enterRisk + fallDamage(fall), enterSlow)
+      const sec = WALK_S * (1 + SLOW_EXTRA * (slowFrom + enterSlow)) + 0.25 * Math.sqrt(Math.max(0, fall) / 16) + enterExtra
+      if (tightDrop) tightMove(i, x, y, z, h, region, c, x2, y2, z2, h1, MOVE.DROP, sec, enterRisk + fallDamage(fall), enterSlow, SNAP, climbHere(x2, y2, z2) ? GRID : 0)
       else edge(x2, y2, z2, h1, MOVE.DROP, i, sec, enterRisk + fallDamage(fall), enterSlow)
       return
     }
+  }
+
+  const dropIntoWater = (i, x, y, z, h, region, c, x2, y2, z2, h0, slowFrom, tightSrc) => {
+    const fall = h0 - y2 * 16
+    if (swimAt(x2, y2, z2) < 0 || fall > costs.maxWaterDrop * 16) return
+    const sec = WALK_S * (1 + SLOW_EXTRA * slowFrom) + 0.25 * Math.sqrt(fall / 16)
+    if (tightSrc || isTight(x2, y2, z2)) tightMove(i, x, y, z, h, region, c, x2, y2, z2, 0, MOVE.DROP, sec, swimRisk(x2, y2, z2), 0, SNAP, 0)
+    else edge(x2, y2, z2, 0, MOVE.DROP, i, sec, swimRisk(x2, y2, z2), 0)
   }
 
   // sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block higher
@@ -788,7 +1034,7 @@ export function createSearch (snapshot, query, options = {}) {
       if (h1 < 0 || isTight(lx, ly, lz)) continue
       const delta = ly * 16 + h1 - h0
       if (delta < -16 || delta > (n <= 2 && upArc ? WHOLE : 0)) continue
-      edge(lx, ly, lz, h1, MOVE.GAP, i, (n + 1) * SPRINT_S + GAP_S + (delta > 0 ? GAP_UP_S : 0), enterRisk + hole, enterSlow)
+      edge(lx, ly, lz, h1, MOVE.GAP, i, (n + 1) * SPRINT_S + GAP_S + (delta > 0 ? GAP_UP_S : 0) + enterExtra, enterRisk + hole, enterSlow)
     }
   }
 
@@ -805,8 +1051,8 @@ export function createSearch (snapshot, query, options = {}) {
   let t0 = performance.now()
   let elapsed = 0
 
-  const startH = standH(from.x, from.y, from.z)
-  const startSlow = hazard[support] === SLOW ? 1 : 0 // before goalNotStandable reuses standH
+  const startH = nodeH(from.x, from.y, from.z)
+  const startSlow = hazard[support] === SLOW && !isWater(from.x, from.y, from.z) ? 1 : 0 // before goalNotStandable reuses standH
   const goalNotStandable = () => {
     if (!near || goalUnloaded) return false
     const r = Math.ceil(goalRange)
@@ -814,7 +1060,7 @@ export function createSearch (snapshot, query, options = {}) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dz = -r; dz <= r; dz++) {
           if (dx * dx + dy * dy + dz * dz > goalRange * goalRange) continue
-          if (standH(goal.x + dx, goal.y + dy, goal.z + dz) >= 0) return false
+          if (nodeH(goal.x + dx, goal.y + dy, goal.z + dz) >= 0) return false
         }
       }
     }
@@ -834,19 +1080,21 @@ export function createSearch (snapshot, query, options = {}) {
     let fy = 0
     let fz = 0
     let hit = false
+    let sawWater = false // a water cell in the flood: drops into water start further up than the flood looks
     const probe = (x, y, z) => { if (x === fx && y === fy && z === fz) hit = true }
     // adds n when it is standable and a forward move reaches the flood's current cell; true when n is the start
     const visit = (x, y, z) => {
       if (!inSpan(x, z)) return false
       const key = keyOf(x, y, z)
       if (seen.has(key)) return false
-      const h = standH(x, y, z)
+      const h = nodeH(x, y, z)
       if (h < 0) return false
       hit = false
       expandAt(x, y, z, h, 0, -1, -1)
       if (!hit) return false
       seen.add(key)
       queue.push([x, y, z])
+      sawWater ||= isWater(x, y, z)
       return key === startKey
     }
     const r = Math.ceil(goalRange)
@@ -858,10 +1106,11 @@ export function createSearch (snapshot, query, options = {}) {
           const x = goal.x + dx
           const y = goal.y + dy
           const z = goal.z + dz
-          if (!inSpan(x, z) || standH(x, y, z) < 0) continue
+          if (!inSpan(x, z) || nodeH(x, y, z) < 0) continue
           seen.add(keyOf(x, y, z))
           queue.push([x, y, z])
           seed.push(keyOf(x, y, z))
+          sawWater ||= isWater(x, y, z)
         }
       }
     }
@@ -884,7 +1133,7 @@ export function createSearch (snapshot, query, options = {}) {
     edge = consider
     allowShut = false
     flooded = seen.size
-    return !open && seen.size <= goalFlood
+    return !open && !sawWater && seen.size <= goalFlood
   }
 
   const finish = why => {
@@ -976,6 +1225,7 @@ export function createSearch (snapshot, query, options = {}) {
         x: xs[i], y: ys[i], z: zs[i], h: hs[i], move: moves[i], corner: corners[i] === 1,
         px: xs[i] + (tight ? (shape >> 5 & 31) / 16 : 0.5), pz: zs[i] + (tight ? (shape >> 10 & 31) / 16 : 0.5)
       }
+      if (isWater(xs[i], ys[i], zs[i])) step.swim = true
       if (moves[i] === MOVE.OPEN) step.opens = [{ x: xs[i], y: ys[i], z: zs[i] }]
       if (shape >> 15 & 1) { step.cx = xs[i] + (shape >> 16 & 31) / 16; step.cz = zs[i] + (shape >> 21 & 31) / 16 }
       out.push(step)
@@ -998,12 +1248,32 @@ export function createSearch (snapshot, query, options = {}) {
     return runs.map(({ key, n }) => `${key} ${n}`)
   }
 
-  const summarize = steps => {
+  // "water column up 20", "bubble lift up 18", "magma column down 15": consecutive vertical swim legs of one kind in one direction
+  const swimRuns = legs => {
+    const runs = []
+    let prev = null
+    for (const { s, p } of legs) {
+      if (s.move !== MOVE.SWIM_UP && s.move !== MOVE.SWIM_DOWN) { prev = null; continue }
+      const bubbles = Math.max(bubble[rawAt(s.x, s.y, s.z)], bubble[rawAt(p.x, p.y, p.z)])
+      const key = s.move === MOVE.SWIM_UP ? (bubbles === 1 ? 'bubble lift up' : 'water column up') : (bubbles === 2 ? 'magma column down' : 'water column down')
+      if (prev?.key === key) prev.n++
+      else runs.push(prev = { key, n: 1 })
+    }
+    return runs.map(({ key, n }) => `${key} ${n}`)
+  }
+  const isSwim = move => move === MOVE.SWIM || move === MOVE.SWIM_UP || move === MOVE.SWIM_DOWN || move === MOVE.EXIT
+  const intoWater = ({ s }) => s.move === MOVE.DROP && isWater(s.x, s.y, s.z)
+
+  const summarize = (steps, node) => {
     const legs = steps.slice(1).map((s, k) => ({ s, p: steps[k] }))
     const blocks = Math.round(legs.reduce((sum, { s, p }) => sum + Math.hypot(s.x - p.x, s.z - p.z), 0))
-    const rise = ({ s, p }) => !CLIMBS.has(s.move) && s.move !== MOVE.DROP && s.move !== MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h
+    const rise = ({ s, p }) => !CLIMBS.has(s.move) && !isSwim(s.move) && s.move !== MOVE.DROP && s.move !== MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h
     const ups = legs.filter(rise).length
-    const falls = legs.filter(({ s }) => s.move === MOVE.DROP).map(({ s, p }) => Math.round((p.y * 16 + p.h - s.y * 16 - s.h) / 16)).filter(f => f >= 2)
+    const depth = ({ s, p }) => Math.round((p.y * 16 + p.h - s.y * 16 - s.h) / 16)
+    const falls = legs.filter(({ s }) => s.move === MOVE.DROP && !isWater(s.x, s.y, s.z)).map(depth).filter(f => f >= 2)
+    const splashes = legs.filter(intoWater).map(depth).filter(f => f >= 2)
+    const swum = Math.round(legs.filter(({ s }) => s.move === MOVE.SWIM || s.move === MOVE.CORNER && s.swim).reduce((sum, { s, p }) => sum + Math.hypot(s.x - p.x, s.z - p.z), 0))
+    const lowest = costs.airSupply - peaks[node]
     const gaps = legs.filter(({ s }) => s.move === MOVE.GAP).length
     const slides = steps.filter(s => s.corner).length
     const gapUps = legs.filter(({ s, p }) => s.move === MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h).length
@@ -1011,26 +1281,36 @@ export function createSearch (snapshot, query, options = {}) {
     const opens = steps.filter(s => s.move === MOVE.OPEN).length
     return [
       `${blocks} blocks`,
+      swum > 0 && `swims ${swum}`,
+      ...swimRuns(legs),
       ...climbRuns(legs),
       opens > 0 && `opens ${opens} trapdoor${opens > 1 ? 's' : ''}`,
       ups > 0 && (ups === 1 ? '1 step up' : `${ups} steps up`),
       falls.length === 1 && `1 drop of ${falls[0]}`,
       falls.length > 1 && `${falls.length} drops, deepest ${Math.max(...falls)}`,
+      splashes.length === 1 && `drops ${splashes[0]} into water`,
+      splashes.length > 1 && `${splashes.length} drops into water, deepest ${Math.max(...splashes)}`,
       gaps > 0 && (gaps === 1 ? '1 gap jump' : `${gaps} gap jumps`),
       slides > 0 && (slides === 1 ? '1 corner slide' : `${slides} corner slides`),
       gapUps > 0 && (gapUps === 1 ? '1 jump up over a gap' : `${gapUps} jumps up over gaps`),
-      lava && 'passes 1 cell from lava'
+      lava && 'passes 1 cell from lava',
+      peaks[node] > 0 && `lowest air ${Math.round(lowest)} s`
     ].filter(Boolean).join(', ')
   }
 
   const pathTo = node => {
     const steps = stepsTo(node)
-    const drops = steps.slice(1).map((s, k) => s.move === MOVE.DROP ? (steps[k].y * 16 + steps[k].h - s.y * 16 - s.h) / 16 : 0)
+    const dropOf = (s, k) => (steps[k].y * 16 + steps[k].h - s.y * 16 - s.h) / 16
+    const drops = steps.slice(1).map((s, k) => s.move === MOVE.DROP && !s.swim ? dropOf(s, k) : 0)
+    const splashes = steps.slice(1).map((s, k) => s.move === MOVE.DROP && s.swim ? dropOf(s, k) : 0)
     const jumps = steps.filter(s => s.move === MOVE.JUMP || s.move === MOVE.GAP || s.move === MOVE.JUMP_CLIMB).length
     const climbed = steps.filter(s => CLIMBS.has(s.move)).length
     const opens = steps.filter(s => s.move === MOVE.OPEN).length
-    const cost = { seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, climbed, opens, unknown: 0 }
-    return { steps, cost, summary: summarize(steps) }
+    const cost = {
+      seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, climbed, opens, unknown: 0,
+      waterSeconds: wsecs[node], airMin: costs.airSupply - peaks[node], waterDrop: Math.max(0, ...splashes)
+    }
+    return { steps, cost, summary: summarize(steps, node) }
   }
 
   const result = () => {
@@ -1042,6 +1322,7 @@ export function createSearch (snapshot, query, options = {}) {
     if (reason === null) return { status: 'found', reason, ...base, path: pathTo(goalNode) }
     // an exhausted search that turned a ladder away at a gap says so
     if (reason === 'exhausted' && gapSeen) reason = 'ladder-gap'
+    else if (reason === 'exhausted' && airSeen) reason = 'air'
     const partial = (why) => ({ status: 'partial', reason: why, ...base, path: best === -1 ? null : pathTo(best) })
     if (reason === 'budget') return partial('budget')
     if (goalUnloaded) return partial('goal-unloaded')
