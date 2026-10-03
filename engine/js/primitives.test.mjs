@@ -578,3 +578,53 @@ test('swim with bad ms rejects with bad-args', async () => {
   const { p } = rig(world)
   await assert.rejects(p.swim('t1', { ms: -1 }), err => err.code === 'bad-args')
 })
+
+// ---- unplanned disconnects ----
+
+const connectOnce = (bots, failAfterFirst = false) => async () => {
+  if (failAfterFirst && bots.length > 0) throw new Error('refused')
+  const b = stubBot(world)
+  bots.push(b)
+  return b
+}
+
+test('an error on the bot is reported as a body event and never thrown', async () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  assert.doesNotThrow(() => bot.emit('error', new Error('boom')))
+  assert.deepEqual(seen, [{ kind: 'error', reason: 'boom' }])
+})
+
+test('after the connection ends an acting call reconnects first and then runs on the new bot', async () => {
+  const bots = []
+  const { p, seen } = await online({ connect: connectOnce(bots) })
+  bots[0].emit('end', 'socket closed')
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
+  assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online'])
+  assert.equal(names(bots[1]).includes('lookAt'), true)
+  assert.equal(names(bots[0]).includes('lookAt'), false)
+})
+
+test('after a kick an acting call resolves disconnected when every reconnect try fails', async () => {
+  const bots = []
+  const { p, seen } = await online({ connect: connectOnce(bots, true) })
+  bots[0].emit('kicked', 'bye')
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })
+  assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'reconnect-failed'])
+  assert.equal(seen[1].reason, 'refused')
+  assert.deepEqual(names(bots[0]).filter(n => n === 'lookAt'), [])
+})
+
+test('a stale token still rejects with cut while the bot is down', async () => {
+  const bots = []
+  const { p } = await online({ connect: connectOnce(bots, true) })
+  bots[0].emit('end', 'gone')
+  await assert.rejects(p.look('old', { pos: at(1, 64, 1) }), err => err.code === 'cut')
+})
+
+test('without a connection to remake, a down body resolves acting calls disconnected', async () => {
+  const { bot, p } = rig(world)
+  bot.emit('end', 'gone')
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })
+})

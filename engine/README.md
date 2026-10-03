@@ -176,6 +176,15 @@ fails it emits `disconnected` and rejects with the last error. Only `createPrimi
 params, supports it; `createPrimitivesFromBot` resolves `{status: 'unsupported'}` without touching the bot. A stale
 token rejects with `cut` on entry and bad `ms` (not a number, negative) with `bad-args`.
 
+An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
+bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the
+body is down, the next acting call (`moveTo`, `dig`, `place`, `collect`, `inspectContainer`, `transfer`, `equip`,
+`eat`, `attack`, `sleep`, `look`, `swim`) first makes the same reconnect `offline` uses (3 tries, 5 s apart; calls
+arriving meanwhile share it), emits `online` and runs on the new bot. If every try fails it emits `reconnect-failed`
+(an error-level engine event) and resolves `{status: 'disconnected'}`; the next acting call tries again. Sensing
+reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
+resolves `disconnected` at once. A stale token still rejects with `cut` first.
+
 `swim` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
 pathfinder has no swim-up move and `moveTo` cannot surface a submerged body. It releases jump on every exit:
 surfaced, the bound, a cut, an error. A body whose head is already out returns `surfaced` at once without pressing
@@ -193,7 +202,7 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
-(`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
+(`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
 it carried, before the server clears it; `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death

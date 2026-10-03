@@ -494,12 +494,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         respawning = false
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },
-      end: reason => emit({ kind: 'disconnected', reason: String(reason) }),
-      kicked: reason => emit({ kind: 'disconnected', reason: JSON.stringify(reason) })
+      end: reason => { down = true; emit({ kind: 'disconnected', reason: String(reason) }) },
+      kicked: reason => { down = true; emit({ kind: 'disconnected', reason: JSON.stringify(reason) }) },
+      // an unhandled 'error' on an EventEmitter throws and takes the process down; report it instead
+      error: err => emit({ kind: 'error', reason: String(err?.message ?? err) })
     }
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
     return () => Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
   }
+  let down = false
   let unbind = bindEvents(bot)
   const onBodyEvent = listener => {
     listeners.add(listener)
@@ -526,6 +529,34 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     }
   }
 
+  const adopt = fresh => {
+    unbind()
+    bot = fresh
+    unbind = bindEvents(bot)
+    down = false
+    emit({ kind: 'online', pos: here() })
+  }
+
+  // After an unplanned disconnect: the same reconnect path offline uses (3 tries). Shared by concurrent callers;
+  // true when the body is back, false (with a reconnect-failed event) when it is not or close() came first.
+  let recovering = null
+  const recover = () => {
+    if (!reconnect) return Promise.resolve(false)
+    recovering ??= reconnectBot()
+      .then(fresh => { if (fresh) adopt(fresh); return Boolean(fresh) })
+      .catch(error => { emit({ kind: 'reconnect-failed', reason: String(error?.message ?? error) }); return false })
+      .finally(() => { recovering = null })
+    return recovering
+  }
+
+  // An acting primitive while the bot is down: reconnect first; resolves 'disconnected' when that fails. A stale
+  // token still rejects with cut before anything else.
+  const whenUp = fn => async (token, a) => {
+    if (!isOwner(token)) throw cutError()
+    if (down && !await recover()) return { status: 'disconnected' }
+    return fn(token, a)
+  }
+
   // Leaves the server for `ms`, then comes back with the same connection params. A cut ends the wait early (the body
   // is never left offline) and the call resolves 'cut'; close() cancels the reconnect and resolves 'closed'.
   const offline = async (token, a = {}) => {
@@ -537,14 +568,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     inflight.add(call)
     emit({ kind: 'offline', ms })
     unbind()
+    bot.on('error', () => {}) // the quitting client may still complain; nothing listens for it any more
     bot.quit()
     const full = await waitOrWake(ms * timeScale, call)
     inflight.delete(call)
     const fresh = await reconnectBot().catch(error => { emit({ kind: 'disconnected', reason: String(error.message) }); throw error })
     if (!fresh) return { status: 'closed' }
-    bot = fresh
-    unbind = bindEvents(bot)
-    emit({ kind: 'online', pos: here() })
+    adopt(fresh)
     return full && isOwner(token) ? { status: 'ok', ms } : { status: 'cut' }
   }
 
@@ -554,7 +584,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
-  return { setOwner, isOwner, self, entities, blocks, blockAt, moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim, offline, onBodyEvent, close }
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
+    .map(([name, fn]) => [name, whenUp(fn)]))
+  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.

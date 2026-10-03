@@ -626,6 +626,8 @@
   (let [pos (.-pos (.self p))]
     {:x (.-x pos) :y (.-y pos) :z (.-z pos)}))
 
+(def error-kinds #{"died" "error" "reconnect-failed"})
+
 (defn record-body-event!
   "A momentary body event becomes an entry of its kind (:hurt, :died, ...)."
   [eng e]
@@ -634,7 +636,7 @@
     (save-memory! eng)
     (emit! eng (merge (dissoc m :kind)
                       {:source :body :kind (keyword (:kind m))
-                       :level (if (= "died" (:kind m)) :error :info)}))))
+                       :level (if (contains? error-kinds (:kind m)) :error :info)}))))
 
 (defn unknown-job
   "The message why inst's spec no longer resolves against the registry, or nil."

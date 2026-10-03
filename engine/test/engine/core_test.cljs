@@ -544,6 +544,14 @@
     (is (= [{:health 5}] (mapv :data (mem/entries (mem/view (:store eng)) :hurt))))
     (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen))))
 
+(deftest bot-errors-and-a-failed-reconnect-are-error-level-events
+  (let [{:keys [eng p seen]} (setup)]
+    (.emit (.-world p) #js {:kind "error" :reason "boom"})
+    (.emit (.-world p) #js {:kind "reconnect-failed" :reason "refused"})
+    (.emit (.-world p) #js {:kind "disconnected" :reason "end"})
+    (is (= [[:error :error] [:reconnect-failed :error] [:disconnected :info]]
+           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+
 (deftest restart-restores-the-list-register-and-changes
   (async done
     (tu/run-async done
