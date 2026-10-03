@@ -490,6 +490,21 @@ down.
   `reflex.reverted`. A move whose anchor is gone puts the reflex at the bottom.
   Jobs cannot reach these.
 
+### Debugging triggers
+
+To see that a trigger fires without running the real job, register it against
+`jobs.debug.notify`:
+
+```clojure
+{:trigger :burning :job (jobs.debug.notify {:text "burning fired"})}
+```
+
+Each run emits an info event of kind `job.notify` (the text plus health, food,
+oxygen, on-fire, position, time of day and nearby hostiles) and writes a
+`:notify` entry `{:text ...}` to body memory (cap 20, ttl 10 minutes). With
+`:chat? true` it also sends the text to game chat, once a primitive `chat`
+exists; none does yet, so today the flag does nothing.
+
 ## The scheduler
 
 `tick!` (every 250 ms from `start!`):

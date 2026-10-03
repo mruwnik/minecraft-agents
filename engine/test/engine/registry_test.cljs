@@ -11,7 +11,7 @@
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.storage.deposit
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around
-     jobs.time.wait-for-day})
+     jobs.time.wait-for-day jobs.debug.notify})
 
 (deftest the-registry-holds-every-job-namespace
   (is (= migrated (set (keys registry/jobs)))))
