@@ -27,6 +27,8 @@
 (defn call-args [p name]
   (mapv #(js->clj (.-args %) :keywordize-keys true) (calls p name)))
 
+(defn dig-positions [p] (mapv :pos (call-args p "dig")))
+
 (defn block-moveTo!
   "Make every moveTo of the fake fail without moving."
   [p]
@@ -157,6 +159,8 @@
   "Solid blocks on all four sides of (5,64,0), at feet and head height."
   (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"])))
 
+(defn failed-event [seen] (first (filter #(= :unstick.failed (:kind %)) @seen)))
+
 (deftest unstick-does-nothing-when-not-stuck
   (async done
     (tu/run-async done
@@ -180,7 +184,7 @@
           (is (= [] (calls p "dig")))
           (is (false? (stuck-now? eng)) "the good move is in the window, so no re-trigger"))))))
 
-(deftest unstick-escalates-pillar-then-dig-then-fails
+(deftest unstick-digs-when-roofed-then-fails
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -191,24 +195,16 @@
           (seed-moved! eng (repeat 4 (bad-move)))
           (core/submit! eng '(jobs.maintenance.unstick) {})
           (await (core/tick! eng))
-          (is (= [] (calls p "dig") (calls p "place")) "attempt 1 only moves")
+          (is (= [] (calls p "jumpPlace") (calls p "place")) "the roof leaves no headroom, so no pillar")
+          (is (= [{:x 6 :y 64 :z 0} {:x 6 :y 65 :z 0}] (dig-positions p)) "attempt 1 in a pit digs the door, no step-back")
           (is (= [{:pos goal :range 1 :maxDistance 3} {:pos goal :range 1 :timeoutS 6}] (call-args p "moveTo"))
-              "no free cell behind in a pit, so the capped moveTo toward the goal, then the uncapped retry")
+              "only the capped hop and the uncapped retry")
           (is (= ["j1"] (:list (core/state eng))))
-          (await (core/tick! eng))
-          (is (= [{:item "cobblestone" :count 2}] (call-args p "jumpPlace")) "attempt 2 pillars with jumpPlace")
-          (is (= [] (calls p "dig") (calls p "place")) "the roof stops it, and no old place-into-own-cell pillar")
-          (await (core/tick! eng))
-          (is (= [{:pos {:x 6 :y 64 :z 0}} {:pos {:x 6 :y 65 :z 0}} {:pos {:x 5 :y 66 :z 0}}]
-                 (call-args p "dig"))
-              "attempt 3 digs the block in front at feet and head height, and the one above the head")
-          (is (= ["j1"] (:list (core/state eng))))
-          (await (core/tick! eng))
-          (is (= ["j1"] (:list (core/state eng))) "attempt 4 still tries")
+          (doseq [_ (range 5)] (await (core/tick! eng)))
           (is (not-any? #{"job.unstick.failed"} (tu/kinds seen)))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "gave up")
-          (let [ev (first (filter #(= :unstick.failed (:kind %)) @seen))]
+          (let [ev (failed-event seen)]
             (is (= :warn (:level ev)))
             (is (= {:x 5 :z 0} (select-keys (:pos ev) [:x :z]))))
           (is (= [{:x 5 :z 0}] (mapv #(select-keys (:pos (:data %)) [:x :z]) (mem/entries (mem/view (:store eng)) :stuck))))
@@ -275,7 +271,6 @@
   (block-moveTo! p)
   (seed-moved! eng (repeat 4 (bad-move)))
   (core/submit! eng '(jobs.maintenance.unstick) {})
-  (await (core/tick! eng))
   (await (core/tick! eng)))
 
 (deftest unstick-equips-the-best-pickaxe-before-digging
@@ -286,19 +281,18 @@
                                           {:name "wooden_pickaxe" :count 1}])]
           (await (run-to-dig! eng p))
           (is (= [{:item "iron_pickaxe" :dest "hand"}] (call-args p "equip")))
-          (is (= 3 (count (calls p "dig"))))
+          (is (= 2 (count (calls p "dig"))) "door: front at feet and head height")
           (let [names (call-names p)]
             (is (< (.indexOf names "equip") (.indexOf names "dig")) "equip precedes the digs")))))))
 
-(deftest unstick-digs-as-before-with-no-pickaxe
+(deftest unstick-digs-with-no-pickaxe-and-nothing-to-equip
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (dig-setup [{:name "cobblestone" :count 3}])]
+        (let [{:keys [eng p]} (dig-setup [{:name "bucket" :count 1}])]
           (await (run-to-dig! eng p))
-          (await (core/tick! eng))
-          (is (= [] (calls p "equip")) "attempt 2 pillared (and failed), attempt 3 digs")
-          (is (= 3 (count (calls p "dig")))))))))
+          (is (= [] (calls p "equip")))
+          (is (= 2 (count (calls p "dig")))))))))
 
 ;; ---------------------------------------------------------------- pillar
 
@@ -325,9 +319,13 @@
                    (await (impl token args)))))))
 
 (defn ^:async run-attempts!
-  "Seed a stuck body, block moveTo (all of them, or only the first when hop?) and tick n times."
+  "Seed a stuck body, block moveTo (all of them when hop? is false, only the first two when true, none when :free)
+  and tick n times."
   [eng p n hop?]
-  (if hop? (block-first-moveTo! p) (block-moveTo! p))
+  (case hop?
+    true (block-first-moveTo! p)
+    false (block-moveTo! p)
+    nil)
   (seed-moved! eng (repeat 4 (bad-move)))
   (core/submit! eng '(jobs.maintenance.unstick) {})
   (loop [i 0]
@@ -335,18 +333,13 @@
       (await (core/tick! eng))
       (recur (inc i)))))
 
-(defn failed-event [seen] (first (filter #(= :unstick.failed (:kind %)) @seen)))
-
 (deftest unstick-pillars-out-of-a-deep-pit-with-jump-place
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks deep-pit :inventory [{:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 1 true))
-          (is (= [] (calls p "jumpPlace")) "attempt 1 is the step-back")
-          (is (= ["j1"] (:list (core/state eng))))
-          (await (core/tick! eng))
-          (is (= [{:item "dirt" :count 3}] (call-args p "jumpPlace")) "attempt 2 pillars")
+          (await (run-attempts! eng p 1 :free))
+          (is (= [{:item "dirt" :count 3}] (call-args p "jumpPlace")) "attempt 1 pillars: dug blocks are carried, so dig only when it cannot")
           (is (= [] (calls p "dig")))
           (is (= [] (calls p "place")))
           (is (= [] (:list (core/state eng))) "the hop succeeded: done"))))))
@@ -357,7 +350,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks deep-pit
                                       :inventory [{:name "cobblestone" :count 8} {:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 2 true))
+          (await (run-attempts! eng p 1 true))
           (is (= [{:item "cobblestone" :count 3}] (call-args p "jumpPlace"))))))))
 
 (deftest unstick-pillar-count-is-the-wall-height
@@ -365,7 +358,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks low-walls :inventory [{:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 2 true))
+          (await (run-attempts! eng p 1 true))
           (is (= [{:item "dirt" :count 2}] (call-args p "jumpPlace"))))))))
 
 (deftest unstick-does-not-pillar-with-no-block-and-says-why
@@ -373,22 +366,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos at5} :blocks deep-pit})]
-          (await (run-attempts! eng p 5 false))
+          (await (run-attempts! eng p 7 false))
           (is (= [] (calls p "jumpPlace")))
           (let [ev (failed-event seen)]
             (is (some? ev))
             (is (seq (:reasons ev)))
             (is (re-find #"no block in inventory" (:text ev)))
-            (is (re-find #"^still stuck after 4 attempts: " (:text ev)))))))))
+            (is (re-find #"^still stuck after 6 attempts: " (:text ev)))))))))
 
 (deftest unstick-roofed-pit-reports-no-headroom-and-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos at5} :blocks roofed-pit :inventory [{:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 5 false))
-          (is (pos? (count (calls p "jumpPlace"))))
-          (is (re-find #"no-headroom" (:text (failed-event seen))))
+          (await (run-attempts! eng p 7 false))
+          (is (re-find #"no headroom" (:text (failed-event seen))))
           (is (= [] (:list (core/state eng))) "gave up after max-attempts, no livelock"))))))
 
 (deftest unstick-does-not-pillar-on-open-ground
@@ -396,7 +388,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks ground :inventory [{:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 5 false))
+          (await (run-attempts! eng p 7 false))
           (is (= [] (calls p "jumpPlace"))))))))
 
 ;; ---------------------------------------------------------------- hop judged by displacement
@@ -433,11 +425,8 @@
                          (seq (calls p "dig")) (await (impl token #js {:pos (clj->js far-goal) :range 1}))
                          :else #js {:status "blocked" :pos (.-pos (.self p)) :distance 6})))
           (await (start-spell! eng))
-          (is (= ["j1"] (:list (core/state eng))) "attempt 1: capped and uncapped both blocked, still stuck")
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng))) "attempt 2 dug the door, the uncapped moveTo walked out")
-          (is (= [{:pos far-goal :range 1 :maxDistance 3} {:pos far-goal :range 1 :timeoutS 6}
-                  {:pos far-goal :range 1 :maxDistance 3} {:pos far-goal :range 1 :timeoutS 6}]
+          (is (= [] (:list (core/state eng))) "attempt 1 dug the door, the capped moveTo stayed blocked, the uncapped one walked out")
+          (is (= [{:pos far-goal :range 1 :maxDistance 3} {:pos far-goal :range 1 :timeoutS 6}]
                  (call-args p "moveTo")))
           (is (= [] (calls p "jumpPlace")))
           (is (not-any? #(= :unstick.failed (:kind %)) @seen)))))))
@@ -459,3 +448,125 @@
           (moved-to! p 6)
           (await (start-spell! eng))
           (is (= ["j1"] (:list (core/state eng))) "1 block from the stuck spot is under :min-move"))))))
+
+;; ---------------------------------------------------------------- dig step: door and stair
+
+(defn dirt-box
+  "Solid dirt for y 60..66, x 0..9, z -3..3 (surface feet at y 67), minus the carved cells."
+  [carved]
+  (apply dissoc
+         (into {} (for [x (range 0 10) y (range 60 67) z (range -3 4)] [(str x "," y "," z) "dirt"]))
+         carved))
+
+(def dirt-pit
+  "A 3-deep 1x1 pit in solid dirt: feet at (5,64,0), open cells up to y 66."
+  (dirt-box ["5,64,0" "5,65,0" "5,66,0"]))
+
+(def dirt-self {:pos {:x 5 :y 64 :z 0}})
+
+(deftest unstick-in-a-dirt-pit-digs-a-stair-step-toward-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self dirt-self :blocks dirt-pit})]
+          (await (run-attempts! eng p 1 false))
+          (is (= [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] (dig-positions p))
+              "feet and head cells of the next step; the headroom cell is already open, and front at feet height is the step")
+          (is (= {:pos {:x 6 :y 65 :z 0} :range 0} (first (call-args p "moveTo"))) "then one step up")
+          (is (= [] (calls p "jumpPlace"))))))))
+
+(deftest unstick-stair-digs-the-headroom-cell-when-solid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self dirt-self :blocks (dirt-box ["5,64,0" "5,65,0"])})]
+          (await (run-attempts! eng p 1 false))
+          (is (= [{:x 5 :y 66 :z 0} {:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] (dig-positions p))))))))
+
+(deftest unstick-chooses-cells-from-the-landed-position
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 5 :y 65 :z 0} :onGround false} :blocks dirt-pit})
+              state (.-state (.-world p))]
+          (.override (.-world p) "wait"
+                     (fn ^:async f [_ _ _]
+                       (set! (.-onGround (.-self state)) true)
+                       (set! (.-pos (.-self state)) #js {:x 5 :y 64 :z 0})
+                       #js {:status "ok"}))
+          (await (run-attempts! eng p 1 :free))
+          (is (pos? (count (calls p "wait"))) "waits for the body to land first")
+          (is (= [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] (dig-positions p)) "cells of the landed feet cell, not the airborne one"))))))
+
+(deftest unstick-uses-the-cell-anyway-when-it-never-lands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 5 :y 64 :z 0} :onGround false} :blocks dirt-pit})]
+          (await (run-attempts! eng p 1 false))
+          (is (<= 1 (count (calls p "wait")) 20) "bounded polling")
+          (is (= [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] (dig-positions p))))))))
+
+(deftest unstick-digs-a-door-through-a-one-block-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks low-walls})]
+          (await (run-attempts! eng p 1 false))
+          (is (= [{:x 6 :y 64 :z 0} {:x 6 :y 65 :z 0}] (dig-positions p)) "front at feet and head height")
+          (is (= [{:pos goal :range 1 :maxDistance 3} {:pos goal :range 1 :timeoutS 6}] (call-args p "moveTo"))
+              "no stair step"))))))
+
+(def bedrock-pit
+  (into {} (for [x (range 4 9) y (range 63 68) z (range -2 3)
+                 :when (not (and (= [5 0] [x z]) (<= 64 y 66)))]
+             [(str x "," y "," z) "bedrock"])))
+
+(deftest unstick-bedrock-pit-gives-up-with-cannot-and-no-step-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks bedrock-pit})]
+          (await (run-attempts! eng p 7 false))
+          (let [ev (failed-event seen)]
+            (is (= 6 (:attempts ev)))
+            (is (= 6 (count (filter #(= "dig: cannot" %) (:reasons ev))))))
+          (is (= [] (filter #(zero? (:range %)) (call-args p "moveTo"))) "no step-back, no stair move"))))))
+
+(deftest unstick-stair-refuses-a-cell-under-gravel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks (assoc dirt-pit "6,67,0" "gravel")})]
+          (await (run-attempts! eng p 7 false))
+          (is (not-any? #{{:x 6 :y 66 :z 0}} (dig-positions p)) "the cell under the gravel is not dug")
+          (is (some #(= "dig: gravel above (6 66 0)" %) (:reasons (failed-event seen)))))))))
+
+(deftest unstick-stair-refuses-a-cell-next-to-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks (assoc dirt-pit "7,65,0" "lava")})]
+          (await (run-attempts! eng p 7 false))
+          (is (not-any? #{{:x 6 :y 65 :z 0}} (dig-positions p)))
+          (is (some #(= "dig: lava next to (6 65 0)" %) (:reasons (failed-event seen)))))))))
+
+(deftest unstick-roofed-pit-with-blocks-digs-the-roof-instead-of-pillaring
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self dirt-self :blocks (dirt-box ["5,64,0" "5,65,0"])
+                                      :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 1 false))
+          (is (= [] (calls p "jumpPlace")) "no headroom, so no pillar")
+          (is (some #{{:x 5 :y 66 :z 0}} (dig-positions p)) "the stair digs the roof first"))))))
+
+(deftest unstick-bedrock-roofed-pit-with-blocks-gives-up-without-pillaring
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks (assoc bedrock-pit "5,66,0" "bedrock")
+                                           :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 7 false))
+          (is (= [] (calls p "jumpPlace")))
+          (is (some #(= "dig: cannot" %) (:reasons (failed-event seen)))))))))

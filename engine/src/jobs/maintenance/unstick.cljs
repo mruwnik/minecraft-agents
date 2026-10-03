@@ -6,15 +6,28 @@
 
 (def doc
   "Get a body out of being stuck: a job keeps calling moveTo and the body gets
-  nowhere. Each round is one attempt, escalating with the attempt count kept
-  in job memory: 1 steps back one block the way it came; 2 pillars out when
+  nowhere. Each round is one attempt, counted in job memory. First it waits
+  (the :wait primitive, 50 ms steps, up to 1 s) for the body to be on the
+  ground, so the cells it picks are the landed ones; still airborne, it uses
+  them anyway. Then: attempt 1 steps back one block the way it came, unless
   the body is in a pit (at least three of the four sides solid at feet+k for
-  k = 0, 1, ... gives the depth d, capped at 8) and a placeable block is
-  carried: jumpPlace with the largest stack and count d; otherwise 2 digs the
-  block in front at feet and head height and the one above the head in a
-  tight gap; 3 digs if 2 pillared, else pillars; later attempts repeat the
-  pillar if possible, else dig. Each attempt that did nothing useful records
-  why in job memory (:reasons). After every attempt it
+  k = 0, 1, ... gives the depth d, capped at 8), where it goes straight to the
+  next rule. Otherwise, when a placeable block is carried in a pit, it
+  pillars: jumpPlace with the largest stack and count d (blocks it digged are
+  carried, so pillaring is preferred every round). Otherwise it digs, toward
+  the stored goal (no goal: the first cardinal), as a DOOR when the wall in
+  front is one block thick (the cells two ahead at feet and head height are
+  open): the solid blocks in front at feet and head height. Else as a STAIR,
+  lifting the body one block: it digs each solid one of H, the cell above the
+  head (headroom to jump), and F1, F2, the feet and head cells one block up
+  in front, which stand on the front block at feet height (left solid; if
+  it is open, the next cardinal is tried, and none solid records a reason),
+  then moves to F1 with range 0. A cell is not dug when the one above it is
+  sand or gravel or any of its six neighbours is water or lava (the reason
+  says which); any dig status but dug or missing ends the attempt with
+  \"dig: <status>\" (bedrock gives cannot, a slow block timeout). The best
+  pickaxe carried is equipped first. Each attempt that did nothing useful
+  records why in job memory (:reasons). After every attempt it
   tries a moveTo toward the stored goal itself, capped at hop-blocks (3) along
   the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If
   that did not move the body more than :min-move blocks from where it stood
@@ -40,7 +53,7 @@
    :min-move {:doc "blocks a move must cover to count as progress" :default (:min-move stuck/defaults)}
    :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :default (:window-ms stuck/defaults)}
    :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
-   :max-attempts {:doc "attempts before giving up with unstick.failed" :default 4}})
+   :max-attempts {:doc "attempts before giving up with unstick.failed" :default 6}})
 
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
@@ -62,6 +75,10 @@
    "oak_planks" "spruce_planks" "birch_planks" "oak_log" "spruce_log" "birch_log"])
 
 (def max-pillar 8)
+
+(def land-step-ms 50)
+
+(def land-max-steps 20)
 
 ;; ------------------------------------------------------------------ geometry
 
@@ -133,8 +150,6 @@
 
 (def dig-ok-statuses #{"dug" "missing"})
 
-(def gravity-or-liquid? (some-fn liquid-names falling-names))
-
 (defn ^:async dig!
   [c pos]
   (await (ctx/act c :dig (clj->js {:pos pos}))))
@@ -143,30 +158,84 @@
   (let [have (set (map :name (u/inventory (:primitives c))))]
     (first (filter have pickaxes))))
 
-(defn ^:async dig-ahead!
-  "Dig the solid blocks in front at feet and head height, and the
-  block above the head when it is solid and the head cell is open (a gap one
-  block too low to jump out of). Sand and gravel overhead are left alone. The
-  best pickaxe carried is equipped first, as a pillar block in hand digs far
-  too slowly."
+(defn on-ground?
+  "False only when the body says it is airborne (a missing key counts as on the ground)."
+  [c]
+  (not (false? (.-onGround (.self (:primitives c))))))
+
+(defn ^:async land!
+  "Wait in short steps until the body is on the ground, up to land-max-steps."
+  [c]
+  (loop [i 0]
+    (when (and (< i land-max-steps) (not (on-ground? c)))
+      (await (ctx/act c :wait (clj->js {:ms land-step-ms})))
+      (recur (inc i)))))
+
+(defn door-cells
+  "The solid blocks in front at feet and head height when the wall is one block
+  thick (both cells two ahead are open), else nil."
+  [c here dir]
+  (let [front (shift here dir)
+        beyond (shift front dir)]
+    (when (and (open? c beyond) (open? c (up beyond 1)))
+      (seq (filter #(solid? c %) [front (up front 1)])))))
+
+(defn stair-cells
+  "{:front f :cells [...]} for the first heading (the goal's first) whose front
+  block at feet height is solid to stand on: the solid ones of H (above the
+  head), F1 and F2 (the next step's feet and head cells). nil when no heading
+  has a step."
+  [c here dir]
+  (some (fn [d]
+          (let [front (shift here d)]
+            (when (solid? c front)
+              {:front (up front 1)
+               :cells (filter #(solid? c %) [(up here 2) (up front 1) (up front 2)])})))
+        (distinct (cons dir cardinals))))
+
+(defn unsafe-reason
+  "Why digging pos is unsafe (a falling block above, liquid beside), else nil."
+  [c pos]
+  (let [at (str "(" (:x pos) " " (:y pos) " " (:z pos) ")")
+        above (block-name c (up pos 1))
+        beside (->> [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]
+                    (keep (fn [[dx dy dz]] (liquid-names (block-name c (-> pos (update :x + dx) (update :y + dy) (update :z + dz)))))))]
+    (cond
+      (falling-names above) (str "dig: " above " above " at)
+      (seq beside) (str "dig: " (first beside) " next to " at))))
+
+(defn ^:async dig-cells!
+  "Dig each pos in turn: nil when all were dug (or already gone), else the reason."
+  [c cells]
+  (loop [ts cells]
+    (if-let [t (first ts)]
+      (let [st (.-status (await (dig! c t)))]
+        (if (contains? dig-ok-statuses st)
+          (recur (rest ts))
+          (str "dig: " st)))
+      nil)))
+
+(defn ^:async dig-step!
+  "Dig toward the goal: a door through a one-block wall, else a stair step that
+  lifts the body one block (then moves onto it). Returns nil when it did
+  something useful, else the reason it did not."
   [c]
   (let [here (cell (u/self-pos c))
-        front (some->> (forward c here) (shift here))
-        above (up here 2)
-        targets (concat (when front (filter #(solid? c %) [front (up front 1)]))
-                        (when (and (solid? c above) (open? c (up here 1))
-                                   (not (gravity-or-liquid? (block-name c above))))
-                          [above]))]
-    (when-let [pick (and (seq targets) (best-pickaxe c))]
-      (await (ctx/act c :equip (clj->js {:item pick :dest "hand"}))))
-    (if (empty? targets)
-      "dig: nothing to dig"
-      (loop [ts targets bad nil]
-        (if-let [t (first ts)]
-          (let [r (await (dig! c t))
-                st (.-status r)]
-            (recur (rest ts) (or bad (when-not (contains? dig-ok-statuses st) (str "dig: " st)))))
-          bad)))))
+        dir (or (forward c here) (first cardinals))
+        door (door-cells c here dir)
+        stair (when-not door (stair-cells c here dir))
+        cells (or door (:cells stair))]
+    (cond
+      (and (not door) (not stair)) "stair: no solid step"
+      :else
+      (if-let [unsafe (some #(unsafe-reason c %) cells)]
+        unsafe
+        (do
+          (when-let [pick (and (seq cells) (best-pickaxe c))]
+            (await (ctx/act c :equip (clj->js {:item pick :dest "hand"}))))
+          (let [bad (await (dig-cells! c cells))]
+            (or bad
+                (when stair (await (go! c (:front stair)))))))))))
 
 (defn walled-at?
   "True when at least three of the four sides are solid at the height of pos."
@@ -195,6 +264,7 @@
     (cond
       (not item) {:why "pillar: no block in inventory"}
       (zero? depth) {:why "pillar: not in a pit"}
+      (not (open? c (up here 2))) {:why "pillar: no headroom"}
       :else {:item item :count depth})))
 
 (defn pillar-possible? [c] (some? (:item (pillar-plan c (cell (u/self-pos c))))))
@@ -250,21 +320,21 @@
     (if (>= tried max-attempts)
       (give-up! c tried)
       (let [attempt (inc tried)]
+        (await (land! c))
         (ctx/update-mem! c merge (when (= 1 attempt) (bearings c (cell (u/self-pos c)))) {:attempts attempt})
-        (let [pillar? (pillar-possible? c)
-              pillared? (:pillared (ctx/mem c))
-              action (case attempt
-                       1 :step-back
-                       2 (if pillar? :pillar :dig)
-                       (if (and (= 3 attempt) pillared?) :dig (if pillar? :pillar :dig)))
+        (let [here (cell (u/self-pos c))
+              pillar? (pillar-possible? c)
+              action (cond
+                       (and (= 1 attempt) (zero? (pit-depth c here))) :step-back
+                       pillar? :pillar
+                       :else :dig)
               skipped (when (and (= :dig action) (not pillar?)) (pillar-skipped-reason c))
               why (await (case action
                            :step-back (step-back! c)
                            :pillar (pillar! c)
-                           :dig (dig-ahead! c)))]
-          (ctx/update-mem! c #(cond-> (update % :reasons (fnil into []) (keep identity [skipped why]))
-                                (= :pillar action) (assoc :pillared true))))
+                           :dig (dig-step! c)))]
+          (ctx/update-mem! c update :reasons (fnil into []) (keep identity [skipped why])))
         (if (await (hop! c min-move))
-          (do (ctx/update-mem! c dissoc :attempts :reasons :pillared)
+          (do (ctx/update-mem! c dissoc :attempts :reasons)
               :done)
           :continue)))))
