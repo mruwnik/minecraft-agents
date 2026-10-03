@@ -6,7 +6,8 @@
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
             [engine.triggers.hungry :as hungry]
-            [engine.triggers.night-unsafe :as night-unsafe]))
+            [engine.triggers.night-unsafe :as night-unsafe]
+            [engine.triggers.stuck :as stuck]))
 
 (def default-health 7)
 
@@ -75,4 +76,4 @@
 (def all
   "Every trigger by name."
   (into {} (map (juxt :name identity))
-        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry night-unsafe/trigger]))
+        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry night-unsafe/trigger stuck/stuck]))
