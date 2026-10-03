@@ -392,12 +392,28 @@
     (boolean (call-guarded eng (str "trigger " (:trigger entry)) false
                            #((:when t) world view (:args entry))))))
 
+(defn reflex-text
+  "\"burning → jobs.survival.extinguish\": the reflex id and its job's label."
+  [reflex node]
+  (str (name reflex) " → " (expr/label node)))
+
+(defn drop-reflex-job!
+  "Drop reflex job id (instance and memory) and emit its one reflex.ended with
+  outcome (:done :declined :cut :dropped :failed) and any extra fields."
+  [eng id reflex outcome extra]
+  (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
+    (drop-instance! eng id)
+    (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job id
+                       :outcome outcome :text (str text ": " (name outcome))}
+                      extra))))
+
 (defn end-reflex!
-  "A reflex job ended on its own; classify and apply the entry's persistence."
-  [eng {:keys [id reflex]}]
-  (drop-instance! eng id)
+  "A reflex job ended on its own with outcome; classify and apply the entry's persistence."
+  [eng {:keys [id reflex]} outcome]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
-        still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
+        still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))
+        text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
+    (drop-instance! eng id)
     (when still?
       (case (:persistence entry)
         :cooldown (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
@@ -405,6 +421,7 @@
         :stop (swap! (:state eng) assoc-in [:reflex-state reflex :stopped?] true)
         nil))
     (emit! eng {:source :reflex :kind :ended :level :info :reflex reflex :job id
+                :outcome outcome :text (str text ": " (name outcome))
                 :how (if still? :completed_not_cleared :cleared)})))
 
 (defn settle-reflex! [eng run {:keys [status error]}]
@@ -414,12 +431,12 @@
     (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
                     :text (str "reflex " (name (:reflex run)) ": job " (:id run)
                                " declined; dropped, it may fire again after the trigger's cooldown")})
-        (end-reflex! eng run))
+        (end-reflex! eng run :declined))
     (:error :cut)
     (do (emit! eng {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run)
                     :error (str error)})
-        (end-reflex! eng run))
-    (end-reflex! eng run)))
+        (end-reflex! eng run (if (= :cut status) :cut :failed)))
+    (end-reflex! eng run :done)))
 
 (defn watch-progress!
   "After a round of a holding listed job: count rounds with no act call and
@@ -485,9 +502,7 @@
   (set-owner! eng nil)
   (reset! (:running eng) nil)
   (if (:reflex h)
-    (do (drop-instance! eng (:id h))
-        (emit! eng {:source :reflex :kind :ended :level :info :reflex (:reflex h) :job (:id h)
-                    :how :dropped :by by :cause cause}))
+    (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause})
     (do (swap! (:state eng) assoc :resume (:id h) :current nil)
         (emit! eng (merge (job-fields eng (:id h))
                           {:source :job :kind :cut :level :info :by by :cause cause})))))
@@ -511,12 +526,12 @@
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
+        node (expr/parse (:jobs eng) (:job entry))
         fired (emit! eng {:source :reflex :kind :fired :level :info :reflex (:id entry)
-                          :job id :interrupted (:id h)})]
+                          :job id :interrupted (:id h) :text (reflex-text (:id entry) node)})]
     (when h (cut! eng h (:id entry) fired))
-    (let [node (expr/parse (:jobs eng) (:job entry))]
-      (swap! (:state eng) add-instance id node {:reflex (:id entry)})
-      (mem/create-job! (:store eng) id (second (job-of eng {:spec node}))))
+    (swap! (:state eng) add-instance id node {:reflex (:id entry)})
+    (mem/create-job! (:store eng) id (second (job-of eng {:spec node})))
     (start-round! eng id)))
 
 (defn expire-changes! [eng]
@@ -705,6 +720,16 @@
     (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
                 :error problem :text (str "dropped on restore: " problem)})))
 
+(defn drop-leftover-reflex-jobs!
+  "After a restore: restore dropped the reflex jobs a crash left in saved;
+  say so with one reflex.ended each (a clean shutdown already did)."
+  [eng saved]
+  (doseq [[id inst] (:instances saved)
+          :when (:reflex inst)]
+    (emit! eng {:source :reflex :kind :ended :level :info :reflex (:reflex inst) :job id
+                :outcome :dropped :how :dropped :by :restart
+                :text (str (reflex-text (:reflex inst) (:spec inst)) ": dropped")})))
+
 (defn unresolved-entry
   "The message why register entry e no longer resolves (trigger or job spec), or nil."
   [eng e]
@@ -763,6 +788,7 @@
     (record-save! eng file (fsu/write-edn! file (state eng)))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
+    (drop-leftover-reflex-jobs! eng saved)
     (drop-unknown-jobs! eng)
     (drop-unresolved-entries! eng)
     (mem/write! store :restart {})
@@ -776,8 +802,11 @@
   rotation and its outcome is never booked, so its job stays on the list
   (persisted as :current, resumed first after a restart) with its memory."
   [eng]
-  (set-owner! eng nil)
-  (reset! (:running eng) nil)
+  (let [h (holder eng)]
+    (set-owner! eng nil)
+    (reset! (:running eng) nil)
+    (when (:reflex h)
+      (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by :shutdown})))
   (emit! eng {:source :system :kind :stopping :level :info :job (:current (state eng))}))
 
 (defn report-tick-failure! [eng e]
