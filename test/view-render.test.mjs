@@ -64,3 +64,19 @@ test('the PNG has the asked size', async () => {
   const img = decodePng(png)
   assert.deepEqual([img.width, img.height], [40, 30])
 })
+
+for (const [name, pose] of [
+  ['no eye', { eye: undefined, pos: undefined }],
+  ['no yaw', { yaw: undefined }],
+  ['a non-numeric eye', { eye: { x: 'a', y: 1, z: 2 } }]
+]) {
+  test(`renderView refuses a pose with ${name}, with a clear PoseError`, () => {
+    const stateDir = stateWith({ status: 'offline', ...pose })
+    assert.throws(() => renderView({ agentName: 'Bob', width: 8, height: 8, stateDir }), e => e.name === 'PoseError' && /pose has no position; body never fully started/.test(e.message))
+  })
+}
+
+test('an offline pose that has a position still renders', () => {
+  const r = renderView({ agentName: 'Bob', width: 8, height: 8, stateDir: stateWith({ status: 'offline' }) })
+  assert.equal(r.pose.status, 'offline')
+})

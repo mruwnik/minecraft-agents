@@ -19,7 +19,7 @@ import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEve
 import { mergeBodies, parsePlan } from './dashboard/map.mjs'
 import { foldEngine, engineView, emptyEngine, parseEngineAgents, engineBody, completeLines, dropTornHead, parseEngineLines, decodeBytes } from './dashboard/engine.mjs'
 import { scanCap } from '../src/lib.mjs'
-import { renderView } from './view/render.mjs'
+import { renderView, PoseError } from './view/render.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
@@ -462,7 +462,7 @@ const handlers = {
 
 // one PNG of what a body sees, drawn from the view files it dumps (tools/view-render.mjs), not through the body
 const serveView = (res, name) => {
-  try { return send(res, 200, 'image/png', renderView({ agentName: name }).png) } catch (e) { return sendJson(res, 404, { error: e.message }) }
+  try { return send(res, 200, 'image/png', renderView({ agentName: name }).png) } catch (e) { return sendJson(res, e instanceof PoseError ? 409 : 404, { error: e.message }) }
 }
 
 http.createServer(async (req, res) => {

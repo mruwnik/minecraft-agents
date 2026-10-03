@@ -25,10 +25,19 @@ const forVersion = version => {
 
 export const viewDir = (agentName, stateDir) => path.join(stateDir, 'agents', agentName, 'view')
 
+export class PoseError extends Error {
+  name = 'PoseError'
+}
+
+const finite = v => typeof v === 'number' && Number.isFinite(v)
+const hasPosition = pose => ['x', 'y', 'z'].every(k => finite(pose.eye?.[k])) && finite(pose.yaw) && finite(pose.pitch)
+
 export function readPose (agentName, stateDir = DEFAULT_STATE_DIR) {
   const file = path.join(viewDir(agentName, stateDir), 'pose.json')
   if (!fs.existsSync(file)) throw new Error(`no pose.json for ${agentName} (looked at ${file})`)
-  return JSON.parse(fs.readFileSync(file, 'utf8'))
+  const pose = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (!hasPosition(pose)) throw new PoseError('pose has no position; body never fully started')
+  return pose
 }
 
 export function renderView ({ agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {} }) {
