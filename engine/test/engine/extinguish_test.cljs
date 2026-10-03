@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.jobs.util :as u]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -34,6 +35,11 @@
 
 (defn entries [eng kind] (mapv :data (mem/entries (mem/view (:store eng)) kind)))
 
+(defn bare-ctx
+  "A ctx with empty job memory over primitives p, for calling check and round directly."
+  [p args]
+  {:primitives p :args args :view (fn [] {:data {} :now 0}) :root "j1" :slots []})
+
 (defn ^:async run-until-empty [eng n]
   (loop [i 0]
     (when (and (< i n) (seq (:list (core/state eng))))
@@ -48,7 +54,7 @@
                            [{:onFire true :inLava true} true]
                            [{:inWater true} false]
                            [{} false]]]
-    (is (= expected (extinguish/check {:primitives (tu/fake {:self self})})) (pr-str self))))
+    (is (= expected (extinguish/check (bare-ctx (tu/fake {:self self}) {}))) (pr-str self))))
 
 (def fire-resistance [{:name "fire_resistance" :amplifier 0 :duration 600}])
 
@@ -57,7 +63,7 @@
                            [{:inLava true :effects fire-resistance} false]
                            [{:onFire true :effects [{:name "speed" :amplifier 0 :duration 600}]} true]
                            [{:onFire true} true]]]
-    (is (= expected (extinguish/check {:primitives (tu/fake {:self self})})) (pr-str self))
+    (is (= expected (extinguish/check (bare-ctx (tu/fake {:self self}) {}))) (pr-str self))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
 
 (deftest burning-trigger-holds-on-fire-or-in-lava
@@ -71,7 +77,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake {})]
-          (is (= :done (await (extinguish/round {:primitives p :args {}}))))
+          (is (= :done (await (extinguish/round (bare-ctx p {})))))
           (is (= [] (vec (.-calls (.-world p))))))))))
 
 (deftest heads-for-water-when-it-is-near
@@ -160,6 +166,37 @@
           (is (not (.-onFire (.self p))))
           (await (run-until-empty eng 3))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest scoops-the-poured-water-back-once-the-fire-is-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (run-until-empty eng 5))
+          (is (= [] (:list (core/state eng))))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :item "water_bucket"}
+                  {:pos {:x 0 :y 64 :z 0} :item "bucket"}]
+                 (mapv call-args (calls p "place"))))
+          (is (not= "water" (.-name (.blockAt p #js {:x 0 :y 64 :z 0}))))
+          (is (some #(= "water_bucket" (:name %)) (u/inventory p))))))))
+
+(deftest a-poured-cell-that-is-no-longer-water-ends-the-job-without-a-scoop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (:list (core/state eng)))) "still listed after the pour")
+          (.delete (.-blocks (.-state (.-world p))) "0,64,0")
+          (await (run-until-empty eng 3))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (calls p "place")))))))))
 
 (deftest no-safe-cell-gives-up-after-three-rounds-with-one-warning
   (async done

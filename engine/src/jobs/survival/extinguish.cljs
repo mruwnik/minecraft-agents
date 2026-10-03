@@ -5,7 +5,11 @@
 
 (def doc
   "Put the body out: it is on fire or in lava. Each round, with a water bucket
-  carried and the body on land, pours the water at the feet. Otherwise it makes
+  carried and the body on land, pours the water at the feet, remembers the cell
+  as :poured and, once the fire is out, scoops that water back up with the
+  empty bucket so no source block is left behind (info :scoop_failed when the
+  scoop is not placed; if still burning after 8 waiting rounds it stops
+  waiting and acts normally). Otherwise it makes
   one short walk: when in lava or no water is within :water-radius, to the
   best nearby cell (:step blocks around the body) that is passable, stands on
   something solid and is not fire, lava, magma or a campfire, scored by
@@ -41,7 +45,11 @@
 (def walk-cost 0.5)
 (def hazard-touch 1.5)
 
-(defn check [c] (burning/burning? (.self (:primitives c))))
+(def max-pour-waits 8)
+
+(defn body-burning? [c] (burning/burning? (.self (:primitives c))))
+
+(defn check [c] (boolean (or (body-burning? c) (:poured (ctx/mem c)))))
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 
@@ -100,7 +108,7 @@
   [pos scanned]
   (boolean (some #(<= (u/dist pos (:pos %)) hazard-touch) scanned)))
 
-(defn clear? [c] (not (check c)))
+(defn clear? [c] (not (body-burning? c)))
 
 (defn finish
   "After acting: done when the body is out, else continue."
@@ -115,11 +123,45 @@
 
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
+(defn clear-pour! [c]
+  (ctx/update-mem! c dissoc :poured :pour-waits))
+
+(defn ^:async scoop-round
+  "The water was poured at poured. Wait while burning (up to max-pour-waits
+  rounds); once out scoop the water back up and finish."
+  [c poured]
+  (let [p (:primitives c)]
+    (cond
+      (body-burning? c)
+      (let [waits (inc (:pour-waits (ctx/mem c) 0))]
+        (if (> waits max-pour-waits)
+          (do (clear-pour! c) nil)
+          (do (ctx/update-mem! c assoc :pour-waits waits) :continue)))
+
+      (not= "water" (u/block-name p poured))
+      (do (clear-pour! c) :done)
+
+      :else
+      (let [r (await (ctx/act c :place (clj->js {:pos poured :item "bucket"})))
+            status (.-status r)]
+        (clear-pour! c)
+        (when-not (= "placed" status)
+          (ctx/emit! c :scoop_failed :info {:text (str "could not scoop the poured water: " status)
+                                             :status status}))
+        :done))))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
-        me (.self p)]
-    (if-not (burning/burning? me)
+        me (.self p)
+        poured (:poured (ctx/mem c))
+        scooped (when poured (await (scoop-round c poured)))]
+    (cond
+      scooped scooped
+
+      (and (not poured) (not (burning/burning? me)))
       :done
+
+      :else
       (let [{:keys [water-radius step scan-radius]} (:args c)
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
@@ -129,7 +171,8 @@
         (remember-hazards! c scanned)
         (cond
           (and (not lava?) (has-bucket? p) (await (pour-water! c pos)))
-          (finish c)
+          (do (ctx/update-mem! c assoc :poured pos)
+              :continue)
 
           water
           (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
