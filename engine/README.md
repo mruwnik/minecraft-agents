@@ -697,7 +697,8 @@ it never removes it, and it alerts.
 - *Act results.* `act!` classifies every act result of a round (the acts of
   children count for the top-level job). Failures are the statuses `blocked
   failed unreachable cannot timeout gone out-of-reach no-item no-support
-  no-headroom occupied full disconnected unsupported not-night monsters-near`;
+  no-headroom occupied full disconnected unsupported not-night monsters-near
+  no-effect`;
   any other status (`arrived partial dug placed ok hit ...`) is progress. An
   act that throws counts as neither. *Neutral acts* neither count nor
   reset: `look`, `wait` and `equip` (a job that looks and then gets a blocked

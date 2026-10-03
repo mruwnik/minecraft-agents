@@ -12,7 +12,7 @@
 
 (def failure-statuses
   "Act statuses that count as a failure; every other status is progress."
-  #{"blocked" "failed" "unreachable" "cannot" "timeout" "gone" "out-of-reach" "no-item"
+  #{"blocked" "failed" "unreachable" "cannot" "no-effect" "timeout" "gone" "out-of-reach" "no-item"
     "no-support" "no-headroom" "occupied" "full" "disconnected" "unsupported" "not-night"
     "monsters-near"})
 
