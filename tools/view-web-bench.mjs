@@ -179,6 +179,20 @@ const hubReport = async cdp => {
     samples.push(await cdp.evaluate('({ stats: __hub.stats(), heap: performance.memory ? performance.memory.usedJSHeapSize : null })'))
   }
   const cards = cardRates(samples)
+  const attachSamples = samples.map(s => Object.values(s.stats.scenes).flatMap(scene => scene.attaches ?? []))
+  const bigSamples = attachSamples.map(list => list.find(a => a.fps === 'raf')).filter(Boolean)
+  const cardCount = attachSamples.at(-1).filter(a => a.fps !== 'raf').length
+  const cardFpsMeans = Array.from({ length: cardCount }, (_, i) => attachSamples.reduce((sum, list) => sum + list.filter(a => a.fps !== 'raf')[i].measuredFps, 0) / attachSamples.length)
+  const bigReport = bigSamples.length ? {
+    size: [bigSamples.at(-1).width, bigSamples.at(-1).height],
+    measuredFpsMin: Math.min(...bigSamples.map(a => a.measuredFps)),
+    measuredFpsSeries: bigSamples.map(a => a.measuredFps),
+    measuredFpsMean: round(bigSamples.reduce((sum, a) => sum + a.measuredFps, 0) / bigSamples.length, 2),
+    copyMsP50: bigSamples.at(-1).copyMs,
+    copyMsP95: bigSamples.at(-1).copyMsP95,
+    gpuMs: bigSamples.at(-1).gpuMs ?? null,
+    cardAttachFps: { min: round(Math.min(...cardFpsMeans), 2), median: round(median(cardFpsMeans), 2), n: cardCount }
+  } : null
   const gpuProbe = await cdp.evaluate('__hub.probeGpu()')
   const longTasks = await cdp.evaluate('window.__longTasks ?? []')
   const final = samples.at(-1).stats
@@ -196,6 +210,7 @@ const hubReport = async cdp => {
     scenes: agents.length,
     scenesWithColumns: ready.length,
     cardFps: cards,
+    big: bigReport,
     fps: { min: round(Math.min(...fpsList), 2), median: round(median(fpsList), 2), perScene: Object.fromEntries(agents.map((a, i) => [a, round(fpsList[i], 2)])) },
     frameCostMs: { p50: round(final.frameCostMs.p50, 2), p95: round(final.frameCostMs.p95, 2), max: round(final.frameCostMs.max, 2), n: final.frameCostMs.n },
     renderCpuMsP50: round(median(agents.map(a => final.scenes[a].renderMsP50).filter(v => v !== null)), 2),

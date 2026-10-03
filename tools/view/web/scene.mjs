@@ -89,7 +89,7 @@ const keep = (list, value) => {
 // /pose /columns /blocks ...), debugLevel (0..2, the table's issue marks), maxDist, urlParams (?time / ?rain overrides of shading.mjs),
 // finishForLatency (gl.finish before stamping latencies: the single-view page's measurement; leave off for many scenes),
 // ownStream (default true: the scene opens /pose/<agent> itself; false: whoever owns a shared /poses stream passes each event of
-// this agent to feed(event, data), as the hub does, because a browser allows only 6 HTTP/1.1 connections per origin)
+// this agent to feed(event, data), as the hub does, because a browser allows only 6 HTTP/1.1 connections per origin))
 export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = true, renderer, decoder, baseUrl = '', debugLevel = 0, maxDist = radius * 16, urlParams = new URLSearchParams(), finishForLatency = false, ownStream = true }) => {
   const id = String(nextSceneId++)
   const N = 2 * radius + 1

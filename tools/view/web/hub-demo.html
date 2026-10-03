@@ -19,6 +19,7 @@
 <div id="grid"></div>
 <script type="module">
 // One 2D canvas per agent from /agents (offline ones too), all drawn by one hub. ?w=&h= card size, ?fps=, ?radius=, ?n= most agents.
+// ?big=<agent>&bigw=1920&bigh=1080 adds one big 'raf' canvas of that agent (a second attach of its card's scene) next to the cards.
 // ?nogl=1 forces getContext('webgl2') to return null, to see the hub without WebGL2.
 
 const params = new URLSearchParams(location.search)
@@ -45,6 +46,18 @@ const cards = agents.map(agent => {
   return { agent, scene, caption }
 })
 
+const bigAgent = params.get('big')
+const bigCard = cards.find(c => c.agent.name === bigAgent)
+if (bigAgent && !bigCard) console.warn(`?big=${bigAgent}: no such agent`)
+if (bigCard) {
+  const canvas = document.createElement('canvas')
+  canvas.style.cssText = 'margin-top:8px;width:100%;max-width:960px'
+  document.body.append(canvas)
+  const size = { width: number('bigw', 1920), height: number('bigh', 1080), fps: 'raf' }
+  bigCard.scene.attach(canvas, size)
+}
+const bigAttach = () => bigCard?.scene.stats().attaches.find(a => a.fps === 'raf') ?? null
+
 const refresh = () => {
   for (const { agent, scene, caption } of cards) {
     const s = scene.stats()
@@ -57,7 +70,7 @@ const refresh = () => {
 setInterval(refresh, 500)
 
 const settled = () => cards.every(({ scene }) => scene.ready())
-window.__hub = { supported: hub.supported, hub, scenes: cards.map(c => c.scene), agents, size: [width, height], stats: () => hub.stats(), probeGpu: o => hub.probeGpu({ width, height, ...o }), ready: false }
+window.__hub = { bigAttach, supported: hub.supported, hub, scenes: cards.map(c => c.scene), agents, size: [width, height], stats: () => hub.stats(), probeGpu: o => hub.probeGpu({ width, height, ...o }), ready: false }
 const waitReady = setInterval(() => { if (settled()) { window.__hub.ready = true; clearInterval(waitReady) } }, 250)
 </script>
 </body>
