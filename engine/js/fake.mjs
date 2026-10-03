@@ -89,6 +89,14 @@ function defaultActs (s) {
     return e
   }
 
+  // Where the body stands decides lava and water: lava is left by stepping out of it, water puts out fire.
+  const settle = () => {
+    const here = blockName(s.self.pos)
+    s.self.inLava = here === 'lava'
+    s.self.inWater = here === 'water'
+    if (s.self.inWater) s.self.onFire = false
+  }
+
   return {
     async moveTo (token, { pos, range = 1, maxDistance = 64 }) {
       if (s.unreachable.has(key(pos))) return { status: 'blocked', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
@@ -99,6 +107,7 @@ function defaultActs (s) {
         return { status: 'partial', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       }
       s.self.pos = { ...pos }
+      settle()
       return { status: 'arrived', pos: { ...pos }, distance: 0 }
     },
 
@@ -117,6 +126,12 @@ function defaultActs (s) {
       if (!near(pos)) return { status: 'unreachable' }
       if (blockName(pos) !== 'air') return { status: 'occupied' }
       if (takeItem(s.inventory, item, 1) === 0) return { status: 'no-item' }
+      if (item === 'water_bucket') { // pours water and leaves the empty bucket
+        addItem(s.inventory, 'bucket', 1)
+        s.blocks.set(key(pos), 'water')
+        if (key(pos) === key(s.self.pos)) settle()
+        return { status: 'placed', block: 'water' }
+      }
       s.blocks.set(key(pos), item)
       return { status: 'placed', block: item }
     },
