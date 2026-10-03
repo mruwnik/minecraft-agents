@@ -21,7 +21,7 @@
   back at :min-oxygen or the head is in air. After a swim that surfaced
   (:surfaced in job memory) a body still in water heads for land instead of
   bobbing: it moves to the nearest land cell within :shore-radius (feet y
-  within one block of the own; feet and head cells air, the cell below solid,
+  from one below to two above the own; feet and head cells air, the cell below solid,
   i.e. not air, water, lava, fire or magma); done when it stands out of the
   water, a failed round (:no_shore warn after three) when the move does not
   get it out, and a clean decline (info :no_shore_near, no warn) when no land
@@ -105,13 +105,13 @@
 
 (defn nearest-land
   "The nearest land cell within radius sideways of self-pos, feet y from one
-  below to one above; nil if none."
+  below to two above; nil if none."
   [p self-pos radius]
   (let [fx (js/Math.floor (:x self-pos))
         fy (js/Math.floor (:y self-pos))
         fz (js/Math.floor (:z self-pos))]
     (->> (for [[dx dz] (columns radius)
-               dy [0 -1 1]]
+               dy [0 -1 1 2]]
            {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
          (filter #(land-cell? p %))
          first)))

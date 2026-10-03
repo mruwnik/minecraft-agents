@@ -223,6 +223,20 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest surfaced-with-the-rim-two-blocks-above-the-feet-it-still-finds-the-ledge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4}
+                                      :blocks (merge pool {"2,64,0" "stone" "2,65,0" "stone" "2,66,0" "stone"})})]
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= {:x 0 :y 65 :z 0} (core/self-pos p)) "the swim surfaced at the top water block")
+          (await (core/tick! eng))
+          (is (= {:x 2 :y 67 :z 0} (core/self-pos p)) "stands on the ledge, feet two above the own")
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng)))))))))
+
 (deftest surfaced-in-open-water-with-no-shore-declines-without-a-warning
   (async done
     (tu/run-async done
