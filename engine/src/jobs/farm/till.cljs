@@ -59,10 +59,15 @@
 
 (defn check
   "True when nothing is pending (the round can finish), false without a hoe.
-  Bad args pass, so the round throws them."
+  Bad args pass, so the round throws them. Walks the cells lazily and stops at
+  the first one that needs work, reading each cell at most once."
   [c]
-  (let [todo (try (pending c) (catch :default _ nil))]
-    (or (nil? todo) (empty? todo) (some? (hoe-of (:primitives c))))))
+  (let [skipped (:skipped (ctx/mem c) {})
+        p (:primitives c)
+        todo? (try (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %))))
+                         (cells (:args c)))
+                   (catch :default _ nil))]
+    (or (nil? todo?) (some? (hoe-of p)))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."

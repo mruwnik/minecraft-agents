@@ -12,7 +12,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -210,3 +210,29 @@
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (await (child-outcome eng job args 10))))
           (is (= 2 (count (calls p "dig")))))))))
+
+(defn counting-ctx
+  "A ctx for till/check over the fake world; reads is an atom counting blockAt calls per cell."
+  [world args reads]
+  (let [p (tu/fake world)
+        orig (.bind (.-blockAt p) p)]
+    (set! (.-blockAt p) (fn [pos] (swap! reads update (js/JSON.stringify pos) (fnil inc 0)) (orig pos)))
+    {:primitives p :args args :view (constantly {}) :root "till-check" :slots []}))
+
+(def sixteen {:from {:x 0 :y 63 :z 0} :to {:x 15 :y 63 :z 15}})
+(def sixteen-cells (till/cells sixteen))
+
+(deftest check-stops-at-the-first-cell-that-needs-work
+  (let [reads (atom {})
+        c (counting-ctx {:inventory hoe :blocks (into {} (map (fn [{:keys [x y z]}] [(str x "," y "," z) "dirt"]) sixteen-cells))}
+                        sixteen reads)]
+    (is (true? (till/check c)))
+    (is (<= (reduce + (vals @reads)) 1))))
+
+(deftest check-reads-each-cell-at-most-once-when-all-is-farmland
+  (let [reads (atom {})
+        c (counting-ctx {:blocks (into {} (map (fn [{:keys [x y z]}] [(str x "," y "," z) "farmland"]) sixteen-cells))}
+                        sixteen reads)]
+    (is (true? (till/check c)) "nothing pending passes without a hoe")
+    (is (<= (reduce + (vals @reads)) 256))
+    (is (every? #(= 1 %) (vals @reads)))))
