@@ -122,7 +122,7 @@
         skipped (set (:skipped (ctx/mem c)))
         item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))
                   (remove #(skipped (.-id %)))
-                  (filter #(or (nil? wanted) (wanted (.. % -item -name))))
+                  (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name))))
                   first)]
     (if-not item
       :done
@@ -166,7 +166,7 @@
     (cond
       (nil? t) true
       (nil? sapling) :not-yet
-      (log-name? (.-name (.blockAt p (clj->js (:pos t))))) :not-yet
+      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) :not-yet
       :else true)))
 
 (defn ^:async plant-sapling-round

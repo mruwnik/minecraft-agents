@@ -293,3 +293,15 @@
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= 3 (count (calls p "dig")))))))))
+
+(deftest collect-drops-ignores-an-item-entity-whose-stack-is-unknown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {})]
+          (set! (.-entities p) (fn [_] #js [#js {:id 7 :name "item" :kind "item" :item nil :distance 2}]))
+          (core/submit! eng :collect-drops {:filter ["oak_log"]} {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "collect")) "an unknown stack is not collected when a filter is set")
+          (is (= [] (:list (core/state eng))))
+          (is (not-any? #(= :failed (:kind %)) @seen) "the job finishes instead of being dropped on a TypeError"))))))
