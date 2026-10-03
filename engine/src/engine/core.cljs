@@ -511,8 +511,9 @@
   "One round of the child job def in slot under parent base; see README.md.
   The child's memory is the parent's [:children slot] sub-map, created with
   the args when missing and cleared when the child is :done only; :continue
-  and :declined keep it, so a declined child's debts survive. Resolves to :declined when the child's check
-  fails, else the child's :done or :continue. A :done child's result! data is
+  and :declined keep it, so a declined child's debts survive. Resolves to
+  :declined when the child's check or round declines, else :done or :continue.
+  A :done child's result! data is
   readable with child-result for the rest of the parent's round. The child
   shares the parent's token, so a cut anywhere ends the whole chain's round."
   [eng base slot def args]
@@ -530,9 +531,9 @@
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (throw error))
-          (if (= status :continue)
-            (swap! (:results base) dissoc child-id)
-            (clear!))
+          (if (= status :done)
+            (clear!)
+            (swap! (:results base) dissoc child-id))
           status)))))
 
 (defn ^:async run-round [eng run inst]

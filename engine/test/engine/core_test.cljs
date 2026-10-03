@@ -101,6 +101,14 @@
 
 (def result-child {:name :result-child :check always :round result-child-round})
 
+(defn ^:async declining-round-child [c]
+  (let [n (inc (:n (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :n n)
+    (ctx/result! c {:n n})
+    (if (= n 1) :declined :done)))
+
+(def declining-round-job {:name :declining-round-child :check always :round declining-round-child})
+
 (def registry
   {'count {:check always :round count-round}
    'walk {:check always :round walk-round}
@@ -487,6 +495,20 @@
           (reset! flag true)
           (is (= :continue (await (ctx/call-child c :x gated-job {}))))
           (is (= {:n 2} (job-mem eng "j9" [:x])) "and resumes from it"))))))
+
+(deftest a-round-declining-child-keeps-its-memory-and-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (is (= :declined (await (ctx/call-child c :x declining-round-job {}))))
+          (is (= {:n 1} (job-mem eng "j9" [:x])) "a declined round preserves child memory")
+          (is (nil? (ctx/child-result c :x)) "a declined round does not hand over its result")
+          (is (= :done (await (ctx/call-child c :x declining-round-job {}))) "the same slot resumes")
+          (is (= {:n 2} (ctx/child-result c :x)) "only the done round hands over its result")
+          (is (= {} (job-mem eng "j9" [:x])) "done clears the resumed child's memory"))))))
 
 (deftest a-done-child-hands-its-result-to-the-parent-for-the-round
   (async done
