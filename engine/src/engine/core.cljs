@@ -360,7 +360,9 @@
                   moved-policy))
     (save-memory! eng)
     (record-act! eng {:root root :reflex reflex} k r (distance from to))
-    (emit! eng (merge fields {:source :action :kind :done :status (.-status r)}))
+    (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
+                 (.-reason r) (assoc :reason (.-reason r))
+                 (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
     r))
 
 (defn make-ctx

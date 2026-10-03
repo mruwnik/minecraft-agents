@@ -2,9 +2,10 @@
   (:require [engine.ctx :as ctx]))
 
 (def doc
-  "Walk a, b, a, b (:laps times each) per round, a moveTo per leg, stopping
-  the round early on any status but arrived; done after :rounds rounds. A
-  harmless long round for showing a reflex cut a running job.")
+  "Walk a, b, a, b (:laps times each) per round, a moveTo per leg; done after
+  :rounds rounds, or at once, with a :leg-unfinished warn (target, status,
+  reason), when a leg does not arrive. A harmless long round for showing a
+  reflex cut a running job.")
 
 (def args
   {:a {:doc "first point" :default nil}
@@ -15,14 +16,23 @@
 
 (defn check [_c] true)
 
+(defn ^:async walk-legs
+  "Walk the legs in order; nil when all arrived, else the first leg's pos and result."
+  [c range legs]
+  (loop [legs legs]
+    (when-let [pos (first legs)]
+      (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
+        (if (= "arrived" (.-status r))
+          (recur (rest legs))
+          [pos r])))))
+
 (defn ^:async round [c]
   (let [{:keys [a b laps rounds range]} (:args c)
-        legs (take (* 2 laps) (cycle [a b]))]
-    (loop [legs legs]
-      (when-let [pos (first legs)]
-        (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
-          (when (= "arrived" (.-status r))
-            (recur (rest legs))))))
-    (let [done-rounds (inc (:rounds-run (ctx/mem c) 0))]
-      (ctx/update-mem! c assoc :rounds-run done-rounds)
-      (if (>= done-rounds rounds) :done :continue))))
+        unfinished (await (walk-legs c range (take (* 2 laps) (cycle [a b]))))]
+    (if-let [[pos r] unfinished]
+      (do (ctx/emit! c :leg-unfinished :warn {:to pos :status (.-status r) :reason (.-reason r)
+                                               :text (str "a leg to " pos " did not arrive: " (.-status r))})
+          :done)
+      (let [done-rounds (inc (:rounds-run (ctx/mem c) 0))]
+        (ctx/update-mem! c assoc :rounds-run done-rounds)
+        (if (>= done-rounds rounds) :done :continue)))))

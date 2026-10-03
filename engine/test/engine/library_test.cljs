@@ -10,6 +10,7 @@
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
 
 (defn setup
@@ -258,6 +259,47 @@
         (is (= {:arrived false :reason :unreachable}
                (await (child-outcome (:eng (setup {:noPath ["9,64,9"]}))
                                      'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
+
+(defn stub-move-to!
+  "Make p's moveTo answer the statuses in order (then arrived), \"stalled\"
+  being the reason of the blocked ones; returns an atom counting the calls."
+  [p statuses]
+  (let [left (atom statuses)
+        n (atom 0)]
+    (set! (.-moveTo p)
+          (fn [_token _args]
+            (let [s (or (first @left) "arrived")]
+              (swap! left rest)
+              (swap! n inc)
+              (js/Promise.resolve #js {:status s :reason (when (= "blocked" s) "stalled")}))))
+    n))
+
+(deftest go-to-counts-only-consecutive-blocked-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {})
+              n (stub-move-to! p ["blocked" "partial" "blocked" "partial" "blocked" "blocked" "blocked"])]
+          (is (= {:arrived false :reason :unreachable}
+                 (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 12))))
+          (is (= 7 @n) "a partial walk resets the count")
+          (is (= [{:status "blocked" :reason "stalled" :tries 3}]
+                 (->> @seen (filter #(= :unreachable (:kind %)))
+                      (mapv #(select-keys % [:status :reason :tries]))))))))))
+
+(deftest go-to-emits-its-result-as-an-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:unreachable ["9,64,9"]})
+              results #(->> @seen (filter (fn [e] (= :result (:kind e))))
+                            (mapv (fn [e] (select-keys e [:level :arrived :reason]))))]
+          (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))
+          (is (= [{:level :info :arrived true}] (results)))
+          (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
+          (is (= [{:level :info :arrived true}
+                  {:level :info :arrived false :reason :unreachable}]
+                 (results))))))))
 
 (deftest collect-drops-hands-over-how-many-it-collected
   (async done
@@ -521,15 +563,18 @@
           (is (= [5 10 5 10 5 10] (move-xs p)))
           (is (= 1 (count (:list (core/state eng)))) "still listed after round one"))))))
 
-(deftest pace-stops-the-round-early-on-a-blocked-leg
+(deftest pace-ends-with-a-warn-when-a-leg-does-not-arrive
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:unreachable ["10,64,0"]})]
+        (let [{:keys [eng p seen]} (setup {:noPath ["10,64,0"]})]
           (core/submit! eng (list 'jobs.movement.pace pace-args) {})
           (await (core/tick! eng))
           (is (= [5 10] (move-xs p)) "ends at the blocked leg")
-          (is (= 1 (count (:list (core/state eng)))) "a blocked leg does not throw or finish"))))))
+          (is (= [] (:list (core/state eng))) "done at once, not round after round")
+          (is (= [{:level :warn :to {:x 10 :y 64 :z 0} :status "blocked" :reason "noPath"}]
+                 (->> @seen (filter #(= :leg-unfinished (:kind %)))
+                      (mapv #(select-keys % [:level :to :status :reason]))))))))))
 
 (deftest pace-is-done-after-the-given-rounds
   (async done
@@ -554,6 +599,20 @@
           (is (= 1 (count (calls p "look"))))
           (is (= [] (:list (core/state eng))))
           (is (= 1000000 (:t (mem/latest (mem/view (:store eng)) :looked)))))))))
+
+(defn rounded [pos] (update-vals pos #(/ (js/Math.round (* 1e6 %)) 1e6)))
+
+(deftest look-point-is-look-ahead-away-in-the-direction-and-height-given
+  (let [here {:x 10 :y 64 :z 20}]
+    (are [u v want] (= want (rounded (look-around/look-point here u v)))
+      0 0 {:x 13 :y 63 :z 20}
+      0.5 0 {:x 7 :y 63 :z 20}
+      0.25 1 {:x 10 :y 65.5 :z 23}
+      0.75 0.4 {:x 10 :y 64 :z 17})))
+
+(deftest look-point-differs-for-different-random-numbers
+  (let [here {:x 0 :y 64 :z 0}]
+    (is (not= (look-around/look-point here 0.1 0.2) (look-around/look-point here 0.6 0.9)))))
 
 (def interval-ms 45000)
 

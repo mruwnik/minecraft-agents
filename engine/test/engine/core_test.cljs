@@ -780,6 +780,25 @@
                  (->> @seen (filter #(= :action (:source %))) (mapv (juxt :source :kind :name)))))
           (is (every? #(= :debug (:level %)) (filter #(= :action (:source %)) @seen))))))))
 
+(defn ^:async blocked-walk-round [c]
+  (await (ctx/act c :moveTo #js {:pos #js {:x 9 :y 64 :z 9}}))
+  (await (ctx/act c :look #js {:pos #js {:x 9 :y 64 :z 0}}))
+  :done)
+
+(deftest action-done-carries-reason-and-rounded-distance-when-the-result-has-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:noPath ["9,64,9"]})
+              eng (assoc-in eng [:jobs 'walker] {:check always :round blocked-walk-round})]
+          (set! (.-moveTo p) (fn [_t _a] (js/Promise.resolve #js {:status "blocked" :reason "noPath" :distance 12.7279221})))
+          (core/submit! eng '(walker) {})
+          (await (core/tick! eng))
+          (is (= [{:name "moveTo" :status "blocked" :reason "noPath" :distance 12.73}
+                  {:name "look" :status "ok"}]
+                 (->> @seen (filter #(and (= :action (:source %)) (= :done (:kind %))))
+                      (mapv #(select-keys % [:name :status :reason :distance]))))))))))
+
 (deftest swim-is-an-acting-primitive-through-ctx-act
   (async done
     (tu/run-async done

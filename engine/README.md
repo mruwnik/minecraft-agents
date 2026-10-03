@@ -873,11 +873,11 @@ after three the job emits a warn and ends.
 
 | job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count | none; hands over `{:arrived bool :reason?}` |
+| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count (consecutive blocked walks; a partial one resets it) | none; hands over `{:arrived bool :reason?}`, also emitted as a `:result` info event |
 | `jobs.time.wait-for-day` | none | it is day | none | none |
 | `jobs.survival.eat` | `{:item nil :until 18 :allow-bad false}` | food below `:until` and something edible carried | none | writes `:fed` (cap 20, 6 h) |
-| `jobs.movement.look-around` | `{:every-ms 2000}` | always | none | writes `:looked` (cap 1, forever) |
-| `jobs.movement.pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
+| `jobs.movement.look-around` | `{:every-ms 2000}` | always | none | writes `:looked` (cap 1, forever); looks in a random direction |
+| `jobs.movement.pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none; a leg that does not arrive warns `:leg-unfinished` and ends it |
 | `jobs.forestry.fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
 | `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items, `:collected` count | none; hands over `{:collected n}` |
 | `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
