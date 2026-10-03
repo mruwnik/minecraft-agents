@@ -64,6 +64,18 @@
   (let [[def args] (child-job ctx job args)]
     ((:call-child ctx) slot def args)))
 
+(defn result!
+  "Hand data to the parent as this job's result. Only the round that ends
+  :done hands it over; the parent reads it with child-result."
+  [ctx data]
+  ((:result ctx) data))
+
+(defn child-result
+  "The data the child in slot handed over with result! in the round it
+  finished, read during that same round of the parent; nil otherwise."
+  [ctx slot]
+  ((:child-result ctx) slot))
+
 (defn check-child
   "Run job's check as the child in slot would see it, for a parent's check."
   [ctx slot job args]

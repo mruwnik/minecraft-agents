@@ -198,9 +198,13 @@
   "The ctx a round or a check receives. base is {:root :slots :chain :token
   :args :round :reflex}; :root is the top-level instance id and :slots the
   child slots below it ([] for the instance itself). A check gets :token nil,
-  so it cannot write or act."
+  so it cannot write or act. :results holds the results children handed over
+  with result! during this round of the top-level job; a fresh one is made
+  when base has none, so results never outlive the round."
   [eng {:keys [root slots chain token args round reflex] :as base}]
   (let [store (:store eng)
+        results (or (:results base) (atom {}))
+        base (assoc base :results results)
         id (mem/path->id root slots)
         check! #(when-not (owner? eng token) (throw (cut-error)))
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
@@ -226,6 +230,8 @@
                      (wrote! kind))
      :act (fn [k act-args] (act! eng base id k act-args))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
+     :result (fn [data] (check!) (swap! results assoc id data))
+     :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
      :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
      :emit (fn [kind level fields]
              (emit! eng (merge fields {:source :job :kind kind :level level :job id
@@ -241,21 +247,29 @@
 (defn ^:async call-child
   "One round of the child job def in slot under parent base; see README.md.
   The child's memory is the parent's [:children slot] sub-map, created with
-  the args when missing. Resolves to :declined when the child's check fails,
-  else the child's :done or :continue. The child shares the parent's token,
-  so a cut anywhere ends the whole chain's round."
+  the args when missing and cleared when the child is :done or :declined, so
+  only a :continue keeps it. Resolves to :declined when the child's check
+  fails, else the child's :done or :continue. A :done child's result! data is
+  readable with child-result for the rest of the parent's round. The child
+  shares the parent's token, so a cut anywhere ends the whole chain's round."
   [eng base slot def args]
   (let [store (:store eng)
-        slots (conj (:slots base) slot)]
+        slots (conj (:slots base) slot)
+        child-id (mem/path->id (:root base) slots)
+        clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (swap! (:results base) dissoc child-id)
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
     (let [c (child-ctx eng base slot args)]
       (if-not ((:check def) c)
-        :declined
+        (do (clear!) :declined)
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (throw error))
+          (if (= status :continue)
+            (swap! (:results base) dissoc child-id)
+            (clear!))
           status)))))
 
 (defn ^:async run-round [eng run inst]

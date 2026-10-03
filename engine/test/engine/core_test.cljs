@@ -74,6 +74,16 @@
       (await (ctx/call-child c :deeper {:name :recurse :check always :round recurse-round}
                              {:depth (dec depth)})))))
 
+(defn ^:async result-child-round
+  "Hands {:n n} over every round; done on the second."
+  [c]
+  (let [n (inc (:n (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :n n)
+    (ctx/result! c {:n n})
+    (if (>= n 2) :done :continue)))
+
+(def result-child {:name :result-child :check always :round result-child-round})
+
 (def registry
   {'count {:check always :round count-round}
    'walk {:check always :round walk-round}
@@ -88,6 +98,9 @@
    'submitter {:check always :round submit-round}
    'jobs.movement.look-around (get registry/jobs 'jobs.movement.look-around)
    'gated gated-job
+   'any-gated {:check always :round (fn ^:async any-gated-round [c]
+                                      (let [r (await (ctx/call-child c :g gated-job {}))]
+                                        (if (= :done r) :done :continue)))}
    'no-check {:round count-round}})
 
 (def triggers
@@ -98,7 +111,9 @@
    :near {:name :near :job '(walk {:pos {:x 50 :y 64 :z 0}}) :persistence :stop
           :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
    :every-interval triggers/every-interval
-   :never {:name :never :job '(eat) :when (constantly false)}})
+   :never {:name :never :job '(eat) :when (constantly false)}
+   :gated {:name :gated :job '(gated) :persistence :retry :when (constantly true)}
+   :gated-child {:name :gated-child :job '(any-gated) :persistence :retry :when (constantly true)}})
 
 (defn setup
   ([] (setup {}))
@@ -280,9 +295,63 @@
           (.setOwner (:primitives eng) "tx")
           (is (= :continue (await (ctx/call-child c :x child-job {:rounds 2}))))
           (is (= :done (await (ctx/call-child c :x child-job {:rounds 2}))))
-          (is (= {:n 2} (job-mem eng "j9" [:x])))
+          (is (= {} (job-mem eng "j9" [:x])) "a done child's memory is cleared")
+          (is (= :continue (await (ctx/call-child c :x child-job {:rounds 2}))) "so the next call starts fresh")
           (is (= :continue (await (ctx/call-child c :y child-job {:rounds 2}))))
           (is (= {:n 1} (job-mem eng "j9" [:y]))))))))
+
+(deftest a-declining-child-memory-is-cleared
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (reset! flag true)
+          (is (= :continue (await (ctx/call-child c :x gated-job {}))))
+          (is (= {:n 1} (job-mem eng "j9" [:x])) "a continuing child keeps its memory")
+          (reset! flag false)
+          (is (= :declined (await (ctx/call-child c :x gated-job {}))))
+          (is (= {} (mem/job-mem (mem/view (:store eng)) "j9" [:x])) "args and all"))))))
+
+(deftest a-done-child-hands-its-result-to-the-parent-for-the-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              base {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1}
+              c (core/make-ctx eng base)]
+          (.setOwner (:primitives eng) "tx")
+          (is (nil? (ctx/child-result c :x)) "nothing before the call")
+          (is (= :continue (await (ctx/call-child c :x result-child {}))))
+          (is (nil? (ctx/child-result c :x)) "a continuing child's result is not handed over")
+          (is (= :done (await (ctx/call-child c :x result-child {}))))
+          (is (= {:n 2} (ctx/child-result c :x)))
+          (is (nil? (ctx/child-result c :y)) "per slot")
+          (is (nil? (ctx/child-result (core/make-ctx eng (assoc base :round 2)) :x))
+              "gone once the parent's round ends"))))))
+
+(deftest a-child-result-reaches-a-parent-through-the-engine
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              seen (atom [])
+              parent {:check always
+                      :round (fn ^:async result-parent-round [c]
+                               (let [r (await (ctx/call-child c :x result-child {}))]
+                                 (swap! seen conj [r (ctx/child-result c :x)])
+                                 r))}]
+          (let [eng (assoc eng :jobs (assoc registry 'result-parent parent))]
+            (core/submit! eng '(result-parent) {})
+            (dotimes [_ 2] (await (core/tick! eng)))
+            (is (= [[:continue nil] [:done {:n 2}]] @seen))
+            (is (= [] (listed eng)))))))))
+
+(deftest a-check-cannot-hand-over-a-result
+  (let [{:keys [eng]} (setup)
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token nil :args {} :round 1})]
+    (is (core/cut? (try (ctx/result! c {:x 1}) (catch :default e e))))))
 
 (deftest children-can-call-children-without-a-depth-cap
   (async done
@@ -677,6 +746,36 @@
     (ctx/update-mem! c assoc :n n)
     (if (>= n 2) :done :continue)))
 
+(deftest a-reflex-job-runs-its-round-even-when-its-check-declines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (reset! flag false)
+          (core/submit! eng '(count) {})
+          (core/register-reflex! eng {:trigger :gated})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= ["j2" "j2"] (ran seen)) "the trigger fired the job and its check was never asked")
+          (is (= {:n 2} (job-mem eng "j2")) "the round ran both times")
+          (is (= {} (job-mem eng "j1")) "the listed job waits"))))))
+
+(deftest a-reflex-whose-child-declines-keeps-the-body-until-preempted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:health 5}})]
+          (reset! flag false)
+          (core/submit! eng '(count) {})
+          (core/register-reflex! eng {:trigger :gated-child})
+          (core/register-reflex! eng {:trigger :hurt})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j2" "j2" "j2"] (ran seen)) "the parent re-polls its declining child each tick")
+          (is (= {} (job-mem eng "j1")) "the listed job waits")
+          (core/move! eng :hurt {:above :gated-child} 60)
+          (await (core/tick! eng))
+          (is (= "dropped" (some #(when (and (= :ended (:kind %)) (= "j2" (:job %))) (name (:how %))) @seen))
+              "a higher reflex takes the body"))))))
+
 (def flag-b (atom true))
 
 (def expr-registry
@@ -706,7 +805,8 @@
         (let [{:keys [eng seen]} (expr-setup)]
           (core/submit! eng '(seq (twice) (twice-b)) {})
           (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= 2 (child-n eng "j1" [:c0])))
+          (is (= 1 (:at (job-mem eng "j1"))) "the first child is done")
+          (is (nil? (child-n eng "j1" [:c0])) "and its memory cleared")
           (is (nil? (child-n eng "j1" [:c1])) "the second child has not run yet")
           (reset! flag-b false)
           (is (nil? (core/tick! eng)) "check = the next unfinished child's check")

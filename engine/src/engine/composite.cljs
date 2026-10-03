@@ -47,16 +47,16 @@
                     (if (= :done r) :done :continue)))))}))
 
 (defn repeat-def
-  "The child in slot :c0; when it is done its memory is dropped, so the next
-  call starts it fresh, and :runs counts the runs. Never done. Check: the
-  child's check."
+  "The child in slot :c0; when it is done call-child drops its memory, so the
+  next call starts it fresh, and :runs counts the runs. Never done. Check:
+  the child's check."
   [kid]
   (let [[def args] kid]
     {:check (fn [c] (boolean (ctx/check-child c (slot 0) def args)))
      :round (fn ^:async repeat-round [c]
               (let [r (await (ctx/call-child c (slot 0) def args))]
                 (when (= :done r)
-                  (ctx/update-mem! c #(-> % (update :children dissoc (slot 0)) (update :runs (fnil inc 0)))))
+                  (ctx/update-mem! c update :runs (fnil inc 0)))
                 :continue))}))
 
 (defn job
