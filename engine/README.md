@@ -33,12 +33,15 @@ Layout:
 - `js/fake.mjs` a scriptable fake world with the same interface, for tests.
 - `src/engine/` `core` (list, register, scheduler, act wrapper,
   call-child), `memory` (the body store), `events`, `ctx` (helpers checks and
-  rounds call), `catalog` (every job and trigger by name), `scenario`, `main`.
-- `src/engine/jobs/` job definitions; `engine.jobs.samples` holds small ones
-  (`:go-to`, `:wait-for-day`, `:eat`, `:look-around`, `:pace`).
-  `src/engine/triggers.cljs` holds the triggers. Register new jobs and
-  triggers in `engine.catalog`.
-- `scenarios/sample.edn` a scenario using the samples.
+  rounds call), `expr` (job expressions), `composite` (combinators as jobs),
+  `registry` (the compile-time job registry, `.clj` macro plus `.cljs`),
+  `build_hooks.clj`, `triggers` (every trigger; `triggers/all`), `scenario`,
+  `main`.
+- `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`,
+  `jobs.forestry.fell-tree`, ...). Nothing registers them: the build finds
+  them. Helpers they share live outside this tree (`engine.jobs.util`,
+  `engine.jobs.forestry`).
+- `scenarios/*.edn` scenarios.
 - `test/engine/` cljs tests. Test helpers live in `engine.test-util`.
 
 The cljs side loads JS modules at runtime with `js/require` (Node 24 can
@@ -226,26 +229,106 @@ owner changes, exactly as the real layer must.
 
 ## Jobs
 
-A job definition is a map of a name, a check and a round:
+A job is a namespace under `src/jobs/` exporting `check` and `round`,
+optionally `doc` and `args`. Directories nest freely; the namespace follows
+the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
-{:name  :go-to                    ; keyword, unique in the catalog
- :check (fn [ctx] bool)           ; required; (constantly true) is fine
- :round go-to-round}              ; (defn ^:async go-to-round [ctx] ...) => :done | :continue
+(ns jobs.survival.eat
+  (:require [engine.ctx :as ctx]))
+
+(def doc "Eat the best food carried, once.")                 ; optional
+
+(def args                                                    ; optional
+  {:item {:doc "the food to eat; the best carried when nil" :default nil}})
+
+(defn check [_c] true)                                       ; ctx -> boolean
+
+(defn ^:async round [c]                                      ; ctx -> :done | :continue
+  (await (ctx/act c :eat #js {}))
+  :done)
 ```
+
+There is no protocol and no catalog to edit: adding the file adds the job.
+
+**The registry.** `engine.registry/jobs` is `{ns-symbol {:check :round :doc
+:args}}`, built at compile time:
+
+1. The build hook `engine.build-hooks/add-job-namespaces` (in both builds'
+   `:build-hooks`) runs at the `:compile-prepare` stage of every compile. It
+   lists every `.cljs`/`.cljc` file under the `jobs` directory on the
+   classpath, reads each with the Clojure reader, and fails the compile with
+   a message naming the namespace when one does not define `check` and
+   `round`, or when the file's `ns` does not match its path. It puts every
+   job namespace at the front of the `:main` module's entries, so each is
+   compiled and loaded although nothing requires it, and gives
+   `engine.registry` those namespaces as `:extra-requires`, so parallel
+   compilation analyses them first (shadow's own test runner does the same).
+2. The macro `engine.registry/job-registry` (in `registry.clj`) scans the
+   same files and emits the map with a var reference per export.
+   `engine.registry` is `^:dev/always`, so the macro re-runs on every
+   compile.
+
+Limits: the scan reads the source text, so `check` and `round` must be
+top-level `def`/`defn` forms (not defined by another macro). A job namespace
+must not require `engine.registry` (it would wait on itself). Under `shadow
+watch`, adding a job file does not by itself trigger a compile; the next
+compile, from any source change, picks it up. Release (`:advanced`) builds
+are untested.
 
 - **The check** says whether the job can usefully run now. It reads sensing
   and memory through the ctx, returns a boolean, and is cheap and side-effect
   free: its ctx has no token, so `act`, `update-mem!` and `remember!` throw.
   Checks are asked every tick; a declined job costs nothing. A check that
   throws declines (with a `system.error` warn). The engine refuses a job
-  definition without a `:check`.
+  without a `check` and a `round`.
 - **The round** returns `:done` (the job leaves the list and its memory is
   deleted) or `:continue`. Anything else, or a throw, drops the job with a
   `job.failed` warn. A cut is never a failure: the job stays listed with its
   memory.
 - Long waits are not loops: a job waiting for daylight returns `:continue`
-  and declines in its check until the sun is up (`:wait-for-day`).
+  and declines in its check until the sun is up (`jobs.time.wait-for-day`).
+- **`args`** maps each arg key to `{:doc :default}`. The engine merges the
+  spec's args over the defaults, so a round can read `(:args ctx)` without
+  its own defaults. Undeclared keys are passed through.
+
+## Job expressions
+
+Wherever a job is named (scenario queue entries, register entries,
+`submit!`, `do-now!`, `ctx/submit!`) it is given as a job spec: an EDN
+list, read with the EDN reader and interpreted, never evaluated.
+
+| form | meaning |
+|---|---|
+| `(jobs.survival.eat)`, `(jobs.survival.eat {:item "bread"})` | a leaf: the job namespace, args optional, merged over its `args` defaults |
+| `(seq e1 e2 ...)` | run the children in order, one child call per round; check = the check of the next unfinished child; done when the last is done |
+| `(any e1 e2 ...)` | each round, call the first child whose check passes; check = any child's check; done when the child that ran is done |
+| `(repeat e)` | when the child is done, start it again fresh; never done; declines when the child declines |
+| `(hold e)` | like `e`, but the list entry holds the body; only around a whole spec, and not in a register entry |
+
+Nothing else is valid: a symbol that is neither a combinator nor a job in
+the registry, a missing or extra argument, args that are not a map, or a
+nested `hold` is refused at load (scenario validation, `submit!`,
+`register-reflex!`) with a message naming the problem and the whole spec.
+
+```clojure
+(jobs.forestry.harvest-wood {:species "oak"})
+(hold (seq (jobs.movement.go-to {:pos {:x 10 :y 64 :z 0}})
+           (jobs.time.wait-for-day)))
+(repeat (any (jobs.forestry.harvest-wood) (jobs.storage.deposit)))
+```
+
+The engine parses a spec into a node (`engine.expr`; plain EDN, persisted in
+`engine.edn`) and runs combinators as generic jobs (`engine.composite`)
+through `call-child`. Child slots are positional, `:c0`, `:c1`, ..., so a
+spec's memory nests like any parent's: `(seq (repeat (any (a))) (b))`
+keeps `a` at `[:children :c0 :children :c0 :children :c0]`. `seq` keeps its
+position as `:at`, `repeat` counts finished runs as `:runs` and drops the
+child's memory to start it fresh. Events name a job by its label:
+`jobs.forestry.fell-tree`, or `(seq jobs.a (repeat jobs.b))`. A restored
+instance whose job namespace no longer exists is dropped with a
+`job.failed` warn.
+
 
 ### ctx
 
@@ -261,9 +344,9 @@ The single argument of a check and a round. Use the helpers in `engine.ctx`.
 | `(ctx/remember! ctx kind data policy?)` | append an entry to body memory |
 | `(ctx/forget-where! ctx kind pred)`, `(ctx/forget-until! ctx kind t)` | drop entries whose data matches, or written at or before `t` |
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive through the act wrapper |
-| `(await (ctx/call-child ctx slot def args))` | one round of a child job (below) |
-| `(ctx/check-child ctx slot def args)` | the child's check against its sub-map, for a parent's check |
-| `(ctx/submit! ctx job-name args opts)` | put a peer job at the end of the list; returns its id |
+| `(await (ctx/call-child ctx slot job args))` | one round of a child job (below); `job` is a job symbol or a definition map |
+| `(ctx/check-child ctx slot job args)` | the child's check against its sub-map, for a parent's check |
+| `(ctx/submit! ctx spec opts)` | put a job spec at the end of the list as a peer; returns its id |
 | `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
 
 **act.** Every acting primitive call goes through `act`. It checks the
@@ -274,8 +357,10 @@ no commit: a job updates its memory map and calls `act`, so a cut loses at
 most the work since the last save. Write a debt or an intent with
 `update-mem!` before the `act` it protects.
 
-**call-child.** `(ctx/call-child ctx slot def args)` takes a slot keyword, a
-job definition (the map, not a catalog name) and args. The child's memory is
+**call-child.** `(ctx/call-child ctx slot job args)` takes a slot keyword,
+a job (a job namespace symbol such as `'jobs.forestry.fell-tree`, whose
+`args` defaults are merged under `args`, or a definition map `{:check
+:round}`) and args. The child's memory is
 the parent's `[:children slot]` sub-map, created as `{:args args :children {}}`
 when missing. The engine runs the child's check against it (false resolves
 to `:declined`, no round run), else one child round with the parent's token,
@@ -330,16 +415,17 @@ A trigger definition:
 ```clojure
 {:name        :hostile-near
  :when        (fn [world view args] bool) ; view is a memory view; args are the entry's
- :job         :retreat                    ; default job (a catalog name)
- :args        {:radius 8}                 ; defaults, merged under the entry's :args
+ :job         '(jobs.survival.retreat)    ; default job spec
+ :args        {:radius 8}                 ; the trigger's own, merged under the entry's :args
  :persistence :cooldown                   ; :retry | :cooldown | :stop
  :cooldown-s  5}
 ```
 
 The register is an ordered vector of entries `{:id :trigger :job :args
 :persistence :cooldown-s :builtin?}`; the id defaults to the trigger name and
-`:args` is the trigger's defaults merged with the scenario's. The same args
-go to the reflex job. The engine evaluates the effective order every tick and
+`:args` is the trigger's defaults merged with the scenario's; they are the
+trigger's only. `:job` is a job spec without `hold`; the reflex job's args
+are in it. The engine evaluates the effective order every tick and
 fires the first entry whose `:when` holds and which is not muted or cooling
 down.
 
@@ -431,11 +517,13 @@ EDN, read with `cljs.reader`:
 
 ```clojure
 {:register [{:trigger :health-low}                                  ; trigger defaults
-            {:trigger :hostile-near :args {:radius 12}}             ; args merged over the defaults
-            {:trigger :health-low :id :health-low-2 :job :eat
+            {:trigger :hostile-near :args {:radius 12}              ; trigger args
+             :job (jobs.survival.retreat {:radius 12 :step 10})}    ; job spec
+            {:trigger :health-low :id :health-low-2
+             :job (jobs.survival.eat {:item "bread"})
              :persistence :retry}]                                  ; overrides
- :queue    [{:job :go-to :args {:pos {:x 10 :y 64 :z 0}}}
-            {:job :wait-for-day :hold? false}]}
+ :queue    [(jobs.movement.go-to {:pos {:x 10 :y 64 :z 0}})         ; job specs
+            (hold (jobs.time.wait-for-day))]}
 ```
 
 `npm run body -- --agent <name> --scenario <file>` loads
@@ -445,35 +533,34 @@ It refuses to start, with a message, when `js/primitives.mjs` does not exist.
 If `state/agents/<name>/engine/engine.edn` exists the saved list and register
 are restored and the scenario is ignored; pass `--fresh` to discard saved
 engine state and start from the scenario (memory is kept; job kinds of the
-discarded list are swept). The scenario is validated against the catalog
-before connecting. `--state-dir <dir>` overrides the repo's `state/`.
+discarded list are swept). The scenario is validated against the job
+registry and the triggers before connecting. `--state-dir <dir>` overrides the repo's `state/`.
 
 `test/engine/scenarios_test.cljs` runs `woodcutter.edn` and `pace-cuts.edn`
 end to end against the fake primitives.
 
 ## Job library
 
-Jobs live in `engine.jobs.forestry`, `engine.jobs.storage`,
-`engine.jobs.survival` and `engine.jobs.samples`, helpers in
-`engine.jobs.util`. All are registered in `engine.catalog`. Every round
+Jobs live under `src/jobs/`, helpers in `engine.jobs.util` and
+`engine.jobs.forestry`. Each declares its args with defaults. Every round
 re-reads the world and does a bounded piece. Positions in memory are
 `{:x :y :z}` maps. Failed rounds are counted in job memory as `:failures`;
 after three the job emits a warn and ends.
 
 | job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `:go-to` | `{:pos :range 1}` | always | `:blocked` count | none |
-| `:wait-for-day` | none | it is day | none | none |
-| `:eat` | `{:item?}` | always | none | none |
-| `:look-around` | none | always | none | writes `:looked` (cap 1, forever) |
-| `:pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
-| `:fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
-| `:collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items | none |
-| `:plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
-| `:harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
-| `:deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
-| `:retreat` | `{:radius 8 :step 8}` | always | `:moves` count | none |
-| `:sleep` | none | a `:bed` is known and it is night | none | reads `:bed` |
+| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count | none |
+| `jobs.time.wait-for-day` | none | it is day | none | none |
+| `jobs.survival.eat` | `{:item nil}` | always | none | none |
+| `jobs.movement.look-around` | none | always | none | writes `:looked` (cap 1, forever) |
+| `jobs.movement.pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
+| `jobs.forestry.fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
+| `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items | none |
+| `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
+| `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
+| `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
+| `jobs.survival.retreat` | `{:radius 8 :step 8}` | always | `:moves` count | none |
+| `jobs.survival.sleep` | none | a `:bed` is known and it is night | none | reads `:bed` |
 
 - `:fell-tree` digs up to two logs per round of the chosen column, lowest
   first, and is done when the column has no logs. It walks with `moveTo`
@@ -485,8 +572,8 @@ after three the job emits a warn and ends.
 - `:plant-sapling` without `:at` plants at the first debt (of `:species` when
   given), walks within 3, equips, places. `occupied` counts as planted.
 - `:harvest-wood` is phase-driven: each round calls the current phase's child
-  once (`:fell-tree`, then `:collect-drops` with the species' log, sapling,
-  stick and apple, then `:plant-sapling`) and advances the phase when the
+  once by symbol (`jobs.forestry.fell-tree`, then `collect-drops` with the
+  species' log, sapling, stick and apple, then `plant-sapling`) and advances the phase when the
   child is done. Its check is the current child's check, so it declines
   (rather than spinning) while no tree is in sight or no sapling is carried.
 - `:deposit` puts away every carried stack except tools and armour (suffixes
@@ -506,17 +593,17 @@ the register entry's `:args`):
 
 | trigger | holds when | job | persistence |
 |---|---|---|---|
-| `:health-low` | health at most `:health` (default 8) | `:eat` | cooldown 30 s |
-| `:hostile-near` | a hostile within `:radius` (default 8); the same `:radius` goes to the job | `:retreat` | cooldown 5 s |
-| `:night-and-bed-known` | not day and a `:bed` entry exists | `:sleep` | cooldown 60 s |
-| `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `:deposit` | cooldown 60 s |
-| `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `:look-around` | cooldown 0 |
+| `:health-low` | health at most `:health` (default 8) | `(jobs.survival.eat)` | cooldown 30 s |
+| `:hostile-near` | a hostile within `:radius` (default 8); set the job's own `:radius` in `:job` | `(jobs.survival.retreat)` | cooldown 5 s |
+| `:night-and-bed-known` | not day and a `:bed` entry exists | `(jobs.survival.sleep)` | cooldown 60 s |
+| `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `(jobs.storage.deposit)` | cooldown 60 s |
+| `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |
 
-`:every-interval` is a wall-clock reflex: `:look-around` looks at a point
+`:every-interval` is a wall-clock reflex: `look-around` looks at a point
 three blocks ahead and writes `:looked`, which survives a restart and makes
 the trigger stop holding. With no entry it fires at once.
 `scenarios/woodcutter-cuts.edn` is the woodcutter with it first in the
-register; `scenarios/pace-cuts.edn` puts it above a long `:pace` job.
+register; `scenarios/pace-cuts.edn` puts it above a long `pace` job.
 
 `:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
 total; the real inventory has 36 main slots, so 30 is a threshold, not a
