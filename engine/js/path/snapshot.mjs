@@ -29,9 +29,10 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
 
   const setSection = (cx, sy, cz, ids) => {
     const key = keyOf(cx, cz)
-    const entry = columnsByKey.get(key) ?? { cx, cz, sections: new Array(sectionCount).fill(undefined) }
+    const entry = columnsByKey.get(key) ?? { cx, cz, sections: new Array(sectionCount).fill(undefined), flagTable: null, flags: null }
     columnsByKey.set(key, entry)
     entry.sections[sy] = ids
+    if (entry.flags) entry.flags[sy] = 0
   }
 
   const dropColumn = (cx, cz) => {
@@ -56,6 +57,27 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
     const section = entryAt(x >> 4, z >> 4)?.sections[ry >> 4]
     if (section === undefined) return
     section[((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)] = id
+    const entry = entryAt(x >> 4, z >> 4)
+    if (entry.flags) entry.flags[ry >> 4] = 0
+  }
+
+  // does the section hold any state with flagTable[id] set? Scanned once per section and table, so a planner can skip whole
+  // sections that cannot matter; writes into the section reset its answer.
+  const sectionHas = (flagTable, cx, sy, cz) => {
+    const entry = entryAt(cx, cz)
+    const section = entry?.sections[sy]
+    if (section === undefined) return false
+    if (entry.flagTable !== flagTable) {
+      entry.flagTable = flagTable
+      entry.flags = new Uint8Array(sectionCount)
+    }
+    let known = entry.flags[sy]
+    if (known === 0) {
+      known = 1
+      for (let i = 0; i < VOLUME && known === 1; i++) if (flagTable[section[i]]) known = 2
+      entry.flags[sy] = known
+    }
+    return known === 2
   }
 
   return {
@@ -65,6 +87,7 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
     dropColumn,
     stateAt,
     setState,
+    sectionHas,
     hasColumn: (cx, cz) => columnsByKey.has(keyOf(cx, cz)),
     columns: () => [...columnsByKey.values()].map(e => [e.cx, e.cz])
   }

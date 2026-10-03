@@ -64,19 +64,21 @@ export function freeMask (boxes, x, z) {
   return mask
 }
 
-// 4-connected components of the free positions: { size, px, pz }, the point nearest the cell centre in 1/16 (ties: lowest j, then i)
-export function regions (mask) {
-  const seen = new Uint8Array(mask.length)
+// 4-connected components of the free positions: labels (region index per position, -1 where blocked) and regs, one
+// { size, px, pz } per region: the point nearest the cell centre in 1/16 (ties: lowest j, then i)
+export function labelRegions (mask) {
+  const labels = new Int8Array(mask.length).fill(-1)
   const stack = new Int32Array(mask.length)
-  const found = []
+  const regs = []
   for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || seen[start]) continue
+    if (!mask[start] || labels[start] !== -1) continue
+    const label = regs.length
     let top = 0
     let size = 0
     let best = start
     let bestD = Infinity
     stack[top++] = start
-    seen[start] = 1
+    labels[start] = label
     while (top > 0) {
       const k = stack[--top]
       const i = k % GRID
@@ -85,16 +87,18 @@ export function regions (mask) {
       const d = (i - 8) * (i - 8) + (j - 8) * (j - 8)
       const bj = (best - best % GRID) / GRID
       if (d < bestD || d === bestD && (j < bj || j === bj && i < best % GRID)) { best = k; bestD = d }
-      const visit = nk => { if (mask[nk] && !seen[nk]) { seen[nk] = 1; stack[top++] = nk } }
+      const visit = nk => { if (mask[nk] && labels[nk] === -1) { labels[nk] = label; stack[top++] = nk } }
       if (i > 0) visit(k - 1)
       if (i < GRID - 1) visit(k + 1)
       if (j > 0) visit(k - GRID)
       if (j < GRID - 1) visit(k + GRID)
     }
-    found.push({ size, px: best % GRID, pz: (best - best % GRID) / GRID })
+    regs.push({ size, px: best % GRID, pz: (best - best % GRID) / GRID })
   }
-  return found
+  return { labels, regs }
 }
+
+export const regions = mask => labelRegions(mask).regs
 
 // can the body centre move in a straight line from -> to ({ x, z } world) at height [lo, hi)? Sampled every 1/16 block.
 export function segmentFree (snapshot, table, from, to, lo, hi) {

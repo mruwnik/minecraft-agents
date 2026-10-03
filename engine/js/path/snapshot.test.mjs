@@ -106,3 +106,32 @@ test('loadRecordedWorld reads column files, honours the range, and returns the c
   assert.equal(loadRecordedWorld(some, dir, { cxMin: 0, cxMax: 1, czMin: 0, czMax: 0 }), 2)
   assert.ok(!some.hasColumn(5, 5))
 })
+
+// ---- sectionHas: does a section hold any state flagged in a per-state table? cached, and kept honest by writes ----
+
+const flagFor = ids => { const t = new Uint8Array(100); ids.forEach(i => { t[i] = 1 }); return t }
+
+test('sectionHas: true when the section holds a flagged state, false otherwise or when absent', () => {
+  const snap = createSnapshot({})
+  const ids = new Uint16Array(4096)
+  ids[5] = 7
+  snap.setSection(0, 4, 0, ids)
+  snap.setSection(0, 5, 0, new Uint16Array(4096))
+  const table = flagFor([7])
+  assert.deepEqual([snap.sectionHas(table, 0, 4, 0), snap.sectionHas(table, 0, 5, 0), snap.sectionHas(table, 0, 6, 0), snap.sectionHas(table, 3, 4, 3)], [true, false, false, false])
+})
+
+test('sectionHas: a write into the section is seen, as is replacing the section, and a different table', () => {
+  const snap = createSnapshot({})
+  snap.setSection(0, 4, 0, new Uint16Array(4096))
+  const table = flagFor([7])
+  assert.equal(snap.sectionHas(table, 0, 4, 0), false)
+  snap.setState(1, snap.minY + 64 + 1, 1, 7)
+  assert.equal(snap.sectionHas(table, 0, 4, 0), true)
+  snap.setState(1, snap.minY + 64 + 1, 1, 0)
+  assert.equal(snap.sectionHas(table, 0, 4, 0), false)
+  const other = new Uint16Array(4096)
+  other[0] = 9
+  snap.setSection(0, 4, 0, other)
+  assert.deepEqual([snap.sectionHas(table, 0, 4, 0), snap.sectionHas(flagFor([9]), 0, 4, 0)], [false, true])
+})

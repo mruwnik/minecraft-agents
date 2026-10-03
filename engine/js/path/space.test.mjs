@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fixtureSnapshot } from './fixture.mjs'
 import { defaultStateTable } from './blocks.mjs'
-import { boxesNear, freeMask, regions, segmentFree } from './space.mjs'
+import { boxesNear, freeMask, regions, labelRegions, segmentFree } from './space.mjs'
 import { bambooBox } from '../offsets.mjs'
 
 const table = defaultStateTable()
@@ -63,6 +63,14 @@ test('regions: ties go to the lowest j then i', () => {
   const mask = new Uint8Array(N * N)
   ;[[8, 7], [9, 7], [9, 8], [9, 9], [8, 9]].forEach(([i, j]) => { mask[j * N + i] = 1 })
   assert.deepEqual(regions(mask), [{ size: 5, px: 8, pz: 7 }])
+})
+
+test('labelRegions: labels follow the regions order, -1 where blocked', () => {
+  const mask = new Uint8Array(N * N)
+  ;[[0, 0], [1, 1], [16, 16], [15, 16]].forEach(([i, j]) => { mask[j * N + i] = 1 })
+  const { labels, regs } = labelRegions(mask)
+  assert.deepEqual(regs, regions(mask))
+  assert.deepEqual([labels[0], labels[N + 1], labels[16 * N + 16], labels[16 * N + 15], labels[5]], [0, 1, 2, 2, -1])
 })
 
 // cocoa between two jungle logs 2 apart (gap cells x = 1, 2), pods in the row z = 0. Pod extents in x from the log face:

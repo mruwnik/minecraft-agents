@@ -27,6 +27,14 @@ test('flat walk of 10 blocks: found, 11 steps, walking speed, no risk', () => {
   assert.ok(r.expanded > 0 && r.ms >= 0)
 })
 
+test('a flat open 20 block query expands under 40 nodes and never starts the goal flood', () => {
+  const r = run(world(), near(22, 64, 2))
+  assert.equal(r.status, 'found')
+  assert.ok(r.expanded < 40, `expanded ${r.expanded}`)
+  assert.equal(r.stats.flooded, 0)
+  assert.equal(r.stats.masks, 0) // no tight cell: no mask is ever built
+})
+
 test('a near goal accepts any standable cell within its range', () => {
   const r = run(world(), near(12, 64, 2, 3))
   assert.equal(r.status, 'found')
@@ -178,11 +186,13 @@ test('a top slab ceiling 1.5 above the floor blocks the walk; a 2 high tunnel do
 })
 
 test('a fence line is not stepped over: exhausted when sealed, a detour when not', () => {
-  const sealed = search(world({ fill: [[5, 64, -2, 5, 64, 40, 'oak_fence']] }), near(8, 64, 2))
+  // the fence runs past the floor's edge: a post at the very edge leaves room to stand beside it
+  const sealed = search(world({ fill: [[5, 64, -3, 5, 64, 41, 'oak_fence']] }), near(8, 64, 2))
   assert.deepEqual([sealed.status, sealed.reason], ['partial', 'exhausted'])
-  const open = run(world({ fill: [[5, 64, -2, 5, 64, 8, 'oak_fence']] }), near(8, 64, 2))
+  const open = run(world({ fill: [[5, 64, -3, 5, 64, 8, 'oak_fence']] }), near(8, 64, 2))
   assert.equal(open.status, 'found')
-  assert.ok(cells(open).every(([x, y, z]) => !(x === 5 && z <= 8)))
+  // it rounds the fence's end: the end cell (z 8) has room beside the post, nothing earlier does
+  assert.ok(open.path.steps.filter(s => s.x === 5).every(s => s.z >= 8))
 })
 
 test('a one block wall is jumped', () => {
