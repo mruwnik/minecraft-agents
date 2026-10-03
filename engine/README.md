@@ -748,7 +748,7 @@ after three the job emits a warn and ends.
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` (and `:roof`, `:target-y` in dig mode), `:placed` | writes `:shelter` (cap 10, 1 day) `{:pos :roof :state :built}` from the current feet and the cells it placed, plus `:door` in walls mode (history only), and `:dig-in-futile` `{:pos}` (cap 5, 10 min) when a dig yields nothing to roof the pit with; its check then declines while no block is carried and one lies within 8 blocks. Walls mode recomputes its cells from the current feet each round; dig mode rechooses if the body leaves its column and stops (`dig_in_failed`) when a dig yields nothing to roof the pit with |
 | `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 300000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping | none | writes `:log-out` (cap 10, 1 day) |
 | `jobs.survival.recover-drops` | `{:margin 0 :danger-radius 8 :collect-radius 6}` | a `:died` with no newer `:recovered` | `:death-t` (the death it is about; a different death resets the rest), `:decided`, `:phase`, children `:go`, `:collect` | reads `:died`, `:respawned` (waits 2 s after a respawn before estimating); writes `:recovered` `{:decision :collected/:skip/:abandoned ...}` (cap 10, 1 day); emits info `:recover-drops.decided` with the decision and a `:text` |
-| `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; each attempt ends with one `moveTo` toward the stored goal (range 1, `:maxDistance` 3); writes `:stuck` (cap 10, 1 h) when it gives up; equips the best pickaxe before digging |
+| `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; each attempt ends with one `moveTo` toward the stored goal (range 1, `:maxDistance` 3); pillars out of pits with `jumpPlace` (depth-many blocks of the largest placeable stack) or digs; writes `:stuck` (cap 10, 1 h) when it gives up, the `unstick.failed` warn carrying `:reasons` and a `:text` naming them; equips the best pickaxe before digging |
 
 - `:fell-tree` digs up to two logs per round of the chosen column, lowest
   first, and is done when the column has no logs. It walks with `moveTo`
@@ -834,7 +834,7 @@ after three the job emits a warn and ends.
   then dig-in, ends once the body is roofed (or asleep, or it is day) and declines
   when none of them can act; `:recover-drops` weighs the
   drops' value (`engine.value`) against the trip and goes back for them or
-  skips; `:unstick` escalates from stepping back to digging to pillaring.
+  skips; `:unstick` escalates from stepping back to pillaring out of a pit (`jumpPlace`) or digging.
 
 Triggers (`engine.triggers`; `:when` receives the world, a memory view and
 the register entry's `:args`):
@@ -878,10 +878,7 @@ The survival jobs pass against the fake only. What they assume about the real
 server and mineflayer, none of it checked live:
 
 - `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returned `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` and treats fire, grass and snow as free (see the `place` result above); not yet re-checked live.
-- Verified live: `unstick`'s pillar attempt cannot work. The server refuses
-  `place` into the body's own cell ("the block is still air") because the body
-  occupies it; without a jump primitive there is no way round that, and `place`
-  throws instead of returning a status, which fails the job.
+- Verified live: placing into the body's own cell is refused by the server ("the block is still air"), so `unstick` pillars with `jumpPlace` instead: in a 3-deep 1x1 pit, count 3 places 3 blocks in about 1.9 s and leaves the body at ground level; with no block it returns `failed`/`no-item` at once, under a roof `failed`/`no-headroom`.
 - `breathe`, `extinguish` and `unstick` use `moveTo` with range 0 to step
   into a cell, water included.
 - `dig-in`'s roof placement may fail with no supporting neighbour

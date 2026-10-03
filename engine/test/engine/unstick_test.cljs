@@ -180,12 +180,12 @@
           (is (= [] (calls p "dig")))
           (is (false? (stuck-now? eng)) "the good move is in the window, so no re-trigger"))))))
 
-(deftest unstick-escalates-dig-then-pillar-then-fails
+(deftest unstick-escalates-pillar-then-dig-then-fails
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos at5}
-                                           :blocks (merge pit {"5,66,0" "stone"})
+                                           :blocks (merge pit {"5,66,0" "stone" "5,63,0" "stone"})
                                            :inventory [{:name "cobblestone" :count 3}]})]
           (block-moveTo! p)
           (seed-moved! eng (repeat 4 (bad-move)))
@@ -196,13 +196,12 @@
               "no free cell behind in a pit, so only the capped moveTo toward the goal")
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))
+          (is (= [{:item "cobblestone" :count 2}] (call-args p "jumpPlace")) "attempt 2 pillars with jumpPlace")
+          (is (= [] (calls p "dig") (calls p "place")) "the roof stops it, and no old place-into-own-cell pillar")
+          (await (core/tick! eng))
           (is (= [{:pos {:x 6 :y 64 :z 0}} {:pos {:x 6 :y 65 :z 0}} {:pos {:x 5 :y 66 :z 0}}]
                  (call-args p "dig"))
-              "attempt 2 digs the block in front at feet and head height, and the one above the head")
-          (is (= [] (calls p "place")))
-          (await (core/tick! eng))
-          (is (= [{:pos at5 :item "cobblestone"}] (call-args p "place")) "attempt 3 pillars")
-          (is (some #{{:pos {:x 5 :y 65 :z 0} :range 0}} (call-args p "moveTo")) "... and steps up")
+              "attempt 3 digs the block in front at feet and head height, and the one above the head")
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))
           (is (= ["j1"] (:list (core/state eng))) "attempt 4 still tries")
@@ -211,8 +210,8 @@
           (is (= [] (:list (core/state eng))) "gave up")
           (let [ev (first (filter #(= :unstick.failed (:kind %)) @seen))]
             (is (= :warn (:level ev)))
-            (is (= at5 (:pos ev))))
-          (is (= [{:pos at5}] (mapv #(select-keys % [:pos]) (map :data (mem/entries (mem/view (:store eng)) :stuck)))))
+            (is (= {:x 5 :z 0} (select-keys (:pos ev) [:x :z]))))
+          (is (= [{:x 5 :z 0}] (mapv #(select-keys (:pos (:data %)) [:x :z]) (mem/entries (mem/view (:store eng)) :stuck))))
           (is (= {:cap 10 :ttl 3600000} (mem/policy (mem/view (:store eng)) :stuck)))
           (is (false? (stuck-now? eng)) "the failed attempts do not re-fire the trigger"))))))
 
@@ -297,5 +296,105 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (dig-setup [{:name "cobblestone" :count 3}])]
           (await (run-to-dig! eng p))
-          (is (= [] (calls p "equip")))
+          (await (core/tick! eng))
+          (is (= [] (calls p "equip")) "attempt 2 pillared (and failed), attempt 3 digs")
           (is (= 3 (count (calls p "dig")))))))))
+
+;; ---------------------------------------------------------------- pillar
+
+(def ground {"5,63,0" "stone"})
+
+(def deep-pit
+  "A 3-deep 1x1 pit: feet at y 64, walls at y 64, 65, 66, ground under the feet."
+  (into ground (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65 66]] [(str x "," y "," z) "stone"])))
+
+(def low-walls
+  "Walls 2 high around the body on flat ground."
+  (into ground (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"])))
+
+(def roofed-pit (merge deep-pit {"5,66,0" "stone"}))
+
+(defn block-first-moveTo!
+  "Make the first moveTo of the fake (attempt 1's hop) fail, later ones real."
+  [p]
+  (let [n (atom 0)]
+    (.override (.-world p) "moveTo"
+               (fn ^:async f [token args impl]
+                 (if (<= (swap! n inc) 1)
+                   #js {:status "blocked" :pos (.-pos (.self p)) :distance 5}
+                   (await (impl token args)))))))
+
+(defn ^:async run-attempts!
+  "Seed a stuck body, block moveTo (all of them, or only the first when hop?) and tick n times."
+  [eng p n hop?]
+  (if hop? (block-first-moveTo! p) (block-moveTo! p))
+  (seed-moved! eng (repeat 4 (bad-move)))
+  (core/submit! eng '(jobs.maintenance.unstick) {})
+  (loop [i 0]
+    (when (< i n)
+      (await (core/tick! eng))
+      (recur (inc i)))))
+
+(defn failed-event [seen] (first (filter #(= :unstick.failed (:kind %)) @seen)))
+
+(deftest unstick-pillars-out-of-a-deep-pit-with-jump-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks deep-pit :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 1 true))
+          (is (= [] (calls p "jumpPlace")) "attempt 1 is the step-back")
+          (is (= ["j1"] (:list (core/state eng))))
+          (await (core/tick! eng))
+          (is (= [{:item "dirt" :count 3}] (call-args p "jumpPlace")) "attempt 2 pillars")
+          (is (= [] (calls p "dig")))
+          (is (= [] (calls p "place")))
+          (is (= [] (:list (core/state eng))) "the hop succeeded: done"))))))
+
+(deftest unstick-pillars-with-the-largest-stack-and-cobblestone-counts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks deep-pit
+                                      :inventory [{:name "cobblestone" :count 8} {:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 2 true))
+          (is (= [{:item "cobblestone" :count 3}] (call-args p "jumpPlace"))))))))
+
+(deftest unstick-pillar-count-is-the-wall-height
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks low-walls :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 2 true))
+          (is (= [{:item "dirt" :count 2}] (call-args p "jumpPlace"))))))))
+
+(deftest unstick-does-not-pillar-with-no-block-and-says-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos at5} :blocks deep-pit})]
+          (await (run-attempts! eng p 5 false))
+          (is (= [] (calls p "jumpPlace")))
+          (let [ev (failed-event seen)]
+            (is (some? ev))
+            (is (seq (:reasons ev)))
+            (is (re-find #"no block in inventory" (:text ev)))
+            (is (re-find #"^still stuck after 4 attempts: " (:text ev)))))))))
+
+(deftest unstick-roofed-pit-reports-no-headroom-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos at5} :blocks roofed-pit :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 5 false))
+          (is (pos? (count (calls p "jumpPlace"))))
+          (is (re-find #"no-headroom" (:text (failed-event seen))))
+          (is (= [] (:list (core/state eng))) "gave up after max-attempts, no livelock"))))))
+
+(deftest unstick-does-not-pillar-on-open-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks ground :inventory [{:name "dirt" :count 4}]})]
+          (await (run-attempts! eng p 5 false))
+          (is (= [] (calls p "jumpPlace"))))))))
