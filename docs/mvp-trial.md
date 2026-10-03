@@ -47,7 +47,7 @@ Fixed, with tests, in commits 5021b39 and 085e02a:
 
 Not fixed, too big for a small patch:
 
-- **Stalled not-ready busy loop.** A parent whose child returns not-ready forever is stepped every tick. There is no backoff, no wake condition and no ceiling, so the event file grows without bound and the body does no useful work. The design says a not-ready job sleeps until its wake condition holds. Here the harvest composite returns the child's bare not-ready with no wake.
+- **Stalled not-ready busy loop.** A parent whose child returns not-ready forever is stepped every tick. There is no backoff, no wake condition and no ceiling, so the event file grows without bound and the body does no useful work. The design has a job yield "wake me when X". Here the harvest composite returns the child's bare not-ready with no wake condition.
 - **Stale replant debt.** The debt is committed when a tree is chosen, before anything is felled. A tree that is never felled leaves a debt that blocks the plant step and, through it, the whole composite.
 - **No reachability check in tree choice.** `find-tree` picks by distance and leaf proximity, not by whether a path exists. A ledge tree wins over a reachable one. Nothing falls back to the next candidate after `tree_blocked`.
 - **Queue starvation.** Because j1 never finishes or sleeps, j2 and anything after it never get a turn, though they are on a round-robin list.
