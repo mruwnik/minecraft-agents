@@ -19,6 +19,29 @@
 
 (rf/reg-fx :fetch-json fetch-json!)
 
+(defn post-json! [{:keys [url body on-ok on-err on-unsupported]}]
+  (-> (js/fetch url #js {:method "POST" :headers #js {"content-type" "application/json"} :body (js/JSON.stringify body)})
+      (.then (fn [res]
+               (if (= 501 (.-status res))
+                 (rf/dispatch on-unsupported)
+                 (-> (.json res)
+                     (.then (fn [data]
+                              (if (or (not (.-ok res)) (.-error data))
+                                (rf/dispatch (conj on-err (or (.-error data) (str "http " (.-status res)))))
+                                (rf/dispatch (conj on-ok (js->clj data :keywordize-keys true))))))))))
+      (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))))
+
+(rf/reg-fx :post-json post-json!)
+
+(rf/reg-fx :download-json
+           (fn [{:keys [filename text]}]
+             (let [url (js/URL.createObjectURL (js/Blob. #js [text] #js {:type "application/json"}))
+                   link (js/document.createElement "a")]
+               (set! (.-href link) url)
+               (set! (.-download link) filename)
+               (.click link)
+               (js/URL.revokeObjectURL url))))
+
 (rf/reg-fx :push-url
            (fn [url] (.pushState js/history nil "" url)))
 
