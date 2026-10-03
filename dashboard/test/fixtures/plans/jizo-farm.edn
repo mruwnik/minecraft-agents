@@ -1,5 +1,5 @@
 ;; Jizo's farm, copied by hand from the places jizo-crop-field (origin -17 62 -97) and jizo-melon-patch (origin -1 62 -88).
-;; Crops sit one block above the origin's y (y 63); the farmland below is not judged.
+;; Crops sit one block above the origin's y (y 63); the farmland below each crop is judged too (plan.shape).
 {:id "jizo-farm" :name "Jizo's farm" :owner "Jizo" :kind :farm :status :active
  :note "Carrots, potatoes, melon and pumpkin stems in the field, three wheat plots with two covered water channels in the patch."
  :region {:min [-17 62 -97] :max [14 63 -71]}

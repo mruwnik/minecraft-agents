@@ -29,7 +29,7 @@
       [:percent] 0
       [:region :min] [-17 62 -97]
       [:elements 0 :id] "potatoes"
-      [:elements 0 :bounds] {:min [-11 63 -97] :max [-10 63 -96]})))
+      [:elements 0 :bounds] {:min [-11 62 -97] :max [-10 63 -96]})))  ; the farmland row below the crops is part of it
 
 (deftest a-village-rolls-up-its-child-farm
   (let [plans (:plans (api/summaries (opts wheat-everywhere)))
@@ -46,9 +46,9 @@
       [:id] "jizo-farm"
       [:elements 0 :content] "crop potatoes"
       [:elements 0 :counts :match] 0
-      [:elements 0 :counts :wrong] 4
+      [:elements 0 :counts :wrong] 8   ; 4 crop cells and the 4 farmland cells below, all wheat
       [:elements 8 :id] "wheat-a"
-      [:elements 8 :counts :percent] 100
+      [:elements 8 :counts :percent] 50   ; the wheat matches, the farmland below it is wheat too
       [:errors] []
       [:grid :min-x] -17
       [:grid :cols] 32

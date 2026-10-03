@@ -2,41 +2,6 @@
   (:require [cljs.test :refer [deftest are is]]
             [dashboard.plan-compare :as cmp]))
 
-(deftest judge-cells
-  (are [want actual status] (= status (cmp/judge want actual))
-    {:kind :crop :crop "wheat"} "wheat" :match
-    {:kind :crop :crop "wheat"} "carrots" :wrong
-    {:kind :crop :crop "wheat"} "air" :missing
-    {:kind :crop :crop "wheat"} "farmland" :wrong
-    {:kind :crop :crop "wheat"} nil :unknown
-    {:kind :crop :crop "melon_stem"} "melon_stem" :match
-    {:kind :crop :crop "melon_stem"} "attached_melon_stem" :match
-    {:kind :crop :crop "melon"} "attached_melon_stem" :match
-    {:kind :crop :crop "pumpkin"} "pumpkin_stem" :match
-    {:kind :crop :crop "melon"} "melon" :wrong
-    {:kind :block :block "oak_fence"} "oak_fence" :match
-    {:kind :block :block "oak_fence"} "birch_fence" :wrong
-    {:kind :block :block "oak_fence"} "cave_air" :missing
-    {:kind :palette :blocks ["water" "oak_slab"]} "oak_slab" :match
-    {:kind :palette :blocks ["water" "oak_slab"]} "dirt" :wrong
-    {:kind :palette :blocks ["water" "oak_slab"]} "void_air" :missing
-    {:kind :solid} "stone" :match
-    {:kind :solid} "lava" :wrong
-    {:kind :solid} "air" :missing
-    {:kind :air} "air" :match
-    {:kind :air} "cave_air" :match
-    {:kind :air} "void_air" :match
-    {:kind :air} "oak_leaves" :extra
-    {:kind :air} nil :unknown))
-
-(deftest want-texts
-  (are [want text] (= text (cmp/want-text want))
-    {:kind :crop :crop "wheat"} "wheat"
-    {:kind :block :block "chest"} "chest"
-    {:kind :palette :blocks ["a" "b"]} "a | b"
-    {:kind :solid} "any solid block"
-    {:kind :air} "air"))
-
 (deftest counts-and-percent
   (are [statuses expected] (= expected (cmp/counts (map (fn [s] {:status s}) statuses)))
     [] {:match 0 :missing 0 :wrong 0 :extra 0 :unknown 0 :total 0 :percent 0}

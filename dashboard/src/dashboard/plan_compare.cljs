@@ -1,51 +1,8 @@
 (ns dashboard.plan-compare
-  "Judges the cells a plan expands to (dashboard.plan/expand) against the blocks actually in the world.
-  Pure: the world comes in as (block-at x y z) -> block name, or nil when no chunk column was dumped there."
-  (:require [clojure.string :as str]))
-
-(def air-names #{"air" "cave_air" "void_air"})
-(def liquid-names #{"water" "lava"})
-
-(defn air? [name] (contains? air-names name))
-
-(defn crop-names
-  "The blocks that count as this crop: the block itself; a melon or pumpkin crop (melon, melon_stem) also counts as
-  its stem and its attached stem. The farmland below is not judged."
-  [crop]
-  (let [base (str/replace crop #"_stem$" "")]
-    (if (or (#{"melon" "pumpkin"} crop) (str/ends-with? crop "_stem"))
-      #{(str base "_stem") (str "attached_" base "_stem")}
-      #{crop})))
-
-(defn matches?
-  "Does this (non-air) block satisfy the want?"
-  [want actual]
-  (case (:kind want)
-    :crop (contains? (crop-names (:crop want)) actual)
-    :block (= (:block want) actual)
-    :palette (contains? (set (:blocks want)) actual)
-    :solid (not (contains? liquid-names actual))
-    false))
-
-(defn judge
-  "match | missing (air where something is wanted) | wrong (another block) | extra (a block where air is wanted)
-  | unknown (actual is nil: no column dumped)."
-  [want actual]
-  (cond
-    (nil? actual) :unknown
-    (= :air (:kind want)) (if (air? actual) :match :extra)
-    (air? actual) :missing
-    (matches? want actual) :match
-    :else :wrong))
-
-(defn want-text [want]
-  (case (:kind want)
-    :crop (:crop want)
-    :block (:block want)
-    :palette (str/join " | " (:blocks want))
-    :solid "any solid block"
-    :air "air"
-    (str "?" (name (or (:kind want) :none)))))
+  "Judges the cells a plan expands to (plan.shape/expand-plan) against the blocks actually in the world, and counts and
+  lays out the statuses (plan.shape/judge decides each one). Pure: the world comes in as (block-at x y z) -> block name,
+  or nil when no chunk column was dumped there."
+  (:require [plan.shape :as shape]))
 
 (def zero-counts {:match 0 :missing 0 :wrong 0 :extra 0 :unknown 0 :total 0 :percent 0})
 
@@ -62,7 +19,7 @@
 
 (defn judge-cell [block-at {[x y z] :pos want :want :as cell}]
   (let [actual (block-at x y z)]
-    (assoc cell :actual actual :status (judge want actual))))
+    (assoc cell :actual actual :status (shape/judge want actual))))
 
 (defn bounds
   "{:min [x y z] :max [x y z]} of cells, nil for none."
@@ -74,7 +31,7 @@
        :max [(axis 0 max) (axis 1 max) (axis 2 max)]})))
 
 (defn grid-cell [{:keys [status want actual element]}]
-  {:s (name status) :e (want-text want) :a actual :el element})
+  {:s (name status) :e (shape/want-text want) :a actual :el element})
 
 (defn layers
   "One top-down grid per y that holds cells: {:y y :rows [[cell-or-nil ...]]} over the x/z bounds of all the cells

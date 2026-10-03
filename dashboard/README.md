@@ -66,8 +66,9 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 
 A plan says what should stand in a region of the world; the dashboard compares it with the chunk columns the bodies dumped
 (`state/worlds/<world>/chunks/<cx>.<cz>.bin`, `cx = floor(x/16)`). One EDN file per plan, `state/worlds/<world>/plans/<id>.edn`
-(the file name is the id). **This format is a draft, input for an overhaul**; `dashboard.plan` is the only namespace that knows it,
-`dashboard.plan-compare` judges cells (pure), `dashboard.plan-api` builds the two endpoints, `js/worldblocks.mjs` is the glue that
+(the file name is the id). **This format is a draft, input for an overhaul**; `plan.shape` (`src/plan/shape.cljc`, plain data, no IO, meant to be
+required by the engine's jobs too) is the only namespace that knows it: validation, child resolution, expansion into cells and the
+cell predicates. `dashboard.plan` reads the files, `dashboard.plan-compare` counts statuses and lays out grids (pure), `dashboard.plan-api` builds the two endpoints, `js/worldblocks.mjs` is the glue that
 reads blocks out of the dumped columns with the view's decoders.
 
 ```clojure
@@ -82,7 +83,9 @@ reads blocks out of the dumped columns with the view's decoders.
 ```
 
 - `:content` is exactly one of `{:crop c}` (the crop block in any growth stage; `melon`/`pumpkin`/`*_stem` also accept the stem and the
-  attached stem; the farmland below is not judged), `{:block b}` (exact block), `{:palette [b ...]}` (any of them),
+  attached stem; the cell below a farmland crop (wheat, carrots, potatoes, beetroots, melon/pumpkin stems, torchflower, pitcher_crop)
+  is judged too: it wants `farmland`, and dirt/grass/coarse dirt/path/air there is `missing`; farmland where a crop is wanted is `missing`, not
+  `wrong`; block states such as growth age and orientation are not available from the column decoder and are not judged), `{:block b}` (exact block), `{:palette [b ...]}` (any of them),
   `{:blueprint name}` (a `:structure` element only), `{:air true}` (keep clear).
 - A region element covers every cell of its `:region`; `:kind :border` only its outer ring (per y layer). Other kinds (`:plot`, `:path`,
   `:feature`, `:area`, ...) are free labels. `:structure` takes the cells of a blueprint of the library (`/api/blueprints`): offset

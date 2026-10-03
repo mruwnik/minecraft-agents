@@ -2,14 +2,15 @@
   "What /api/plans and /api/plan/<id> answer: the plans of a world compared with the dumped blocks. Plain data in and
   out (the server supplies the directory, the blueprint lookup and the block lookup)."
   (:require [dashboard.plan :as plan]
-            [dashboard.plan-compare :as cmp]))
+            [dashboard.plan-compare :as cmp]
+            [plan.shape :as shape]))
 
 (defn compare-one [plans id blueprint-fn block-at]
-  (cmp/compare-plan (plan/expand-plan plans id blueprint-fn) block-at))
+  (cmp/compare-plan (shape/expand-plan plans id blueprint-fn) block-at))
 
 (defn header [id p]
   {:id id :name (or (:name p) id) :owner (:owner p) :kind (:kind p) :status (or (:status p) :proposed)
-   :region (:region p) :note (:note p) :children (plan/children p)})
+   :region (:region p) :note (:note p) :children (shape/children p)})
 
 (defn list-item [plans blueprint-fn block-at [id p]]
   (let [{:keys [counts elements]} (compare-one plans id blueprint-fn block-at)]
