@@ -26,6 +26,8 @@ precision highp sampler2DArray;
 uniform usampler3D uBlocks;
 uniform usampler3D uCoarse;
 uniform usampler3D uLightTex;
+uniform usampler3D uBiomes; // reserved for view-textures: per-world biome ids, one texel per 4x4x4 blocks (tintFor will read them)
+uniform sampler2D uBiomeColors; // reserved: per-world biome id -> colours, 4 x 256
 uniform sampler2D uMats;
 uniform usampler2D uInfo;
 uniform sampler2D uElems;
@@ -557,32 +559,48 @@ export const textureLevels = (bytes, layers, size, levels) => {
   return sizes.map((n, l) => bytes.subarray(sizes.slice(0, l).reduce((a, b) => a + b, 0), sizes.slice(0, l + 1).reduce((a, b) => a + b, 0)))
 }
 
-export function createRenderer (canvas) {
-  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' })
+const TABLE_ROW_BYTES = MATERIAL_COLUMNS * 4 + INFO_TEXELS * 8 // RGBA8 colours + RGBA16UI info per material
+
+// One renderer owns the GL context, the program and the tables every world shares (materials, textures, elements, tints,
+// debug); a world (createWorld) owns the per-scene block window. canvasOrGl: a canvas (the renderer makes the context) or an
+// existing WebGL2 context (the renderer then draws into whatever framebuffer is bound, and never resizes the canvas itself).
+export function createRenderer (canvasOrGl) {
+  const gl = typeof canvasOrGl.getContext === 'function'
+    ? canvasOrGl.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' })
+    : canvasOrGl
   if (!gl) throw new Error('WebGL2 is not available')
+  const canvas = gl.canvas
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
   gl.useProgram(program)
 
-  const blocks = nearestTexture(gl, gl.TEXTURE_3D, 0)
-  const coarse = nearestTexture(gl, gl.TEXTURE_3D, 1)
   const mats = nearestTexture(gl, gl.TEXTURE_2D, 2)
   const info = nearestTexture(gl, gl.TEXTURE_2D, 3)
   const tex = nearestTexture(gl, gl.TEXTURE_2D_ARRAY, 4)
-  const lightTex = nearestTexture(gl, gl.TEXTURE_3D, 5)
   const elems = nearestTexture(gl, gl.TEXTURE_2D, 6)
   let elemBase = 0
   let tintGroups = new Float32Array(6 * 3).fill(1)
   let tintConst = new Float32Array(32 * 3).fill(1)
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR)
-  let world = null
   let lodMax = 0
   let debug = false
+  let tableVersion = null
+  const sharedBytes = { materials: 0, elements: 0, textures: 0 }
+  const worlds = new Set()
+
+  // The tables are per Minecraft version and one renderer holds one set: every scene of a renderer must use the same version.
+  // Returns false (and logs) when a different version was claimed before.
+  const claimTable = version => {
+    if (tableVersion === null) tableVersion = version
+    if (tableVersion === version) return true
+    console.error(`this renderer holds the tables of ${tableVersion}; a scene wants ${version} and is not drawn`)
+    return false
+  }
 
   const setMaterials = materials => {
     gl.activeTexture(gl.TEXTURE2)
@@ -591,6 +609,7 @@ export function createRenderer (canvas) {
     gl.activeTexture(gl.TEXTURE3)
     gl.bindTexture(gl.TEXTURE_2D, info)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16UI, INFO_TEXELS, materials.length, 0, gl.RGBA_INTEGER, gl.UNSIGNED_SHORT, materialInfo(materials))
+    sharedBytes.materials = materials.length * TABLE_ROW_BYTES
   }
 
   // the element table: RGBA32F, width texels per row (tools/view/element-table.mjs); a table with no elements leaves one zero row
@@ -599,6 +618,7 @@ export function createRenderer (canvas) {
     gl.bindTexture(gl.TEXTURE_2D, elems)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, rows, 0, gl.RGBA, gl.FLOAT, data)
     elemBase = listTexels
+    sharedBytes.elements = width * rows * 16
   }
   // the stage-1 tint colours: groups by TINT_GROUP_NAMES, constants by index (both 0..255 RGB)
   const setTints = ({ groups, constants }) => {
@@ -619,54 +639,113 @@ export function createRenderer (canvas) {
       gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, 0, n, n, layers, gl.RGBA, gl.UNSIGNED_BYTE, data)
     })
     lodMax = levels - 1
+    sharedBytes.textures = bytes.byteLength
   }
 
-  // N columns a side, height blocks tall; texStorage contents start zeroed
-  const allocate = (n, height) => {
-    const sections = height >> 4
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_3D, blocks)
-    gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R16UI, n * 16, height, n * 16)
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_3D, coarse)
-    gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n, sections, n)
-    gl.activeTexture(gl.TEXTURE5)
-    gl.bindTexture(gl.TEXTURE_3D, lightTex)
-    gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n * 16, height, n * 16)
-    world = { n, height, sections, zeros: new Uint16Array(256 * height), openSky: new Uint8Array(256 * height).fill(0xf0), noFlags: new Uint8Array(sections) }
+  // ---- one world: the block window of one scene (its own 3D textures; texture units 0, 1 and 5 are bound to them while drawing) ----
+  const createWorld = () => {
+    const blocks = nearestTexture(gl, gl.TEXTURE_3D, 0)
+    const coarse = nearestTexture(gl, gl.TEXTURE_3D, 1)
+    const lightTex = nearestTexture(gl, gl.TEXTURE_3D, 5)
+    // Per-world biome data for view-textures (the shader only declares the samplers so far; tintFor does not read them yet):
+    // biomes is R8UI, (n*4, height/4, n*4), one texel per 4x4x4 blocks, filled by uploadColumn's optional biomes argument;
+    // biomeColors is RGBA8 4 x 256 (biome id -> colours), per world because scenes may show different worlds.
+    const biomes = nearestTexture(gl, gl.TEXTURE_3D, 7)
+    const biomeColors = nearestTexture(gl, gl.TEXTURE_2D, 8)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 4, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4 * 256 * 4))
+    let size = null
+
+    const bind = () => {
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_3D, blocks)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_3D, coarse)
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_3D, lightTex)
+      gl.activeTexture(gl.TEXTURE7)
+      gl.bindTexture(gl.TEXTURE_3D, biomes)
+      gl.activeTexture(gl.TEXTURE8)
+      gl.bindTexture(gl.TEXTURE_2D, biomeColors)
+    }
+
+    // N columns a side, height blocks tall; texStorage contents start zeroed
+    const allocate = (n, height) => {
+      const sections = height >> 4
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_3D, blocks)
+      gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R16UI, n * 16, height, n * 16)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_3D, coarse)
+      gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n, sections, n)
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_3D, lightTex)
+      gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n * 16, height, n * 16)
+      gl.activeTexture(gl.TEXTURE7)
+      gl.bindTexture(gl.TEXTURE_3D, biomes)
+      gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n * 4, height >> 2, n * 4)
+      size = { n, height, sections, noFlags: new Uint8Array(sections) }
+      world.bytes = n * n * 256 * height * 3 + n * n * sections + n * n * 16 * (height >> 2) + 4 * 256 * 4
+    }
+
+    // mats is 16*height*16 material indices, x fastest then y then z; flags one byte per section, bottom first; light is
+    // sky << 4 | block per cell in the same order
+    // slot flags: 0 no column (mats and light are stale and never read), 1 a section with blocks, 2 an all-air section
+    const putFlags = (sx, sz, flags) => {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_3D, coarse)
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, sx, 0, sz, 1, size.sections, 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, flags)
+    }
+    // biomes (optional): 4 x height/4 x 4 bytes, x fastest then y then z
+    const uploadColumn = (sx, sz, mats16, flags, light, biomeIds) => {
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_3D, blocks)
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, size.height, 16, gl.RED_INTEGER, gl.UNSIGNED_SHORT, mats16)
+      putFlags(sx, sz, flags.map(f => (f ? 1 : 2)))
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_3D, lightTex)
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, size.height, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, light)
+      if (!biomeIds) return
+      gl.activeTexture(gl.TEXTURE7)
+      gl.bindTexture(gl.TEXTURE_3D, biomes)
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 4, 0, sz * 4, 4, size.height >> 2, 4, gl.RED_INTEGER, gl.UNSIGNED_BYTE, biomeIds)
+    }
+    // colours: 4 x 256 RGBA8 bytes (Uint8Array of 4096)
+    const setBiomeColors = colors => {
+      gl.activeTexture(gl.TEXTURE8)
+      gl.bindTexture(gl.TEXTURE_2D, biomeColors)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 4, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, colors)
+    }
+    // an unloaded slot reads as air with open sky (so loaded neighbours are not shaded black): only its flags are zeroed,
+    // the stale blocks and light stay in the textures and every read checks the flag first
+    const clearSlot = (sx, sz) => putFlags(sx, sz, size.noFlags)
+
+    const dispose = () => {
+      for (const t of [blocks, coarse, lightTex, biomes, biomeColors]) gl.deleteTexture(t)
+      size = null
+      world.bytes = 0
+      worlds.delete(world)
+    }
+
+    const world = { allocate, uploadColumn, clearSlot, setBiomeColors, biomes, biomeColors, dispose, bind, isAllocated: () => size !== null, size: () => size, bytes: 0 }
+    worlds.add(world)
+    return world
   }
 
-  // mats is 16*height*16 material indices, x fastest then y then z; flags one byte per section, bottom first; light is
-  // sky << 4 | block per cell in the same order
-  // slot flags: 0 no column (mats and light are stale and never read), 1 a section with blocks, 2 an all-air section
-  const putFlags = (sx, sz, flags) => {
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_3D, coarse)
-    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx, 0, sz, 1, world.sections, 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, flags)
-  }
-  const uploadColumn = (sx, sz, mats16, flags, light) => {
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_3D, blocks)
-    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_SHORT, mats16)
-    putFlags(sx, sz, flags.map(f => (f ? 1 : 2)))
-    gl.activeTexture(gl.TEXTURE5)
-    gl.bindTexture(gl.TEXTURE_3D, lightTex)
-    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, light)
-  }
-  // an unloaded slot reads as air with open sky (so loaded neighbours are not shaded black): only its flags are zeroed,
-  // the stale blocks and light stay in the textures and every read checks the flag first
-  const clearSlot = (sx, sz) => putFlags(sx, sz, world.noFlags)
-
+  // sets the canvas size (when this renderer was given a canvas) and the viewport
   const resize = (w, h) => {
-    if (canvas.width !== w) canvas.width = w
-    if (canvas.height !== h) canvas.height = h
+    if (canvas && canvas.width !== w) canvas.width = w
+    if (canvas && canvas.height !== h) canvas.height = h
     gl.viewport(0, 0, w, h)
   }
 
-  // eye is relative to the window origin; entities are {min, max, color} in the same space
-  const draw = ({ eye, basis, dist, darken, slotOff, entities }) => {
+  // eye is relative to the window origin; entities are {min, max, color} in the same space; width/height (default: the canvas size)
+  // are the viewport drawn at the framebuffer's bottom-left
+  const draw = (world, { eye, basis, dist, darken, slotOff, entities, width = canvas.width, height = canvas.height }) => {
+    const size = world.size()
     const count = Math.min(entities.length, MAX_ENTITIES)
     const flat = key => new Float32Array(MAX_ENTITIES * 3).map((_, i) => (entities[Math.floor(i / 3)]?.[key]?.[i % 3]) ?? 0)
+    world.bind()
+    gl.viewport(0, 0, width, height)
     gl.uniform1i(uniform.uBlocks, 0)
     gl.uniform1i(uniform.uCoarse, 1)
     gl.uniform1i(uniform.uMats, 2)
@@ -677,14 +756,16 @@ export function createRenderer (canvas) {
     gl.uniform3fv(uniform.uTintGroups, tintGroups)
     gl.uniform3fv(uniform.uTintConst, tintConst)
     gl.uniform1i(uniform.uLightTex, 5)
+    gl.uniform1i(uniform.uBiomes, 7)
+    gl.uniform1i(uniform.uBiomeColors, 8)
     gl.uniform1f(uniform.uLodMax, lodMax)
-    gl.uniform2f(uniform.uRes, canvas.width, canvas.height)
+    gl.uniform2f(uniform.uRes, width, height)
     gl.uniform3f(uniform.uEye, eye.x, eye.y, eye.z)
     gl.uniform3f(uniform.uFwd, basis.forward.x, basis.forward.y, basis.forward.z)
     gl.uniform3f(uniform.uRight, basis.right.x, basis.right.y, basis.right.z)
     gl.uniform3f(uniform.uUp, basis.up.x, basis.up.y, basis.up.z)
     gl.uniform1f(uniform.uHalf, basis.half)
-    gl.uniform3i(uniform.uSize, world.n * 16, world.height, world.n * 16)
+    gl.uniform3i(uniform.uSize, size.n * 16, size.height, size.n * 16)
     gl.uniform2i(uniform.uSlotOff, slotOff.x, slotOff.z)
     gl.uniform1f(uniform.uDist, dist)
     gl.uniform1f(uniform.uDarken, darken)
@@ -702,5 +783,11 @@ export function createRenderer (canvas) {
   }
 
   const setDebug = on => { debug = on }
-  return { renderer, setDebug, setMaterials, setTextures, setElements, setTints, allocate, uploadColumn, clearSlot, resize, draw, clear, finish: () => gl.finish(), isAllocated: () => world !== null }
+  // bytes of GPU texture memory: the shared tables and each live world (texture storage only; no driver padding or mip overhead guessed)
+  const memory = () => {
+    const shared = Object.values(sharedBytes).reduce((a, b) => a + b, 0)
+    const perWorld = [...worlds].map(w => w.bytes)
+    return { shared, sharedParts: { ...sharedBytes }, worlds: perWorld, total: shared + perWorld.reduce((a, b) => a + b, 0) }
+  }
+  return { gl, renderer, setDebug, setMaterials, setTextures, setElements, setTints, claimTable, createWorld, resize, draw, clear, memory, finish: () => gl.finish() }
 }

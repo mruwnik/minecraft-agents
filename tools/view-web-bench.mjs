@@ -1,5 +1,7 @@
 // Measures the browser view in headless Chromium over CDP.
-//   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds]
+//   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub]
+// --hub: the url is tools/view/web/hub-demo.html (many scenes in one context); samples window.__hub every second for --seconds and prints per-scene fps (min / median over scenes),
+//   main-thread frame cost, GPU time per scene render (timer query, and a gl.finish probe), GPU memory and JS heap instead of the single-view numbers.
 // --trace S: after the warm-up, records S seconds of the drawn camera (window.__view.camTrace) and adds `smooth` (with dropped frames), `shownLatency`, `decodeMs`, `uploadMs` and `columnChange` (file mtime to drawn).
 // Prints one JSON line {url, angle, renderer, fps, frames, latency, loaded}. No dependencies (global fetch and WebSocket).
 import { spawn } from 'node:child_process'
@@ -20,7 +22,8 @@ const { values, positionals } = parseArgs({
     height: { type: 'string' },
     chromium: { type: 'string', default: '/usr/bin/chromium' },
     timeout: { type: 'string', default: '90' },
-    trace: { type: 'string' }
+    trace: { type: 'string' },
+    hub: { type: 'boolean', default: false }
   }
 })
 const url = positionals[0]
@@ -152,6 +155,42 @@ const smoothness = trace => {
   }
 }
 
+const median = list => percentile(list, 0.5)
+
+// the hub page: per-second samples of window.__hub.stats(), then the numbers that matter for 11 cards at 6 fps
+const hubReport = async cdp => {
+  const samples = []
+  for (let i = 0; i < Number(values.seconds); i++) {
+    await sleep(1000)
+    samples.push(await cdp.evaluate('({ stats: __hub.stats(), heap: performance.memory ? performance.memory.usedJSHeapSize : null })'))
+  }
+  const gpuProbe = await cdp.evaluate('__hub.probeGpu()')
+  const longTasks = await cdp.evaluate('window.__longTasks ?? []')
+  const final = samples.at(-1).stats
+  const agents = Object.keys(final.scenes)
+  const meanFps = agent => samples.reduce((sum, s) => sum + s.stats.scenes[agent].fps, 0) / samples.length
+  const fpsList = agents.map(meanFps)
+  const ready = agents.filter(a => final.scenes[a].loaded > 0)
+  const heaps = samples.map(s => s.heap).filter(h => h !== null)
+  const probe = Object.values(gpuProbe).filter(v => v !== null)
+  const queried = agents.map(a => final.scenes[a].gpuMs).filter(v => v !== undefined)
+  const mb = bytes => round(bytes / 1048576, 1)
+  return {
+    url,
+    renderer: final.renderer,
+    scenes: agents.length,
+    scenesWithColumns: ready.length,
+    fps: { min: round(Math.min(...fpsList), 2), median: round(median(fpsList), 2), perScene: Object.fromEntries(agents.map((a, i) => [a, round(fpsList[i], 2)])) },
+    frameCostMs: { p50: round(final.frameCostMs.p50, 2), p95: round(final.frameCostMs.p95, 2), max: round(final.frameCostMs.max, 2), n: final.frameCostMs.n },
+    renderCpuMsP50: round(median(agents.map(a => final.scenes[a].renderMsP50).filter(v => v !== null)), 2),
+    gpuMs: { timerQuery: final.gpuTimer ? { median: round(median(queried), 2), max: round(Math.max(...queried), 2), n: queried.length } : null, finishProbe: { median: round(median(probe), 2), max: round(Math.max(...probe), 2), n: probe.length } },
+    gpuMemoryMB: { total: mb(final.memory.total), shared: mb(final.memory.shared), perScene: mb(median(final.memory.worlds)), scenes: final.memory.worlds.length },
+    jsHeapMB: heaps.length ? { last: mb(heaps.at(-1)), max: mb(Math.max(...heaps)) } : null,
+    longTasks: { n: longTasks.length, totalMs: round(longTasks.reduce((x, y) => x + y, 0), 1), maxMs: Math.max(0, ...longTasks) },
+    console: cdp.logs.slice(0, 10)
+  }
+}
+
 const main = async () => {
   const port = await freePort()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'view-bench-'))
@@ -177,8 +216,15 @@ const main = async () => {
     // main-thread long tasks (> 50 ms by the browser's definition) from the start of the page, for every page version
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__longTasks = []; new PerformanceObserver(list => { for (const e of list.getEntries()) window.__longTasks.push(Math.round(e.duration * 10) / 10) }).observe({ entryTypes: ['longtask'] })` })
     await cdp.send('Page.navigate', { url })
-    const ready = await waitUntil(() => cdp.evaluate('window.__view?.ready === true'), Number(values.timeout) * 1000, 'window.__view.ready')
+    const ready = await waitUntil(() => cdp.evaluate(values.hub ? 'window.__hub?.ready === true' : 'window.__view?.ready === true'), Number(values.timeout) * 1000, values.hub ? 'window.__hub.ready' : 'window.__view.ready')
     await sleep(2000)
+    if (values.hub) {
+      const report = await hubReport(cdp)
+      if (values.screenshot) fs.writeFileSync(values.screenshot, Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+      console.log(JSON.stringify({ ready, ...report }))
+      cdp.close()
+      return
+    }
     if (values.trace) await cdp.evaluate('__view.camTrace.length = 0; __view.latencies.length = 0; __view.shownLatencies.length = 0; __view.decodeMs.length = 0; __view.uploadMs.length = 0; (__view.columnDrawn ??= []).length = 0; (__view.retargetMs ??= []).length = 0; __longTasks.length = 0; window.__mainDecode0 = { ...(__view.mainDecode ?? { ms: 0, columns: 0 }) }; (__view.slowUploads ??= []).length = 0; true')
     const first = await cdp.evaluate('({frames: __view.frames, t: performance.now()})')
     await sleep(Number(values.trace ?? values.seconds) * 1000)
