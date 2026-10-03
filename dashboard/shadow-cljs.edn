@@ -1,0 +1,22 @@
+;; shadow-cljs builds for the dashboard. See README.md.
+{:source-paths ["src" "test"]
+ :dependencies [[reagent "1.3.0"]
+                [re-frame "1.4.3"]]
+ :builds
+ {:server {:target :node-script
+           :main dashboard.server/main
+           :output-to "out/server.cjs"
+           :output-dir "out/server-js"
+           :compiler-options {:infer-externs false}}
+  :ui {:target :browser
+       :output-dir "out/public/js"
+       :asset-path "/js"
+       :modules {:main {:entries [dashboard.ui]
+                        :init-fn dashboard.ui/init}}
+       :compiler-options {:infer-externs false}}
+  :test {:target :node-test
+         :output-to "out/test.cjs"
+         :output-dir "out/test"
+         :ns-regexp "-test$"
+         :autorun false
+         :compiler-options {:infer-externs false}}}}
