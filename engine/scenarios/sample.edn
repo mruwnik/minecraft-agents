@@ -1,5 +1,5 @@
-;; Proves the engine end to end with the sample jobs: walk a little, wait for
-;; day, eat when health is low.
+;; Proves the engine end to end with small jobs: walk a little, then wait for
+;; day, as one seq; eat when health is low.
 {:register [{:trigger :health-low}]
- :queue [{:job :go-to :args {:pos {:x 0 :y 64 :z 0} :range 2}}
-         {:job :wait-for-day}]}
+ :queue [(seq (jobs.movement.go-to {:pos {:x 0 :y 64 :z 0} :range 2})
+              (jobs.time.wait-for-day))]}

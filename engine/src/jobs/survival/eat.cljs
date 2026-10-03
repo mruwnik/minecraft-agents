@@ -8,7 +8,8 @@
 (defn check [_c] true)
 
 (defn ^:async round [c]
-  (let [r (await (ctx/act c :eat (clj->js (select-keys (:args c) [:item]))))]
+  (let [item (:item (:args c))
+        r (await (ctx/act c :eat (if item #js {:item item} #js {})))]
     (when (= "no-food" (.-status r))
       (ctx/emit! c :no_food :info {:text "nothing to eat"}))
     :done))

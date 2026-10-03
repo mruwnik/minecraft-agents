@@ -3,5 +3,5 @@
 {:register [{:trigger :hostile-near}
             {:trigger :health-low}
             {:trigger :night-and-bed-known}]
- :queue [{:job :harvest-wood :args {:species "oak" :radius 16}}
-         {:job :deposit :args {}}]}
+ :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
+         (jobs.storage.deposit)]}

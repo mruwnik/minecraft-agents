@@ -1,12 +1,13 @@
 (ns engine.scenarios-test
   "The shipped scenarios run end to end against the fake primitives."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.catalog :as catalog]
+            [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]))
 
 (defn tree [x z height]
   (merge
@@ -20,10 +21,10 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/fake world)
-        eng (core/create {:primitives p :catalog catalog/catalog :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         s (scenario/read-file file)]
-    (is (= [] (scenario/problems catalog/catalog s)))
+    (is (= [] (scenario/problems registry/jobs triggers/all s)))
     (core/load-scenario! eng s)
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -53,7 +54,7 @@
           (mem/write! (:store eng) :chest {:pos {:x 8 :y 64 :z 8}} mem/place-policy)
           (await (run-ticks eng clock 20 1000))
           (is (= [] (:list (core/state eng))) "deposit finishes")
-          (is (= #{:harvest-wood :deposit} (names-started seen)))
+          (is (= #{"jobs.forestry.harvest-wood" "jobs.storage.deposit"} (names-started seen)))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 4 :y 64 :z 0}))) "replanted")
           (is (not-any? #(#{:warn :error} (:level %)) @seen)))))))
 
@@ -64,7 +65,7 @@
         (let [{:keys [eng p seen clock]} (boot "scenarios/pace-cuts.edn" {:self {:pos {:x -78 :y 69 :z -40}}})
               world (.-world p)]
           (await (core/tick! eng))
-          (is (= [:look-around] (vec (names-started seen))) "every-interval fires at once")
+          (is (= ["jobs.movement.look-around"] (vec (names-started seen))) "every-interval fires at once")
           (let [release (.hold world "moveTo")
                 pacing (core/tick! eng)]
             (swap! clock + 21000)

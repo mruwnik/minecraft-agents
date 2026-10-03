@@ -1,6 +1,7 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
-  (:require [engine.memory :as mem]))
+  (:require [engine.expr :as expr]
+            [engine.memory :as mem]))
 
 ;; ------------------------------------------------------------------ job memory
 
@@ -47,22 +48,34 @@
 
 ;; ------------------------------------------------------------------ composition
 
+(defn child-job
+  "[def args] for a child: job is a definition map, or a job namespace
+  symbol looked up in the registry with args merged over its defaults."
+  [ctx job args]
+  (if (symbol? job)
+    (expr/leaf (:jobs (:engine ctx)) job args)
+    [job args]))
+
 (defn call-child
-  "Run one round of job definition def as the child in slot, with args.
-  A promise of :done, :continue or :declined (its check failed)."
-  [ctx slot def args]
-  ((:call-child ctx) slot def args))
+  "Run one round of job (a definition map, or a job namespace symbol) as the
+  child in slot, with args. A promise of :done, :continue or :declined (its
+  check failed)."
+  [ctx slot job args]
+  (let [[def args] (child-job ctx job args)]
+    ((:call-child ctx) slot def args)))
 
 (defn check-child
-  "Run def's check as the child in slot would see it, for a parent's check."
-  [ctx slot def args]
-  (let [slots (conj (:slots ctx) slot)]
+  "Run job's check as the child in slot would see it, for a parent's check."
+  [ctx slot job args]
+  (let [[def args] (child-job ctx job args)
+        slots (conj (:slots ctx) slot)]
     ((:check def) (assoc ctx :slots slots :args args))))
 
 (defn submit!
-  "Put a new job at the end of the list; returns its instance id."
-  ([ctx job args] (submit! ctx job args {}))
-  ([ctx job args opts] ((:submit ctx) job args opts)))
+  "Put a job spec (an expression, see engine.expr) at the end of the list;
+  returns its instance id."
+  ([ctx spec] (submit! ctx spec {}))
+  ([ctx spec opts] ((:submit ctx) spec opts)))
 
 (defn emit!
   "Emit an event with :source :job and this job's envelope fields."

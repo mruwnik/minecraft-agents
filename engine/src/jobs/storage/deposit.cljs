@@ -1,9 +1,16 @@
-(ns engine.jobs.storage
-  "Putting things away. Contracts in README.md, section Job library."
+(ns jobs.storage.deposit
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.memory :as mem]))
+
+(def doc
+  "Walk to the chest and deposit one stack per round: the named items, or
+  everything but tools and armour (saplings included).")
+
+(def args
+  {:chest {:doc "chest position; the known :chest place when nil" :default nil}
+   :items {:doc "item names to put away; everything but tools and armour when nil" :default nil}})
 
 (def gear-suffixes ["_pickaxe" "_axe" "_shovel" "_hoe" "_sword" "_helmet" "_chestplate" "_leggings" "_boots"])
 (def gear-names #{"shears" "bow" "crossbow" "fishing_rod" "flint_and_steel" "shield" "trident"})
@@ -24,17 +31,14 @@
   (let [wanted (some-> wanted set)]
     (first (filter #(if wanted (wanted (:name %)) (not (tool? (:name %)))) items))))
 
-(defn deposit-check
+(defn check
   "A chest is known."
   [c]
   (boolean (chest-of (ctx/view c) (:args c))))
 
-(defn ^:async deposit-round
-  "args {:chest pos-or-nil :items names-or-nil}. Walks to the chest (args, or
-  the known :chest place) and deposits one stack per round: the
-  named items, or everything but tools and armour. Done when nothing is left
-  to put away. Three failed transfers (full, missing, unreachable) give up
-  with a chest_unusable warn."
+(defn ^:async round
+  "Done when nothing is left to put away. Three failed transfers (full,
+  missing, unreachable) give up with a chest_unusable warn."
   [c]
   (let [chest (chest-of (ctx/view c) (:args c))
         stack (to-deposit (u/inventory (:primitives c)) (:items (:args c)))]
@@ -51,5 +55,3 @@
             (if (= "ok" (.-status r))
               :continue
               (u/fail! c :chest_unusable (str "chest not usable: " (.-status r))))))))))
-
-(def deposit {:name :deposit :check deposit-check :round deposit-round})

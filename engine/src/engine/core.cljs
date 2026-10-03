@@ -6,7 +6,8 @@
   The state atom holds plain EDN, written on every change. Memory (engine.memory)
   is saved at every round end and whenever the engine itself writes to it.
     :list [id]              listed instance ids, in cycle order
-    :instances {id inst}    {:id :job :args :round :hold? :reflex}
+    :instances {id inst}    {:id :spec :round :hold? :reflex}; :spec is a parsed
+                            job expression node (engine.expr)
     :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :builtin?}
     :changes {rid {prop {:value v :until ms-or-nil}}}  prop is :mute or :position
     :reflex-state {rid {:cooldown-until ms :stopped? bool}}
@@ -16,7 +17,9 @@
     :pending-reflex id      a reflex job between its rounds; it keeps the body
     :next-id n
   The in-flight round itself ({:id :token :reflex :round}) is not persisted."
-  (:require [engine.events :as events]
+  (:require [engine.composite :as composite]
+            [engine.events :as events]
+            [engine.expr :as expr]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             ["path" :as path]))
@@ -119,15 +122,13 @@
 (defn running [eng] @(:running eng))
 (defn now [eng] ((:now eng)))
 
-(defn job-def [eng job]
-  (let [def (get-in eng [:catalog :jobs job])]
-    (cond
-      (nil? def) (throw (ex-info (str "unknown job " job) {:job job}))
-      (not (fn? (:check def))) (throw (ex-info (str "job " job " has no :check") {:job job}))
-      :else def)))
+(defn job-of
+  "[def args] of instance inst, from its parsed spec."
+  [eng inst]
+  (composite/job (:jobs eng) (:spec inst)))
 
 (defn trigger-def [eng trigger]
-  (or (get-in eng [:catalog :triggers trigger])
+  (or (get-in eng [:triggers trigger])
       (throw (ex-info (str "unknown trigger " trigger) {:trigger trigger}))))
 
 (defn emit! [eng event]
@@ -135,7 +136,8 @@
 
 (defn job-fields [eng id]
   (let [inst (get-in (state eng) [:instances id])]
-    {:job id :chain [id] :round (:round inst) :reflex (:reflex inst) :name (:job inst)}))
+    {:job id :chain [id] :round (:round inst) :reflex (:reflex inst)
+     :name (some-> (:spec inst) expr/label)}))
 
 (defn set-owner! [eng token]
   (.setOwner (:primitives eng) token))
@@ -145,8 +147,8 @@
     (swap! (:state eng) update :next-id inc)
     (str "j" n)))
 
-(defn add-instance [state id job args opts]
-  (assoc-in state [:instances id] (merge {:id id :job job :args (or args {}) :round 0} opts)))
+(defn add-instance [state id node opts]
+  (assoc-in state [:instances id] (merge {:id id :spec node :round 0} opts)))
 
 (defn save-memory! [eng]
   (mem/save! (:store eng)))
@@ -215,7 +217,7 @@
                      (wrote! kind))
      :act (fn [k act-args] (act! eng base id k act-args))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
-     :submit (fn [job job-args opts] (check!) (submit! eng job job-args (assoc opts :by id)))
+     :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
      :emit (fn [kind level fields]
              (emit! eng (merge fields {:source :job :kind kind :level level :job id
                                        :chain chain :round round :reflex reflex})))}))
@@ -248,9 +250,9 @@
           status)))))
 
 (defn ^:async run-round [eng run inst]
-  (let [def (job-def eng (:job inst))
+  (let [[def args] (job-of eng inst)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
-                         :args (:args inst) :round (:round run) :reflex (:reflex run)})]
+                         :args args :round (:round run) :reflex (:reflex run)})]
     (try
       (normalize-result (await ((:round def) c)))
       (catch :default e
@@ -269,17 +271,17 @@
 
 (defn check-ctx
   "The ctx a listed job's check receives: memory and sensing, no token."
-  [eng inst]
+  [eng inst args]
   (make-ctx eng {:root (:id inst) :slots [] :chain [(:id inst)] :token nil
-                 :args (:args inst) :round (:round inst) :reflex (:reflex inst)}))
+                 :args args :round (:round inst) :reflex (:reflex inst)}))
 
 (defn check-passes?
   "Whether listed instance id's check passes now. A throwing check declines."
   [eng id]
-  (let [inst (get-in (state eng) [:instances id])
-        check (:check (job-def eng (:job inst)))]
-    (boolean (call-guarded eng (str "check of " (:job inst)) false
-                           #(check (check-ctx eng inst))))))
+  (let [inst (get-in (state eng) [:instances id])]
+    (boolean (call-guarded eng (str "check of " id) false
+                           #(let [[def args] (job-of eng inst)]
+                              ((:check def) (check-ctx eng inst args)))))))
 
 (defn choose-listed
   "The listed job to run next: a holder (or nothing, while its check declines),
@@ -298,12 +300,13 @@
 ;; ------------------------------------------------------------------ settling a round
 
 (defn settle-listed! [eng {:keys [id]} {:keys [status error]}]
-  (let [idx (.indexOf (:list (state eng)) id)]
+  (let [idx (.indexOf (:list (state eng)) id)
+        fields (job-fields eng id)]
     (case status
       :done
       (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
           (mem/delete-job! (:store eng) id)
-          (emit! eng {:source :job :kind :completed :level :info :job id :chain [id]}))
+          (emit! eng (merge fields {:source :job :kind :completed :level :info})))
 
       :cut
       (do (swap! (:state eng) assoc :resume id :current nil)
@@ -314,8 +317,8 @@
       :error
       (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
           (mem/delete-job! (:store eng) id)
-          (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
-                      :error (str error) :text (str "dropped: " error)}))
+          (emit! eng (merge fields {:source :job :kind :failed :level :warn
+                                    :error (str error) :text (str "dropped: " error)})))
 
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
@@ -446,8 +449,9 @@
         fired (emit! eng {:source :reflex :kind :fired :level :info :reflex (:id entry)
                           :job id :interrupted (:id h)})]
     (when h (cut! eng h (:id entry) fired))
-    (swap! (:state eng) add-instance id (:job entry) (:args entry) {:reflex (:id entry)})
-    (mem/create-job! (:store eng) id (:args entry))
+    (let [node (expr/parse (:jobs eng) (:job entry))]
+      (swap! (:state eng) add-instance id node {:reflex (:id entry)})
+      (mem/create-job! (:store eng) id (second (job-of eng {:spec node}))))
     (start-round! eng id)))
 
 (defn expire-changes! [eng]
@@ -479,18 +483,22 @@
 ;; ------------------------------------------------------------------ list edits (agents, and submit from rounds)
 
 (defn submit!
-  "Put a new instance of job on the list. opts: :hold? :front? :by. Returns its id."
-  [eng job args {:keys [hold? front? by]}]
-  (job-def eng job)
-  (let [id (new-id! eng)]
+  "Put a job spec (an expression, see engine.expr) on the list; (hold e) or
+  opts :hold? make it hold the body. opts: :hold? :front? :by. Throws on a
+  bad spec. Returns the instance id."
+  [eng spec {:keys [front? by] :as opts}]
+  (let [{:keys [node hold?]} (expr/parse-spec (:jobs eng) spec)
+        hold? (boolean (or hold? (:hold? opts)))
+        args (second (job-of eng {:spec node}))
+        id (new-id! eng)]
     (swap! (:state eng) #(cond-> (-> %
-                                     (add-instance id job args {:hold? (boolean hold?)})
+                                     (add-instance id node {:hold? hold?})
                                      (update :list (fn [l] (if front? (into [id] l) (conj l id)))))
                            (and front? (pos? (count (:list %)))) (update :cursor inc)))
-    (mem/create-job! (:store eng) id (or args {}))
+    (mem/create-job! (:store eng) id args)
     (save-memory! eng)
-    (emit! eng {:source :job :kind :queued :level :info :job id :chain [id] :name job
-                :args args :hold (boolean hold?) :by by})
+    (emit! eng {:source :job :kind :queued :level :info :job id :chain [id] :name (expr/label node)
+                :spec (pr-str spec) :hold hold? :by by})
     id))
 
 (defn cancel! [eng id]
@@ -503,17 +511,20 @@
   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by :agent}))
 
 (defn do-now!
-  "Cut a running listed job and put job at the front, holding the body."
-  [eng job args]
+  "Cut a running listed job and put the job spec at the front, holding the body."
+  [eng spec]
+  (expr/parse-spec (:jobs eng) spec)
   (let [r (running eng)]
     (when (and r (not (:reflex r)))
       (cut! eng r :do-now nil))
-    (submit! eng job args {:hold? true :front? true :by :agent})))
+    (submit! eng spec {:hold? true :front? true :by :agent})))
 
 ;; ------------------------------------------------------------------ register edits (agents only)
 
 (defn entry-from
-  "A register entry from a spec {:trigger ...overrides}, filled from the trigger."
+  "A register entry from a spec {:trigger ...overrides}, filled from the
+  trigger. :job is a job spec (an expression without hold); :args are the
+  trigger's, merged over its defaults."
   [eng spec]
   (let [t (trigger-def eng (:trigger spec))]
     (merge {:id (:trigger spec) :trigger (:trigger spec) :job (:job t)
@@ -525,12 +536,12 @@
   "Append a reflex to the register. Returns its id."
   [eng spec]
   (let [entry (entry-from eng spec)]
-    (job-def eng (:job entry))
+    (expr/parse (:jobs eng) (:job entry))
     (when (index-of-id (:register (state eng)) (:id entry))
       (throw (ex-info (str "reflex already registered: " (:id entry)) {:id (:id entry)})))
     (swap! (:state eng) update :register conj entry)
     (emit! eng {:source :reflex :kind :changed :level :info :reflex (:id entry)
-                :property :registered :value (:job entry) :by :agent})
+                :property :registered :value (pr-str (:job entry)) :by :agent})
     (:id entry)))
 
 (defn remove-reflex!
@@ -577,11 +588,11 @@
 ;; ------------------------------------------------------------------ scenario, lifecycle
 
 (defn load-scenario!
-  "Register a scenario's reflexes and queue its jobs, in order."
+  "Register a scenario's reflexes and queue its job specs, in order."
   [eng {:keys [register queue]}]
   (doseq [spec register] (register-reflex! eng spec))
-  (doseq [{:keys [job args hold?]} queue]
-    (submit! eng job args {:hold? hold? :by :scenario})))
+  (doseq [spec queue]
+    (submit! eng spec {:by :scenario})))
 
 (defn self-pos [p]
   (let [pos (.-pos (.self p))]
@@ -597,12 +608,30 @@
                       {:source :body :kind (keyword (:kind m))
                        :level (if (= "died" (:kind m)) :error :info)}))))
 
+(defn unknown-job
+  "The message why inst's spec no longer resolves against the registry, or nil."
+  [eng inst]
+  (try (job-of eng inst) nil
+       (catch :default e (ex-message e))))
+
+(defn drop-unknown-jobs!
+  "After a restore: drop instances whose job namespace is gone, with a warn."
+  [eng]
+  (doseq [[id inst] (:instances (state eng))
+          :let [problem (unknown-job eng inst)]
+          :when problem]
+    (swap! (:state eng) remove-listed id)
+    (mem/delete-job! (:store eng) id)
+    (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
+                :error problem :text (str "dropped on restore: " problem)})))
+
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
   memory.edn when present, sweeps memory and appends a :restart entry.
-  Options: :primitives :catalog :dir :now :events :body, :stall-rounds
-  (default 20) and :sweep-ms (default 60000)."
-  [{:keys [primitives catalog dir now events body stall-rounds sweep-ms]
+  Options: :primitives, :jobs (the registry, {sym {:check :round :doc
+  :args}}), :triggers ({name trigger}), :dir :now :events :body,
+  :stall-rounds (default 20) and :sweep-ms (default 60000)."
+  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms]
     :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
@@ -613,7 +642,7 @@
         store (mem/open dir {:now now
                              :world-time #(.-timeOfDay (.self primitives))
                              :live-jobs #(set (keys (:instances @st)))})
-        eng {:primitives primitives :catalog catalog :dir dir :now now :events ev
+        eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
              :state st
              :running (atom nil)
@@ -627,6 +656,7 @@
     (fsu/write-edn! file (state eng))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
+    (drop-unknown-jobs! eng)
     (mem/write! store :restart {})
     (save-memory! eng)
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info

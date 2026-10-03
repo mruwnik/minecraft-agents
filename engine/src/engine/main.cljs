@@ -1,9 +1,10 @@
 (ns engine.main
   "Entry point: npm run body -- --agent <name> --scenario <file> [--fresh] [--state-dir <dir>]"
-  (:require [engine.catalog :as catalog]
-            [engine.core :as core]
+  (:require [engine.core :as core]
             [engine.fsutil :as fsu]
+            [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.triggers :as triggers]
             ["fs" :as fs]
             ["path" :as path]
             ["module" :refer [createRequire]]))
@@ -46,7 +47,7 @@
         prims-file (path/join root "js" "primitives.mjs")
         cfg (when agent (load-agent state-dir agent))
         plan (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
-        issues (when plan (scenario/problems catalog/catalog plan))]
+        issues (when plan (scenario/problems registry/jobs triggers/all plan))]
     (cond
       (nil? agent) {:error usage}
       (:error cfg) {:error (:text cfg)}
@@ -66,7 +67,7 @@
             restoring? (fs/existsSync engine-file)
             create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
             p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)}))
-            eng (core/create {:primitives p :catalog catalog/catalog :dir (:engine-dir cfg)
+            eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (:engine-dir cfg)
                               :body (:username cfg)})]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
         (let [stop-ticks (core/start! eng {:tick-ms 250})]

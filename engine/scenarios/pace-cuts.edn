@@ -4,4 +4,4 @@
 {:register [{:trigger :every-interval :args {:seconds 20}}
             {:trigger :hostile-near}
             {:trigger :health-low}]
- :queue [{:job :pace :args {:a {:x -80 :y 69 :z -41} :b {:x -76 :y 69 :z -38} :laps 3 :rounds 12}}]}
+ :queue [(jobs.movement.pace {:a {:x -80 :y 69 :z -41} :b {:x -76 :y 69 :z -38} :laps 3 :rounds 12})]}

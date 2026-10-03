@@ -1,5 +1,7 @@
 (ns engine.triggers
-  "Trigger definitions. See README.md, Triggers and the register."
+  "Trigger definitions. :job is the default job spec (an expression, see
+  engine.expr); :args are the trigger's own. See README.md, Triggers and the
+  register."
   (:require [engine.memory :as mem]))
 
 (def default-health 8)
@@ -8,7 +10,7 @@
   "Holds when health is at most :health (args, default 8)."
   {:name :health-low
    :when (fn [world _memory args] (<= (.-health (.self world)) (:health args default-health)))
-   :job :eat
+   :job '(jobs.survival.eat)
    :args {:health default-health}
    :persistence :cooldown
    :cooldown-s 30})
@@ -16,13 +18,13 @@
 (def hostile-radius 8)
 
 (def hostile-near
-  "Holds when a hostile is within :radius (args, default 8). The same args
-  go to the :retreat job, so one :radius sets both."
+  "Holds when a hostile is within :radius (args, default 8). The retreat
+  job's own :radius (default 8) is set in the entry's :job spec."
   {:name :hostile-near
    :when (fn [world _memory args]
            (let [radius (:radius args hostile-radius)]
              (pos? (.-length (.entities world #js {:radius radius :kind "hostile" :max 1})))))
-   :job :retreat
+   :job '(jobs.survival.retreat)
    :args {:radius hostile-radius}
    :persistence :cooldown
    :cooldown-s 5})
@@ -32,7 +34,7 @@
    :when (fn [world memory _args]
            (and (not (.-isDay (.self world)))
                 (some? (mem/place memory :bed))))
-   :job :sleep
+   :job '(jobs.survival.sleep)
    :args {}
    :persistence :cooldown
    :cooldown-s 60})
@@ -46,7 +48,7 @@
    :when (fn [world memory args]
            (and (>= (.-length (.-inventory (.self world))) (:stacks args nearly-full-stacks))
                 (some? (mem/place memory :chest))))
-   :job :deposit
+   :job '(jobs.storage.deposit)
    :args {:stacks nearly-full-stacks}
    :persistence :cooldown
    :cooldown-s 60})
@@ -63,7 +65,12 @@
            (let [last (:t (mem/latest memory :looked))]
              (or (nil? last)
                  (>= (- (:now memory) last) (* 1000 (:seconds args default-interval-s))))))
-   :job :look-around
+   :job '(jobs.movement.look-around)
    :args {:seconds default-interval-s}
    :persistence :cooldown
    :cooldown-s 0})
+
+(def all
+  "Every trigger by name."
+  (into {} (map (juxt :name identity))
+        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval]))

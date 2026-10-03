@@ -1,32 +1,42 @@
 (ns engine.samples-test
   "The sample jobs and trigger end to end against the fake, from a scenario."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.catalog :as catalog]
+            [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]))
 
 (def scenario-text
   "{:register [{:trigger :health-low}]
-    :queue [{:job :go-to :args {:pos {:x 30 :y 64 :z 0}}}
-            {:job :wait-for-day}]}")
+    :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0}})
+            (jobs.time.wait-for-day)]}")
 
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/fake world)
-        eng (core/create {:primitives p :catalog catalog/catalog :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
 (deftest scenario-reads-and-validates
   (let [s (scenario/parse scenario-text)]
-    (is (= [] (scenario/problems catalog/catalog s)))
-    (is (= ["unknown trigger :nope" "unknown job :fly" "queue entry 0 has no :job"]
-           (scenario/problems catalog/catalog {:register [{:trigger :nope} {:trigger :health-low :job :fly}]
-                                               :queue [{:args {}}]})))))
+    (is (= [] (scenario/problems registry/jobs triggers/all s)))
+    (let [ps (scenario/problems registry/jobs triggers/all
+                                '{:register [{:trigger :nope}
+                                             {:trigger :health-low :job (jobs.fly)}
+                                             {:trigger :health-low :job (hold (jobs.survival.eat))}]
+                                  :queue [{:job :go-to} (jobs.fly) (seq)]})]
+      (is (= 6 (count ps)))
+      (is (= "unknown trigger :nope" (first ps)))
+      (is (re-find #"unknown job or combinator jobs.fly" (nth ps 1)))
+      (is (re-find #"hold is not allowed in a register entry" (nth ps 2)))
+      (is (re-find #"a job spec is a list" (nth ps 3)) "the old map form is refused")
+      (is (re-find #"unknown job or combinator jobs.fly" (nth ps 4)))
+      (is (re-find #"seq takes at least one" (nth ps 5))))))
 
 (deftest go-to-wait-for-day-and-health-low-end-to-end
   (async done
@@ -48,7 +58,7 @@
           (.setTime world 1000)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= [:go-to :eat :wait-for-day]
+          (is (= ["jobs.movement.go-to" "jobs.survival.eat" "jobs.time.wait-for-day"]
                  (->> @seen (filter #(= :round_started (:kind %))) (mapv :name)))))))))
 
 (deftest go-to-gives-up-after-three-blocked-walks
@@ -56,7 +66,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:unreachable ["9,64,9"]})]
-          (core/submit! eng :go-to {:pos {:x 9 :y 64 :z 9}} {})
+          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}}) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [] (:list (core/state eng))))
           (is (some #(= :unreachable (:kind %)) @seen)))))))
@@ -66,7 +76,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {})]
-          (core/submit! eng :go-to {:pos {:x 100 :y 64 :z 0}} {})
+          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 100 :y 64 :z 0}}) {})
           (await (core/tick! eng))
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))

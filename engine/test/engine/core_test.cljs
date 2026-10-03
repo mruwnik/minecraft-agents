@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.events :as events]
-            [engine.jobs.samples :as samples]
+            [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             ["fs" :as fs]
@@ -52,7 +52,7 @@
     (if (= a :done) :done :continue)))
 
 (defn ^:async submit-round [c]
-  (ctx/submit! c :count {} {})
+  (ctx/submit! c '(count) {})
   :done)
 
 (def flag (atom false))
@@ -74,29 +74,31 @@
       (await (ctx/call-child c :deeper {:name :recurse :check always :round recurse-round}
                              {:depth (dec depth)})))))
 
-(def catalog
-  {:jobs {:count {:name :count :check always :round count-round}
-          :walk {:name :walk :check always :round walk-round}
-          :parent-walk {:name :parent-walk :check always :round parent-walk-round}
-          :eat {:name :eat :check always :round eat-round}
-          :fail {:name :fail :check always :round fail-round}
-          :bad-result {:name :bad-result :check always :round bad-result-round}
-          :child child-job
-          :recurse {:name :recurse :check always :round recurse-round}
-          :parent {:name :parent :check always :round parent-round}
-          :declined-parent {:name :declined-parent :check always :round declined-parent-round}
-          :submitter {:name :submitter :check always :round submit-round}
-          :look-around samples/look-around
-          :gated gated-job
-          :no-check {:name :no-check :round count-round}}
-   :triggers {:hurt {:name :hurt :job :eat :persistence :retry
-                     :when (fn [w _ _] (<= (.-health (.self w)) 8))}
-              :hungry {:name :hungry :job :eat :persistence :cooldown :cooldown-s 30
-                       :when (fn [w _ _] (< (.-food (.self w)) 10))}
-              :near {:name :near :job :walk :args {:pos {:x 50 :y 64 :z 0}} :persistence :stop
-                     :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
-              :every-interval triggers/every-interval
-              :never {:name :never :job :eat :when (constantly false)}}})
+(def registry
+  {'count {:check always :round count-round}
+   'walk {:check always :round walk-round}
+   'parent-walk {:check always :round parent-walk-round}
+   'eat {:check always :round eat-round}
+   'fail {:check always :round fail-round}
+   'bad-result {:check always :round bad-result-round}
+   'child child-job
+   'recurse {:check always :round recurse-round}
+   'parent {:check always :round parent-round}
+   'declined-parent {:check always :round declined-parent-round}
+   'submitter {:check always :round submit-round}
+   'jobs.movement.look-around (get registry/jobs 'jobs.movement.look-around)
+   'gated gated-job
+   'no-check {:round count-round}})
+
+(def triggers
+  {:hurt {:name :hurt :job '(eat) :persistence :retry
+          :when (fn [w _ _] (<= (.-health (.self w)) 8))}
+   :hungry {:name :hungry :job '(eat) :persistence :cooldown :cooldown-s 30
+            :when (fn [w _ _] (< (.-food (.self w)) 10))}
+   :near {:name :near :job '(walk {:pos {:x 50 :y 64 :z 0}}) :persistence :stop
+          :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
+   :every-interval triggers/every-interval
+   :never {:name :never :job '(eat) :when (constantly false)}})
 
 (defn setup
   ([] (setup {}))
@@ -105,7 +107,7 @@
    (let [clock (atom 1000000)
          [seen sink] (tu/capture-sink)
          p (tu/fake world)
-         eng (core/create {:primitives p :catalog catalog :dir dir :now #(deref clock)
+         eng (core/create {:primitives p :jobs registry :triggers triggers :dir dir :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :clock clock :seen seen :dir dir})))
 
@@ -144,9 +146,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng :count {} {})
-          (core/submit! eng :count {} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(count) {})
           (dotimes [_ 5] (await (core/tick! eng)))
           (is (= ["j1" "j2" "j3" "j1" "j2"] (ran seen)))
           (is (= {:n 2} (job-mem eng "j1")))
@@ -158,9 +160,9 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
           (reset! flag false)
-          (core/submit! eng :gated {} {})
+          (core/submit! eng '(gated) {})
           (is (nil? (core/tick! eng)) "every check declines: idle")
-          (core/submit! eng :count {} {})
+          (core/submit! eng '(count) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= ["j2" "j2"] (ran seen)))
           (reset! flag true)
@@ -173,25 +175,25 @@
     (tu/run-async done
       (fn ^:async t []
         (let [seen-ctx (atom nil)
-              cat (assoc-in catalog [:jobs :peek] {:name :peek :round count-round
-                                                   :check (fn [c] (reset! seen-ctx [(:args c) (dissoc (ctx/mem c) :args :children)]) true)})
               {:keys [eng]} (setup)
-              eng (assoc eng :catalog cat)]
-          (core/submit! eng :peek {:a 1} {})
+              eng (assoc-in eng [:jobs 'peek]
+                            {:round count-round
+                             :check (fn [c] (reset! seen-ctx [(:args c) (dissoc (ctx/mem c) :args :children)]) true)})]
+          (core/submit! eng (list 'peek {:a 1}) {})
           (await (core/tick! eng))
           (core/tick! eng)
           (is (= [{:a 1} {:n 1}] @seen-ctx)))))))
 
 (deftest a-job-without-a-check-is-refused
   (let [{:keys [eng]} (setup)]
-    (is (thrown? js/Error (core/submit! eng :no-check {} {})))))
+    (is (thrown? js/Error (core/submit! eng '(no-check) {})))))
 
 (deftest a-round-returning-anything-else-fails-the-job
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng :bad-result {} {})
+          (core/submit! eng '(bad-result) {})
           (await (core/tick! eng))
           (is (= [] (listed eng)))
           (is (some #(= :failed (:kind %)) @seen)))))))
@@ -202,8 +204,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
           (reset! flag false)
-          (core/submit! eng :count {} {})
-          (core/submit! eng :gated {} {:hold? true})
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(gated) {:hold? true})
           (is (nil? (core/tick! eng)) "the holder declines; the others wait")
           (reset! flag true)
           (dotimes [_ 2] (await (core/tick! eng)))
@@ -215,7 +217,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup)]
           (reset! flag false)
-          (core/submit! eng :declined-parent {} {})
+          (core/submit! eng '(declined-parent) {})
           (await (core/tick! eng))
           (is (= {:child :declined} (job-mem eng "j1"))))))))
 
@@ -224,8 +226,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen dir]} (setup)]
-          (core/submit! eng :walk {:pos {:x 3 :y 64 :z 0}} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng (list 'walk {:pos {:x 3 :y 64 :z 0}}) {})
+          (core/submit! eng '(count) {})
           (await (core/tick! eng))
           (is (= ["j2"] (listed eng)))
           (is (nil? (get-in (memory-on-disk dir) [:entries :job/j1])) "its memory kind is deleted")
@@ -238,8 +240,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng :count {} {})
-          (core/submit! eng :count {} {:hold? true})
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(count) {:hold? true})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j2" "j2" "j2"] (ran seen))))))))
 
@@ -248,7 +250,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng :fail {} {})
+          (core/submit! eng '(fail) {})
           (await (core/tick! eng))
           (is (= [] (listed eng)))
           (is (= :warn (:level (first (filter #(= :failed (:kind %)) @seen))))))))))
@@ -258,7 +260,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng dir]} (setup)]
-          (core/submit! eng :parent {} {})
+          (core/submit! eng '(parent) {})
           (await (core/tick! eng))
           (is (= {:seen [:continue]} (job-mem eng "j1")))
           (is (= {:n 1} (job-mem eng "j1" [:a])))
@@ -287,7 +289,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng :recurse {:depth 12} {})
+          (core/submit! eng (list 'recurse {:depth 12}) {})
           (await (core/tick! eng))
           (is (= [] (listed eng)) "the innermost :done bubbles up")
           (is (not-any? #(= :failed (:kind %)) @seen)))))))
@@ -308,8 +310,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup)]
-          (core/submit! eng :submitter {} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng '(submitter) {})
+          (core/submit! eng '(count) {})
           (await (core/tick! eng))
           (is (= ["j2" "j3"] (listed eng))))))))
 
@@ -322,8 +324,8 @@
         (let [{:keys [eng seen p]} (setup {:inventory [{:name "bread" :count 3}]})
               world (.-world p)]
           (core/register-reflex! eng {:trigger :hurt})
-          (core/submit! eng :walk {:pos {:x 5 :y 64 :z 0}} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
+          (core/submit! eng '(count) {})
           (.hold world "moveTo")
           (let [walking (core/tick! eng)]
             (set! (.. world -state -self -health) 6)
@@ -347,8 +349,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen p clock]} (setup {})
               world (.-world p)]
-          (core/submit! eng :walk {:pos {:x 5 :y 64 :z 0}} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
+          (core/submit! eng '(count) {})
           (.hold world "moveTo")
           (let [walking (core/tick! eng)]
             (core/register-reflex! eng {:trigger :every-interval :args {:seconds 45}})
@@ -447,10 +449,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup)]
-          (core/submit! eng :walk {:pos {:x 5 :y 64 :z 0}} {})
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
           (.hold (.-world p) "moveTo")
           (let [walking (core/tick! eng)]
-            (core/do-now! eng :count {})
+            (core/do-now! eng '(count))
             (await walking))
           (is (= ["j2" "j1"] (listed eng)))
           (await (core/tick! eng))
@@ -477,8 +479,8 @@
           (core/register-reflex! eng {:trigger :hurt})
           (core/register-reflex! eng {:trigger :never})
           (core/mute! eng :never 600)
-          (core/submit! eng :walk {:pos {:x 5 :y 64 :z 0}} {})
-          (core/submit! eng :count {} {})
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
+          (core/submit! eng '(count) {})
           (.hold (.-world p) "moveTo")
           (core/tick! eng)
           (let [{again :eng seen :seen} (setup {} dir)
@@ -489,7 +491,7 @@
             (is (= "j1" (:resume s)) "the in-flight round is lost and resumes first")
             (is (= 2 (count (mem/entries (mem/view (:store again)) :restart))) "one per start")
             (is (some #(= :restored (:kind %)) @seen))
-            (core/submit! again :count {} {})
+            (core/submit! again '(count) {})
             (is (= ["j1" "j2" "j3"] (listed again)) "ids continue")
             (await (core/tick! again))
             (is (= ["j1"] (ran seen)))))))))
@@ -503,7 +505,7 @@
         (let [{:keys [eng seen p]} (setup)]
           (.override (.-world p) "moveTo"
                      (fn [_ _ _] (js/Promise.reject (core/cut-error))))
-          (core/submit! eng :parent-walk {} {})
+          (core/submit! eng '(parent-walk) {})
           (await (core/tick! eng))
           (is (= ["j1"] (listed eng)) "a cut is not a failure")
           (is (= {:before true} (job-mem eng "j1")) "its memory survives")
@@ -517,7 +519,7 @@
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
               {:keys [eng p seen]} (setup {} dir)]
-          (core/submit! eng :parent-walk {} {})
+          (core/submit! eng '(parent-walk) {})
           (.hold (.-world p) "moveTo")
           (let [walking (core/tick! eng)]
             (core/shutdown! eng)
@@ -547,10 +549,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen dir]} (setup)
-              eng (assoc-in eng [:catalog :jobs :intent] {:name :intent :check always :round intent-round})
+              eng (assoc-in eng [:jobs 'intent] {:check always :round intent-round})
               release (.hold (.-world p) "moveTo")
               release-look (.hold (.-world p) "look")]
-          (core/submit! eng :intent {} {})
+          (core/submit! eng '(intent) {})
           (let [r (core/tick! eng)]
             (is (= :walk-east (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :intent]))
                 "saved before the primitive")
@@ -568,7 +570,7 @@
 (deftest a-check-cannot-act-or-write
   (let [{:keys [eng]} (setup)
         c (core/make-ctx eng {:root "j1" :slots [] :chain ["j1"] :token nil :args {} :round 0})]
-    (core/submit! eng :count {} {})
+    (core/submit! eng '(count) {})
     (is (thrown? js/Error (ctx/update-mem! c assoc :x 1)))
     (is (thrown? js/Error (ctx/remember! c :seen {})))))
 
@@ -591,14 +593,14 @@
   (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
   :continue)
 
-(def stall-catalog
-  (update catalog :jobs merge {:spin {:name :spin :check always :round spin-round}
-                               :looker {:name :looker :check always :round look-round}}))
+(def stall-registry
+  (merge registry {'spin {:check always :round spin-round}
+                   'looker {:check always :round look-round}}))
 
 (defn stall-setup [opts]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
-        eng (core/create (merge {:primitives (tu/fake {}) :catalog stall-catalog :dir (tu/tmp-dir)
+        eng (core/create (merge {:primitives (tu/fake {}) :jobs stall-registry :triggers triggers :dir (tu/tmp-dir)
                                  :now #(deref clock)
                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                                 opts))]
@@ -611,7 +613,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (stall-setup {:stall-rounds 3})]
-          (core/submit! eng :spin {} {:hold? true})
+          (core/submit! eng '(spin) {:hold? true})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= [] (stalls seen)))
           (await (core/tick! eng))
@@ -625,10 +627,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
-          (core/submit! eng :looker {} {:hold? true})
+          (core/submit! eng '(looker) {:hold? true})
           (dotimes [_ 4] (await (core/tick! eng)))
           (core/cancel! eng "j1")
-          (core/submit! eng :count {} {:hold? true})
+          (core/submit! eng '(count) {:hold? true})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [] (stalls seen))))))))
 
@@ -637,7 +639,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
-          (core/submit! eng :spin {} {})
+          (core/submit! eng '(spin) {})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [] (stalls seen))))))))
 
@@ -646,7 +648,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (stall-setup {})]
-          (core/submit! eng :spin {} {:hold? true})
+          (core/submit! eng '(spin) {:hold? true})
           (dotimes [_ 19] (await (core/tick! eng)))
           (is (= [] (stalls seen)))
           (await (core/tick! eng))
@@ -665,3 +667,146 @@
     (swap! clock + core/default-sweep-ms)
     (core/tick! eng)
     (is (nil? (get-in (memory-on-disk dir) [:entries :seen])))))
+
+;; ---------------------------------------------------------------- job expressions
+
+(defn ^:async twice-round
+  "Done on its second round; records the rounds it ran."
+  [c]
+  (let [n (inc (:n (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :n n)
+    (if (>= n 2) :done :continue)))
+
+(def flag-b (atom true))
+
+(def expr-registry
+  (merge registry {'twice {:check always :round twice-round}
+                   'twice-b {:check (fn [_] @flag-b) :round twice-round}
+                   'defaults {:check always :round count-round
+                              :args {:a {:doc "a" :default 1} :b {:doc "b" :default 2}}}}))
+
+(defn expr-setup []
+  (let [s (setup)]
+    (update s :eng assoc :jobs expr-registry)))
+
+(defn child-n [eng id slots] (:n (job-mem eng id slots)))
+
+(deftest a-leaf-runs-with-its-args-merged-over-the-defaults
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)]
+          (core/submit! eng '(defaults {:b 5}) {})
+          (is (= {:a 1 :b 5} (:args (mem/job-mem (mem/view (:store eng)) "j1" [])))))))))
+
+(deftest seq-runs-its-children-in-order-and-is-done-after-the-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (expr-setup)]
+          (core/submit! eng '(seq (twice) (twice-b)) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 2 (child-n eng "j1" [:c0])))
+          (is (nil? (child-n eng "j1" [:c1])) "the second child has not run yet")
+          (reset! flag-b false)
+          (is (nil? (core/tick! eng)) "check = the next unfinished child's check")
+          (reset! flag-b true)
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= [] (listed eng)))
+          (is (= "(seq twice twice-b)" (:name (first (filter #(= :completed (:kind %)) @seen))))
+              "events name the expression"))))))
+
+(deftest any-runs-the-first-child-whose-check-passes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)]
+          (reset! flag false)
+          (core/submit! eng '(any (gated) (twice)) {})
+          (await (core/tick! eng))
+          (is (= 1 (child-n eng "j1" [:c1])) "the gated child declined")
+          (await (core/tick! eng))
+          (is (= [] (listed eng)) "done when that child is done"))))))
+
+(deftest any-declines-when-every-child-declines
+  (let [{:keys [eng]} (expr-setup)]
+    (reset! flag false)
+    (reset! flag-b false)
+    (core/submit! eng '(any (gated) (twice-b)) {})
+    (is (nil? (core/tick! eng)))
+    (reset! flag-b true)))
+
+(deftest repeat-starts-its-child-fresh-each-time-it-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)]
+          (core/submit! eng '(repeat (twice)) {})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= ["j1"] (listed eng)) "never done")
+          (is (= 2 (:runs (job-mem eng "j1"))))
+          (is (= 1 (child-n eng "j1" [:c0])) "the third run started fresh"))))))
+
+(deftest repeat-declines-when-its-child-declines
+  (let [{:keys [eng]} (expr-setup)]
+    (reset! flag false)
+    (core/submit! eng '(repeat (gated)) {})
+    (is (nil? (core/tick! eng)))))
+
+(deftest hold-makes-the-list-entry-hold-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (expr-setup)]
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(hold (repeat (twice))) {})
+          (is (true? (get-in (core/state eng) [:instances "j2" :hold?])))
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j2" "j2" "j2"] (ran seen))))))))
+
+(deftest combinators-nest-and-survive-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              boot #(core/create {:primitives (tu/fake {}) :jobs expr-registry :triggers triggers
+                                  :dir dir :now (constantly 1000000)
+                                  :events (events/make {:body "Fake" :sinks []})})
+              eng (boot)]
+          (core/submit! eng '(seq (repeat (any (twice))) (count)) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= 1 (child-n eng "j1" [:c0 :c0 :c0])) "slots nest by position")
+          (let [again (boot)]
+            (is (= {:op :seq :children [{:op :repeat :child {:op :any :children [{:op :leaf :job 'twice :args {}}]}}
+                                        {:op :leaf :job 'count :args {}}]}
+                   (get-in (core/state again) [:instances "j1" :spec])))
+            (await (core/tick! again))
+            (is (= 2 (:runs (job-mem again "j1" [:c0]))) "the resumed child finished its second run")))))))
+
+(deftest a-bad-spec-is-refused-at-submit-and-register
+  (let [{:keys [eng]} (expr-setup)]
+    (is (thrown-with-msg? js/Error #"unknown job or combinator nope" (core/submit! eng '(nope) {})))
+    (is (thrown-with-msg? js/Error #"hold is not allowed here" (core/register-reflex! eng {:trigger :hurt :job '(hold (eat))})))
+    (is (= [] (listed eng)))))
+
+(deftest a-restored-job-whose-namespace-is-gone-is-dropped-with-a-warn
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/submit! eng '(count) {})
+    (let [clock (atom 1000000)
+          [seen sink] (tu/capture-sink)
+          again (core/create {:primitives (tu/fake {}) :jobs (dissoc registry 'count) :triggers triggers
+                              :dir dir :now #(deref clock)
+                              :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+      (is (= [] (listed again)))
+      (is (some #(= [:failed :warn] [(:kind %) (:level %)]) @seen)))))
+
+(deftest a-child-by-symbol-gets-the-registry-defaults
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (await (ctx/call-child c :x 'defaults {:b 9}))
+          (is (= {:a 1 :b 9} (:args (mem/job-mem (mem/view (:store eng)) "j9" [:x])))))))))
