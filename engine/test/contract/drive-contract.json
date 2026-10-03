@@ -1,0 +1,2181 @@
+[
+ {
+  "name": "get with nobody",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take ok",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 14.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take by the same who again",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 500,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "again"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015500,
+       "idleLeftS": 15
+      }
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take held by another",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "view",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "held-by claude"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take refused offline",
+  "steps": [
+   {
+    "at": 0,
+    "status": {
+     "offline": true,
+     "settling": false
+    }
+   },
+   {
+    "at": 10,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "offline"
+     }
+    }
+   },
+   {
+    "at": 20,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": true,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take refused settling",
+  "steps": [
+   {
+    "at": 0,
+    "status": {
+     "offline": false,
+     "settling": true
+    }
+   },
+   {
+    "at": 10,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "settling"
+     }
+    }
+   },
+   {
+    "at": 20,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": true
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take without who",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "why": "x"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "bad-args",
+      "text": "who is required"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take with idleS 30",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test",
+      "idleS": 30
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 30000,
+       "expiresAt": 1030000,
+       "idleLeftS": 30
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 30000,
+       "expiresAt": 1030000,
+       "idleLeftS": 29.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "take with idleS out of range",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test",
+      "idleS": 0
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "bad-args",
+      "text": "idleS must be a number 1..3600"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set controls and absolute look",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true,
+       "jump": true
+      },
+      "look": {
+       "yaw": 90,
+       "pitch": 10
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": true,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 90,
+       "pitch": 10,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": true,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 90,
+       "pitch": 10,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 14.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set by a non-driver",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "view",
+      "controls": {
+       "forward": true
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-driver",
+      "holder": "claude"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set without takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-taken"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "stop without takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "stop",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-taken"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "ping without takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "ping",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-taken"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "release without takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "release",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-taken"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set bad control name",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "fly": true
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "bad-args",
+      "text": "bad control fly: names are forward/back/left/right/jump/sneak/sprint with boolean values"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set non-boolean control value",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": 1
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "bad-args",
+      "text": "bad control forward: names are forward/back/left/right/jump/sneak/sprint with boolean values"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "set ms out of range",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true
+      },
+      "ms": 10001
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "bad-args",
+      "text": "ms must be an integer 1..10000"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "timed hold expires",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true
+      },
+      "ms": 500
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 14.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   },
+   {
+    "at": 700,
+    "tick": true
+   },
+   {
+    "at": 710,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 14.4
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "ping moves expiresAt",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 5000,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "ping",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1020000,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 5100,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1020000,
+       "idleLeftS": 14.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "stop clears controls",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true,
+       "sneak": true
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": true,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "stop",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015200,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 300,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015200,
+       "idleLeftS": 14.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "release by driver",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "release",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "release by other without force",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "release",
+      "who": "view"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": false,
+      "reason": "not-driver",
+      "holder": "claude"
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 14.8
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "release by other with force",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "release",
+      "who": "view",
+      "force": true
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null
+     }
+    }
+   },
+   {
+    "at": 200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "dead-man clears untimed controls",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "set",
+      "who": "claude",
+      "controls": {
+       "forward": true
+      }
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": true,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 15
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      }
+     }
+    }
+   },
+   {
+    "at": 1100,
+    "tick": true
+   },
+   {
+    "at": 1200,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": 0,
+       "pitch": 0,
+       "idleMs": 15000,
+       "expiresAt": 1015100,
+       "idleLeftS": 13.9
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "idle ends the takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 15000,
+    "tick": true
+   },
+   {
+    "at": 15100,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "offline ends the takeover",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 100,
+    "status": {
+     "offline": true,
+     "settling": false
+    }
+   },
+   {
+    "at": 200,
+    "tick": true
+   },
+   {
+    "at": 300,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": null,
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": true,
+      "settling": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "unknown op",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "dance",
+      "who": "claude"
+     }
+    },
+    "expect": {
+     "status": 400,
+     "json": {
+      "ok": false,
+      "reason": "bad-request",
+      "text": "body must be an object with a known op"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "missing body",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 400,
+     "json": {
+      "ok": false,
+      "reason": "bad-request",
+      "text": "body must be an object with a known op"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "unknown path",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "GET",
+     "path": "/nope",
+     "body": null
+    },
+    "expect": {
+     "status": 404,
+     "json": {
+      "ok": false,
+      "reason": "not-found"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "unsupported method",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "DELETE",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 404,
+     "json": {
+      "ok": false,
+      "reason": "not-found"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "GET does not move expiresAt",
+  "steps": [
+   {
+    "at": 0,
+    "req": {
+     "method": "POST",
+     "path": "/drive",
+     "body": {
+      "op": "take",
+      "who": "claude",
+      "why": "test"
+     }
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 15
+      }
+     }
+    }
+   },
+   {
+    "at": 5000,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 10
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   },
+   {
+    "at": 9000,
+    "req": {
+     "method": "GET",
+     "path": "/drive",
+     "body": null
+    },
+    "expect": {
+     "status": 200,
+     "json": {
+      "ok": true,
+      "manual": {
+       "who": "claude",
+       "why": "test",
+       "since": 1000000,
+       "controls": {
+        "forward": false,
+        "back": false,
+        "left": false,
+        "right": false,
+        "jump": false,
+        "sneak": false,
+        "sprint": false
+       },
+       "yaw": null,
+       "pitch": null,
+       "idleMs": 15000,
+       "expiresAt": 1015000,
+       "idleLeftS": 6
+      },
+      "pos": {
+       "x": 0,
+       "y": 64,
+       "z": 0
+      },
+      "offline": false,
+      "settling": false
+     }
+    }
+   }
+  ]
+ }
+]
