@@ -1,0 +1,3 @@
+;; apiary.guard live: raised lit fire on the ground
+{:register []
+ :queue [(jobs.apiary.guard {:box {:from {:x 6043 :y 98 :z 6038} :to {:x 6047 :y 108 :z 6042}}})]}

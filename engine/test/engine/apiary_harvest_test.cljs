@@ -1,6 +1,6 @@
 (ns engine.apiary-harvest-test
   "jobs.apiary.harvest against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -52,40 +52,6 @@
   {:inventory inventory
    :blocks (cond-> {hive name} smoke? (assoc under "campfire"))
    :states (cond-> {hive {:honey_level level}} smoke? (assoc under {:lit true}))})
-
-
-(defn block-at-from
-  "A block-at over {\"x,y,z\" {:name n :lit bool}} cells; absent cells are air."
-  [cells]
-  (fn [{:keys [x y z]}]
-    (let [cell (get cells (str x "," y "," z) {:name "air"})]
-      (when-not (= :unloaded cell)
-        #js {:name (:name cell) :properties (clj->js (select-keys cell [:lit]))}))))
-
-(deftest smoke-source-follows-the-vanilla-rule
-  (let [hive-pos {:x 0 :y 10 :z 0}
-        fire {:name "campfire" :lit true}
-        cold {:name "campfire" :lit false}]
-    (are [cells expected] (= expected (harvest/smoke-source (block-at-from cells) hive-pos))
-      {"0,9,0" fire} {:x 0 :y 9 :z 0}
-      {"0,5,0" fire} {:x 0 :y 5 :z 0}
-      {"0,4,0" fire} nil
-      {"0,9,0" cold} nil
-      {"0,9,0" {:name "stone"} "0,8,0" fire} {:x 0 :y 8 :z 0}
-      {"0,9,0" {:name "white_carpet"} "0,8,0" fire} {:x 0 :y 8 :z 0}
-      {"0,9,0" {:name "stone"} "0,7,0" fire} nil
-      {"0,9,0" {:name "water"} "0,8,0" fire} {:x 0 :y 8 :z 0}
-      {"0,9,0" :unloaded "0,8,0" fire} nil
-      {} nil)))
-
-(deftest open-fire-is-a-lit-fire-nothing-covers
-  (let [fire {:name "campfire" :lit true}]
-    (are [cells expected] (= expected (harvest/open-fire? (block-at-from cells) {:x 0 :y 5 :z 0}))
-      {"0,5,0" fire} true
-      {"0,5,0" fire "0,6,0" {:name "white_carpet"}} false
-      {"0,5,0" fire "0,6,0" {:name "moss_carpet"}} true
-      {"0,5,0" fire "0,6,0" {:name "stone"}} false
-      {"0,5,0" fire "0,6,0" :unloaded} true)))
 
 (deftest shears-take-the-honey-and-the-comb-is-collected
   (async done

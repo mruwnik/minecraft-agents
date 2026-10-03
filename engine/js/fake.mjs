@@ -199,6 +199,7 @@ function defaultActs (s, emit) {
         if (key(pos) === key(s.self.pos)) settle()
         return { status: 'placed', block: 'water' }
       }
+      if (item.endsWith('campfire')) s.states.set(key(pos), { lit: true })
       s.blocks.set(key(pos), item)
       return { status: 'placed', block: item }
     },

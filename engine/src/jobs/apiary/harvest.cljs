@@ -1,5 +1,6 @@
 (ns jobs.apiary.harvest
   (:require [engine.ctx :as ctx]
+            [engine.jobs.apiary :as apiary]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -32,51 +33,6 @@
 (def max-strikes 3)
 (def tool-item {:shears "shears" :bottle "glass_bottle"})
 (def hive-names #js ["beehive" "bee_nest"])
-
-;; ------------------------------------------------------------------ smoke (vanilla CampfireBlock.isSmokeyPos)
-
-(def passes
-  "Blocks without a collision box: smoke goes through them. Anything not listed counts as in the way, which can only make a hive look unsmoked."
-  #{"air" "cave_air" "void_air" "water" "short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "torch" "wall_torch"})
-
-(defn campfire? [b] (contains? #{"campfire" "soul_campfire"} (some-> b .-name)))
-
-(defn lit-campfire? [b]
-  (and (campfire? b) (true? (some-> b .-properties .-lit))))
-
-(defn smoke-source
-  "The position of the lit campfire that smokes the hive at pos, or nil. block-at takes a {:x :y :z} and returns a block or nil (unloaded)."
-  [block-at {:keys [x y z]}]
-  (let [at (fn [down] {:x x :y (- y down) :z z})]
-    (loop [down 1]
-      (when (<= down 5)
-        (let [b (block-at (at down))]
-          (cond
-            (nil? b) nil
-            (lit-campfire? b) (at down)
-            (campfire? b) nil
-            (contains? passes (.-name b)) (recur (inc down))
-            :else (when (lit-campfire? (block-at (at (inc down)))) (at (inc down)))))))))
-
-(defn covered?
-  "True when what sits on the fire at pos stops bees landing in it."
-  [block-at pos]
-  (let [b (block-at (update pos :y inc))]
-    (boolean (and b
-                  (not (contains? passes (.-name b)))
-                  (not= "moss_carpet" (.-name b))))))
-
-(defn open-fire? [block-at fire]
-  (not (covered? block-at fire)))
-
-(defn hive-verdict
-  "What may be done with a hive: :ok, :not-smoked or :open-fire."
-  [block-at pos]
-  (let [fire (smoke-source block-at pos)]
-    (cond
-      (nil? fire) :not-smoked
-      (open-fire? block-at fire) :open-fire
-      :else :ok)))
 
 ;; ------------------------------------------------------------------ the world
 
@@ -113,16 +69,13 @@
                  [:shears :bottle])]
     (some #(when (carried? (tool-item %)) (tool-item %)) wanted)))
 
-(defn block-at-fn [p]
-  (fn [pos] (.blockAt p (clj->js pos))))
-
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
   [c hs]
-  (let [block-at (block-at-fn (:primitives c))
+  (let [block-at (apiary/block-at-fn (:primitives c))
         skipped (:skipped (ctx/mem c) {})
         ripe (->> hs (filter :ripe) (remove #(contains? skipped (pos-key (:pos %)))))
-        verdicts (map (fn [h] [(:pos h) (hive-verdict block-at (:pos h))]) ripe)]
+        verdicts (map (fn [h] [(:pos h) (apiary/hive-verdict block-at (:pos h))]) ripe)]
     {:hives (count hs)
      :ripe (count (filter :ripe hs))
      :todo (vec (keep (fn [[pos v]] (when (= :ok v) pos)) verdicts))

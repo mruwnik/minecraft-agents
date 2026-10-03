@@ -108,6 +108,14 @@ test('dig removes the block and drops an item entity', async () => {
   assert.equal((await p.dig('t1', { pos: at(20, 64, 0) })).status, 'unreachable')
 })
 
+test('place of a campfire lights it; other blocks get no lit state', async () => {
+  const p = owned({ inventory: [{ name: 'campfire', count: 1 }, { name: 'stone', count: 1 }] })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'campfire' })).status, 'placed')
+  assert.equal(p.blockAt(at(1, 64, 0)).properties.lit, true)
+  assert.equal((await p.place('t1', { pos: at(2, 64, 0), item: 'stone' })).status, 'placed')
+  assert.equal(p.blockAt(at(2, 64, 0)).properties?.lit, undefined)
+})
+
 test('collect moves a dropped item into the inventory', async () => {
   const p = owned({ blocks: { '1,64,0': 'oak_log' } })
   const { drops } = await p.dig('t1', { pos: at(1, 64, 0) })

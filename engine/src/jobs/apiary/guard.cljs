@@ -1,0 +1,250 @@
+(ns jobs.apiary.guard
+  (:require [engine.ctx :as ctx]
+            [engine.jobs.apiary :as apiary]
+            [engine.jobs.util :as u]))
+
+(def doc
+  "Keep the lit campfires of an apiary in the standard column: the fire one
+  block underground with ground on all four sides, a carpet on it, then air,
+  then the hive. A raised fire (some side open, so bees fly in sideways) with
+  real walled ground under it is dug out (its carpet taken first), the ground
+  block under it too, and a carried campfire is placed one block lower (mining
+  a campfire gives charcoal, not the fire, so one must be carried). Then every
+  lit fire with nothing on it gets a non-moss carpet (an open fire burns
+  landing bees). Fires are worked nearest first, at most :max actions in a
+  run; a fire that cannot be reached or refuses is skipped for the rest of the
+  run. The body never stands in a fire's cell. Ends with a result {:sunk n
+  :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n};
+  :reason is :guarded (work done, nothing left), :limit (:max reached), :safe,
+  :no-fire, :no-carpet, :no-campfire (nothing to do it with), a skip reason
+  such as :unreachable, :on-fire, :occupied, :cannot or :place-failed, or
+  :gave-up after 3 fruitless fires in a row. Every end but :guarded and :limit
+  also emits a warn apiary.guard-gave-up.")
+
+(def args
+  {:box {:doc "{:from pos :to pos}, fires inside it only; overrides :center and :radius" :default nil}
+   :center {:doc "centre of the search; the body's position when the job first runs when nil" :default nil}
+   :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :default 16}
+   :max {:doc "actions (sinks and carpets) in one run, at most" :default 12}})
+
+(def reach 3)
+(def max-strikes 3)
+
+;; ------------------------------------------------------------------ the plan
+
+(defn plan-fire
+  "What to do about one fire: nil when it is safe, {:pos :action :kind/:item} when something carried does it,
+  else {:pos :left reason}."
+  [block-at inventory {:keys [pos name]}]
+  (let [ns (apiary/needs block-at pos)
+        kind (apiary/campfire-in inventory name)
+        carpet (apiary/carpet-in inventory)]
+    (cond
+      (empty? ns) nil
+      (and (:sink ns) kind) {:pos pos :action :sink :kind kind}
+      (and (:carpet ns) carpet) {:pos pos :action :carpet :item carpet}
+      :else {:pos pos :left (if (:carpet ns) :no-carpet :no-campfire)})))
+
+(defn survey
+  "{:fires n :todo [action maps, nearest first] :left {key reason}} of the fires not skipped."
+  [c center]
+  (let [p (:primitives c)
+        block-at (apiary/block-at-fn p)
+        inventory (u/inventory p)
+        skipped (:skipped (ctx/mem c) {})
+        all (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))})
+        plans (->> all
+                   (remove #(contains? skipped (apiary/pos-key (:pos %))))
+                   (keep #(plan-fire block-at inventory %)))]
+    {:fires (count all)
+     :todo (vec (filter :action plans))
+     :left (into {} (keep (fn [pl] (when (:left pl) [(apiary/pos-key (:pos pl)) (:left pl)])) plans))}))
+
+(defn end-reason
+  "Why the run ends with nothing to act on, given the memory and the survey."
+  [m {:keys [left fires]}]
+  (cond
+    (seq (:skipped m)) (first (vals (:skipped m)))
+    (seq left) (first (vals left))
+    (pos? (+ (:sunk m 0) (:carpeted m 0))) :guarded
+    (zero? fires) :no-fire
+    :else :safe))
+
+(defn actions [m] (+ (:sunk m 0) (:carpeted m 0)))
+
+(defn finish!
+  "Emit the outcome, hand it to the parent and end the job."
+  [c reason seen]
+  (let [m (ctx/mem c)
+        result {:sunk (:sunk m 0)
+                :carpeted (:carpeted m 0)
+                :reason reason
+                :left (:left seen {})
+                :skipped (:skipped m {})
+                :fires (:fires seen 0)}]
+    (ctx/emit! c :apiary.guard-done :info (assoc result :text (str "apiary guard done: " (name reason) ", sunk " (:sunk result) ", carpeted " (:carpeted result))))
+    (when-not (#{:guarded :limit} reason)
+      (ctx/emit! c :apiary.guard-gave-up :warn {:reason reason :left (:left result) :skipped (:skipped result)
+                                                :text (str "apiary guard stopped: " (name reason))}))
+    (ctx/result! c result)
+    :done))
+
+(defn skip!
+  "Leave the fire alone for the rest of the run and count a fruitless fire."
+  [c pos reason]
+  (ctx/update-mem! c #(-> % (assoc-in [:skipped (apiary/pos-key pos)] reason) (update :strikes (fnil inc 0)))))
+
+(defn booked!
+  "Count a finished action of kind (:sunk or :carpeted) and clear the strikes."
+  [c kind]
+  (ctx/update-mem! c #(-> % (update kind (fnil inc 0)) (assoc :strikes 0))))
+
+(defn center-of [c]
+  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
+
+;; ------------------------------------------------------------------ the body
+
+(defn on-fire?
+  "True when the body's floored position is the fire's cell or the one above it."
+  [c {:keys [x y z]}]
+  (let [me (u/self-pos c)
+        f (fn [k] (js/Math.floor (k me)))]
+    (and (= x (f :x)) (= z (f :z)) (contains? #{y (inc y)} (f :y)))))
+
+(defn ^:async clear-fire!
+  "Move off the fire's cell once when standing in it. Resolves to true when clear."
+  [c {:keys [x y z] :as fire}]
+  (when (on-fire? c fire)
+    (await (ctx/act c :moveTo (clj->js {:pos {:x (+ x 2) :y y :z z} :range 0}))))
+  (not (on-fire? c fire)))
+
+;; ------------------------------------------------------------------ carpet
+
+(defn ^:async carpet!
+  [c pos item]
+  (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
+    (if (= "placed" (.-status r))
+      (booked! c :carpeted)
+      (skip! c pos (keyword (.-status r))))))
+
+;; ------------------------------------------------------------------ sink
+
+(defn named-at [block-at pos] (some-> (block-at pos) .-name))
+
+(defn next-step
+  "The next idempotent step of a sink {:fire :kind :carpet} read off the world:
+  {:op :dig/:place :pos}, :done when the lowered fire stands, :abort when a cell cannot be read."
+  [block-at {:keys [fire kind]}]
+  (let [above (update fire :y inc)
+        below (update fire :y dec)
+        above-name (named-at block-at above)
+        fire-name (named-at block-at fire)
+        below-block (block-at below)]
+    (cond
+      (nil? below-block) {:op :abort}
+      (contains? #{"campfire" "soul_campfire"} (.-name below-block)) {:op :done}
+      (and above-name (apiary/carpet? above-name)) {:op :dig :pos above}
+      (contains? #{"campfire" "soul_campfire"} fire-name) {:op :dig :pos fire}
+      (not= "air" (.-name below-block)) {:op :dig :pos below}
+      :else {:op :place :pos below :item kind})))
+
+(defn ^:async collect-carpet!
+  "Pick up the carpet that was dug up."
+  [c carpet]
+  (loop [tries 0]
+    (when (and (< tries 8) (= :continue (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]}))))
+      (recur (inc tries)))))
+
+(defn abandon!
+  "Give up the sink: clear it and skip the fire."
+  [c pos reason]
+  (ctx/update-mem! c dissoc :sinking)
+  (skip! c pos reason))
+
+(defn ^:async finish-sink! [c {:keys [carpet]}]
+  (ctx/update-mem! c dissoc :sinking)
+  (booked! c :sunk)
+  (when carpet (await (collect-carpet! c carpet)))
+  :continue)
+
+(defn ^:async sink!
+  "Run the steps of the sink in mem :sinking until the lowered fire stands."
+  [c]
+  (let [{:keys [fire] :as s} (:sinking (ctx/mem c))
+        block-at (apiary/block-at-fn (:primitives c))]
+    (loop []
+      (let [{:keys [op pos item]} (next-step block-at s)]
+        (case op
+          :done (await (finish-sink! c s))
+          :abort (do (abandon! c fire :cannot) :continue)
+          :dig (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
+                 (if (contains? #{"dug" "missing"} status)
+                   (recur)
+                   (do (abandon! c fire (keyword status)) :continue)))
+          :place (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
+                   (if (= "placed" status)
+                     (await (finish-sink! c s))
+                     (do (abandon! c fire :place-failed) :continue))))))))
+
+(defn start-sink!
+  "Remember the sink so a cut resumes it, then run it."
+  [c fire kind]
+  (let [above (named-at (apiary/block-at-fn (:primitives c)) (update fire :y inc))]
+    (ctx/update-mem! c assoc :sinking {:fire fire :kind kind :carpet (when (and above (apiary/carpet? above)) above)})
+    (sink! c)))
+
+;; ------------------------------------------------------------------ rounds
+
+(defn ^:async work!
+  "Walk to the fire, stand clear of its cell and do the action once."
+  [c {:keys [pos action kind item]}]
+  (let [w (await (u/walk-near! c pos reach))]
+    (case w
+      :partial :continue
+      :blocked (do (skip! c pos :unreachable) :continue)
+      (if-not (await (clear-fire! c pos))
+        (do (skip! c pos :on-fire) :continue)
+        (if (= :sink action)
+          (await (start-sink! c pos kind))
+          (do (await (carpet! c pos item)) :continue))))))
+
+(defn ^:async resume-sink!
+  "A cut left a sink half done: walk back and run its steps again."
+  [c]
+  (let [{:keys [fire]} (:sinking (ctx/mem c))
+        w (await (u/walk-near! c fire reach))]
+    (case w
+      :partial :continue
+      :blocked (do (abandon! c fire :unreachable) :continue)
+      (if (await (clear-fire! c fire))
+        (await (sink! c))
+        (do (abandon! c fire :on-fire) :continue)))))
+
+(defn check
+  "True while a run is under way or some lit fire in the area lacks a carpet or sits too high."
+  [c]
+  (boolean
+   (or (:started (ctx/mem c))
+       (let [p (:primitives c)
+             block-at (apiary/block-at-fn p)
+             {:keys [box radius]} (:args c)
+             center (or (:center (:args c)) (u/self-pos c))]
+         (some #(seq (apiary/needs block-at (:pos %))) (apiary/fires p {:box box :center center :radius radius}))))))
+
+(defn ^:async round
+  "One bounded step: resume a sink; else survey the fires and finish when the
+  budget is spent, three fires in a row failed or none can be worked; else act
+  on the nearest workable fire."
+  [c]
+  (let [center (center-of c)
+        _ (ctx/update-mem! c assoc :started true :center center)
+        m (ctx/mem c)]
+    (if (:sinking m)
+      (await (resume-sink! c))
+      (let [seen (survey c center)
+            target (first (:todo seen))]
+        (cond
+          (>= (actions m) (:max (:args c))) (finish! c :limit seen)
+          (>= (:strikes m 0) max-strikes) (finish! c :gave-up seen)
+          (nil? target) (finish! c (end-reason m seen) seen)
+          :else (await (work! c target)))))))
