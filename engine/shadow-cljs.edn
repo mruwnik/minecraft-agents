@@ -15,4 +15,23 @@
          :ns-regexp "-test$"
          :autorun false
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
-         :compiler-options {:infer-externs false}}}}
+         :compiler-options {:infer-externs false}}
+  ;; The language benchmark (bench-lang/): the ClojureScript port of the path planner's search as a library the JS
+  ;; harness loads. planner-bench is compiled like :body (`shadow-cljs compile planner-bench`); planner-bench-release is
+  ;; the same code under :advanced (`shadow-cljs release planner-bench-release`).
+  :planner-bench {:target :node-library
+                  :exports {:planTuned engine.path.planner-tuned/plan
+                            :createSearchTuned engine.path.planner-tuned/create-search
+                            :MOVE engine.path.planner-tuned/MOVE
+                            :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                  :output-to "out/planner-bench.cjs"
+                  :output-dir "out/planner-bench"
+                  :compiler-options {:infer-externs false}}
+  :planner-bench-release {:target :node-library
+                          :exports {:planTuned engine.path.planner-tuned/plan
+                                    :createSearchTuned engine.path.planner-tuned/create-search
+                                    :MOVE engine.path.planner-tuned/MOVE
+                                    :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                          :output-to "out/planner-bench-release.cjs"
+                          :output-dir "out/planner-bench-release"
+                          :compiler-options {:infer-externs :auto}}}}
