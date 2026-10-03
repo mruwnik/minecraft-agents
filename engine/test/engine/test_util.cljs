@@ -8,8 +8,18 @@
 
 (def require-here (createRequire (str (js/process.cwd) "/")))
 
-(defn tmp-dir []
-  (fs/mkdtempSync (path/join (os/tmpdir) "engine-test-")))
+(defonce made-dirs (atom []))
+
+(defonce remove-dirs-on-exit
+  (.on js/process "exit"
+       (fn [] (run! #(fs/rmSync % #js {:recursive true :force true}) @made-dirs))))
+
+(defn tmp-dir
+  "A fresh temp dir, removed when the test process exits."
+  []
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "engine-test-"))]
+    (swap! made-dirs conj dir)
+    dir))
 
 (defn fake
   "A fake primitives object from js/fake.mjs built from a cljs spec map."

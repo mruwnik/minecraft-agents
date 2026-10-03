@@ -13,10 +13,12 @@ const sample = () => ({
 })
 
 test('fixture write/read round trip', () => {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lf-')), 'a.bin')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lf-'))
+  const file = path.join(dir, 'a.bin')
   const f = sample()
   writeLightFixture(file, f)
   assert.deepEqual(readLightFixture(file), f)
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 
 test('breakdown names the mismatching class and world coordinate', () => {
