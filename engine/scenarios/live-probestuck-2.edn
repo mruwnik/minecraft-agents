@@ -1,0 +1,5 @@
+;; ProbeStuck trigger tests while walking: :stuck and :died against notify,
+;; pacing between two points on the test pad.
+{:register [{:trigger :stuck :job (jobs.debug.notify {:text "stuck fired"})}
+            {:trigger :died :job (jobs.debug.notify {:text "died fired"})}]
+ :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}
