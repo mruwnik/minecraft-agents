@@ -78,10 +78,29 @@ written once: the last full pose (position, eye, yaw, pitch, entities as they we
 - Columns are never deleted on unload. The directory is a persistent mirror of every column any body has visited.
 - Known limitation: last writer wins. Two bodies that see different versions of a column (different times, or one has
   stale data) overwrite each other. The `t` and `body` header fields say who wrote it and when.
-- Light is what the server sent with the chunk, plus any `update_light` packet (the writer marks that column dirty).
-  Known limitation: this Paper 26.1 server sends no `update_light` after a block change (the vanilla client relights
-  locally; mineflayer does not). A probe that placed a torch with `setblock` saw only `block_change` packets for 16 s,
-  so the dumped light of that column and its neighbours stays as it was until the column is loaded again.
+- Light: what the server sent with the chunk, kept current by the body itself. The server sends no light update after
+  a block change (the vanilla client relights locally; mineflayer does not: a probe that placed a torch saw only
+  `block_change` packets), so `engine/js/view.mjs` relights locally (`engine/js/light.mjs`). For each changed block P
+  (state actually changed) it recomputes the box P±16 (extended down through a sky-transparent run below P, plus 15),
+  holding the box's one-cell shell fixed and recomputing the interior from emitters and the shell with vanilla rules
+  (per-state emission and filter, shape-occluded faces of slabs, stairs, snow layers..., lossless sky going straight
+  down). A change cannot reach further than 15, so the result is exact. Results live in an overlay of per-section
+  light owned by the writer (mineflayer's column light is never written: its accessors scramble the order), used when
+  the column is encoded, and dropped when the server sends the column again (chunk load) or unloads it. Every column
+  with a changed cell is rewritten. Overlapping boxes of one flush merge up to 48x48 by 64. The relight runs at the
+  500 ms flush and is budgeted to 10 ms per flush (a box in progress finishes); changes over budget are carried to
+  the next flush, and their column is not written before it is relit. An `update_light` packet, if a server sends one,
+  marks its column dirty too.
+  Guarantee and evidence: on five regions captured from the live server (`tools/light-capture.mjs`,
+  `engine/js/fixtures/light/`: a forest, a lava cave, an ocean, a lit room with torch, lantern, lava, glowstone, lit
+  furnace, campfire, slab, stairs, glass, leaves, sea pickle, snow layer, and someone's torch-lit build), relighting
+  from the shell reproduces the server's light with 0 mismatches (`engine/js/light-oracle.test.mjs`). Live, a torch,
+  a lantern and a roof hole relit by the body matched the server's light after the chunks were re-sent, 0 of 29,791
+  cells different. A change shows in the dump 0.5-1.2 s after the command.
+  Cost (`view.stats`: `relightMs`, `relightMaxMs`, `relightBoxes`, `relightCells`, `relightCarried`, the breakdown
+  `relightStatesMs/LightMs/FloodMs/WriteMs`, and `relightTableMs` once per attach, ~100 ms): one torch or a steady
+  1x2 tunnel dig stays at or under ~10 ms per flush (about 4 ms per box); a 2000-block console `fill` runs 19-25 ms
+  in a single flush (one capped box over the budget) and 83 ms in the first flush after a login (cold code).
 - Hazard for anything that reads light: prismarine-chunk's `loadParsedLight` (prismarine-chunk 1.41.0, checked on
   26.1) reads the vanilla 2048-byte nibble arrays as big-endian longs, so `column.getSkyLight/getBlockLight`, and
   mineflayer's `block.light` / `block.skyLight`, return the value of another x in the same 16-cell row: the cell at
