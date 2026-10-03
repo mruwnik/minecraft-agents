@@ -15,11 +15,17 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 `/api/plans?world=` (every plan file of the world with its totals, cached 10 s), `/api/plan/<id>?world=` (full comparison: elements, per-layer grids, errors),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
 
-- `/api/thumb/<body>.png`: the body's latest view as a PNG (rendered by `js/thumbs.mjs` from `pose.json`; `x-pose-mtime`
-  header; 404 when the body has no view). `/api/thumbs/stats`: the thumbnailer's counters. The render worker has heap caps (`resourceLimits`, 160 MB old generation) and is replaced
-  once it holds more than 400 loaded columns (the view's column cache never evicts). On SIGTERM/SIGINT the server closes the
-  thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
+- `/api/thumb/<body>.png`: the fallback still of a body's latest view (software-rendered from `pose.json`, `x-pose-mtime`
+  header; 404 when the body has no view), used only when the browser has no WebGL2 or the page has `?nogl=1`.
+  `dashboard.thumbs` (cljs) decides: cached by pose mtime, a newer pose is re-rendered only once the cached still is 2 s old, one render
+  at a time, the render worker replaced once it holds more than 400 columns. `js/thumbs.mjs` renders one still on request in a
+  worker thread (heap caps, `resourceLimits` 160 MB old generation). `/api/thumbs/stats`: `{bodies, renders, last-ms, mean-ms, queue}`.
+  On SIGTERM/SIGINT the server closes the thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
   than 10 s shows an "N s old" / "N min old" mark when the body is online (`trouble/thumb-age-mark`).
+- Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body gets ONE frame at its
+  last pose (`ui/stills.cljs`: one scene at a time is opened, snapshotted into a 2D canvas once the columns are loaded, and closed; re-taken only when
+  `poseMtimeMs` changes). Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
+  `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
 - `/api/events/<body>?limit=`: the tail of the body's `events.jsonl`, filtered to what the popup lists (default 300, at most 2000).
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
 - `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job

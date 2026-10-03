@@ -39,7 +39,7 @@
     :else reflex))
 
 ;; What the trouble rules read, kept even for debug events that never reach :recent:
-;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover?}
+;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover? :takeover-who :takeover-t}
 (defn next-signals [signals e]
   (let [{:keys [source kind t]} e
         backoff-key (or (:name e) (:reflex e) (:job e))]
@@ -52,8 +52,8 @@
       (and (= "reflex" source) (= "stuck" (:reflex e)) (= "fired" kind)) (assoc signals :stuck-t t :stuck-open? true)
       (and (= "reflex" source) (= "stuck" (:reflex e)) (= "ended" kind)) (assoc signals :stuck-open? false)
       (= "unstick.failed" kind) (assoc signals :stuck-t t)
-      (and (= "system" source) (= "takeover_started" kind)) (assoc signals :takeover? true)
-      (and (= "system" source) (= "takeover_ended" kind)) (assoc signals :takeover? false)
+      (and (= "system" source) (= "takeover_started" kind)) (assoc signals :takeover? true :takeover-who (:who e) :takeover-t t)
+      (and (= "system" source) (= "takeover_ended" kind)) (-> signals (assoc :takeover? false) (dissoc :takeover-who :takeover-t))
       :else signals)))
 
 (defn noteworthy? [e]

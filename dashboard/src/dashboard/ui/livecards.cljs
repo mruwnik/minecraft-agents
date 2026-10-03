@@ -1,25 +1,88 @@
 (ns dashboard.ui.livecards
-  "Live previews on the body cards: the view hub's textured WebGL scenes drawn over the thumbnails.
-  The pure decisions (flags, which cards get a scene, canvas or still, the fps label) come first; the reagent
-  component with the hub lifecycle is below. The hub comes from window.getViewHub, defined by the module script in index.html."
-  (:require [reagent.core :as r]))
+  "Previews on the body cards from the view hub's textured WebGL scenes: live scenes for online bodies, one snapshot
+  (dashboard.ui.stills) for offline ones; the server's PNGs only when the hub cannot draw (no WebGL2, ?nogl=1).
+  The pure decisions (flags, hub status, mode, plan, what a card shows, the snapshot queue, the fps label) come first; the
+  reagent components with the hub lifecycle are below. The hub comes from window.getViewHub, defined by the module script in index.html."
+  (:require [reagent.core :as r]
+            [reagent.dom :as rdom]))
 
 (defn flags
-  "The debug and fallback flags of a location.search: ?nogl=1 keeps the stills, ?fps=1 labels each card with its fps."
+  "The debug and fallback flags of a location.search: ?nogl=1 keeps the server's stills (no hub), ?fps=1 labels each live card
+  with its fps, ?allive=1 gives every card a live scene, offline ones too."
   [search]
-  (let [params (js/URLSearchParams. search)]
-    {:nogl? (= "1" (.get params "nogl"))
-     :fps? (= "1" (.get params "fps"))}))
+  (let [params (js/URLSearchParams. search)
+        on? #(= "1" (.get params %))]
+    {:nogl? (on? "nogl")
+     :fps? (on? "fps")
+     :allive? (on? "allive")}))
 
-(defn wants-scene?
-  "Online bodies get a scene when the hub can draw; offline bodies keep the still."
-  [supported? {:keys [nogl?]} status]
-  (boolean (and supported? (not nogl?) (not= status :offline))))
+(def hub-wait-ms 8000)
+
+(defn hub-status
+  "Can the page's hub draw? :loading while the module script has not defined window.getViewHub (for at most hub-wait-ms),
+  then :supported, or :unsupported (no WebGL2, the module failed, or it never came)."
+  [present? supported? waited-ms]
+  (cond
+    (and present? supported?) :supported
+    present? :unsupported
+    (< waited-ms hub-wait-ms) :loading
+    :else :unsupported))
+
+(defn render-mode
+  "How cards are drawn: :hub (hub scenes), :still (the server's PNGs, the fallback) or :pending (the hub is not known yet)."
+  [status {:keys [nogl?]}]
+  (cond
+    nogl? :still
+    (= status :supported) :hub
+    (= status :loading) :pending
+    :else :still))
+
+(defn card-plan
+  "In hub mode: :live (a scene kept open) for online bodies, :snapshot (one frame, scene closed) for offline ones; ?allive=1 makes all live."
+  [{:keys [allive?]} status]
+  (if (or allive? (not= status :offline)) :live :snapshot))
+
+(defn card-view
+  "What a card's preview shows: :blank, :img (the server's PNG), :noview, :live (hub canvas) or :still (canvas holding a snapshot).
+  `still` is the snapshot record {:mtime :failed?} of the card, nil before it was taken."
+  [mode plan has-view? still]
+  (cond
+    (= mode :pending) :blank
+    (= mode :still) (if has-view? :img :noview)
+    (not has-view?) :noview
+    (= plan :live) :live
+    (:failed? still) :img
+    :else :still))
+
+(def snapshot-timeout-ms 20000)
+
+(defn snapshot-state
+  "Is the scene ready to snapshot, still loading its columns, or out of time?"
+  [ready? waited-ms]
+  (cond
+    ready? :ready
+    (< waited-ms snapshot-timeout-ms) :waiting
+    :else :timeout))
+
+(defn next-snapshot
+  "The offline card to snapshot next, or nil. `wanted`: name -> pose mtime (nil: no view); `done`: name -> {:mtime ...} of the last
+  attempt (a failed one counts, it is not retried for the same pose). Alphabetical, one at a time."
+  [wanted done]
+  (->> (sort-by key wanted)
+       (filter (fn [[name mtime]] (and mtime (not= mtime (:mtime (get done name))))))
+       ffirst))
 
 (defn show-canvas?
   "The canvas replaces the still only once the scene has drawn or loaded something."
   [stats]
   (boolean (and stats (or (pos? (or (:fps stats) 0)) (pos? (or (:loaded stats) 0))))))
+
+(defn no-world-data?
+  "True when a scene that has connected (it has a pose: status is neither connecting nor unsupported) has no loaded column,
+  so the view would be plain sky. `loaded` and `status` as in scene.stats(); status is nil for the popup's window.__view,
+  which only exists once the page has connected, so a nil status counts as connected."
+  [{:keys [loaded status]}]
+  (boolean (and (number? loaded) (zero? loaded) (not (contains? #{"connecting" "unsupported"} status)))))
 
 (defn fps-label [stats]
   (if-let [fps (:fps stats)]
@@ -37,34 +100,48 @@
   (when-let [get-hub (.-getViewHub js/window)]
     (try (get-hub) (catch :default _ nil))))
 
+(defonce hub-state (r/atom :loading))
+
+(defonce hub-poll
+  (delay
+    (let [started (js/Date.now)
+          timer (atom nil)
+          check (fn []
+                  (let [hub (view-hub)
+                        status (hub-status (some? hub) (some-> hub .-supported) (- (js/Date.now) started))]
+                    (reset! hub-state status)
+                    (when-not (= status :loading) (js/clearInterval @timer))))]
+      (reset! timer (js/setInterval check 100))
+      (check))))
+
+(defn current-mode
+  "The render mode of the page, starting the hub check on first use; reactive."
+  [flags]
+  (when-not (:nogl? flags) @hub-poll)
+  (render-mode @hub-state flags))
+
 (defn live-canvas
-  "A canvas for one online body, kept in step with `status` by polling; draws nothing until the hub has a scene for it.
-  `on-stats` is called with the scene stats each tick (nil when there is no scene)."
+  "A canvas for one body with a scene in the hub, open while it is mounted; draws nothing until the hub has something for it.
+  `on-stats` is called with the scene stats every poll-ms."
   [_props]
   (let [state (atom {})]
     (r/create-class
      {:display-name "live-canvas"
       :component-did-mount
       (fn [this]
-        (let [tick (fn []
-                     (let [{:keys [name status nogl? on-stats]} (r/props this)
-                           canvas (:canvas @state)
-                           hub (when (and canvas (not nogl?)) (view-hub))
-                           wanted? (wants-scene? (some-> hub .-supported) {:nogl? nogl?} status)
-                           scene (:scene @state)]
-                       (when (and scene (not wanted?))
-                         (.detach scene canvas)
-                         (.close scene)
-                         (swap! state dissoc :scene))
-                       (when (and wanted? (not scene))
-                         (let [s (try (.addScene hub #js {:agent name :radius 2 :fov 70 :interp true})
-                                      (catch :default _ nil))]
-                           (when s
-                             (.attach s canvas (clj->js canvas-size))
-                             (swap! state assoc :scene s))))
-                       (on-stats (some-> (:scene @state) .stats (js->clj :keywordize-keys true)))))]
-          (swap! state assoc :timer (js/setInterval tick poll-ms))
-          (tick)))
+        (let [canvas (:canvas @state)
+              {:keys [name]} (r/props this)
+              scene (some-> (view-hub)
+                            (.addScene #js {:agent name :radius 2 :fov 70 :interp true}))]
+          (some-> scene (.attach canvas (clj->js canvas-size)))
+          (swap! state assoc
+                 :canvas canvas
+                 :scene scene
+                 :timer (js/setInterval
+                         (fn []
+                           ((:on-stats (r/props this))
+                            (some-> scene .stats (js->clj :keywordize-keys true))))
+                         poll-ms))))
       :component-will-unmount
       (fn [_]
         (let [{:keys [timer scene canvas]} @state]
@@ -72,17 +149,18 @@
           (when scene (.detach scene canvas) (.close scene))))
       :reagent-render
       (fn [{:keys [shown?]}]
-        [:canvas.live {:ref #(swap! state assoc :canvas %)
+        [:canvas.live {:ref #(when % (swap! state assoc :canvas %))
                        :class (when-not shown? "pending")
                        :width (:width canvas-size) :height (:height canvas-size)}])})))
 
 (defn live-preview
   "The canvas plus the fps label for a card; `stats` is a ratom per card holding the latest scene stats."
-  [{:keys [name status flags]}]
+  [{:keys [name flags]}]
   (let [stats (r/atom nil)]
-    (fn [{:keys [name status flags]}]
+    (fn [{:keys [name flags]}]
       [:<>
-       [live-canvas {:name name :status status :nogl? (:nogl? flags) :shown? (show-canvas? @stats)
-                     :on-stats #(reset! stats %)}]
+       [live-canvas {:name name :shown? (show-canvas? @stats) :on-stats #(reset! stats %)}]
+       (when (and @stats (no-world-data? @stats))
+         [:div.nodata "no world data yet"])
        (when (:fps? flags)
          [:span.fps-tag (fps-label @stats)])])))

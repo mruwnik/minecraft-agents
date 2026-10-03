@@ -1,5 +1,5 @@
 (ns dashboard.ui.trouble-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [deftest is testing are]]
             [dashboard.ui.trouble :as t]))
 
 (def now 1000000)
@@ -25,12 +25,12 @@
            ["health just above" (body {:hud {:health 7 :food 20}}) []]
            ["fractional health rounds up for display" (body {:hud {:health 5.5 :food 20}}) [{:severity :danger :text "health 6"}]]
            ["low food" (body {:hud {:health 20 :food 6}}) [{:severity :warn :text "food 6"}]]
-           ["manual takeover" (body {:signals {:takeover? true}}) [{:severity :danger :text "manual control"}]]
+           ["manual takeover is not a trouble" (body {:signals {:takeover? true}}) []]
            ["offline bodies are never in trouble" (body {:up false :signals {:takeover? true :died-t now}}) []]
            ["no hud, no signals" {:name "A" :up true :engine {}} []]
-           ["order: manual, died, health, hurt, backoff, stuck, food"
+           ["order: died, health, hurt, backoff, stuck, food"
             (body {:signals {:takeover? true :died-t now :hurt-t now :backoffs {"x" 1} :stuck-open? true} :hud {:health 2 :food 1}})
-            [{:severity :danger :text "manual control"} {:severity :danger :text "died 0s ago"} {:severity :danger :text "health 2"}
+            [{:severity :danger :text "died 0s ago"} {:severity :danger :text "health 2"}
              {:severity :warn :text "hurt 0s ago"} {:severity :warn :text "backoff: x"} {:severity :warn :text "stuck"} {:severity :warn :text "food 1"}]]]]
     (testing title
       (is (= expected (t/reasons b now))))))
@@ -39,7 +39,11 @@
   (doseq [[title b expected]
           [["working" (body {:job {:id "j1" :name "dig"}}) :working]
            ["idle" (body) :idle]
-           ["trouble beats working" (body {:job {:id "j1"} :signals {:takeover? true}}) :trouble]
+           ["trouble beats working" (body {:job {:id "j1"} :signals {:hurt-t now}}) :trouble]
+           ["manual beats trouble and working" (body {:job {:id "j1"} :signals {:takeover? true :died-t now}}) :manual]
+           ["manual alone" (body {:signals {:takeover? true}}) :manual]
+           ["takeover ended" (body {:signals {:takeover? false}}) :idle]
+           ["offline beats manual" (body {:up false :signals {:takeover? true}}) :offline]
            ["offline beats all" (body {:up false :job {:id "j1"}}) :offline]]]
     (testing title
       (is (= expected (t/status b now))))))
@@ -47,14 +51,14 @@
 (deftest sort-bodies-by-status-then-name
   (let [mk (fn [n o] (assoc (body o) :name n))
         bodies [(mk "Zed" {:up false}) (mk "Amy" {}) (mk "Bob" {:job {:id "j"}}) (mk "Cat" {:job {:id "j"}})
-                (mk "Dan" {:signals {:takeover? true}}) (mk "Abe" {:signals {:takeover? true}})]]
-    (is (= ["Abe" "Dan" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
+                (mk "Dan" {:signals {:takeover? true}}) (mk "Abe" {:signals {:hurt-t now}}) (mk "Eve" {:signals {:takeover? true}})]]
+    (is (= ["Dan" "Eve" "Abe" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
 
 (deftest counts
   (let [mk (fn [o] (body o))]
-    (is (= {:working 2 :idle 1 :trouble 1 :offline 1}
-           (t/counts [(mk {:job {:id "j"}}) (mk {:job {:id "k"}}) (mk {}) (mk {:signals {:takeover? true}}) (mk {:up false})] now)))
-    (is (= {:working 0 :idle 0 :trouble 0 :offline 0} (t/counts [] now)))))
+    (is (= {:manual 1 :working 2 :idle 1 :trouble 1 :offline 1}
+           (t/counts [(mk {:job {:id "j"}}) (mk {:job {:id "k"}}) (mk {}) (mk {:signals {:takeover? true}}) (mk {:signals {:hurt-t now}}) (mk {:up false})] now)))
+    (is (= {:manual 0 :working 0 :idle 0 :trouble 0 :offline 0} (t/counts [] now)))))
 
 (deftest short-job-text
   (doseq [[job edn-job expected]
@@ -78,11 +82,11 @@
   (doseq [[title b expected]
           [["a working body in trouble"
             full-body
-            {:name "Hazel" :status :trouble :reason "hurt 3s ago" :severity :warn :thumb "/api/thumb/Hazel.png?v=555"
+            {:name "Hazel" :status :trouble :reason "hurt 3s ago" :severity :warn :thumb "/api/thumb/Hazel.png?v=555" :pose-mtime 555
              :health 14 :food 20 :job "attack, round 3" :event "went wrong" :event-age "12s ago" :event-level "warn" :offline nil}]
            ["an idle body without a view or events"
             {:name "Bob" :up true :engine {:recent []}}
-            {:name "Bob" :status :idle :reason nil :severity nil :thumb nil :health nil :food nil :job nil :event nil :event-age nil :event-level nil :offline nil}]
+            {:name "Bob" :status :idle :reason nil :severity nil :thumb nil :pose-mtime nil :health nil :food nil :job nil :event nil :event-age nil :event-level nil :offline nil}]
            ["an offline body"
             (assoc full-body :up false :engine {:age-ms 10800000 :recent [] :job nil})
             {:name "Hazel" :status :offline :reason nil :severity nil :thumb "/api/thumb/Hazel.png?v=555"
@@ -113,3 +117,29 @@
 (deftest card-model-carries-the-mark
   (is (= "12 s old" (:thumb-age (t/card-model {:name "A" :up true :engine {} :view {:poseMtimeMs (- now 12000)}} now))))
   (is (nil? (:thumb-age (t/card-model {:name "A" :up false :engine {} :view {:poseMtimeMs (- now 12000)}} now)))))
+
+(deftest since-text-table
+  (are [t expected] (= expected (t/since-text t))
+    nil nil
+    "x" nil
+    (.getTime (js/Date. 2026 9 3 7 5 0)) "07:05"
+    (.getTime (js/Date. 2026 9 3 23 59 59)) "23:59"
+    (.getTime (js/Date. 2026 9 3 0 0 0)) "00:00"))
+
+(deftest manual-text-table
+  (let [at (.getTime (js/Date. 2026 9 3 14 30 0))]
+    (are [b expected] (= expected (t/manual-text b))
+      (body {:signals {:takeover? true :takeover-who "dan" :takeover-t at}}) "driven by dan since 14:30"
+      (body {:signals {:takeover? true :takeover-who "dan"}}) "driven by dan"
+      (body {:signals {:takeover? true}}) "driven by someone"
+      (body {:signals {:takeover? false :takeover-who "dan" :takeover-t at}}) nil
+      (body {:up false :signals {:takeover? true :takeover-who "dan"}}) nil
+      (body) nil)))
+
+(deftest card-model-manual
+  (let [at (.getTime (js/Date. 2026 9 3 14 30 0))
+        card (t/card-model (body {:signals {:takeover? true :takeover-who "dan" :takeover-t at :hurt-t now}}) now)]
+    (are [k expected] (= expected (k card))
+      :status :manual
+      :manual "driven by dan since 14:30"
+      :reason "hurt 0s ago")))

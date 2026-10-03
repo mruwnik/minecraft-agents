@@ -1,6 +1,8 @@
 (ns dashboard.ui.detail
   "The body popup: header, the live view with takeover chrome, HUD, inventory, job stack and the action log."
   (:require [re-frame.core :as rf]
+            [reagent.core :as r]
+            [dashboard.ui.livecards :as live]
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
@@ -45,13 +47,32 @@
                        :on-click #(rf/dispatch [:detail-stats])} "stats"])
      (when error [:span.derr error])]))
 
+(defn frame-loaded
+  "window.__view.loaded of the view page in our iframe, nil until it has one."
+  []
+  (some-> (js/document.getElementById "view-frame") .-contentWindow .-__view .-loaded))
+
+(defn frame-nodata
+  "Overlay while the popup's view page has no loaded column; polls the same-origin iframe."
+  []
+  (let [loaded (r/atom nil)
+        timer (atom nil)]
+    (r/create-class
+     {:component-did-mount #(reset! timer (js/setInterval (fn [] (reset! loaded (try (frame-loaded) (catch :default _ nil)))) 500))
+      :component-will-unmount #(js/clearInterval @timer)
+      :reagent-render
+      (fn []
+        (when (live/no-world-data? {:loaded @loaded})
+          [:div.nodata "no world data yet"]))})))
+
 (defn view-box [{:keys [name online? iframe-src thumb offline-text]}]
   (let [driven? (and online? (= :ours (:kind @(rf/subscribe [:drive-banner]))))]
     [:div.viewarea
      [:div.viewbox {:class [(when driven? "driven") (when-not online? "offline")]}
       (if online?
-        ^{:key name} [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"
+        ^{:key name} [:<> [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"
                                   :on-load #(rf/dispatch [:frame-loaded])}]
+        [frame-nodata]]
         [:<>
          (if thumb [:img {:src thumb :alt (str "last view of " name)}] [:div.noview "no view"])
          [:div.offline-note offline-text]])]]))

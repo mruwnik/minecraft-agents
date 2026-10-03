@@ -10,16 +10,13 @@
 (def low-health 6)
 (def low-food 6)
 
-(def status-order {:trouble 0 :working 1 :idle 2 :offline 3})
+(def status-order {:manual 0 :trouble 1 :working 2 :idle 3 :offline 4})
 
 (defn ago [now t] (logic/time-ago-text (- now t)))
 
 (defn within? [now t ms] (and (number? t) (<= (- now t) ms)))
 
 (defn reason [severity text] {:severity severity :text text})
-
-(defn manual [{:keys [takeover?]} _ _]
-  (when takeover? (reason :danger "manual control")))
 
 (defn died [{:keys [died-t]} _ now]
   (when (within? now died-t died-window-ms) (reason :danger (str "died " (ago now died-t)))))
@@ -42,7 +39,7 @@
     (when (and (number? f) (<= f low-food)) (reason :warn (str "food " (js/Math.ceil f))))))
 
 ;; most severe first; the first one is the card's one-line reason
-(def rules [manual died health hurt backoff stuck food])
+(def rules [died health hurt backoff stuck food])
 
 (defn reasons
   "The reasons a body is in trouble, [{:severity :danger|:warn :text}], most important first; none for an offline body."
@@ -53,9 +50,30 @@
           hud (:hud view)]
       (into [] (keep #(% signals hud now)) rules))))
 
+(defn manual?
+  "Is an online body under manual control (takeover_started without a later takeover_ended)? Not a trouble."
+  [{:keys [up engine]}]
+  (boolean (and up (get-in engine [:signals :takeover?]))))
+
+(defn since-text
+  "HH:MM (local time) of an epoch-ms time, nil for anything else."
+  [t]
+  (when (number? t)
+    (let [d (js/Date. t)
+          two #(.padStart (str %) 2 "0")]
+      (str (two (.getHours d)) ":" (two (.getMinutes d))))))
+
+(defn manual-text
+  "\"driven by <who> since HH:MM\", nil when the body is not under manual control."
+  [body]
+  (when (manual? body)
+    (let [{:keys [takeover-who takeover-t]} (get-in body [:engine :signals])]
+      (str "driven by " (or takeover-who "someone") (when-let [s (since-text takeover-t)] (str " since " s))))))
+
 (defn status [body now]
   (cond
     (not (:up body)) :offline
+    (manual? body) :manual
     (seq (reasons body now)) :trouble
     (get-in body [:engine :job]) :working
     :else :idle))
@@ -64,7 +82,7 @@
   (vec (sort-by (juxt #(status-order (status % now)) :name) bodies)))
 
 (defn counts [bodies now]
-  (merge {:working 0 :idle 0 :trouble 0 :offline 0}
+  (merge {:manual 0 :working 0 :idle 0 :trouble 0 :offline 0}
          (frequencies (map #(status % now) bodies))))
 
 (defn short-name [s]
@@ -106,8 +124,10 @@
     {:name name
      :status st
      :reason (:text top)
+     :manual (manual-text body)
      :severity (:severity top)
      :thumb (thumb-src name view)
+     :pose-mtime (:poseMtimeMs view)
      :thumb-age (thumb-age-mark up (:poseMtimeMs view) now)
      :health (get-in view [:hud :health])
      :food (get-in view [:hud :food])

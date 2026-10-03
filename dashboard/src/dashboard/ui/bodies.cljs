@@ -2,9 +2,10 @@
   "The Bodies page: one card per engine body, trouble first, and the detail modal."
   (:require [re-frame.core :as rf]
             [dashboard.ui.livecards :as live]
+            [dashboard.ui.stills :as stills]
             [dashboard.ui.trouble :as trouble]))
 
-(def status-label {:trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
+(def status-label {:manual "manual" :trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
 
 (defn short-label [s] (trouble/short-name s))
 
@@ -22,17 +23,22 @@
 
 (defn page-flags [] (live/flags (.-search js/location)))
 
-(defn preview [{:keys [name thumb thumb-age status offline]}]
-  [:div.preview
-   (if thumb
-     [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
-     [:div.noview "no view"])
-   (when (live/wants-scene? true (page-flags) status) [live/live-preview {:name name :status status :flags (page-flags)}])
-   (when (= status :offline) [:span.offline-tag offline])
-   (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
-   [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]])
+(defn preview [{:keys [name thumb thumb-age status offline pose-mtime]}]
+  (let [flags (page-flags)
+        mode (live/current-mode flags)
+        view (live/card-view mode (live/card-plan flags status) (some? thumb) (stills/record name))]
+    [:div.preview
+     (case view
+       :blank nil
+       :img [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
+       :noview [:div.noview "no view"]
+       :live [live/live-preview {:name name :flags flags}]
+       :still [stills/still-canvas {:name name :pose-mtime pose-mtime}])
+     (when (= status :offline) [:span.offline-tag offline])
+     (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
+     [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))
 
-(defn body-card [{:keys [name status reason severity health food job event event-age event-level] :as card}]
+(defn body-card [{:keys [name status reason manual severity health food job event event-age event-level] :as card}]
   ^{:key name}
   [:div.bcard {:class [(clojure.core/name status) (when reason (str "sev-" (clojure.core/name severity)))]
                :tabIndex 0 :role "button"
@@ -44,6 +50,7 @@
     [:div.line.job {:title job} (or job [:span.dim "no job"])]
     [:div.line.event {:class event-level :title event}
      (if event [:<> [:span.text event] [:span.age event-age]] [:span.dim "no events"])]
+    (when manual [:div.reason.manual manual])
     (when reason [:div.reason {:class (clojure.core/name severity)} reason])]])
 
 (defn page []

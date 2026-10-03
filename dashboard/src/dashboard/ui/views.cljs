@@ -25,7 +25,7 @@
               :on-change #(rf/dispatch [:set-world (.. % -target -value)])}
      (for [n names] ^{:key n} [:option {:value n} n])]))
 
-(def count-pills [[:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]])
+(def count-pills [[:manual "manual"] [:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]])
 
 (defn count-pill [counts [k label]]
   ^{:key k}

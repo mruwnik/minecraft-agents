@@ -232,6 +232,15 @@
     (testing title
       (is (= expected (boolean (:takeover? (signals events))))))))
 
+(deftest signals-takeover-who-and-since
+  (doseq [[title events expected]
+          [["started" [(ev 1 {:source "system" :kind "takeover_started" :who "dan"})] {:takeover? true :takeover-who "dan" :takeover-t (+ t0 1000)}]
+           ["ended clears who and since" [(ev 1 {:source "system" :kind "takeover_started" :who "dan"}) (ev 2 {:source "system" :kind "takeover_ended"})] {:takeover? false}]
+           ["a new holder replaces" [(ev 1 {:source "system" :kind "takeover_started" :who "a"}) (ev 3 {:source "system" :kind "takeover_started" :who "b"})]
+            {:takeover? true :takeover-who "b" :takeover-t (+ t0 3000)}]]]
+    (testing title
+      (is (= expected (select-keys (signals events) [:takeover? :takeover-who :takeover-t]))))))
+
 (deftest log-entries
   (doseq [[title e worthy?]
           [["a job completing" (ev 1 {:kind "completed"}) true]
