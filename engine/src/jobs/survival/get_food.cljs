@@ -15,7 +15,11 @@
   food animal within :hunt-radius, or else dig mature crops or sweet berry
   bushes in it, and collect the drops; (4) nothing found: emit a food.none
   warn naming what was searched and the nearest known source, write a
-  :hungry entry and finish, then stay quiet and idle for :ask-cooldown-ms.
+  :hungry entry and finish. For :ask-cooldown-ms after that the round still
+  eats and still does step 3 (what is in sight), but does not walk to
+  remembered sources, say food.none or write :hungry again; with nothing in
+  sight it returns :declined. Wheat is skipped (not edible raw, no
+  crafting). A source found empty or unreachable is forgotten.
   Hungry is food below :food (default 6), or below :food-when-hurt (default
   14) while health is below full; the same test as the hungry trigger.")
 
@@ -32,8 +36,9 @@
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 
 (def ripe-age
-  "The growth stage at which each crop block can be harvested."
-  {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
+  "The growth stage at which each crop block can be harvested. Wheat is left
+  out: it is not edible raw and there is no crafting yet."
+  {"carrots" 7 "potatoes" 7 "beetroots" 3})
 
 (def berry-bush {"sweet_berry_bush" 2})
 
@@ -68,8 +73,11 @@
                (not= pos (:dead-source (ctx/mem c))))
       source)))
 
-(defn bury-source! [c pos]
+(defn bury-source!
+  "Give up on the source at pos: not tried again this job, and forgotten."
+  [c pos]
   (ctx/update-mem! c assoc :dead-source pos)
+  (ctx/forget-where! c :food-source #(= pos (:pos %)))
   nil)
 
 (defn ^:async go-near!
@@ -235,5 +243,5 @@
     (cond
       (= :continue eaten) :continue
       (not (hungry-now? c)) :done
-      (gave-up-recently? c) :done
+      (gave-up-recently? c) (or (await (hunt! c)) :declined)
       :else (await (search! c)))))
