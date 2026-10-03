@@ -21,6 +21,7 @@ precision highp usampler2D;
 precision highp sampler2DArray;
 uniform usampler3D uBlocks;
 uniform usampler3D uCoarse;
+uniform usampler3D uLightTex;
 uniform sampler2D uMats;
 uniform usampler2D uInfo;
 uniform sampler2DArray uTex;
@@ -34,7 +35,7 @@ uniform float uHalf;
 uniform ivec3 uSize;
 uniform ivec2 uSlotOff;
 uniform float uDist;
-uniform float uLight;
+uniform float uDarken;
 uniform int uEntCount;
 uniform vec3 uEntMin[${MAX_ENTITIES}];
 uniform vec3 uEntMax[${MAX_ENTITIES}];
@@ -43,6 +44,74 @@ out vec4 outColor;
 
 const int MAX_STEPS = 2048;
 ${SHADING_GLSL}
+const uint CUTOUT = 1u;
+const uint TRANSLUCENT = 2u;
+const uint EMISSIVE = 16u;
+
+bool inWindow (ivec3 c) {
+  return all(greaterThanEqual(c, ivec3(0))) && all(lessThan(c, uSize));
+}
+
+ivec3 wrapCell (ivec3 c) {
+  return ivec3((c.x + uSlotOff.x) % uSize.x, c.y, (c.z + uSlotOff.y) % uSize.z);
+}
+
+// (sky, block) of a cell: open sky outside the window, dark below the world
+vec2 cellLight (ivec3 c) {
+  if (c.y < 0) return vec2(0.0);
+  if (!inWindow(c)) return vec2(15.0, 0.0);
+  uint v = texelFetch(uLightTex, wrapCell(c), 0).r;
+  return vec2(float(v >> 4), float(v & 15u));
+}
+
+// a full opaque cube: what occludes ambient light
+bool occludes (ivec3 c) {
+  if (!inWindow(c)) return false;
+  uint m = texelFetch(uBlocks, wrapCell(c), 0).r;
+  if (m == 0u) return false;
+  return int(texelFetch(uInfo, ivec2(0, int(m)), 0).w) == 0 && (texelFetch(uInfo, ivec2(1, int(m)), 0).r & (CUTOUT | TRANSLUCENT)) == 0u;
+}
+
+// smooth light and ambient occlusion on the face of the cell that looks along -stepSign on axis, interpolated at local
+vec3 faceLight (ivec3 cell, int axis, float stepSign, vec3 local) {
+  ivec3 f = cell;
+  f[axis] -= int(stepSign);
+  int b = (axis + 1) % 3;
+  int c = (axis + 2) % 3;
+  ivec3 eb = ivec3(0);
+  ivec3 ec = ivec3(0);
+  eb[b] = 1;
+  ec[c] = 1;
+  vec2 lg[9];
+  bool og[9];
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      ivec3 p = f + (i - 1) * eb + (j - 1) * ec;
+      lg[i * 3 + j] = cellLight(p);
+      og[i * 3 + j] = (i != 1 || j != 1) && occludes(p);
+    }
+  }
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      int di = i * 2 - 1;
+      int dj = j * 2 - 1;
+      int s1 = (1 + di) * 3 + 1;
+      int s2 = 3 + 1 + dj;
+      int k = (1 + di) * 3 + 1 + dj;
+      vec3 corner = cornerLight(lg[4], lg[s1], lg[s2], lg[k], bvec3(og[s1], og[s2], og[k]));
+      float wu = i == 1 ? local[b] : 1.0 - local[b];
+      float wv = j == 1 ? local[c] : 1.0 - local[c];
+      sum += corner * wu * wv;
+    }
+  }
+  return sum;
+}
+
+vec3 cellColor (ivec3 c) {
+  vec2 l = cellLight(c);
+  return lightColor(l.x, l.y, uDarken);
+}
 // mip level from distance: derivatives are discontinuous across voxels
 float lodAt (float t, float dAxis) {
   float texels = t * (2.0 * uHalf / uRes.x) * 16.0 / max(abs(dAxis), 0.25);
@@ -74,7 +143,8 @@ bool crossHit (vec3 lo, vec3 dd, float t, uint layerCode, out float sHit, out ve
 
 vec3 skyColor (vec3 d) {
   float up = clamp(d.y, 0.0, 1.0);
-  return mix(vec3(200.0, 222.0, 255.0), vec3(105.0, 160.0, 250.0), up) / 255.0 * uLight;
+  vec3 day = mix(vec3(200.0, 222.0, 255.0), vec3(105.0, 160.0, 250.0), up) / 255.0;
+  return mix(vec3(0.01, 0.015, 0.04), day, clamp((uDarken - 0.2) / 0.8, 0.0, 1.0));
 }
 
 float shadeOf (int axis, float dirComponent) {
@@ -110,6 +180,11 @@ void main () {
   bool hit = false;
   float tHit = uDist;
   vec3 hitCol = vec3(0.0);
+  ivec3 hitCell = ivec3(0);
+  int hitAxis = 1;
+  float hitSign = 1.0;
+  vec3 hitLocal = vec3(0.5);
+  int hitMode = 1; // 0 smooth light and AO, 1 the cell's own light, 2 emissive
   vec3 acc = vec3(0.0);
   float trans = 1.0;
   uint prevM = 0u;
@@ -159,6 +234,8 @@ void main () {
           hit = true;
           tHit = sHit;
           hitCol = rgb;
+          hitCell = cell;
+          hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
           break;
         }
         vec3 b1 = (vec3(0.25, 0.0, 0.25) - lo) * inv;
@@ -169,6 +246,8 @@ void main () {
           hit = true;
           tHit = max(bn, t);
           hitCol = texelFetch(uMats, ivec2(1, int(m)), 0).rgb * 0.95;
+          hitCell = cell;
+          hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
           break;
         }
       } else {
@@ -176,13 +255,18 @@ void main () {
         if (kind == 3 || (flags & 2u) != 0u) {
           if (m != prevM) {
             float alpha = kind == 3 || !textured ? c.a : (tex.a > 0.0 ? tex.a : 0.5);
-            acc += trans * alpha * tex.rgb * shade * uLight;
+            acc += trans * alpha * tex.rgb * shade * ((flags & EMISSIVE) != 0u ? vec3(1.0) : cellColor(cell));
             trans *= 1.0 - alpha;
           }
         } else if (!(textured && (flags & 1u) != 0u && tex.a < 0.5)) {
           hit = true;
           tHit = t;
           hitCol = tex.rgb * shade;
+          hitCell = cell;
+          hitAxis = axis;
+          hitSign = stepSign;
+          hitLocal = local;
+          hitMode = (flags & EMISSIVE) != 0u ? 2 : (kind <= 1 ? 0 : 1);
           break;
         }
       }
@@ -198,7 +282,14 @@ void main () {
   float tNearest = hit ? tHit : uDist;
   if (hit) {
     float fog = clamp((tHit / uDist - 0.6) / 0.4, 0.0, 1.0);
-    color = mix(hitCol * uLight, sky, fog);
+    vec3 lit = vec3(1.0);
+    if (hitMode == 0) {
+      vec3 l = faceLight(hitCell, hitAxis, hitSign, hitLocal);
+      lit = l.z * lightColor(l.x, l.y, uDarken);
+    } else if (hitMode == 1) {
+      lit = cellColor(hitCell);
+    }
+    color = mix(hitCol * lit, sky, fog);
   }
   float bestT = tNearest;
   for (int i = 0; i < ${MAX_ENTITIES}; i++) {
@@ -215,7 +306,7 @@ void main () {
     bestT = te;
     int eax = en.x >= en.y && en.x >= en.z ? 0 : (en.y >= en.z ? 1 : 2);
     float fog = clamp((te / uDist - 0.6) / 0.4, 0.0, 1.0);
-    color = mix(uEntCol[i] * shadeOf(eax, d[eax]) * uLight, sky, fog);
+    color = mix(uEntCol[i] * shadeOf(eax, d[eax]) * cellColor(ivec3(floor(o + dd * max(te - 0.01, 0.0)))), sky, fog);
   }
   outColor = vec4(acc + trans * color, 1.0);
 }`
@@ -281,7 +372,7 @@ export function createRenderer (canvas) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uLight', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -292,6 +383,7 @@ export function createRenderer (canvas) {
   const mats = nearestTexture(gl, gl.TEXTURE_2D, 2)
   const info = nearestTexture(gl, gl.TEXTURE_2D, 3)
   const tex = nearestTexture(gl, gl.TEXTURE_2D_ARRAY, 4)
+  const lightTex = nearestTexture(gl, gl.TEXTURE_3D, 5)
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR)
   let world = null
   let lodMax = 0
@@ -326,19 +418,27 @@ export function createRenderer (canvas) {
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_3D, coarse)
     gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n, sections, n)
-    world = { n, height, sections, zeros: new Uint16Array(256 * height), noFlags: new Uint8Array(sections) }
+    gl.activeTexture(gl.TEXTURE5)
+    gl.bindTexture(gl.TEXTURE_3D, lightTex)
+    gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8UI, n * 16, height, n * 16)
+    world = { n, height, sections, zeros: new Uint16Array(256 * height), openSky: new Uint8Array(256 * height).fill(0xf0), noFlags: new Uint8Array(sections) }
   }
 
-  // mats is 16*height*16 material indices, x fastest then y then z; flags one byte per section, bottom first
-  const uploadColumn = (sx, sz, mats16, flags) => {
+  // mats is 16*height*16 material indices, x fastest then y then z; flags one byte per section, bottom first; light is
+  // sky << 4 | block per cell in the same order
+  const uploadColumn = (sx, sz, mats16, flags, light) => {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_3D, blocks)
     gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_SHORT, mats16)
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_3D, coarse)
     gl.texSubImage3D(gl.TEXTURE_3D, 0, sx, 0, sz, 1, world.sections, 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, flags)
+    gl.activeTexture(gl.TEXTURE5)
+    gl.bindTexture(gl.TEXTURE_3D, lightTex)
+    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, light)
   }
-  const clearSlot = (sx, sz) => uploadColumn(sx, sz, world.zeros, world.noFlags)
+  // an unloaded slot is air with open sky, so the faces of loaded neighbours next to it are not shaded black
+  const clearSlot = (sx, sz) => uploadColumn(sx, sz, world.zeros, world.noFlags, world.openSky)
 
   const resize = (w, h) => {
     if (canvas.width !== w) canvas.width = w
@@ -347,7 +447,7 @@ export function createRenderer (canvas) {
   }
 
   // eye is relative to the window origin; entities are {min, max, color} in the same space
-  const draw = ({ eye, basis, dist, light, slotOff, entities }) => {
+  const draw = ({ eye, basis, dist, darken, slotOff, entities }) => {
     const count = Math.min(entities.length, MAX_ENTITIES)
     const flat = key => new Float32Array(MAX_ENTITIES * 3).map((_, i) => (entities[Math.floor(i / 3)]?.[key]?.[i % 3]) ?? 0)
     gl.uniform1i(uniform.uBlocks, 0)
@@ -355,6 +455,7 @@ export function createRenderer (canvas) {
     gl.uniform1i(uniform.uMats, 2)
     gl.uniform1i(uniform.uInfo, 3)
     gl.uniform1i(uniform.uTex, 4)
+    gl.uniform1i(uniform.uLightTex, 5)
     gl.uniform1f(uniform.uLodMax, lodMax)
     gl.uniform2f(uniform.uRes, canvas.width, canvas.height)
     gl.uniform3f(uniform.uEye, eye.x, eye.y, eye.z)
@@ -365,7 +466,7 @@ export function createRenderer (canvas) {
     gl.uniform3i(uniform.uSize, world.n * 16, world.height, world.n * 16)
     gl.uniform2i(uniform.uSlotOff, slotOff.x, slotOff.z)
     gl.uniform1f(uniform.uDist, dist)
-    gl.uniform1f(uniform.uLight, light)
+    gl.uniform1f(uniform.uDarken, darken)
     gl.uniform1i(uniform.uEntCount, count)
     gl.uniform3fv(uniform.uEntMin, flat('min'))
     gl.uniform3fv(uniform.uEntMax, flat('max'))

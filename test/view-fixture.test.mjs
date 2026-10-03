@@ -6,6 +6,7 @@ import path from 'node:path'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { decodeColumnFile, restoreColumn } from '../engine/js/view.mjs'
 import { cameraBasis } from '../tools/view/web/camera.mjs'
+import { decodeLight } from '../tools/view/web/decode.mjs'
 import { faceRegion } from '../tools/view/project.mjs'
 import { FIXTURE, blockNameAt, lightAt, writeFixture } from '../tools/view/fixture.mjs'
 
@@ -15,7 +16,15 @@ writeFixture(stateDir)
 
 const load = (cx, cz) => {
   const { header, sections, light } = decodeColumnFile(fs.readFileSync(path.join(stateDir, 'worlds', 'fixture', 'chunks', `${cx}.${cz}.bin`)))
-  return { header, column: restoreColumn(new Chunk({ minY: header.minY, worldHeight: header.worldHeight }), { sections, light }) }
+  return { header, light, column: restoreColumn(new Chunk({ minY: header.minY, worldHeight: header.worldHeight }), { sections, light }) }
+}
+
+// the dumped light in vanilla nibble order (prismarine's own getters are scrambled within a row, so they are not truth)
+const lightCell = ({ header, light }, x, y, z) => {
+  const values = decodeLight(light.buffer, light.meta, header.worldHeight >> 4)
+  const ly = y - header.minY
+  const v = values[(ly >> 4) * 4096 + ((ly & 15) << 8 | z << 4 | x)]
+  return { sky: v >> 4, block: v & 15 }
 }
 
 const blocks = [
@@ -37,6 +46,7 @@ const lights = [
   ['torch patch', FIXTURE.torch.x[0], 65, 9, { sky: 0, block: 14 }],
   ['next to torch patch', FIXTURE.torch.x[1] + 1, 65, 9, { sky: 15, block: 0 }],
   ['solid', 3, 64, 3, { sky: 0, block: 0 }],
+  ['leaves let light through', 10, 67, 4, { sky: 15, block: 0 }],
   ['other chunk', -5, 70, -5, { sky: 15, block: 0 }]
 ]
 
@@ -46,23 +56,30 @@ test('lightAt describes the lighting', () => {
 
 test('the four columns round trip through the file format with every cell set', () => {
   for (const [cx, cz] of [[0, 0], [0, -1], [-1, 0], [-1, -1]]) {
-    const { header, column } = load(cx, cz)
+    const loaded = load(cx, cz)
+    const { header, column } = loaded
     assert.equal(header.mcVersion, '26.1')
     assert.equal(header.minY, -64)
     assert.equal(header.worldHeight, 384)
     const inColumn = ([, x, , z]) => Math.floor(x / 16) === cx && Math.floor(z / 16) === cz
     for (const [, x, y, z] of [...blocks, ...lights].filter(inColumn)) {
       const local = { x: x - cx * 16, y, z: z - cz * 16 }
-      assert.equal(column.getSkyLight(local), lightAt(x, y, z).sky, `sky ${x} ${y} ${z}`)
-      assert.equal(column.getBlockLight(local), lightAt(x, y, z).block, `block ${x} ${y} ${z}`)
+      assert.deepEqual(lightCell(loaded, local.x, y, local.z), lightAt(x, y, z), `light ${x} ${y} ${z}`)
       assert.equal(column.getBlock(local).name, blockNameAt(x, y, z), `block ${x} ${y} ${z}`)
     }
   }
 })
 
 test('the lowest and highest sections carry light data', () => {
-  const { column } = load(-1, -1)
-  for (const y of [-64, -1, 0, 319]) assert.equal(column.getSkyLight({ x: 3, y, z: 3 }), 15, `y ${y}`)
+  const loaded = load(-1, -1)
+  for (const y of [-64, -1, 0, 319]) assert.equal(lightCell(loaded, 3, y, 3).sky, 15, `y ${y}`)
+})
+
+test('every cell of a whole row decodes to its intended light (vanilla nibble order)', () => {
+  const loaded = load(0, 0)
+  const row = Array.from({ length: 16 }, (_, x) => lightCell(loaded, x, 65, 9))
+  assert.deepEqual(row, Array.from({ length: 16 }, (_, x) => lightAt(x, 65, 9)))
+  assert.ok(row.some(c => c.block === 14) && row.some(c => c.block === 0))
 })
 
 test('pose and hud files are written', () => {

@@ -22,7 +22,7 @@ export function parseColumnFile (raw) {
     parts[name] = raw.subarray(at, at + len)
     at += len
   }
-  return { header, sections: parts.sections }
+  return { header, sections: parts.sections, light: { meta: header.parts.find(p => p.name === 'light')?.meta ?? {}, bytes: parts.light ?? new Uint8Array(0) } }
 }
 
 const reader = bytes => {
@@ -95,3 +95,48 @@ export function decodeSections (bytes, format) {
   }
   return { ids, nonEmpty }
 }
+
+// bit `i` of a long-array mask of [hi, lo] int32 pairs
+const maskBit = (mask, i) => ((mask?.[i >> 6]?.[(i & 63) >= 32 ? 0 : 1] ?? 0) >>> (i & 31)) & 1
+
+// light as one byte per cell, `sky << 4 | block`, in decodeSections order. Light section L = s + 1 (0 is below minY).
+// Nibbles are little-endian within a byte (even cell index low). No sky data and not flagged empty means open sky (15).
+export function decodeLight (bytes, meta, numSections) {
+  const out = new Uint8Array(numSections * SECTION_VOLUME)
+  const size = meta?.sectionBytes ?? 2048
+  const skyBuffers = new Map()
+  const blockBuffers = new Map()
+  let sky = 0
+  let block = 0
+  for (let l = 0; l < numSections + 2; l++) {
+    if (maskBit(meta?.skyLightMask, l) && sky < (meta.skyCount ?? 0)) skyBuffers.set(l, sky++)
+    if (maskBit(meta?.blockLightMask, l) && block < (meta.blockCount ?? 0)) blockBuffers.set(l, block++)
+  }
+  for (let s = 0; s < numSections; s++) {
+    const base = s * SECTION_VOLUME
+    const skyAt = skyBuffers.get(s + 1)
+    const blockAt = blockBuffers.get(s + 1)
+    const skyFrom = skyAt === undefined ? 0 : skyAt * size
+    const blockFrom = blockAt === undefined ? 0 : ((meta.skyCount ?? 0) + blockAt) * size
+    const open = skyAt === undefined && !maskBit(meta?.emptySkyLightMask, s + 1)
+    for (let i = 0; i < SECTION_VOLUME; i++) {
+      const shift = (i & 1) * 4
+      const skyValue = skyAt === undefined ? (open ? 15 : 0) : (bytes[skyFrom + (i >> 1)] >> shift) & 15
+      const blockValue = blockAt === undefined ? 0 : (bytes[blockFrom + (i >> 1)] >> shift) & 15
+      out[base + i] = skyValue << 4 | blockValue
+    }
+  }
+  return out
+}
+
+// section order (s*4096 + (ly<<8|z<<4|x), y = s*16+ly) to GPU texture order ((z*height + y)*16 + x)
+export function textureOrder (values, height, out = new values.constructor(values.length)) {
+  for (let i = 0; i < values.length; i++) {
+    const y = (i >> 12) * 16 + ((i >> 8) & 15)
+    out[(((i >> 4) & 15) * height + y) * 16 + (i & 15)] = values[i]
+  }
+  return out
+}
+
+// a dumped light part {meta, bytes} as the light window's bytes for one column (GPU order, sky << 4 | block)
+export const lightColumn = (light, height) => textureOrder(decodeLight(light.bytes, light.meta, height >> 4), height)

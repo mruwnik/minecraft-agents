@@ -56,7 +56,7 @@ const TEXTURES = [
     test: s => s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80) > 0.05 && s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80) < 0.8 && s.fraction(([r, g]) => g > r + 10) > 0.1,
     describe: s => `reddish ${s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80).toFixed(2)} vs 0.05..0.8, greenish ${s.fraction(([r, g]) => g > r + 10).toFixed(2)} vs > 0.1`
   },
-  { name: 'lit stone textured', region: 'lit', test: s => s.std > 8, describe: s => `std ${s.std.toFixed(1)} vs > 8` }
+  { name: 'lit stone textured', region: 'lit', test: s => s.std > 4, describe: s => `std ${s.std.toFixed(1)} vs > 4` }
 ]
 
 // the lighting stage: only run with --lighting

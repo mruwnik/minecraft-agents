@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { celestialAngle, skyDarken, brightness, lightColor, faceUV, faceShade, cornerLight, SHADING_GLSL } from '../tools/view/web/shading.mjs'
+import { celestialAngle, skyDarken, brightness, lightColor, faceUV, faceShade, cornerLight, sceneTime, SHADING_GLSL } from '../tools/view/web/shading.mjs'
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`)
 
@@ -82,3 +82,18 @@ for (const [name, args, want] of [
 for (const name of ['float brightness(', 'vec3 lightColor(', 'vec3 faceUV(', 'vec3 cornerLight(', 'float skyDarken(', 'float faceShade(', 'float celestialAngle(']) {
   test(`SHADING_GLSL defines ${name}`, () => assert.ok(SHADING_GLSL.includes(name)))
 }
+
+const params = query => new URLSearchParams(query)
+for (const [name, pose, query, want] of [
+  ['pose values', { timeOfDay: 13000, rain: 0.5 }, '', { time: 13000, rain: 0.5 }],
+  ['no pose values: noon, dry', {}, '', { time: 6000, rain: 0 }],
+  ['time param overrides', { timeOfDay: 13000, rain: 0.5 }, 'time=18000', { time: 18000, rain: 0.5 }],
+  ['time 0 is a value', { timeOfDay: 13000 }, 'time=0', { time: 0, rain: 0 }],
+  ['time rounds', {}, 'time=100.6', { time: 101, rain: 0 }],
+  ['bad time ignored', { timeOfDay: 13000 }, 'time=abc', { time: 13000, rain: 0 }],
+  ['empty time ignored', { timeOfDay: 13000 }, 'time=', { time: 13000, rain: 0 }],
+  ['rain param overrides', { rain: 0 }, 'rain=1', { time: 6000, rain: 1 }],
+  ['rain clamps high', {}, 'rain=3', { time: 6000, rain: 1 }],
+  ['rain clamps low', { rain: 0.4 }, 'rain=-2', { time: 6000, rain: 0 }],
+  ['bad rain ignored', { rain: 0.4 }, 'rain=x', { time: 6000, rain: 0.4 }]
+]) test(`sceneTime: ${name}`, () => assert.deepEqual(sceneTime(pose, params(query)), want))

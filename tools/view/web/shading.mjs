@@ -21,6 +21,17 @@ export function skyDarken (timeOfDay, rain, thunder = 0) {
   return g * 0.8 + 0.2
 }
 
+// {time, rain} for the frame: the `time` (ticks) and `rain` (0..1) URL params override the pose's values
+export function sceneTime (pose, params) {
+  const given = name => {
+    const text = params.get(name)
+    return text === null || text.trim() === '' || !Number.isFinite(Number(text)) ? null : Number(text)
+  }
+  const time = given('time')
+  const rain = given('rain')
+  return { time: time === null ? pose.timeOfDay ?? 6000 : Math.round(time), rain: clamp(rain ?? pose.rain ?? 0, 0, 1) }
+}
+
 export const brightness = level => {
   const f = level / 15
   return f / (4 - 3 * f)

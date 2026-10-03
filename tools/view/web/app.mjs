@@ -1,14 +1,16 @@
 // The browser view: follows an agent's pose over server-sent events, keeps a toroidal window of chunk columns in the
 // GPU, and draws it every frame (see gl.mjs). window.__view exposes numbers for automated measurement.
 import { cameraBasis, directionFor } from './camera.mjs'
-import { inflate, parseColumnFile, decodeSections } from './decode.mjs'
+import { inflate, parseColumnFile, decodeSections, lightColumn } from './decode.mjs'
 import { createRenderer } from './gl.mjs'
 import { poseInterpolator } from './interp.mjs'
+import { skyDarken, sceneTime } from './shading.mjs'
 
 const MAX_IN_FLIGHT = 6
 const LATENCY_KEEP = 200
 const TRACE_KEEP = 4000
 const DECODE_KEEP = 2000
+const TIMING_KEEP = 2000
 const MOUSE_SENSITIVITY = 0.0022
 const FREE_SPEED = 12
 
@@ -39,7 +41,7 @@ const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
 }
 
-const view = window.__view = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], loaded: 0, wanted: 0, ready: false, renderer: null }
+const view = window.__view = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], lightMs: [], uploadMs: [], loaded: 0, wanted: 0, ready: false, renderer: null }
 
 const state = {
   pose: null,
@@ -102,6 +104,11 @@ const materialColumn = (ids, height, materialOf) => {
   return { mats, flags }
 }
 
+const keepTiming = (list, ms) => {
+  list.push(Math.round(ms * 10) / 10)
+  if (list.length > TIMING_KEEP) list.shift()
+}
+
 const fetchColumn = async (world, cx, cz) => {
   const res = await fetch(`/columns/${world}/${cx}.${cz}.bin`)
   if (res.status === 404) return null
@@ -109,11 +116,14 @@ const fetchColumn = async (world, cx, cz) => {
   const bytes = new Uint8Array(await res.arrayBuffer())
   const started = performance.now()
   const raw = await inflate(bytes)
-  const { header, sections } = parseColumnFile(raw)
+  const { header, sections, light } = parseColumnFile(raw)
   const { ids } = decodeSections(sections, { ...state.table.format, numSections: header.worldHeight >> 4 })
   view.decodeMs.push(Math.round((performance.now() - started) * 10) / 10)
   if (view.decodeMs.length > DECODE_KEEP) view.decodeMs.shift()
-  return { header, ids }
+  const lightStarted = performance.now()
+  const lit = lightColumn(light, header.worldHeight)
+  keepTiming(view.lightMs, performance.now() - lightStarted)
+  return { header, ids, light: lit }
 }
 
 const keyOf = (cx, cz) => `${cx}.${cz}`
@@ -133,7 +143,9 @@ const settle = (key, column, result) => {
   }
   ensureDims(result.header)
   const { mats, flags } = materialColumn(result.ids, state.dims.height, state.table.materialOf)
-  gfx.uploadColumn(mod(column.cx, N), mod(column.cz, N), mats, flags)
+  const uploadStarted = performance.now()
+  gfx.uploadColumn(mod(column.cx, N), mod(column.cz, N), mats, flags, result.light)
+  keepTiming(view.uploadMs, performance.now() - uploadStarted)
   column.status = 'loaded'
 }
 
@@ -264,10 +276,6 @@ const moveFree = dt => {
 
 // ---- drawing ----
 
-const clamp01 = v => Math.min(1, Math.max(0, v))
-// brightness of the day as the Node renderer has it: 0.3 at midnight .. 1; timeOfDay 0 is sunrise, 6000 noon
-const daylight = time => 0.3 + 0.7 * clamp01(0.5 + 1.6 * Math.sin(((time ?? 6000) % 24000) / 24000 * 2 * Math.PI))
-
 const entityColor = e => {
   if (e.type === 'player' || e.kind === 'player' || e.username) return [0.2, 0.4, 0.95]
   if (e.type === 'hostile' || e.kind === 'Hostile mobs') return [0.88, 0.14, 0.14]
@@ -314,11 +322,12 @@ const frame = (now, dt) => {
   const cam = state.free ?? { eye: shown.eye, yaw: shown.yaw, pitch: shown.pitch }
   if (!state.free) recordTrace(now, cam)
   const origin = { x: (state.ccx - radius) * 16, y: state.dims.minY, z: (state.ccz - radius) * 16 }
+  const { time, rain } = sceneTime({ timeOfDay: shown.timeOfDay ?? state.pose.timeOfDay, rain: shown.rain ?? state.pose.rain }, params)
   gfx.draw({
     eye: { x: cam.eye.x - origin.x, y: cam.eye.y - origin.y, z: cam.eye.z - origin.z },
     basis: cameraBasis({ yaw: cam.yaw, pitch: cam.pitch, fov }),
     dist: maxDist,
-    light: daylight(shown.timeOfDay ?? state.pose.timeOfDay),
+    darken: skyDarken(time, rain),
     slotOff: { x: mod(state.ccx - radius, N) * 16, z: mod(state.ccz - radius, N) * 16 },
     entities: entityBoxes(shown.entities ?? state.pose.entities, origin, cam.eye)
   })

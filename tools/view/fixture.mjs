@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { encodeColumn, columnFile, poseFile, hudFile } from '../../engine/js/view.mjs'
+import { encodeColumn, columnFile, poseFile, hudFile, LIGHT_SECTION_BYTES } from '../../engine/js/view.mjs'
 import { makeChunkClass } from './columns.mjs'
 
 export const MC_VERSION = '26.1'
@@ -50,13 +50,32 @@ export const blockNameAt = (x, y, z) => {
 }
 
 export const lightAt = (x, y, z) => {
-  if (blockNameAt(x, y, z) !== 'air') return { sky: 0, block: 0 }
+  const name = blockNameAt(x, y, z)
+  if (name === 'oak_leaves') return { sky: 15, block: 0 } // light passes through leaves, so the wool behind them is lit
+  if (name !== 'air') return { sky: 0, block: 0 }
   if (within(x, DARK.x) && within(z, DARK.z) && within(y, WALL_Y)) return { sky: 0, block: 0 }
   if (y === TORCH.y && within(x, TORCH.x) && within(z, TORCH.z)) return { sky: 0, block: 14 }
   return { sky: 15, block: 0 }
 }
 
 const stateIds = (registry, names) => Object.fromEntries(names.map(name => [name, registry.blocksByName[name].defaultState]))
+
+// the column's light dump written straight in vanilla nibble order (cell i of a section: byte i >> 1, low nibble when i is
+// even); prismarine's setSkyLight/setBlockLight scramble the order inside each 16-cell row. Light section l covers the
+// layer l - 1 above the lowest section, so l = 0 and the top one stay empty (sky mask bits 1..numSections).
+const lightDump = (cx, cz) => {
+  const sections = WORLD_HEIGHT >> 4
+  const buffers = key => Array.from({ length: sections }, (_, s) => {
+    const buffer = Buffer.alloc(LIGHT_SECTION_BYTES)
+    for (let i = 0; i < 4096; i++) {
+      const light = lightAt(cx * 16 + (i & 15), MIN_Y + s * 16 + (i >> 8), cz * 16 + ((i >> 4) & 15))
+      buffer[i >> 1] |= light[key] << ((i & 1) * 4)
+    }
+    return buffer
+  })
+  const mask = [[0, 2 ** (sections + 1) - 2]]
+  return { skyLight: buffers('sky'), blockLight: buffers('block'), skyLightMask: mask, blockLightMask: mask, emptySkyLightMask: [[0, 0]], emptyBlockLightMask: [[0, 0]] }
+}
 
 const buildColumn = (Chunk, ids, cx, cz) => {
   const column = new Chunk({ minY: MIN_Y, worldHeight: WORLD_HEIGHT })
@@ -66,14 +85,12 @@ const buildColumn = (Chunk, ids, cx, cz) => {
         const x = cx * 16 + lx
         const z = cz * 16 + lz
         const name = blockNameAt(x, y, z)
-        const light = lightAt(x, y, z)
         const at = { x: lx, y, z: lz }
         if (name !== 'air') column.setBlockStateId(at, ids[name])
-        column.setSkyLight(at, light.sky)
-        column.setBlockLight(at, light.block)
       }
     }
   }
+  column.dumpLight = () => lightDump(cx, cz)
   return column
 }
 
