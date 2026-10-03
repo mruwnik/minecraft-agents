@@ -5,8 +5,9 @@ import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { makeChunkClass, loadColumn } from '../tools/view/columns.mjs'
 import { columnFormat } from '../tools/view/web-format.mjs'
-import { inflate, parseColumnFile } from '../tools/view/web/decode.mjs'
-import { decodeBiomes, biomeTextureOrder } from '../tools/view/web/biomes.mjs'
+import { inflate, parseColumnFile, decodeSections } from '../tools/view/web/decode.mjs'
+import { biomeTextureOrder } from '../tools/view/web/biomes.mjs'
+const decodeBiomes = (bytes, format) => decodeSections(bytes, format).biomes
 
 const MIN_Y = -64
 const HEIGHT = 384

@@ -1,5 +1,5 @@
 // Decodes the chunk column files a body dumps (docs/view-format.md) in a browser: no node imports. A port of what
-// prismarine-chunk's 1.18 ChunkColumn.load reads, keeping only block state ids (biome containers are parsed to be skipped).
+// prismarine-chunk's 1.18 ChunkColumn.load reads, keeping block state ids and biome ids.
 
 const SECTION_VOLUME = 4096
 const BIOME_VOLUME = 64
@@ -80,20 +80,22 @@ const readContainer = (r, format, capacity, maxPaletteBits, put) => {
   readPacked(r, bits, longs, capacity, palette ? (i, v) => put(i, palette[v]) : put)
 }
 
+// biomes: 64 ids per section (4x4x4 cells of 4 blocks), section s at s * 64, index y4 << 4 | z4 << 2 | x4; ids above 255 become 255
 export function decodeSections (bytes, format) {
   const r = reader(bytes)
   const ids = new Uint16Array(format.numSections * SECTION_VOLUME)
   const nonEmpty = new Uint8Array(format.numSections)
-  const ignore = () => {}
+  const biomes = new Uint8Array(format.numSections * BIOME_VOLUME)
   for (let s = 0; s < format.numSections; s++) {
     r.i16() // solid block count
     if (format.hasFluidCount) r.i16()
     const base = s * SECTION_VOLUME
     readContainer(r, format, SECTION_VOLUME, MAX_BLOCK_PALETTE_BITS, (i, v) => { ids[base + i] = v })
     nonEmpty[s] = ids.subarray(base, base + SECTION_VOLUME).some(v => v !== 0) ? 1 : 0
-    readContainer(r, format, BIOME_VOLUME, MAX_BIOME_PALETTE_BITS, ignore)
+    const biomeBase = s * BIOME_VOLUME
+    readContainer(r, format, BIOME_VOLUME, MAX_BIOME_PALETTE_BITS, (i, v) => { biomes[biomeBase + i] = v > 255 ? 255 : v })
   }
-  return { ids, nonEmpty }
+  return { ids, nonEmpty, biomes }
 }
 
 // bit `i` of a long-array mask of [hi, lo] int32 pairs
