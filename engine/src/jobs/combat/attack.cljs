@@ -21,11 +21,18 @@
   run, even after respawning. Done (info
   attack.done, and hands over {:reason :killed [ids] :given-up {id reason}})
   with :reason :cleared once no target has been within :radius for :lost-s
-  (waiting in 1 s steps),
-  :gave-up when every target present has been given up on, or :timeout after
-  :timeout-s from the first round (warn attack.timeout). The check passes while
-  a target not given up on is within :radius, and always once the job has
-  started, so a cut job resumes and ends itself. It does not guard the body's
+  (waiting in 1 s steps) and every target seen was killed or given up on,
+  :lost when some was neither, :gave-up when every target present has been
+  given up on, :timeout after :timeout-s from the first round (warn
+  attack.timeout), or :absent when no target is present at the first round.
+  :absent :done (the default) lets the job start and end at once with :absent
+  - (jobs.combat.attack {:targets [123 \"zombie\"]}) is a one-shot order;
+  :absent :wait makes the check decline until a target is present -
+  (repeat (jobs.combat.attack {:targets \"zombie\" :absent :wait})) is a
+  standing guard. The check passes while a target not given up on is within
+  :radius, and always once the job has started, so a cut job resumes and ends
+  itself. Creepers get no special handling: they are attacked only when
+  listed, and the body does not back off. It does not guard the body's
   health: the survival register sits above it and cuts it; the job resumes
   after.")
 
@@ -38,7 +45,8 @@
    :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :default 4}
    :max-hits {:doc "hits without a kill before a target is given up on" :default 40}
-   :walk-timeout-s {:doc "bound of one walk towards a target" :default 5}})
+   :walk-timeout-s {:doc "bound of one walk towards a target" :default 5}
+   :absent {:doc ":done ends the job at once, reason :absent, when no target is present at the first round; :wait makes the check decline until one is" :default :done}})
 
 (def reach 3)
 
@@ -88,7 +96,9 @@
     (into [] (remove #(contains? given-up (.-id %))) (present c))))
 
 (defn check [c]
-  (boolean (or (:started (ctx/mem c)) (seq (candidates c)))))
+  (boolean (or (:started (ctx/mem c))
+               (not= :wait (:absent (:args c)))
+               (seq (candidates c)))))
 
 (defn book-kill!
   "Add id to :killed; its username, if any, is not attacked again."
@@ -176,6 +186,14 @@
     (ctx/result! c result)
     :done))
 
+(defn settled-reason
+  "How a run that saw nothing for :lost-s ends: :cleared when every target
+  ever seen was killed or given up on, else :lost."
+  [c]
+  (let [{:keys [seen killed given-up]} (ctx/mem c)
+        done? (into (set killed) (keys given-up))]
+    (if (every? done? seen) :cleared :lost)))
+
 (defn within-gap?
   "Whether the last swing was less than the gap ago."
   [c]
@@ -194,7 +212,7 @@
     (fail! c target))
   :continue)
 
-(defn ^:async round [c]
+(defn ^:async run-round! [c]
   (let [now (ctx/now c)
         {:keys [timeout-s lost-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -204,10 +222,15 @@
         (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout)
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
         (empty? targets) (if (>= (- now (or (:last-seen m) (:started m))) (* 1000 lost-s))
-                           (finish! c :cleared)
+                           (finish! c (settled-reason c))
                            (do (await (ctx/act c :wait #js {:ms 1000}))
                                :continue))
-        :else (do (ctx/update-mem! c assoc :last-seen now)
+        :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
                   (if (within-gap? c)
                     :continue
                     (await (engage! c (first targets)))))))))
+
+(defn ^:async round [c]
+  (if (and (nil? (:started (ctx/mem c))) (empty? (candidates c)))
+    (finish! c :absent)
+    (await (run-round! c))))

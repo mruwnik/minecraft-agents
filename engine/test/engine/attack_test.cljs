@@ -130,7 +130,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zed 7 3) (zed 8 30)]})]
-          (core/submit! eng (spec {:targets [8 "skeleton"]}) {})
+          (core/submit! eng (spec {:targets [8 "skeleton"] :absent :wait}) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (h/calls p "attack"))))
           (is (zero? (count (h/calls p "equip")))))))))
@@ -144,7 +144,7 @@
           (is (= [7 7 7 7] (attacked s))))
         (doseq [targets [["player"] ["hostile"] [3 "Fake"]]]
           (let [{:keys [eng]} (h/setup {:entities [(ent 3 "Fake" "player" 1) (ent 9 "Alex" "player" 2)]})]
-            (core/submit! eng (spec {:targets targets}) {})
+            (core/submit! eng (spec {:targets targets :absent :wait}) {})
             (is (nil? (core/tick! eng)) (str targets))))))))
 
 (deftest gives-up-on-an-unreachable-target
@@ -240,7 +240,7 @@
           (swap! clock + 6000)
           (await (core/tick! eng))
           (is (finished? s))
-          (is (= :cleared (:reason (done-event s)))))))))
+          (is (= :lost (:reason (done-event s)))))))))
 
 (deftest a-target-that-vanishes-after-a-hit-is-not-booked-as-killed
   (async done
@@ -253,7 +253,7 @@
           (swap! clock + 6000)
           (await (core/tick! eng))
           (is (finished? s))
-          (is (= :cleared (:reason (done-event s))))
+          (is (= :lost (:reason (done-event s))))
           (is (= [] (:killed (done-event s)))))))))
 
 (deftest a-player-is-named-by-username-when-given-up-on
@@ -298,4 +298,41 @@
           (is (not (finished? s)))
           (swap! clock + 6000)
           (await (core/tick! eng))
-          (is (= :cleared (:reason (done-event s)))))))))
+          (is (= :lost (:reason (done-event s)))))))))
+
+(deftest an-absent-target-ends-the-job-at-once-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [targets [[123] ["skeleton"] ["Fake"]]]
+          (let [{:keys [p] :as s} (await (h/first-round (spec {:targets targets})
+                                                        {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]}))]
+            (is (finished? s) (str targets))
+            (is (= :absent (:reason (done-event s))) (str targets))
+            (is (= 1 (count (events-of s :attack.done))) (str targets))
+            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "look" "attack" "wait"]) (str targets))))))))
+
+(deftest absent-wait-declines-until-a-target-turns-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock] :as s} (h/setup {:inventory h/sword})]
+          (core/submit! eng (spec {:targets ["zombie"] :absent :wait}) {})
+          (is (nil? (core/tick! eng)))
+          (is (zero? (count (events-of s :attack.done))))
+          (.push (.-entities (.-state (.-world p)))
+                 #js {:id 7 :name "zombie" :kind "hostile" :health 20 :pos (tu/pos 2 64 0)})
+          (swap! clock + 700)
+          (await (core/tick! eng))
+          (is (= [7] (attacked s))))))))
+
+(deftest lost-when-a-target-is-neither-killed-nor-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7 8]} {:inventory h/sword :entities [(zed 7 2) (zed 8 3)]} 4))]
+          (aset (aget (.. p -world -state -entities) 0) "pos" (tu/pos 0 64 40))
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= :lost (:reason (done-event s))))
+          (is (= [7] (:killed (done-event s)))))))))
