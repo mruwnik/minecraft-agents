@@ -1,0 +1,4 @@
+;; Backoff live proof, after: the same go-to under repeat with the default backoff, plus look-around.
+{:register []
+ :queue [(repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}}))
+         (repeat (jobs.movement.look-around))]}

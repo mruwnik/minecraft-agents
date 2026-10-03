@@ -1,0 +1,3 @@
+;; Backoff live proof, before, alone: the sealed-box go-to under repeat with backoff off.
+{:register []
+ :queue [(backoff false (repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}})))]}
