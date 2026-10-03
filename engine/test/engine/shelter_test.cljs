@@ -113,6 +113,18 @@
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= 1 (count (emitted seen :bed_missing)))))))))
 
+(deftest sleep-gives-up-on-an-unreachable-bed-after-three-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= [] (calls p "sleep")))
+          (is (= 9 (count (calls p "moveTo"))) "each of the three tries walks go-to afresh, three blocked walks each")
+          (is (= 1 (count (emitted seen :bed_unreachable)))))))))
+
 ;; ----------------------------------------------------------------- log-out
 
 (deftest log-out-goes-offline-when-another-player-sleeps-and-no-bed-is-known

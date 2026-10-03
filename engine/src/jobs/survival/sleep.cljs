@@ -20,8 +20,6 @@
 
 (def slept-policy {:cap 10 :ttl (* 7 sh/ms-per-day)})
 
-(def sleep-reach 3)
-
 (defn check [c]
   (and (sh/night? (:primitives c))
        (some? (sh/bed c (:bed-radius (:args c))))))
@@ -44,5 +42,5 @@
       (let [walk (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2}))]
         (cond
           (= :continue walk) :continue
-          (> (u/dist (u/self-pos c) bed) sleep-reach) (u/fail! c :bed_unreachable "cannot reach the bed")
+          (not (:arrived (ctx/child-result c :go))) (u/fail! c :bed_unreachable "cannot reach the bed")
           :else (await (sleep-at! c bed)))))))

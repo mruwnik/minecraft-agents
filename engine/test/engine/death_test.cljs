@@ -190,7 +190,7 @@
           (is (< (await (run-until-empty eng 10)) 10))
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "collect")))
-          (is (= :abandoned (:decision (recovered eng)))))))))
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (deftest recover-drops-abandons-when-the-window-closes-mid-trip
   (async done

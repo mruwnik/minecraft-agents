@@ -4,6 +4,7 @@
             ["fs" :as fs]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
@@ -28,6 +29,21 @@
       i
       (do (await (core/tick! eng))
           (recur (inc i))))))
+
+(defn ^:async child-outcome
+  "Run job (a registry symbol) with args as the child of a recording parent
+  until the list is empty, at most n ticks; the child's result when done."
+  [eng job args n]
+  (let [out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
 
 (defn tree [x z species height]
   (merge
@@ -203,6 +219,34 @@
           (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
           (is (<= (await (run-until-empty eng 8)) 4) "an unreachable item does not loop forever")
           (is (= {"dirt" 1} (inv p))))))))
+
+;; ------------------------------------------------------------ child results
+
+(deftest go-to-hands-over-whether-it-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:arrived true}
+               (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))))
+        (is (= {:arrived true}
+               (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 0 :y 64 :z 0}} 3)))
+            "already there")
+        (is (= {:arrived false :reason :unreachable}
+               (await (child-outcome (:eng (setup {:unreachable ["9,64,9"]}))
+                                     'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
+
+(deftest collect-drops-hands-over-how-many-it-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})]
+          (is (= {:collected 2}
+                 (await (child-outcome (:eng (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt") (item 3 4 "dirt")]
+                                                     :unreachable ["2,64,0"]}))
+                                       'jobs.forestry.collect-drops {:radius 10} 8)))
+              "the unreachable stick is not counted")
+          (is (= {:collected 0}
+                 (await (child-outcome (:eng (setup {})) 'jobs.forestry.collect-drops {:radius 10} 3)))))))))
 
 ;; ------------------------------------------------------------ plant-sapling
 

@@ -4,7 +4,8 @@
 
 (def doc
   "Walk to :pos. A partial walk continues next round; three blocked walks
-  give up with an unreachable warn.")
+  give up with an unreachable warn. Hands over {:arrived true}, or
+  {:arrived false :reason :unreachable} when it gave up (ctx/result!).")
 
 (def args
   {:pos {:doc "target position {:x :y :z}" :default nil}
@@ -14,13 +15,17 @@
 
 (defn check [_c] true)
 
+(defn arrived! [c]
+  (ctx/result! c {:arrived true})
+  :done)
+
 (defn ^:async round [c]
   (let [{:keys [pos range]} (:args c)]
     (if (<= (u/dist (u/self-pos c) pos) range)
-      :done
+      (arrived! c)
       (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
         (case (.-status r)
-          "arrived" :done
+          "arrived" (arrived! c)
           "partial" :continue
           (let [tries (inc (:blocked (ctx/mem c) 0))]
             (ctx/update-mem! c assoc :blocked tries)
@@ -28,4 +33,5 @@
               :continue
               (do (ctx/emit! c :unreachable :warn {:target pos :tries tries
                                                     :text (str "gave up walking to " pos)})
+                  (ctx/result! c {:arrived false :reason :unreachable})
                   :done))))))))

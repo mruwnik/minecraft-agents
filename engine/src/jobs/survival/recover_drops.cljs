@@ -46,24 +46,16 @@
     {:value (value/inventory-value inventory (:level experience))
      :cost (value/retrieval-cost pos (u/self-pos c) (entity-positions p 64 "hostile" 32) cause elapsed)}))
 
-(defn drop-ids [p radius]
-  (map #(.-id %) (array-seq (.entities p #js {:radius radius :kind "item" :max 32}))))
-
 (defn ^:async go! [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
     (cond
       (not= :done r) :continue
-      (> (u/dist (u/self-pos c) pos) (inc arrive-range)) (finish! c :abandoned (merge (:decided (ctx/mem c)) {:reason :unreachable}))
+      (not (:arrived (ctx/child-result c :go))) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :unreachable))
       :else (do (ctx/update-mem! c assoc :phase :collect) :continue))))
 
 (defn ^:async collect! [c radius]
-  (let [p (:primitives c)
-        skipped (set (:skipped (get-in (ctx/mem c) [:children :collect])))
-        before (remove skipped (drop-ids p radius))
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius}))
-        now-here (set (drop-ids p radius))
-        items (+ (:items (ctx/mem c) 0) (count (remove now-here before)))]
-    (ctx/update-mem! c assoc :items items)
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius}))
+        items (:collected (ctx/child-result c :collect) 0)]
     (cond
       (= :continue r) :continue
       (pos? items) (finish! c :collected (assoc (:decided (ctx/mem c)) :items items))
