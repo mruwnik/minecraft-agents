@@ -367,3 +367,46 @@
           (await (core/tick! eng))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :no-damage} (:given-up (done-event s)))))))))
+
+(defn ^:async scripted-attack
+  "Submit an attack on id 7 (in reach) whose attack results follow statuses in order, then repeat the last; n ticks."
+  [statuses n]
+  (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]})
+        i (atom 0)]
+    (.override (.-world p) "attack"
+               (fn [_token _args _impl]
+                 (let [st (nth statuses (min @i (dec (count statuses))))]
+                   (swap! i inc)
+                   (js/Promise.resolve #js {:status st :hurt true}))))
+    (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
+    (await (run-ticks s n 700))
+    s))
+
+(deftest a-landed-hit-resets-the-out-of-reach-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scripted-attack (vec (take 12 (cycle ["out-of-reach" "hit"]))) 24))]
+          (is (>= (count (attacked s)) 12))
+          (is (empty? (events-of s :attack.gave-up))))))))
+
+(deftest three-out-of-reach-swings-in-a-row-still-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scripted-attack ["out-of-reach"] 10))]
+          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) (events-of s :attack.gave-up)))))))))
+
+(deftest out-of-reach-right-after-an-arrived-walk-is-the-target-moving-not-a-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 10)]})]
+          ;; the walk answers arrived but the body stays far; the swing finds the target gone on
+          (.override (.-world p) "moveTo" (fn [_ _ _] (js/Promise.resolve #js {:status "arrived"})))
+          (.override (.-world p) "attack" (fn [_ _ _] (js/Promise.resolve #js {:status "out-of-reach"})))
+          (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
+          (await (run-ticks s 14 700))
+          (is (>= (count (attacked s)) 5) "swung well past three times")
+          (is (>= (count (h/calls p "moveTo")) 5) "walked each round")
+          (is (empty? (events-of s :attack.gave-up))))))))

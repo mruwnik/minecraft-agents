@@ -13,7 +13,7 @@
   :walk-timeout-s) and swings once, at most one swing per :attack-gap-ms (nil:
   the held weapon's cooldown, combat/attack-gap-ms). A target is given up on
   (warn attack.gave-up with :reason) after three blocked walks or out-of-reach
-  swings (:unreachable), after :no-damage-hits swings in a row that did no
+  swings in a row (:unreachable; a landed hit resets the count; an out-of-reach swing right after a walk that arrived means the target moved on and does not count), after :no-damage-hits swings in a row that did no
   damage (:no-damage: the attack reported hurt false, or a known health that
   did not drop), or after :max-hits hits without a kill (:too-many-hits). A
   kill is booked only when the attack reports killed (a target that merely
@@ -129,6 +129,11 @@
     (ctx/update-mem! c assoc-in [:fails (.-id target)] n)
     (when (>= n u/max-failures) (give-up! c target :unreachable))))
 
+(defn reset-fails!
+  "A landed swing is progress: target's failure count starts again at 0."
+  [c target]
+  (ctx/update-mem! c assoc-in [:fails (.-id target)] 0))
+
 (defn quiet-hit?
   "Whether a hit did no damage: reported hurt false, or a known health that did not drop."
   [result previous]
@@ -154,29 +159,32 @@
         (>= (get hits id 0) max-hits) (give-up! c target :too-many-hits)))))
 
 (defn ^:async walk!
-  "Walk within reach of target when further than reach. Resolves to :there,
-  :partial or :blocked."
+  "Walk within reach of target when further than reach. Resolves to :there
+  (no walk needed), :arrived (a moveTo arrived), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
       (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
         (case (.-status r)
-          "arrived" :there
+          "arrived" :arrived
           "partial" :partial
           :blocked)))))
 
 (defn ^:async swing!
-  "Face and hit target once."
-  [c target]
+  "Face and hit target once. walked? says a walk just arrived: an out-of-reach
+  swing then means the target moved on, and is not counted as a failure."
+  [c target walked?]
   (let [tpos (u/pos-of (.-pos target))]
     (ctx/update-mem! c assoc :last-attack (ctx/now c))
     (await (ctx/act c :look #js {:pos #js {:x (:x tpos) :y (+ 1 (:y tpos)) :z (:z tpos)}}))
     (let [a (await (ctx/act c :attack #js {:id (.-id target)}))]
       (case (.-status a)
-        "killed" (book-kill! c (.-id target) (or (.-username target) nil))
-        "out-of-reach" (fail! c target)
-        "hit" (note-hit! c target a)
+        "killed" (do (reset-fails! c target)
+                     (book-kill! c (.-id target) (or (.-username target) nil)))
+        "out-of-reach" (when-not walked? (fail! c target))
+        "hit" (do (reset-fails! c target)
+                  (note-hit! c target a))
         nil))))
 
 (defn finish!
@@ -216,7 +224,8 @@
   [c target]
   (await (combat/equip-best! c (combat/best-weapon (:primitives c) (:weapons (:args c)))))
   (case (await (walk! c target))
-    :there (await (swing! c target))
+    :there (await (swing! c target false))
+    :arrived (await (swing! c target true))
     :partial nil
     (fail! c target))
   :continue)
