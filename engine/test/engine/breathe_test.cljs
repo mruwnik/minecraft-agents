@@ -207,7 +207,7 @@
   "Water at y 64 and 65 around the origin column; air above."
   (into {} (for [y [64 65] x [-1 0 1] z [-1 0 1]] [(str x "," y "," z) "water"])))
 
-(deftest surfaced-in-a-pool-it-walks-onto-a-ledge-two-blocks-away
+(deftest surfaced-in-a-pool-it-swims-onto-a-ledge-two-blocks-away
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -220,6 +220,8 @@
           (await (core/tick! eng))
           (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) "second round stands on the ledge")
           (is (not (.-inWater (.self p))))
+          (is (= ["swim" "swim"] (call-names p)) "the shore step swims, no moveTo")
+          (is (= {:x 2 :y 65 :z 0} (js->clj (.-toward (.-args (last (array-seq (.. p -world -calls))))) :keywordize-keys true)))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -248,6 +250,22 @@
           (is (= 1 (count (filter #(= :no_shore_near (:kind %)) @seen))))
           (is (not-any? #(= :warn (:level %)) @seen))
           (is (= ["swim"] (call-names p))))))))
+
+(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})
+              ]
+          (.override (.-world p) "swim"
+                     (fn ^:async f [_ args impl]
+                       (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :no_shore (:kind %)) @seen))))
+          (is (not (some #{"moveTo"} (call-names p)))))))))
 
 (deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging
   (async done

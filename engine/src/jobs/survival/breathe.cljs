@@ -20,10 +20,10 @@
   the situation is gone once the head is clear, and in water either oxygen is
   back at :min-oxygen or the head is in air. After a swim that surfaced
   (:surfaced in job memory) a body still in water heads for land instead of
-  bobbing: it moves to the nearest land cell within :shore-radius (feet y
+  bobbing: it swims toward the nearest land cell within :shore-radius (feet y
   from one below to two above the own; feet and head cells air, the cell below solid,
   i.e. not air, water, lava, fire or magma); done when it stands out of the
-  water, a failed round (:no_shore warn after three) when the move does not
+  water, a failed round (:no_shore warn after three) when the swim does not
   get it out, and a clean decline (info :no_shore_near, no warn) when no land
   is in reach. Gives up (:no_air or :no_way_out warn) after three failed
   rounds; the suffocating trigger then fires it again.")
@@ -174,8 +174,9 @@
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
 (defn ^:async head-for-land!
-  "Surfaced and still in water: walk to the nearest land cell within
-  :shore-radius. :done when out of the water or when no land is in reach
+  "Surfaced and still in water: swim toward the nearest land cell within
+  :shore-radius (the swim primitive with toward climbs out onto a rim the
+  pathfinder cannot path to). :done when out of the water or when no land is in reach
   (info :no_shore_near); a failed round otherwise."
   [c]
   (let [p (:primitives c)
@@ -184,8 +185,8 @@
     (if-not target
       (do (ctx/emit! c :no_shore_near :info {:radius radius :text "no land within reach of the surfaced body"})
           :done)
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
-        (if (or (= "arrived" (status r)) (not (.-inWater (.self p))))
+      (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
+        (if (or (= "landed" (status r)) (not (.-inWater (.self p))))
           :done
           (u/fail! c :no_shore "could not reach the nearest shore"))))))
 
