@@ -2,6 +2,7 @@
 // search's inner loop with no allocation. Heights are in 1/16 block above the cell's floor.
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
+import { OFFSET_MAX } from '../offsets.mjs'
 
 export const OPEN = 0 // no collision, not fluid, not hazard
 export const SOLID = 1 // has collision
@@ -35,6 +36,22 @@ const LIT_CAMPFIRES = new Set(['campfire', 'soul_campfire'])
 const STAIR_UP = { east: 1, west: 2, south: 3, north: 4 }
 const STAIRS = /_stairs$/
 
+// the data's bamboo box is wrong (0.156..0.344); vanilla is Block.box(6.5, 0, 6.5, 9.5, 16, 9.5), offset per position at lookup
+const BAMBOO_BOX = [0.40625, 0, 0.40625, 0.59375, 1, 0.59375]
+const FOOTPRINT = 16 // sample cells per axis for the coverage test; every vanilla shape edge is a multiple of 1/16
+
+// true when the boxes' xz projections leave part of the 1x1 footprint uncovered (cell centres sampled at 1/16)
+const leavesGaps = boxes => {
+  for (let i = 0; i < FOOTPRINT; i++) {
+    for (let j = 0; j < FOOTPRINT; j++) {
+      const x = (i + 0.5) / FOOTPRINT
+      const z = (j + 0.5) / FOOTPRINT
+      if (!boxes.some(b => x > b[0] && x < b[3] && z > b[2] && z < b[5])) return true
+    }
+  }
+  return false
+}
+
 const sixteenths = v => Math.round(v * 16)
 
 const kindOf = (name, props, top) => {
@@ -62,20 +79,30 @@ export function buildStateTable (registry) {
   const kind = new Uint8Array(size)
   const hazard = new Uint8Array(size)
   const stairUp = new Uint8Array(size)
+  const boxStart = new Uint32Array(size)
+  const boxCount = new Uint8Array(size)
+  const offsetMax = new Float32Array(size)
+  const partial = new Uint8Array(size)
+  const floats = []
   for (const block of registry.blocksArray) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) {
       const state = Block.fromStateId(id, 0)
-      const shapes = state.shapes ?? []
+      const shapes = block.name === 'bamboo' ? [BAMBOO_BOX] : state.shapes ?? []
       const props = state.getProperties()
       // the data's shape for snow layers matches the server: (layers - 1) * 2 / 16, so no correction is needed
       top[id] = shapes.reduce((m, s) => Math.max(m, sixteenths(s[4])), 0)
       base[id] = shapes.reduce((m, s) => Math.min(m, sixteenths(s[1])), 16)
       kind[id] = kindOf(block.name, props, top[id])
       hazard[id] = hazardOf(block.name, props)
+      boxStart[id] = floats.length / 6
+      boxCount[id] = shapes.length
+      shapes.forEach(s => floats.push(...s))
+      offsetMax[id] = OFFSET_MAX[block.name] ?? 0
+      partial[id] = shapes.length > 0 && leavesGaps(shapes) ? 1 : 0
       if (STAIRS.test(block.name) && props.half === 'bottom' && props.shape === 'straight') stairUp[id] = STAIR_UP[props.facing] ?? 0
     }
   }
-  return { top, base, kind, hazard, stairUp }
+  return { top, base, kind, hazard, stairUp, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
 }
 
 let shared

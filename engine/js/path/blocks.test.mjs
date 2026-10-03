@@ -83,3 +83,57 @@ test('state table is sized to the highest state id', () => {
   const max = registry.blocksArray.reduce((m, b) => Math.max(m, b.maxStateId), 0)
   assert.equal(table.top.length, max + 1)
 })
+
+const boxesOf = (id) => Array.from({ length: table.boxCount[id] }, (_, i) => Array.from(table.boxes.subarray((table.boxStart[id] + i) * 6, (table.boxStart[id] + i) * 6 + 6)))
+
+// [block, props, partial, offsetMax]
+const partialCases = [
+  ['stone', {}, 0, 0],
+  ['air', {}, 0, 0],
+  ['oak_slab', { type: 'bottom' }, 0, 0],
+  ['oak_slab', { type: 'top' }, 0, 0],
+  ['oak_stairs', { facing: 'north', half: 'bottom', shape: 'straight' }, 0, 0],
+  ['white_carpet', {}, 0, 0],
+  ['oak_trapdoor', { half: 'bottom', open: false }, 0, 0],
+  ['oak_trapdoor', { half: 'bottom', open: true }, 1, 0],
+  ['cocoa', { age: 2 }, 1, 0],
+  ['bamboo', {}, 1, 0.25],
+  ['pointed_dripstone', {}, 1, 0.125],
+  ['glass_pane', {}, 1, 0],
+  ['iron_bars', {}, 1, 0],
+  ['oak_fence', {}, 1, 0],
+  ['cobblestone_wall', {}, 1, 0],
+  ['ladder', {}, 1, 0],
+  ['oak_door', { open: false }, 1, 0],
+  ['lantern', {}, 1, 0],
+  ['iron_chain', {}, 1, 0],
+  ['end_rod', {}, 1, 0],
+  ['lightning_rod', {}, 1, 0],
+  ['candle', {}, 1, 0],
+  ['flower_pot', {}, 1, 0],
+  ['skeleton_skull', {}, 1, 0],
+  ['oak_fence_gate', { open: true }, 0, 0]
+]
+
+for (const [name, props, partial, offsetMax] of partialCases) {
+  test(`partial and offsetMax: ${name} ${JSON.stringify(props)}`, () => {
+    const id = stateId(name, props)
+    assert.deepEqual({ partial: table.partial[id], offsetMax: table.offsetMax[id] }, { partial, offsetMax })
+  })
+}
+
+// [block, props, boxes] block-local
+const boxCases = [
+  ['air', {}, []],
+  ['stone', {}, [[0, 0, 0, 1, 1, 1]]],
+  ['oak_slab', { type: 'bottom' }, [[0, 0, 0, 1, 0.5, 1]]],
+  ['cocoa', { age: 2, facing: 'west' }, [[0.0625, 0.1875, 0.25, 0.5625, 0.75, 0.75]]],
+  ['bamboo', {}, [[0.40625, 0, 0.40625, 0.59375, 1, 0.59375]]],
+  ['oak_fence', { north: false, south: false, east: false, west: false }, [[0.375, 0, 0.375, 0.625, 1.5, 0.625]]]
+]
+
+for (const [name, props, boxes] of boxCases) {
+  test(`boxes: ${name} ${JSON.stringify(props)}`, () => {
+    assert.deepEqual(boxesOf(stateId(name, props)), boxes)
+  })
+}
