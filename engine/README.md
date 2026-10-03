@@ -173,8 +173,10 @@ Extra fields on the result:
 - `swim`: `oxygen` (`{before, after}`, the air level when the call started and ended).
 - `dig`: `block` (name dug), `drops` (`[{id, name, count, pos}]`, the item
   entities that appeared within 2 blocks during up to 1 s after the break).
-- `place`: `block` (name placed). Buckets (`bucket`, `water_bucket`, `lava_bucket`) are used, not placed: `pos` is
-  the cell that receives the liquid (it must be air, else `occupied`, and have a solid neighbour, else `no-support`),
+- `place`: `block` (name placed). A cell holding fire, soul fire, grass (`short_grass`, `tall_grass`, `grass`) or a snow layer counts as free,
+  because the game replaces those; any other block is `occupied` (water and lava are replaced for block items as before). Buckets (`bucket`, `water_bucket`, `lava_bucket`) are used, not placed: `pos` is
+  the cell that receives the liquid (it must be air or a replaceable block, else `occupied`, and have a solid
+  neighbour, else `no-support`),
   or for an empty `bucket` the liquid cell to scoop (`missing` when it holds none). The body equips the bucket, looks
   at the supporting block (or the liquid), calls `activateItem`, and waits up to 1.5 s for the cell to change:
   `placed` (`block` is `water`, `lava` or `bucket`), else `{status: 'failed', reason: 'unchanged'}`.
@@ -718,7 +720,7 @@ after three the job emits a warn and ends.
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
 | `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source`; writes `:hungry` when nothing is found |
-| `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3 :offline-allowed true :offline-ms 300000 :player-radius 128}` | the night-unsafe condition, or a built `:shelter` here whose roof is still over the body | `:needs-bed-noted`, children `:sleep`, `:log-out`, `:dig-in`, `:wait` | writes `:shelter` (built, reopened); reads `:slept` |
+| `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3 :offline-allowed true :offline-ms 300000 :player-radius 128}` | the night-unsafe condition, or a built `:shelter` here whose roof is still over the body | `:needs-bed-noted`, `:sleep-failed`, children `:sleep`, `:log-out`, `:dig-in`, `:wait` | writes `:shelter` (built, reopened); reads `:slept` |
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` and its targets | writes `:shelter` (cap 10, 1 day) |
 | `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 300000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping | none | writes `:log-out` (cap 10, 1 day) |
 | `jobs.survival.recover-drops` | `{:margin 0 :danger-radius 8 :collect-radius 6}` | a `:died` with no newer `:recovered` | `:death-t` (the death it is about; a different death resets the rest), `:decided`, `:phase`, children `:go`, `:collect` | reads `:died`, `:respawned` (waits 2 s after a respawn before estimating); writes `:recovered` `{:decision :collected/:skip/:abandoned ...}` (cap 10, 1 day); emits info `:recover-drops.decided` with the decision and a `:text` |
@@ -803,7 +805,7 @@ measurement.
 The survival jobs pass against the fake only. What they assume about the real
 server and mineflayer, none of it checked live:
 
-- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returns `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` (see the `place` result above); not yet re-checked live.
+- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returned `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` and treats fire, grass and snow as free (see the `place` result above); not yet re-checked live.
 - Verified live: `unstick`'s pillar attempt cannot work. The server refuses
   `place` into the body's own cell ("the block is still air") because the body
   occupies it; without a jump primitive there is no way round that, and `place`

@@ -2,6 +2,7 @@
 // Engine and job tests drive it; it never talks to a server.
 
 import { lineClear } from './sight.mjs'
+import { isReplaceable } from './blocks.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -147,7 +148,7 @@ function defaultActs (s) {
         s.blocks.delete(key(pos))
         return { status: 'placed', block: 'bucket' }
       }
-      if (blockName(pos) !== 'air') return { status: 'occupied' }
+      if (blockName(pos) !== 'air' && !isReplaceable(blockName(pos))) return { status: 'occupied' }
       if (takeItem(s.inventory, item, 1) === 0) return { status: 'no-item' }
       if (item === 'water_bucket') { // pours water and leaves the empty bucket
         addItem(s.inventory, 'bucket', 1)

@@ -787,3 +787,26 @@ test('a call whose owner is cut while waiting for the reconnect rejects with cut
   await pending
   assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), [])
 })
+
+// ---- replaceable cells: the game replaces them, so place treats them as free ----
+
+const replaceable = ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow']
+
+for (const name of replaceable) {
+  test(`place puts a block into a ${name} cell`, async () => {
+    const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': name }, items: [{ name: 'cobblestone', count: 1, slot: 36 }] })
+    assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' }), { status: 'placed', block: 'cobblestone' })
+  })
+
+  test(`a water bucket pours onto a ${name} cell`, async () => {
+    const { p } = bucketRig({ blocks: { '1,64,0': name }, item: 'water_bucket', onActivate: blocks => { blocks['1,64,0'] = 'water' } })
+    assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'placed', block: 'water' })
+  })
+}
+
+test('place into a cell of a solid block, or a plant that is not replaceable, stays occupied', async () => {
+  for (const name of ['stone', 'oak_sapling']) {
+    const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': name }, items: [{ name: 'cobblestone', count: 1, slot: 36 }] })
+    assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })).status, 'occupied')
+  }
+})

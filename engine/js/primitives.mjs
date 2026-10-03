@@ -4,6 +4,7 @@ import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
 import { lineClear } from './sight.mjs'
+import { isReplaceable } from './blocks.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -330,7 +331,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const scoop = item.name === 'bucket'
     const there = bot.blockAt(vec(p))
     if (scoop && !(there && isLiquid(there.name))) return { status: 'missing' }
-    if (!scoop && there && !isAir(there.name)) return { status: 'occupied' }
+    if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied' }
     const aim = scoop ? there : supportFor(p)?.ref
     if (!aim) return { status: 'no-support' }
     if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
@@ -360,7 +361,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         return bucket ? useBucket(ctx, bucket, p) : { status: 'no-item' }
       }
       const there = bot.blockAt(vec(p))
-      if (there && !isAir(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied' }
+      if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied' }
       const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-item' }
       const support = supportFor(p)

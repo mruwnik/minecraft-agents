@@ -369,3 +369,13 @@ test('a cut ends the fake wait early and the body is back before the offline cal
   assert.equal(p.isOffline(), false)
   assert.deepEqual(seen, ['offline', 'online'])
 })
+
+for (const name of ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow']) {
+  test(`fake place treats a ${name} cell as free and replaces it, for a block and for a water bucket`, async () => {
+    const p = owned({ inventory: [{ name: 'dirt', count: 1 }, { name: 'water_bucket', count: 1 }], blocks: { '1,64,0': name, '2,64,0': name } })
+    assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'dirt' })).status, 'placed')
+    assert.equal(p.blockAt(at(1, 64, 0)).name, 'dirt')
+    assert.equal((await p.place('t1', { pos: at(2, 64, 0), item: 'water_bucket' })).status, 'placed')
+    assert.equal(p.blockAt(at(2, 64, 0)).name, 'water')
+  })
+}
