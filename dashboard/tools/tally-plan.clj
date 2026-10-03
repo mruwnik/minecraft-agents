@@ -1,5 +1,5 @@
 ;; Plan minus world against a column survey, with plan.shape's own functions, on the JVM:
-;;   cd dashboard && clojure -Sdeps '{:paths ["src"]}' -M tools/tally-plan.clj <blueprint-dir> <plan.edn> <survey.edn> ...
+;;   cd engine && clojure -Sdeps '{:paths ["src"]}' -M ../dashboard/tools/tally-plan.clj <blueprint-dir> <plan.edn> <survey.edn> ...
 ;; Prints the plan's answer counts (match missing wrong extra unknown), then each part's counts.
 ;; A survey file maps [x z] to {:y top-solid :ground :above :state :ground-state :stack [[y name state] ..]}, with a
 ;; header line ";; survey of <kind> <site>, ... plan origin y <y0>". :stack lists the non-air blocks of a y range that

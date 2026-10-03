@@ -1,5 +1,5 @@
 ;; Checks plan and blueprint files with plan.shape on the JVM, no shadow-cljs compile:
-;;   cd dashboard && clojure -Sdeps '{:paths ["src"]}' -M tools/check-plan.clj <blueprint-dir> <plan.edn> ...
+;;   cd engine && clojure -Sdeps '{:paths ["src"]}' -M ../dashboard/tools/check-plan.clj <blueprint-dir> <plan.edn> ...
 ;; Prints every problem (blueprints first), then per valid plan its cell and spot counts. Exits 1 on any problem.
 (require '[clojure.edn :as edn]
          '[clojure.java.io :as io]
