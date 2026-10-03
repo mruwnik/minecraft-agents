@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, mergeChat, parseEventLines, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, unsureWater as rawUnsureWater, parseWorldList, resolveWorld, scopeSnapshot, scopeChatSources, agentInWorld } from '../tools/dashboard/lib.mjs'
-import { mergeBodies, humanSightings, mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
+import { mergeBodies, humanSightings, mapPoints, fitPoints, isEmptyWorld, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects as rawPlanRects, cellColour, cellLabel, hitPlan, hitVillagePlace, planDiff as rawPlanDiff, cellExpectation, worldColour, worldLabel } from '../tools/dashboard/map.mjs'
 import { villageViews, attachVillageStatus } from '../tools/dashboard/villages.mjs'
 import { blueprintRow, layerCells, hoverText, legendRows, billRows, lintLines, blockColour, altColour, familyOf } from '../tools/dashboard/blueprint.mjs'
 import { parseBlueprint, resolve, bill, lint } from '../src/blueprint/format.mjs'
@@ -1108,3 +1108,32 @@ membership.forEach(([why, name, world, expected]) => test(`agentInWorld: ${why}`
   const agents = [{ name: 'Claude', world: 'main' }, { name: 'Free', world: null }]
   assert.equal(agentInWorld(agents, name, world), expected)
 }))
+
+// ---------------------------------------------------------------- what the map fits
+
+const upBody = { name: 'A', up: true, state: { pos: { x: 5, y: 64, z: 6 } } }
+const downBody = { name: 'B', up: false, state: null }
+const hut = { name: 'hut', x: 10, z: 20 }
+const zone = { name: 'z', x1: 1, z1: 2, x2: 3, z2: 4 }
+const human = { name: 'Steve', x: 7, y: 64, z: 8 }
+
+const fitCases = [
+  ['bodies scope with a body up fits bodies and humans only', { bodies: [upBody], places: [hut], zones: [zone], humans: [human] }, 'bodies', { points: [{ x: 5, z: 6 }, { x: 7, z: 8 }], pad: 96 }],
+  ['bodies scope with none up falls back to places and zones', { bodies: [downBody], places: [hut], zones: [zone], humans: [] }, 'bodies', { points: [{ x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }], pad: 24 }],
+  ['all scope fits everything', { bodies: [upBody], places: [hut], zones: [zone], humans: [] }, 'all', { points: [{ x: 5, z: 6 }, { x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }], pad: 24 }],
+  ['an empty world has no points', { bodies: [], places: [], zones: [], humans: [] }, 'bodies', { points: [], pad: 24 }]
+]
+for (const [name, world, scope, expected] of fitCases) {
+  test(`fitPoints: ${name}`, () => assert.deepEqual(fitPoints(world, scope), expected))
+}
+
+const emptyCases = [
+  ['nothing at all', { bodies: [], places: [], zones: [], humans: [] }, true],
+  ['only a body that is down', { bodies: [downBody], places: [], zones: [], humans: [] }, true],
+  ['a body up', { bodies: [upBody], places: [], zones: [], humans: [] }, false],
+  ['a place', { bodies: [], places: [hut], zones: [], humans: [] }, false],
+  ['a zone', { bodies: [], places: [], zones: [zone], humans: [] }, false]
+]
+for (const [name, world, expected] of emptyCases) {
+  test(`isEmptyWorld: ${name}`, () => assert.equal(isEmptyWorld(world), expected))
+}

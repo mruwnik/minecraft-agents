@@ -257,7 +257,7 @@
   </div>
 </div>
 <script type="module">
-import { mapPoints, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, hitVillagePlace, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
+import { fitPoints, isEmptyWorld, worldBounds, fitView, project, zoneRect, fitLabels, onCanvas, planRects, cellColour, cellLabel, hitPlan, hitVillagePlace, parsePlacePlan, planLevels, layerDiff, cellWorldBlock, planDiff, cellExpectation, worldColour, worldLabel } from './map.mjs'
 
 const el = id => document.getElementById(id)
 
@@ -314,9 +314,8 @@ const makeMap = name => {
   // The far corners of this world are 2000 blocks apart, and fitting all of them squeezes the huts into one blob:
   // the default fit is around the bodies themselves, with 96 blocks of ground round them.
   const refit = () => {
-    const wide = scope === 'all'
-    const points = mapPoints(world.bodies, wide ? world.places : [], wide ? world.zones : [], world.humans)
-    view = fitView(worldBounds(points, wide ? 24 : 96), size.w - 80, size.h - 80)
+    const { points, pad } = fitPoints(world, scope)
+    view = fitView(worldBounds(points, pad), size.w - 80, size.h - 80)
     if (!view) return
     view.originX -= 40 / view.scale
     view.originZ -= 40 / view.scale
@@ -451,7 +450,7 @@ const makeMap = name => {
     if (!view) {
       ctx.fillStyle = '#8b95a5'
       ctx.font = '12px ui-monospace, monospace'
-      ctx.fillText('no body is up and nothing is marked on the map yet', 20, 30)
+      ctx.fillText(isEmptyWorld(world) ? 'nothing here yet: no body is up and no places or zones are marked' : 'nothing to fit on the map', 20, 30)
       return
     }
     drawGrid()

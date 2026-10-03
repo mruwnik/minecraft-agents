@@ -42,6 +42,17 @@ export const mapPoints = (bodies, places, zones, humans) => [
   ...humans.map(h => ({ x: h.x, z: h.z }))
 ]
 
+// The far corners of a world can be 2000 blocks apart, so the default fit is around the bodies; with no body up
+// there is nothing to centre on, so fall back to everything marked on the map.
+export const fitPoints = (world, scope) => {
+  const everything = { points: mapPoints(world.bodies, world.places, world.zones, world.humans), pad: 24 }
+  if (scope === 'all') return everything
+  const near = mapPoints(world.bodies, [], [], world.humans)
+  return near.length ? { points: near, pad: 96 } : everything
+}
+
+export const isEmptyWorld = world => !world.bodies.some(b => b.up) && !world.places.length && !world.zones.length
+
 export const worldBounds = (points, pad = 16) => {
   if (!points.length) return null
   const xs = points.map(p => p.x)
