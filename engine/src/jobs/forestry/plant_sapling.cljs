@@ -7,7 +7,30 @@
 
 (def args
   {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :default nil}
-   :species {:doc "sapling species; any when nil" :default nil}})
+   :species {:doc "sapling species; any when nil" :default nil}
+   :bone-meal {:doc "bone meal uses after planting, 0 for none" :default 0}})
+
+(defn sapling-at?
+  "True when the block at pos ends in _sapling."
+  [p pos]
+  (boolean (some-> (u/block-name p pos) (.endsWith "_sapling"))))
+
+(defn has-meal? [p]
+  (some #(= "bone_meal" (:name %)) (u/inventory p)))
+
+(defn ^:async meal-round
+  "One bone meal use on the planted sapling; done when it grew, the uses are
+  spent or no bone meal is carried."
+  [c {:keys [pos left]}]
+  (let [p (:primitives c)]
+    (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
+      (do (ctx/update-mem! c dissoc :meal) :done)
+      (let [w (await (u/walk-near! c pos 3))]
+        (case w
+          :partial :continue
+          (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
+              (ctx/update-mem! c update-in [:meal :left] dec)
+              :continue))))))
 
 (defn check
   "Nothing to plant (the round finishes), or a matching sapling is carried
@@ -16,6 +39,7 @@
   (let [p (:primitives c)
         t (target-of (debts c) (:args c))]
     (cond
+      (:meal (ctx/mem c)) true
       (nil? t) true
       (nil? (sapling-for (u/inventory p) (:species t))) false
       (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) false
@@ -28,8 +52,10 @@
   to plant."
   [c]
   (let [t (target-of (debts c) (:args c))
-        sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))]
+        sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
+        meal (:meal (ctx/mem c))]
     (cond
+      meal (await (meal-round c meal))
       (nil? t) :done
       (nil? sapling) :continue
       :else
@@ -40,6 +66,9 @@
           (do (await (ctx/act c :equip (clj->js {:item sapling})))
               (let [r (await (ctx/act c :place (clj->js {:pos (:pos t) :item sapling})))]
                 (if (#{"placed" "occupied"} (.-status r))
-                  (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
-                      :done)
+                  (let [n (:bone-meal (:args c))]
+                    (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
+                    (if (and (pos? n) (has-meal? (:primitives c)))
+                      (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :continue)
+                      :done))
                   (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))

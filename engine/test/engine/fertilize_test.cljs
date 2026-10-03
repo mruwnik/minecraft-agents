@@ -1,0 +1,122 @@
+(ns engine.fertilize-test
+  "jobs.farm.fertilize against the fake world."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.registry :as registry]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]))
+
+(defn setup [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)
+        p (tu/fake world)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(defn ^:async run-until-empty [eng n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (await (core/tick! eng))
+          (recur (inc i))))))
+
+(defn ^:async child-outcome
+  [eng job args n]
+  (let [out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
+
+(defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
+(defn age [p k] (.get (.. p -world -state -ages) k))
+
+(def job 'jobs.farm.fertilize)
+(def meal [{:name "bone_meal" :count 20}])
+(def two-wheat {:inventory meal
+                :blocks {"2,64,0" "wheat" "3,64,1" "wheat"}
+                :ages {"2,64,0" 3 "3,64,1" 4}})
+
+(deftest fertilize-ripens-every-unripe-crop-then-reports
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-wheat)
+              r (await (child-outcome eng job {} 20))]
+          (is (= 7 (age p "2,64,0")))
+          (is (= 7 (age p "3,64,1")))
+          (is (= (count (calls p "useOn")) (:used r)))
+          (is (= 4 (:used r))))))))
+
+(deftest fertilize-never-targets-a-ripe-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat" "3,64,1" "beetroots"}
+                                      :ages {"2,64,0" 7 "3,64,1" 3}})]
+          (is (= {:used 0} (await (child-outcome eng job {} 5))))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest fertilize-max-stops-after-that-many-uses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-wheat)]
+          (is (= {:used 1} (await (child-outcome eng job {:max 1} 10))))
+          (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest fertilize-waits-without-bone-meal-while-crops-are-unripe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
+          (core/submit! eng (list job {}) {})
+          (is (nil? (core/tick! eng)) "no bone meal: not yet")
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest fertilize-refuses-a-crop-that-stays-unchanged-and-finishes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
+          (.override (.-world p) "useOn"
+                     (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
+          (is (= {:used 0} (await (child-outcome eng job {} 10))))
+          (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest fertilize-at-touches-only-that-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-wheat)
+              r (await (child-outcome eng job {:at {:x 2 :y 64 :z 0}} 20))]
+          (is (= 7 (age p "2,64,0")))
+          (is (= 4 (age p "3,64,1")))
+          (is (= 2 (:used r))))))))
+
+(deftest fertilize-finishes-when-the-bone-meal-runs-out-after-some-was-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc two-wheat :inventory [{:name "bone_meal" :count 1}]))]
+          (is (= {:used 1} (await (child-outcome eng job {} 10))))
+          (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest fertilize-center-moves-the-radius-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory meal
+                                      :blocks {"30,64,0" "wheat" "2,64,0" "wheat"}
+                                      :ages {"30,64,0" 5 "2,64,0" 5}})]
+          (await (child-outcome eng job {:center {:x 30 :y 64 :z 2} :radius 4} 20))
+          (is (= 7 (age p "30,64,0")) "near the centre, far from the body")
+          (is (= 5 (age p "2,64,0")) "near the body, outside the centre's radius"))))))

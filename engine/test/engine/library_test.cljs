@@ -349,6 +349,55 @@
           (await (run-until-empty eng 4))
           (is (= "birch_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5})))))))))
 
+(defn plant-meal-world [meal]
+  {:inventory (cond-> [{:name "oak_sapling" :count 1}] meal (conj {:name "bone_meal" :count meal}))})
+
+(deftest plant-sapling-bone-meal-0-uses-none-and-finishes-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (plant-meal-world 5))]
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5}}) {})
+          (is (= 1 (await (run-until-empty eng 5))))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest plant-sapling-bone-meal-uses-the-count-then-finishes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (plant-meal-world 5))]
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :bone-meal 3}) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (:list (core/state eng))))
+          (is (= 3 (count (calls p "useOn"))))
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5})))))))))
+
+(deftest plant-sapling-bone-meal-stops-when-the-sapling_grew
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (plant-meal-world 5))]
+          (.override (.-world p) "useOn"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (.set (.. p -world -state -blocks) "5,64,5" "oak_log")
+                         r)))
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :bone-meal 3}) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest plant-sapling-bone-meal-without-bone-meal-is-done-after-planting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (plant-meal-world nil))]
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :bone-meal 3}) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (:list (core/state eng))))
+          (is (empty? (calls p "useOn")))
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5})))))))))
+
 ;; ------------------------------------------------------------------ deposit
 
 (def chest-world
