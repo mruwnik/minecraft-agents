@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildCommand, targetsFromEnv } from '../tools/rcon-test.mjs'
 
+const HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'witch', 'drowned', 'husk', 'stray', 'zombie_villager', 'phantom', 'slime', 'pillager', 'vindicator']
+
 const T = 'ClaudeProbe'
 
 const allowed = [
@@ -28,7 +30,7 @@ const allowed = [
   [['fire', T], [`damage ${T} 1 minecraft:on_fire`]],
   [['summon', 'zombie', '1', '64', '2'], ['summon minecraft:zombie 1 64 2']],
   [['summon', 'cow', '1', '64', '2', '3'], Array(3).fill('summon minecraft:cow 1 64 2')],
-  [['kill-mobs', '0', '64', '0', '16'], ['kill @e[type=!player,type=!item,x=0,y=64,z=0,distance=..16]']],
+  [['kill-mobs', '0', '64', '0', '16'], HOSTILE.map(t => `kill @e[type=minecraft:${t},x=0,y=64,z=0,distance=..16]`)],
   [['setblock', '1', '2', '3', 'stone'], ['setblock 1 2 3 minecraft:stone']],
   [['fill', '0', '0', '0', '7', '7', '6', 'glass'], ['fill 0 0 0 7 7 6 minecraft:glass']],
   [['fill', '5', '5', '5', '0', '0', '0', 'air'], ['fill 5 5 5 0 0 0 minecraft:air']]
@@ -114,3 +116,10 @@ test('default targets include the probe bodies', () => {
   assert.deepEqual(['ProbeWater', 'ProbeFight', 'ProbeNight', 'ProbeStuck'].map(n => buildCommand(['tp', n, '1', '2', '3'], { targets })),
     [['tp ProbeWater 1 2 3'], ['tp ProbeFight 1 2 3'], ['tp ProbeNight 1 2 3'], ['tp ProbeStuck 1 2 3']])
 })
+
+for (const type of ['villager', 'wolf', 'cat', 'item_frame', 'armor_stand', 'player', 'item']) {
+  test(`kill-mobs never selects ${type}`, () => {
+    const types = buildCommand(['kill-mobs', '0', '64', '0', '16'], { targets: [T] }).map(c => c.match(/type=minecraft:(\w+)/)[1])
+    assert.equal(types.includes(type), false)
+  })
+}

@@ -39,6 +39,9 @@ const MAX_AMPLIFIER = 4
 const MAX_DAMAGE = 20
 const MAX_SUMMON = 5
 const MAX_RADIUS = 32
+// kill-mobs targets only these: a selector cannot or-together types, so it is one kill command per type, and
+// villagers, pets, item frames and players are never in the list
+const HOSTILE_MOBS = ['zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'witch', 'drowned', 'husk', 'stray', 'zombie_villager', 'phantom', 'slime', 'pillager', 'vindicator']
 const MAX_FILL_VOLUME = 500
 
 export function targetsFromEnv (env) {
@@ -127,7 +130,7 @@ const builders = {
     const [cx, cy, cz] = coords([x, y, z])
     const r = number(radius, 'radius')
     if (!(Number(r) > 0 && Number(r) <= MAX_RADIUS)) throw new Error(`radius must be positive and at most ${MAX_RADIUS}, got ${r}`)
-    return [`kill @e[type=!player,type=!item,x=${cx},y=${cy},z=${cz},distance=..${r}]`]
+    return HOSTILE_MOBS.map(type => `kill @e[type=minecraft:${type},x=${cx},y=${cy},z=${cz},distance=..${r}]`)
   }],
   setblock: [[4, 4], '<x> <y> <z> <block>', ([x, y, z, block]) =>
     [`setblock ${coords([x, y, z]).join(' ')} minecraft:${oneOf(block, BLOCKS, 'block')}`]],
