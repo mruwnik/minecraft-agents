@@ -21,13 +21,15 @@
 (def hostile-radius 8)
 
 (def hostile-near
-  "Holds when a hostile is within :radius (args, default 8). The retreat
-  job's own :radius (default 8) is set in the entry's :job spec."
+  "Holds when a hostile mob is within :radius (args, default 8). Players and
+  passive mobs are other entity kinds and never count. Sensing has no line of
+  sight, so a hostile behind a wall counts. The job's own :radius (default 8)
+  is set in the entry's :job spec."
   {:name :hostile-near
    :when (fn [world _memory args]
            (let [radius (:radius args hostile-radius)]
              (pos? (.-length (.entities world #js {:radius radius :kind "hostile" :max 1})))))
-   :job '(jobs.survival.retreat)
+   :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius}
    :persistence :cooldown
    :cooldown-s 5})

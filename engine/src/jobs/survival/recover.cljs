@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
-            [jobs.survival.retreat :as retreat]))
+            [engine.jobs.combat :as combat]))
 
 (def doc
   "A hurt body flees and heals; it does not fight. Starts when health is
@@ -77,7 +77,7 @@
 
 (defn ^:async round [c]
   (let [{:keys [sight healed]} (:args c)
-        threat (first (retreat/hostiles (:primitives c) sight))]
+        threat (first (combat/hostiles (:primitives c) sight))]
     (cond
       (>= (health-of c) healed) :done
       :else

@@ -191,6 +191,12 @@ test('player entities default to awake with a username; mobs get neither', () =>
   assert.deepEqual([dan.username, dan.sleeping, sue.sleeping, creeper.creeper, 'sleeping' in creeper], ['Dan', false, true, true, false])
 })
 
+test('a creeper entity carries creeper: true without being told; other hostiles do not', () => {
+  const p = createFake({ entities: [{ id: 1, name: 'creeper', kind: 'hostile', pos: at(1, 64, 0) }, { id: 2, name: 'zombie', kind: 'hostile', pos: at(2, 64, 0) }] })
+  const [creeper, zombie] = p.entities({})
+  assert.deepEqual([creeper.creeper, 'creeper' in zombie], [true, false])
+})
+
 test('offline flips the flag, emits offline and online, and resolves ok after the wait', async () => {
   const p = owned({ offlineScale: 0.001 })
   const seen = []
