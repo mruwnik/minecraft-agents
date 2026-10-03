@@ -1,0 +1,3 @@
+;; batch-block: compost live case: feed the composter at 5003,100,4997 wheat seeds until it fills, take the bone meal
+{:register []
+ :queue [(jobs.farm.compost {:items ["wheat_seeds"]})]}
