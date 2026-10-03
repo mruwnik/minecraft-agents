@@ -36,17 +36,13 @@
 
 (defn chat-panel []
   (let [open? @(rf/subscribe [:chat-open?])]
-    (if-not open?
-      [:aside#chat.closed
-       [:button.chat-tab {:title "show chat" :on-click #(rf/dispatch [:toggle-chat])} "chat ◂"]]
+    (when open?
       (let [all @(rf/subscribe [:chat])
             visible @(rf/subscribe [:visible-chat])]
         [:aside#chat
          [:div#chatbar
           [:h2 "chat"]
-          [:span.dim (if (= (count all) (count visible)) (str (count all)) (str (count visible) " of " (count all)))]
-          [:span.spacer]
-          [:button {:title "hide chat" :on-click #(rf/dispatch [:toggle-chat])} "hide ▸"]]
+          [:span.dim (if (= (count all) (count visible)) (str (count all)) (str (count visible) " of " (count all)))]]
          [:div#chattools
           [:input#chatfilter {:type "search" :placeholder "filter by name or text" :spell-check false
                               :value @(rf/subscribe [:chat-filter])

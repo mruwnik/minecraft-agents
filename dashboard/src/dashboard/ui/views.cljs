@@ -1,12 +1,13 @@
 (ns dashboard.ui.views
-  "The shell: left rail, top bar with live counts, the page, and the chat panel on the right."
+  "The shell: left rail, top bar with live counts, the page, the chat panel, and the toggle bar on the right."
   (:require [re-frame.core :as rf]
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.chat :as chat]
             [dashboard.ui.detail :as detail]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.map :as map-ui]
-            [dashboard.ui.mappanels :as mappanels]))
+            [dashboard.ui.mappanels :as mappanels]
+            [dashboard.ui.rail :as rail]))
 
 (def rail-items
   [[:bodies "/" "Bodies"] [:map "/map" "Map"] [:plans "/plans" "Plans"] [:villages "/villages" "Villages"]
@@ -61,5 +62,6 @@
     [topbar page]
     [:div#work
      [:div#content content]
-     [chat/chat-panel]]]
+     [chat/chat-panel]
+     [rail/rail-bar page]]]
    [detail/modal]])

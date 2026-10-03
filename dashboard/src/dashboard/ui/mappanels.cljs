@@ -1,28 +1,23 @@
 (ns dashboard.ui.mappanels
-  "The two lists beside the map, each hideable like the chat: the places and the players."
+  "The two lists beside the map, each shown or hidden from the right-hand bar: the places and the players."
   (:require [re-frame.core :as rf]
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.cards :as cards]))
 
 (defn side-panel
-  "A panel that folds into a narrow tab; its open state lives in the db like the chat's."
-  [{:keys [id title count open? toggle]} & content]
-  (if-not open?
-    [:aside.closed {:id id}
-     [:button.chat-tab {:title (str "show " title) :on-click #(rf/dispatch [toggle])} (str title " ◂")]]
+  "A panel shown or hidden by its toggle on the right-hand bar (dashboard.ui.rail); nothing when hidden."
+  [{:keys [id title count open?]} & content]
+  (when open?
     [:aside {:id id}
      [:section
-      [:div.sidebar
-       [:h2 (str title " (" count ")")]
-       [:span.spacer]
-       [:button {:title (str "hide " title) :on-click #(rf/dispatch [toggle])} "hide ▸"]]
+      [:div.sidebar [:h2 (str title " (" count ")")]]
       (into [:div.sidebody] content)]]))
 
 (defn places-panel []
   (let [places @(rf/subscribe [:places])
         selected @(rf/subscribe [:selected])]
     (into [side-panel {:id "placespanel" :title "places" :count (count places)
-                       :open? @(rf/subscribe [:places-open?]) :toggle :toggle-places}]
+                       :open? @(rf/subscribe [:places-open?])}]
           (map #(cards/place-row selected %))
           places)))
 
@@ -38,6 +33,6 @@
   (let [rows @(rf/subscribe [:player-rows])
         selected @(rf/subscribe [:selected])]
     (into [side-panel {:id "playerspanel" :title "players" :count (count rows)
-                       :open? @(rf/subscribe [:players-open?]) :toggle :toggle-players}]
+                       :open? @(rf/subscribe [:players-open?])}]
           (map #(player-row selected %))
           rows)))
