@@ -16,9 +16,10 @@
   pillar if possible, else dig. Each attempt that did nothing useful records
   why in job memory (:reasons). After every attempt it
   tries a moveTo toward the stored goal itself, capped at hop-blocks (3) along
-  the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If that ends arrived
-  or partial and moves the body more than :min-move blocks the spell is over
-  (:done); otherwise :continue. After :max-attempts attempts it emits the warn
+  the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If
+  that did not move the body more than :min-move blocks from where it stood
+  (status is ignored), it retries once uncapped (range 1, :timeoutS 6). If
+  either moved it that far the spell is over (:done); otherwise :continue. After :max-attempts attempts it emits the warn
   event unstick.failed with the position, :reasons and a :text naming them, writes a :stuck memory entry (cap 10,
   ttl 1 hour) and ends so the list resumes.
 
@@ -44,6 +45,8 @@
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
 (def hop-blocks 3)
+
+(def retry-timeout-s 6)
 
 (def open-names #{"air" "cave_air" "void_air"})
 
@@ -214,14 +217,18 @@
           :else (str "pillar: " (or (.-reason r) status)))))))
 
 (defn ^:async hop!
-  "One moveTo toward the stored goal, capped at hop-blocks. True when it ended
-  arrived or partial and the body moved more than min-move blocks."
+  "A moveTo toward the stored goal, capped at hop-blocks; when that does not
+  succeed, one uncapped retry with :timeoutS retry-timeout-s. Success is
+  displacement alone: the body ended more than min-move blocks from where it
+  stood before, whatever the status."
   [c min-move]
   (let [before (u/self-pos c)]
     (when-let [goal (:goal (ctx/mem c))]
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks})))]
-        (and (contains? stuck/ok-statuses (.-status r))
-             (> (u/dist before (u/self-pos c)) min-move))))))
+      (letfn [(moved? [] (> (u/dist before (u/self-pos c)) min-move))]
+        (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks})))
+        (or (moved?)
+            (do (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))
+                (moved?)))))))
 
 (defn give-up! [c attempts]
   (let [pos (u/self-pos c)

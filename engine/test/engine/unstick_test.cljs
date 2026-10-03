@@ -192,8 +192,8 @@
           (core/submit! eng '(jobs.maintenance.unstick) {})
           (await (core/tick! eng))
           (is (= [] (calls p "dig") (calls p "place")) "attempt 1 only moves")
-          (is (= [{:pos goal :range 1 :maxDistance 3}] (call-args p "moveTo"))
-              "no free cell behind in a pit, so only the capped moveTo toward the goal")
+          (is (= [{:pos goal :range 1 :maxDistance 3} {:pos goal :range 1 :timeoutS 6}] (call-args p "moveTo"))
+              "no free cell behind in a pit, so the capped moveTo toward the goal, then the uncapped retry")
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))
           (is (= [{:item "cobblestone" :count 2}] (call-args p "jumpPlace")) "attempt 2 pillars with jumpPlace")
@@ -315,12 +315,12 @@
 (def roofed-pit (merge deep-pit {"5,66,0" "stone"}))
 
 (defn block-first-moveTo!
-  "Make the first moveTo of the fake (attempt 1's hop) fail, later ones real."
+  "Make the first two moveTos of the fake (attempt 1's capped hop and its uncapped retry) fail, later ones real."
   [p]
   (let [n (atom 0)]
     (.override (.-world p) "moveTo"
                (fn ^:async f [token args impl]
-                 (if (<= (swap! n inc) 1)
+                 (if (<= (swap! n inc) 2)
                    #js {:status "blocked" :pos (.-pos (.self p)) :distance 5}
                    (await (impl token args)))))))
 
@@ -398,3 +398,64 @@
         (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks ground :inventory [{:name "dirt" :count 4}]})]
           (await (run-attempts! eng p 5 false))
           (is (= [] (calls p "jumpPlace"))))))))
+
+;; ---------------------------------------------------------------- hop judged by displacement
+
+(def far-goal {:x 11 :y 64 :z 0})
+
+(defn far-bad-move [] {:from at5 :to at5 :status "blocked" :target far-goal})
+
+(defn walled-in-setup []
+  (setup {:self {:pos at5} :blocks (merge pit {"5,66,0" "stone"})}))
+
+(defn moved-to!
+  "Make every moveTo of the fake move the body to x, then report blocked."
+  [p x]
+  (.override (.-world p) "moveTo"
+             (fn ^:async f [token args impl]
+               (await (impl token #js {:pos #js {:x x :y 64 :z 0} :range 0}))
+               #js {:status "blocked" :pos (.-pos (.self p)) :distance 5})))
+
+(defn ^:async start-spell! [eng]
+  (seed-moved! eng (repeat 4 (far-bad-move)))
+  (core/submit! eng '(jobs.maintenance.unstick) {})
+  (await (core/tick! eng)))
+
+(deftest unstick-retries-uncapped-when-the-capped-point-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (walled-in-setup)]
+          (.override (.-world p) "moveTo"
+                     (fn ^:async f [token args impl]
+                       (cond
+                         (.-maxDistance args) #js {:status "blocked" :pos (.-pos (.self p)) :distance 6}
+                         (seq (calls p "dig")) (await (impl token #js {:pos (clj->js far-goal) :range 1}))
+                         :else #js {:status "blocked" :pos (.-pos (.self p)) :distance 6})))
+          (await (start-spell! eng))
+          (is (= ["j1"] (:list (core/state eng))) "attempt 1: capped and uncapped both blocked, still stuck")
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "attempt 2 dug the door, the uncapped moveTo walked out")
+          (is (= [{:pos far-goal :range 1 :maxDistance 3} {:pos far-goal :range 1 :timeoutS 6}
+                  {:pos far-goal :range 1 :maxDistance 3} {:pos far-goal :range 1 :timeoutS 6}]
+                 (call-args p "moveTo")))
+          (is (= [] (calls p "jumpPlace")))
+          (is (not-any? #(= :unstick.failed (:kind %)) @seen)))))))
+
+(deftest unstick-counts-displacement-not-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (walled-in-setup)]
+          (moved-to! p 7)
+          (await (start-spell! eng))
+          (is (= [] (:list (core/state eng))) "blocked but 2 blocks from the stuck spot: done"))))))
+
+(deftest unstick-does-not-count-a-short-move-as-success
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (walled-in-setup)]
+          (moved-to! p 6)
+          (await (start-spell! eng))
+          (is (= ["j1"] (:list (core/state eng))) "1 block from the stuck spot is under :min-move"))))))
