@@ -1,7 +1,7 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
 ;; order, most urgent first: air, fire, hostiles, health, food, night, being
-;; stuck, then a death's drops. Between reflexes the body looks around, one
-;; look per round, so it visibly idles. A reflex job gets one chance: when its
+;; stuck, then a death's drops, then a full inventory. Between reflexes the
+;; body looks around, one look per round, so it visibly idles. A reflex job gets one chance: when its
 ;; round declines or is done it is dropped, and the trigger fires it again once
 ;; its cooldown (counted from the job ending) has passed. Hostiles sit above
 ;; health: respond-to-hostile already flees when hurt and fights only when
@@ -22,5 +22,6 @@
              :job (jobs.maintenance.unstick)}
             {:trigger :died :persistence :cooldown :cooldown-s 30
              :job (jobs.survival.recover-drops {:collect-radius 6})}
-            {:trigger :inventory-nearly-full}]
+            {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
+             :job (jobs.storage.make-room {:free 4 :chest-range 32})}]
  :queue [(repeat (jobs.movement.look-around))]}

@@ -4,6 +4,7 @@
   register."
   (:require [engine.memory :as mem]
             [engine.jobs.combat :as combat]
+            [engine.jobs.util :as u]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
             [engine.triggers.hungry :as hungry]
@@ -47,19 +48,21 @@
    :persistence :cooldown
    :cooldown-s 5})
 
-(def nearly-full-stacks 30)
+(def nearly-full-free 2)
 
 (def inventory-nearly-full
-  "Holds when at least :stacks (args, default 30) stacks are carried and a
-  chest is known."
+  "Holds when at most :free (args, default 2) of the 36 main and hotbar slots
+  are empty. No chest is needed: make-room puts things in a known chest when
+  there is one and tosses the least valuable stacks when there is not. A
+  cooldown of 120 s makes a body with nothing it may toss not retry
+  every tick."
   {:name :inventory-nearly-full
-   :when (fn [world memory args]
-           (and (>= (.-length (.-inventory (.self world))) (:stacks args nearly-full-stacks))
-                (some? (mem/place memory :chest))))
-   :job '(jobs.storage.deposit)
-   :args {:stacks nearly-full-stacks}
+   :when (fn [world _memory args]
+           (<= (u/free-slots world) (:free args nearly-full-free)))
+   :job '(jobs.storage.make-room)
+   :args {:free nearly-full-free}
    :persistence :cooldown
-   :cooldown-s 60})
+   :cooldown-s 120})
 
 (def default-interval-s 60)
 

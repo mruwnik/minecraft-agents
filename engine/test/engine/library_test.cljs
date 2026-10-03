@@ -1,6 +1,6 @@
 (ns engine.library-test
   "The job and trigger library end to end against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             ["fs" :as fs]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -347,6 +347,51 @@
           (is (= [] (:list (core/state eng))))
           (is (some #(= :chest_unusable (:kind %)) @seen)))))))
 
+(deftest deposit-keep-leaves-exactly-the-kept-count-across-stacks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 40} {:name "bread" :count 2} {:name "oak_log" :count 30}]
+                                      :containers {"10,64,0" []}})]
+          (core/submit! eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :items ["oak_log"] :keep {"oak_log" 16}}) {})
+          (await (run-until-empty eng 8))
+          (is (= {"oak_log" 16 "bread" 2} (inv p)))
+          (is (= [{:name "oak_log" :count 54}]
+                 (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true))))))))
+
+(deftest deposit-keep-at-or-above-the-carried-total-puts-nothing-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup chest-world)
+              result (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :keep {"oak_log" 5 "bread" 9}} 4))]
+          (is (zero? (count (calls p "transfer"))))
+          (is (= {:gave-up false} result)))))))
+
+(deftest deposit-reports-that-it-gave-nothing-up-when-it-ends-empty
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup chest-world)]
+          (is (= {:gave-up false} (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)))))))))
+
+(deftest deposit-reports-the-reason-when-it-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup chest-world)]
+          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
+          (is (= {:gave-up true :reason "full"}
+                 (select-keys (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)) [:gave-up :reason]))))))))
+
+(deftest deposit-reports-an-unreachable-chest-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc chest-world :unreachable ["10,64,0"]))]
+          (is (= {:gave-up true :reason "unreachable"}
+                 (select-keys (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)) [:gave-up :reason]))))))))
+
 ;; ------------------------------------------------------------- harvest-wood
 
 (deftest harvest-wood-composes-the-three-children
@@ -429,17 +474,17 @@
           (await (core/tick! eng))
           (is (= 1 (count (calls p "sleep")))))))))
 
-(deftest inventory-nearly-full-fires-deposit-once-a-chest-is-known
+(defn junk-stacks [n] (mapv (fn [i] {:name (str "item_" i) :count 1}) (range n)))
+
+(deftest inventory-nearly-full-fires-make-room-with-no-chest-known
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stacks (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 30))
-              {:keys [eng p]} (setup {:inventory stacks :containers {"10,64,0" []}})]
+        (let [{:keys [eng p]} (setup {:inventory (junk-stacks 34)})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :inventory-nearly-full}]}"))
-          (is (nil? (core/tick! eng)) "no chest known: does not fire")
-          (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "transfer")))))))))
+          (is (pos? (count (calls p "toss"))) "no chest: it tosses junk")
+          (is (zero? (count (calls p "transfer")))))))))
 
 ;; ----------------------------------------------------------------- scenario
 
@@ -587,11 +632,17 @@
   (is (false? (trigger-holds triggers/health-low {:self {:health 10}} {:health 8})))
   (is (true? (trigger-holds triggers/health-low {:self {:health 10}} {:health 12}))))
 
-(deftest inventory-nearly-full-reads-its-stack-count-from-args
-  (let [world {:inventory (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 5))}
-        memory (view-with :chest 1 {:pos {:x 1 :y 64 :z 1}} 1000000)]
-    (is (false? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 30})))
-    (is (true? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 5})))))
+(deftest inventory-nearly-full-holds-when-few-slots-are-free
+  (are [stacks free expected] (= expected (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks stacks)} {:free free}))
+    33 2 false
+    34 2 true
+    36 2 true
+    35 0 false
+    36 0 true))
+
+(deftest inventory-nearly-full-defaults-to-two-free-slots
+  (is (false? (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks 33)} {})))
+  (is (true? (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks 34)} {}))))
 
 (deftest a-scenario-radius-reaches-the-trigger
   (async done

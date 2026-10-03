@@ -133,7 +133,7 @@
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 2 :burning 2 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :stuck 60 :died 30})
+  {:suffocating 2 :burning 2 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :stuck 60 :died 30 :inventory-nearly-full 120})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})

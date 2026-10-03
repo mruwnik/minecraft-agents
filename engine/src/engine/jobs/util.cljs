@@ -28,6 +28,15 @@
   (mapv (fn [i] {:name (.-name i) :count (.-count i) :slot (.-slot i)})
         (array-seq (.-inventory (.self p)))))
 
+(def inventory-slots
+  "Main and hotbar slots: what the inventory list holds (armour and off-hand are not in it)."
+  36)
+
+(defn free-slots
+  "Empty main and hotbar slots of primitives p, at least 0."
+  [p]
+  (max 0 (- inventory-slots (.-length (.-inventory (.self p))))))
+
 (defn ^:async walk-near!
   "Walk until within range of pos, skipping the walk when already there.
   Resolves to :there, :partial (closer, call again) or :blocked."

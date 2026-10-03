@@ -493,9 +493,9 @@ read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
   last. `:wt` is the body's `timeOfDay` when written. No provenance field.
 - **Kinds** are an open vocabulary keyed by what the observation is about:
   `:hurt`, `:died`, `:chat`, `:restart`, `:bed`, `:chest`, `:looked`,
-  `:moved`, `:forestry/replant`, `:job/j7`. The survival jobs write `:breathe`,
+  `:moved`, `:picked-up`, `:forestry/replant`, `:job/j7`. The survival jobs write `:breathe`,
   `:extinguish`, `:hazard`, `:hostile`, `:fed`, `:hungry`, `:slept`,
-  `:shelter`, `:log-out`, `:stuck` and `:recovered`, and read `:home` and
+  `:shelter`, `:log-out`, `:stuck`, `:recovered` and `:chest-unusable` (make-room: a chest that failed it), and read `:home` and
   `:food-source`, which nothing writes yet (an agent or a later job will).
 - **Policy** `{:cap n :ttl ms}` is passed with a write and stored beside the
   kind. A new kind written without one gets the default, cap 50 and ttl one
@@ -587,6 +587,7 @@ down.
   | night-unsafe | 10 | keep trying through the night |
   | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
+  | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
 - Agent-only edits (functions in `engine.core`): `register-reflex!`,
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
   (`{:above id}` or `{:below id}`, with TTL), `clear-change!`. Each property
@@ -733,7 +734,8 @@ after three the job emits a warn and ends.
 | `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items, `:collected` count | none; hands over `{:collected n}` |
 | `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
 | `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
-| `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
+| `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil :keep {}}` | a chest is known (args or `:chest`) | `:failures` | reads `:chest`; hands over `{:gave-up false}` when nothing is left, `{:gave-up true :reason status}` when failures used it up (`"unreachable"` for a blocked walk) |
+| `jobs.storage.make-room` | `{:free 4 :chest-range 32 :keep-food 16 :keep-blocks 64 :toss-below 1 :swap-radius 8 :away 4 :max-rounds 40}` | fewer than `:free` slots free | `:rounds`, `:tossed-at`, `:toss-dir`, `:walked`, `:acted`, `:swap-id` (with `:swap-item`, `:swap-worth`), child `:deposit` | reads `:chest`, `:chest-unusable`, `:picked-up`; writes `:chest-unusable` `{:pos :reason}` (cap 5, 10 min); emits info `make-room.tossed`, `.swapped`, `.done`, `.declined`, warn `make-room.stalled`, `make-room.toss-failed` |
 | `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 40 :eat-gap 12 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
 | `jobs.survival.sleep` | `{:bed-radius}` | night, a `:bed` within `:bed-radius`, and no unexpired `:bed-unreachable` at that pos | child `:go` | reads `:bed`, `:bed-unreachable`; writes `:slept`, retracts a missing `:bed` (not when its chunk is unloaded: retried, warns `bed_unloaded`), writes `:bed-unreachable {:pos}` (cap 5, 10 min) when the bed stays unreachable after three tries |
 | `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10 :shore-radius 6}` | drowning (swims up, or walks sideways to a column with air, then swims toward the nearest land within `:shore-radius`), enclosed (the suffocating condition: a sideways step first, else dig), or surfaced and still in water | `:noted`, `:surfaced`, `:side-tried`, `:failures` | writes `:breathe` (cap 20, 1 h) |
@@ -767,7 +769,39 @@ after three the job emits a warn and ends.
   plus shears, bow, crossbow, fishing_rod, flint_and_steel, shield, trident),
   one stack per round. Saplings included: on a shared list with
   `:harvest-wood` it can take the sapling the replant needs. Warn kind
-  `chest_unusable`.
+  `chest_unusable`. `:keep` (`{item-name count}`) leaves at least that many of
+  a name carried: the first stack of a wanted name whose carried total is over
+  its keep is moved, cut to `total - keep` when it is bigger. The job hands its
+  parent `{:gave-up false}` when nothing was left to put away and `{:gave-up
+  true :reason r}` when the failed attempts ended it (`r` the transfer status
+  `full`, `missing`, `unreachable`, ... or `"unreachable"` for a walk that
+  could not get there).
+- `:make-room` is the `:inventory-nearly-full` reflex job. Every round first
+  asks whether anything is left to do, and ends `:done` when at least `:free`
+  slots are free. Protection: tools, weapons and armour (deposit's `tool?`)
+  and the three buckets are never put away or thrown. Food (`jobs.survival.eat/edible`)
+  is never thrown and is put away only above `:keep-food` (best food-points
+  first); building blocks (`jobs.survival.dig-in/building-blocks`, in that
+  order) are put away or thrown only above `:keep-blocks`. Steps: (1) a
+  `:chest` within `:chest-range` of the body with no `:chest-unusable` entry
+  for its position takes the names above their keep (deposit with `:keep`; a
+  chest that gives up is remembered unusable for 10 minutes and the job goes
+  on without it); (2) with no slot free, the nearest item within
+  `:swap-radius` whose `engine.value/item-worth` is above that of the first
+  throwable stack: that stack is thrown away from the item, then `collect`
+  fetches the item (`make-room.swapped`); (3) otherwise the first stack of
+  the toss order is thrown (`look` then `toss`): worth below `:toss-below`,
+  cheapest first, then the name picked up longest ago (the `:picked-up` body
+  entries), then the smaller count; a stack is only thrown whole and only when
+  its name keeps its floor (food, block and tool floors above) afterwards. The
+  direction is the first of +x, -x, +z, -z whose two cells ahead at eye level
+  are not solid (+x when none is; for a swap, the cardinals most opposite the
+  item first). After throwing, once `:free` slots are free (or nothing more may
+  be thrown) the body walks `:away` blocks back from where it threw, so it does
+  not pick the stack up again. With nothing it may throw it declines
+  (`make-room.declined`, reason `nothing-to-toss`), and after `:max-rounds`
+  rounds it declines with a `make-room.stalled` warn. Three failed tosses end
+  it with a `make-room.toss-failed` warn.
 - `:retreat` walks `:step` blocks away from the nearest hostile per round,
   leaning towards the latest `:bed` or `:home` when that is not through the
   hostile, and turning up to 120 degrees to keep clear of `:hazard` cells and
@@ -819,7 +853,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 30 s |
-| `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `(jobs.storage.deposit)` | cooldown 60 s |
+| `:inventory-nearly-full` | at most `:free` (default 2) of the 36 main and hotbar slots are empty; no chest is needed | `(jobs.storage.make-room)` | cooldown 120 s |
 | `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |
 
 `:every-interval` is a wall-clock reflex: `look-around` looks at a point
@@ -829,9 +863,14 @@ next round. With no entry it fires at once.
 `scenarios/woodcutter-cuts.edn` is the woodcutter with it first in the
 register; `scenarios/pace-cuts.edn` puts it above a long `pace` job.
 
-`:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
-total; the real inventory has 36 main slots, so 30 is a threshold, not a
-measurement.
+`:inventory-nearly-full` counts free slots as 36 minus the stacks in
+`self().inventory`, which lists main and hotbar slots only (armour and the
+off-hand are not in it): `engine.jobs.util/free-slots`.
+
+`engine.value/item-worth` (a number: 0, 1, 5 or 25, by tier; a missing `:count`
+counts as 1) is the shared item worth: `recover-drops` sums it over a death's
+inventory (`inventory-value`) and `make-room` reads it to decide what may be
+thrown.
 
 ### Live-unverified assumptions
 
@@ -853,6 +892,11 @@ server and mineflayer, none of it checked live:
 - `:hostile-near` needs a visible hostile, but `respond-to-hostile` still picks its targets with `combat/hostiles`
   without `{:sight ...}`, so once it runs it may choose one behind a wall.
 - Wheat is not food raw and there is no crafting yet, so `get-food` skips it.
+- `make-room`: a tossed stack lands outside the pickup range of the body, so it
+  does not take the stack straight back (the walk-away is the guard);
+  `playerCollect` fires for the body's own pick-ups,
+  including items given with `/give`, and its dropped item is readable (the
+  `picked-up` event is skipped when it is not).
 
 ## Not built (hooks only)
 

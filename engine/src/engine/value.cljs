@@ -1,7 +1,9 @@
 (ns engine.value
   "Pure estimates for deciding whether to go back for the drops after a
   death: what the items are worth and what fetching them costs. Both are in
-  the same arbitrary units and are meant to be refined later.
+  the same arbitrary units and are meant to be refined later. The item worth
+  (item-worth) is the shared worth table: recover-drops sums it over a death's
+  inventory, make-room reads it to decide what may be tossed.
 
   Item value, per stack (an inventory entry), first matching rule wins:
 
@@ -42,18 +44,26 @@
   [item]
   (boolean (some #(seq (get item %)) [:enchants :nbt])))
 
-(defn item-tier [{:keys [name count] :as item}]
-  (cond
-    (enchanted? item) :high
-    :else (or (some (fn [r] (when (and (re-find (:match r) name) (>= count (:min-count r 0))) (:tier r)))
-                    rules)
-              :junk)))
+(defn item-tier
+  "The tier of an inventory entry; a missing :count counts as 1."
+  [{:keys [name count] :as item}]
+  (let [count (or count 1)]
+    (if (enchanted? item)
+      :high
+      (or (some (fn [r] (when (and (re-find (:match r) name) (>= count (:min-count r 0))) (:tier r)))
+                rules)
+          :junk))))
+
+(defn item-worth
+  "The worth of one inventory entry ({:name :count? ...}): the value of its tier."
+  [item]
+  (tier-values (item-tier item)))
 
 (defn inventory-value
   "The worth of carrying inventory ([{:name :count ...}]) with experience
   level: the tier value of each stack plus 0.5 per level."
   [inventory level]
-  (+ (transduce (map (comp tier-values item-tier)) + 0 inventory)
+  (+ (transduce (map item-worth) + 0 inventory)
      (* 0.5 (or level 0))))
 
 ;; ---------------------------------------------------------------- the cost
