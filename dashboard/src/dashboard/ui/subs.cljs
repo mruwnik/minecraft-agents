@@ -72,9 +72,14 @@
  :<- [:selected]
  :<- [:now]
  :<- [:plan-items]
- (fn [[view canvas bodies places zones humans selected now plans] _]
+ :<- [:terrain?]
+ :<- [:tiles]
+ :<- [:current-world]
+ (fn [[view canvas bodies places zones humans selected now plans terrain? tiles world] _]
    {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :selected selected
-    :now now :plans plans}))
+    :now now :plans plans
+    :terrain? terrain? :tile-world (:world tiles)
+    :tile-index (when (= (:requested tiles) world) (:index tiles))}))
 
 (rf/reg-sub
  :detail-model

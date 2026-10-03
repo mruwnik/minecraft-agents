@@ -1,6 +1,7 @@
 (ns dashboard.ui.bodies
   "The Bodies page: one card per engine body, trouble first, and the detail modal."
   (:require [re-frame.core :as rf]
+            [dashboard.ui.livecards :as live]
             [dashboard.ui.trouble :as trouble]))
 
 (def status-label {:trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
@@ -19,11 +20,14 @@
       [:div.fill {:class (name kind) :style {:width (str (* 5 (or v 0)) "%")}}]]
      [:span.vnum (if v (js/Math.round v) "-")]]))
 
+(defn page-flags [] (live/flags (.-search js/location)))
+
 (defn preview [{:keys [name thumb thumb-age status offline]}]
   [:div.preview
    (if thumb
      [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
      [:div.noview "no view"])
+   (when (live/wants-scene? true (page-flags) status) [live/live-preview {:name name :status status :flags (page-flags)}])
    (when (= status :offline) [:span.offline-tag offline])
    (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
    [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]])

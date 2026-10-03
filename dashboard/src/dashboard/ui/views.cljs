@@ -44,7 +44,9 @@
      (when (= page :map)
        [:<> [:button {:on-click #(rf/dispatch [:fit-home])} "home"]
         [:button {:on-click #(rf/dispatch [:fit])} "fit all"]
-        [:button {:on-click #(rf/dispatch [:fit-bodies])} "fit bodies"]])]))
+        [:button {:on-click #(rf/dispatch [:fit-bodies])} "fit bodies"]
+        [:button {:class (when @(rf/subscribe [:terrain?]) "on") :title "terrain under the map, from the dumped chunk columns"
+                  :on-click #(rf/dispatch [:toggle-terrain])} "terrain"]])]))
 
 (defn map-page []
   [:main.map-page

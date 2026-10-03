@@ -1,5 +1,11 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Minecraft agents</title><link rel="stylesheet" href="/style.css"></head>
-<body><div id="app">loading...</div><script src="/js/main.js"></script></body>
+<body><div id="app">loading...</div><script src="/js/main.js"></script>
+<script type="module">
+  // one view hub per page, created on first use by the body cards (js/ui/livecards.cljs); undefined when the module fails to load
+  import { createViewHub } from '/web/hub.mjs'
+  let hub = null
+  window.getViewHub = () => (hub ??= createViewHub({ maxScenes: 12, fps: 6, baseUrl: '' }))
+</script></body>
 </html>

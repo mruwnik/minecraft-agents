@@ -2,6 +2,7 @@
   (:require [reagent.core :as r]
             [re-frame.core :as rf]
             [dashboard.mapview :as mv]
+            [dashboard.tiles :as tiles]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]
             [dashboard.ui.plansmodel :as pm]
@@ -183,6 +184,62 @@
        (for [z (:zones lay) :when (:name z)]
          (assoc (label-box ctx z zone-color label-font) :px (+ (:px z) 2) :py (+ (:py z) 2)))))))
 
+;; ---------------------------------------------------------------- terrain
+;; The tile pictures are loaded as the viewport asks for them (at most max-loading at a time) and kept in a bounded LRU,
+;; larger than the most tiles ever drawn as pictures (mm/max-terrain-tiles), so panning back finds them again.
+(def image-cap 2400)
+(def max-loading 16)
+(def terrain-dim "rgba(11,13,17,0.16)")
+(def coverage-color "rgba(130,150,175,0.22)")
+
+(defonce tile-images (tiles/lru))
+(defonce loading (atom 0))
+(defonce on-tile-loaded (atom nil))
+(defonce redraw-queued (atom false))
+
+(defn queue-redraw! []
+  (when-not @redraw-queued
+    (reset! redraw-queued true)
+    (js/requestAnimationFrame (fn [] (reset! redraw-queued false) (when-let [f @on-tile-loaded] (f))))))
+
+(defn tile-url [world {:keys [cx cz mtime]}]
+  (str "/api/tile/" (js/encodeURIComponent world) "/" cx "." cz ".png?m=" mtime))
+
+(defn start-load! [url]
+  (let [img (js/Image.)
+        done! (fn [] (swap! loading dec) (queue-redraw!))]
+    (swap! loading inc)
+    (set! (.-onload img) done!)
+    (set! (.-onerror img) (fn [] (aset img "failed" true) (done!)))
+    (set! (.-src img) url)
+    (tiles/lru-put! tile-images image-cap url img)
+    nil))
+
+(defn tile-image
+  "The loaded picture of a tile, or nil (not asked for yet, loading, or failed); starts the load when it is due."
+  [url]
+  (let [img (tiles/lru-get! tile-images url)]
+    (cond
+      (and img (.-complete img) (pos? (.-naturalWidth img))) img
+      img nil
+      (>= @loading max-loading) nil
+      :else (start-load! url))))
+
+(defn draw-terrain! [ctx {:keys [view canvas tile-index tile-world]}]
+  (let [{:keys [mode items]} (mm/visible-terrain view canvas tile-index)]
+    (.save ctx)
+    (set! (.-imageSmoothingEnabled ctx) false)
+    (if (= mode :coverage)
+      (do (set! (.-fillStyle ctx) coverage-color)
+          (doseq [{:keys [px py size]} items] (.fillRect ctx px py (max 1 (- size 0.5)) (max 1 (- size 0.5)))))
+      (do (doseq [{:keys [px py size] :as t} items
+                  :let [img (tile-image (tile-url tile-world t))]
+                  :when img]
+            ;; a hair larger than the cell, so no seam shows between neighbours at fractional scales
+            (.drawImage ctx img (js/Math.floor px) (js/Math.floor py) (inc (js/Math.ceil size)) (inc (js/Math.ceil size))))))
+    (.restore ctx)
+    mode))
+
 (defn draw! [canvas model]
   (let [{:keys [w h]} (:canvas model)
         ctx (when (and canvas w h (:view model)) (.getContext canvas "2d"))
@@ -194,7 +251,12 @@
       (.setTransform ctx dpr 0 0 dpr 0 0)
       (.clearRect ctx 0 0 w h)
       (set! (.-font ctx) label-font)
-      (let [lay (layout model)]
+      (let [lay (layout model)
+            mode (when (and (:terrain? model) (:tile-index model) (:tile-world model)) (draw-terrain! ctx model))]
+        (when (= mode :coverage)
+          (set! (.-fillStyle ctx) "rgba(215,220,228,0.75)")
+          (set! (.-textBaseline ctx) "top")
+          (.fillText ctx "zoom in for terrain (shaded: dumped columns)" 10 8))
         (doseq [z (:zones lay)] (draw-zone! ctx z))
         (doseq [p (:plans lay)] (draw-plan! ctx p))
         (doseq [e (:plan-elements lay)] (draw-element! ctx e))
@@ -237,8 +299,10 @@
       (fn []
         (.addEventListener @canvas "wheel" on-wheel #js {:passive false})
         (.observe (js/ResizeObserver. measure!) @wrap)
+        (reset! on-tile-loaded redraw!)
         (measure!)
         (redraw!))
+      :component-will-unmount #(reset! on-tile-loaded nil)
       :component-did-update redraw!
       :reagent-render
       (fn []

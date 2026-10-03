@@ -91,3 +91,31 @@
     2349 "2.3k"
     12500 "12.5k"
     nil ""))
+
+(def tile-index {[0 0] 10 [1 0] 11 [0 1] 12 [5 5] 13 [-1 -1] 14})
+
+(deftest tile-range-of-a-view
+  (are [view canvas expected] (= expected (mm/tile-range view canvas))
+    {:origin-x 0 :origin-z 0 :scale 1} {:w 32 :h 32} {:cx1 0 :cx2 1 :cz1 0 :cz2 1}
+    {:origin-x -1 :origin-z -17 :scale 1} {:w 16 :h 16} {:cx1 -1 :cx2 0 :cz1 -2 :cz2 -1}
+    {:origin-x 0 :origin-z 0 :scale 2} {:w 64 :h 32} {:cx1 0 :cx2 1 :cz1 0 :cz2 0}))
+
+(deftest visible-terrain-tiles
+  (are [view canvas expected] (= expected (mapv (juxt :cx :cz :mtime :px :py :size) (:items (mm/visible-terrain view canvas tile-index))))
+    ;; only the dumped tiles in the viewport; px/py are the tile's corner in pixels, size its edge
+    {:origin-x 0 :origin-z 0 :scale 1} {:w 32 :h 32} [[0 0 10 0 0 16] [1 0 11 16 0 16] [0 1 12 0 16 16]]
+    {:origin-x 8 :origin-z 8 :scale 2} {:w 32 :h 32} [[0 0 10 -16 -16 32] [1 0 11 16 -16 32] [0 1 12 -16 16 32]]
+    {:origin-x 100 :origin-z 100 :scale 1} {:w 32 :h 32} []))
+
+(deftest terrain-mode-by-tile-count
+  (are [canvas scale mode] (= mode (:mode (mm/visible-terrain {:origin-x 0 :origin-z 0 :scale scale} canvas tile-index)))
+    {:w 800 :h 600} 1 :tiles
+    {:w 1920 :h 1080} 1 :coverage
+    {:w 1920 :h 1080} 4 :tiles
+    ;; 45 x 45 tiles is 2025 > 2000
+    {:w 721 :h 721} 1 :coverage
+    {:w 1920 :h 1080} 0.05 :coverage))
+
+(deftest coverage-lists-the-dumped-columns-in-view
+  (let [{:keys [items]} (mm/visible-terrain {:origin-x -16 :origin-z -16 :scale 0.01} {:w 1920 :h 1080} tile-index)]
+    (is (= #{[0 0] [1 0] [0 1] [5 5] [-1 -1]} (set (map (juxt :cx :cz) items))))))

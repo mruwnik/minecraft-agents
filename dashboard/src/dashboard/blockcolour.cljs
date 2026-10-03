@@ -126,3 +126,43 @@
     (if (or (nil? base) (not= "true" (:waterlogged states)) (not (hex? base)))
       base
       (mix base water 0.7))))
+
+;; ---------------------------------------------------------------- terrain (the map's top-down layer)
+;; What the top of a column is made of, as seen from above: the common surface blocks of every biome. The table wins over
+;; the blueprint colours above (a leaf block is the foliage's green, not a hash colour).
+(def terrain-colours
+  {"air" "#14171c" "grass_block" "#5f9a45" "oak_leaves" "#3f7a2f" "spruce_leaves" "#2f5a35" "birch_leaves" "#6a8f3c" "jungle_leaves" "#2f8a25"
+   "acacia_leaves" "#5f8a2a" "dark_oak_leaves" "#2f5a22" "mangrove_leaves" "#4a7a3a" "cherry_leaves" "#e8a0b8"
+   "pale_oak_leaves" "#8a9a7a" "azalea_leaves" "#5f8a3a" "flowering_azalea_leaves" "#7a8a4a" "leaf_litter" "#8a6a3a"
+   "vine" "#4c7a2f" "moss_block" "#5a7a2a" "moss_carpet" "#5a7a2a" "mycelium" "#6f6277" "podzol" "#5a4a2a" "rooted_dirt" "#6b5236"
+   "dirt_path" "#8f7a43" "grass_path" "#8f7a43" "crimson_nylium" "#8a2a3a" "warped_nylium" "#2a7a6a"
+   "sand" "#d8cf9a" "red_sand" "#c2743a" "suspicious_sand" "#d0c590" "gravel" "#8c8a86" "clay" "#9aa1ab" "mud" "#4a3f3a"
+   "snow" "#f0f4f8" "snow_block" "#f0f4f8" "powder_snow" "#f0f4f8" "ice" "#9fd3ff" "packed_ice" "#8ab8f0" "blue_ice" "#74a8f0"
+   "water" "#3b6fb6" "lava" "#e0641e" "magma_block" "#8a3a14" "obsidian" "#1a1425" "bedrock" "#555555"
+   "stone" "#7a7f88" "deepslate" "#4c4c52" "tuff" "#6c6e66" "calcite" "#dcdcd6" "dripstone_block" "#7a5c4a" "basalt" "#4a4a50"
+   "smooth_basalt" "#47474d" "netherrack" "#6f3030" "soul_sand" "#5a4637" "soul_soil" "#4f3e32" "end_stone" "#dcdca6"
+   "terracotta" "#985e43" "coal_ore" "#5a5a5e" "iron_ore" "#8a7a6e" "copper_ore" "#7a7a6a" "gold_ore" "#9a9060" "diamond_ore" "#6a8a8e"
+   "redstone_ore" "#8a5a5a" "lapis_ore" "#5a6a8e" "emerald_ore" "#6a8e6a" "deepslate_coal_ore" "#44444a" "deepslate_iron_ore" "#5a5252"
+   "cactus" "#3f7a3a" "pumpkin" "#d0771a" "melon" "#8aa830" "kelp" "#3a7a4a" "kelp_plant" "#3a7a4a" "seagrass" "#3a8a4a" "tall_seagrass" "#3a8a4a"
+   "lily_pad" "#2f7a2f" "sea_pickle" "#6a8a3a" "brown_mushroom_block" "#8a6a50" "red_mushroom_block" "#b03a30" "mushroom_stem" "#d8d0c0"
+   "glass" "#a9d6e8" "cobweb" "#d8d8d8" "sweet_berry_bush" "#4a7a3a" "dead_bush" "#8a6a3a" "sugar_cane" "#8ab05a" "bamboo" "#5f8a2a"
+   "oak_log" "#6b4f2a" "spruce_log" "#4a3a22" "birch_log" "#d7d5c8" "jungle_log" "#6a5230" "acacia_log" "#6a5a52" "dark_oak_log" "#3a2a14"})
+
+(defn known?
+  "True when the name has a colour of its own (not the hash fallback)."
+  [name]
+  (boolean (or (terrain-colours name) (family-of name) (fixed name) (world-colours name))))
+
+(defn hsl-hex
+  "[h 0..360, s 0..1, l 0..1] -> \"#rrggbb\"."
+  [h s l]
+  (let [a (* s (min l (- 1 l)))
+        f (fn [n] (let [k (mod (+ n (/ h 30)) 12)]
+                    (hex2 (* 255 (- l (* a (max -1 (min (- k 3) (- 9 k) 1))))))))]
+    (str "#" (f 0) (f 8) (f 4))))
+
+;; always a hex, so the tiles can do arithmetic on it; a block nobody listed gets the same muted hash colour every time
+(defn terrain-colour [name]
+  (or (terrain-colours name)
+      (let [c (block-colour name)]
+        (if (hex? c) c (hsl-hex (mod (hash-name name) 360) 0.3 0.45)))))

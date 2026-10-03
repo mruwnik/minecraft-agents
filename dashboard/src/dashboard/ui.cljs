@@ -12,6 +12,7 @@
             [dashboard.ui.pages.villagers :as villagers]
             [dashboard.ui.pages.villages :as villages]
             [dashboard.ui.subs]
+            [dashboard.ui.tiles-events]
             [dashboard.ui.views :as views]))
 
 (defn page-content [page]
@@ -37,6 +38,6 @@
     (rf/dispatch-sync [:init (.-search js/location) page])
     (case page
       :plans (rf/dispatch [:plans/start true])
-      :map (rf/dispatch [:plans/start false])
+      :map (do (rf/dispatch [:plans/start false]) (rf/dispatch [:tiles/start]))
       nil)
     (.render (rdom/create-root (js/document.getElementById "app")) (r/as-element [root page]))))

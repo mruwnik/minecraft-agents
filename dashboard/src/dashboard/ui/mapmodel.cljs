@@ -75,3 +75,38 @@
     (not (number? blocks)) ""
     (< blocks 1000) (str (js/Math.round blocks))
     :else (let [k (/ (js/Math.round (/ blocks 100)) 10)] (str k "k"))))
+
+;; ---------------------------------------------------------------- terrain tiles
+(def tile-blocks 16)
+(def max-terrain-tiles
+  "More tiles than this in view: no pictures (too many requests), just a mark where columns are dumped."
+  2000)
+
+(defn tile-range
+  "The chunk columns (inclusive cx/cz ranges) a view shows in a canvas of {:w :h} pixels."
+  [{:keys [origin-x origin-z scale]} {:keys [w h]}]
+  (let [col (fn [blocks] (js/Math.floor (/ blocks tile-blocks)))
+        last-col (fn [blocks] (dec (js/Math.ceil (/ blocks tile-blocks))))]
+    {:cx1 (col origin-x) :cx2 (last-col (+ origin-x (/ w scale)))
+     :cz1 (col origin-z) :cz2 (last-col (+ origin-z (/ h scale)))}))
+
+(defn tile-item [{:keys [origin-x origin-z scale]} [cx cz] mtime]
+  {:cx cx :cz cz :mtime mtime :size (* tile-blocks scale)
+   :px (* (- (* cx tile-blocks) origin-x) scale) :py (* (- (* cz tile-blocks) origin-z) scale)})
+
+(defn visible-terrain
+  "{:mode :tiles | :coverage, :items [tile]} for the dumped columns ({[cx cz] mtime}) in view. Up to max-terrain-tiles
+  columns in view are :tiles, to be drawn as pictures; more are :coverage, drawn as plain marks."
+  [view canvas index]
+  (let [{:keys [cx1 cx2 cz1 cz2]} (tile-range view canvas)
+        count-in-view (* (inc (- cx2 cx1)) (inc (- cz2 cz1)))]
+    (if (<= count-in-view max-terrain-tiles)
+      {:mode :tiles
+       :items (vec (for [cz (range cz1 (inc cz2)) cx (range cx1 (inc cx2))
+                         :let [mtime (get index [cx cz])]
+                         :when mtime]
+                     (tile-item view [cx cz] mtime)))}
+      {:mode :coverage
+       :items (vec (for [[[cx cz :as k] mtime] index
+                         :when (and (<= cx1 cx cx2) (<= cz1 cz cz2))]
+                     (tile-item view k mtime)))})))

@@ -51,3 +51,14 @@
 (deftest shade
   (doseq [[hex k expected] [["#808080" 1 "#808080"] ["#808080" 0.5 "#404040"] ["#ffffff" 1.1 "#ffffff"] ["hsl(1 30% 45%)" 0.5 "hsl(1 30% 45%)"]]]
     (is (= expected (bc/shade hex k)))))
+
+(deftest terrain-colour-is-always-a-hex
+  (doseq [name ["grass_block" "oak_leaves" "spruce_leaves" "birch_leaves" "sand" "water" "snow" "deepslate" "netherrack" "terracotta"
+                "oak_planks" "red_terracotta" "something_new_in_26_1"]]
+    (is (bc/hex? (bc/terrain-colour name)) name)))
+
+(deftest terrain-colour-known-blocks-are-not-hash-colours
+  (doseq [name ["grass_block" "oak_leaves" "spruce_leaves" "birch_leaves" "jungle_leaves" "acacia_leaves" "dark_oak_leaves" "sand" "red_sand"
+                "water" "snow" "snow_block" "ice" "packed_ice" "deepslate" "netherrack" "terracotta" "mycelium" "podzol" "gravel" "stone"
+                "andesite" "diorite" "granite" "dirt_path" "moss_block" "lava" "bedrock" "obsidian" "coal_ore" "iron_ore" "kelp" "seagrass"]]
+    (is (bc/known? name) name)))

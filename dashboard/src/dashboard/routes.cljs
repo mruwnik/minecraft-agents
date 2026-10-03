@@ -4,6 +4,8 @@
 (def blueprint-re #"^/api/blueprint/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 (def unsupported-re #"^/api/(?:look|screen|actions|whisper|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
 (def thumb-re #"^/api/thumb/([A-Za-z0-9_-]+)\.png$")
+(def tile-re #"^/api/tile/([A-Za-z0-9_-]+)/(-?\d+)\.(-?\d+)\.png$")
+(def tiles-re #"^/api/tiles/([A-Za-z0-9_-]+)$")
 (def item-icon-re #"^/api/item-icon/([a-z0-9_]+)\.png$")
 (def plan-re #"^/api/plan/([A-Za-z0-9_-]+)$")
 (def events-re #"^/api/events/([A-Za-z0-9_-]+)$")
@@ -19,6 +21,7 @@
    "/plans" {:kind :page}
    "/jobs" {:kind :page}
    "/api/thumbs/stats" {:kind :thumbs-stats}
+   "/api/tile-stats" {:kind :tile-stats}
    "/api/worlds" {:kind :worlds}
    "/api/state" {:kind :state}
    "/api/plans" {:kind :plans-api}
@@ -39,6 +42,9 @@
     (or (exact path)
         (some->> (re-find blueprint-re path) second (assoc {:kind :blueprint} :name))
         (some->> (re-find thumb-re path) second (assoc {:kind :thumb} :name))
+        (when-let [[_ world cx cz] (re-find tile-re path)]
+          {:kind :tile :world world :cx (js/parseInt cx 10) :cz (js/parseInt cz 10)})
+        (some->> (re-find tiles-re path) second (assoc {:kind :tiles} :world))
         (some->> (re-find item-icon-re path) second (assoc {:kind :item-icon} :name))
         (some->> (re-find plan-re path) second (assoc {:kind :plan-api} :name))
         (some->> (re-find events-re path) second (assoc {:kind :events} :name))

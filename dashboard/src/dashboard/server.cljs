@@ -19,6 +19,7 @@
             [dashboard.plan-api :as plan-api]
             [dashboard.rcon :as rcon]
             [dashboard.routes :as routes]
+            [dashboard.tiles :as tiles]
             [dashboard.view-info :as view-info]
             [dashboard.worlds :as worlds]))
 
@@ -521,6 +522,86 @@
                    (send-json! res 404 {:error (str "no plan called " plan-id " in " world-name)})))))
       (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))
 
+;; ---------------------------------------------------------------- terrain tiles (dashboard.tiles)
+;; GET /api/tile/<world>/<cx>.<cz>.png: the top-down picture of a dumped column. The JS glue decodes the column (a few ms),
+;; dashboard.tiles colours it, the PNG is cached by the column file's mtime in a bounded LRU. A tile is ~100-600 bytes.
+(def tile-cache-cap 2048)
+(def tile-list-ttl-ms 5000)
+(defonce tile-cache (tiles/lru))
+(defonce tile-lists (atom {}))
+(defonce world-tiles (atom {}))
+(defonce tile-stats (atom {:renders 0 :render-ms 0 :hits 0}))
+
+(defn tiles-for [module world-name]
+  (or (get @world-tiles world-name)
+      (let [made ((.-createWorldTiles module) #js {:stateDir (.join path root "state") :world world-name})]
+        (swap! world-tiles assoc world-name made)
+        made)))
+
+(defn column-mtime [world-name cx cz]
+  (try (js/Math.floor (.-mtimeMs (.statSync fs (.join path worlds-dir world-name "chunks" (str cx "." cz ".bin")))))
+       (catch :default _ nil)))
+
+(defn render-tile
+  "The PNG of the column, or nil when it is not dumped."
+  [module world-name cx cz]
+  (let [started (js/performance.now)]
+    (when-let [col (.column (tiles-for module world-name) cx cz (to-js tiles/skipped-blocks))]
+      (let [png ((.-encodeTile module) tiles/size tiles/size
+                 (tiles/tile-rgba {:palette (vec (.-palette col)) :top (.-top col) :floor (.-floor col) :y (.-y col) :depth (.-depth col)}))]
+        (swap! tile-stats #(-> % (update :renders inc) (update :render-ms + (- (js/performance.now) started))))
+        png))))
+
+(defn cached-tile [module world-name cx cz mtime]
+  (let [k (str world-name "/" cx "." cz)
+        held (tiles/lru-get! tile-cache k)]
+    (if (and held (= mtime (:mtime held)))
+      (do (swap! tile-stats update :hits inc) (:png held))
+      (when-let [png (render-tile module world-name cx cz)]
+        (tiles/lru-put! tile-cache tile-cache-cap k {:mtime mtime :png png})
+        png))))
+
+(defn send-tile! [res world-name cx cz]
+  (let [mtime (when (some #{world-name} (world-names)) (column-mtime world-name cx cz))]
+    (if-not mtime
+      (send-json! res 404 {:error (str "column " cx "." cz " of " world-name " is not dumped")})
+      (-> @worldblocks-loaded
+          (.then (fn [module]
+                   (if-let [png (cached-tile module world-name cx cz mtime)]
+                     (do (.writeHead res 200 #js {"content-type" "image/png" "cache-control" "public, max-age=3600"
+                                                  "x-column-mtime" (str mtime)})
+                         (.end res png))
+                     (send-json! res 404 {:error (str "column " cx "." cz " of " world-name " is not dumped")}))))
+          (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))))
+
+(defn column-entries [world-name]
+  (let [dir (.join path worlds-dir world-name "chunks")]
+    (vec (for [file (try (.readdirSync fs dir) (catch :default _ #js []))
+               :let [mtime (try (.-mtimeMs (.statSync fs (.join path dir file))) (catch :default _ nil))]
+               :when mtime]
+           [file mtime]))))
+
+(defn tile-entries
+  "[[cx cz mtime]] of the world's dumped columns, re-read from the directory at most every 5 s."
+  [world-name]
+  (let [{:keys [at value]} (get @tile-lists world-name)]
+    (if (and at (< (- (js/Date.now) at) tile-list-ttl-ms))
+      value
+      (let [value (tiles/index-entries (column-entries world-name))]
+        (swap! tile-lists assoc world-name {:at (js/Date.now) :value value})
+        value))))
+
+(defn send-tiles! [res world-name query]
+  (if-not (some #{world-name} (world-names))
+    (send-json! res 404 {:error (str "no world called " world-name)})
+    (let [since (some-> (.get query "since") (js/parseInt 10))]
+      (send-json! res 200 {:world world-name :at (js/Date.now)
+                           :tiles (tiles/newer-than (tile-entries world-name) (when-not (js/isNaN since) since))}))))
+
+(defn tile-stats-json []
+  (let [{:keys [renders render-ms hits]} @tile-stats]
+    {:renders renders :renders-ms-avg (when (pos? renders) (/ render-ms renders)) :hits hits :cached (.-size tile-cache)}))
+
 (defn handle-world-scoped! [res kind world-name query plan-name]
   (case kind
     :state (send-json! res 200 (snapshot world-name))
@@ -534,7 +615,7 @@
 (def world-kinds #{:state :chat :world :villages-api :plans-api :plan-api})
 
 (defn handle! [req res]
-  (let [{:keys [kind] blueprint-name :name request-path :path} (routes/route (.-url req))
+  (let [{:keys [kind] blueprint-name :name request-path :path :as route} (routes/route (.-url req))
         query (.-searchParams (js/URL. (.-url req) "http://dashboard"))
         choice (when (world-kinds kind) (choose-world query))]
     (cond
@@ -550,6 +631,9 @@
         :chat-send (send-chat! req res)
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
+        :tile (send-tile! res (:world route) (:cx route) (:cz route))
+        :tiles (send-tiles! res (:world route) query)
+        :tile-stats (send-json! res 200 (tile-stats-json))
         :worlds (send-json! res 200 {:worlds (read-world-list)})
         :villagers-api (send-json-js! res 200 (legacy/villagers repo-root root))
         :blueprints (send-json-js! res 200 (blueprint-library))

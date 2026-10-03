@@ -14,6 +14,7 @@ const mount = mountView({ repo, stateDir })
 const handlesCases = [
   ['/view', true], ['/view/', true], ['/pose/Bob', true], ['/web/app.mjs', true], ['/columns/w/0.0.bin', true],
   ['/blocks/1.21', true], ['/textures/x', true], ['/hud/Bob', true], ['/drive/Bob', true], ['/agents', true],
+  ['/poses', true], ['/elements/1.21.bin', true], ['/biomes/w.json', true], ['/posesx', false],
   ['/', false], ['/nope', false], ['/viewer', false], ['/agents/x', false], ['/api/bodies', false], ['/webx', false]
 ]
 for (const [pathname, expected] of handlesCases) {
