@@ -31,6 +31,7 @@
       :else {:username (or (:username config) agent)
              :host (:host world)
              :port (:port world)
+             :world (:world config)
              :engine-dir (path/join state-dir "agents" agent "engine")})))
 
 (defn missing-primitives-message [file]
@@ -54,21 +55,30 @@
       (not (fs/existsSync prims-file)) {:error (missing-primitives-message prims-file)}
       (and scenario (nil? plan)) {:error (str "no scenario file " scenario)}
       (seq issues) {:error (str "scenario problems: " (pr-str issues))}
-      :else {:root root :cfg cfg :plan plan})))
+      :else {:root root :cfg cfg :plan plan :state-dir state-dir})))
 
 (defn ^:async run
   "Start a body. Resolves to {:engine eng :stop f} or {:error text}."
   [{:keys [fresh?] :as opts}]
-  (let [{:keys [error root cfg plan]} (preflight opts)]
+  (let [{:keys [error root cfg plan state-dir]} (preflight opts)]
     (if error
       {:error error}
       (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
             _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
             restoring? (fs/existsSync engine-file)
             create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
-            p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)}))
+            eng-ref (atom nil)
+            ;; the view dump's view.stats and view.error go straight to the event stream (docs/view-format.md)
+            on-view-event (fn [e]
+                            (when-let [eng @eng-ref]
+                              (core/emit! eng (-> (js->clj e :keywordize-keys true)
+                                                  (update :kind keyword) (update :source keyword) (update :level keyword)))))
+            p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
+                                             :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
+                                                        :onEvent on-view-event}}))
             eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (:engine-dir cfg)
-                              :body (:username cfg)})]
+                              :body (:username cfg)})
+            _ (reset! eng-ref eng)]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
         (let [stop-ticks (core/start! eng {:tick-ms 250})]
           {:engine eng :stop (fn [] (stop-ticks) (core/shutdown! eng) (.close p))})))))

@@ -923,3 +923,17 @@ test('a scoop where neither the cell nor the inventory changes still fails uncha
   const { p } = rig({ blocks: { '1,64,0': 'water' }, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => {} })
   assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'failed', reason: 'unchanged' })
 })
+
+// ---- view dump hooks ----
+
+test('the view attaches to every bot, detaches while offline and on close, then stops', async () => {
+  const calls = []
+  const view = { attach: b => calls.push(['attach', b]), detach: () => calls.push(['detach']), stop: () => calls.push(['stop']) }
+  const first = stubBot(world)
+  const second = stubBot(world)
+  const p = createPrimitivesFromBot(first, { timeScale: 0.0001, reconnect: async () => second, view })
+  p.setOwner('t1')
+  await p.offline('t1', { ms: 1000 })
+  await p.close()
+  assert.deepEqual(calls, [['attach', first], ['detach'], ['attach', second], ['detach'], ['stop']])
+})

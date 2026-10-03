@@ -15,7 +15,7 @@
 
 (deftest load-agent-reads-config-and-world
   (let [dir (agent-state-dir)]
-    (is (= {:username "Bob" :host "h" :port 7 :engine-dir (path/join dir "agents" "Bob" "engine")}
+    (is (= {:username "Bob" :host "h" :port 7 :world "w" :engine-dir (path/join dir "agents" "Bob" "engine")}
            (main/load-agent dir "Bob")))
     (is (= :no-config (:error (main/load-agent dir "Nobody"))))))
 

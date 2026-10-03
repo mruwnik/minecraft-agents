@@ -30,6 +30,7 @@ Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
 Layout:
 
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub bot for the primitive tests.
+- `js/view.mjs` the view dump (chunk columns, pose, hud files for an external renderer; `BODY_VIEW=0` disables), format in `docs/view-format.md`.
 - `js/fake.mjs` a scriptable fake world with the same interface, for tests.
 - `src/engine/` `core` (list, register, scheduler, act wrapper,
   call-child), `memory` (the body store), `events`, `ctx` (helpers checks and

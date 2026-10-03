@@ -3,6 +3,7 @@
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
+import { createView } from './view.mjs'
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 
@@ -94,8 +95,9 @@ const gained = (before, after) => Object.entries(after)
 // Builds the primitives over an already spawned bot. `timeScale` multiplies every time bound (tests shrink it).
 // `reconnect` (internal; createPrimitives passes it) makes a fresh spawned bot with the same connection params and
 // enables `offline`; without it `offline` is unsupported.
-export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null } = {}) {
+export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null } = {}) {
   let bot = initialBot
+  view?.attach(bot)
   let closed = false
   let owner = null
   const inflight = new Set()
@@ -649,6 +651,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     unbind()
     bot = fresh
     unbind = bindEvents(bot)
+    view?.attach(bot)
     down = false
     emit({ kind: 'online', pos: here() })
   }
@@ -690,6 +693,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     inflight.add(call)
     emit({ kind: 'offline', ms })
     unbind()
+    view?.detach()
     bot.on('error', () => {}) // the quitting client may still complain; nothing listens for it any more
     bot.quit()
     try {
@@ -711,6 +715,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const close = async () => {
     closed = true
     setOwner(null)
+    await view?.detach()
+    view?.stop()
     bot.quit()
   }
 
@@ -721,6 +727,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
-export async function createPrimitives (opts, { connect = connectBot, timeScale = 1 } = {}) {
-  return createPrimitivesFromBot(await connect(opts), { timeScale, reconnect: () => connect(opts) })
+// `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
+export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1 } = {}) {
+  const view = viewOpts ? createView(viewOpts) : null
+  return createPrimitivesFromBot(await connect(opts), { timeScale, reconnect: () => connect(opts), view })
 }
