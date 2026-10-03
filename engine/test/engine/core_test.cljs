@@ -544,6 +544,38 @@
     (is (= [{:health 5}] (mapv :data (mem/entries (mem/view (:store eng)) :hurt))))
     (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen))))
 
+(deftest cancelling-a-reflex-job-between-rounds-leaves-no-ghost-instance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 5}})]
+          (core/register-reflex! eng {:trigger :hurt :job '(count)})
+          (await (core/tick! eng))
+          (is (= "j1" (:pending-reflex (core/state eng))) "the reflex job holds the body between rounds")
+          (set! (.. p -world -state -self -health) 20)
+          (core/cancel! eng "j1")
+          (is (nil? (:pending-reflex (core/state eng))))
+          (is (= {} (:instances (core/state eng))))
+          (is (nil? (core/tick! eng)) "nothing is left to start"))))))
+
+(deftest the-tick-loop-reports-a-failed-round-settle-and-keeps-ticking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/capture-sink)
+              throwing (fn [e] (when (= :yielded (:kind e)) (throw (js/Error. "sink broke"))))
+              eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink throwing] :now #(deref clock)})})
+              stop (do (core/submit! eng '(count) {})
+                       (core/start! eng {:tick-ms 5}))]
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 60))))
+          (stop)
+          (is (some #(and (= :error (:kind %)) (re-find #"sink broke" (str (:text %)))) @seen)
+              "the failure became an error event")
+          (is (<= 2 (count (filter #(= :round_started (:kind %)) @seen))) "the loop kept ticking"))))))
+
 (deftest bot-errors-and-a-failed-reconnect-are-error-level-events
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "error" :reason "boom"})

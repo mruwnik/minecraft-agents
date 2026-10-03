@@ -96,6 +96,7 @@
                 (update :instances dissoc id))
       (and (>= idx 0) (< idx (:cursor state))) (update :cursor dec)
       (= id (:resume state)) (assoc :resume nil)
+      (= id (:pending-reflex state)) (assoc :pending-reflex nil)
       (= id (:current state)) (assoc :current nil))))
 
 (defn restore
@@ -724,16 +725,20 @@
   (reset! (:running eng) nil)
   (emit! eng {:source :system :kind :stopping :level :info :job (:current (state eng))}))
 
+(defn report-tick-failure! [eng e]
+  (emit! eng {:source :system :kind :error :level :error :text (str "tick failed: " e)}))
+
 (defn start!
-  "Tick every tick-ms until the returned stop fn is called."
+  "Tick every tick-ms until the returned stop fn is called. A tick that throws,
+  or whose round fails to settle, is reported as an error event; the loop goes on."
   [eng {:keys [tick-ms] :or {tick-ms 250}}]
   (let [stopped (atom false)]
     (letfn [(step []
               (when-not @stopped
                 (try
-                  (tick! eng)
+                  (some-> (tick! eng) (.catch #(report-tick-failure! eng %)))
                   (catch :default e
-                    (emit! eng {:source :system :kind :error :level :error :text (str "tick failed: " e)})))
+                    (report-tick-failure! eng e)))
                 (js/setTimeout step tick-ms)))]
       (step))
     #(reset! stopped true)))
