@@ -1,0 +1,4 @@
+;; batch-craft live: kit craft branch - cut every 5 s by a look-around reflex while making a wooden hoe from logs
+{:register [{:trigger :every-interval :args {:seconds 5} :job (jobs.movement.look-around {:every-ms 300})}]
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+                    (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0})))]}

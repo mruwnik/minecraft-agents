@@ -3,7 +3,9 @@
             [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
             [engine.jobs.util :as u]
+            [jobs.items.craft]
             [jobs.storage.deposit :as deposit]
+            [jobs.storage.withdraw]
             [jobs.survival.eat :as eat]))
 
 (def doc
@@ -17,13 +19,28 @@
   else what the chest could not supply, keyed by the kind string or :food), or
   {:gave-up true :reason r :short {...}} (\"unreachable\", the inspect status, or
   the withdraw's reason) when the failed attempts used it up and the warn was
-  emitted.")
+  emitted.
+
+  With :craft (the default) the take phase does not finish on a short: it enters
+  phase :craft in memory. Each craft round re-derives what is still short from the
+  inventory and makes exactly one child call. Per short tool kind K the tiers of
+  :craft-tiers are tried in order for the tool tier_K through jobs.items.craft;
+  when it comes back short of a material, the chest is asked for it (through
+  jobs.storage.withdraw, exactly what the recipe needs), else a stick or planks
+  is crafted as a sub-step (at most two deep), else the tier is ruled out and
+  the next is tried. A short result drops the kept inspect, so the next round inspects again
+  (an ok act, so short crafts alone never trip the backoff). Food short is made as bread from wheat (chest or body) in
+  batches of 3. The result gets :missing {kind text} for what could not be made
+  (\"no-table\" ends the phase for every short kind), only when non-empty.")
 
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
    :spare {:doc "extra of each tool kind beyond the one in use" :default 1}
    :food {:doc "food items to carry" :default 12}
-   :chest {:doc "chest position; the known :chest place when nil" :default nil}})
+   :chest {:doc "chest position; the known :chest place when nil" :default nil}
+   :craft {:doc "craft what the chest cannot supply" :default true}
+   :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :default ["stone" "wooden"]}
+   :radius {:doc "how far to look for a crafting table" :default 32}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -103,6 +120,176 @@
   [items]
   (mapv (fn [i] {:name (.-name i) :count (.-count i)}) (array-seq items)))
 
+(def craft-keys [:phase :try :ruled :why :missing :steps :chest-items])
+
+(def table-reasons #{"no-table" "not-a-table" "unreachable"})
+
+(defn mkey
+  "Memory key of a kind: the keyword :food is kept as the string \"food\"."
+  [kind]
+  (if (= :food kind) "food" kind))
+
+(defn rkey [k] (if (= "food" k) :food k))
+
+(defn tiers-of
+  "The tiers to try, in order; golden is never used."
+  [a]
+  (vec (remove #{"golden" "gold"} (:craft-tiers a))))
+
+(defn chest-count
+  "How many of name the inspected stacks hold."
+  [stacks name]
+  (deposit/carried stacks name))
+
+(defn rule-out
+  "Drop the tool being made for its kind: remember the tier and why."
+  [mem text]
+  (let [{:keys [kind tier]} (:try mem)]
+    (-> mem
+        (assoc :steps nil :try nil)
+        (update-in [:ruled kind] (fnil conj []) tier)
+        (update-in [:why kind] #(if % (str % ", " text) text)))))
+
+(defn mark-missing [mem kind text]
+  (assoc-in mem [:missing (mkey kind)] text))
+
+(defn plan-call
+  "[mem call] for the first still-short kind not given up on; call is
+  {:slot :job :args :for} or nil when nothing more can be tried. Pure."
+  [mem a still stacks inv chest]
+  (let [[kind n] (first (remove #(contains? (:missing mem) (mkey (first %))) still))
+        wheat-held (chest-count stacks "wheat")
+        wheat-body (deposit/carried inv "wheat")]
+    (cond
+      (nil? kind) [mem nil]
+      (= :food kind)
+      (let [loaves (min n (quot (+ wheat-held wheat-body) 3))]
+        (cond
+          (zero? loaves) (recur (mark-missing mem kind "wheat") a still stacks inv chest)
+          (< wheat-body (* 3 loaves)) [mem {:slot :get :job 'jobs.storage.withdraw :for :food-get
+                                            :args {:chest chest :items {"wheat" (* 3 loaves)}}}]
+          :else [mem {:slot :craft :job 'jobs.items.craft :for :food
+                      :args {:item "bread" :count loaves :radius (:radius a)}}]))
+      :else
+      (let [steps (when (= kind (:kind (:try mem))) (:steps mem))
+            tier (first (remove (set (get-in mem [:ruled kind])) (tiers-of a)))]
+        (cond
+          (seq steps)
+          (let [{:keys [item get count]} (peek steps)]
+            [mem (if get
+                   {:slot :get :job 'jobs.storage.withdraw :for :get
+                    :args {:chest chest :items {get count}}}
+                   {:slot :craft :job 'jobs.items.craft :for :tool
+                    :args {:item item :count count :radius (:radius a)}})])
+          (nil? tier) (recur (mark-missing mem kind (or (get (:why mem) kind) "no tier")) a still stacks inv chest)
+          :else (recur (assoc mem :try {:kind kind :tier tier}
+                              :steps [{:item (str tier "_" kind) :count 1}])
+                       a still stacks inv chest))))))
+
+(defn classify-short
+  "How to get one missing name: [:get held-name], [:craft name] or [:none text]."
+  [name alts stacks depth]
+  (let [held (first (filter #(pos? (chest-count stacks %)) (cons name alts)))]
+    (cond
+      held [:get held]
+      (and (or (= "stick" name) (str/ends-with? name "_planks")) (< depth 2)) [:craft name]
+      :else [:none (str/join " or " (cons name alts))])))
+
+(defn absorb-short
+  "Mem after a tool craft step came back short of materials."
+  [mem res stacks inv]
+  (let [steps (:steps mem)
+        top (peek steps)
+        made (:made res 0)
+        steps (if (< made (:count top)) (conj (pop steps) (update top :count - made)) (pop steps))
+        depth (dec (count steps))
+        alts (:alternatives res)
+        hows (map (fn [[name n]] [name n (classify-short name (get alts name) stacks depth)]) (:short res))
+        none (first (filter #(= :none (first (nth % 2))) hows))
+        [name n [how arg]] (first hows)]
+    (cond
+      none (rule-out mem (second (nth none 2)))
+      (= :get how) (assoc mem :steps (conj steps {:get arg :count (+ n (deposit/carried inv arg))}))
+      :else (assoc mem :steps (conj steps {:item arg :count n})))))
+
+(defn absorb
+  "{:mem m :end reason :fail reason} after the child call finished with res. Pure."
+  [mem call res stacks inv]
+  (let [reason (:reason res)
+        top (peek (:steps mem))]
+    (case (:for call)
+      (:get :food-get)
+      (if (:gave-up res)
+        {:mem mem :fail reason}
+        {:mem (cond-> (assoc mem :chest-items nil)
+                (= :get (:for call)) (assoc :steps (pop (:steps mem))))})
+      (cond
+        (contains? table-reasons reason) {:mem mem :end reason}
+        reason {:mem mem :fail reason}
+        (and (:short res) (= :food (:for call))) {:mem (mark-missing mem :food "wheat")}
+        (:short res) {:mem (assoc (absorb-short mem res stacks inv) :chest-items nil)}
+        (not (pos? (:made res 0))) {:mem mem :fail "nothing-made"}
+        (= :food (:for call)) {:mem mem}
+        :else (let [steps (pop (:steps mem))]
+                {:mem (cond-> (assoc mem :steps steps) (empty? steps) (assoc :try nil))})))))
+
+(defn finish-craft!
+  "End the craft phase with the result: what is still short and why."
+  [c still end]
+  (let [m (ctx/mem c)
+        kinds (map first still)
+        missing (cond-> (:missing m) end (merge (zipmap (map mkey kinds) (repeat end))))
+        missing (into {} (keep (fn [k] (when-let [t (get missing (mkey k))] [k t]))) kinds)
+        short (into {} still)]
+    (when (seq short)
+      (ctx/emit! c :kit.short :info {:short short :text (str "kit still short " (pr-str short) (when (seq missing) (str ", missing " (pr-str missing))))}))
+    (ctx/result! c (cond-> {:gave-up false :short short} (seq missing) (assoc :missing missing)))
+    :done))
+
+(defn ^:async load-chest!
+  "The inspected chest stacks, from memory or by walking near and inspecting
+  (stored in memory); a keyword (:continue, or the give-up's) when that failed."
+  [c chest still]
+  (if-let [stacks (:chest-items (ctx/mem c))]
+    stacks
+    (let [w (await (u/walk-near! c chest 3))]
+      (case w
+        :partial :continue
+        :blocked (give-up! c "unreachable" (into {} still))
+        (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
+          (if (not= "ok" (.-status seen))
+            (give-up! c (.-status seen) (into {} still))
+            (let [stacks (stacks-of (.-items seen))]
+              (ctx/update-mem! c assoc :chest-items stacks)
+              stacks)))))))
+
+(defn ^:async craft-round
+  "One bounded craft-phase round: one child call, then fold its result into memory."
+  [c]
+  (let [a (:args c)
+        chest (deposit/chest-of (ctx/view c) a)
+        still (needs (u/inventory (:primitives c)) a)]
+    (if (empty? still)
+      (finish-craft! c still nil)
+      (let [stacks (await (load-chest! c chest still))]
+        (if (keyword? stacks)
+          stacks
+          (let [inv (u/inventory (:primitives c))
+                [mem call] (plan-call (ctx/mem c) a still stacks inv chest)]
+            (ctx/update-mem! c merge (select-keys mem craft-keys))
+            (if (nil? call)
+              (finish-craft! c still nil)
+              (let [r (await (ctx/call-child c (:slot call) (:job call) (:args call)))
+                    res (when (= :done r) (ctx/child-result c (:slot call)))]
+                (if-not (= :done r)
+                  (if (= :continue r) :continue (u/fail! c :kit.gave-up "kit craft child declined"))
+                  (let [{:keys [mem end fail]} (absorb mem call res stacks inv)]
+                    (ctx/update-mem! c merge (select-keys mem craft-keys))
+                    (cond
+                      fail (give-up! c fail (into {} still))
+                      end (finish-craft! c still end)
+                      :else :continue)))))))))))
+
 (defn ^:async round
   "One bounded step; see doc. Early returns: nothing needed, walk, inspect,
   nothing takeable, then one withdraw round."
@@ -110,8 +297,10 @@
   (let [a (:args c)
         chest (deposit/chest-of (ctx/view c) a)
         still (needs (u/inventory (:primitives c)) a)]
-    (if (empty? still)
-      (finish! c {})
+    (cond
+      (= :craft (:phase (ctx/mem c))) (await (craft-round c))
+      (empty? still) (finish! c {})
+      :else
       (let [w (await (u/walk-near! c chest 3))]
         (case w
           :partial :continue
@@ -122,6 +311,9 @@
               (let [inv (u/inventory (:primitives c))
                     {:keys [take short]} (plan still inv (stacks-of (.-items seen)))]
                 (cond
+                  (and (empty? take) (:craft a))
+                  (do (ctx/update-mem! c assoc :phase :craft :chest-items (stacks-of (.-items seen)))
+                      :continue)
                   (empty? take) (do (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
                                     (finish! c short))
                   :else

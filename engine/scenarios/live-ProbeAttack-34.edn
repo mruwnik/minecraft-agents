@@ -1,0 +1,4 @@
+;; batch-craft live: kit craft branch - :craft false keeps the take-only behaviour
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+                    (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0 :craft false})))]}

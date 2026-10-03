@@ -46,7 +46,7 @@
 (def chest {:x 10 :y 64 :z 0})
 (def job 'jobs.storage.kit)
 (def full-chest [{:name "bread" :count 32} {:name "stone_hoe" :count 1} {:name "stone_hoe" :count 1} {:name "wooden_hoe" :count 1}])
-(def kit-args {:chest chest :tools ["hoe"] :spare 1 :food 12})
+(def kit-args {:chest chest :tools ["hoe"] :spare 1 :food 12 :craft false})
 
 (deftest needs-lists-what-is-still-carried-short
   (are [inventory args expected] (= expected (kit/needs inventory args))
@@ -138,3 +138,90 @@
           (mem/write! (:store eng) :chest {:pos chest} mem/place-policy)
           (await (run-until-empty eng 12))
           (is (= {"stone_hoe" 2 "bread" 12} (inv p))))))))
+
+;; ------------------------------------------------------------------ the craft branch
+
+(def hoe-recipes
+  {"stone_hoe" {:needs {"cobblestone" 2 "stick" 2} :count 1 :table true}
+   "wooden_hoe" {:needs {"oak_planks" 2 "stick" 2} :count 1 :table true}
+   "diamond_hoe" {:needs {"diamond" 2 "stick" 2} :count 1 :table true}})
+(def table {"11,64,0" "crafting_table"})
+(def hoe-args {:chest chest :tools ["hoe"] :spare 0 :food 0})
+
+(defn ^:async craft-run
+  "Run the kit on a chest with the hoe recipes and a table by default; {:result :inv :chest :p :eng}."
+  [{:keys [contents carried blocks args]
+    :or {blocks table args hoe-args}}]
+  (let [{:keys [eng p]} (setup {:containers {"10,64,0" contents} :inventory (or carried []) :blocks blocks :recipes hoe-recipes})
+        result (await (child-outcome eng job args 60))]
+    {:result result :inv (inv p) :chest (into {} (comp (filter #(pos? (:count %))) (map (juxt :name :count))) (chest-items p)) :p p}))
+
+(def stone-chest [{:name "cobblestone" :count 5} {:name "stick" :count 4} {:name "diamond" :count 3}])
+
+(deftest kit-crafts-what-the-chest-cannot-supply
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label world expected-inv expected-chest]
+                [["stone hoe from cobblestone and sticks, diamonds untouched"
+                  {:contents stone-chest}
+                  {"stone_hoe" 1}
+                  {"cobblestone" 3 "stick" 2 "diamond" 3}]
+                 ["wooden hoe from logs through planks and sticks"
+                  {:contents [{:name "oak_log" :count 2}]}
+                  {"wooden_hoe" 1}
+                  {"oak_log" 1}]
+                 ["diamond hoe when only diamond is allowed"
+                  {:contents stone-chest :args (assoc hoe-args :craft-tiers ["diamond"])}
+                  {"diamond_hoe" 1}
+                  {"cobblestone" 5 "stick" 2 "diamond" 1}]]]
+          (let [{:keys [result inv chest]} (await (craft-run world))]
+            (is (= {:gave-up false :short {}} result) label)
+            (is (= expected-inv (select-keys inv (keys expected-inv))) label)
+            (is (= expected-chest chest) label)))))))
+
+(deftest kit-craft-reports-what-is-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label world expected]
+                [["no table"
+                  {:contents stone-chest :blocks {}}
+                  {:gave-up false :short {"hoe" 1} :missing {"hoe" "no-table"}}]
+                 ["nothing makeable"
+                  {:contents [{:name "dirt" :count 4}]}
+                  {:gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}]
+                 ["food short, no wheat"
+                  {:contents [] :args {:chest chest :tools [] :spare 0 :food 2}}
+                  {:gave-up false :short {:food 2} :missing {:food "wheat"}}]]]
+          (let [{:keys [result chest p]} (await (craft-run world))]
+            (is (= expected result) label)
+            (is (zero? (count (calls p "transfer"))) label)))))))
+
+(deftest kit-crafts-bread-from-chest-wheat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result inv chest]} (await (craft-run {:contents [{:name "wheat" :count 10}]
+                                                            :args {:chest chest :tools [] :spare 0 :food 2}}))]
+          (is (= {:gave-up false :short {}} result))
+          (is (= 2 (get inv "bread")))
+          (is (= 4 (get chest "wheat"))))))))
+
+(deftest kit-craft-false-leaves-the-short-as-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (craft-run {:contents stone-chest :args (assoc hoe-args :craft false)}))]
+          (is (= {:gave-up false :short {"hoe" 1}} result))
+          (is (empty? (calls p "craft"))))))))
+
+(deftest kit-craft-rederives-from-the-inventory-after-a-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result inv chest]} (await (craft-run {:contents stone-chest
+                                                              :carried [{:name "stick" :count 2}]}))]
+          (is (= {:gave-up false :short {}} result))
+          (is (= 1 (get inv "stone_hoe")))
+          (is (= 4 (get chest "stick"))))))))
