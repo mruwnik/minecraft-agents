@@ -11,7 +11,8 @@
   :ranged-radius) and keeps going while one is within :clear-radius, so a
   chasing mob does not catch up between steps. Cornered (no open direction,
   or the walk is blocked) it fights back with the best weapon whatever its
-  health; unarmed it gives up after three tries. Once per flight, with at
+  health, and keeps that fight while the hostile stays within :radius (no
+  running back into the corner); unarmed it gives up after three tries. Once per flight, with at
   least :eat-gap blocks to the nearest hostile and food carried, it eats
   (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
   no hostile has been within :clear-radius for :cooldown-ms.")
@@ -141,7 +142,8 @@
   [c why]
   (let [{:keys [radius ranged-radius weapons]} (:args c)]
     (if (combat/best-weapon (:primitives c) weapons)
-      (do (await (ctx/call-child c :cornered 'jobs.survival.fight-back
+      (do (ctx/update-mem! c assoc :cornered true)
+          (await (ctx/call-child c :cornered 'jobs.survival.fight-back
                                  {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}))
           :continue)
       (u/fail! c :retreat_blocked why))))
@@ -165,8 +167,12 @@
       (and (nil? threat) fleeing? (>= (- now (:last-seen (ctx/mem c))) cooldown-ms)) :done
       (and (nil? threat) fleeing?) :continue
       (nil? threat) (do (ctx/update-mem! c assoc :last-seen now) :continue)
+      (and (:cornered (ctx/mem c)) (<= (.-distance threat) radius))
+      (do (ctx/update-mem! c assoc :last-seen now)
+          (await (cornered! c "cornered")))
       :else
-      (let [_ (await (eat-on-the-run! c threat))
+      (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
+            _ (await (eat-on-the-run! c threat))
             from (u/self-pos c)
             target (choose-target (block-at-fn p) from (u/pos-of (.-pos threat)) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]

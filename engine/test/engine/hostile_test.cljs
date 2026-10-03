@@ -423,3 +423,15 @@
 
 (deftest retreat-flees-until-the-hostile-is-forty-away
   (is (= 40 (get-in (registry/jobs 'jobs.survival.retreat) [:args :clear-radius :default]))))
+
+(deftest a-cornered-fight-is-kept-while-the-hostile-is-close
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round retreat {:inventory sword :blocks box :entities [(assoc (zombie 2 0) :health 20)]}))]
+          (is (= 1 (count (calls p "attack"))))
+          (set! (.. p -world -state -blocks) (js/Map.))
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 2 (count (calls p "attack"))) "the pen opened up, but the zombie is still at 2: keep fighting")
+          (is (zero? (count (calls p "moveTo"))) "no running back and forth"))))))
