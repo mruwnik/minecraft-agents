@@ -3,6 +3,7 @@
   (a 1 s poll of /drive/<name>, postMessage from the view page, take and release requests)."
   (:require [re-frame.core :as rf]
             [dashboard.ui.api :as api]
+            [dashboard.ui.db :as db]
             [dashboard.ui.detail-model :as detail-model]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.logic :as logic]))
@@ -12,6 +13,20 @@
 (def log-limit 300)
 (def frame-id "view-frame")
 
+(defn reconcile-page [prior-stream prior-events data]
+  (let [reset? (or (:gap? data)
+                   (not= (:stream-id data) (:stream-id prior-stream)))
+        prior (if reset? [] prior-events)
+        known (set (map :seq prior))
+        incoming (remove #(contains? known (:seq %)) (:events data))
+        events (vec (take-last 1000 (into prior incoming)))]
+    {:events events
+     :stream {:stream-id (:stream-id data)
+              :generation-id (:generation-id data)
+              :seq (get-in data [:cursor :seq] 0)}
+     :outstanding (or (:outstanding data) {})
+     :notices (->> events (filter #(= :notice (:attention %))) (take-last 5) reverse vec)}))
+
 (defn drive-url [name] (str "/drive/" (js/encodeURIComponent name)))
 
 (defn body-url [body]
@@ -20,7 +35,9 @@
 (rf/reg-event-fx
  :open-detail
  (fn [{:keys [db]} [_ name]]
-   {:db (assoc db :detail-body name :detail-events [] :detail-chip :all :detail-text "" :drive {})
+   {:db (assoc db :detail-body name :detail-events [] :detail-chip :all :detail-text "" :drive {}
+               :detail-stream nil :attention-outstanding (db/body-outstanding (:state db) name)
+               :attention-error nil :detail-notices [])
     :replace-url (body-url name)
     :fx [[:start-timers [[:detail-log log-ms [:poll-detail-log]] [:detail-drive drive-ms [:poll-drive]]]]
          [:dispatch [:poll-detail-log]]
@@ -50,15 +67,47 @@
  :poll-detail-log
  (fn [{:keys [db]} _]
    (when-let [name (:detail-body db)]
-     {:fetch-json {:key :detail-log :url (logic/api-url (str "/api/events/" name) nil {:limit log-limit})
-                   :on-ok [:detail-log-ok name] :on-err [:detail-log-err name]}})))
+     (let [{:keys [stream-id seq]} (:detail-stream db)
+           query (cond-> {:limit log-limit}
+                   stream-id (assoc :stream-id stream-id :after (or seq 0)))]
+       {:fetch-edn {:key :detail-log :url (logic/api-url (str "/api/events/" name) nil query)
+                    :on-ok [:detail-log-ok name] :on-err [:detail-log-err name]}}))))
+
+(rf/reg-event-fx
+ :detail-log-ok
+ (fn [{:keys [db]} [_ name data]]
+   (if (= name (:detail-body db))
+     (let [{:keys [events stream outstanding notices]} (reconcile-page (:detail-stream db) (:detail-events db) data)
+           db (assoc db :detail-events events
+                        :detail-stream stream
+                        :attention-outstanding outstanding
+                        :detail-notices notices
+                        :attention-error nil)]
+       (cond-> {:db db} (:more? data) (assoc :dispatch [:poll-detail-log])))
+     {:db db})))
+
+(rf/reg-event-db :detail-log-err (fn [db [_ name error]] (if (= name (:detail-body db)) (assoc db :attention-error (str error)) db)))
+
+(rf/reg-event-fx
+ :attention-resolve
+ (fn [{:keys [db]} [_ request-id]]
+   (when-let [name (:detail-body db)]
+     {:post-edn {:url (str "/api/attention/" (js/encodeURIComponent name) "/resolve")
+                 :body {:request-id request-id :reason :handled}
+                 :on-ok [:attention-resolved name]
+                 :on-err [:attention-resolve-error name]}})))
+
+(rf/reg-event-fx
+ :attention-resolved
+ (fn [{:keys [db]} [_ name _]]
+   (if (= name (:detail-body db))
+     {:db (assoc db :attention-error nil) :dispatch [:poll-detail-log]}
+     {})))
 
 (rf/reg-event-db
- :detail-log-ok
- (fn [db [_ name data]]
-   (if (= name (:detail-body db)) (assoc db :detail-events (vec (:events data))) db)))
-
-(rf/reg-event-db :detail-log-err (fn [db _] db))
+ :attention-resolve-error
+ (fn [db [_ name error]]
+   (if (= name (:detail-body db)) (assoc db :attention-error (str error)) db)))
 
 (rf/reg-event-db :detail-chip (fn [db [_ chip]] (assoc db :detail-chip chip)))
 (rf/reg-event-db :detail-text (fn [db [_ text]] (assoc db :detail-text text)))

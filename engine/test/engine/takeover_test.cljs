@@ -37,7 +37,7 @@
 
 (defn setup [spec]
   (let [clock (atom t0)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake spec)
         dir (tu/tmp-dir)
         eng (core/create {:primitives p :jobs jobs :triggers triggers :dir dir :now #(deref clock)
@@ -129,11 +129,11 @@
           [ended] (kinds-of seen :takeover_ended)
           [dead] (kinds-of seen :drive_deadman)]
       (is (= ["claude" "look around"] ((juxt :who :why) started)))
-      (is (= :info (:level started)))
+      (is (nil? (:level started)))
       (is (= "manual control by claude: look around; jobs and reflexes paused" (:text started)))
       (is (= ["claude" "idle" 70] ((juxt :who :reason :held-ms) ended)))
       (is (= "manual control by claude ended: idle; jobs and reflexes resume" (:text ended)))
-      (is (= :warn (:level dead)))
+      (is (nil? (:level dead)))
       (is (= "driver claude silent 2100 ms: controls released" (:text dead))))))
 
 (deftest manual-state-is-not-persisted

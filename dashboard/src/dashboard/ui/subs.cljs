@@ -9,7 +9,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -97,7 +97,8 @@
  :<- [:detail-events]
  :<- [:detail-chip]
  :<- [:detail-text]
- (fn [[events chip text] _] (eventlog/rows events {:chip chip :text text})))
+ :<- [:attention-outstanding]
+ (fn [[events chip text outstanding] _] (eventlog/rows events outstanding {:chip chip :text text})))
 
 (rf/reg-sub
  :drive-banner

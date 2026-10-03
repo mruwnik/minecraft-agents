@@ -103,10 +103,10 @@
                 (ev 5 {:kind "failed" :level "warn" :error "no path" :name "dig"})
                 (ev 6 {:source "job" :kind "dig_in_failed" :level "warn" :name "shelter"})
                 (ev 7 {:source "body" :kind "hurt" :job nil})]]
-    (is (= [{:t (+ t0 4000) :level "info" :source "body" :kind "chat" :text "hello"}
-            {:t (+ t0 5000) :level "warn" :source "job" :kind "failed" :text "no path"}
-            {:t (+ t0 6000) :level "warn" :source "job" :kind "dig_in_failed" :text "job.dig_in_failed shelter"}
-            {:t (+ t0 7000) :level "info" :source "body" :kind "hurt" :text "body.hurt"}]
+    (is (= [{:t (+ t0 1000) :source "action" :kind "started" :attention "none" :text "action.started moveTo"}
+            {:t (+ t0 4000) :source "body" :kind "chat" :attention "none" :text "hello"}
+            {:t (+ t0 5000) :source "job" :kind "failed" :attention "none" :text "no path"}
+            {:t (+ t0 7000) :source "body" :kind "hurt" :attention "none" :text "body.hurt"}]
            (:recent (view events (+ t0 8000)))))))
 
 (deftest recent-keeps-newest-10
@@ -251,11 +251,12 @@
            ["view stats" (ev 1 {:source "body" :kind "view.stats"}) false]
            ["an action start (debug)" (ev 1 {:source "action" :kind "started" :level "debug"}) true]
            ["other debug noise" (ev 1 {:source "path" :kind "x" :level "debug"}) false]
-           ["a warning" (ev 1 {:source "path" :kind "x" :level "warn"}) true]]]
+           ["a warning level does not determine attention" (ev 1 {:source "path" :kind "x" :level "warn"}) false]]]
     (is (= worthy? (ee/log-worthy? e)) title)))
 
 (deftest log-entry-shape
-  (is (= {:t 1 :seq 2 :level "info" :source "job" :kind "completed" :name "n" :text nil :error nil :args {:a 1} :reflex nil :ms nil}
+  (is (= {:generation-id "legacy" :time-ms 1 :seq 2 :source :job :kind :completed :attention :none
+          :context {} :message nil :data {:name "n" :args {:a 1} :pos {:x 1}}}
          (ee/log-entry {:t 1 :seq 2 :level "info" :source "job" :kind "completed" :name "n" :args {:a 1} :inventory [1 2 3] :pos {:x 1}}))))
 
 (deftest log-tail

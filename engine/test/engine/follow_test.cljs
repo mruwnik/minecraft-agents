@@ -20,7 +20,7 @@
   and puts the child's result in :out when it finishes."
   [world args]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         out (atom :not-done)
         parent {:check (constantly true)
@@ -50,7 +50,7 @@
 (defn move-targets [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo")))
 (defn self-x [p] (.-x (.-pos (.self p))))
 (defn entities [p] (.-entities (.-state (.-world p))))
-(defn has-event? [{:keys [seen]} kind level] (boolean (some #(and (= kind (:kind %)) (= level (:level %))) @seen)))
+(defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
 
 (defn ^:async follow
   "Setup, run n ticks step ms apart, return the setup map."
@@ -104,7 +104,7 @@
               {:keys [p out] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
           (is (= {:reason "lost" :last-seen {:x 10 :y 64 :z 0}} @out))
           (is (= 1 (count (move-targets p))) "the last-seen cell is walked to once")
-          (is (has-event? s :follow.lost :info)))))))
+          (is (has-event? s :follow.lost)))))))
 
 (deftest a-player-who-is-never-there-is-absent-after-two-seconds
   (async done
@@ -113,7 +113,7 @@
         (let [{:keys [clock out] :as s} (await (follow {} {:player "Steve"} 10 500))]
           (is (= {:reason "absent"} @out))
           (is (<= 2000 (- @clock 1000000)))
-          (is (has-event? s :follow.absent :info)))))))
+          (is (has-event? s :follow.absent)))))))
 
 (deftest not-yet-absent-within-the-grace
   (async done
@@ -129,7 +129,7 @@
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason "unreachable"} @out))
           (is (= 3 (count (calls p "moveTo"))))
-          (is (has-event? s :follow.unreachable :warn)))))))
+          (is (has-event? s :follow.unreachable)))))))
 
 (deftest timeout-ends-the-follow
   (async done
@@ -148,4 +148,4 @@
           (await (run-ticks s 10 500))
           (is (= {:reason "out-of-range"} @out))
           (is (= 3 (count (calls p "moveTo"))))
-          (is (has-event? s :follow.out-of-range :warn)))))))
+          (is (has-event? s :follow.out-of-range)))))))

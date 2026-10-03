@@ -10,11 +10,13 @@
 
 (defn refusal
   "nil when the request may proceed, else {:status :error}. Origin must equal http://<Host> when present."
-  [{:keys [host origin content-type port]}]
+  [{:keys [host origin content-type port content-types]}]
+  (let [content-types (or content-types ["application/json"])]
   (cond
     (not (local-host? host port)) {:status 403 :error "bad Host"}
     (and (some? origin) (not= origin (str "http://" host))) {:status 403 :error "bad Origin"}
-    (not (str/starts-with? (or content-type "") "application/json")) {:status 415 :error "Content-Type must be application/json"}))
+    (not (some #(str/starts-with? (or content-type "") %) content-types))
+    {:status 415 :error (str "Content-Type must be " (str/join " or " content-types))})))
 
 (defn method-refusal [method]
   (when-not (= "POST" method) {:status 405 :error "POST only"}))

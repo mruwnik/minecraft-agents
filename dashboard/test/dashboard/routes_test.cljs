@@ -74,6 +74,9 @@
            ["/api/item-icon/../x.png" {:kind :unknown}]
            ["/api/events/ProbeMove?limit=300" {:kind :events :name "ProbeMove"}]
            ["/api/events/Probe-Move_2" {:kind :events :name "Probe-Move_2"}]
+           ["/api/attention/ProbeMove/resolve" {:kind :attention-resolve :name "ProbeMove"}]
+           ["/api/attention/Probe-Move_2/resolve" {:kind :attention-resolve :name "Probe-Move_2"}]
+           ["/api/attention/../resolve" {:kind :unknown}]
            ["/api/events/" {:kind :unknown}]
            ["/api/events/a/b" {:kind :unknown}]]]
     (is (= expected (routes/route url)) url)))

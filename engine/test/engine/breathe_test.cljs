@@ -12,7 +12,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -248,7 +248,7 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (filter #(= :no_shore_near (:kind %)) @seen))))
-          (is (not-any? #(= :warn (:level %)) @seen))
+          (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen))
           (is (= ["swim"] (call-names p))))))))
 
 (deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds

@@ -36,6 +36,7 @@
             [engine.expr :as expr]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            ["crypto" :as crypto]
             ["path" :as path]))
 
 (def default-stall-rounds
@@ -54,7 +55,7 @@
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
    :deferred-ends [] :cursor 0 :resume nil :current nil :pending-reflex nil :failed {}
-   :next-id 1})
+   :attention {} :next-id 1})
 
 ;; ------------------------------------------------------------------ errors
 
@@ -156,6 +157,79 @@
 
 (defn emit! [eng event]
   (events/emit! (:events eng) event))
+
+(defn outstanding [eng] (:attention (state eng)))
+
+(defn attention-event [request]
+  (-> (:event request)
+      (assoc :attention :required :request-id (:request-id request))))
+
+(defn same-request? [request job-id reason]
+  (and (= job-id (:job-id request)) (= reason (:reason request))))
+
+(defn request-attention!
+  "Persist and emit a required request. Re-observations for one job/reason reuse
+  the stable request ID; only changed data or message emits an update."
+  [eng {:keys [job-id reason kind data message context state-update]}]
+  (when-not (and job-id reason kind)
+    (throw (ex-info "required attention needs job-id, reason and kind" {:job-id job-id :reason reason :kind kind})))
+  (let [existing (some (fn [[_ request]] (when (same-request? request job-id reason) request))
+                       (:attention (state eng)))
+        request-id (or (:request-id existing) (.randomUUID crypto))
+        event {:source :job :kind kind
+               :context (merge {:job-id job-id} context)
+               :data (assoc (or data {}) :reason reason)
+               :message message}
+        request (merge existing {:request-id request-id :job-id job-id :reason reason
+                                 :event event :updated-at (now eng)})
+        changed? (or (nil? existing)
+                     (not= (select-keys (:event existing) [:data :message :kind])
+                           (select-keys event [:data :message :kind])))]
+    (swap! (:state eng) (fn [s]
+                          (-> (if state-update (state-update s) s)
+                              (assoc-in [:attention request-id] request))))
+    (when changed? (emit! eng (attention-event request)))
+    request-id))
+
+(defn resolve-attention!
+  "Close a required request after persisting its removal. Missing IDs are safe
+  to acknowledge repeatedly; callers get :already-resolved."
+  [eng request-id reason]
+  (if-let [request (get-in (state eng) [:attention request-id])]
+    (do
+      (swap! (:state eng)
+             (fn [s]
+               (cond-> (update s :attention dissoc request-id)
+                 (and (:job-id request) (contains? (:failed s) (:job-id request)))
+                 (assoc-in [:failed (:job-id request) :attention-closed?] true))))
+      (emit! eng {:source :attention :kind :resolved
+                  :context (cond-> {} (:job-id request) (assoc :job-id (:job-id request)))
+                  :request-id request-id
+                  :data {:handled (not (#{:job-cancelled :job-dropped} reason)) :reason reason}})
+      :resolved)
+    :already-resolved))
+
+(defn resolve-job-attention!
+  ([eng job-id reason] (resolve-job-attention! eng job-id reason identity))
+  ([eng job-id reason state-update]
+   (let [requests (->> (:attention (state eng))
+                       (keep (fn [[request-id request]]
+                               (when (= job-id (:job-id request)) [request-id request])))
+                       vec)
+         ids (mapv first requests)]
+     (swap! (:state eng) (fn [s]
+                           (-> (state-update s)
+                               (update :attention #(apply dissoc % ids)))))
+     (doseq [[request-id request] requests]
+       (emit! eng {:source :attention :kind :resolved
+                   :context (cond-> {} (:job-id request) (assoc :job-id (:job-id request)))
+                   :request-id request-id
+                   :data {:handled (not (#{:job-cancelled :job-dropped} reason)) :reason reason}}))
+     (count requests))))
+
+(defn replay-attention! [eng]
+  (doseq [[_ request] (:attention (state eng))]
+    (emit! eng (attention-event request))))
 
 (defn job-fields [eng id]
   (let [inst (get-in (state eng) [:instances id])]
@@ -349,22 +423,30 @@
   (when-not (owner? eng token) (throw (cut-error)))
   (swap! (:acts eng) update root (fnil inc 0))
   (save-memory! eng)
-  (let [fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)}
+  (let [action-id (.randomUUID crypto)
+        fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
+                :action-id action-id}
         p (:primitives eng)
         _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
-        from (when (= :moveTo k) (self-pos p))
-        r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
-        to (when (= :moveTo k) (self-pos p))]
-    (when (= :moveTo k)
-      (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)
-                                       :target (js->clj (.-pos args) :keywordize-keys true)}
-                  moved-policy))
-    (save-memory! eng)
-    (record-act! eng {:root root :reflex reflex} k r (distance from to))
-    (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
-                 (.-reason r) (assoc :reason (.-reason r))
-                 (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
-    r))
+        from (when (= :moveTo k) (self-pos p))]
+    (try
+      (let [r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
+            to (when (= :moveTo k) (self-pos p))]
+        (when (= :moveTo k)
+          (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)
+                                           :target (js->clj (.-pos args) :keywordize-keys true)}
+                      moved-policy))
+        (save-memory! eng)
+        (record-act! eng {:root root :reflex reflex} k r (distance from to))
+        (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
+                     (.-reason r) (assoc :reason (.-reason r))
+                     (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
+        r)
+      (catch :default e
+        (emit! eng (cond-> (merge fields {:source :action :kind :done
+                                          :status (if (cut? e) :cut :failed)})
+                     (not (cut? e)) (assoc :error (str e))))
+        (throw e)))))
 
 (defn make-ctx
   "The ctx a round or a check receives. base is {:root :slots :chain :token
@@ -405,6 +487,15 @@
      :result (fn [data] (check!) (swap! results assoc id data))
      :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
      :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
+     :request-attention (fn [kind reason data message]
+                          (check!)
+                          (request-attention! eng {:job-id root :reason reason :kind kind
+                                                   :context (cond-> {:round round :chain chain}
+                                                              reflex (assoc :reflex-id reflex))
+                                                   :data data :message message}))
+     :resolve-attention (fn [request-id reason]
+                          (check!)
+                          (resolve-attention! eng request-id reason))
      :emit (fn [kind level fields]
              (emit! eng (merge fields {:source :job :kind kind :level level :job id
                                        :chain chain :round round :reflex reflex})))}))
@@ -501,10 +592,13 @@
         fields (job-fields eng id)]
     (case status
       :done
-      (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
+      (do (resolve-job-attention! eng id :job-completed
+                                  #(assoc (remove-listed % id) :cursor (max idx 0)))
           (forget-backoff! eng id)
           (mem/delete-job! (:store eng) id)
-          (emit! eng (merge fields {:source :job :kind :completed :level :info})))
+          (emit! eng (merge fields {:source :job :kind :completed :level :info
+                                    :attention :notice
+                                    :data {:status :completed}})))
 
       :cut
       (do (swap! (:state eng) assoc :resume id :current nil)
@@ -513,12 +607,13 @@
                              :text "a primitive rejected with cut; the job stays listed"})))
 
       :error
-      (do (swap! (:state eng) #(-> %
-                                   (assoc-in [:failed id] {:error (str error) :t (now eng)})
-                                   (assoc :cursor (inc idx) :current nil)))
-          (emit! eng (merge fields {:source :job :kind :failed :level :warn
-                                    :error (str error)
-                                    :text (str "failed, kept on the list until retry! or cancel!: " error)})))
+      (request-attention! eng {:job-id id :reason :round-failed :kind :failed
+                               :context (select-keys fields [:round :chain])
+                               :data {:error (str error)}
+                               :message (str "Job failed and is parked until retried or cancelled: " error)
+                               :state-update #(-> %
+                                                  (assoc-in [:failed id] {:error (str error) :t (now eng)})
+                                                  (assoc :cursor (inc idx) :current nil))})
 
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
@@ -800,7 +895,7 @@
   (when (= id (:id (running eng)))
     (set-owner! eng nil)
     (reset! (:running eng) nil))
-  (swap! (:state eng) remove-listed id)
+  (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
   (forget-backoff! eng id)
   (mem/delete-job! (:store eng) id)
   (save-memory! eng)
@@ -812,7 +907,7 @@
   [eng id]
   (if-not (contains? (:failed (state eng)) id)
     false
-    (do (swap! (:state eng) update :failed dissoc id)
+    (do (resolve-job-attention! eng id :job-retried #(update % :failed dissoc id))
         (emit! eng {:source :job :kind :retried :level :info :job id :chain [id] :by :agent})
         true)))
 
@@ -980,20 +1075,27 @@
   memory.edn when present, sweeps memory and appends a :restart entry.
   Options: :primitives, :jobs (the registry, {sym {:check :round :doc
   :args}}), :triggers ({name trigger}), :dir :now :events :body,
+  :max-event-bytes (default 64 MiB),
   :stall-rounds (default 20), :sweep-ms (default 60000) and :stats-ms (how
   often memory.save-stats is emitted, default 60000), :backoff (the engine-wide
   backoff config, a map or false, see engine.backoff) and :backoff-alert-ms
   (least gap between two job.backoff warns, default 300000)."
   [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms
+           max-event-bytes
            backoff backoff-alert-ms]
     :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
          stats-ms default-stats-ms backoff-alert-ms default-backoff-alert-ms}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
-        st (atom (if saved (restore saved) empty-state))
-        ev (or events (events/make {:body username :file (path/join dir "events.jsonl") :stdout? true
-                                    :now now :pos-fn #(self-pos primitives)}))
+        initial-state (if saved (restore saved) empty-state)
+        initial-state (cond-> initial-state
+                        (nil? (:generation-id initial-state)) (assoc :generation-id (.randomUUID crypto)))
+        st (atom initial-state)
+        ev (or events (events/make {:file (path/join dir "events.edn")
+                                    :generation-id (:generation-id initial-state)
+                                    :max-bytes (or max-event-bytes 67108864)
+                                    :stdout? true :now now :pos-fn #(self-pos primitives)}))
         store (mem/open dir {:now now
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :live-jobs #(set (keys (:instances @st)))})
@@ -1026,6 +1128,18 @@
     (drop-leftover-reflex-jobs! eng saved)
     (drop-unknown-jobs! eng)
     (drop-unresolved-entries! eng)
+    (doseq [[request-id request] (:attention (state eng))
+            :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]
+      (resolve-attention! eng request-id :job-dropped))
+    ;; Upgrade older snapshots and repair a crash boundary: a parked failed job
+    ;; must always have a durable required request before startup replay.
+    (doseq [[id failure] (:failed (state eng))
+            :when (and (not (:attention-closed? failure))
+                       (not-any? #(same-request? % id :round-failed) (vals (:attention (state eng))))) ]
+      (request-attention! eng {:job-id id :reason :round-failed :kind :failed
+                               :data {:error (:error failure)}
+                               :message (str "Job failed and is parked until retried or cancelled: " (:error failure))}))
+    (replay-attention! eng)
     (mem/write! store :restart {})
     (save-memory! eng)
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info

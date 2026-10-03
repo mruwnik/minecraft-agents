@@ -9,6 +9,7 @@
 (def item-icon-re #"^/api/item-icon/([a-z0-9_]+)\.png$")
 (def plan-re #"^/api/plan/([A-Za-z0-9_-]+)$")
 (def events-re #"^/api/events/([A-Za-z0-9_-]+)$")
+(def attention-resolve-re #"^/api/attention/([A-Za-z0-9_-]+)/resolve$")
 (def static-re #"^/[A-Za-z0-9_./-]+\.(?:js|css|map|png|svg|ico|json|html|txt|woff2?)$")
 
 (def exact
@@ -47,6 +48,7 @@
         (some->> (re-find tiles-re path) second (assoc {:kind :tiles} :world))
         (some->> (re-find item-icon-re path) second (assoc {:kind :item-icon} :name))
         (some->> (re-find plan-re path) second (assoc {:kind :plan-api} :name))
+        (some->> (re-find attention-resolve-re path) second (assoc {:kind :attention-resolve} :name))
         (some->> (re-find events-re path) second (assoc {:kind :events} :name))
         (when (re-find unsupported-re path) {:kind :unsupported})
         (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})

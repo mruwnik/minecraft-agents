@@ -745,41 +745,73 @@ it never removes it, and it alerts.
 
 ## Events
 
-JSON lines, one per event, on stdout and appended to
-`state/agents/<name>/engine/events.jsonl`. Envelope (from `docs/events.md`):
+The engine writes one EDN map per line to stdout and
+`state/agents/<name>/engine/events.edn`. The canonical contract is in
+[`docs/event-stream.md`](../docs/event-stream.md). Event HTTP responses and
+requests also use `application/edn`; there is no JSON serialization boundary
+for engine events. Existing JSONL logs remain historical files and are not
+appended to or mixed with the EDN stream.
 
-| field | what |
+| field | meaning |
 |---|---|
-| `seq` | monotone per body, continues across restarts |
-| `t` | wall time, ms since epoch |
-| `body` | username |
-| `source` | `job`, `reflex`, `action`, `body`, `world`, `system` |
-| `kind` | for example `round_started`; the pair `source.kind` names the event |
-| `level` | `debug`, `info`, `warn`, `error` |
-| `job` | instance id owning the body, or null |
-| `chain` | ids from the top-level job down to `job`, for children |
-| `reflex` | reflex id when inside a reflex job |
-| `round` | the job's round number |
-| `pos` | integer cell of the body |
-| `cause` | optional seq of the event that caused this one |
-| `text` | optional one-line prose |
+| `:seq` | increasing stream sequence, retained across restarts and `--fresh` |
+| `:generation-id` | engine-state identity; retained on restore, replaced by `--fresh` |
+| `:time-ms` | wall-clock milliseconds since epoch |
+| `:source`, `:kind` | event producer area and event kind |
+| `:context` | applicable job ID, child chain, round, reflex ID, action-call ID and causal sequence |
+| `:data` | structured event-specific fields, including position when available |
+| `:message` | optional display text, not a machine-readable reason |
+| `:attention` | omitted/`:none`, `:notice`, or `:required` |
+| `:request-id` | stable identity for a required request and its resolution |
 
-Plus kind-specific fields. Kinds the engine emits: `job.queued`,
-`job.round_started`, `job.yielded` (a `:continue`), `job.cut`,
-`job.completed`, `job.failed`, `job.retried`, `job.cancelled`, `job.stalled` (warn),
-`job.backoff` (warn), `job.recovered` (see Backoff; `reflex.` for reflexes),
-`job.memory_written` (debug, `memory` is the kind), `action.started` and
-`action.done` (debug), `reflex.fired` and `reflex.ended` (both with `text` "reflex → job"; ended carries `outcome`: `done`, `declined`, `cut`, `failed`, `dropped` or `backoff`, exactly one per fired job, including on shutdown and for jobs a crash left behind; `how`: `cleared`,
-`completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,
-`body.<kind>` for body events, `system.started`, `system.restored`,
-`system.stopping`, `system.takeover_started`, `system.takeover_ended`, `system.drive_deadman` (warn),
-`system.control_unavailable` (error).
+Body identity belongs to the subscription, not every event. There is no
+schema-version or severity field. Existing internal emitters are normalized
+at the appender boundary; consumers use structured kinds, outcomes and attention.
 
-Save measurement (no optimisation, just numbers): every write of `memory.edn`
-or `engine.edn` emits `memory.saved` (debug) with `file` (`memory.edn` or
-`engine.edn`), `bytes` written and `ms` the write took. Once a minute
-(`:stats-ms`, checked in `tick!`) `memory.save-stats` (info) sums the window:
-`count`, `bytes`, `ms` (total) and `max-ms`, then the window restarts.
+Sources cover job and reflex lifecycle, primitive action starts/outcomes,
+body events, system lifecycle/manual takeover, memory writes and save statistics.
+Primitive starts and outcomes share an action-call ID. Routine events do not
+notify an agent. Notices can be batched. Required requests remain in saved
+engine state until explicitly resolved, independently of retained history;
+reading one does not resolve it or pause the whole engine.
+
+The appender retains **64 MiB total** by default across active and rotated
+segments (`events.edn.1` through `.3`). `events.edn.meta.edn` preserves stream
+identity and reserved sequence numbers. A cursor is `{:stream-id ... :seq ...}`.
+Rotation can make a cursor too old, and a crash can leave reserved sequence
+gaps; readers receive an explicit gap and reconcile current state. Incomplete
+trailing records are repaired on startup; malformed complete records are reported.
+The cap is a byte budget, not a guaranteed duration of history.
+
+Configure `engine.events.maxBytes` in the existing agent runtime configuration,
+or override it for one launch with `--events-max-bytes <bytes>`; this is not a
+job-scenario setting. The minimum accepted cap is 1024 bytes. Records larger
+than the cap are rejected explicitly, never silently truncated. An outstanding
+required request remains in saved state even if its notification cannot be logged.
+
+### Local event API
+
+The engine exposes HTTP over `state/agents/<name>/engine/events.sock`, a local
+Unix socket with mode 0600. It is separate from manual driving's `control.sock`.
+All responses are EDN, including errors; mutation bodies must be EDN too.
+
+| request | behavior |
+|---|---|
+| `GET /snapshot` | coherent engine state, outstanding requests, body metadata and cursor |
+| `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
+| `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
+
+For example, read a snapshot without taking control of the body:
+
+```sh
+curl --unix-socket state/agents/Bob/engine/events.sock http://localhost/snapshot
+```
+
+On connection/reconnection or a history gap, reconcile outstanding requests
+from `/snapshot`, then read events after that snapshot's cursor. This is an
+observational stream, not an event-sourced database. State and memory snapshots
+remain authoritative. The ClojureScript dashboard uses this API and offers a
+read-only historical fallback for offline engines and old logs.
 
 ## Manual takeover
 
@@ -1084,7 +1116,7 @@ server and mineflayer, none of it checked live:
 ## Not built (hooks only)
 
 Claims, no-touch regions, flapping counters, the per-body no-progress
-detector, progress events, the HTTP API, multi-body, world memory, soft
+detector, progress events, a general job-control API, multi-body, world memory, soft
 pathfinding weights, a reflex pointing at a listed instance (a register entry
 may carry `:instance` later).
 

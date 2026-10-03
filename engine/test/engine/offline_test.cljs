@@ -31,7 +31,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs jobs :triggers triggers :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -99,7 +99,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
+              [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:time 14000 :entities [sleeper] :offlineScale 0.01})
               eng (core/create {:primitives p :jobs registry/jobs :triggers real-triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)

@@ -1,6 +1,6 @@
 # Dashboard (ClojureScript)
 
-Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `engine/events.jsonl`).
+Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `engine/events.sock` or legacy event files).
 
     npm install
     npm test          # shadow-cljs compile test && node out/test.cjs
@@ -9,9 +9,11 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 
 `DASHBOARD_ROOT` overrides the repo root (default: two levels above `out/`).
 
-## Endpoints (JSON, `cache-control: no-store`)
+## Endpoints
 
-`/api/worlds`, `/api/state?world=`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers`,
+`/api/state?world=` is EDN (`application/edn`) because it carries engine summaries and outstanding attention requests. Other read endpoints below return JSON unless noted; all use `cache-control: no-store`.
+
+`/api/worlds`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers`,
 `/api/plans?world=` (every plan file of the world with its totals, cached 10 s), `/api/plan/<id>?world=` (full comparison: elements, per-layer grids, errors),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
 
@@ -26,7 +28,8 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
   last pose (`ui/stills.cljs`: one scene at a time is opened, snapshotted into a 2D canvas once the columns are loaded, and closed; re-taken only when
   `poseMtimeMs` changes). Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
-- `/api/events/<body>?limit=`: the tail of the body's `events.jsonl`, filtered to what the popup lists (default 300, at most 2000).
+- `/api/events/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming. Legacy bodies without `events.edn` or an event socket may use their old `events.jsonl` as historical best-effort input.
+- `POST /api/attention/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
 - `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job
   namespace of `engine/src/jobs/**/*.cljs` (`kind` job, `id` `jobs.<dir>.<name>`) and every trigger of
@@ -44,10 +47,9 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
   `^[A-Za-z0-9_]{1,16}$`, checked at startup). Rate limit 1 per second and 5 per 30 s (429). Replies `{ok, command}`, 400 `{error}`,
   502 `{error}` when RCON fails. `DASHBOARD_CHAT_DRY=1` logs the command instead of sending. Code: `dashboard.chat-send`
   (pure), `dashboard.rcon` (socket, password read in-process).
-- Guard (`dashboard.guard`) on every state-changing route (POST `/api/chat/send`, POST `/api/blueprint-preview`), same rules as
-  `tools/view/drive-proxy.mjs` (whose check is not exported, so it is reimplemented): Host must be `127.0.0.1`, `localhost` or `[::1]`
-  with the server's port; Origin, when present, must equal `http://<Host>` (a foreign Origin or `null` is 403); Content-Type
-  must be `application/json` (415); other methods get 405; body limit 4 KB for chat (413), 2 MiB for blueprint-preview.
+- Guard (`dashboard.guard`) on every state-changing route, including POST `/api/attention/<body>/resolve`, applies the loopback
+  Host/Origin restrictions used by `tools/view/drive-proxy.mjs`; attention resolution requires `application/edn`. Existing
+  mutation routes use JSON.
   `/drive/<body>` goes through drive-proxy and keeps its own check.
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
   `/view`, `/agents`, `/pose/<body>`, `/hud/<body>`, `/drive/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
@@ -62,10 +64,12 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 
 ## Differs from the old dashboard
 
-- No body is ever contacted: engine bodies are read from `events.jsonl` (incremental tail) and `engine.edn`
-  (jobs, reflexes). Folders without `engine/events.jsonl` are listed as down, "not an engine body (unsupported)".
+- Engine bodies with the canonical event service are read from their local `events.sock` for snapshots, paginated event replay
+  and attention resolution; the socket is separate from the viewer control socket. Old bodies can still be read from
+  `events.jsonl` as best-effort history. `engine.edn` remains a legacy fallback for jobs and reflexes. Folders without recognized
+  engine data are listed as down, "not an engine body (unsupported)".
 - No look/screen/actions/whisper/icon endpoints, and `/api/world` is 501.
-- Chat comes from engine events (`source chat`, kind `said`/`whisper`); `t` is epoch millis.
+- Chat comes from engine events (`:source :chat`, kind `:said`/`:whisper`); canonical `:time-ms` is epoch millis.
 - Villages, villagers and blueprints reuse the old JS modules (read-only, loaded with `require`).
 
 ## Plans (draft)

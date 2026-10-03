@@ -168,12 +168,42 @@
   ^{:key k}
   [:button.chip {:class (when (= k current) "on") :on-click #(rf/dispatch [:detail-chip k])} label])
 
-(defn log-row [{:keys [seq t level category source-kind text]}]
+(defn log-row [{:keys [seq t attention category source-kind text]}]
   ^{:key seq}
-  [:div.lrow {:class [level (clojure.core/name category)]}
+  [:div.lrow {:class [(clojure.core/name attention) (clojure.core/name category)]}
    [:span.when (logic/clock-ms-text t)]
    [:span.skind source-kind]
-   [:span.ltext text]])
+   [:span.ltext text]
+   [:span.attention (case attention :required "required" :notice "notice" :resolved "handled" "routine")]])
+
+(defn attention-panel []
+  (let [outstanding @(rf/subscribe [:attention-outstanding])
+        notices @(rf/subscribe [:detail-notices])
+        error @(rf/subscribe [:attention-error])]
+    [:section.dattention
+     [:div.attention-section
+      [:h3 "Needs attention"]
+      (if (seq outstanding)
+        (into [:div.attention-list]
+              (map (fn [[id request]]
+                     ^{:key id}
+                     [:div.attention-request
+                      [:span.attention.required "required"]
+                      [:span.attention-text (eventlog/request-text request)]
+                      [:button {:disabled (= "legacy" (get-in @(rf/subscribe [:detail-stream]) [:stream-id]))
+                                :title "Acknowledge this request; this does not retry the job"
+                                :on-click #(rf/dispatch [:attention-resolve id])} "Mark handled"]]))
+              (sort-by key outstanding))
+        [:div.dim "No outstanding requests"])
+      (when error [:div.attention-error error])
+      [:p.dim "Mark handled acknowledges the request; it does not retry the job."]]
+     [:div.attention-section
+      [:h3 "Notices"]
+      (if (seq notices)
+        (into [:div.notice-list]
+              (map (fn [e] [:div.notice-row [:span.attention.notice "notice"] [:span (eventlog/event-message e)]]))
+              notices)
+        [:div.dim "No recent notices"])]]))
 
 (defn log-panel []
   (let [rows @(rf/subscribe [:detail-rows])
@@ -197,4 +227,5 @@
         [header m]
         [:div.dleft [chrome (:online? m)] [view-box m]]
         [:div.dright [hud-panel (:hud m)] [inventory-panel (:hud m)] [jobs-panel m]]
+        [attention-panel]
         [log-panel]]])))

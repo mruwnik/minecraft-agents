@@ -10,7 +10,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -83,7 +83,7 @@
         (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread"}))]
           (is (= {:made 0 :reason "no-table"} result))
           (is (empty? (calls p "moveTo")))
-          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.no-table (:kind %)) @seen)))))))
 
 (deftest craft-reports-what-is-missing
   (async done
@@ -99,7 +99,7 @@
       (fn ^:async t []
         (let [[result _ seen] (await (craft {} {:item "dragon_egg"}))]
           (is (= {:made 0 :reason "no-recipe"} result))
-          (is (some #(and (= :craft.cannot (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.cannot (:kind %)) @seen)))))))
 
 (deftest craft-count-is-on-top-of-what-is-carried
   (async done
@@ -119,7 +119,7 @@
                                               {:item "bread"}))]
             (is (= {:made 0 :reason "unreachable"} result))
             (is (= 3 (count (calls p "moveTo"))))
-            (is (some #(and (= :craft.gave-up (:kind %)) (= :warn (:level %))) @seen))))))))
+            (is (some #(= :craft.gave-up (:kind %)) @seen))))))))
 
 (deftest craft-with-a-full-inventory
   (async done
@@ -128,7 +128,7 @@
         (let [filler (mapv #(hash-map :name (str "item_" %) :count 1) (range 35))
               [result _ seen] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
           (is (= {:made 0 :reason "full"} result))
-          (is (some #(and (= :craft.full (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.full (:kind %)) @seen)))))))
 
 (deftest craft-gives-up-when-the-table-arg-is-not-a-table
   (async done
@@ -137,7 +137,7 @@
         (let [[result _ seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"10,64,0" "stone"}}
                                             {:item "bread" :table table}))]
           (is (= {:made 0 :reason "not-a-table"} result))
-          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.no-table (:kind %)) @seen)))))))
 
 (deftest craft-gives-up-when-in-reach-of-a-table-that-still-refuses
   (async done
@@ -148,7 +148,7 @@
               result (await (child-outcome eng job {:item "bread"} 8))]
           (is (= {:made 0 :reason "unreachable"} result))
           (is (empty? (calls p "moveTo")))
-          (is (some #(and (= :craft.gave-up (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.gave-up (:kind %)) @seen)))))))
 
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
   (async done
@@ -193,4 +193,4 @@
                                             {:item "bread" :radius 8}))]
           (is (= {:made 0 :reason "no-table"} result))
           (is (empty? (calls p "moveTo")))
-          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :craft.no-table (:kind %)) @seen)))))))

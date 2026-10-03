@@ -15,7 +15,7 @@
 (def jobs {'away {:check (constantly true) :round away-round}})
 
 (defn engine-with-sink [p clock]
-  (let [[seen sink] (tu/capture-sink)
+  (let [[seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives p :jobs jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :body "Fake"})]
     (swap! (:events eng) update :sinks conj sink)

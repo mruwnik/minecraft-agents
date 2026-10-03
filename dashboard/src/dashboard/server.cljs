@@ -1,10 +1,11 @@
 (ns dashboard.server
-  "The dashboard server: plain node http on 127.0.0.1. Engine bodies are read from state/agents/<name>/engine/
-  (events.jsonl tail and engine.edn); no body is ever contacted."
+  "The dashboard server: plain node http on 127.0.0.1. Engine bodies are read from their local event service,
+  with an events.jsonl/engine.edn fallback for legacy body directories."
   (:require ["fs" :as fs]
             ["http" :as http]
             ["path" :as path]
             ["url" :as url]
+            [cljs.reader :as reader]
             [clojure.string :as str]
             [dashboard.chat :as chat]
             [dashboard.engine-edn :as engine-edn]
@@ -105,8 +106,79 @@
 (def edn-cache (atom {}))
 (def tails (atom {}))
 
-(defn events-file [name] (.join path agents-dir name "engine" "events.jsonl"))
-(defn engine-folder? [name] (file-exists? (events-file name)))
+(defn engine-dir [name] (.join path agents-dir name "engine"))
+(defn events-file [name] (.join path (engine-dir name) "events.jsonl"))
+(defn canonical-events-file [name] (.join path (engine-dir name) "events.edn"))
+(defn events-socket [name] (.join path (engine-dir name) "events.sock"))
+(defn engine-folder? [name]
+  (or (file-exists? (.join path (engine-dir name) "engine.edn"))
+      (file-exists? (canonical-events-file name))
+      (file-exists? (events-socket name))
+      (file-exists? (events-file name))))
+(defn canonical-engine? [name]
+  (or (file-exists? (canonical-events-file name)) (file-exists? (events-socket name))))
+
+;; The engine owns event ordering, retention and the durable attention inbox. Dashboard caches only the last
+;; serialized snapshot and its fold; every request refreshes from the socket before exposing live state.
+(def live-engines (atom {}))
+(def live-refreshing (atom {}))
+(def live-errors (atom {}))
+(def event-page-size 1000)
+(def event-socket-timeout-ms 1500)
+(declare agent-entries)
+
+(defn edn-response [text]
+  (try (reader/read-string text) (catch :default e (throw (js/Error. (str "bad EDN from engine: " (ex-message e)))))))
+
+(defn event-socket-request! [name method request-path body]
+  (js/Promise.
+   (fn [resolve reject]
+     (let [text (when (some? body) (pr-str body))
+           headers (when text #js {"content-type" "application/edn" "content-length" (js/Buffer.byteLength text)})
+           options #js {:socketPath (events-socket name) :method method :path request-path :headers (or headers #js {})}
+           req (.request
+                http options
+                (fn [res]
+                  (let [chunks (atom [])]
+                    (.on res "data" #(swap! chunks conj %))
+                    (.on res "end"
+                         (fn []
+                           (let [status (.-statusCode res)
+                                 response-text (.toString (js/Buffer.concat (to-array @chunks)) "utf8")]
+                             (if (and (>= status 200) (< status 300))
+                               (try (resolve (edn-response response-text)) (catch :default e (reject e)))
+                               (reject (js/Error. (str "engine event API HTTP " status))))))))))]
+       (.on req "error" reject)
+       (.setTimeout req event-socket-timeout-ms #(.destroy req (js/Error. "engine event API timed out")))
+       (.end req text)))))
+
+(defn event-page! [name stream-id after limit]
+  (event-socket-request! name "GET"
+                         (str "/events?stream-id=" (js/encodeURIComponent stream-id)
+                              "&after=" after "&limit=" limit)
+                         nil))
+
+(defn state-cursor [snapshot]
+  (let [cursor (:cursor snapshot)]
+    {:stream-id (:stream-id cursor) :seq (or (:seq cursor) 0)}))
+
+(defn read-live-tail! [name snapshot after]
+  (let [{:keys [stream-id seq]} (state-cursor snapshot)
+        after (max 0 after)]
+    (-> (event-page! name stream-id after event-page-size)
+        (.then (fn [page]
+                 (if-not (:gap? page)
+                   {:page page :after after :snapshot snapshot :reset? false}
+                   ;; Retention or a replaced stream: take a fresh snapshot, reconcile its inbox, then read a
+                   ;; retained tail from the same stream rather than pretending the missing range was delivered.
+                   (-> (event-socket-request! name "GET" "/snapshot" nil)
+                       (.then (fn [fresh]
+                                (let [{new-stream :stream-id head :seq} (state-cursor fresh)
+                                      oldest (or (:oldest-seq page) 1)
+                                      newest (or (:latest-seq page) head)
+                                      tail-after (max (dec oldest) (- newest (dec event-page-size)))]
+                                  (-> (event-page! name new-stream tail-after event-page-size)
+                                      (.then (fn [tail] {:page tail :after tail-after :snapshot fresh :reset? true})))))))))))))
 
 (defn advance-engine
   "Reads only what was appended since; a file that shrank starts over from its tail."
@@ -124,6 +196,48 @@
   (let [entry (advance-engine (get @engines name) (events-file name))]
     (swap! engines assoc name entry)
     (:state entry)))
+
+(defn last-seq [events fallback]
+  (or (:seq (peek (vec events))) fallback 0))
+
+(defn refresh-live-engine! [name]
+  (or (get @live-refreshing name)
+      (let [promise
+            (-> (event-socket-request! name "GET" "/snapshot" nil)
+                (.then (fn [snapshot]
+                         (let [previous (get @live-engines name)
+                               cursor (state-cursor snapshot)
+                               same-stream? (= (:stream-id cursor) (get-in previous [:cursor :stream-id]))
+                               same-generation? (= (:generation-id snapshot) (:generation-id previous))
+                               local-reset? (not (and same-stream? same-generation?))
+                               after (if local-reset?
+                                       (max 0 (- (:seq cursor) (dec event-page-size)))
+                                       (get-in previous [:cursor :seq] 0))]
+                           (-> (read-live-tail! name snapshot after)
+                               (.then (fn [{:keys [page snapshot] gap-reset? :reset?}]
+                                        (let [events (:events page)
+                                              actual-reset? (or local-reset? gap-reset?)
+                                              folded (ee/fold-engine (if actual-reset? ee/empty-engine (:folded previous)) events)
+                                              combined (if actual-reset? events (into (vec (:events previous)) events))
+                                              page-seq (last-seq events after)
+                                              next-cursor {:stream-id (:stream-id (state-cursor snapshot))
+                                                           :seq page-seq}
+                                              cache {:snapshot snapshot :cursor next-cursor :folded folded
+                                                     :events (vec (take-last event-page-size combined))
+                                                     :reset? actual-reset?}]
+                                          (swap! live-errors dissoc name)
+                                          (swap! live-engines assoc name cache)
+                                          cache)))))))
+                (.catch (fn [e]
+                          (swap! live-errors assoc name (ex-message e))
+                          (get @live-engines name)))
+                (.finally (fn [] (swap! live-refreshing dissoc name))))]
+        (swap! live-refreshing assoc name promise)
+        promise)))
+
+(defn refresh-live-engines! []
+  (let [names (->> (agent-entries) (map :name) (filter canonical-engine?) vec)]
+    (js/Promise.all (clj->js (map refresh-live-engine! names)))))
 
 ;; engine.edn is re-read when its mtime or size changed
 (defn read-edn-text [name]
@@ -176,12 +290,41 @@
     (view-info/summarize (:value pose) (:value hud) (:mtime pose))))
 
 (defn engine-body [agent now]
-  (let [view (try
-               (ee/engine-view (read-engine (:name agent)) now)
-               (catch :default e
-                 (assoc (ee/engine-view ee/empty-engine now) :error (str "events unreadable: " (ex-message e)))))
-        pose-view (read-view (:name agent))]
-    (assoc (ee/engine-body agent (-> (ee/with-view-status view pose-view) (merge (edn-fields (:name agent) now))))
+  (let [name (:name agent)
+        live (get @live-engines name)
+        canonical? (canonical-engine? name)
+        live-error (get @live-errors name)
+        persisted-state (when canonical?
+                          (let [{:keys [value]} (engine-edn/read-edn (read-edn-text name))]
+                            (when (map? value) value)))
+        folded (if canonical?
+                 (or (:folded live) ee/empty-engine)
+                 (try (read-engine name) (catch :default _ ee/empty-engine)))
+        engine-view (ee/engine-view folded now)
+        pose-view (read-view name)
+        snap (:snapshot live)
+        authoritative-state (if (and snap (not live-error)) (:state snap) persisted-state)
+        scheduler-summary (if (and canonical? (map? authoritative-state))
+                            (engine-edn/summarize (pr-str authoritative-state) now)
+                            (edn-fields name now))
+        outstanding (if (and snap (not live-error))
+                      (or (:outstanding snap) {})
+                      (or (:attention persisted-state) {}))
+        position (or (:position snap) (:pos engine-view))
+        offline? (or (and canonical? live-error)
+                     (true? (:offline snap))
+                     (and canonical? (nil? snap)))
+        view (cond-> (-> engine-view
+                         (assoc :pos position
+                                :cursor (:cursor live)
+                                :generation-id (:generation-id snap)
+                                :outstanding outstanding)
+                         scheduler-summary)
+               offline? (assoc :up false :error (if snap "disconnected" "event service unavailable"))
+               (:settling snap) (assoc :settling true))]
+    (assoc (ee/engine-body agent (ee/with-view-status view pose-view))
+           :state (when position {:pos position})
+           :outstanding outstanding
            :view pose-view)))
 
 (defn agent-entries []
@@ -218,6 +361,8 @@
           (assoc w :places (from-js (legacy/attach-village-status repo-root (to-js (:places w)) villages))))
         worlds))
 
+(declare send-edn!)
+
 (defn snapshot [world-name]
   (let [now (js/Date.now)
         all-bodies (bodies now)
@@ -233,6 +378,13 @@
     (assoc (worlds/scope-snapshot full world-name)
            :worldList (read-world-list)
            :selected world-name)))
+
+(defn send-state! [res world-name]
+  (-> (refresh-live-engines!)
+      (.then (fn [_] (send-edn! res 200 (snapshot world-name))))
+      (.catch (fn [e]
+                (when-not (.-headersSent res)
+                  (send-edn! res 500 {:error (str (ex-message e))}))))))
 
 ;; ---------------------------------------------------------------- chat
 (defn talk-lines-of [text]
@@ -285,6 +437,9 @@
 
 (defn send-json! [res code value]
   (send-json-js! res code (to-js value)))
+
+(defn send-edn! [res code value]
+  (send! res code "application/edn; charset=utf-8" (pr-str value)))
 
 (defn send-file! [res file]
   (let [type (get content-types (str/lower-case (.extname path file)) "application/octet-stream")]
@@ -398,11 +553,90 @@
         (swap! log-cache assoc name {:size size :events events})
         events))))
 
+(defn query-int [query key fallback]
+  (let [n (js/parseInt (.get query key) 10)]
+    (if (js/Number.isFinite n) n fallback)))
+
+(defn cursor-for-page [stream-id after page]
+  {:stream-id stream-id :seq (or (:seq (peek (vec (:events page)))) after 0)})
+
+(defn canonical-feed! [name query]
+  (-> (event-socket-request! name "GET" "/snapshot" nil)
+      (.then (fn [initial]
+               (let [{:keys [stream-id seq]} (state-cursor initial)
+                     limit (min event-page-size (log-limit (.get query "limit")))
+                     requested-stream (.get query "stream-id")
+                     requested-after (query-int query "after" -1)
+                     after (if (and requested-stream (not (neg? requested-after)))
+                             requested-after
+                             (max 0 (- seq limit)))]
+                 (-> (event-page! name (or requested-stream stream-id) after limit)
+                     (.then (fn [page]
+                              (if-not (:gap? page)
+                                {:snapshot initial :page page :after after :gap? false}
+                                (-> (event-socket-request! name "GET" "/snapshot" nil)
+                                    (.then (fn [fresh]
+                                             (let [{fresh-stream :stream-id fresh-seq :seq} (state-cursor fresh)
+                                                   oldest (or (:oldest-seq page) 1)
+                                                   newest (or (:latest-seq page) fresh-seq)
+                                                   tail-after (max 0 (max (dec oldest) (- newest limit)))]
+                                               (-> (event-page! name fresh-stream tail-after limit)
+                                                   (.then (fn [tail]
+                                                            {:snapshot fresh :page tail :after tail-after :gap? true}))))))))))))))))
+
 (defn send-events! [res name query]
-  (if-not (engine-folder? name)
-    (send-json! res 404 {:error (str "no engine body called " name)})
-    (send-json! res 200 {:at (js/Date.now) :body name
-                         :events (vec (take-last (log-limit (.get query "limit")) (read-log name)))})))
+  (cond
+    (not (engine-folder? name))
+    (send-edn! res 404 {:error (str "no engine body called " name)})
+
+    (canonical-engine? name)
+    (-> (canonical-feed! name query)
+        (.then (fn [{:keys [snapshot page after gap?]}]
+                 (let [cursor (cursor-for-page (:stream-id (state-cursor snapshot)) after page)]
+                   (send-edn! res 200 {:body name
+                                       :generation-id (:generation-id snapshot)
+                                       :stream-id (:stream-id cursor)
+                                       :cursor cursor
+                                       :events (vec (:events page))
+                                       :outstanding (or (:outstanding snapshot) {})
+                                       :gap? gap?
+                                       :more? (< (or (:seq cursor) after) (or (:latest-seq page) (:seq cursor) after))}))))
+        (.catch (fn [e] (when-not (.-headersSent res)
+                          (send-edn! res 503 {:error (str "engine event service unavailable: " (ex-message e))})))))
+
+    ;; Compatibility for old running bodies only. A body with events.edn/events.sock never also reads JSONL.
+    (not (file-exists? (events-file name)))
+    (send-edn! res 404 {:error "no event stream"})
+
+    :else
+    (send-edn! res 200 {:body name :generation-id "legacy" :stream-id "legacy"
+                        :cursor {:stream-id "legacy" :seq (or (:seq (peek (read-log name))) 0)}
+                        :events (vec (take-last (log-limit (.get query "limit")) (read-log name)))
+                        :outstanding {} :gap? false :more? false})))
+
+(declare port read-body)
+
+(defn resolve-attention! [req res name]
+  (let [headers (.-headers req)
+        refused (or (guard/method-refusal (.-method req))
+                    (guard/refusal {:host (.-host headers) :origin (.-origin headers)
+                                    :content-type (aget headers "content-type") :port port
+                                    :content-types ["application/edn"]}))]
+    (cond
+      refused (send-edn! res (:status refused) {:error (:error refused)})
+      (not (canonical-engine? name)) (send-edn! res 404 {:error "no canonical engine event service"})
+      :else
+      (read-body req guard/max-body-bytes
+                 (fn [text]
+                   (if-not text
+                     (send-edn! res 413 {:error "request body too large"})
+                     (let [request (try (reader/read-string text) (catch :default _ nil))]
+                       (if-not (and (map? request) (string? (:request-id request)) (= :handled (:reason request)))
+                         (send-edn! res 400 {:error "expected {:request-id string :reason :handled}"})
+                         (-> (event-socket-request! name "POST" "/attention/resolve" request)
+                             (.then #(send-edn! res 200 %))
+                             (.catch (fn [e] (when-not (.-headersSent res)
+                                               (send-edn! res 503 {:error (str "engine event service unavailable: " (ex-message e))})))))))))))))
 
 ;; ---------------------------------------------------------------- item pictures
 ;; The textures the view uses (repo textures/: blocks at the top, items under item/): the first candidate that exists.
@@ -621,7 +855,7 @@
 
 (defn handle-world-scoped! [res kind world-name query plan-name]
   (case kind
-    :state (send-json! res 200 (snapshot world-name))
+    :state (send-state! res world-name)
     :plans-api (send-plans! res world-name nil)
     :plan-api (send-plans! res world-name plan-name)
     :chat (send-json! res 200 (chat-log (chat/chat-limit (.get query "limit")) world-name))
@@ -645,6 +879,7 @@
         :thumb (send-thumb! res blueprint-name)
         :item-icon (send-item-icon! res blueprint-name)
         :events (send-events! res blueprint-name query)
+        :attention-resolve (resolve-attention! req res blueprint-name)
         :chat-send (send-chat! req res)
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)

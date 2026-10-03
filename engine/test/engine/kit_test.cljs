@@ -12,7 +12,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -113,7 +113,7 @@
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" full-chest} :unreachable ["10,64,0"]})
               result (await (child-outcome eng job kit-args 8))]
           (is (= {:gave-up true :reason "unreachable" :short {"hoe" 2 :food 12}} result))
-          (is (some #(and (= :kit.gave-up (:kind %)) (= :warn (:level %))) @seen)))))))
+          (is (some #(= :kit.gave-up (:kind %)) @seen)))))))
 
 (deftest kit-gives-up-when-withdraw-does
   (async done
@@ -124,7 +124,7 @@
           (let [result (await (child-outcome eng job kit-args 12))]
             (is (true? (:gave-up result)))
             (is (= "full" (:reason result)))
-            (is (some #(and (= :withdraw.gave-up (:kind %)) (= :warn (:level %))) @seen))
+            (is (some #(= :withdraw.gave-up (:kind %)) @seen))
             (is (= [] (:list (core/state eng))))))))))
 
 (deftest kit-needs-a-known-chest

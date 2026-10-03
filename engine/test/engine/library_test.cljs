@@ -17,7 +17,7 @@
   ([world] (setup world (tu/tmp-dir)))
   ([world dir]
    (let [clock (atom 1000000)
-         [seen sink] (tu/capture-sink)
+         [seen sink] (tu/legacy-capture-sink)
          p (tu/fake world)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -323,12 +323,12 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:unreachable ["9,64,9"]})
               results #(->> @seen (filter (fn [e] (= :result (:kind e))))
-                            (mapv (fn [e] (select-keys e [:level :arrived :reason]))))]
+                            (mapv (fn [e] (select-keys e [:arrived :reason]))))]
           (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))
-          (is (= [{:level :info :arrived true}] (results)))
+          (is (= [{:arrived true}] (results)))
           (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
-          (is (= [{:level :info :arrived true}
-                  {:level :info :arrived false :reason :unreachable}]
+          (is (= [{:arrived true}
+                  {:arrived false :reason :unreachable}]
                  (results))))))))
 
 (deftest collect-drops-hands-over-how-many-it-collected
@@ -651,9 +651,9 @@
           (await (core/tick! eng))
           (is (= [5 10] (move-xs p)) "ends at the blocked leg")
           (is (= [] (:list (core/state eng))) "done at once, not round after round")
-          (is (= [{:level :warn :to {:x 10 :y 64 :z 0} :status "blocked" :reason "noPath"}]
+          (is (= [{:to {:x 10 :y 64 :z 0} :status "blocked" :reason "noPath"}]
                  (->> @seen (filter #(= :leg-unfinished (:kind %)))
-                      (mapv #(select-keys % [:level :to :status :reason]))))))))))
+                      (mapv #(select-keys % [:to :status :reason]))))))))))
 
 (deftest pace-is-done-after-the-given-rounds
   (async done

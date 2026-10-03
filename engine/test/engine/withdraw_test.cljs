@@ -12,7 +12,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -115,7 +115,7 @@
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]} :unreachable ["10,64,0"]})
               result (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8))]
           (is (= {:gave-up true :reason "unreachable" :short {"bread" 3}} result))
-          (is (some #(and (= :withdraw.gave-up (:kind %)) (= :warn (:level %))) @seen))
+          (is (some #(= :withdraw.gave-up (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest withdraw-gives-up-with-the-transfer-failure

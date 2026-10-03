@@ -35,8 +35,8 @@
  :poll-state
  (fn [{:keys [db]} _]
    (let [world (:world db)]
-     {:fetch-json {:key :state :url (logic/api-url "/api/state" world {})
-                   :on-ok [:state-ok world] :on-err [:state-err world]}})))
+     {:fetch-edn {:key :state :url (logic/api-url "/api/state" world {})
+                  :on-ok [:state-ok world] :on-err [:state-err world]}})))
 
 (rf/reg-event-fx
  :poll-chat
@@ -51,7 +51,8 @@
  (fn [db [_ world data]]
    (if (not= world (:world db))
      db
-     (assoc db :state data :status "connected"))))
+     (cond-> (assoc db :state data :status "connected")
+       (:detail-body db) (assoc :attention-outstanding (db/body-outstanding data (:detail-body db)))))))
 
 (rf/reg-event-db
  :state-err

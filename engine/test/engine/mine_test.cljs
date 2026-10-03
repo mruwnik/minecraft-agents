@@ -16,7 +16,7 @@
   "An engine over primitives p (made from world when not given) on dir."
   [{:keys [world p dir clock]}]
   (let [clock (or clock (atom 1000000))
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (or p (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock)
@@ -172,7 +172,7 @@
               warns (events-of s :mine.gave-up)]
           (is (= :gave-up (:reason (done-event s))))
           (is (= 1 (count warns)))
-          (is (= :warn (:level (first warns))))
+          (is (nil? (:level (first warns))))
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
@@ -213,7 +213,7 @@
                                  {:blocks floor :drops {"dirt" "rotten_flesh"}} 60))
               short-warns (events-of s :mine.mend-short)]
           (is (= 1 (count short-warns)))
-          (is (= :warn (:level (first short-warns))))
+          (is (nil? (:level (first short-warns))))
           (is (some? (done-event s)))
           (is (zero? (count (calls s "place"))))
           (is (finished? s)))))))
@@ -291,7 +291,7 @@
           (await (run-ticks s 80))
           (is (= 6 (count (calls s "place"))) "bounded at max-mend-failures")
           (is (= 1 (count (events-of s :mine.mend-failed))))
-          (is (= :warn (:level (first (events-of s :mine.mend-failed)))))
+          (is (nil? (:level (first (events-of s :mine.mend-failed)))))
           (is (empty? (events-of s :mine.mend-short)))
           (is (some? (done-event s)))
           (is (finished? s)))))))
@@ -354,7 +354,7 @@
           (is (= 3 (dig-count s)))
           (is (= :no-drops (:reason (done-event s))))
           (is (= [:no-drops] (mapv :reason warns)))
-          (is (= :warn (:level (first warns))))
+          (is (nil? (:level (first warns))))
           (is (= "dirt" (block-at s 0 63 0)) "the ground is intact")
           (is (finished? s)))))))
 
@@ -484,7 +484,7 @@
         (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 10))
               warns (events-of s :mine.no-tool)]
           (is (zero? (dig-count s)))
-          (is (= [:warn] (mapv :level warns)))
+          (is (= 1 (count warns)))
           (is (= ["pickaxe"] (mapv :tool warns)))
           (is (= :no-tool (:reason (done-event s))))
           (is (nil? (:ground (job-mem s))) "nothing was written")

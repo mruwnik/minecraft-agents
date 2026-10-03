@@ -17,7 +17,7 @@
   ([world] (setup world (tu/tmp-dir) t0))
   ([world dir start]
    (let [clock (atom start)
-         [seen sink] (tu/capture-sink)
+         [seen sink] (tu/legacy-capture-sink)
          p (tu/fake world)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir
                            :now #(deref clock) :backoff false
@@ -207,7 +207,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "gave up")
           (let [ev (failed-event seen)]
-            (is (= :warn (:level ev)))
+            (is (nil? (:level ev)))
             (is (= {:x 5 :z 0} (select-keys (:pos ev) [:x :z]))))
           (is (= [{:x 5 :z 0}] (mapv #(select-keys (:pos (:data %)) [:x :z]) (mem/entries (mem/view (:store eng)) :stuck))))
           (is (= {:cap 10 :ttl 3600000} (mem/policy (mem/view (:store eng)) :stuck)))
@@ -598,7 +598,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom t0)
-              [seen sink] (tu/capture-sink)
+              [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:self dirt-self :blocks bedrock-pit})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)

@@ -1,6 +1,7 @@
 (ns dashboard.engine-events
   "What the dashboard knows about an ENGINE body: everything comes from the events it appends to
-  state/agents/<name>/engine/events.jsonl. Pure; fs access stays in dashboard.server.")
+  state/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
+  (:require [clojure.string :as str]))
 
 ;; The longest gap between two events inside one run was ~10 s (a restart gap is 60 s+), so 30 s is 3x margin.
 (def engine-up-ms 30000)
@@ -8,25 +9,56 @@
 (def recent-max 10)
 
 ;; job.round_started / job.yielded arrive at info every 0.25-10 s per running job: noise in a "what happened" list
-(def heartbeats #{"round_started" "yielded"})
+(def heartbeats #{"round-started" "yielded"})
 (def job-ends #{"completed" "failed" "cancelled"})
 (def levels-shown #{"info" "warn" "error"})
 
 (def empty-engine {:last nil :pos nil :job nil :reflex nil :recent [] :warns [] :signals {}})
 
 (defn describe [e]
-  (or (:text e) (:error e)
+  (or (:message e) (:text e) (:error e)
       (str (:source e) "." (:kind e) (when (:name e) (str " " (:name e))))))
 
+(defn field-name [x]
+  (cond (keyword? x) (name x) (string? x) x :else (str x)))
+
+(defn canonical-event
+  "Projects an EDN event onto the small legacy-shaped view used by dashboard summaries.
+  The canonical event remains intact for the event log and attention UI."
+  [e]
+  (if-not (:time-ms e)
+    e
+    (let [context (:context e)
+          data (:data e)
+          source (field-name (:source e))
+          kind (field-name (:kind e))
+          job-id (or (:job-id context) (:job-id data))
+          reflex-id (or (:reflex-id context) (:reflex-id data))]
+      {:seq (:seq e) :t (:time-ms e)
+       :source source :kind kind
+       :job job-id :chain (:chain context) :round (:round context)
+       :reflex reflex-id
+       :name (or (:name data) (:job-name data) (:action data) (:job data) (:name context))
+       :pos (or (:position data) (:pos data))
+       :who (or (:who data) (:who context))
+       :message (:message e)
+       :text (:message e)
+       :error (or (:error data) (:reason data))
+       :attention (field-name (or (:attention e) :none))
+       :request-id (:request-id e)})))
+
 (defn system-started? [e]
-  (and (= "system" (:source e)) (= "started" (:kind e))))
+  (and (= "system" (:source e)) (contains? #{"started" "run_started"} (:kind e))))
+
+(defn kind-name [e] (str/replace (:kind e) "_" "-"))
+(defn kind-is? [e & kinds] (contains? (set kinds) (kind-name e)))
 
 ;; only a top-level job (its own id is the head of its chain) is "the current job"; a queued job is not running yet
 (defn next-job [job e]
   (cond
     (system-started? e) nil
-    (or (not= "job" (:source e)) (= "queued" (:kind e)) (not (:job e)) (not= (first (:chain e)) (:job e))) job
-    (job-ends (:kind e)) (when-not (= (:id job) (:job e)) job)
+    (or (not= "job" (:source e)) (kind-is? e "queued") (not (:job e)) (not= (first (:chain e)) (:job e))) job
+    (kind-is? e "completed" "failed" "cancelled") (when-not (= (:id job) (:job e)) job)
     :else {:id (:job e)
            :name (or (:name e) (when (= (:id job) (:job e)) (:name job)))}))
 
@@ -34,16 +66,17 @@
   (cond
     (system-started? e) nil
     (not= "reflex" (:source e)) reflex
-    (= "fired" (:kind e)) (or (:reflex e) reflex)
-    (= "ended" (:kind e)) (when-not (= (:reflex e) reflex) reflex)
+    (kind-is? e "fired") (or (:reflex e) reflex)
+    (kind-is? e "ended") (when-not (= (:reflex e) reflex) reflex)
     :else reflex))
 
 ;; The last lifecycle event that says the body is gone: a stop (system.stopping), a disconnect or kick of the session,
 ;; a failed reconnect. A later body.spawned / body.online or system.started ends it.
 (defn offline-event? [{:keys [source kind]}]
-  (or (and (= "system" source) (= "stopping" kind))
-      (and (= "body" source) (#{"disconnected" "kicked"} kind))
-      (= "reconnect-failed" kind)))
+  (let [kind (str/replace kind "_" "-")]
+    (or (and (= "system" source) (= "stopping" kind))
+        (and (= "body" source) (contains? #{"disconnected" "kicked"} kind))
+        (= "reconnect-failed" kind))))
 
 ;; What the trouble rules read, kept even for debug events that never reach :recent:
 ;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover? :takeover-who :takeover-t :offline? :online-t}
@@ -52,22 +85,27 @@
         backoff-key (or (:name e) (:reflex e) (:job e))]
     (cond
       (system-started? e) {:online-t t}
-      (and (= "body" source) (#{"spawned" "online"} kind)) (assoc signals :offline? false :online-t t)
+      (and (= "body" source) (contains? #{"spawned" "online"} (str/replace kind "_" "-"))) (assoc signals :offline? false :online-t t)
       (offline-event? e) (assoc signals :offline? true)
-      (and (= "body" source) (= "hurt" kind)) (assoc signals :hurt-t t)
-      (and (= "body" source) (= "died" kind)) (assoc signals :died-t t)
-      (and (#{"job" "reflex"} source) (= "backoff" kind)) (assoc-in signals [:backoffs backoff-key] t)
-      (and (#{"job" "reflex"} source) (= "recovered" kind)) (update signals :backoffs dissoc backoff-key)
-      (and (= "reflex" source) (= "stuck" (:reflex e)) (= "fired" kind)) (assoc signals :stuck-t t :stuck-open? true)
-      (and (= "reflex" source) (= "stuck" (:reflex e)) (= "ended" kind)) (assoc signals :stuck-open? false)
+      (and (= "body" source) (kind-is? e "hurt")) (assoc signals :hurt-t t)
+      (and (= "body" source) (kind-is? e "died")) (assoc signals :died-t t)
+      (and (#{"job" "reflex"} source) (kind-is? e "backoff")) (assoc-in signals [:backoffs backoff-key] t)
+      (and (#{"job" "reflex"} source) (kind-is? e "recovered")) (update signals :backoffs dissoc backoff-key)
+      (and (= "reflex" source) (= "stuck" (:reflex e)) (kind-is? e "fired")) (assoc signals :stuck-t t :stuck-open? true)
+      (and (= "reflex" source) (= "stuck" (:reflex e)) (kind-is? e "ended")) (assoc signals :stuck-open? false)
       (= "unstick.failed" kind) (assoc signals :stuck-t t)
-      (and (= "system" source) (= "takeover_started" kind)) (assoc signals :takeover? true :takeover-who (:who e) :takeover-t t)
-      (and (= "system" source) (= "takeover_ended" kind)) (-> signals (assoc :takeover? false) (dissoc :takeover-who :takeover-t))
+      (and (= "system" source) (kind-is? e "takeover-started" "manual-started")) (assoc signals :takeover? true :takeover-who (:who e) :takeover-t t)
+      (and (= "system" source) (kind-is? e "takeover-ended" "manual-ended")) (-> signals (assoc :takeover? false) (dissoc :takeover-who :takeover-t))
       :else signals)))
 
 (defn noteworthy? [e]
-  (and (levels-shown (:level e))
-       (not (and (= "job" (:source e)) (heartbeats (:kind e))))))
+  (let [source (:source e)
+        kind (kind-name e)]
+    (or (not= "none" (or (:attention e) "none"))
+        (and (= "job" source) (kind-is? e "completed" "failed" "cancelled" "backoff" "recovered"))
+        (and (= "action" source) (kind-is? e "started" "done" "failed" "cancelled"))
+        (and (#{"system" "body" "reflex"} source)
+             (not (and (= "body" source) (= "view.stats" (:kind e))))))))
 
 (defn fold-one [state e]
   (-> state
@@ -77,7 +115,8 @@
              :reflex (next-reflex (:reflex state) e)
              :signals (next-signals (:signals state) e))
       (update :recent #(if (noteworthy? e)
-                         (vec (take-last recent-max (conj % {:t (:t e) :level (:level e) :source (:source e) :kind (:kind e) :text (describe e)})))
+                         (vec (take-last recent-max (conj % {:t (:t e) :source (:source e) :kind (:kind e)
+                                                             :attention (or (:attention e) "none") :text (describe e)})))
                          %))
       (update :warns #(if (#{"warn" "error"} (:level e)) (conj % {:t (:t e) :level (:level e)}) %))))
 
@@ -90,7 +129,7 @@
 
 ;; events: oldest first. Returns a new state.
 (defn fold-engine [state events]
-  (trim-warns state (reduce fold-one state events)))
+  (trim-warns state (reduce (fn [s e] (fold-one s (canonical-event e))) state events)))
 
 (defn engine-view [state now]
   (if-not (:last state)
@@ -211,19 +250,27 @@
 ;; ---------------------------------------------------------------- the action log
 ;; What a body's popup lists: the events people read, not memory saves, heartbeats and path debug.
 (defn log-worthy? [e]
-  (let [{:keys [source kind level]} e]
+  (let [{:keys [source kind attention]} (canonical-event e)
+        kind (str/replace kind "_" "-")]
     (cond
       (= "memory" source) false
-      (= "memory_written" kind) false
+      (= "memory-written" kind) false
       (and (= "job" source) (heartbeats kind)) false
       (and (= "body" source) (= "view.stats" kind)) false
-      (= "action" source) true
-      :else (boolean (levels-shown level)))))
+      :else (or (= "action" source) (not= "none" (or attention "none"))
+                (contains? #{"job" "reflex" "body" "system" "chat"} source)))))
 
 ;; only the fields the log shows: inventories and path dumps in other events never leave the server
 (defn log-entry [e]
-  {:t (:t e) :seq (:seq e) :level (:level e) :source (:source e) :kind (:kind e)
-   :name (:name e) :text (:text e) :error (:error e) :args (:args e) :reflex (:reflex e) :ms (:ms e)})
+  (let [event (canonical-event e)]
+    (if (:time-ms e)
+      e
+      {:seq (:seq event) :generation-id "legacy" :time-ms (:t event)
+       :source (keyword (:source event)) :kind (keyword (str/replace (:kind event) "_" "-"))
+       :context (cond-> {} (:job event) (assoc :job-id (:job event)) (:chain event) (assoc :chain (:chain event))
+                  (:round event) (assoc :round (:round event)) (:reflex event) (assoc :reflex-id (:reflex event)))
+       :data (dissoc event :seq :t :source :kind :job :chain :round :reflex :text :message :attention :request-id :level :inventory)
+       :message (or (:message event) (:text event)) :attention :none})))
 
 (defn log-tail
   "The last n log-worthy events of a list, oldest first."

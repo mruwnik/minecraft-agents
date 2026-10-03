@@ -89,6 +89,18 @@
   ([ctx spec] (submit! ctx spec {}))
   ([ctx spec opts] ((:submit ctx) spec opts)))
 
+(defn request-attention!
+  "Open or update a durable request for this top-level job. `reason` is the
+  stable deduplication key; `kind`, `data`, and `message` describe the current
+  request. Repeated calls with the same job/reason reuse its request ID."
+  [ctx kind reason data message]
+  ((:request-attention ctx) kind reason data message))
+
+(defn resolve-attention!
+  "Resolve a request ID owned by this job, with a structured reason keyword."
+  [ctx request-id reason]
+  ((:resolve-attention ctx) request-id reason))
+
 (defn emit!
   "Emit an event with :source :job and this job's envelope fields."
   ([ctx kind level] (emit! ctx kind level {}))

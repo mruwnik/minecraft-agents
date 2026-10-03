@@ -39,6 +39,14 @@
 (defn ^:async fail-round [_]
   (throw (js/Error. "nope")))
 
+(defn ^:async attention-round [c]
+  (ctx/request-attention! c :storage_blocked :chest_full {:item "oak_log" :count 24} "Chest is full")
+  :continue)
+
+(defn ^:async attention-done-round [c]
+  (ctx/request-attention! c :storage_blocked :chest_full {:item "oak_log" :count 24} "Chest is full")
+  :done)
+
 (defn ^:async write-fail-round [c]
   (ctx/update-mem! c assoc :x 1)
   (throw (js/Error. "nope")))
@@ -99,6 +107,8 @@
    'parent-walk {:check always :round parent-walk-round}
    'eat {:check always :round eat-round}
    'fail {:check always :round fail-round}
+   'attention {:check always :round attention-round}
+   'attention-done {:check always :round attention-done-round}
    'write-fail {:check always :round write-fail-round}
    'bad-result {:check always :round bad-result-round}
    'child child-job
@@ -130,8 +140,10 @@
   ([] (setup {}))
   ([world] (setup world (tu/tmp-dir)))
   ([world dir]
+   (setup world dir false))
+  ([world dir canonical?]
    (let [clock (atom 1000000)
-         [seen sink] (tu/capture-sink)
+         [seen sink] (if canonical? (tu/capture-sink) (tu/legacy-capture-sink))
          p (tu/fake world)
          eng (core/create {:primitives p :jobs registry :triggers triggers :dir dir :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -284,7 +296,12 @@
           (is (= ["j1" "j2"] (listed eng)) "still listed")
           (is (= {:x 1} (job-mem eng "j1")) "memory intact")
           (is (= {"j1" {:error "Error: nope" :t @clock}} (:failed (core/state eng))))
-          (is (= [:warn] (mapv :level (filter #(= :failed (:kind %)) @seen))))
+          (let [[request-id request] (first (:attention (core/state eng)))]
+            (is (string? request-id) "a parked failure opens a stable required request")
+            (is (= :round-failed (:reason request)))
+            (is (= :required (:attention (some #(when (= request-id (:request-id %)) %) @seen)))))
+          (is (some #(and (= :failed (:kind %)) (= :required (:attention %))) @seen)
+              "failure is represented by a required attention event")
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j1" "j2" "j2" "j2"] (ran seen)) "the scheduler skips j1"))))))
 
@@ -316,26 +333,34 @@
         (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(write-fail) {})
           (await (core/tick! eng))
+          (let [request-id (ffirst (:attention (core/state eng)))]
           (is (nil? (core/tick! eng)) "skipped while failed")
           (is (true? (core/retry! eng "j1")))
           (is (= {} (:failed (core/state eng))))
+          (is (empty? (:attention (core/state eng))))
+          (is (some #(and (= :resolved (:kind %)) (= request-id (:request-id %))
+                          (= :job-retried (:reason %))) @seen))
           (is (= {:x 1} (job-mem eng "j1")))
           (is (some #(= [:job :retried "j1"] [(:source %) (:kind %) (:job %)]) @seen))
           (await (core/tick! eng))
           (is (= ["j1" "j1"] (ran seen)))
-          (is (false? (core/retry! eng "nope"))))))))
+          (is (false? (core/retry! eng "nope")))))))))
 
 (deftest cancel-removes-a-failed-job-and-its-mark
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup)]
+        (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(write-fail) {})
           (await (core/tick! eng))
-          (core/cancel! eng "j1")
-          (is (= [] (listed eng)))
-          (is (= {} (:failed (core/state eng))))
-          (is (= {} (job-mem eng "j1"))))))))
+          (let [request-id (ffirst (:attention (core/state eng)))]
+            (core/cancel! eng "j1")
+            (is (= [] (listed eng)))
+            (is (= {} (:failed (core/state eng))))
+            (is (= {} (core/outstanding eng)))
+            (is (some #(and (= :resolved (:kind %)) (= request-id (:request-id %))
+                            (= :job-cancelled (:reason %))) @seen)
+                "cancellation resolves the parked failure request")))))))
 
 (deftest a-throwing-reflex-job-is-dropped-with-the-same-warn
   (async done
@@ -346,7 +371,7 @@
           (await (core/tick! eng))
           (is (= {} (:instances (core/state eng))) "one chance")
           (is (= {} (:failed (core/state eng))))
-          (is (= [[:warn :boom]] (mapv (juxt :level :reflex) (filter #(= :failed (:kind %)) @seen)))))))))
+          (is (some #(and (= :failed (:kind %)) (= :boom (:reflex %))) @seen)))))))
 
 (deftest a-restart-keeps-the-failed-mark
   (async done
@@ -364,6 +389,57 @@
             (let [round (core/tick! again)]
               (is (some? round) "retry runs it")
               (await round))))))))
+
+(deftest required-attention-persists-replays-with-same-id-and-resolves-idempotently
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng]} (setup {} dir)]
+          (core/submit! eng '(attention) {})
+          (await (core/tick! eng))
+          (let [[request-id request] (first (:attention (core/state eng)))
+                generation (:generation-id (core/state eng))
+                on-disk (reader/read-string (fs/readFileSync (path/join dir "engine.edn") "utf8"))
+                {:keys [eng seen]} (setup {} dir)]
+            (is (= request (get-in on-disk [:attention request-id])) "request persisted in authoritative state")
+            (is (= generation (:generation-id (core/state eng))) "generation survives process restart")
+            (is (some #(and (= request-id (:request-id %)) (= :required (:attention %))) @seen)
+                "startup replays the request with its original ID")
+            (let [round (core/tick! eng)]
+              (await round)
+              (is (= #{request-id} (set (keys (:attention (core/state eng))))) "re-observation deduplicates")
+              (is (= 1 (count (filter #(= request-id (:request-id %)) @seen))) "unchanged request is not re-emitted"))
+            (is (= :resolved (core/resolve-attention! eng request-id :handled)))
+            (is (= :already-resolved (core/resolve-attention! eng request-id :handled)))
+            (is (empty? (:attention (core/state eng))))))))))
+
+(deftest resolving-parked-failure-does-not-reopen-it-on-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng]} (setup {} dir)]
+          (core/submit! eng '(write-fail) {})
+          (await (core/tick! eng))
+          (let [request-id (ffirst (:attention (core/state eng)))]
+            (core/resolve-attention! eng request-id :handled)
+            (is (true? (get-in (core/state eng) [:failed "j1" :attention-closed?])))
+            (let [{again :eng} (setup {} dir)]
+              (is (= {} (:attention (core/state again))) "an explicit acknowledgment stays closed"))))))))
+
+(deftest job-completion-resolves-its-open-request
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {} (tu/tmp-dir) true)]
+          (core/submit! eng '(attention-done) {})
+          (await (core/tick! eng))
+          (is (= [] (listed eng)))
+          (is (empty? (:attention (core/state eng))))
+          (is (some #(and (= :resolved (:kind %)) (= :job-completed (get-in % [:data :reason]))) @seen))
+          (is (some #(and (= :completed (:kind %)) (= :notice (:attention %))) @seen)
+              "a completed job produces a completion notice"))))))
 
 (deftest a-child-lives-in-its-parents-memory-under-children
   (async done
@@ -651,37 +727,37 @@
           (is (= {} (:instances (core/state eng))))
           (is (nil? (core/tick! eng)) "nothing is left to start"))))))
 
-(deftest the-tick-loop-reports-a-failed-round-settle-and-keeps-ticking
+(deftest the-tick-loop-parks-a-failed-round-and-keeps-ticking
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
-              throwing (fn [e] (when (= :yielded (:kind e)) (throw (js/Error. "sink broke"))))
+              [seen sink] (tu/legacy-capture-sink)
               eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)
                                 :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink throwing] :now #(deref clock)})})
-              stop (do (core/submit! eng '(count) {})
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              stop (do (core/submit! eng '(write-fail) {})
+                       (core/submit! eng '(count) {})
                        (core/start! eng {:tick-ms 5}))]
           (await (js/Promise. (fn [resolve] (js/setTimeout resolve 60))))
           (stop)
-          (is (some #(and (= :error (:kind %)) (re-find #"sink broke" (str (:text %)))) @seen)
-              "the failure became an error event")
+          (is (some #(and (= :failed (:kind %)) (= :required (:attention %))) @seen)
+              "the failure parks the job with a required attention request")
           (is (<= 2 (count (filter #(= :round_started (:kind %)) @seen))) "the loop kept ticking"))))))
 
 (deftest picked-up-is-a-debug-event-and-an-entry-of-its-own
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "picked-up" :item "stick" :count 3})
-    (is (= [{:item "stick" :count 3}] (mapv :data (mem/entries (mem/view (:store eng)) :picked-up))))
-    (is (= [[:picked-up :debug]] (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+          (is (= [{:item "stick" :count 3}] (mapv :data (mem/entries (mem/view (:store eng)) :picked-up))))
+    (is (some #(and (= :body (:source %)) (= :picked-up (:kind %))) @seen))))
 
 (deftest bot-errors-and-a-failed-reconnect-are-error-level-events
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "error" :reason "boom"})
     (.emit (.-world p) #js {:kind "reconnect-failed" :reason "refused"})
     (.emit (.-world p) #js {:kind "disconnected" :reason "end"})
-    (is (= [[:error :error] [:reconnect-failed :error] [:disconnected :info]]
-           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+    (is (= [:error :reconnect-failed :disconnected]
+           (->> @seen (filter #(= :body (:source %))) (mapv :kind))))))
 
 (deftest restart-restores-the-list-register-and-changes
   (async done
@@ -778,7 +854,12 @@
           (is (= [[:action :started "moveTo"] [:action :done "moveTo"]
                   [:action :started "look"] [:action :done "look"]]
                  (->> @seen (filter #(= :action (:source %))) (mapv (juxt :source :kind :name)))))
-          (is (every? #(= :debug (:level %)) (filter #(= :action (:source %)) @seen))))))))
+          (let [actions (filter #(= :action (:source %)) @seen)]
+            (is (= 2 (count (set (map :action-id actions)))) "repeated calls get different IDs")
+            (is (= (mapv :action-id (take-nth 2 actions))
+                   (mapv :action-id (take-nth 2 (rest actions)))) "each completion pairs with its start"))
+          (is (= 4 (count (filter #(= :action (:source %)) @seen)))
+              "primitive calls have start/done events"))))))
 
 (defn ^:async blocked-walk-round [c]
   (await (ctx/act c :moveTo #js {:pos #js {:x 9 :y 64 :z 9}}))
@@ -843,7 +924,7 @@
 
 (defn stall-setup [opts]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         eng (core/create (merge {:primitives (tu/fake {}) :jobs stall-registry :triggers triggers :dir (tu/tmp-dir)
                                  :now #(deref clock)
                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
@@ -861,7 +942,7 @@
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= [] (stalls seen)))
           (await (core/tick! eng))
-          (is (= [[:warn "j1" 3]] (mapv (juxt :level :job :rounds) (stalls seen))))
+          (is (= [["j1" 3]] (mapv (juxt :job :rounds) (stalls seen))))
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= 1 (count (stalls seen))) "once per spell, and no cap: it keeps running")
           (is (= ["j1"] (listed eng))))))))
@@ -1084,18 +1165,18 @@
         {:keys [eng]} (setup {} dir)]
     (core/submit! eng '(count) {})
     (let [clock (atom 1000000)
-          [seen sink] (tu/capture-sink)
+          [seen sink] (tu/legacy-capture-sink)
           again (core/create {:primitives (tu/fake {}) :jobs (dissoc registry 'count) :triggers triggers
                               :dir dir :now #(deref clock)
                               :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
       (is (= [] (listed again)))
-      (is (some #(= [:failed :warn] [(:kind %) (:level %)]) @seen)))))
+      (is (some #(= :failed (:kind %)) @seen)))))
 
 (defn restore-with
   "An engine restored from dir with the given jobs and triggers; [eng seen]."
   [dir jobs triggers]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)]
+        [seen sink] (tu/legacy-capture-sink)]
     [(core/create {:primitives (tu/fake {}) :jobs jobs :triggers triggers :dir dir :now #(deref clock)
                    :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
      seen]))
@@ -1109,7 +1190,7 @@
     (let [[again seen] (restore-with dir registry (dissoc triggers :never))]
       (is (= [:hurt] (mapv :id (:register (core/state again)))))
       (is (not (contains? (:changes (core/state again)) :never)) "its changes go with it")
-      (is (some #(= [:system :warn] [(:source %) (:level %)]) @seen))
+      (is (some #(and (= :system (:source %)) (= :dropped (:kind %))) @seen))
       (is (nil? (core/tick! again)) "the tick no longer throws"))))
 
 (deftest a-restored-register-entry-whose-job-is-gone-is-dropped-with-a-warn
@@ -1119,7 +1200,7 @@
     (core/register-reflex! eng {:trigger :never :job '(count)})
     (let [[again seen] (restore-with dir (dissoc registry 'count) triggers)]
       (is (= [:hurt] (mapv :id (:register (core/state again)))))
-      (is (some #(= [:system :warn] [(:source %) (:level %)]) @seen)))))
+      (is (some #(and (= :system (:source %)) (= :dropped (:kind %))) @seen)))))
 
 (deftest a-child-by-symbol-gets-the-registry-defaults
   (async done
@@ -1145,7 +1226,6 @@
           (await (core/tick! eng))
           (let [saved (saved-events seen)]
             (is (= #{"memory.edn" "engine.edn"} (set (map :file saved))))
-            (is (every? #(= :debug (:level %)) saved))
             (is (every? #(pos? (:bytes %)) saved))
             (is (every? #(and (number? (:ms %)) (>= (:ms %) 0)) saved))))))))
 
@@ -1162,7 +1242,6 @@
           (core/tick! eng)
           (let [[e & more] (stats)]
             (is (empty? more))
-            (is (= :info (:level e)))
             (is (pos? (:count e)))
             (is (pos? (:bytes e)))
             (is (>= (:ms e) (:max-ms e) 0))))))))
@@ -1291,15 +1370,15 @@
               (let [[_ seen2] (restore-with dir registry triggers)]
                 (is (= [:dropped] (outcomes seen2)))))))))))
 
-(deftest world-not-loaded-is-a-warn-level-event
+(deftest world-not-loaded-is-a-body-event
   (let [{:keys [p seen]} (setup)]
     (.emit (.-world p) #js {:kind "world-not-loaded" :ms 10000})
-    (is (= [[:world-not-loaded :warn]]
-           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+    (is (= [:world-not-loaded]
+           (->> @seen (filter #(= :body (:source %))) (mapv :kind))))))
 
 
-(deftest physics-stalled-is-a-warn-level-event
+(deftest physics-stalled-is-a-body-event
   (let [{:keys [p seen]} (setup)]
     (.emit (.-world p) #js {:kind "physics-stalled" :pos #js {:x 0 :y 64 :z 0} :ms 2100})
-    (is (= [[:physics-stalled :warn]]
-           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+    (is (= [:physics-stalled]
+           (->> @seen (filter #(= :body (:source %))) (mapv :kind))))))

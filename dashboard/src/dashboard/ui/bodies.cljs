@@ -38,7 +38,7 @@
      (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
      [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))
 
-(defn body-card [{:keys [name status reason manual severity mine? health food job event event-age event-level] :as card}]
+(defn body-card [{:keys [name status reason manual severity mine? health food job event event-age event-attention] :as card}]
   ^{:key name}
   [:div.bcard {:class [(clojure.core/name status) (when mine? "mine") (when reason (str "sev-" (clojure.core/name severity)))]
                :tabIndex 0 :role "button"
@@ -48,7 +48,7 @@
    [:div.binfo
     [:div.vitals [bar :health health] [bar :food food]]
     [:div.line.job {:title job} (or job [:span.dim "no job"])]
-    [:div.line.event {:class event-level :title event}
+    [:div.line.event {:class (when (#{:notice :required} event-attention) (clojure.core/name event-attention)) :title event}
      (if event [:<> [:span.text event] [:span.age event-age]] [:span.dim "no events"])]
     (when manual [:div.reason.manual manual])
     (when reason [:div.reason {:class (clojure.core/name severity)} reason])]])

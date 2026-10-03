@@ -31,6 +31,11 @@
 (defn all-bodies [db]
   (or (get-in db [:state :bodies]) (:bodies (world-of db)) []))
 
+(defn body-outstanding [snapshot body-name]
+  (or (:outstanding (some #(when (or (= body-name (:name %)) (= body-name (:username %))) %)
+                           (:bodies snapshot)))
+      {}))
+
 (defn current-world [db]
   (or (:world db) (get-in db [:state :selected])))
 

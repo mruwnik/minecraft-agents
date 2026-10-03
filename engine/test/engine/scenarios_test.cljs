@@ -19,7 +19,7 @@
   "An engine over the fake world loaded with the scenario file."
   [file world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
@@ -56,7 +56,7 @@
           (is (= [] (:list (core/state eng))) "deposit finishes")
           (is (= #{"jobs.forestry.harvest-wood" "jobs.storage.deposit"} (names-started seen)))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 4 :y 64 :z 0}))) "replanted")
-          (is (not-any? #(#{:warn :error} (:level %)) @seen)))))))
+          (is (not-any? #(or (= :required (:attention %)) (#{:failed :error} (:kind %))) @seen)))))))
 
 (deftest pace-cuts-runs-on-the-fake-and-the-reflex-cuts-pace
   (async done
@@ -76,7 +76,7 @@
           (is (some #(= [:job :cut] [(:source %) (:kind %)]) @seen) "the reflex cut the pace round")
           (await (run-ticks eng clock 30 1000))
           (is (= [] (:list (core/state eng))) "pace resumes and finishes its rounds")
-          (is (not-any? #(#{:warn :error} (:level %)) @seen)))))))
+          (is (not-any? #(or (= :required (:attention %)) (#{:failed :error} (:kind %))) @seen)))))))
 
 (defn fired [seen]
   (keep #(when (= [:reflex :fired] [(:source %) (:kind %)]) (:reflex %)) @seen))
@@ -129,7 +129,7 @@
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
               "the drops lie at its feet, so the trip is worth it")
           (is (= ["bread"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread is back")
-          (is (not-any? #(and (= :error (:level %)) (not= :body (:source %))) @seen)
+          (is (not-any? #(and (#{:error :failed} (:kind %)) (not= :body (:source %))) @seen)
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns

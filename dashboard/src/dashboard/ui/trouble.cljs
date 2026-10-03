@@ -141,5 +141,5 @@
      :job (job-text (:job engine) edn-job)
      :event (:text last-event)
      :event-age (when last-event (ago now (:t last-event)))
-     :event-level (:level last-event)
+     :event-attention (keyword (clojure.core/name (or (:attention last-event) "none")))
      :offline (when-not up (offline-text (:age-ms engine)))})))

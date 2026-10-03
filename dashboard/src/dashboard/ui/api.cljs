@@ -1,5 +1,6 @@
 (ns dashboard.ui.api
-  (:require [re-frame.core :as rf]))
+  (:require [cljs.reader :as reader]
+            [re-frame.core :as rf]))
 
 ;; keys of requests still in flight: a slow response never piles up behind the next poll tick
 (defonce in-flight (atom #{}))
@@ -19,6 +20,22 @@
 
 (rf/reg-fx :fetch-json fetch-json!)
 
+(defn fetch-edn! [{:keys [key url on-ok on-err]}]
+  (when-not (contains? @in-flight key)
+    (swap! in-flight conj key)
+    (-> (js/fetch url)
+        (.then (fn [res]
+                 (-> (.text res)
+                     (.then (fn [text]
+                              (let [data (try (reader/read-string text) (catch :default e {:error (str e)}))]
+                                (if (.-ok res)
+                                  (rf/dispatch (conj on-ok data))
+                                  (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res))))))))))))
+        (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))
+        (.finally (fn [] (swap! in-flight disj key))))))
+
+(rf/reg-fx :fetch-edn fetch-edn!)
+
 (defn post-json! [{:keys [url body on-ok on-err on-unsupported]}]
   (-> (js/fetch url #js {:method "POST" :headers #js {"content-type" "application/json"} :body (js/JSON.stringify body)})
       (.then (fn [res]
@@ -32,6 +49,19 @@
       (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))))
 
 (rf/reg-fx :post-json post-json!)
+
+(defn post-edn! [{:keys [url body on-ok on-err]}]
+  (-> (js/fetch url #js {:method "POST" :headers #js {"content-type" "application/edn"} :body (pr-str body)})
+      (.then (fn [res]
+               (.then (.text res)
+                      (fn [text]
+                        (let [data (try (reader/read-string text) (catch :default e {:error (str e)}))]
+                          (if (and (.-ok res) (not (:error data)))
+                            (rf/dispatch (conj on-ok data))
+                            (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res)))))))))))
+      (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))))
+
+(rf/reg-fx :post-edn post-edn!)
 
 (rf/reg-fx :download-json
            (fn [{:keys [filename text]}]

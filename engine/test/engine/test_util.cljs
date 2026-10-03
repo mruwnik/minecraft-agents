@@ -35,6 +35,28 @@
   (let [seen (atom [])]
     [seen (fn [e] (swap! seen conj e))]))
 
+(defn legacy-event
+  "Test-only adapter for older scheduler/job assertions. Production consumers
+  should inspect canonical :context and :data instead."
+  [event]
+  (let [context (:context event)
+        projected (merge {:seq (:seq event) :t (:time-ms event) :body "Fake"}
+                         (dissoc context :job-id :reflex-id :cause-seq)
+                         (:data event)
+                         (select-keys event [:source :kind :request-id :attention]))]
+    (cond-> projected
+      (:job-id context) (assoc :job (:job-id context))
+      (:reflex-id context) (assoc :reflex (:reflex-id context))
+      (:cause-seq context) (assoc :cause (:cause-seq context))
+      (some? (:message event)) (assoc :text (:message event)))))
+
+(defn legacy-capture-sink
+  "Legacy-shaped test sink. Kept separate so direct appender tests exercise
+  the canonical event API without a compatibility projection."
+  []
+  (let [seen (atom [])]
+    [seen (fn [e] (swap! seen conj (legacy-event e)))]))
+
 (defn kinds
   "The \"source.kind\" names of collected events, in order."
   [seen]

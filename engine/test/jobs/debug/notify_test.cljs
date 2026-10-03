@@ -1,5 +1,5 @@
 (ns jobs.debug.notify-test
-  "jobs.debug.notify against the fake world: an info event with a sensing
+  "jobs.debug.notify against the fake world: a canonical event with a sensing
   snapshot, a :notify memory entry, and a trigger that fires it."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -31,7 +31,7 @@
     (is (= "notify" (get-in args [:text :default])))
     (is (false? (get-in args [:chat? :default])))))
 
-(deftest round-emits-an-info-event-and-a-notify-entry
+(deftest round-emits-a-canonical-event-and-a-notify-entry
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -41,10 +41,11 @@
           (core/submit! eng '(jobs.debug.notify {:text "burning fired"}) {})
           (await (core/tick! eng))
           (let [[e :as evs] (notify-events seen)
-                text (:text e)]
+                text (:message e)]
             (is (= 1 (count evs)))
-            (is (= :info (:level e)))
+            (is (not (contains? e :level)))
             (is (= :job (:source e)))
+            (is (= :notice (:attention e)) "explicit notification is surfaced as a notice")
             (is (re-find #"^burning fired" text))
             (is (re-find #"health 7" text))
             (is (re-find #"food 12" text))
@@ -63,7 +64,7 @@
                                                     {:name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}]})]
           (core/submit! eng '(jobs.debug.notify) {})
           (await (core/tick! eng))
-          (is (re-find #"hostiles 1" (:text (first (notify-events seen))))))))))
+          (is (re-find #"hostiles 1" (:message (first (notify-events seen))))))))))
 
 (deftest a-registered-trigger-fires-it
   (async done
@@ -109,9 +110,9 @@
               failed (filterv #(= :notify.chat-failed (:kind %)) @seen)]
           (is (empty? (:list (core/state eng))) "done")
           (is (= 1 (count failed)))
-          (is (= :info (:level (first failed))))
-          (is (re-find #"blocked" (:text (first failed))))
-          (is (re-find #"rate" (:text (first failed)))))))))
+          (is (not (contains? (first failed) :level)))
+          (is (re-find #"blocked" (:message (first failed))))
+          (is (re-find #"rate" (:message (first failed)))))))))
 
 (deftest a-command-text-is-refused-by-the-fake-and-not-recorded
   (async done
@@ -121,8 +122,8 @@
               failed (filterv #(= :notify.chat-failed (:kind %)) @seen)]
           (is (empty? (chat-lines p)))
           (is (empty? (:list (core/state eng))))
-          (is (re-find #"cannot" (:text (first failed))))
-          (is (re-find #"command" (:text (first failed)))))))))
+          (is (re-find #"cannot" (:message (first failed))))
+          (is (re-find #"command" (:message (first failed)))))))))
 
 (deftest chat-with-to-whispers-the-text
   (async done

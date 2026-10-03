@@ -83,14 +83,14 @@
           [["a working body in trouble"
             full-body
             {:name "Hazel" :status :trouble :reason "hurt 3s ago" :severity :warn :thumb "/api/thumb/Hazel.png?v=555" :pose-mtime 555
-             :health 14 :food 20 :job "attack, round 3" :event "went wrong" :event-age "12s ago" :event-level "warn" :offline nil}]
+             :health 14 :food 20 :job "attack, round 3" :event "went wrong" :event-age "12s ago" :event-attention :none :offline nil}]
            ["an idle body without a view or events"
             {:name "Bob" :up true :engine {:recent []}}
-            {:name "Bob" :status :idle :reason nil :severity nil :thumb nil :pose-mtime nil :health nil :food nil :job nil :event nil :event-age nil :event-level nil :offline nil}]
+            {:name "Bob" :status :idle :reason nil :severity nil :thumb nil :pose-mtime nil :health nil :food nil :job nil :event nil :event-age nil :event-attention :none :offline nil}]
            ["an offline body"
             (assoc full-body :up false :engine {:age-ms 10800000 :recent [] :job nil})
             {:name "Hazel" :status :offline :reason nil :severity nil :thumb "/api/thumb/Hazel.png?v=555"
-             :health 14 :food 20 :job nil :event nil :event-age nil :event-level nil :offline "offline 3h"}]
+             :health 14 :food 20 :job nil :event nil :event-age nil :event-attention :none :offline "offline 3h"}]
            ]]
     (testing title
       (is (= expected (select-keys (t/card-model b now) (keys expected)))))))

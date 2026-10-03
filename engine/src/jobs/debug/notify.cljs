@@ -38,11 +38,13 @@
 (defn ^:async round [c]
   (let [{:keys [text chat? to]} (:args c)
         p (:primitives c)]
-    (ctx/emit! c :job.notify :info {:text (str/join " | " [text (snapshot p)])})
+    (ctx/emit! c :job.notify :info {:text (str/join " | " [text (snapshot p)])
+                                    :attention :notice})
     (ctx/remember! c :notify {:text text} notify-policy)
     (when (and chat? (some? (.-chat p)))
       (let [{:keys [status reason]} (await (chat/say! c text {:to to}))]
         (when (not= "sent" status)
           (ctx/emit! c :notify.chat-failed :info {:text (str "chat " status (when reason (str ": " reason)))
-                                                  :status status :reason reason}))))
+                                                  :status status :reason reason
+                                                  :attention :notice}))))
     :done))

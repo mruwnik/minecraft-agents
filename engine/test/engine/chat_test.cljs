@@ -16,7 +16,7 @@
 
 (defn setup [limits]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake {:entities [{:kind "player" :username "Steve" :name "Steve" :pos {:x 2 :y 64 :z 0}}]})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

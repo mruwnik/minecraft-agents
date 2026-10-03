@@ -168,7 +168,7 @@
   ([] (setup {}))
   ([opts]
    (let [clock (atom t0)
-         [seen sink] (tu/capture-sink)
+         [seen sink] (tu/legacy-capture-sink)
          p (tu/fake {})
          eng (core/create (merge {:primitives p :jobs jobs :triggers triggers :dir (tu/tmp-dir)
                                   :now #(deref clock)
@@ -279,8 +279,8 @@
           (reset! status "arrived")
           (await (tick-at r (+ t0 1000)))
           (is (nil? (entry eng "j1")))
-          (is (= [[:job :info "j1"]]
-                 (mapv (juxt :source :level :job) (of-kind seen :recovered))))
+          (is (= [[:job "j1"]]
+                 (mapv (juxt :source :job) (of-kind seen :recovered))))
           (is (= [:recovered :yielded] (->> @seen (map :kind) (filter #{:recovered :yielded}) (take-last 2)))
               "at the act, not at the end of the round"))))))
 
@@ -419,8 +419,8 @@
           (core/submit! eng '(bump) {})
           (await (tick-at r t0))
           (let [w (first (warns))]
-            (is (= [:job :warn "j1" :moveTo "blocked" "no path" 1000 1]
-                   ((juxt :source :level :job :act :status :reason :delay-ms :fruitless) w)))
+            (is (= [:job "j1" :moveTo "blocked" "no path" 1000 1]
+                   ((juxt :source :job :act :status :reason :delay-ms :fruitless) w)))
             (is (string? (:text w))))
           (doseq [s (range 1 5)]
             (await (tick-at r (+ t0 (* 1000 s) -500)))

@@ -12,7 +12,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [_ sink] (tu/capture-sink)
+        [_ sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
@@ -203,7 +203,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
+              [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
@@ -230,7 +230,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
+              [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:self {:onFire true} :blocks (floor 8)})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
@@ -240,7 +240,7 @@
           (is (= [] (calls p "moveTo")) "does not walk")
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))))
-          (is (not-any? #(= :warn (:level %)) @seen)))))))
+          (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen)))))))
 
 (deftest burning-next-to-a-fire-block-still-walks
   (async done

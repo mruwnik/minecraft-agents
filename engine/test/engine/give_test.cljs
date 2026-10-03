@@ -22,7 +22,7 @@
   and puts the child's result in :out when it finishes."
   [world args]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         out (atom :not-done)
         parent {:check (constantly true)
@@ -39,7 +39,7 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn entities [p] (.-entities (.-state (.-world p))))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
-(defn has-event? [{:keys [seen]} kind level] (boolean (some #(and (= kind (:kind %)) (= level (:level %))) @seen)))
+(defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
 
 (defn take-drops!
   "The player picks up every item entity lying in the world."
@@ -113,7 +113,7 @@
             (is (= 1 (count (calls p "moveTo"))))
             (is (= 1 (count (calls p "toss"))))
             (is (= left (inv p)))
-            (is (has-event? s :give.done :info))))))))
+            (is (has-event? s :give.done))))))))
 
 (deftest nothing-carried-gives-nothing
   (async done
@@ -122,7 +122,7 @@
         (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:player "Steve" :item "bread"} 5 true))]
           (is (= {:given 0 :reason "no-item"} @out))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.no-item :warn)))))))
+          (is (has-event? s :give.no-item)))))))
 
 (deftest a-player-who-is-never-there-is-gone-after-two-seconds
   (async done
@@ -132,7 +132,7 @@
           (is (= {:given 0 :reason "gone"} @out))
           (is (<= 2000 (- @clock 1000000)))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.gone :info)))))))
+          (is (has-event? s :give.gone)))))))
 
 (deftest three-blocked-walks-are-unreachable
   (async done
@@ -143,7 +143,7 @@
           (is (= {:given 0 :reason "unreachable"} @out))
           (is (= 3 (count (calls p "moveTo"))))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.unreachable :warn)))))))
+          (is (has-event? s :give.unreachable)))))))
 
 (deftest a-drop-never-taken-is-collected-back-after-wait-s
   (async done
@@ -155,7 +155,7 @@
           (is (= {"bread" 5} (inv p)))
           (is (= 1 (count (calls p "collect"))))
           (is (<= 6000 (- @clock 1000000)))
-          (is (has-event? s :give.returned :info)))))))
+          (is (has-event? s :give.returned)))))))
 
 (deftest a-part-of-the-toss-coming-back-counts-what-was-given
   (async done
@@ -180,7 +180,7 @@
                                                 (fn [p] (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "no-item" :count 0})))))]
           (is (= {:given 0 :reason "no-item"} @out))
           (is (= 3 (count (calls p "toss"))))
-          (is (has-event? s :give.gave-up :warn)))))))
+          (is (has-event? s :give.gave-up)))))))
 
 (deftest a-drop-that-cannot-be-collected-ends-as-litter
   (async done
@@ -191,7 +191,7 @@
                                                 (fn [p] (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
           (is (= {:given 5 :reason "litter" :returned 0} @out))
           (is (= 3 (count (calls p "collect"))))
-          (is (has-event? s :give.gave-up :warn)))))))
+          (is (has-event? s :give.gave-up)))))))
 
 (deftest a-drop-that-spawns-late-is-not-reported-as-taken
   (async done
@@ -203,7 +203,7 @@
                                                 #(late-drop % held) (appear-two-ticks-after-toss held)))]
           (is (= {:given 0 :reason "not-taken" :returned 5} @out) "waited for the drop, then took it back")
           (is (= 1 (count (calls p "collect"))))
-          (is (not (has-event? s :give.done :info))))))))
+          (is (not (has-event? s :give.done))))))))
 
 (deftest a-drop-that-never-appears-is-unconfirmed-after-three-seconds
   (async done
@@ -215,7 +215,7 @@
                                                     #(late-drop % held)))]
           (is (= {:given 5 :reason "unconfirmed"} @out))
           (is (<= 3000 (- @clock 1000000)))
-          (is (has-event? s :give.unconfirmed :info)))))))
+          (is (has-event? s :give.unconfirmed)))))))
 
 (deftest three-arrived-but-out-of-range-walks-are-out-of-range
   (async done
@@ -228,4 +228,4 @@
           (is (= {:given 0 :reason "out-of-range"} @out))
           (is (= 3 (count (calls p "moveTo"))))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.out-of-range :warn)))))))
+          (is (has-event? s :give.out-of-range)))))))

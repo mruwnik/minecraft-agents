@@ -27,6 +27,12 @@
 (deftest user-view-wins
   (is (= {:scale 2} (db/effective-view (assoc (model) :user-view {:scale 2})))))
 
+(deftest outstanding-attention-is-available-from-offline-state
+  (let [inbox {"r1" {:request-id "r1"}}
+        state {:bodies [{:name "Offline" :up false :outstanding inbox}]}]
+    (is (= inbox (db/body-outstanding state "Offline")))
+    (is (= {} (db/body-outstanding state "Missing")))))
+
 (deftest home-includes-plans
   (let [m (assoc-in (model) [:plans :items] [{:region {:min [400 60 0] :max [599 70 9]}}])]
     (is (> (visible-blocks (db/effective-view m) 1000) 600))))
