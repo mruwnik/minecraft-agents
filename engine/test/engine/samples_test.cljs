@@ -53,12 +53,15 @@
           (set! (.. world -state -self -health) 6)
           (set! (.. world -state -self -food) 10)
           (await (core/tick! eng))
-          (is (= 15 (.-food (.self p))) "health-low ate")
+          (is (= 15 (.-food (.self p))) "health-low ran recover, which ate")
+          (set! (.. world -state -self -health) 18)
+          (await (core/tick! eng))
+          (is (= ["j2"] (:list (core/state eng))) "healed: recover is done")
           (is (nil? (core/tick! eng)) "cooling down, and still night")
           (.setTime world 1000)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= ["jobs.movement.go-to" "jobs.survival.eat" "jobs.time.wait-for-day"]
+          (is (= ["jobs.movement.go-to" "jobs.survival.recover" "jobs.survival.recover" "jobs.time.wait-for-day"]
                  (->> @seen (filter #(= :round_started (:kind %))) (mapv :name)))))))))
 
 (deftest go-to-gives-up-after-three-blocked-walks

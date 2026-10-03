@@ -6,13 +6,14 @@
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]))
 
-(def default-health 8)
+(def default-health 7)
 
 (def health-low
-  "Holds when health is at most :health (args, default 8)."
+  "Holds when health is below :health (args, default 7 of 20). Runs recover,
+  which flees, eats and waits for regeneration."
   {:name :health-low
-   :when (fn [world _memory args] (<= (.-health (.self world)) (:health args default-health)))
-   :job '(jobs.survival.eat)
+   :when (fn [world _memory args] (< (.-health (.self world)) (:health args default-health)))
+   :job '(jobs.survival.recover)
    :args {:health default-health}
    :persistence :cooldown
    :cooldown-s 30})
