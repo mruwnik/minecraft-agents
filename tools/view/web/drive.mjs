@@ -1,6 +1,6 @@
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, withTimeout } from './drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout } from './drive-keys.mjs'
 
 const REQUEST_TIMEOUT_MS = 1500
 const POLL_MS = 1000
@@ -136,22 +136,30 @@ const start = () => {
     pendingLook = mergeLook(pendingLook ?? {}, mouseLook(e.movementX, e.movementY))
   })
 
-  const stopControls = () => {
-    if (driving) send({ op: 'stop', who: ME })
-  }
-  addEventListener('blur', stopControls)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') stopControls()
-  })
-  document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement !== canvas) stopControls()
-  })
-  const leave = () => {
+  const onLeave = (event) => {
     if (!driving) return
-    post({ op: 'release', who: ME }, { keepalive: true }) // not queued: the page is going away
+    const action = leaveAction(event)
+    if (action === null) return
+    if (event === 'pagehide') {
+      post({ op: 'stop', who: ME }, { keepalive: true }) // not queued: the page is going away; no release
+      return
+    }
+    send({ op: 'stop', who: ME })
+    if (action === 'stop-release') release()
   }
-  addEventListener('pagehide', leave)
-  addEventListener('beforeunload', leave)
+  addEventListener('blur', () => onLeave('blur'))
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') onLeave('hidden')
+  })
+  let hadLock = false
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === canvas) { hadLock = true; return }
+    if (!hadLock) return
+    hadLock = false
+    onLeave('pointerlock-lost')
+  })
+  addEventListener('pagehide', () => onLeave('pagehide'))
+  addEventListener('beforeunload', () => onLeave('pagehide'))
 
   setInterval(() => {
     if (!driving) return

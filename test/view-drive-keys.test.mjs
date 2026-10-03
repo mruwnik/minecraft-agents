@@ -1,7 +1,7 @@
 // Pure key mapping for driving a body from the view page.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, withTimeout } from '../tools/view/web/drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout } from '../tools/view/web/drive-keys.mjs'
 
 const controlCases = [
   ['KeyW', 'forward'], ['KeyS', 'back'], ['KeyA', 'left'], ['KeyD', 'right'], ['Space', 'jump'],
@@ -108,7 +108,13 @@ for (const [args, expected] of [
   test(`shouldReleaseOnEscape ${JSON.stringify(args)}`, () => assert.equal(shouldReleaseOnEscape(args), expected))
 }
 
-const hangingFetch = (log) => (url, init) => new Promise((resolve, reject) => {
+for (const [event, expected] of [
+  ['pointerlock-lost', 'stop-release'], ['hidden', 'stop'], ['blur', 'stop'], ['pagehide', 'stop'], ['click', null], [undefined, null]
+]) {
+  test(`leaveAction ${event}`, () => assert.equal(leaveAction(event), expected))
+}
+
+const hangingFetch =(log) => (url, init) => new Promise((resolve, reject) => {
   log.push({ url, init })
   init.signal.addEventListener('abort', () => reject(new Error('aborted')))
 })

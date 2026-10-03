@@ -36,6 +36,11 @@ export const shouldTakeOnClick = ({ embed, driving, manual, me }) => embed && !d
 // the first Esc only exits pointer lock (the browser eats it); an Esc with no lock left releases
 export const shouldReleaseOnEscape = ({ code, driving, pointerLocked }) => code === 'Escape' && driving && !pointerLocked
 
+// what the page does when it may be leaving: losing pointer lock (Esc) stops and releases; a hidden tab, blur or
+// pagehide only stops (the body's idle timeout gives the body back if the page does not return)
+const LEAVE_ACTIONS = { 'pointerlock-lost': 'stop-release', hidden: 'stop', blur: 'stop', pagehide: 'stop' }
+export const leaveAction = (event) => LEAVE_ACTIONS[event] ?? null
+
 // fetch that aborts after ms, so a hung request cannot hold the serial queue
 export const withTimeout = (fetchFn, ms) => async (url, init = {}) => {
   const controller = new AbortController()

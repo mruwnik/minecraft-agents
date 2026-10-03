@@ -125,13 +125,15 @@ The page can take over a body and drive it by hand (movement only). The "take ov
 - Arrow keys turn 15 degrees and tilt 10 degrees. Click the canvas for pointer-lock mouse look.
 - F (free camera) is ignored while driving.
 
-A red banner, shown to every viewer while anyone drives, names who. Losing focus, a hidden tab or losing pointer lock
-sends stop; closing the page sends release. The page pings every 500 ms (the body releases untimed controls after 1 s of
+A red banner, shown to every viewer while anyone drives, names who. Leave rule: losing pointer lock while driving
+(after having had it, so a single Esc) sends stop, then releases; a hidden tab or window blur sends stop and keeps the
+takeover; pagehide/beforeunload sends stop (fetch keepalive) but not release, so the body's 15 s idle timeout gives the
+body back if the page does not return (an embedding dashboard releases when its popup closes). The page pings every 500 ms (the body releases untimed controls after 1 s of
 silence). Requests are serialised, so a key-up never overtakes its key-down. Every POST times out after 1500 ms, so a
 hung request cannot hold the queue (a queued stop must not sit behind it); the body's 1 s dead-man covers the gap.
 
 - `?who=<name>` sets the driver name (default `view`; must match `[A-Za-z0-9:_-]{1,40}`, else `view`).
-- Esc while driving, once pointer lock is off, releases (the first Esc only exits pointer lock, which the browser handles).
+- Esc while driving without pointer lock releases; with lock, the Esc exits the lock, which itself releases (see the leave rule).
 - `?embed=1` (the dashboard embeds the page same-origin in an iframe): a click on the canvas takes over when this page is
   not driving and nobody else holds the body; while driving, a click requests pointer lock as usual.
 - When framed, every render posts `{type: 'drive', driving, manual, expiresAt}` to the parent (`manual` is the lease view
