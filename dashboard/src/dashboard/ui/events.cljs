@@ -68,9 +68,11 @@
 (rf/reg-event-fx
  :set-world
  (fn [{:keys [db]} [_ world]]
-   {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :status "connecting...")
+   {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :status "connecting..."
+               :villages nil)
     :push-url (logic/with-world (.-pathname js/location) world)
-    :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]]]}))
+    :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]]
+         (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])]}))
 
 (rf/reg-event-db :canvas-size (fn [db [_ w h]] (assoc db :canvas {:w w :h h})))
 (rf/reg-event-db :fit (fn [db _] (assoc db :user-view nil)))

@@ -22,6 +22,9 @@
 (rf/reg-fx :push-url
            (fn [url] (.pushState js/history nil "" url)))
 
+(rf/reg-fx :replace-url
+           (fn [url] (.replaceState js/history nil "" url)))
+
 (rf/reg-fx :console-log
            (fn [text] (js/console.log text)))
 
