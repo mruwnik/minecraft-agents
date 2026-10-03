@@ -88,7 +88,7 @@
         p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
-        name (sh/block-name p below)]
+        name (u/block-name p below)]
     (cond
       (hazards name) (do (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)

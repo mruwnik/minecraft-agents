@@ -5,6 +5,12 @@
 
 (def max-failures 3)
 
+(defn block-name
+  "The block name at cell pos of primitives p, or nil when the chunk is not
+  loaded (blockAt returns null there)."
+  [p pos]
+  (some-> (.blockAt p (clj->js pos)) .-name))
+
 (defn pos-of
   "A JS {x y z} object as a cljs map."
   [o]

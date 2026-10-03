@@ -8,7 +8,8 @@
     suffocates. Every block does except the ones in passable: air, water,
     lava, plants, torches, signs, rails, carpets, buttons, ladders, vines,
     cobweb, snow layers and the like. An unloaded cell (blockAt null) is
-    read as not enclosed, never as a reason to dig.")
+    read as not enclosed, never as a reason to dig."
+  (:require [engine.jobs.util :as u]))
 
 (def default-min-oxygen 12)
 
@@ -35,10 +36,6 @@
 
 (defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
 
-(defn block-name
-  "The block name at cell, or nil when the chunk is not loaded."
-  [p cell]
-  (some-> (.blockAt p (clj->js cell)) .-name))
 
 (defn head-cell [self]
   {:x (js/Math.floor (.. self -pos -x))
@@ -49,7 +46,7 @@
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."
   [p min-oxygen]
   (let [self (.self p)
-        head (block-name p (head-cell self))]
+        head (u/block-name p (head-cell self))]
     (cond
       (and (.-inWater self) (< (.-oxygen self) min-oxygen) (not (air? (or head "water")))) :drowning
       (and (some? head) (not (passable? head))) :enclosed

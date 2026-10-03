@@ -48,8 +48,8 @@
   (loop [k 0]
     (when (<= k reach)
       (let [y (+ fy k)
-            feet (s/block-name p {:x x :y y :z z})
-            head (s/block-name p {:x x :y (inc y) :z z})]
+            feet (u/block-name p {:x x :y y :z z})
+            head (u/block-name p {:x x :y (inc y) :z z})]
         (cond
           (not (and feet head (passable-water-or-air? feet))) nil
           (s/air? head) {:x x :y y :z z}
@@ -64,7 +64,7 @@
           (columns radius))))
 
 (defn solid-at? [p cell]
-  (let [n (s/block-name p cell)]
+  (let [n (u/block-name p cell)]
     (and (some? n) (not (s/passable? n)))))
 
 (defn status [r] (.-status r))

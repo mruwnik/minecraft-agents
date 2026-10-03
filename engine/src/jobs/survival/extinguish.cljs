@@ -42,7 +42,6 @@
 
 (defn offset [pos dx dy dz] {:x (+ (:x pos) dx) :y (+ (:y pos) dy) :z (+ (:z pos) dz)})
 
-(defn block-name [p pos] (some-> (.blockAt p (clj->js pos)) .-name))
 
 (defn scan [p radius names max]
   (mapv (fn [b] {:name (.-name b) :pos (u/pos-of (.-pos b))})
@@ -51,9 +50,9 @@
 (defn standable?
   "Feet cell and head cell passable, and the cell below solid, or the feet in water."
   [p pos]
-  (let [feet (block-name p pos)
-        head (block-name p (offset pos 0 1 0))
-        below (block-name p (offset pos 0 -1 0))]
+  (let [feet (u/block-name p pos)
+        head (u/block-name p (offset pos 0 1 0))
+        below (u/block-name p (offset pos 0 -1 0))]
     (and (contains? passable feet)
          (contains? passable head)
          (or (= "water" feet)

@@ -57,7 +57,7 @@
 (defn up [pos n] (update pos :y + n))
 
 (defn block-name [c pos]
-  (.-name (.blockAt (:primitives c) (clj->js pos))))
+  (u/block-name (:primitives c) pos))
 
 (defn open? [c pos] (contains? open-names (block-name c pos)))
 

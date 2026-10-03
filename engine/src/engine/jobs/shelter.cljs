@@ -38,9 +38,8 @@
 
 (defn feet [p] (cell (u/self-pos {:primitives p})))
 
-(defn block-name [p pos] (some-> (.blockAt p (clj->js pos)) .-name))
 
-(defn solid-at? [p pos] (solid? (block-name p pos)))
+(defn solid-at? [p pos] (solid? (u/block-name p pos)))
 
 (defn roofed?
   "A solid block within height blocks straight above the feet cell (the

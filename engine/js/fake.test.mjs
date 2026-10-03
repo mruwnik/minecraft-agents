@@ -53,6 +53,13 @@ test('blocks match by names or predicate, sorted by distance', () => {
   assert.equal(p.blockAt(at(9, 9, 9)).name, 'air')
 })
 
+test('blockAt returns null for a cell in an unloaded chunk', () => {
+  const p = createFake({ blocks: { '1,64,0': 'dirt' }, unloaded: ['1,64,0', '2,64,0'] })
+  assert.equal(p.blockAt(at(1, 64, 0)), null)
+  assert.equal(p.blockAt(at(2, 64, 0)), null)
+  assert.equal(p.blockAt(at(3, 64, 0)).name, 'air')
+})
+
 test('acting with a stale token rejects with cut', async () => {
   const p = owned()
   await assert.rejects(p.moveTo('other', { pos: at(1, 64, 0) }), { code: 'cut' })

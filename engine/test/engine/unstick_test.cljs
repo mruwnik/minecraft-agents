@@ -216,6 +216,20 @@
 
 ;; ---------------------------------------------------------------- quiet period
 
+(def unloaded-around
+  "Every cell in a box around the body, as the fake's \"x,y,z\" keys."
+  (vec (for [x (range 0 14) y (range 62 68) z (range -3 4)] (str x "," y "," z))))
+
+(deftest unstick-survives-unloaded-cells-around-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:pos at5} :unloaded unloaded-around})]
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (core/submit! eng '(jobs.maintenance.unstick) {})
+          (await (core/tick! eng))
+          (is (not-any? #(= :failed (:kind %)) @seen) "a null blockAt is not a job failure"))))))
+
 (deftest stuck-trigger-is-quiet-after-a-give-up
   (async done
     (tu/run-async done

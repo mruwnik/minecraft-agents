@@ -46,6 +46,7 @@ function initialState (spec) {
     self: { ...defaultSelf, ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
     time: spec.time ?? 1000,
     blocks: new Map(Object.entries(spec.blocks ?? {})),
+    unloaded: new Set(spec.unloaded ?? []), // "x,y,z" cells in an unloaded chunk: blockAt returns null there
     ages: new Map(Object.entries(spec.ages ?? {})), // "x,y,z" -> crop age, for blocks that have one
     entities: clone(spec.entities ?? []).map(withEntityDefaults),
     inventory: clone(spec.inventory ?? []),
@@ -312,6 +313,7 @@ export function createFake (spec = {}) {
     },
 
     blockAt (pos) {
+      if (s.unloaded.has(key(pos))) return null
       return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)) }
     },
 
