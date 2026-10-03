@@ -44,25 +44,3 @@
   "Docs this long start collapsed on the page."
   [job]
   (> (count (str/join (body-paragraphs job))) long-doc-chars))
-
-(def summary-chars 200)
-
-(defn cut-at-word [text limit]
-  (if (<= (count text) limit)
-    text
-    (let [head (subs text 0 (inc limit))
-          at (str/last-index-of head " ")]
-      (str (subs text 0 (or at limit)) "\u2026"))))
-
-(defn summary
-  "{:text :more?}: the first sentence of the doc (cut at a word near summary-chars), and whether there is more."
-  [job]
-  (let [full (str/join " " (body-paragraphs job))
-        first-sentence (or (re-find #"(?s)^.*?[.!?](?=\s|$)" full) full)
-        text (cut-at-word first-sentence summary-chars)]
-    {:text text :more? (not= text full)}))
-
-(defn arg-count
-  "Top-level keys of the pretty-printed args map."
-  [args]
-  (count (re-seq #"(?:^\{|\n) ?:[^\s]+" (or args ""))))

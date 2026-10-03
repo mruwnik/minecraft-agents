@@ -30,22 +30,13 @@
 (defn job-doc [job]
   (let [open? (r/atom false)]
     (fn [job]
-      (let [{:keys [text more?]} (jm/summary job)]
+      (let [long? (jm/long-doc? job)]
         [:div.job-docs
-         (if @open?
-           [:div.job-text
-            (for [[i p] (map-indexed vector (jm/body-paragraphs job))]
-              ^{:key i} [:p.job-doc p])]
-           [:p.job-doc text])
-         (when more?
-           [:button.linkish {:on-click #(swap! open? not)} (if @open? "less" "more")])]))))
-
-(defn job-args [args]
-  (let [open? (r/atom false)]
-    (fn [args]
-      [:div.job-args-box
-       [:button.linkish {:on-click #(swap! open? not)} (str (if @open? "hide" "args") " (" (jm/arg-count args) ")")]
-       (when @open? [:pre.job-args args])])))
+         [:div.job-text {:class (when (and long? (not @open?)) "clamped")}
+          (for [[i p] (map-indexed vector (jm/body-paragraphs job))]
+            ^{:key i} [:p.job-doc p])]
+         (when long?
+           [:button.linkish {:on-click #(swap! open? not)} (if @open? "show less" "show more")])]))))
 
 (defn job-card [{:keys [id name args file error] :as job}]
   ^{:key id}
@@ -56,7 +47,7 @@
     (for [{:keys [kind text]} (jm/badges job)]
       ^{:key kind} [:span.pill.jobbadge {:class (clojure.core/name kind)} text])]
    (if error [:div.err error] [job-doc job])
-   (when args [job-args args])
+   (when args [:pre.job-args args])
    [:div.job-file file]])
 
 (defn group [{:keys [category jobs]}]

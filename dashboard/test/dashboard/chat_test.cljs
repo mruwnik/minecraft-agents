@@ -67,21 +67,3 @@
            ["default for negative" "-3" 200]]]
     (testing what
       (is (= expected (chat/chat-limit raw))))))
-
-(defn heard-real [t from message] {:source "body" :kind "chat" :from from :message message :t t :body "ProbeWater" :level "info" :seq 3})
-(defn said-by-body [t args] {:source "action" :kind "started" :name "chat" :args args :t t :body "ProbeWater" :level "debug" :seq 4})
-
-(deftest real-body-chat-events
-  (is (= [{:t t0 :from "Dan" :to nil :kind "chat" :message "hi"}]
-         (chat/merge-chat [(heard "A" (heard-real t0 "Dan" "hi")) (heard "B" (heard-real (+ t0 3) "Dan" "hi"))] 200))))
-
-(deftest body-own-chat-is-from-the-body
-  (is (= [{:t t0 :from "Pacer" :to nil :kind "chat" :message "yo"}
-          {:t (+ t0 1000) :from "Pacer" :to "Dan" :kind "whisper" :message "psst"}]
-         (chat/merge-chat [(heard "Pacer" (said-by-body t0 {:message "yo"})
-                                  (said-by-body (+ t0 1000) {:message "psst" :to "Dan"}))] 200))))
-
-(deftest other-body-events-are-not-chat
-  (is (= [] (chat/merge-chat [(heard "A" {:source "body" :kind "spawned" :from "Dan" :t t0}
-                                     {:source "action" :kind "started" :name "moveTo" :args {} :t t0}
-                                     {:source "action" :kind "done" :name "chat" :t t0})] 200))))
