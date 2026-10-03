@@ -4,6 +4,8 @@ import { createFake } from './fake.mjs'
 
 const at = (x, y, z) => ({ x, y, z })
 
+const tick = () => new Promise(resolve => setTimeout(resolve, 1))
+
 const owned = (spec = {}) => {
   const p = createFake(spec)
   p.setOwner('t1')
@@ -170,4 +172,53 @@ test('body events reach listeners until unsubscribed', () => {
   off()
   p.world.emit({ kind: 'chat' })
   assert.deepEqual(seen, ['hurt'])
+})
+
+test('self carries the survival fields with healthy defaults', () => {
+  const s = createFake().self()
+  assert.deepEqual([s.oxygen, s.onFire, s.inWater, s.inLava, s.isSleeping, s.foodSaturation, s.dimension], [20, false, false, false, false, 5, 'overworld'])
+  assert.deepEqual(s.experience, { level: 0, points: 0, progress: 0 })
+})
+
+test('self survival fields come from the spec', () => {
+  const s = createFake({ self: { oxygen: 3, onFire: true, inLava: true, dimension: 'the_nether', experience: { level: 2, points: 20, progress: 0.5 } } }).self()
+  assert.deepEqual([s.oxygen, s.onFire, s.inLava, s.dimension, s.experience.level], [3, true, true, 'the_nether', 2])
+})
+
+test('player entities default to awake with a username; mobs get neither', () => {
+  const p = createFake({ entities: [{ id: 1, name: 'Dan', kind: 'player', pos: at(1, 64, 0) }, { id: 2, name: 'creeper', kind: 'hostile', creeper: true, pos: at(2, 64, 0) }, { id: 3, name: 'Sue', kind: 'player', sleeping: true, pos: at(3, 64, 0) }] })
+  const [dan, creeper, sue] = p.entities({})
+  assert.deepEqual([dan.username, dan.sleeping, sue.sleeping, creeper.creeper, 'sleeping' in creeper], ['Dan', false, true, true, false])
+})
+
+test('offline flips the flag, emits offline and online, and resolves ok after the wait', async () => {
+  const p = owned({ offlineScale: 0.001 })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  const pending = p.offline('t1', { ms: 20000 })
+  await tick()
+  assert.equal(p.world.state.offline, true)
+  assert.deepEqual(await pending, { status: 'ok', ms: 20000 })
+  assert.equal(p.world.state.offline, false)
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
+})
+
+for (const [ms, expected] of [[undefined, 300000], [99999999, 600000]]) {
+  test(`fake offline with ms ${ms} reports ${expected}`, async () => {
+    const p = owned({ offlineScale: 0 })
+    assert.equal((await p.offline('t1', ms === undefined ? {} : { ms })).ms, expected)
+  })
+}
+
+test('fake offline with a stale token rejects with cut', async () => {
+  await assert.rejects(createFake().offline('nope', { ms: 1 }), e => e.code === 'cut')
+})
+
+test('a cut during the fake wait still comes back online and resolves cut', async () => {
+  const p = owned({ offlineScale: 0.001 })
+  const pending = p.offline('t1', { ms: 20000 })
+  await tick()
+  p.setOwner('t2')
+  assert.deepEqual(await pending, { status: 'cut' })
+  assert.equal(p.world.state.offline, false)
 })

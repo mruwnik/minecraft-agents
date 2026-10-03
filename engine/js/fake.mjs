@@ -15,19 +15,40 @@ export class CutError extends Error {
   constructor () { super('cut: the ownership token changed'); this.code = 'cut' }
 }
 
-const defaultSelf = { username: 'Fake', pos: { x: 0, y: 64, z: 0 }, health: 20, food: 20 }
+const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
+const OFFLINE_MAX_MS = 10 * 60 * 1000
+
+const defaultSelf = {
+  username: 'Fake',
+  pos: { x: 0, y: 64, z: 0 },
+  health: 20,
+  food: 20,
+  foodSaturation: 5,
+  oxygen: 20,
+  onFire: false,
+  inWater: false,
+  inLava: false,
+  isSleeping: false,
+  experience: { level: 0, points: 0, progress: 0 },
+  dimension: 'overworld'
+}
+
+// players are awake and have a username unless the spec says otherwise
+const withEntityDefaults = (e) => ({ health: 20, ...(e.kind === 'player' && { sleeping: false, username: e.name }), ...e })
 
 function initialState (spec) {
   return {
     self: { ...defaultSelf, ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
     time: spec.time ?? 1000,
     blocks: new Map(Object.entries(spec.blocks ?? {})),
-    entities: clone(spec.entities ?? []).map(e => ({ health: 20, ...e })),
+    entities: clone(spec.entities ?? []).map(withEntityDefaults),
     inventory: clone(spec.inventory ?? []),
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
     drops: { ...(spec.drops ?? {}) },
     unreachable: new Set(spec.unreachable ?? []),
-    nextEntityId: 1000
+    nextEntityId: 1000,
+    offline: false,
+    offlineScale: spec.offlineScale ?? 0.001 // offline waits ms * this, so tests need not sit out minutes
   }
 }
 
@@ -220,6 +241,14 @@ export function createFake (spec = {}) {
         pos: { ...s.self.pos },
         health: s.self.health,
         food: s.self.food,
+        foodSaturation: s.self.foodSaturation,
+        oxygen: s.self.oxygen,
+        onFire: s.self.onFire,
+        inWater: s.self.inWater,
+        inLava: s.self.inLava,
+        isSleeping: s.self.isSleeping,
+        experience: { ...s.self.experience },
+        dimension: s.self.dimension,
         timeOfDay: s.time,
         isDay: isDayAt(s.time),
         held: s.self.held,
@@ -275,6 +304,17 @@ export function createFake (spec = {}) {
       emit (event) { for (const l of listeners) l(event) },
       setTime (t) { s.time = t }
     }
+  }
+
+  // Leaves for a shortened wait, then comes back; a cut during the wait still comes back, then says so.
+  acts.offline = async (token, { ms } = {}) => {
+    const wanted = Math.floor(Math.min(ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
+    s.offline = true
+    primitives.world.emit({ kind: 'offline', ms: wanted })
+    await new Promise(resolve => setTimeout(resolve, wanted * s.offlineScale))
+    s.offline = false
+    primitives.world.emit({ kind: 'online', pos: { ...s.self.pos } })
+    return token === owner ? { status: 'ok', ms: wanted } : { status: 'cut' }
   }
 
   for (const name of Object.keys(acts)) primitives[name] = wrap(name)
