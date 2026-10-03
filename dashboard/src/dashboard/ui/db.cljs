@@ -14,8 +14,7 @@
    :chat-open? true
    :chat-filter ""
    :hide-whispers? false
-   :look-body nil
-   :actions-body nil
+   :detail-body nil
    :notices {}})
 
 (defn world-of [db] (first (get-in db [:state :worlds])))

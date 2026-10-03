@@ -186,3 +186,48 @@
 (deftest unsupported-body-is-down
   (is (= {:name "Old" :username "O" :world "claude" :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil}
          (ee/unsupported-body {:name "Old" :username "O" :world "claude"}))))
+
+;; ---------------------------------------------------------------- signals (what the trouble rules read)
+(defn signals [events] (:signals (view events (+ t0 99000))))
+
+(deftest signals-hurt-and-died
+  (doseq [[title events path expected]
+          [["hurt keeps the time of the last hurt, even at debug level"
+            [(ev 1 {:source "body" :kind "hurt" :level "debug" :health 15}) (ev 2 {:source "body" :kind "hurt" :level "debug"})]
+            [:hurt-t] (+ t0 2000)]
+           ["died keeps its time" [(ev 1 {:source "body" :kind "died" :level "error"})] [:died-t] (+ t0 1000)]
+           ["a hurt from another source is not a hurt" [(ev 1 {:source "job" :kind "hurt"})] [:hurt-t] nil]]]
+    (testing title
+      (is (= expected (get-in (signals events) path))))))
+
+(deftest signals-backoff
+  (doseq [[title events expected]
+          [["a job backoff starts" [(ev 1 {:kind "backoff" :level "warn" :name "go-to"})] {"go-to" (+ t0 1000)}]
+           ["a reflex backoff is keyed by the reflex" [(reflex-ev 1 "backoff" "hungry" {:level "warn"})] {"hungry" (+ t0 1000)}]
+           ["recovered ends it"
+            [(ev 1 {:kind "backoff" :level "warn" :name "go-to"}) (ev 2 {:kind "recovered" :name "go-to"})] {}]
+           ["recovered of another leaves it"
+            [(ev 1 {:kind "backoff" :level "warn" :name "go-to"}) (ev 2 {:kind "recovered" :name "dig"})] {"go-to" (+ t0 1000)}]
+           ["a restart clears it"
+            [(ev 1 {:kind "backoff" :level "warn" :name "go-to"}) (ev 2 {:source "system" :kind "started" :job nil :chain nil})] {}]]]
+    (testing title
+      (is (= expected (into {} (:backoffs (signals events))))))))
+
+(deftest signals-stuck
+  (doseq [[title events expected]
+          [["the stuck reflex firing" [(reflex-ev 1 "fired" "stuck" {})] {:stuck-open? true :stuck-t (+ t0 1000)}]
+           ["ended closes it" [(reflex-ev 1 "fired" "stuck" {}) (reflex-ev 2 "ended" "stuck" {})] {:stuck-open? false :stuck-t (+ t0 1000)}]
+           ["unstick giving up" [(ev 1 {:kind "unstick.failed" :level "warn"})] {:stuck-t (+ t0 1000)}]
+           ["another reflex is not stuck" [(reflex-ev 1 "fired" "hungry" {})] {}]]]
+    (testing title
+      (is (= expected (select-keys (signals events) [:stuck-open? :stuck-t]))))))
+
+(deftest signals-takeover
+  (doseq [[title events expected]
+          [["started" [(ev 1 {:source "system" :kind "takeover_started"})] true]
+           ["started then ended" [(ev 1 {:source "system" :kind "takeover_started"}) (ev 2 {:source "system" :kind "takeover_ended"})] false]
+           ["ended then started again"
+            [(ev 1 {:source "system" :kind "takeover_started"}) (ev 2 {:source "system" :kind "takeover_ended"}) (ev 3 {:source "system" :kind "takeover_started"})] true]
+           ["never" [(ev 1)] false]]]
+    (testing title
+      (is (= expected (boolean (:takeover? (signals events))))))))

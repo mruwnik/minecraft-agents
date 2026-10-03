@@ -4,6 +4,7 @@
   (:require ["fs" :as fs]
             ["http" :as http]
             ["path" :as path]
+            ["url" :as url]
             [clojure.string :as str]
             [dashboard.chat :as chat]
             [dashboard.engine-edn :as engine-edn]
@@ -11,6 +12,7 @@
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
             [dashboard.routes :as routes]
+            [dashboard.view-info :as view-info]
             [dashboard.worlds :as worlds]))
 
 (def repo-root (.resolve path js/__dirname ".." ".."))
@@ -122,12 +124,43 @@
       {:edn-error (:error summary)}
       summary)))
 
+;; ---------------------------------------------------------------- views (pose.json, hud.json)
+;; Each file is re-read only when its mtime changed; a missing or unreadable file is nil.
+(def view-cache (atom {}))
+
+(defn view-file [name file] (.join path agents-dir name "view" file))
+
+(defn parse-js [text] (try (js/JSON.parse text) (catch :default _ nil)))
+
+;; pose.json carries every nearby entity and changes often: only the few fields we show are converted
+(defn pose-fields [o]
+  (when o
+    {:status (.-status o) :dimension (.-dimension o) :pos (js->clj (.-pos o) :keywordize-keys true)}))
+
+(defn read-view-file [name file convert]
+  (let [full (view-file name file)]
+    (try
+      (let [mtime (.-mtimeMs (.statSync fs full))
+            cached (get-in @view-cache [name file])]
+        (if (= mtime (:mtime cached))
+          cached
+          (let [entry {:mtime mtime :value (convert (parse-js (.readFileSync fs full "utf8")))}]
+            (swap! view-cache assoc-in [name file] entry)
+            entry)))
+      (catch :default _ nil))))
+
+(defn read-view [name]
+  (let [pose (read-view-file name "pose.json" pose-fields)
+        hud (read-view-file name "hud.json" #(some-> % (js->clj :keywordize-keys true)))]
+    (view-info/summarize (:value pose) (:value hud) (:mtime pose))))
+
 (defn engine-body [agent now]
   (let [view (try
                (ee/engine-view (read-engine (:name agent)) now)
                (catch :default e
                  (assoc (ee/engine-view ee/empty-engine now) :error (str "events unreadable: " (ex-message e)))))]
-    (ee/engine-body agent (merge view (edn-fields (:name agent) now)))))
+    (assoc (ee/engine-body agent (merge view (edn-fields (:name agent) now)))
+           :view (read-view (:name agent)))))
 
 (defn agent-entries []
   (mapv (fn [n] {:name n :text (read-text (.join path agents-dir n "config.json"))}) (dir-names agents-dir)))
@@ -240,6 +273,45 @@
       (send-file! res file)
       (send-json! res 404 {:error "not found"}))))
 
+;; ---------------------------------------------------------------- thumbnails
+;; js/thumbs.mjs is ESM and this build is CJS. A literal import() in the bundle does not work (Closure; and
+;; new Function("return import(..)") fails in the bundle: "A dynamic import callback was not specified"), so js/import-esm.cjs,
+;; a native CommonJS file, makes the call. THUMBS_MODULE overrides the module path (tests).
+(def thumbs-module (or (.-THUMBS_MODULE js/process.env) (.join path dashboard-dir "js" "thumbs.mjs")))
+
+(def import-esm (js/require (.join path dashboard-dir "js" "import-esm.cjs")))
+
+(def no-thumbnails
+  {:get (fn [_] (js/Promise.resolve nil))
+   :stats (fn [] #js {:error "thumbnailer unavailable"})
+   :close (fn [])})
+
+(defn load-thumbnailer []
+  (-> (import-esm (.-href (.pathToFileURL url thumbs-module)))
+      (.then (fn [m] (let [t ((.-createThumbnailer m) #js {:stateDir (.join path root "state")})]
+                       {:get #(.get t %) :stats #(.stats t) :close #(.close t)})))
+      (.catch (fn [e]
+                (js/console.error (str "thumbnails disabled: " (ex-message e)))
+                no-thumbnails))))
+
+;; one thumbnailer for the process, created on the first request
+(defonce thumbnailer (delay (load-thumbnailer)))
+
+(defn send-thumb! [res name]
+  (-> @thumbnailer
+      (.then (fn [t] ((:get t) name)))
+      (.then (fn [thumb]
+               (if-not thumb
+                 (send-json! res 404 {:error (str "no view for " name)})
+                 (do (.writeHead res 200 #js {"content-type" "image/png" "cache-control" "no-store"
+                                              "x-pose-mtime" (str (.-poseMtimeMs thumb))})
+                     (.end res (.-png thumb))))))
+      (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))
+
+(defn send-thumbs-stats! [res]
+  (-> @thumbnailer
+      (.then (fn [t] (send-json-js! res 200 ((:stats t)))))))
+
 (def route-list
   "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
 
@@ -287,6 +359,8 @@
       (case kind
         :page (send-file! res (.join path public-dir "index.html"))
         :static (serve-static! res request-path)
+        :thumb (send-thumb! res blueprint-name)
+        :thumbs-stats (send-thumbs-stats! res)
         :worlds (send-json! res 200 {:worlds (read-world-list)})
         :villagers-api (send-json-js! res 200 (legacy/villagers repo-root root))
         :blueprints (send-json-js! res 200 (blueprint-library))

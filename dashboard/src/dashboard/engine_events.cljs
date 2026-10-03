@@ -12,7 +12,7 @@
 (def job-ends #{"completed" "failed" "cancelled"})
 (def levels-shown #{"info" "warn" "error"})
 
-(def empty-engine {:last nil :pos nil :job nil :reflex nil :recent [] :warns []})
+(def empty-engine {:last nil :pos nil :job nil :reflex nil :recent [] :warns [] :signals {}})
 
 (defn describe [e]
   (or (:text e) (:error e)
@@ -38,6 +38,24 @@
     (= "ended" (:kind e)) (when-not (= (:reflex e) reflex) reflex)
     :else reflex))
 
+;; What the trouble rules read, kept even for debug events that never reach :recent:
+;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover?}
+(defn next-signals [signals e]
+  (let [{:keys [source kind t]} e
+        backoff-key (or (:name e) (:reflex e) (:job e))]
+    (cond
+      (system-started? e) {}
+      (and (= "body" source) (= "hurt" kind)) (assoc signals :hurt-t t)
+      (and (= "body" source) (= "died" kind)) (assoc signals :died-t t)
+      (and (#{"job" "reflex"} source) (= "backoff" kind)) (assoc-in signals [:backoffs backoff-key] t)
+      (and (#{"job" "reflex"} source) (= "recovered" kind)) (update signals :backoffs dissoc backoff-key)
+      (and (= "reflex" source) (= "stuck" (:reflex e)) (= "fired" kind)) (assoc signals :stuck-t t :stuck-open? true)
+      (and (= "reflex" source) (= "stuck" (:reflex e)) (= "ended" kind)) (assoc signals :stuck-open? false)
+      (= "unstick.failed" kind) (assoc signals :stuck-t t)
+      (and (= "system" source) (= "takeover_started" kind)) (assoc signals :takeover? true)
+      (and (= "system" source) (= "takeover_ended" kind)) (assoc signals :takeover? false)
+      :else signals)))
+
 (defn noteworthy? [e]
   (and (levels-shown (:level e))
        (not (and (= "job" (:source e)) (heartbeats (:kind e))))))
@@ -47,7 +65,8 @@
       (assoc :last {:t (:t e) :seq (:seq e)}
              :pos (or (:pos e) (:pos state))
              :job (next-job (:job state) e)
-             :reflex (next-reflex (:reflex state) e))
+             :reflex (next-reflex (:reflex state) e)
+             :signals (next-signals (:signals state) e))
       (update :recent #(if (noteworthy? e)
                          (vec (take-last recent-max (conj % {:t (:t e) :level (:level e) :source (:source e) :kind (:kind e) :text (describe e)})))
                          %))
@@ -63,7 +82,7 @@
 
 (defn engine-view [state now]
   (if-not (:last state)
-    {:up false :error "no events yet" :at nil :age-ms nil :job nil :reflex nil :pos nil :recent [] :warn10m 0 :error10m 0}
+    {:up false :error "no events yet" :at nil :age-ms nil :job nil :reflex nil :pos nil :recent [] :warn10m 0 :error10m 0 :signals {}}
     (let [age-ms (max 0 (- now (get-in state [:last :t])))
           up (< age-ms engine-up-ms)
           warns (filter #(> (:t %) (- now warn-window-ms)) (:warns state))
@@ -77,7 +96,8 @@
        :pos (:pos state)
        :recent (:recent state)
        :warn10m (count-level "warn")
-       :error10m (count-level "error")})))
+       :error10m (count-level "error")
+       :signals (:signals state)})))
 
 ;; ---------------------------------------------------------------- reading the file in pieces
 (def newline-byte 10)

@@ -42,8 +42,8 @@
     (is (= expected (l/api-url path world params)))))
 
 (deftest page-for-path
-  (doseq [[path expected] [["/" :main] ["/villages" :villages] ["/villagers" :villagers] ["/blueprints" :blueprints]
-                           ["/villages/" :villages] ["/zzz" :main]]]
+  (doseq [[path expected] [["/" :bodies] ["/map" :map] ["/map/" :map] ["/plans" :plans] ["/jobs" :jobs] ["/villages" :villages]
+                           ["/villagers" :villagers] ["/blueprints" :blueprints] ["/villages/" :villages] ["/zzz" :bodies]]]
     (is (= expected (l/page-for-path path)))))
 
 (def msgs [{:t 1 :from "Steve" :to nil :message "hello there"}
@@ -97,3 +97,4 @@
 (deftest clock-ms-text
   (is (= "03:04:05" (l/clock-ms-text (.getTime (js/Date. 2020 0 1 3 4 5)))))
   (is (= "x" (l/clock-ms-text "x"))))
+

@@ -39,10 +39,13 @@
 
 (defn page-for-path [path]
   (case (str/replace path #"/+$" "")
+    "/map" :map
+    "/plans" :plans
     "/villages" :villages
     "/villagers" :villagers
     "/blueprints" :blueprints
-    :main))
+    "/jobs" :jobs
+    :bodies))
 
 (defn filter-chat [msgs needle hide-whispers?]
   (let [n (str/lower-case (or needle ""))

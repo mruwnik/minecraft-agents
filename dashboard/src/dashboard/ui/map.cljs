@@ -7,7 +7,7 @@
 (def pick-radius 10)
 (def label-font "11px ui-monospace, Menlo, monospace")
 
-(def colors {:up "#6ee7a8" :down "#55606f" :human "#f08ad0" :place "#d9b25f" :zone "#5b8fd6" :ink "#dfe4ec"})
+(def colors {:up "#3fb950" :down "#6e7681" :human "#f08ad0" :place "#d9b25f" :zone "#5b8fd6" :ink "#dfe4ec"})
 
 (defn body-pos [b] (get-in b [:state :pos]))
 

@@ -1,11 +1,12 @@
 (ns dashboard.ui.subs
   (:require [re-frame.core :as rf]
             [dashboard.ui.db :as db]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.ui.trouble :as trouble]))
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :look-body :actions-body :notices :chat :worlds]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :notices :chat :worlds]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -31,10 +32,24 @@
  :<- [:bodies]
  (fn [bodies _] (logic/split-bodies bodies)))
 
+;; bodies the engine runs: sorted for the cards, counted for the top bar
 (rf/reg-sub
- :counts-text
- :<- [:bodies]
- (fn [bodies _] (str (count (filter :up bodies)) " up / " (count bodies) " bodies")))
+ :cards
+ :<- [:split-bodies]
+ :<- [:now]
+ (fn [[{:keys [engine]} now] _]
+   (mapv #(trouble/card-model % now) (trouble/sort-bodies engine now))))
+
+(rf/reg-sub
+ :status-counts
+ :<- [:split-bodies]
+ :<- [:now]
+ (fn [[{:keys [engine]} now] _] (trouble/counts engine now)))
+
+(rf/reg-sub
+ :foreign-count
+ :<- [:split-bodies]
+ (fn [{:keys [foreign]} _] (count foreign)))
 
 (rf/reg-sub
  :visible-chat

@@ -23,24 +23,25 @@
            [:div#chatempty "no messages"]
            (into [:<>] (map-indexed message-row messages)))])})))
 
-(defn chat-drawer []
-  (let [open? @(rf/subscribe [:chat-open?])
-        all @(rf/subscribe [:chat])
-        visible @(rf/subscribe [:visible-chat])
-        notice (get @(rf/subscribe [:notices]) "whisper")]
-    [:div#chat {:class (when-not open? "closed")}
-     [:div#chatbar
-      [:h2 "chat"]
-      [:span.muted (if (= (count all) (count visible)) (str (count all)) (str (count visible) " of " (count all)))]
-      [:span.spacer]
-      [:input#chatfilter.chatTools {:type "search" :placeholder "filter by name or text" :spellcheck false
-                                    :value @(rf/subscribe [:chat-filter])
-                                    :on-change #(rf/dispatch [:chat-filter (.. % -target -value)])}]
-      [:label.chatTools [:input {:type "checkbox" :checked @(rf/subscribe [:hide-whispers?])
-                                 :on-change #(rf/dispatch [:hide-whispers (.. % -target -checked)])}]
-       " hide whispers"]
-      [:input#whisper.chatTools {:type "text" :placeholder "whisper (Enter)"
-                                 :on-key-down #(when (= "Enter" (.-key %)) (rf/dispatch [:unsupported "whisper"]))}]
-      [:button#chattoggle {:on-click #(rf/dispatch [:toggle-chat])} (if open? "hide ▾" "show ▴")]]
-     (when notice [:div.muted.notice.chatTools notice])
-     (when open? [chat-log visible])]))
+(defn chat-panel []
+  (let [open? @(rf/subscribe [:chat-open?])]
+    (if-not open?
+      [:aside#chat.closed
+       [:button.chat-tab {:title "show chat" :on-click #(rf/dispatch [:toggle-chat])} "chat ◂"]]
+      (let [all @(rf/subscribe [:chat])
+            visible @(rf/subscribe [:visible-chat])]
+        [:aside#chat
+         [:div#chatbar
+          [:h2 "chat"]
+          [:span.dim (if (= (count all) (count visible)) (str (count all)) (str (count visible) " of " (count all)))]
+          [:span.spacer]
+          [:button {:title "hide chat" :on-click #(rf/dispatch [:toggle-chat])} "hide ▸"]]
+         [:div#chattools
+          [:input#chatfilter {:type "search" :placeholder "filter by name or text" :spell-check false
+                              :value @(rf/subscribe [:chat-filter])
+                              :on-change #(rf/dispatch [:chat-filter (.. % -target -value)])}]
+          [:label [:input {:type "checkbox" :checked @(rf/subscribe [:hide-whispers?])
+                           :on-change #(rf/dispatch [:hide-whispers (.. % -target -checked)])}]
+           " hide whispers"]]
+         [chat-log visible]
+         [:input#whisper {:type "text" :disabled true :placeholder "sending arrives in a later stage"}]]))))

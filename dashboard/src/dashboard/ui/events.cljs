@@ -17,9 +17,8 @@
      {:db initial
       :fx [[:dispatch [:fetch-worlds]]
            [:dispatch [:poll-state]]
-           (when (= page :main) [:dispatch [:poll-chat]])
-           [:start-timers (concat [[:state state-ms [:poll-state]]]
-                                  (when (= page :main) [[:chat chat-ms [:poll-chat]]]))]]})))
+           [:dispatch [:poll-chat]]
+           [:start-timers [[:state state-ms [:poll-state]] [:chat chat-ms [:poll-chat]]]]]})))
 
 (rf/reg-event-fx
  :fetch-worlds
@@ -68,7 +67,7 @@
 (rf/reg-event-fx
  :set-world
  (fn [{:keys [db]} [_ world]]
-   {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :status "connecting..."
+   {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :detail-body nil :status "connecting..."
                :villages nil)
     :push-url (logic/with-world (.-pathname js/location) world)
     :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]]
@@ -99,9 +98,8 @@
 (rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
 (rf/reg-event-db :hide-whispers (fn [db [_ on?]] (assoc db :hide-whispers? on?)))
-(rf/reg-event-db :look-body (fn [db [_ name]] (assoc db :look-body name)))
-(rf/reg-event-db :open-actions (fn [db [_ name]] (assoc db :actions-body name)))
-(rf/reg-event-db :close-actions (fn [db _] (assoc db :actions-body nil)))
+(rf/reg-event-db :open-detail (fn [db [_ name]] (assoc db :detail-body name)))
+(rf/reg-event-db :close-detail (fn [db _] (assoc db :detail-body nil)))
 
 ;; The one handler for every action engine bodies do not support: log it, show it, call nothing.
 (rf/reg-event-fx

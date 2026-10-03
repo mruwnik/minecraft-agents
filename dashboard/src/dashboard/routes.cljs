@@ -3,6 +3,7 @@
 
 (def blueprint-re #"^/api/blueprint/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 (def unsupported-re #"^/api/(?:look|screen|actions|whisper|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
+(def thumb-re #"^/api/thumb/([A-Za-z0-9_-]+)\.png$")
 (def static-re #"^/[A-Za-z0-9_./-]+\.(?:js|css|map|png|svg|ico|json|html|txt|woff2?)$")
 
 (def exact
@@ -11,6 +12,10 @@
    "/villagers" {:kind :page}
    "/villages" {:kind :page}
    "/blueprints" {:kind :page}
+   "/map" {:kind :page}
+   "/plans" {:kind :page}
+   "/jobs" {:kind :page}
+   "/api/thumbs/stats" {:kind :thumbs-stats}
    "/api/worlds" {:kind :worlds}
    "/api/state" {:kind :state}
    "/api/villagers" {:kind :villagers-api}
@@ -27,6 +32,7 @@
   (let [path (pathname url)]
     (or (exact path)
         (some->> (re-find blueprint-re path) second (assoc {:kind :blueprint} :name))
+        (some->> (re-find thumb-re path) second (assoc {:kind :thumb} :name))
         (when (re-find unsupported-re path) {:kind :unsupported})
-        (when (and (re-find static-re path) (not (str/includes? path ".."))) {:kind :static :path path})
+        (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})
         {:kind :unknown})))
