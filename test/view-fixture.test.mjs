@@ -49,6 +49,8 @@ const lights = [
   ['leaves let light through', 10, 67, 4, { sky: 15, block: 0 }],
   ['slab cell is lit', 4, 65, 8, { sky: 15, block: 0 }],
   ['snow cell is lit', 11, 65, 8, { sky: 15, block: 0 }],
+  ['glass cell is lit', 8, 69, 3, { sky: 15, block: 0 }],
+  ['lime cell behind the glass', 8, 69, 1, { sky: 0, block: 0 }],
   ['other chunk', -5, 70, -5, { sky: 15, block: 0 }]
 ]
 
@@ -116,8 +118,19 @@ const overlap = (a, b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <
 test('the slab and snow regions do not overlap the original ones or each other', () => {
   const basis = cameraBasis({ yaw: FIXTURE.yaw, pitch: FIXTURE.pitch, fov: 70 })
   const rects = Object.fromEntries(FIXTURE.regions.map(({ name, face }) => [name, faceRegion(basis, FIXTURE.eye, face, 640, 360)]))
-  const added = FIXTURE.regions.map(r => r.name).filter(n => !OLD_REGIONS.includes(n))
+  const added = FIXTURE.regions.map(r => r.name).filter(n => !OLD_REGIONS.includes(n) && n !== 'glass')
   assert.deepEqual(added, ['slab lower', 'slab upper', 'snow lower', 'snow upper'])
   const pairs = added.flatMap((a, i) => [...OLD_REGIONS, ...added.slice(i + 1)].map(b => [a, b]))
   for (const [a, b] of pairs) assert.ok(!overlap(rects[a], rects[b]), `${a} ${JSON.stringify(rects[a])} overlaps ${b} ${JSON.stringify(rects[b])}`)
+})
+
+test('the glass wall and its region do not overlap any other region', () => {
+  const basis = cameraBasis({ yaw: FIXTURE.yaw, pitch: FIXTURE.pitch, fov: 70 })
+  const rects = Object.fromEntries(FIXTURE.regions.map(({ name, face }) => [name, faceRegion(basis, FIXTURE.eye, face, 640, 360)]))
+  const others = FIXTURE.regions.map(r => r.name).filter(n => n !== 'glass')
+  assert.ok(FIXTURE.regions.some(r => r.name === 'glass'))
+  for (const b of others) assert.ok(!overlap(rects.glass, rects[b]), `glass ${JSON.stringify(rects.glass)} overlaps ${b} ${JSON.stringify(rects[b])}`)
+  // the whole glass wall (face rectangle without the inset) stays clear of the others too
+  const wall = faceRegion(basis, FIXTURE.eye, { axis: 'z', at: 4, x: [7, 10], y: [69, 71] }, 640, 360)
+  for (const b of others) assert.ok(!overlap(wall, rects[b]), `glass wall overlaps ${b}`)
 })

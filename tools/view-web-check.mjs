@@ -1,5 +1,6 @@
 // Headless pixel regression check of the browser view against a synthetic world (tools/view/fixture.mjs).
-//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost]
+//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--web dir]
+// --web: serve the page from this directory instead of tools/view/web (e.g. a copy with the shader changed, to prove a check can fail)
 // --ghost: the no-ghost check (tools/view/ghost-fixture.mjs): jump between two places that share window slots and compare with fresh loads.
 // Prints PASS|FAIL per check, saves screenshots to --out, exits 1 if a check fails.
 import fs from 'node:fs'
@@ -17,7 +18,7 @@ import { PLACES, AGENT as GHOST_AGENT, writeGhostWorld, writePose } from './view
 import { decodePng, encodePng } from '../src/vision/renderer.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false } } })
+const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false }, web: { type: 'string' } } })
 
 const WIDTH = 640
 const HEIGHT = 360
@@ -43,6 +44,8 @@ const textureAverage = name => {
 }
 const diamondExpected = textureAverage('diamond_ore').map(v => v * Z_FACE_SHADE)
 
+const limeExpected = textureAverage('lime_wool').map(v => v * Z_FACE_SHADE)
+const isLime = rgb => rgb.every((v, i) => Math.abs(v - limeExpected[i]) <= 40) // the block behind the glass, shaded like any z face
 const isRed = ([r, g, b]) => r > 70 && g < 50 && b < 50 // the shaded, AO-darkened wool
 const isWhite = ([r, g, b]) => r > 100 && g > 100 && b > 100 && Math.abs(r - b) < 25
 const isGold = ([r, g, b]) => r > 110 && g > 90 && b < 80
@@ -67,6 +70,8 @@ const TEXTURES = [
   { name: 'slab lower half is planks', region: 'slab lower', test: s => s.mean[0] > s.mean[2] + 30, describe: s => `r ${s.mean[0].toFixed(0)} vs b ${s.mean[2].toFixed(0)} + 30` },
   { name: 'above the slab shows what is behind', region: 'slab upper', test: s => s.fraction(isRed) > 0.6, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` },
   { name: 'snow lower quarter is white', region: 'snow lower', test: s => s.fraction(isWhite) > 0.6, describe: s => `white ${s.fraction(isWhite).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` },
+  // the inner face between two glass blocks is culled: nothing draws a border line across the lime block seen through them
+  { name: 'glass culls the inner face', region: 'glass', test: s => s.fraction(isLime) > 0.85, describe: s => `lime ${s.fraction(isLime).toFixed(3)} vs > 0.85 (mean ${fmt(s.mean)})` },
   { name: 'snow is low', region: 'snow upper', test: s => s.fraction(isGold) > 0.6, describe: s => `gold ${s.fraction(isGold).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` }
 ]
 
@@ -96,7 +101,7 @@ const RUNS = [
 ]
 
 const startServer = async stateDir => {
-  const server = createViewServer({ stateDir, textureDir: path.join(repo, 'textures'), webDir: path.join(repo, 'tools', 'view', 'web') })
+  const server = createViewServer({ stateDir, textureDir: path.join(repo, 'textures'), webDir: values.web ? path.resolve(values.web) : path.join(repo, 'tools', 'view', 'web') })
   const port = await freePort()
   await new Promise(resolve => server.listen(port, '127.0.0.1', resolve))
   return { server, port }

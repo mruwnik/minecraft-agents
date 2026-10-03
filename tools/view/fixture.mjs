@@ -23,8 +23,12 @@ const TORCH = { x: [6, 9], z: [8, 10], y: 65 } // torch-lit floor top, in the mi
 // a bottom slab and a two-layer snow, each with a wool / gold block right behind (north of) it: their upper parts are empty air
 const SLAB = { x: 4, y: 65, z: 8 }
 const SNOW = { x: 11, y: 65, z: 8 }
+// a glass wall two blocks deep (z and z - 1) with a lime wool block right behind it: without the same-material cull the
+// inner face between the two glass blocks draws its border across the middle of the front face
+const GLASS = { x: [7, 9], y: [69, 70], z: 3 }
+export const GLASS_BACK = 'lime_wool'
 export const STATES = { oak_slab: { type: 'bottom' }, snow: { layers: 2 } }
-const LIT_BLOCKS = new Set(['oak_leaves', 'oak_slab', 'snow']) // not opaque: light passes through (partial blocks have their own light)
+const LIT_BLOCKS = new Set(['oak_leaves', 'oak_slab', 'snow', 'glass']) // not opaque: light passes through (partial blocks have their own light)
 
 // the eye is far enough back (and in x centred on the wall) that the whole wall and the torch patch fit a 70 degree view
 export const FIXTURE = {
@@ -43,6 +47,8 @@ export const FIXTURE = {
     { name: 'slab lower', face: { axis: 'z', at: SLAB.z + 1, x: [SLAB.x, SLAB.x + 1], y: [SLAB.y, SLAB.y + 0.5] } },
     { name: 'slab upper', face: { axis: 'z', at: SLAB.z + 1, x: [SLAB.x + 0.55, SLAB.x + 1], y: [SLAB.y + 0.7, SLAB.y + 1] } },
     { name: 'snow lower', face: { axis: 'z', at: SNOW.z + 1, x: [SNOW.x, SNOW.x + 1], y: [SNOW.y, SNOW.y + 0.25] } },
+    // inside the middle cell's front face, inset 0.1 (the glass texture is transparent except for a thin border at the edges; 0.25 would be too small on screen at this distance)
+    { name: 'glass', face: { axis: 'z', at: GLASS.z + 1, x: [8.1, 8.9], y: [69.1, 69.9] } },
     { name: 'snow upper', face: { axis: 'z', at: SNOW.z + 1, x: [SNOW.x, SNOW.x + 0.45], y: [SNOW.y + 0.55, SNOW.y + 1] } }
   ]
 }
@@ -61,6 +67,12 @@ export const blockNameAt = (x, y, z) => {
   if (x === SLAB.x && y === SLAB.y && z === SLAB.z - 1) return 'red_wool'
   if (x === SNOW.x && y === SNOW.y && z === SNOW.z) return 'snow'
   if (x === SNOW.x && y === SNOW.y && z === SNOW.z - 1) return 'gold_block'
+  if (within(x, GLASS.x) && within(y, GLASS.y)) {
+    if (z === GLASS.z || z === GLASS.z - 1) return 'glass'
+    if (z === GLASS.z - 2) return GLASS_BACK
+  }
+  // the backdrop is bigger than the glass: rays through its upper rows still rise past the glass's own height
+  if (z === GLASS.z - 2 && within(x, [GLASS.x[0] - 1, GLASS.x[1] + 1]) && within(y, [GLASS.y[0], GLASS.y[1] + 5])) return GLASS_BACK
   if (z === WALL_Z - 1 && x === 10 && within(y, WALL_Y)) return 'red_wool'
   return 'air'
 }
@@ -126,7 +138,7 @@ export const poseFor = now => ({
 
 export const writeFixture = stateDir => {
   const Chunk = makeChunkClass(MC_VERSION)
-  const ids = stateIds(Chunk.registry, ['stone', 'oak_leaves', 'red_wool', 'diamond_ore', 'oak_slab', 'snow', 'gold_block'])
+  const ids = stateIds(Chunk.registry, ['stone', 'oak_leaves', 'red_wool', 'diamond_ore', 'oak_slab', 'snow', 'gold_block', 'glass', GLASS_BACK])
   for (const [cx, cz] of CHUNKS) {
     const file = columnFile(stateDir, WORLD, cx, cz)
     fs.mkdirSync(path.dirname(file), { recursive: true })
