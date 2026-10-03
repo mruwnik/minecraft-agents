@@ -4,16 +4,42 @@ import fs from 'node:fs'
 import path from 'node:path'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
+import { textureSet, SIZE, LEVELS } from './textures.mjs'
 import { decodePng, textureCandidates, tintOf, colorOf } from '../../src/vision/renderer.mjs'
 
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
-const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
 const FACES = [['top', 'top'], ['side', 'side'], ['bottom', 'bottom']]
+const FULL = [0, 0, 0, 16, 16, 16]
 
-const kindOf = block => {
-  if (block.name === 'water' || block.name === 'lava') return block.name
-  if (!block.shapes.length) return 'cross'
-  return JSON.stringify(block.shapes) === FULL_CUBE ? 'cube' : 'partial'
+export const CUTOUT = 1
+export const TRANSLUCENT = 2
+export const AXIS_X = 4
+export const AXIS_Z = 8
+export const EMISSIVE = 16
+export const CULL_SAME = 32 // no face between two blocks of this material
+
+// collision shapes are not the visual shape: these blocks are drawn differently from how they collide
+const FULL_CUBES = new Set(['powder_snow', 'soul_sand', 'mud', 'honey_block'])
+const FLAT = /(rail|_pressure_plate)$|^(redstone_wire|lily_pad)$/
+const CULL_SAME_NAMES = /glass$|glass_pane$|^ice$|^frosted_ice$|^slime_block$|^honey_block$/
+const TRANSLUCENT_NAMES = /^(water|ice|frosted_ice|slime_block|honey_block)$|stained_glass(_pane)?$/
+
+const isFull = box => box.every((v, i) => v === FULL[i])
+
+const boxOf = (block, props) => {
+  if (block.name === 'snow') return [0, 0, 0, 16, Number(props.layers) * 2, 16]
+  if (FULL_CUBES.has(block.name)) return FULL
+  if (FLAT.test(block.name)) return [0, 0, 0, 16, 1, 16]
+  if (!block.shapes.length) return null
+  const union = block.shapes.reduce((u, sh) => u.map((v, i) => i < 3 ? Math.min(v, sh[i]) : Math.max(v, sh[i])))
+  return union.map(v => Math.round(Math.min(1, Math.max(0, v)) * 16))
+}
+
+const shapeOf = (block, props) => {
+  if (block.name === 'water' || block.name === 'lava') return { kind: block.name, box: FULL }
+  const box = boxOf(block, props)
+  if (!box) return { kind: 'cross', box: FULL }
+  return { kind: isFull(box) ? 'cube' : 'box', box }
 }
 
 const hashColor = name => {
@@ -44,7 +70,20 @@ const alphaFor = (kind, coverage) => {
   return 255
 }
 
-export function materialTable (version, textureDir) {
+const hasCutout = ({ width, rgba }) => {
+  for (let i = 3; i < width * width * 4; i += 4) if (rgba[i] < 128) return true
+  return false
+}
+
+const flagsOf = (block, props, kind, cutout, emitLight) => {
+  const translucent = TRANSLUCENT_NAMES.test(block.name)
+  return (translucent ? TRANSLUCENT : cutout && kind !== 'water' && kind !== 'lava' ? CUTOUT : 0) |
+    (CULL_SAME_NAMES.test(block.name) ? CULL_SAME : 0) | (props.axis === 'x' ? AXIS_X : 0) | (props.axis === 'z' ? AXIS_Z : 0) |
+    (emitLight > 0 && props.lit !== false ? EMISSIVE : 0)
+}
+
+// one build gives the table and the texture bytes, so layer indices always agree
+export function textureBytes (version, textureDir) {
   const registry = prismarineRegistry(version)
   const Block = prismarineBlock(registry)
   const images = new Map()
@@ -55,9 +94,15 @@ export function materialTable (version, textureDir) {
     images.set(name, found)
     return found
   }
-  const faceColor = (block, kind, face) => {
-    const props = block.getProperties()
-    const textureName = textureCandidates(block.name, face, props).find(n => image(n))
+  const layerNames = []
+  const layerIndex = new Map()
+  const layerFor = name => {
+    if (!name) return -1
+    if (!layerIndex.has(name)) layerIndex.set(name, layerNames.push(name) - 1)
+    return layerIndex.get(name)
+  }
+  const faceTexture = (block, kind, face, props) => textureCandidates(block.name, kind === 'cross' ? 'cross' : face, props).find(n => image(n))
+  const faceColor = (block, kind, textureName) => {
     const fallback = () => [...(colorOf(block.name) ?? hashColor(block.name)), alphaFor(kind, 1)]
     if (!textureName) return fallback()
     const { rgb, coverage } = averageColor(image(textureName))
@@ -66,14 +111,23 @@ export function materialTable (version, textureDir) {
     const tinted = rgb.map((v, c) => tint ? v * tint[c] / 255 : v)
     return [...tinted.map(Math.round), alphaFor(kind, coverage)]
   }
+  const describe = block => {
+    const props = block.getProperties()
+    const { kind, box } = shapeOf(block, props)
+    const names = FACES.map(([, face]) => faceTexture(block, kind, face, props))
+    const colors = FACES.map(([k], i) => [k, faceColor(block, kind, names[i])])
+    const cutout = names.some(n => n && hasCutout(image(n)))
+    const emitLight = props.lit === false ? 0 : registry.blocksByName[block.name].emitLight
+    const flags = flagsOf(block, props, kind, cutout, emitLight)
+    return { name: block.name, kind, tex: names.map(layerFor), box, flags, emit: emitLight, ...Object.fromEntries(colors) }
+  }
 
-  const materials = [{ name: 'air', kind: 'cube', top: [0, 0, 0, 0], side: [0, 0, 0, 0], bottom: [0, 0, 0, 0] }]
+  const materials = [{ name: 'air', kind: 'cube', tex: [-1, -1, -1], box: FULL, flags: 0, emit: 0, top: [0, 0, 0, 0], side: [0, 0, 0, 0], bottom: [0, 0, 0, 0] }]
   const byKey = new Map()
   const materialIndex = block => {
-    const kind = kindOf(block)
-    const key = `${block.name}|${kind}`
+    const material = describe(block)
+    const key = JSON.stringify(material)
     if (byKey.has(key)) return byKey.get(key)
-    const material = { name: block.name, kind, ...Object.fromEntries(FACES.map(([k, face]) => [k, faceColor(block, kind, face)])) }
     materials.push(material)
     byKey.set(key, materials.length - 1)
     return materials.length - 1
@@ -85,10 +139,14 @@ export function materialTable (version, textureDir) {
     const block = Block.fromStateId(id, 0)
     materialOf[id] = AIR.has(block.name) ? 0 : materialIndex(block)
   }
-  return {
+  const table = {
     version,
     stateCount,
     materialOf: Buffer.from(materialOf.buffer).toString('base64'),
-    materials
+    materials,
+    textures: { size: SIZE, levels: LEVELS, names: layerNames }
   }
+  return { table, textures: textureSet(textureDir, layerNames) }
 }
+
+export const materialTable = (version, textureDir) => textureBytes(version, textureDir).table

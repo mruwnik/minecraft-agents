@@ -4,8 +4,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createViewServer } from '../tools/view/serve.mjs'
 
+const realTextures = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-'))
 const stateDir = path.join(root, 'state')
 const webDir = path.join(root, 'web')
@@ -59,7 +61,7 @@ before(async () => {
   fs.writeFileSync(path.join(webDir, 'index.html'), '<h1>hi</h1>')
   fs.writeFileSync(path.join(webDir, 'x.mjs'), 'export const x = 1')
   fs.writeFileSync(path.join(webDir, 'secret.txt'), 'no')
-  server = createViewServer({ stateDir, textureDir: path.join(root, 'none'), webDir, pollMs: 20, columnPollMs: 50 })
+  server = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 50 })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${server.address().port}`
 })
@@ -102,6 +104,9 @@ for (const [p, status] of [
   ['/web/secret.txt', 404],
   ['/web/nothere.mjs', 404],
   ['/blocks/abc.json', 404],
+  ['/textures/abc.bin', 404],
+  ['/textures/26.1.json', 404],
+  ['/textures/a/26.1.bin', 404],
   ['/nothing', 404]
 ]) {
   test(`GET ${p} is ${status}`, async () => {
@@ -172,4 +177,15 @@ test('GET /blocks/<version>.json serves the material table', async () => {
   assert.equal(table.version, '26.1')
   assert.ok(table.materials.length > 100)
   assert.equal(typeof table.format.maxBitsPerBlock, 'number')
+})
+
+test('GET /textures/<version>.bin serves the packed texture layers', async () => {
+  const table = await (await get('/blocks/26.1.json')).json()
+  assert.ok(table.textures.names.length > 100)
+  const response = await get('/textures/26.1.bin')
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('content-type'), 'application/octet-stream')
+  const bytes = Buffer.from(await response.arrayBuffer())
+  const expected = [0, 1, 2, 3, 4].reduce((sum, level) => sum + table.textures.names.length * (16 >> level) ** 2 * 4, 0)
+  assert.equal(bytes.length, expected)
 })

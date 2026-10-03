@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { materialTable } from './materials.mjs'
+import { textureBytes } from './materials.mjs'
 import { columnFormat } from './web-format.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
@@ -45,10 +45,14 @@ const sendFile = async (res, file, contentType) => {
 
 export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250 }) {
   const agentFile = (name, file) => path.join(stateDir, 'agents', name, 'view', file)
-  const tables = new Map()
-  const tableFor = version => {
-    if (!tables.has(version)) tables.set(version, JSON.stringify({ ...materialTable(version, textureDir), format: columnFormat(version) }))
-    return tables.get(version)
+  const builds = new Map()
+  // one build per version serves both the table and the texture bytes
+  const buildFor = version => {
+    if (builds.has(version)) return builds.get(version)
+    const { table, textures } = textureBytes(version, textureDir)
+    const build = { table: JSON.stringify({ ...table, format: columnFormat(version) }), textures: Buffer.from(textures.bytes) }
+    builds.set(version, build)
+    return build
   }
 
   const listAgents = async res => {
@@ -147,8 +151,11 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     if (head === 'columns' && rest.length === 2 && NAME.test(rest[0]) && COLUMN_FILE.test(rest[1])) {
       return sendFile(res, path.join(stateDir, 'worlds', rest[0], 'chunks', rest[1]), 'application/octet-stream')
     }
-    const version = head === 'blocks' && rest.length === 1 ? /^([0-9.]+)\.json$/.exec(rest[0])?.[1] : null
-    if (version && VERSION.test(version)) return send(res, 200, tableFor(version), { 'Content-Type': 'application/json' })
+    const versionOf = (dir, ext) => head === dir && rest.length === 1 ? new RegExp(`^([0-9.]+)\\.${ext}$`).exec(rest[0])?.[1] : null
+    const tableVersion = versionOf('blocks', 'json')
+    if (tableVersion && VERSION.test(tableVersion)) return send(res, 200, buildFor(tableVersion).table, { 'Content-Type': 'application/json' })
+    const textureVersion = versionOf('textures', 'bin')
+    if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
     notFound(res)
   }
 

@@ -67,11 +67,13 @@ const decodeBase64U16 = text => {
 }
 
 const loadTable = async version => {
-  const res = await fetch(`/blocks/${version}.json`)
+  const [res, texRes] = await Promise.all([fetch(`/blocks/${version}.json`), fetch(`/textures/${version}.bin`)])
   if (!res.ok) throw new Error(`blocks table for ${version}: HTTP ${res.status}`)
-  const json = await res.json()
+  if (!texRes.ok) throw new Error(`textures for ${version}: HTTP ${texRes.status}`)
+  const [json, bytes] = await Promise.all([res.json(), texRes.arrayBuffer()])
   state.table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
   gfx.setMaterials(json.materials)
+  gfx.setTextures({ bytes: new Uint8Array(bytes), layers: json.textures.names.length, size: json.textures.size, levels: json.textures.levels })
 }
 
 // state ids of a decoded column to material indices in the texture's order (x fastest, then y, then z)
