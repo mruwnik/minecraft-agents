@@ -20,7 +20,8 @@
   vanishes is not); a killed target or player is not attacked again in this
   run, even after respawning. Done (info
   attack.done, and hands over {:reason :killed [ids] :given-up {id reason}})
-  with :reason :cleared once no target has been within :radius for :lost-s,
+  with :reason :cleared once no target has been within :radius for :lost-s
+  (waiting in 1 s steps),
   :gave-up when every target present has been given up on, or :timeout after
   :timeout-s from the first round (warn attack.timeout). The check passes while
   a target not given up on is within :radius, and always once the job has
@@ -204,7 +205,8 @@
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
         (empty? targets) (if (>= (- now (or (:last-seen m) (:started m))) (* 1000 lost-s))
                            (finish! c :cleared)
-                           :continue)
+                           (do (await (ctx/act c :wait #js {:ms 1000}))
+                               :continue))
         :else (do (ctx/update-mem! c assoc :last-seen now)
                   (if (within-gap? c)
                     :continue

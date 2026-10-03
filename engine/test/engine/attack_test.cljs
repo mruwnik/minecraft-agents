@@ -284,3 +284,18 @@
             (is (finished? s) (str targets))
             (is (= :cleared (:reason (done-event s))) (str targets))
             (is (= [9] (:killed (done-event s))) (str targets))))))))
+
+(deftest waits-in-one-second-steps-while-nothing-is-in-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p clock eng seen] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
+          (set! (.. p -world -state -entities) #js [])
+          (await (run-ticks s 12 250))
+          (is (pos? (count (h/calls p "wait"))))
+          (is (= [1000] (distinct (mapv #(.. % -args -ms) (h/calls p "wait")))))
+          (is (not-any? #(= :stalled (:kind %)) @seen))
+          (is (not (finished? s)))
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= :cleared (:reason (done-event s)))))))))

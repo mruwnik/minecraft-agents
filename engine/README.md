@@ -815,7 +815,7 @@ after three the job emits a warn and ends.
   walks or out-of-reach swings, `:no-damage-hits` swings that did no damage, or `:max-hits` hits. A kill is booked
   only when `attack` reports `killed` (a target that merely vanishes is not); a killed target is not attacked again,
   even respawned. Done with
-  `:cleared` (nothing in `:radius` for `:lost-s`), `:gave-up` or `:timeout`. It does not guard health: the survival
+  `:cleared` (nothing in `:radius` for `:lost-s`, waiting in 1 s steps), `:gave-up` or `:timeout`. It does not guard health: the survival
   register cuts it and it resumes.
 - `:retreat` walks `:step` blocks away from the nearest hostile per round,
   leaning towards the latest `:bed` or `:home` when that is not through the
