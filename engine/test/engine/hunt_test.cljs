@@ -169,3 +169,35 @@
             (swap! clock + 700)
             (await (core/tick! eng)))
           (is (= {:killed 2 :reason :count} @out)))))))
+
+(defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))
+
+(deftest a-baby-is-never-a-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :entities [(baby-cow 1 2) (cow 2 5)]} 30))]
+          (is (= [2] (distinct (attacked s))) "only the adult is attacked")
+          (is (contains? (world-ids s) 1) "the baby lives")
+          (is (not (contains? (world-ids s) 2))))))))
+
+(deftest keep-counts-adults-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword
+                                        :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
+          (core/submit! eng (spec {:keep 2}) {})
+          (is (nil? (core/tick! eng)) "two adults and three babies: nothing to take")
+          (is (zero? (count (h/calls p "attack")))))))))
+
+(deftest keep-ends-the-hunt-on-adults-with-babies-around
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 5 :keep 2}
+                                 {:inventory h/sword
+                                  :entities [(cow 1 3) (cow 2 4) (cow 3 5) (baby-cow 4 2) (baby-cow 5 2)]} 40))]
+          (is (= :keep (:reason (done-event s))))
+          (is (= 1 (:killed (done-event s))))
+          (is (= #{2 3 4 5} (world-ids s)) "one adult died, two adults and both babies remain"))))))

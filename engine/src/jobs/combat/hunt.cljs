@@ -4,9 +4,11 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Kill :count animals of the mob kind :mob within :radius, collecting their
-  drops, and never take the last :keep of the kind (they breed). The check
-  passes while more than :keep of the kind are within :radius, and always once
+  "Kill :count adult animals of the mob kind :mob within :radius, collecting
+  their drops, and never take the last :keep adults of the kind (they breed).
+  Babies are never targets and never counted (an entity is an adult unless it
+  reports baby true). The check passes while more than :keep adults of the
+  kind are within :radius, and always once
   the job has started. One step per round: (1) with a :target, the attack
   child fights it (every round it is not done); it is booked killed, or
   skipped when attack gave up on it or lost it, and :skips counts skipped
@@ -14,7 +16,7 @@
   hunt.gave-up); (2) after a target the collect-drops child picks up :drops
   (nil: the kind's entry in the drops table, or every item within
   :collect-radius for a kind not in it); (3) :killed reaching :count ends
-  :count; (4) at most :keep of the kind still present ends :keep (skipped
+  :count; (4) at most :keep adults of the kind still present ends :keep (skipped
   animals still count, they still breed); (5) no candidate (present, not
   skipped, nearest first) ends :none on the second round in a row that finds
   none, after a 1 s wait (look twice); (6) else the nearest candidate becomes
@@ -44,18 +46,20 @@
   {:mob {:doc "mob type name of the animals to hunt" :default "cow"}
    :count {:doc "animals to kill" :default 1}
    :radius {:doc "animals within this many blocks of the body count" :default 24}
-   :keep {:doc "never kill the last this many of the kind within :radius" :default 2}
+   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count)" :default 2}
    :collect-radius {:doc "how far around to collect drops after a kill" :default 8}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :default nil}
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :default 3}})
 
 (defn present
-  "The entities named :mob within :radius, never players or items."
+  "The adult entities named :mob within :radius, never players, items or babies
+  (an entity is an adult unless its baby field is true)."
   [c]
   (let [{:keys [mob radius]} (:args c)]
     (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [mob] :max 64}))
          (remove #(contains? #{"player" "item"} (.-kind %)))
+         (remove #(true? (.-baby %)))
          vec)))
 
 (defn candidates
