@@ -243,6 +243,34 @@ test('a gap jump may land one lower', () => {
   assert.equal(r.status, 'found')
 })
 
+// ---- farmland: vanilla tramples it when a body lands on it after falling more than 0.5 blocks, so no gap jump or drop ends on
+// farmland; a jump up one block onto it falls about 0.3 from the top of the arc and is kept (a farm's water channels are left
+// that way) ----
+
+const farmland = (x0, z0, x1, z1) => [x0, 63, z0, x1, 63, z1, 'farmland']
+// a farmland node is the farmland's own cell (y 63) at h 15
+const tramples = r => r.path.steps.filter(s => [MOVE.GAP, MOVE.DROP].includes(s.move) && s.y === 63 && s.h === 15)
+const farmlandCases = [
+  // off a 1-high platform: the straight way drops onto the farmland east of it; the way round drops onto stone south of it
+  ['a drop', world({ fill: [[0, 64, 0, 4, 64, 4, 'stone'], farmland(5, -2, 7, 40)] }), near(9, 64, 2), { x: 2, y: 65, z: 2 }],
+  // over a 2-wide gap whose far side is farmland for z <= 10
+  ['a gap jump', world({ fill: [[5, 60, -2, 6, 63, 40, 'air'], farmland(7, -2, 9, 10)] }), near(11, 64, 2), start]
+]
+for (const [name, w, goal, from] of farmlandCases) {
+  test(`${name} never lands on farmland: the route goes round and is found`, () => {
+    const r = run(w, goal, {}, from)
+    assert.equal(r.status, 'found')
+    assert.deepEqual(tramples(r), [])
+  })
+}
+
+test('a jump up one block onto farmland is kept: out of a 1-deep hole straight onto the farmland east of it', () => {
+  const w = world({ fill: [farmland(1, 1, 3, 3), [2, 63, 2, 2, 63, 2, 'air'], [2, 63, 1, 2, 63, 1, 'stone']] })
+  const r = run(w, near(8, 64, 2), {}, { x: 2, y: 63, z: 2 })
+  assert.equal(r.status, 'found')
+  assert.deepEqual(r.path.steps.slice(0, 2).map(s => [s.move, s.x, s.y, s.z, s.h]), [[MOVE.START, 2, 63, 2, 0], [MOVE.JUMP, 3, 63, 2, 15]])
+})
+
 // gaps of 1..3 cells then ground 1 higher: the jump arc needs feet + 2.5 headroom, and only gaps of 1 or 2 may climb
 const gapUp = (gap, extra = []) => world({ fill: [[5, 60, -2, 4 + gap, 63, 40, 'air'], [5 + gap, 64, -2, 40, 64, 40, 'stone'], ...extra] })
 const gapUps = [

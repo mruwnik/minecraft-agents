@@ -30,6 +30,7 @@ const runCompared = file => {
   const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'compare-')), 'log')
   const run = spawnSync(process.execPath, ['--import', hook, path.join(pathDir, file)], { env: { ...plainEnv, COMPARE_LOG: log }, encoding: 'utf8', maxBuffer: 1 << 26 })
   const lines = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+  fs.rmSync(path.dirname(log), { recursive: true, force: true }) // read: never left behind in /tmp
   return { run, lines, pass: Number(/^ℹ pass (\d+)/m.exec(run.stdout)?.[1]), fail: Number(/^ℹ fail (\d+)/m.exec(run.stdout)?.[1]) }
 }
 

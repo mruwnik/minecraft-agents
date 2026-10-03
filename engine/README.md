@@ -1138,6 +1138,24 @@ Known gaps:
 - `createPrimitives` accepts an optional `version` (default as in `src/config.mjs`).
 - Timeouts resolve with a status as the contract says, not by rejecting; only cuts and bad args reject.
 
+## Path planner (not used by the engine yet)
+
+`js/path/planner.mjs` is the specification (an A* over a snapshot of section state ids: walking, jumps, drops, gap jumps,
+climbing, water, doors; costs in seconds plus risk); `src/engine/path/planner_tuned.cljs` is its port, kept equal to it
+by `bench-lang/fixtures-equal.test.mjs`. Build: `npx shadow-cljs compile planner-bench` (tests) and `npx shadow-cljs
+release planner-bench-release` (bench). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
+fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
+
+`engine.path.alternatives/plan-alternatives` (`planAlternatives(snapshot, query, options, k = 3)`) returns
+`{status, reason, paths, searches, ms}`: up to k paths, best first, each `{steps, cost, summary, total, differs}`
+(`total` = seconds + riskWeight × risk, the true cost of the walk; `differs` says what sets it apart, e.g. `on foot
+instead of by ladder`). A path is returned only when, against the paths returned before it, its set of kinds (ladder,
+water, door; none of them is on foot) is not one of theirs, or fewer than 60% of its cells lie within 2 blocks of their
+cells. The first path is `plan`'s own; the others come from the same search re-run with a kind refused, or with the
+cells within 1 block of earlier paths costing more (weight 1.5, at most 10× the first search's expansions). One path
+back is the normal answer where there is only one way. On the bench set (304 queries, best of 7 interleaved): k=1
+p50 1.09 ms, p99 89 ms (as `plan`); k=3 p50 7.0 ms, p99 335 ms, with 2 or 3 paths for 83 queries.
+
 ## Migrating old bots
 
 `npx shadow-cljs compile migrate`, then `node out/migrate.cjs [--dry-run] [--state-dir <dir>] Name...` (default state

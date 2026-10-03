@@ -12,7 +12,10 @@
    closure (swimEdge's emit, the opening pass's edge) the port splits the call in a begin and an end, or switches `edge-mode`.
 
    Not ported, called through interop: the snapshot (stateAt, sectionHas, hasColumn), the state table's arrays and the
-   free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).")
+   free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
+
+   Not in planner.mjs: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
+   (see avoidCost). Without it the search is planner.mjs's.")
 
 (set! *warn-on-infer* true)
 
@@ -41,6 +44,10 @@
 (def ^:const ACT-LEVER 2)
 (def ^:const ACT-PLATE 3)
 (def ^:const GRID 17)
+;; kinds of move a search for an alternative path may refuse (options.avoid.kinds, bits)
+(def ^:const AVOID-CLIMB 1)
+(def ^:const AVOID-WATER 2)
+(def ^:const AVOID-OPEN 4)
 
 (def ^:const MOVE-WALK 1)
 (def ^:const MOVE-DIAGONAL 2)
@@ -111,6 +118,11 @@
     bigger))
 
 (defn- fall-damage [fall16] (js/Math.max 0 (js/Math.ceil (- (/ fall16 16) FREE-FALL))))
+
+(defn cell-key
+  "one number for a cell, the key of options.avoid.cells: x and z within 2^20 of 0, y within 512"
+  [x y z]
+  (+ (* (+ (* (+ x 1048576) 2097152) (+ z 1048576)) 1024) (+ y 512)))
 
 ;; ---- results (cold: once per plan) ----
 
@@ -185,11 +197,13 @@
    ^js snapshot ^js table ^js space
    tbl-top tbl-base tbl-kind tbl-hazard tbl-stair tbl-partial tbl-climb tbl-climb-name tbl-facing tbl-floor tbl-special
    tbl-flowing tbl-bubble tbl-magma tbl-dripleaf tbl-openable tbl-open-state tbl-open-kind tbl-door-half tbl-activator
-   tbl-attach min-y
+   tbl-attach tbl-farmland min-y
    ;; the query
    from-x from-y from-z from-px from-pz goal-x goal-y goal-z goal-range slack ^boolean near ^boolean goal-unloaded
    ;; options
    max-nodes max-drop weight risk-weight goal-flood flood-after
+   ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
+   ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
    ;; costs (options.costs over DEFAULT-COSTS)
    c-climb-up c-climb-down c-jump-climb c-open c-open-redstone c-open-plate c-beside-magma c-swim-h c-swim-up c-swim-down
    c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-max-water-drop c-dripleaf c-dripleaf-risk
@@ -624,26 +638,42 @@
       (cond
         (or (neg? rx) (>= rx SPAN) (neg? rz) (>= rz SPAN)) nil
         (or (< x bx0) (> x bx1) (< z bz0) (> z bz1) (< y by0) (> y by1)) (set! boxed true)
+        ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
+        ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
+        (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget tbl-farmland (.stateAt snapshot x y z)) 1)) nil
         :else
-        (let [key (.keyOf s x y z region)
-              slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec slots)))
-              found (aget hash-table slot)
-              sec (+ (aget secs parent-node) dsec)
-              risk (+ (aget risks parent-node) drisk)
-              g (+ sec (* risk-weight risk))]
-          (if (== found -1)
-            (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
-            (let [d-air (- move-air (aget airs found))
-                  g-found (aget gs found)]
-              (cond
-                (and (< g g-found) (<= d-air AIR-STEP))
-                (when-not (== (aget heap-pos found) -2)
-                  (.relax s found x z h move parent-node sec risk g slow-to corner shape))
-
-                (or (< g g-found) (< d-air (- AIR-STEP)))
+        (let [extra (if avoiding (.avoidCost s x y z move dsec drisk) 0)]
+          (when-not (neg? extra)
+            (let [key (.keyOf s x y z region)
+                  slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec slots)))
+                  found (aget hash-table slot)
+                  sec (+ (aget secs parent-node) dsec)
+                  risk (+ (aget risks parent-node) drisk)
+                  ;; an alternative's search orders by its penalised cost; secs and risks stay the true cost of the walk
+                  g (if avoiding (+ (aget gs parent-node) dsec (* risk-weight drisk) extra) (+ sec (* risk-weight risk)))]
+              (if (== found -1)
                 (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
+                (let [d-air (- move-air (aget airs found))
+                      g-found (aget gs found)]
+                  (cond
+                    (and (< g g-found) (<= d-air AIR-STEP))
+                    (when-not (== (aget heap-pos found) -2)
+                      (.relax s found x z h move parent-node sec risk g slow-to corner shape))
 
-                :else nil)))))))
+                    (or (< g g-found) (< d-air (- AIR-STEP)))
+                    (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
+
+                    :else nil)))))))))
+
+  ;; what entering x,y,z by `move` adds to its cost in a search for an alternative path: -1 refuses a move of a kind avoided
+  ;; (climbing, water, opening something); a cell within 1 block of an earlier path costs avoid-factor times its own cost more
+  (avoidCost [s x y z move dsec drisk]
+    (cond
+      (and (not (zero? (bit-and avoid-kinds AVOID-CLIMB))) (>= move MOVE-CLIMB-UP) (<= move MOVE-OPEN)) -1
+      (and (not (zero? (bit-and avoid-kinds AVOID-WATER))) (or (>= move MOVE-SWIM) ^boolean (.isWater s x y z))) -1
+      (and (not (zero? (bit-and avoid-kinds AVOID-OPEN))) (or (== move MOVE-OPEN) (pos? move-open))) -1
+      (true? (.has avoid-cells (cell-key x y z))) (* avoid-factor (+ dsec (* risk-weight drisk)))
+      :else 0))
 
   ;; where moves go: into the search, or the goal flood's probe
   (sink [s x y z h move parent-node dsec drisk slow-to corner shape]
@@ -2020,6 +2050,7 @@
         ^js goal (.-goal query)
         ^js costs (js/Object.assign #js {} DEFAULT-COSTS (.-costs options))
         max-nodes (option options "maxNodes" 200000)
+        ^js avoid (.-avoid options)
         margin (option options "margin" 64)
         y-margin (option options "yMargin" 48)
         goal-range (or-else (.-range goal) 0)
@@ -2038,13 +2069,15 @@
      (.-climbName table) (.-facing table) (.-floor table) (.-special table)
      (.-flowing table) (.-bubble table) (.-magma table) (.-dripleaf table) (.-openable table) (.-openState table)
      (.-openKind table) (.-doorHalf table) (.-activator table)
-     (.-attach table) (.-minY snapshot)
+     (.-attach table) (.-farmland table) (.-minY snapshot)
      ;; the query
      (.-x from) (.-y from) (.-z from) (or-else (.-px from) (+ (.-x from) 0.5)) (or-else (.-pz from) (+ (.-z from) 0.5))
      (.-x goal) (.-y goal) (.-z goal) goal-range (* OCTILE-SLACK goal-range) near goal-unloaded
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000)
+     ;; avoid
+     (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      ;; costs
      (unchecked-get costs "climbUp") (unchecked-get costs "climbDown") (unchecked-get costs "jumpClimb") (unchecked-get costs "open")
      (unchecked-get costs "openRedstone") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")

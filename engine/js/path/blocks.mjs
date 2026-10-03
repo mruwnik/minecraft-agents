@@ -134,6 +134,7 @@ export function buildStateTable (registry) {
   const bubble = new Uint8Array(size) // bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
   const magma = new Uint8Array(size) // a magma block: a body must not end its route on it
   const dripleaf = new Uint8Array(size) // a big dripleaf leaf with collision: a floor that tilts under a body
+  const farmland = new Uint8Array(size) // farmland: a body landing on it from a jump or a fall tramples it to dirt
   const openable = new Uint8Array(size)
   const openState = new Uint32Array(size)
   const openKind = new Uint8Array(size)
@@ -174,6 +175,7 @@ export function buildStateTable (registry) {
       flowing[id] = block.name === 'water' && Number(props.level) !== 0 ? 1 : 0
       bubble[id] = block.name === 'bubble_column' ? (props.drag === true ? 2 : 1) : 0
       magma[id] = block.name === 'magma_block' ? 1 : 0
+      farmland[id] = block.name === 'farmland' ? 1 : 0
       // (a magma bubble column is special too: the cells beside it cost risk, which a search only looks for where one is near)
       special[id] = partial[id] | (climb[id] === CLIMB_NONE ? 0 : 1) | (bubble[id] === 2 ? 1 : 0) | (openable[id] > 0 ? 1 : 0)
       if (block.name === 'big_dripleaf' && top[id] > 0) {
@@ -184,7 +186,7 @@ export function buildStateTable (registry) {
       if (STAIRS.test(block.name) && props.half === 'bottom' && props.shape === 'straight') stairUp[id] = STAIR_UP[props.facing] ?? 0
     }
   }
-  return { top, base, kind, hazard, stairUp, climb, climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, magma, dripleaf, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
+  return { top, base, kind, hazard, stairUp, climb, climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, magma, dripleaf, farmland, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
 }
 
 let shared

@@ -119,7 +119,7 @@ export function createSearch (snapshot, query, options = {}) {
     goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48
   } = options
   const costs = { ...DEFAULT_COSTS, ...options.costs }
-  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, magma, dripleaf, openable, openState, openKind, doorHalf, activator, attach } = table
+  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, magma, dripleaf, farmland, openable, openState, openKind, doorHalf, activator, attach } = table
   const { minY } = snapshot
   const rawAt = snapshot.stateAt
   // What the body sees: in the opening pass of an expansion (see expandAt) a closed door, gate or trapdoor reads as open, so the
@@ -437,6 +437,9 @@ export function createSearch (snapshot, query, options = {}) {
     const rz = z - from.z + HALF
     if (rx < 0 || rx >= SPAN || rz < 0 || rz >= SPAN) return
     if (x < bx0 || x > bx1 || z < bz0 || z > bz1 || y < by0 || y > by1) { boxed = true; return }
+    // a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node is the
+    // farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
+    if ((move === MOVE.GAP || move === MOVE.DROP) && farmland[rawAt(x, y, z)] === 1) return
     const key = keyOf(x, y, z, region)
     let s = hashOf(x, y, z, region) & (slots - 1)
     let found = -1

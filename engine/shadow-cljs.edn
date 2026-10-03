@@ -27,6 +27,7 @@
   :planner-bench {:target :node-library
                   :exports {:planTuned engine.path.planner-tuned/plan
                             :createSearchTuned engine.path.planner-tuned/create-search
+                            :planAlternatives engine.path.alternatives/plan-alternatives
                             :MOVE engine.path.planner-tuned/MOVE
                             :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
                   :output-to "out/planner-bench.cjs"
@@ -35,6 +36,7 @@
   :planner-bench-release {:target :node-library
                           :exports {:planTuned engine.path.planner-tuned/plan
                                     :createSearchTuned engine.path.planner-tuned/create-search
+                                    :planAlternatives engine.path.alternatives/plan-alternatives
                                     :MOVE engine.path.planner-tuned/MOVE
                                     :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
                           :output-to "out/planner-bench-release.cjs"
