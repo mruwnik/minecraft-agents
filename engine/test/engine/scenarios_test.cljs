@@ -77,3 +77,57 @@
           (await (run-ticks eng clock 30 1000))
           (is (= [] (:list (core/state eng))) "pace resumes and finishes its rounds")
           (is (not-any? #(#{:warn :error} (:level %)) @seen)))))))
+
+(defn fired [seen]
+  (keep #(when (= [:reflex :fired] [(:source %) (:kind %)]) (:reflex %)) @seen))
+
+(deftest survival-idles-and-fires-its-reflexes-on-the-fake
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
+                                               {:time 1000
+                                                :self {:experience {:level 3 :points 40 :progress 0}}
+                                                :inventory [{:name "bread" :count 4}]})
+              state (.. p -world -state)
+              self (.-self state)]
+          (is (= [:suffocating :burning :health-low :hostile-near :hungry :night-unsafe :stuck :died
+                  :inventory-nearly-full]
+                 (mapv :id (:register (core/state eng)))))
+          (await (run-ticks eng clock 3 1000))
+          (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
+          (is (= #{"(repeat jobs.movement.look-around)"} (names-started seen)) "it idles looking around")
+
+          (set! (.-health self) 5)
+          (set! (.-food self) 10)
+          (await (run-ticks eng clock 3 1000))
+          (is (= [:health-low] (fired seen)) "low health fires recover")
+          (is (< 10 (.-food self)) "recover ate at the safe point")
+          (set! (.-health self) 20)
+          (await (run-ticks eng clock 3 1000))
+          (is (some #(= [:reflex :ended :health-low] [(:source %) (:kind %) (:reflex %)]) @seen)
+              "healed, recover ends")
+
+          (set! (.-entities state) #js [#js {:id 50 :name "zombie" :kind "hostile" :pos (tu/pos 4 64 0) :health 20}])
+          (await (run-ticks eng clock 3 1000))
+          (is (= [:health-low :hostile-near] (fired seen)) "a hostile fires respond-to-hostile")
+          (set! (.-entities state) #js [])
+          (await (run-ticks eng clock 10 1000))
+          (is (some #(= [:reflex :ended :hostile-near] [(:source %) (:kind %) (:reflex %)]) @seen)
+              "with the hostile gone the reflex ends")
+          (let [looks (count (filter #(and (= :round_started (:kind %)) (= "j1" (:job %))) @seen))]
+            (await (run-ticks eng clock 2 1000))
+            (is (< looks (count (filter #(and (= :round_started (:kind %)) (= "j1" (:job %))) @seen)))
+                "the body is back to looking around"))
+
+          (.die (.-world p))
+          (is (= {:level 3 :points 40} (:experience (:data (mem/latest (mem/view (:store eng)) :died))))
+              "the died entry keeps the experience")
+          (await (run-ticks eng clock 3 1000))
+          (is (= [:health-low :hostile-near :died] (fired seen)) "a death fires recover-drops")
+          (is (= {:decision :collected :items 1}
+                 (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
+              "the drops lie at its feet, so the trip is worth it")
+          (is (= ["bread"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread is back")
+          (is (not-any? #(and (= :error (:level %)) (not= :body (:source %))) @seen)
+              "no errors besides the death itself"))))))
