@@ -39,26 +39,26 @@
       :else
       (let [target (away-from (u/self-pos c) (u/pos-of (.-pos threat)) step)
             r (await (ctx/act c :moveTo (clj->js {:pos target :range 1})))]
-        (ctx/commit! c #(assoc % :moves (inc moves)))
+        (ctx/update-mem! c assoc :moves (inc moves))
         :continue))))
 
 (def retreat {:name :retreat :check (constantly true) :round retreat-round})
 
-(defn bed-of [memory]
-  (:pos (first (mem/places memory :bed))))
+(defn bed-of [c]
+  (mem/place (ctx/view c) :bed))
 
 (defn sleep-check
   "A bed is known and it is night."
   [c]
-  (and (some? (bed-of {:common (ctx/mem c :common)}))
+  (and (some? (bed-of c))
        (not (.-isDay (.self (:primitives c))))))
 
 (defn ^:async sleep-round
-  "Walks to the first known bed in common places and sleeps. Done once asleep,
+  "Walks to the known :bed place and sleeps. Done once asleep,
   or when it turns out not to be night. A taken bed or a monster nearby is
   retried three times; a missing bed warns and ends."
   [c]
-  (let [bed (bed-of {:common (ctx/mem c :common)})
+  (let [bed (bed-of c)
         w (if bed (await (u/walk-near! c bed 2)) :blocked)]
     (case w
       :partial :continue

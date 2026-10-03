@@ -31,7 +31,7 @@
   {:name :night-and-bed-known
    :when (fn [world memory _args]
            (and (not (.-isDay (.self world)))
-                (boolean (seq (mem/places memory :bed)))))
+                (some? (mem/place memory :bed))))
    :job :sleep
    :args {}
    :persistence :cooldown
@@ -45,7 +45,7 @@
   {:name :inventory-nearly-full
    :when (fn [world memory args]
            (and (>= (.-length (.-inventory (.self world))) (:stacks args nearly-full-stacks))
-                (boolean (seq (mem/places memory :chest)))))
+                (some? (mem/place memory :chest))))
    :job :deposit
    :args {:stacks nearly-full-stacks}
    :persistence :cooldown
@@ -54,13 +54,13 @@
 (def default-interval-s 60)
 
 (def every-interval
-  "Holds when the last look-around (recorded in body memory by the job, so it
-  survives a restart) is at least :seconds old. With no record it holds at
-  once, so the first firing is not delayed. Once the job has recorded the
-  time it stops holding, so there is no cooldown to wait out."
+  "Holds when the latest :looked entry (written by the look-around job, so it
+  survives a restart) is at least :seconds old. With none it holds at once,
+  so the first firing is not delayed. Once the job has written the entry it
+  stops holding, so there is no cooldown to wait out."
   {:name :every-interval
    :when (fn [_world memory args]
-           (let [last (get-in memory [:body :every-interval-last])]
+           (let [last (:t (mem/latest memory :looked))]
              (or (nil? last)
                  (>= (- (:now memory) last) (* 1000 (:seconds args default-interval-s))))))
    :job :look-around

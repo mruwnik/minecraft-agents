@@ -39,7 +39,11 @@
 
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 
-(defn common [eng] (mem/scope (:store eng) :common))
+(defn debts [eng] (mapv :data (mem/entries (mem/view (:store eng)) :forestry/replant)))
+
+(defn job-mem [eng id slots] (mem/job-mem (mem/view (:store eng)) id slots))
+
+(defn know-place! [eng kind pos] (mem/write! (:store eng) kind {:pos pos} mem/place-policy))
 
 ;; ---------------------------------------------------------------- fell-tree
 
@@ -53,12 +57,12 @@
           (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}]
                  (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "dig")))
               "one round digs at most two logs, lowest first")
-          (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the replant debt is committed with the base position")
           (is (pos? (await (run-until-empty eng 6))))
           (is (= [] (:list (core/state eng))))
           (is (nil? (get (inv p) "oak_log")) "the logs are drops on the ground, not collected")
-          (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the debt is recorded once"))))))
 
 (deftest fell-tree-nearest-species-and-no-tree
@@ -70,7 +74,7 @@
           (await (core/tick! eng))
           (is (= [{:x 2 :y 64 :z 2}] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (take 1 (calls p "dig"))))
               "nil species picks the nearest tree")
-          (is (= "spruce" (:species (first (get-in (common eng) [:debts :replant]))))))))))
+          (is (= "spruce" (:species (first (debts eng))))))))))
 
 (deftest fell-tree-is-not-yet-without-a-tree-and-ignores-bare-log-piles
   (async done
@@ -94,7 +98,7 @@
           (core/submit! eng :fell-tree {:radius 20} {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [12 12 12] (dig-xs p)) "only the reachable tree is dug")
-          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
               "no debt for the tree that was never felled")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
@@ -107,7 +111,7 @@
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "dig")))
-          (is (nil? (get-in (common eng) [:debts :replant])) "no debt without a felled tree")
+          (is (= [] (debts eng)) "no debt without a felled tree")
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
 (deftest fell-tree-gives-up-on-a-tree-after-three-partials-in-a-row
@@ -118,7 +122,7 @@
           (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "partial"}))
           (core/submit! eng :fell-tree {:radius 20} {})
           (await (run-until-empty eng 2))
-          (is (empty? (:unreachable (mem/job (:store eng) ["j1"]))) "two partials are still progress")
+          (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
           (await (run-until-empty eng 10))
           (is (= [] (calls p "dig")))
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
@@ -157,7 +161,7 @@
           (core/submit! eng :fell-tree {:radius 20} {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [8 12 12 12] (dig-xs p)) "one failed dig on the ledge tree, then the next tree is felled")
-          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
               "no debt for the tree that was never dug")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
@@ -171,7 +175,7 @@
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= [8] (dig-xs p)) "one dig attempt, no retries")
-          (is (nil? (get-in (common eng) [:debts :replant])))
+          (is (= [] (debts eng)))
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
 ;; ------------------------------------------------------------ collect-drops
@@ -222,7 +226,7 @@
           (core/submit! eng :plant-sapling {:species "oak"} {})
           (await (run-until-empty eng 4))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
-          (is (= [] (get-in (common eng) [:debts :replant])) "debt cleared"))))))
+          (is (= [] (debts eng)) "debt cleared"))))))
 
 (deftest plant-sapling-at-a-position-and-not-yet-without-a-sapling
   (async done
@@ -261,7 +265,7 @@
         (let [{:keys [eng p]} (setup chest-world)]
           (core/submit! eng :deposit {:items ["bread"]} {})
           (is (nil? (core/tick! eng)) "no chest known: blocked")
-          (mem/commit! (:store eng) :common #(assoc-in % [:places :chest] [{:pos {:x 10 :y 64 :z 0}}]))
+          (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (run-until-empty eng 6))
           (is (= {"oak_log" 5 "stone_axe" 1} (inv p))))))))
 
@@ -285,12 +289,12 @@
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng :harvest-wood {:species "oak" :radius 10} {})
           (await (core/tick! eng))
-          (is (= {:x 3 :z 0} (:column (mem/job (:store eng) ["j1" :fell]))) "the child's memory lives under the parent's slot")
+          (is (= {:x 3 :z 0} (:column (job-mem eng "j1" [:fell]))) "the child's memory lives under the parent's slot")
           (is (< (await (run-until-empty eng 20)) 20) "finishes")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (inv p) "oak_log")) "logs collected")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "replanted at the base")
-          (is (= [] (get-in (common eng) [:debts :replant]))))))))
+          (is (= [] (debts eng))))))))
 
 ;; --------------------------------------------------------- retreat / sleep
 
@@ -319,7 +323,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time 14000 :blocks {"6,64,0" "red_bed"}})]
-          (mem/commit! (:store eng) :common #(assoc-in % [:places :bed] [{:pos {:x 6 :y 64 :z 0}}]))
+          (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/submit! eng :sleep {} {})
           (await (run-until-empty eng 4))
           (is (= 1 (count (calls p "sleep"))))
@@ -330,7 +334,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:time 1000 :blocks {"6,64,0" "red_bed"}})]
-          (mem/commit! (:store eng) :common #(assoc-in % [:places :bed] [{:pos {:x 6 :y 64 :z 0}}]))
+          (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/submit! eng :sleep {} {})
           (is (nil? (core/tick! eng))))))))
 
@@ -351,7 +355,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time 14000 :blocks {"6,64,0" "red_bed"}})]
-          (mem/commit! (:store eng) :common #(assoc-in % [:places :bed] [{:pos {:x 6 :y 64 :z 0}}]))
+          (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-and-bed-known}]}"))
           (await (run-until-empty eng 1))
           (await (core/tick! eng))
@@ -365,7 +369,7 @@
               {:keys [eng p]} (setup {:inventory stacks :containers {"10,64,0" []}})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :inventory-nearly-full}]}"))
           (is (nil? (core/tick! eng)) "no chest known: does not fire")
-          (mem/commit! (:store eng) :common #(assoc-in % [:places :chest] [{:pos {:x 10 :y 64 :z 0}}]))
+          (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "transfer")))))))))
 
@@ -425,15 +429,18 @@
           (await (core/tick! eng))
           (is (= 1 (count (calls p "look"))))
           (is (= [] (:list (core/state eng))))
-          (is (= 1000000 (:every-interval-last (mem/scope (:store eng) :body)))))))))
+          (is (= 1000000 (:t (mem/latest (mem/view (:store eng)) :looked)))))))))
 
 (def interval-ms 45000)
 
+(defn view-with
+  "A memory view at now-ms holding one entry of kind written at t, or none."
+  [kind t data now-ms]
+  {:data (if t (mem/add-entry mem/empty-data kind {:t t :data data} mem/place-policy) mem/empty-data)
+   :now now-ms})
+
 (defn holds-with [last now-ms]
-  ((:when triggers/every-interval)
-   nil
-   {:body (if last {:every-interval-last last} {}) :now now-ms}
-   {:seconds 45}))
+  ((:when triggers/every-interval) nil (view-with :looked last {} now-ms) {:seconds 45}))
 
 (deftest every-interval-holds-without-a-record-and-after-the-interval
   (is (true? (holds-with nil 1000)) "no record: fire at once")
@@ -480,7 +487,7 @@
           (core/submit! eng :fell-tree {:species "oak" :radius 120} {})
           (await (core/tick! eng))
           (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
-          (is (nil? (:failures (mem/scope (:store eng) :job))) "a partial walk is progress, not a failure")
+          (is (nil? (:failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= 3 (count (calls p "dig")))))))))
@@ -500,7 +507,7 @@
 ;; ------------------------------------------------------ trigger args from the entry
 
 (defn trigger-holds [trigger world args]
-  ((:when trigger) (tu/fake world) {} args))
+  ((:when trigger) (tu/fake world) (view-with :none nil nil 0) args))
 
 (def zombie-at-12 {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}}]})
 
@@ -514,7 +521,7 @@
 
 (deftest inventory-nearly-full-reads-its-stack-count-from-args
   (let [world {:inventory (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 5))}
-        memory {:common {:places {:chest [{:pos {:x 1 :y 64 :z 1}}]}}}]
+        memory (view-with :chest 1 {:pos {:x 1 :y 64 :z 1}} 1000000)]
     (is (false? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 30})))
     (is (true? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 5})))))
 

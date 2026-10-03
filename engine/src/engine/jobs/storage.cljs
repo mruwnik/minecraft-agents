@@ -13,9 +13,9 @@
       (some #(str/ends-with? n %) gear-suffixes)))
 
 (defn chest-of
-  "The chest position: args :chest, else the first known :chest place."
-  [memory args]
-  (or (:chest args) (:pos (first (mem/places memory :chest)))))
+  "The chest position: args :chest, else the known :chest place."
+  [view args]
+  (or (:chest args) (mem/place view :chest)))
 
 (defn to-deposit
   "The first carried stack to put away: of the wanted names when given,
@@ -27,16 +27,16 @@
 (defn deposit-check
   "A chest is known."
   [c]
-  (boolean (chest-of {:common (ctx/mem c :common)} (:args c))))
+  (boolean (chest-of (ctx/view c) (:args c))))
 
 (defn ^:async deposit-round
   "args {:chest pos-or-nil :items names-or-nil}. Walks to the chest (args, or
-  the first :chest in common places) and deposits one stack per round: the
+  the known :chest place) and deposits one stack per round: the
   named items, or everything but tools and armour. Done when nothing is left
   to put away. Three failed transfers (full, missing, unreachable) give up
   with a chest_unusable warn."
   [c]
-  (let [chest (chest-of {:common (ctx/mem c :common)} (:args c))
+  (let [chest (chest-of (ctx/view c) (:args c))
         stack (to-deposit (u/inventory (:primitives c)) (:items (:args c)))]
     (cond
       (nil? stack) :done

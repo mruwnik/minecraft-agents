@@ -1,5 +1,6 @@
 (ns engine.core-test
   (:require [cljs.test :refer [deftest is async testing]]
+            [cljs.reader :as reader]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -13,16 +14,16 @@
 ;; ---------------------------------------------------------------- test jobs
 
 (defn ^:async count-round [c]
-  (ctx/commit! c #(update % :n (fnil inc 0)))
+  (ctx/update-mem! c update :n (fnil inc 0))
   :continue)
 
 (defn ^:async walk-round [c]
   (let [r (await (ctx/act c :moveTo #js {:pos (clj->js (:pos (:args c)))}))]
-    (ctx/commit! c {:walked (.-status r)})
+    (ctx/update-mem! c assoc :walked (.-status r))
     :done))
 
 (defn ^:async parent-walk-round [c]
-  (ctx/commit! c {:before true})
+  (ctx/update-mem! c assoc :before true)
   (await (ctx/act c :moveTo #js {:pos #js {:x 5 :y 64 :z 0}}))
   :done)
 
@@ -38,26 +39,40 @@
 
 (defn ^:async child-round [c]
   (let [n (:n (ctx/mem c) 0)]
-    (ctx/commit! c {:n (inc n)})
+    (ctx/update-mem! c assoc :n (inc n))
     (if (>= (inc n) (:rounds (:args c) 2)) :done :continue)))
 
+(def always (constantly true))
+
+(def child-job {:name :child :check always :round child-round})
+
 (defn ^:async parent-round [c]
-  (let [a (await (ctx/step-child c :a :child {:rounds 2}))]
-    (ctx/commit! c #(update % :seen (fnil conj []) (name a)))
+  (let [a (await (ctx/call-child c :a child-job {:rounds 2}))]
+    (ctx/update-mem! c update :seen (fnil conj []) a)
     (if (= a :done) :done :continue)))
 
 (defn ^:async submit-round [c]
   (ctx/submit! c :count {} {})
   :done)
 
-(defn ^:async declined-parent-round [c]
-  (let [r (await (ctx/step-child c :a :gated {}))]
-    (ctx/commit! c {:child r})
-    :continue))
-
 (def flag (atom false))
 
-(def always (constantly true))
+(def gated-job {:name :gated :round count-round :check (fn [_] @flag)})
+
+(defn ^:async declined-parent-round [c]
+  (let [r (await (ctx/call-child c :a gated-job {}))]
+    (ctx/update-mem! c assoc :child r)
+    :continue))
+
+(defn ^:async recurse-round
+  "Calls itself as a child in slot :deeper until :depth levels exist."
+  [c]
+  (let [depth (:depth (:args c))]
+    (ctx/update-mem! c assoc :at depth)
+    (if (zero? depth)
+      :done
+      (await (ctx/call-child c :deeper {:name :recurse :check always :round recurse-round}
+                             {:depth (dec depth)})))))
 
 (def catalog
   {:jobs {:count {:name :count :check always :round count-round}
@@ -66,13 +81,13 @@
           :eat {:name :eat :check always :round eat-round}
           :fail {:name :fail :check always :round fail-round}
           :bad-result {:name :bad-result :check always :round bad-result-round}
-          :child {:name :child :check always :round child-round}
+          :child child-job
+          :recurse {:name :recurse :check always :round recurse-round}
           :parent {:name :parent :check always :round parent-round}
           :declined-parent {:name :declined-parent :check always :round declined-parent-round}
           :submitter {:name :submitter :check always :round submit-round}
           :look-around samples/look-around
-          :gated {:name :gated :round count-round
-                  :check (fn [_] @flag)}
+          :gated gated-job
           :no-check {:name :no-check :round count-round}}
    :triggers {:hurt {:name :hurt :job :eat :persistence :retry
                      :when (fn [w _ _] (<= (.-health (.self w)) 8))}
@@ -95,7 +110,13 @@
      {:eng eng :p p :clock clock :seen seen :dir dir})))
 
 (defn listed [eng] (:list (core/state eng)))
-(defn job-mem [eng id] (mem/job (:store eng) [id]))
+(defn job-mem
+  "A job's memory without the engine's :args and :children keys."
+  ([eng id] (job-mem eng id []))
+  ([eng id slots] (dissoc (mem/job-mem (mem/view (:store eng)) id slots) :args :children)))
+
+(defn memory-on-disk [dir]
+  (reader/read-string (fs/readFileSync (path/join dir "memory.edn") "utf8")))
 (defn ran [seen] (->> @seen (filter #(= :round_started (:kind %))) (mapv :job)))
 
 ;; ---------------------------------------------------------------- pure register
@@ -153,7 +174,7 @@
       (fn ^:async t []
         (let [seen-ctx (atom nil)
               cat (assoc-in catalog [:jobs :peek] {:name :peek :round count-round
-                                                   :check (fn [c] (reset! seen-ctx [(:args c) (ctx/mem c)]) true)})
+                                                   :check (fn [c] (reset! seen-ctx [(:args c) (dissoc (ctx/mem c) :args :children)]) true)})
               {:keys [eng]} (setup)
               eng (assoc eng :catalog cat)]
           (core/submit! eng :peek {:a 1} {})
@@ -196,7 +217,7 @@
           (reset! flag false)
           (core/submit! eng :declined-parent {} {})
           (await (core/tick! eng))
-          (is (= "declined" (name (:child (job-mem eng "j1"))))))))))
+          (is (= {:child :declined} (job-mem eng "j1"))))))))
 
 (deftest done-removes-the-job-and-its-memory
   (async done
@@ -207,7 +228,7 @@
           (core/submit! eng :count {} {})
           (await (core/tick! eng))
           (is (= ["j2"] (listed eng)))
-          (is (false? (fs/existsSync (path/join dir "jobs" "j1.json"))))
+          (is (nil? (get-in (memory-on-disk dir) [:entries :job/j1])) "its memory kind is deleted")
           (is (some #(= [:completed "j1"] [(:kind %) (:job %)]) @seen))
           (await (core/tick! eng))
           (is (= ["j1" "j2"] (ran seen))))))))
@@ -232,32 +253,55 @@
           (is (= [] (listed eng)))
           (is (= :warn (:level (first (filter #(= :failed (:kind %)) @seen))))))))))
 
-(deftest children-resume-by-slot-and-finish-once
+(deftest a-child-lives-in-its-parents-memory-under-children
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng dir]} (setup)]
           (core/submit! eng :parent {} {})
           (await (core/tick! eng))
-          (is (= {:seen ["continue"]} (job-mem eng "j1")))
-          (is (= {:n 1} (mem/job (:store eng) ["j1" :a])))
-          (is (= {:n 1} (get-in (tu/read-json (path/join dir "jobs" "j1.json")) [:children :a :mem])))
+          (is (= {:seen [:continue]} (job-mem eng "j1")))
+          (is (= {:n 1} (job-mem eng "j1" [:a])))
+          (is (= {:rounds 2} (:args (mem/job-mem (mem/view (:store eng)) "j1" [:a]))) "created with its args")
+          (is (= 1 (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :children :a :n]))
+              "saved at round end")
           (await (core/tick! eng))
           (is (= [] (listed eng)))
-          (is (false? (fs/existsSync (path/join dir "jobs" "j1.json")))))))))
+          (is (nil? (get-in (memory-on-disk dir) [:entries :job/j1])) "done takes the subtree"))))))
 
-(deftest a-done-child-is-not-run-again
+(deftest the-same-slot-resumes-and-a-new-slot-is-fresh
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup)
-              c (core/make-ctx eng {:id "j9" :path ["j9"] :chain ["j9"] :token nil :args {} :round 1})]
-          (.setOwner (:primitives eng) nil)
-          (is (= :continue (await (ctx/step-child c :x :child {:rounds 2}))))
-          (is (= :done (await (ctx/step-child c :x :child {:rounds 2}))))
-          (is (= :done (await (ctx/step-child c :x :child {:rounds 2}))))
-          (is (= {} (mem/job (:store eng) ["j9" :x])))
-          (is (= :continue (await (ctx/step-child c :y :child {:rounds 2})))))))))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (is (= :continue (await (ctx/call-child c :x child-job {:rounds 2}))))
+          (is (= :done (await (ctx/call-child c :x child-job {:rounds 2}))))
+          (is (= {:n 2} (job-mem eng "j9" [:x])))
+          (is (= :continue (await (ctx/call-child c :y child-job {:rounds 2}))))
+          (is (= {:n 1} (job-mem eng "j9" [:y]))))))))
+
+(deftest children-can-call-children-without-a-depth-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng :recurse {:depth 12} {})
+          (await (core/tick! eng))
+          (is (= [] (listed eng)) "the innermost :done bubbles up")
+          (is (not-any? #(= :failed (:kind %)) @seen)))))))
+
+(deftest a-child-of-a-cut-round-is-not-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "old" :args {} :round 1})]
+          (.setOwner (:primitives eng) "new")
+          (is (= :cut (try (await (ctx/call-child c :x child-job {}))
+                           (catch :default e (when (core/cut? e) :cut)))))
+          (is (= {} (job-mem eng "j9" [:x]))))))))
 
 (deftest submit-from-a-round-appends-with-the-next-id
   (async done
@@ -421,7 +465,7 @@
 (deftest body-events-become-records
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "hurt" :health 5})
-    (is (= [5] (mapv :health (mem/records (mem/snapshot (:store eng)) "hurt"))))
+    (is (= [{:health 5}] (mapv :data (mem/entries (mem/view (:store eng)) :hurt))))
     (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen))))
 
 (deftest restart-restores-the-list-register-and-changes
@@ -443,7 +487,7 @@
             (is (= [:hurt :never] (mapv :id (:register s))))
             (is (= #{:never} (set (keys (:changes s)))))
             (is (= "j1" (:resume s)) "the in-flight round is lost and resumes first")
-            (is (= 2 (count (mem/records (mem/snapshot (:store again)) "restart"))) "one per start")
+            (is (= 2 (count (mem/entries (mem/view (:store again)) :restart))) "one per start")
             (is (some #(= :restored (:kind %)) @seen))
             (core/submit! again :count {} {})
             (is (= ["j1" "j2" "j3"] (listed again)) "ids continue")
@@ -486,3 +530,55 @@
             (is (= "j1" (:resume (core/state again))))
             (await (core/tick! again))
             (is (= ["j1"] (ran seen2)) "the body resumes from the list")))))))
+
+;; ---------------------------------------------------------------- act
+
+(defn ^:async intent-round
+  "Writes an intent, then walks; the intent must be on disk during the walk."
+  [c]
+  (ctx/update-mem! c assoc :intent :walk-east)
+  (await (ctx/act c :moveTo #js {:pos #js {:x 5 :y 64 :z 0}}))
+  (ctx/update-mem! c assoc :walked true)
+  (await (ctx/act c :look #js {:pos #js {:x 9 :y 64 :z 0}}))
+  :done)
+
+(deftest act-saves-memory-before-and-after-and-emits-debug-events
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen dir]} (setup)
+              eng (assoc-in eng [:catalog :jobs :intent] {:name :intent :check always :round intent-round})
+              release (.hold (.-world p) "moveTo")
+              release-look (.hold (.-world p) "look")]
+          (core/submit! eng :intent {} {})
+          (let [r (core/tick! eng)]
+            (is (= :walk-east (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :intent]))
+                "saved before the primitive")
+            (release)
+            (await (js/Promise. (fn [ok] (js/setTimeout ok 0))))
+            (is (true? (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :walked]))
+                "saved before the next primitive")
+            (release-look)
+            (await r))
+          (is (= [[:action :started "moveTo"] [:action :done "moveTo"]
+                  [:action :started "look"] [:action :done "look"]]
+                 (->> @seen (filter #(= :action (:source %))) (mapv (juxt :source :kind :name)))))
+          (is (every? #(= :debug (:level %)) (filter #(= :action (:source %)) @seen))))))))
+
+(deftest a-check-cannot-act-or-write
+  (let [{:keys [eng]} (setup)
+        c (core/make-ctx eng {:root "j1" :slots [] :chain ["j1"] :token nil :args {} :round 0})]
+    (core/submit! eng :count {} {})
+    (is (thrown? js/Error (ctx/update-mem! c assoc :x 1)))
+    (is (thrown? js/Error (ctx/remember! c :seen {})))))
+
+(deftest a-stale-token-is-cut-at-act-without-calling-the-primitive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "old" :args {} :round 1})]
+          (.setOwner p "new")
+          (is (= :cut (try (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
+                           (catch :default e (when (core/cut? e) :cut)))))
+          (is (= 0 (.-length (.-calls (.-world p))))))))))

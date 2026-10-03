@@ -24,7 +24,7 @@
           "arrived" :done
           "partial" :continue
           (let [tries (inc (:blocked (ctx/mem c) 0))]
-            (ctx/commit! c {:blocked tries})
+            (ctx/update-mem! c assoc :blocked tries)
             (if (< tries max-blocked)
               :continue
               (do (ctx/emit! c :unreachable :warn {:target pos :tries tries
@@ -54,13 +54,15 @@
 
 (def look-ahead 3)
 
+(def looked-policy {:cap 1 :ttl :forever})
+
 (defn ^:async look-around-round
-  "Face a point a few blocks ahead of the body, once, then record the time in
-  body memory as :every-interval-last, which the :every-interval trigger reads."
+  "Face a point a few blocks ahead of the body, once, then write a :looked
+  entry to body memory, which the :every-interval trigger reads."
   [c]
   (let [{:keys [x y z]} (self-pos c)]
     (await (ctx/act c :look (clj->js {:pos {:x (+ x look-ahead) :y (inc y) :z z}})))
-    (ctx/commit! c :body #(assoc % :every-interval-last ((:now (:engine c)))))
+    (ctx/remember! c :looked {} looked-policy)
     :done))
 
 (def look-around {:name :look-around :check (constantly true) :round look-around-round})
@@ -79,7 +81,7 @@
           (when (= "arrived" (.-status r))
             (recur (rest legs))))))
     (let [done-rounds (inc (:rounds-run (ctx/mem c) 0))]
-      (ctx/commit! c {:rounds-run done-rounds})
+      (ctx/update-mem! c assoc :rounds-run done-rounds)
       (if (>= done-rounds rounds) :done :continue))))
 
 (def pace {:name :pace :check (constantly true) :round pace-round})

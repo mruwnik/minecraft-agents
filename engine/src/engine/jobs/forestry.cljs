@@ -52,13 +52,15 @@
 (defn unreachable-set [memory]
   (set (map vec (:unreachable memory))))
 
-(defn add-debt
-  "Replant debts with one for pos, once."
-  [debts pos species]
-  (let [v (vec debts)]
-    (if (some #(= pos (:pos %)) v)
-      v
-      (conj v {:pos pos :species species}))))
+(def replant-kind
+  "Body memory kind of replant debts: {:pos base :species name} per felled
+  tree, oldest first, until a sapling is planted there."
+  :forestry/replant)
+
+(def replant-policy {:cap 50 :ttl :forever})
+
+(defn debts [c]
+  (mapv :data (ctx/entries c replant-kind)))
 
 ;; ---------------------------------------------------------------- fell-tree
 
@@ -70,10 +72,11 @@
        (sort-by #(get-in % [:pos :y]))))
 
 (defn record-debt!
-  "Commit the replant debt for the tree this job chose."
+  "Write the replant debt for the tree this job chose, once."
   [c]
   (let [{:keys [base species]} (ctx/mem c)]
-    (ctx/commit! c :common #(update-in % [:debts :replant] add-debt base species))))
+    (when-not (some #(= base (:pos %)) (debts c))
+      (ctx/remember! c replant-kind {:pos base :species species} replant-policy))))
 
 (defn ^:async dig-up!
   "Dig the logs in order, walking in reach first. Commits the replant debt
@@ -101,13 +104,13 @@
   unreachable; nil when no candidate is in sight."
   [c radius species]
   (when-let [t (tree-near (:primitives c) radius species (unreachable-set (ctx/mem c)))]
-    (ctx/commit! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
+    (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
     t))
 
 (defn mark-unreachable!
   "Remember the chosen column as unreachable and forget the choice."
   [c]
-  (ctx/commit! c (fn [m] (-> m
+  (ctx/update-mem! c (fn [m] (-> m
                              (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
                              (dissoc :column :species :base)
                              (assoc :partials 0)))))
@@ -118,14 +121,14 @@
   (let [partials (inc (:partials (ctx/mem c) 0))]
     (if (or (= :blocked r) (>= partials max-partials))
       (mark-unreachable! c)
-      (ctx/commit! c #(assoc % :partials partials)))
+      (ctx/update-mem! c assoc :partials partials))
     :continue))
 
 (defn ^:async fell-tree-round
   "args {:species name-or-nil :radius 16}. Picks a tree (log column with
   leaves) the first round and remembers the column, then digs up to two logs
-  bottom-up per round. Commits the replant debt {:pos base :species} to
-  [:common :debts :replant] when the base log is dug. A tree whose walk is
+  bottom-up per round. Writes the replant debt {:pos base :species} to body
+  memory kind :forestry/replant when the base log is dug. A tree whose walk is
   :blocked, or partial three times in a row, is remembered as unreachable and
   the next candidate is chosen; with none left it warns tree_blocked and
   finishes. Done when the column holds no logs."
@@ -145,7 +148,7 @@
           :done
           (let [r (await (dig-up! c (take logs-per-round logs)))]
             (case r
-              :ok (do (ctx/commit! c #(assoc % :partials 0)) :continue)
+              :ok (do (ctx/update-mem! c assoc :partials 0) :continue)
               (:partial :blocked) (walk-failed! c r)
               (:unreachable :cannot :out-of-reach) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
@@ -180,24 +183,24 @@
       :done
       (let [r (await (ctx/act c :collect #js {:id (.-id item)}))]
         (when (#{"unreachable" "timeout"} (.-status r))
-          (ctx/commit! c #(update % :skipped (fnil conj []) (.-id item))))
+          (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))
         :continue))))
 
 (def collect-drops {:name :collect-drops :check (constantly true) :round collect-drops-round})
 
 ;; ------------------------------------------------------------ plant-sapling
 
-(defn pick-debt [memory species]
-  (->> (get-in memory [:common :debts :replant])
+(defn pick-debt [debts species]
+  (->> debts
        (filter #(or (nil? species) (= species (:species %))))
        first))
 
 (defn target-of
-  "The planting plan {:pos :species :debt} from args and the common debts, or nil."
-  [memory args]
+  "The planting plan {:pos :species :debt} from args and the replant debts, or nil."
+  [debts args]
   (if-let [at (:at args)]
     {:pos at :species (:species args)}
-    (when-let [d (pick-debt memory (:species args))]
+    (when-let [d (pick-debt debts (:species args))]
       {:pos (:pos d) :species (or (:species args) (:species d)) :debt d})))
 
 (defn sapling-for
@@ -209,15 +212,12 @@
          (filter #(if want (= want %) (str/ends-with? % "_sapling")))
          first)))
 
-(defn clear-debt [debts pos]
-  (filterv #(not= pos (:pos %)) debts))
-
 (defn plant-sapling-check
   "Nothing to plant (the round finishes), or a matching sapling is carried
   and the spot no longer holds a log."
   [c]
   (let [p (:primitives c)
-        t (target-of {:common (ctx/mem c :common)} (:args c))]
+        t (target-of (debts c) (:args c))]
     (cond
       (nil? t) true
       (nil? (sapling-for (u/inventory p) (:species t))) false
@@ -226,11 +226,11 @@
 
 (defn ^:async plant-sapling-round
   "args {:at pos-or-nil :species name-or-nil}. Without :at, plants at the
-  oldest replant debt in common memory (of species, when given). Equips a
+  oldest replant debt in body memory (of species, when given). Equips a
   sapling, places it and clears the debt. Done at once when there is nothing
   to plant."
   [c]
-  (let [t (target-of {:common (ctx/mem c :common)} (:args c))
+  (let [t (target-of (debts c) (:args c))
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))]
     (cond
       (nil? t) :done
@@ -243,7 +243,7 @@
           (do (await (ctx/act c :equip (clj->js {:item sapling})))
               (let [r (await (ctx/act c :place (clj->js {:pos (:pos t) :item sapling})))]
                 (if (#{"placed" "occupied"} (.-status r))
-                  (do (ctx/commit! c :common #(update-in % [:debts :replant] clear-debt (:pos t)))
+                  (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
                       :done)
                   (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))
 
@@ -254,22 +254,38 @@
 (defn drop-filter [species]
   (when species [(str species "_log") (str species "_sapling") "stick" "apple"]))
 
-(defn ^:async harvest-wood-round
-  "args {:species name-or-nil :radius 16 :filter names-or-nil}. Steps three
-  children in order, in slots :fell, :collect and :plant. Returns :continue
-  at the first child that is not :done (a declined child included), or :done
-  when all three are."
-  [c]
-  (let [{:keys [species radius filter] :or {radius default-radius}} (:args c)
-        steps [[:fell :fell-tree {:species species :radius radius}]
-               [:collect :collect-drops {:radius radius :filter (or filter (drop-filter species))}]
-               [:plant :plant-sapling {:species species}]]]
-    (loop [[[slot job args] & more] steps]
-      (if-not slot
-        :done
-        (let [r (await (ctx/step-child c slot job args))]
-          (if (= :done r)
-            (recur more)
-            :continue))))))
+(defn phases
+  "The children of harvest-wood in order: [phase slot def args]."
+  [{:keys [species radius filter] :or {radius default-radius}}]
+  [[:fell :fell fell-tree {:species species :radius radius}]
+   [:collect :collect collect-drops {:radius radius :filter (or filter (drop-filter species))}]
+   [:plant :plant plant-sapling {:species species}]])
 
-(def harvest-wood {:name :harvest-wood :check (constantly true) :round harvest-wood-round})
+(defn current-phase
+  "The [phase slot def args] harvest-wood is in, from its memory."
+  [c]
+  (let [phase (:phase (ctx/mem c) :fell)]
+    (some #(when (= phase (first %)) %) (phases (:args c)))))
+
+(defn harvest-wood-check
+  "The current phase's child would run: its check, against its sub-map."
+  [c]
+  (let [[_ slot def args] (current-phase c)]
+    (boolean (ctx/check-child c slot def args))))
+
+(defn ^:async harvest-wood-round
+  "args {:species name-or-nil :radius 16 :filter names-or-nil}. Phases :fell,
+  :collect and :plant, each one child in the slot of the same name. A round
+  steps the current phase's child once; when the child is done the phase
+  advances. Done when the :plant child is done. A declined child is
+  :continue (its check normally keeps the round from running at all)."
+  [c]
+  (let [[phase slot def args] (current-phase c)
+        r (await (ctx/call-child c slot def args))
+        next-phase (second (drop-while #(not= phase %) (map first (phases (:args c)))))]
+    (cond
+      (not= :done r) :continue
+      (nil? next-phase) :done
+      :else (do (ctx/update-mem! c assoc :phase next-phase) :continue))))
+
+(def harvest-wood {:name :harvest-wood :check harvest-wood-check :round harvest-wood-round})

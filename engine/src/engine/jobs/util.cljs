@@ -39,7 +39,7 @@
   then emits a warn of kind and gives up with :done."
   [c kind text]
   (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/commit! c #(assoc % :failures tries))
+    (ctx/update-mem! c assoc :failures tries)
     (if (< tries max-failures)
       :continue
       (do (ctx/emit! c kind :warn {:tries tries :text text})

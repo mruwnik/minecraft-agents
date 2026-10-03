@@ -3,7 +3,8 @@
   the reflex register (ordered triggers with TTL mutes and moves), cuts by
   ownership-token rotation, and persistence of both to engine.edn.
 
-  The state atom holds plain EDN, written on every change:
+  The state atom holds plain EDN, written on every change. Memory (engine.memory)
+  is saved at every round end and whenever the engine itself writes to it.
     :list [id]              listed instance ids, in cycle order
     :instances {id inst}    {:id :job :args :round :hold? :reflex}
     :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :builtin?}
@@ -98,9 +99,6 @@
                :pending-reflex nil)
         (update :instances #(apply dissoc % reflex-ids)))))
 
-(defn reflex-instance-ids [saved]
-  (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances saved)))
-
 (defn normalize-result [r]
   (if (#{:done :continue} r)
     {:status r}
@@ -133,10 +131,6 @@
 (defn set-owner! [eng token]
   (.setOwner (:primitives eng) token))
 
-(defn memory-view [eng p]
-  (let [d (mem/snapshot (:store eng))]
-    {:common (:common d) :body (:body d) :job (mem/job (:store eng) p)}))
-
 (defn new-id! [eng]
   (let [n (:next-id (state eng))]
     (swap! (:state eng) update :next-id inc)
@@ -145,59 +139,105 @@
 (defn add-instance [state id job args opts]
   (assoc-in state [:instances id] (merge {:id id :job job :args (or args {}) :round 0} opts)))
 
+(defn save-memory! [eng]
+  (mem/save! (:store eng)))
+
 (defn drop-instance! [eng id]
   (swap! (:state eng) #(cond-> (update % :instances dissoc id)
                          (= id (:pending-reflex %)) (assoc :pending-reflex nil)))
-  (mem/delete-job! (:store eng) id))
+  (mem/delete-job! (:store eng) id)
+  (save-memory! eng))
 
 ;; ------------------------------------------------------------------ ctx and rounds
 
-(declare submit! step-child)
+(declare submit! call-child)
+
+(defn owner? [eng token]
+  (and (some? token) (.isOwner (:primitives eng) token)))
+
+(defn ^:async act!
+  "Every acting primitive call from a job: check the ownership token, save
+  memory, emit action.started, call, save memory again, emit action.done.
+  A cut rejects here (stale token) or from the primitive."
+  [eng {:keys [root token chain round reflex]} id k args]
+  (when-not (owner? eng token) (throw (cut-error)))
+  (swap! (:acts eng) update root (fnil inc 0))
+  (save-memory! eng)
+  (let [fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)}
+        p (:primitives eng)
+        _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
+        r (await (.call (aget p (name k)) p token args))]
+    (save-memory! eng)
+    (emit! eng (merge fields {:source :action :kind :done :status (.-status r)}))
+    r))
 
 (defn make-ctx
-  "The ctx a round receives. base is {:id :path :chain :token :args :round :reflex}."
-  [eng {:keys [id path chain token args round reflex] :as base}]
+  "The ctx a round or a check receives. base is {:root :slots :chain :token
+  :args :round :reflex}; :root is the top-level instance id and :slots the
+  child slots below it ([] for the instance itself). A check gets :token nil,
+  so it cannot write or act."
+  [eng {:keys [root slots chain token args round reflex] :as base}]
   (let [store (:store eng)
-        p (:primitives eng)
-        check! #(when-not (.isOwner p token) (throw (cut-error)))
-        read (fn ([] (mem/job store path))
-               ([scope] (if (= scope :job) (mem/job store path) (mem/scope store scope))))
-        commit (fn ([m] (check!) (mem/commit-job! store path m))
-                 ([scope m] (check!)
-                  (if (= scope :job) (mem/commit-job! store path m) (mem/commit! store scope m))))]
-    {:engine eng :primitives p :token token :args args :id id :path path
-     :chain chain :round round :reflex reflex
-     :memory {:get read :commit commit}
-     :step-child (fn [slot job child-args] (step-child eng base slot job child-args))
+        id (mem/path->id root slots)
+        check! #(when-not (owner? eng token) (throw (cut-error)))
+        wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
+                                      :chain chain :round round :reflex reflex :memory kind}))]
+    {:engine eng :primitives (:primitives eng) :token token :args args :id id
+     :root root :slots slots :chain chain :round round :reflex reflex
+     :view #(mem/view store)
+     :update-mem (fn [f more]
+                   (check!)
+                   (apply mem/update-job! store root slots f more)
+                   (wrote! (mem/job-kind root)))
+     :remember (fn [kind data policy]
+                 (check!)
+                 (mem/write! store kind data policy)
+                 (wrote! kind))
+     :forget (fn [kind pred]
+               (check!)
+               (mem/forget-where! store kind pred)
+               (wrote! kind))
+     :forget-until (fn [kind t]
+                     (check!)
+                     (mem/forget-until! store kind t)
+                     (wrote! kind))
+     :act (fn [k act-args] (act! eng base id k act-args))
+     :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
      :submit (fn [job job-args opts] (check!) (submit! eng job job-args (assoc opts :by id)))
      :emit (fn [kind level fields]
              (emit! eng (merge fields {:source :job :kind kind :level level :job id
                                        :chain chain :round round :reflex reflex})))}))
 
-(defn ^:async step-child
-  "One round of the child job in slot under parent; see README.md. Resolves
-  to :declined when the child's check fails, else the child's :done or :continue."
-  [eng parent slot job args]
+(defn child-ctx
+  "The ctx of the child in slot under parent base, with args."
+  [eng base slot args]
+  (let [slots (conj (:slots base) slot)]
+    (make-ctx eng (assoc base :slots slots :args args
+                         :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
+
+(defn ^:async call-child
+  "One round of the child job def in slot under parent base; see README.md.
+  The child's memory is the parent's [:children slot] sub-map, created with
+  the args when missing. Resolves to :declined when the child's check fails,
+  else the child's :done or :continue. The child shares the parent's token,
+  so a cut anywhere ends the whole chain's round."
+  [eng base slot def args]
   (let [store (:store eng)
-        p (:primitives eng)
-        child-path (conj (:path parent) (keyword slot))]
-    (if (mem/done? store child-path)
-      :done
-      (let [def (job-def eng job)
-            id (mem/path->id child-path)
-            c (make-ctx eng (assoc parent :id id :path child-path :args args
-                                   :chain (conj (:chain parent) id)))]
-        (if-not ((:check def) c)
-          :declined
-          (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
-            (when-not (.isOwner p (:token parent)) (throw (cut-error)))
-            (when (= status :error) (throw error))
-            (when (= status :done) (mem/mark-done! store child-path))
-            status))))))
+        slots (conj (:slots base) slot)]
+    (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
+      (mem/update-job! store (:root base) slots assoc :args args :children {}))
+    (let [c (child-ctx eng base slot args)]
+      (if-not ((:check def) c)
+        :declined
+        (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
+          (when-not (owner? eng (:token base)) (throw (cut-error)))
+          (when (= status :error) (throw error))
+          status)))))
 
 (defn ^:async run-round [eng run inst]
   (let [def (job-def eng (:job inst))
-        c (make-ctx eng {:id (:id run) :path [(:id run)] :chain [(:id run)] :token (:token run)
+        c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args (:args inst) :round (:round run) :reflex (:reflex run)})]
     (try
       (normalize-result (await ((:round def) c)))
@@ -218,7 +258,7 @@
 (defn check-ctx
   "The ctx a listed job's check receives: memory and sensing, no token."
   [eng inst]
-  (make-ctx eng {:id (:id inst) :path [(:id inst)] :chain [(:id inst)] :token nil
+  (make-ctx eng {:root (:id inst) :slots [] :chain [(:id inst)] :token nil
                  :args (:args inst) :round (:round inst) :reflex (:reflex inst)}))
 
 (defn check-passes?
@@ -270,21 +310,19 @@
                             {:source :job :kind :yielded :level :info :status status}))))))
 
 (defn trigger-holds?
-  "Whether entry's trigger holds: (:when world memory args), where memory is
-  {:common :body :now ms} and args are the entry's args."
-  [eng entry world memory]
-  (let [t (trigger-def eng (:trigger entry))
-        memory (assoc memory :now (now eng))]
+  "Whether entry's trigger holds: (:when world view args), where view is a
+  memory view {:data :now} (see engine.memory) and args are the entry's args."
+  [eng entry world view]
+  (let [t (trigger-def eng (:trigger entry))]
     (boolean (call-guarded eng (str "trigger " (:trigger entry)) false
-                           #((:when t) world memory (:args entry))))))
+                           #((:when t) world view (:args entry))))))
 
 (defn end-reflex!
   "A reflex job ended on its own; classify and apply the entry's persistence."
   [eng {:keys [id reflex]}]
   (drop-instance! eng id)
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
-        d (mem/snapshot (:store eng))
-        still? (and entry (trigger-holds? eng entry (:primitives eng) (select-keys d [:common :body])))]
+        still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
       (case (:persistence entry)
         :cooldown (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
@@ -311,7 +349,8 @@
     (set-owner! eng nil)
     (if (:reflex run)
       (settle-reflex! eng run outcome)
-      (settle-listed! eng run outcome)))
+      (settle-listed! eng run outcome))
+    (save-memory! eng))
   nil)
 
 (defn start-round!
@@ -363,8 +402,8 @@
   false; return the first entry that holds and is eligible."
   [eng order]
   (let [p (:primitives eng)
-        memory (select-keys (mem/snapshot (:store eng)) [:common :body])
-        results (mapv (fn [e] [e (trigger-holds? eng e p memory)]) order)
+        view (mem/view (:store eng))
+        results (mapv (fn [e] [e (trigger-holds? eng e p view)]) order)
         t (now eng)]
     (doseq [[e holds] results
             :when (and (not holds) (get-in (state eng) [:reflex-state (:id e) :stopped?]))]
@@ -377,6 +416,7 @@
                           :job id :interrupted (:id h)})]
     (when h (cut! eng h (:id entry) fired))
     (swap! (:state eng) add-instance id (:job entry) (:args entry) {:reflex (:id entry)})
+    (mem/create-job! (:store eng) id (:args entry))
     (start-round! eng id)))
 
 (defn expire-changes! [eng]
@@ -413,6 +453,8 @@
                                      (add-instance id job args {:hold? (boolean hold?)})
                                      (update :list (fn [l] (if front? (into [id] l) (conj l id)))))
                            (and front? (pos? (count (:list %)))) (update :cursor inc)))
+    (mem/create-job! (:store eng) id (or args {}))
+    (save-memory! eng)
     (emit! eng {:source :job :kind :queued :level :info :job id :chain [id] :name job
                 :args args :hold (boolean hold?) :by by})
     id))
@@ -423,6 +465,7 @@
     (reset! (:running eng) nil))
   (swap! (:state eng) remove-listed id)
   (mem/delete-job! (:store eng) id)
+  (save-memory! eng)
   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by :agent}))
 
 (defn do-now!
@@ -510,34 +553,42 @@
   (let [pos (.-pos (.self p))]
     {:x (.-x pos) :y (.-y pos) :z (.-z pos)}))
 
-(defn record-body-event! [eng e]
+(defn record-body-event!
+  "A momentary body event becomes an entry of its kind (:hurt, :died, ...)."
+  [eng e]
   (let [m (js->clj e :keywordize-keys true)]
-    (mem/add-record! (:store eng) (assoc m :t (now eng)))
+    (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))
+    (save-memory! eng)
     (emit! eng (merge (dissoc m :kind)
                       {:source :body :kind (keyword (:kind m))
                        :level (if (= "died" (:kind m)) :error :info)}))))
 
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
-  memory when present. Options: :primitives :catalog :dir :now :events :body."
+  memory.edn when present, sweeps memory and appends a :restart entry.
+  Options: :primitives :catalog :dir :now :events :body."
   [{:keys [primitives catalog dir now events body] :or {now js/Date.now}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
+        st (atom (if saved (restore saved) empty-state))
         ev (or events (events/make {:body username :file (path/join dir "events.jsonl") :stdout? true
                                     :now now :pos-fn #(self-pos primitives)}))
+        store (mem/open dir {:now now
+                             :world-time #(.-timeOfDay (.self primitives))
+                             :live-jobs #(set (keys (:instances @st)))})
         eng {:primitives primitives :catalog catalog :dir dir :now now :events ev
-             :store (mem/open dir)
-             :state (atom (if saved (restore saved) empty-state))
+             :store store
+             :state st
              :running (atom nil)
-             :tokens (atom 0)}]
-    (doseq [id (when saved (reflex-instance-ids saved))]
-      (mem/delete-job! (:store eng) id))
-    (add-watch (:state eng) ::persist (fn [_ _ old new] (when (not= old new) (fsu/write-edn! file new))))
+             :tokens (atom 0)
+             :acts (atom {})}]
+    (add-watch st ::persist (fn [_ _ old new] (when (not= old new) (fsu/write-edn! file new))))
     (fsu/write-edn! file (state eng))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
-    (mem/add-record! (:store eng) {:kind "restart" :t (now)})
+    (mem/write! store :restart {})
+    (save-memory! eng)
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info
                 :list (:list (state eng)) :register (mapv :id (:register (state eng)))})
     eng))
