@@ -45,6 +45,16 @@
   (ctx/submit! c :count {} {})
   :done)
 
+(defn ^:async idle-round [c]
+  (ctx/commit! c #(update % :n (fnil inc 0)))
+  :not-ready)
+
+(defn ^:async waking-child-round [_]
+  {:status :not-ready :wake [:after 1005000]})
+
+(defn ^:async waking-parent-round [c]
+  (await (ctx/step-child c :a :waking-child {})))
+
 (def flag (atom :not-yet))
 
 (def catalog
@@ -56,6 +66,9 @@
           :child {:name :child :round child-round}
           :parent {:name :parent :round parent-round}
           :submitter {:name :submitter :round submit-round}
+          :idle {:name :idle :round idle-round}
+          :waking-child {:name :waking-child :round waking-child-round}
+          :waking-parent {:name :waking-parent :round waking-parent-round}
           :gated {:name :gated :round count-round
                   :precondition (fn [_ _ _] @flag)}}
    :triggers {:hurt {:name :hurt :job :eat :persistence :retry
@@ -157,6 +170,49 @@
           (await (core/tick! eng))
           (is (= [] (listed eng)))
           (is (= ["j1" "j1"] (ran seen))))))))
+
+(deftest a-not-ready-round-without-a-wake-backs-off-for-the-recheck-interval
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup)]
+          (core/submit! eng :idle {} {})
+          (core/submit! eng :count {} {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j1" "j2" "j2"] (ran seen)) "the idle job is skipped while backing off")
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
+          (is (= 2 (:n (job-mem eng "j1")))))))))
+
+(deftest a-lone-not-ready-job-is-stepped-again-only-after-the-interval
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup)]
+          (core/submit! eng :idle {} {})
+          (await (core/tick! eng))
+          (swap! clock + 4999)
+          (is (nil? (core/tick! eng)))
+          (swap! clock + 1)
+          (await (core/tick! eng))
+          (is (= ["j1" "j1"] (ran seen)))
+          (is (nil? (core/tick! eng))))))))
+
+(deftest a-child-wake-is-booked-on-the-parent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup)]
+          (core/submit! eng :waking-parent {} {})
+          (await (core/tick! eng))
+          (let [inst (get-in (core/state eng) [:instances "j1"])]
+            (is (= [:after 1005000] (:wake inst)))
+            (is (nil? (:not-before inst)) "a wake replaces the back-off"))
+          (is (nil? (core/tick! eng)))
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (= 2 (:round (get-in (core/state eng) [:instances "j1"])))))))))
 
 (deftest a-holding-job-is-always-chosen
   (async done

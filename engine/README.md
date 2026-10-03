@@ -208,7 +208,7 @@ Round results:
 |---|---|
 | `:done` | the job is finished; it leaves the list, its memory is deleted |
 | `:continue` | more to do; ready again whenever its precondition holds |
-| `:not-ready` | could do nothing this round; same as `:continue`, but recorded as no progress |
+| `:not-ready` | could do nothing this round; recorded as no progress. Without a wake the job is not stepped again for a minimum re-check interval (engine option `:min-recheck-ms`, default 5000 ms) |
 | `{:status :continue :wake [:day]}` | a yield with a per-round precondition (a data condition, see `engine.conditions`); it overrides the definition's precondition until the job next runs |
 
 A round may also throw; the job is then dropped with a `job.failed` warn.
@@ -228,7 +228,7 @@ keys directly.
 | `:id` | | instance id, for example `"j4"` or `"j4/walk"` for a child |
 | `:memory` | `(ctx/mem ctx)`, `(ctx/mem ctx :body)`, `(ctx/mem ctx :common)` | read a scope now |
 | | `(ctx/commit! ctx m-or-f)`, `(ctx/commit! ctx :body m-or-f)` | replace the scope with `m`, or with `(f current)`; written to disk at once; throws `cut` if this round was cut |
-| `:step-child` | `(await (ctx/step-child ctx slot job-name args))` | run one round of a child; returns `:done`, `:continue` or `:not-ready` |
+| `:step-child` | `(await (ctx/step-child ctx slot job-name args))` | run one round of a child; returns `:done`, `:continue` or `:not-ready`, or `{:status :not-ready :wake w}` when the child yielded a wake condition (return it as your own result to pass the wake up) |
 | `:submit` | `(ctx/submit! ctx job-name args {:hold? false})` | put a new job at the end of the list; returns its id |
 | `:emit` | `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
 | | `(ctx/act ctx :moveTo #js {...})` | call a primitive with the token: `(.moveTo p token args)` |
