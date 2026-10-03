@@ -55,7 +55,7 @@ The JS layer exports one factory per module:
 
 ```js
 // js/primitives.mjs
-export async function createPrimitives ({ host, port, username, auth }) // resolves once spawned
+export async function createPrimitives ({ host, port, username, auth }) // resolves once spawned and the column under the body is loaded (waits up to 10 s)
 // js/fake.mjs
 export function createFake (worldSpec)
 ```
@@ -159,7 +159,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress; `reason: 'noPath'` when the pathfinder gave up with no path and the body is not there) | `timeoutS`, at most 60 | goal cleared, controls released |
 | `dig(token, a)` | `{pos}` | `dug`, `missing` (air), `unreachable` (more than 4.5 away), `cannot` (unbreakable) | 10 s | `stopDigging` |
 | `place(token, a)` | `{pos, item}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable` | 5 s | nothing placed after the cut |
-| `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
+| `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-centred`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
 | `collect(token, a)` | `{id, timeoutS = 10}` | `collected`, `gone`, `unreachable`, `timeout` | `timeoutS`, at most 20 | as `moveTo` |
 | `inspectContainer(token, a)` | `{pos}` | `ok`, `missing`, `unreachable` | 5 s | window closed |
 | `transfer(token, a)` | `{pos, direction, item, count}`; `direction` is `deposit` or `withdraw` | `ok` (`moved` may be less than `count`), `missing`, `unreachable`, `no-item`, `full` | 5 s | window closed |
@@ -196,7 +196,7 @@ Extra fields on the result:
 
 Offline is body state. `offline` quits the bot, emits the body event `offline`, waits `ms` (default 5 minutes, hard
 maximum 10 minutes), reconnects with the same connection params (up to 3 tries, 5 s apart), rebinds the library bot so
-every other primitive and every listener works on the new bot, emits `online`, and resolves `{status: 'ok', ms}`. From
+every other primitive and every listener works on the new bot (after it spawned and, up to 10 s, its world loaded), emits `online`, and resolves `{status: 'ok', ms}`. From
 the moment it quits until the fresh bot is adopted the body is offline, and `isOffline()` is true:
 
 - Sensing says so instead of returning stale values: `self()` returns `{status: 'offline'}`, `entities()` and `blocks()`
@@ -225,13 +225,13 @@ bot starts with no goal.
 An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
 bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the
 body is down, the next acting call (`moveTo`, `dig`, `place`, `collect`, `inspectContainer`, `transfer`, `equip`,
-`eat`, `attack`, `sleep`, `look`, `swim`) first makes the same reconnect `offline` uses (3 tries, 5 s apart; calls
+`eat`, `attack`, `sleep`, `look`, `swim`) first makes the same reconnect `offline` uses (3 tries, 5 s apart, then up to 10 s for the world; calls
 arriving meanwhile share it), emits `online` and runs on the new bot. If every try fails it emits `reconnect-failed`
 (an error-level engine event) and resolves `{status: 'disconnected'}`; the next acting call tries again. Sensing
 reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
 resolves `disconnected` at once. A stale token still rejects with `cut` first.
 
-`jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it looks straight down, jumps, and once the feet clear
+`jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it first sneaks to the centre of its cell (within 0.03, up to 1 s, else `failed`/`not-centred`: the server refuses the placement when the body is off-centre, seen live at 0.09 off), looks straight down, jumps, and once the feet clear
 the cell it stood in places `item` there against the block below that cell, releases jump and waits to stand one block
 higher. It checks before each jump that something solid is under the feet (`no-support`) and that the cell two above the
 feet is not solid (`no-headroom`), and stops at the first failure, reporting `placed`, the blocks it did raise. `not-raised`
@@ -258,7 +258,7 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
-(`from`, `message`), `picked-up` (`item`, `count`: the body picked up an item entity), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
+(`from`, `message`), `picked-up` (`item`, `count`: the body picked up an item entity), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `world-not-loaded` (`ms`, warn level: the column under the body did not load within 10 s after spawn or a reconnect; the body is used anyway), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
 it carried. An instant death (`/kill`, void, damage) has the server clear the slots before the event is read, so when the live inventory is empty `inventory` is the last snapshot of the living body (taken on each health event above 0 and about once a second of physics ticks); `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death
@@ -923,7 +923,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `swim` | `setControlState('jump', true)` while `blockAt(eye cell)` is water, `false` on every exit |
 | `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
 | `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
-| `jumpPlace` | per block: needs the item, a full block under the feet and the cell two above the feet not solid; equips, looks straight down (`look(yaw, -pi/2)`), `setControlState('jump', true)`, polls every 20 ms until the feet are 1.01 above the start cell (clear of it), `placeBlock(block under the start cell, +y)` into the cell just left, releases jump, waits up to 1 s for `onGround` and checks the body now stands a block higher. Cleanup: jump released |
+| `jumpPlace` | per block: needs the item, a full block under the feet and the cell two above the feet not solid; sneaks to the cell centre (within 0.03, up to 1 s, else `not-centred`); equips, looks straight down (`look(yaw, -pi/2)`), `setControlState('jump', true)`, polls every 20 ms until the feet are 1.01 above the start cell (clear of it), `placeBlock(block under the start cell, +y)` into the cell just left, releases jump, waits up to 1 s for `onGround` and checks the body now stands a block higher. Cleanup: jump released |
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
 | `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
 | `equip` | `bot.equip(item, dest)` |

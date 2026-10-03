@@ -1271,3 +1271,9 @@
               (core/tick! eng)
               (let [[_ seen2] (restore-with dir registry triggers)]
                 (is (= [:dropped] (outcomes seen2)))))))))))
+
+(deftest world-not-loaded-is-a-warn-level-event
+  (let [{:keys [p seen]} (setup)]
+    (.emit (.-world p) #js {:kind "world-not-loaded" :ms 10000})
+    (is (= [[:world-not-loaded :warn]]
+           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))

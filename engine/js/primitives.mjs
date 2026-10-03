@@ -31,17 +31,30 @@ const SWIM_DEFAULT_MS = 3000
 const SWIM_MAX_MS = 10000
 const RECONNECT_TRIES = 3
 const RECONNECT_RETRY_MS = 5000
+const WORLD_TIMEOUT_MS = 10000
+const WORLD_POLL_MS = 50
 const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 const STEP_RISE = 1.0
 const CENTRE_TOLERANCE = 0.1
 const CENTRE_S = 1
+const PILLAR_CENTRE_TOLERANCE = 0.03
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
 
 const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
+// Resolves true once the column under the body is loaded (blockAt there is non-null), false after `timeoutMs`.
+// A body that acts before its chunk arrives sees no roof, no bed and no other players.
+export async function waitForWorld (bot, { timeoutMs = WORLD_TIMEOUT_MS, pollMs = WORLD_POLL_MS } = {}) {
+  const deadline = Date.now() + timeoutMs
+  while (!bot.blockAt(bot.entity.position)) {
+    if (Date.now() >= deadline) return false
+    await sleepMs(pollMs)
+  }
+  return true
+}
 const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const center = p => ({ x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 })
@@ -105,7 +118,7 @@ const gained = (before, after) => Object.entries(after)
 // Builds the primitives over an already spawned bot. `timeScale` multiplies every time bound (tests shrink it).
 // `reconnect` (internal; createPrimitives passes it) makes a fresh spawned bot with the same connection params and
 // enables `offline`; without it `offline` is unsupported.
-export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null } = {}) {
+export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, pending = [] } = {}) {
   let bot = initialBot
   view?.attach(bot)
   let closed = false
@@ -180,31 +193,40 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       ctx.alive()
     }
   }
-  // Out of a 1-deep hole: the server rejects every jump while the body is flush against a wall, so centre in the cell
-  // first, then hold jump alone, and press forward only once the feet are a block above where they started.
-  const stepUp = async (ctx, body, target) => {
+  // Sneaks to the middle of `centre` (a cell), forward held only while off-centre: sneaking is slow enough not to
+  // overshoot into the far wall. True when centred within `tolerance` (already or after), false after CENTRE_S;
+  // always leaves sneak and forward released.
+  const centreBody = async (ctx, body, centre, tolerance = CENTRE_TOLERANCE) => {
     // a server correction replaces the position object, so it is read fresh at every use
     const live = () => body.entity.position
-    const centre = cell(live())
-    const startY = live().y
     const toCentre = () => Math.hypot(centre.x + 0.5 - live().x, centre.z + 0.5 - live().z)
-    const onTick = () => { if (live().y >= startY + STEP_RISE) body.setControlState('forward', true) }
+    if (toCentre() < tolerance) return true
     const onCentre = () => {
-      const off = toCentre() >= CENTRE_TOLERANCE
+      const off = toCentre() >= tolerance
       if (off) faceCentre(body, centre).catch(() => {})
       body.setControlState('forward', off)
     }
+    body.setControlState('sneak', true)
+    body.on('physicsTick', onCentre)
+    try {
+      await waitUntil(ctx, () => toCentre() < tolerance, CENTRE_S)
+      return toCentre() < tolerance
+    } finally {
+      body.off('physicsTick', onCentre)
+      body.setControlState('forward', false)
+      body.setControlState('sneak', false)
+    }
+  }
+  // Out of a 1-deep hole: the server rejects every jump while the body is flush against a wall, so centre in the cell
+  // first, then hold jump alone, and press forward only once the feet are a block above where they started.
+  const stepUp = async (ctx, body, target) => {
+    const live = () => body.entity.position
+    const centre = cell(live())
+    const startY = live().y
+    const onTick = () => { if (live().y >= startY + STEP_RISE) body.setControlState('forward', true) }
     stopWalking(body)
     try {
-      if (toCentre() >= CENTRE_TOLERANCE) {
-        // sneaking is slow enough not to overshoot into the far wall; forward is held only while off-centre
-        body.setControlState('sneak', true)
-        body.on('physicsTick', onCentre)
-        await waitUntil(ctx, () => toCentre() < CENTRE_TOLERANCE, CENTRE_S)
-        body.off('physicsTick', onCentre)
-        body.setControlState('forward', false)
-        body.setControlState('sneak', false)
-      }
+      await centreBody(ctx, body, centre) // a failure to centre is ignored: the jump below tries anyway
       await faceCentre(body, target)
       ctx.alive()
       body.setControlState('jump', true)
@@ -212,7 +234,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const landed = () => { const now = cell(live()); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
       await waitUntil(ctx, landed, STEP_S)
     } finally {
-      body.off('physicsTick', onCentre)
       body.off('physicsTick', onTick)
       body.clearControlStates()
     }
@@ -447,6 +468,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           const below = bot.blockAt(vec({ ...start, y: start.y - 1 }))
           if (below?.boundingBox !== 'block') return outcome('no-support')
           if (solidAt({ ...start, y: start.y + 2 })) return outcome('no-headroom')
+          // the server refuses the placement when the body is off-centre (seen live at 0.09), so centre first
+          if (!await centreBody(ctx, bot, start, PILLAR_CENTRE_TOLERANCE)) return outcome('not-centred')
           await bot.equip(item, 'hand')
           ctx.alive()
           await bot.look(bot.entity.yaw ?? 0, -Math.PI / 2, true)
@@ -800,6 +823,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   let unbind = bindEvents(bot)
   const onBodyEvent = listener => {
     listeners.add(listener)
+    pending.splice(0).forEach(e => listener(e)) // events from before anyone listened (createPrimitives' wait)
     return () => listeners.delete(listener)
   }
 
@@ -811,13 +835,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     call.wake = () => { clearTimeout(timer); resolve(false) }
   })
 
+  // waits for the fresh bot's world; a timeout is a warn event and the bot is used anyway. null when close() came first.
+  const awaitWorld = async fresh => {
+    if (!await waitForWorld(fresh, { timeoutMs: worldTimeoutMs })) emit({ kind: 'world-not-loaded', ms: worldTimeoutMs })
+    if (!closed) return fresh
+    fresh.quit()
+    return null
+  }
+
   // a fresh bot, retried a few times; null when close() came first (a bot made meanwhile is quit)
   const reconnectBot = async () => {
     for (let attempt = 1; ; attempt++) {
       if (closed) return null
       const fresh = await reconnect().then(b => ({ b }), error => ({ error }))
       if (fresh.b && closed) { fresh.b.quit(); return null }
-      if (fresh.b) return fresh.b
+      if (fresh.b) return awaitWorld(fresh.b)
       if (attempt >= RECONNECT_TRIES) throw fresh.error
       await sleepMs(RECONNECT_RETRY_MS * timeScale)
     }
@@ -904,7 +936,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
 // `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
-export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1 } = {}) {
+export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS } = {}) {
   const view = viewOpts ? createView(viewOpts) : null
-  return createPrimitivesFromBot(await connect(opts), { timeScale, reconnect: () => connect(opts), view })
+  const bot = await connect(opts)
+  const pending = await waitForWorld(bot, { timeoutMs: worldTimeoutMs }) ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
+  return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, pending })
 }

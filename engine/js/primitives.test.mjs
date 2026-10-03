@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot } from './primitives.mjs'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
 
+// the calls a bot received, minus the blockAt reads waitForWorld makes
+const acted = bot => names(bot).filter(n => n !== 'blockAt')
+
 const at = (x, y, z) => ({ x, y, z })
 const SCALE = 0.01 // every time bound shrinks 100 times: 20 s becomes 200 ms
 
@@ -429,13 +432,13 @@ test('offline quits, waits, reconnects with the same params and rebinds every pr
   assert.deepEqual(result, { status: 'ok', ms: 1000 })
   assert.equal(bots.length, 2)
   assert.deepEqual(seenOpts, [opts, opts])
-  assert.deepEqual(names(bots[0]), ['quit'])
+  assert.deepEqual(acted(bots[0]), ['quit'])
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
   bots[1].health = 7
   assert.equal(p.self().health, 7)
   await p.look('t1', { yaw: 0, pitch: 0 })
-  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), ['look'])
-  assert.deepEqual(names(bots[0]), ['quit'])
+  assert.deepEqual(acted(bots[1]), ['look'])
+  assert.deepEqual(acted(bots[0]), ['quit'])
 })
 
 test('offline reports its ms in the events and the online event carries the position', async () => {
@@ -466,14 +469,14 @@ for (const ms of ['soon', -5, NaN, Infinity]) {
     const { p, bots } = await online()
     await assert.rejects(p.offline('t1', { ms }), err => err.code === 'bad-args')
     assert.equal(bots.length, 1)
-    assert.deepEqual(names(bots[0]), [])
+    assert.deepEqual(acted(bots[0]), [])
   })
 }
 
 test('offline with a stale token rejects with cut and never quits', async () => {
   const { p, bots } = await online()
   await assert.rejects(p.offline('old', { ms: 1000 }), err => err.code === 'cut')
-  assert.deepEqual(names(bots[0]), [])
+  assert.deepEqual(acted(bots[0]), [])
 })
 
 test('offline from createPrimitivesFromBot is unsupported and leaves the bot alone', async () => {
@@ -519,7 +522,7 @@ test('close while the reconnect is in flight quits the bot it produces', async (
   await p.close()
   release()
   assert.deepEqual(await pending, { status: 'closed' })
-  assert.deepEqual(names(bots[1]), ['quit'])
+  assert.deepEqual(acted(bots[1]), ['quit'])
   assert.deepEqual(seen.map(e => e.kind), ['offline'])
 })
 
@@ -829,8 +832,8 @@ test('after a cut the new owner acts on the reconnected bot, never on the quit o
   assert.equal(p.isOffline(), true)
   await p.look('t2', { yaw: 0, pitch: 0 })
   assert.deepEqual(await pending, { status: 'cut' })
-  assert.deepEqual(names(bots[0]), ['quit'])
-  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), ['look'])
+  assert.deepEqual(acted(bots[0]), ['quit'])
+  assert.deepEqual(acted(bots[1]), ['look'])
 })
 
 test('a call whose owner is cut while waiting for the reconnect rejects with cut', async () => {
@@ -841,7 +844,7 @@ test('a call whose owner is cut while waiting for the reconnect rejects with cut
   p.setOwner('t3')
   await assert.rejects(look, err => err.code === 'cut')
   await pending
-  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), [])
+  assert.deepEqual(acted(bots[1]), [])
 })
 
 // ---- replaceable cells: the game replaces them, so place treats them as free ----
@@ -1122,14 +1125,15 @@ test('moveTo: a goto that teleports the body into a pit away from the goal and r
 
 // A stub body that rises when jump goes on, lets placeBlock fill the cell it left, and lands one block higher when
 // jump goes off: the three things the real physics and server do. `rise` false leaves the body on the ground.
-const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }], rise = true, hang = [] } = {}) => {
+const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }], rise = true, hang = [], pos = [0.5, 64, 0.5], pinned = false } = {}) => {
   const all = { '0,63,0': 'stone', ...blocks }
-  const { bot, p } = rig({ blocks: all, items, hang })
+  const { bot, p } = rig({ blocks: all, items, hang, pos })
   const startOf = () => Math.floor(bot.entity.position.y)
   let start = null
   const press = bot.setControlState
   bot.setControlState = (control, on) => {
     const result = press(control, on)
+    if (control === 'forward' && on && !pinned) bot.entity.position = new Vec3(Math.floor(bot.entity.position.x) + 0.5, bot.entity.position.y, Math.floor(bot.entity.position.z) + 0.5)
     if (control !== 'jump') return result
     if (on && rise) {
       start = startOf()
@@ -1161,6 +1165,39 @@ test('jumpPlace raises the body one block per repetition: look down, jump, place
   assert.deepEqual(placeCalls, [[63, 1], [64, 1]], 'against the block under the start cell, on its top face')
   assert.deepEqual(bot.calls.filter(c => c.name === 'look').map(c => c.args[1]), [-Math.PI / 2, -Math.PI / 2])
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false], ['jump', true], ['jump', false]])
+})
+
+test('jumpPlace centres an off-centre body in its cell, sneaking, before it jumps', async () => {
+  const { bot, p } = pillarRig({ pos: [0.41, 64, 0.5] })
+  const ticker = setInterval(() => bot.emit('physicsTick'), 2)
+  try {
+    assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'done', placed: 1 })
+  } finally {
+    clearInterval(ticker)
+  }
+  const order = controls(bot).map(c => c.join(':'))
+  assert.ok(order.indexOf('sneak:true') >= 0 && order.indexOf('sneak:true') < order.indexOf('jump:true'), `controls: ${order}`)
+  assert.ok(order.indexOf('sneak:false') < order.indexOf('jump:true'), 'sneak released before the jump')
+})
+
+test('jumpPlace fails not-centred, without jumping, when the body cannot be centred', async () => {
+  const { bot, p } = pillarRig({ pos: [0.41, 64, 0.5], pinned: true })
+  const ticker = setInterval(() => bot.emit('physicsTick'), 2)
+  try {
+    assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'not-centred' })
+  } finally {
+    clearInterval(ticker)
+  }
+  const order = controls(bot).map(c => c.join(':'))
+  assert.equal(order.includes('jump:true'), false)
+  assert.equal(order.lastIndexOf('sneak:false') > order.lastIndexOf('sneak:true'), true)
+  assert.equal(order.lastIndexOf('forward:false') > order.lastIndexOf('forward:true'), true)
+})
+
+test('jumpPlace does not move a body that is already centred', async () => {
+  const { bot, p } = pillarRig({ pos: [0.5, 64, 0.5] })
+  await p.jumpPlace('t1', { item: 'dirt' })
+  assert.deepEqual(controls(bot).filter(c => c[0] !== 'jump'), [])
 })
 
 test('jumpPlace without the item fails at once, without pressing anything', async () => {
@@ -1300,4 +1337,55 @@ test('toss with a slot that is empty or holds another item is no-item and never 
 test('toss with a non-numeric slot rejects with bad-args', async () => {
   const { p } = rig(twoStacks)
   await assert.rejects(p.toss('t1', { item: 'cobblestone', slot: 'x' }), err => err.code === 'bad-args')
+})
+
+// ---- waiting for the world after spawn ----
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const WORLD_OPTS = { host: 'h', port: 1, username: 'u' }
+
+test('createPrimitives does not return until the column under the body is loaded', async () => {
+  const bot = stubBot({ ...world, unloaded: true })
+  let done = false
+  const pending = createPrimitives(WORLD_OPTS, { connect: async () => bot, timeScale: SCALE, worldTimeoutMs: 5000 }).then(p => { done = true; return p })
+  await sleep(150)
+  assert.equal(done, false)
+  bot.loadWorld()
+  const p = await pending
+  assert.equal(done, true)
+  assert.equal(p.blockAt({ x: 2, y: 64, z: 0 }).name, 'oak_log')
+})
+
+test('a reconnected bot is not adopted until its world is loaded', async () => {
+  const bots = []
+  const connect = async () => { const b = stubBot({ ...world, unloaded: bots.length > 0 }); bots.push(b); return b }
+  const p = await createPrimitives(WORLD_OPTS, { connect, timeScale: 0.0001, worldTimeoutMs: 5000 })
+  p.setOwner('t1')
+  const pending = p.offline('t1', { ms: 1 })
+  await sleep(150)
+  assert.equal(bots.length, 2)
+  assert.equal(p.isOffline(), true)
+  bots[1].loadWorld()
+  assert.deepEqual(await pending, { status: 'ok', ms: 1 })
+  assert.equal(p.isOffline(), false)
+})
+
+test('a world that never loads resolves anyway and emits world-not-loaded to listeners added later', async () => {
+  const bot = stubBot({ ...world, unloaded: true })
+  const p = await createPrimitives(WORLD_OPTS, { connect: async () => bot, timeScale: SCALE, worldTimeoutMs: 100 })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  assert.deepEqual(seen, [{ kind: 'world-not-loaded', ms: 100 }])
+})
+
+test('a reconnect into a world that never loads adopts anyway and emits world-not-loaded before online', async () => {
+  const bots = []
+  const connect = async () => { const b = stubBot({ ...world, unloaded: bots.length > 0 }); bots.push(b); return b }
+  const p = await createPrimitives(WORLD_OPTS, { connect, timeScale: 0.0001, worldTimeoutMs: 100 })
+  p.setOwner('t1')
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  await p.offline('t1', { ms: 1 })
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'world-not-loaded', 'online'])
+  assert.equal(seen[1].ms, 100)
 })

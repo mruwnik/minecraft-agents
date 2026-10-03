@@ -9,7 +9,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], onActivate = () => {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, onActivate = () => {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -18,7 +18,9 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     if (name in reject) return Promise.reject(new Error(reject[name]))
     return hangs.has(name) ? never() : Promise.resolve(impl(...args))
   }
+  let notLoaded = unloaded // the chunks have not arrived: blockAt answers null everywhere until loadWorld()
   const blockAt = v => {
+    if (notLoaded) return null
     const name = blocks[key(v.x, v.y, v.z)]
     if (name === undefined) return { name: 'air', position: new Vec3(v.x, v.y, v.z), boundingBox: 'empty', diggable: false, getProperties: () => ({}) }
     return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
@@ -41,6 +43,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     registry: { effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, name: e.name }])), itemsByName: { bread: { id: 1 }, cobblestone: { id: 2 } }, foodsByName: { bread: { foodPoints: 5 }, apple: { foodPoints: 4 } } },
     physics: { playerHalfWidth: 0.3 },
     calls,
+    loadWorld: () => { notLoaded = false },
     blockAt: v => { calls.push({ name: 'blockAt', args: [v] }); return blockAt(v) },
     findBlocks: ({ matching, maxDistance, count }) => {
       const found = Object.keys(blocks).map(k => new Vec3(...k.split(',').map(Number)))
