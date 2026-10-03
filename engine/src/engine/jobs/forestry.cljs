@@ -61,15 +61,17 @@
        (sort-by #(get-in % [:pos :y]))))
 
 (defn ^:async dig-up!
-  "Dig the logs in order, walking in reach first. Resolves to :ok, or a
-  non-ok walk or dig status for the caller to count as a failure."
+  "Dig the logs in order, walking in reach first. Resolves to :ok, :partial
+  (the walk made progress but is not in reach yet; call again) or a non-ok
+  walk or dig status for the caller to count as a failure."
   [c logs]
   (loop [[l & more] logs]
     (if-not l
       :ok
       (let [w (await (u/walk-near! c (:pos l) 3))]
-        (if (= :blocked w)
-          :blocked
+        (case w
+          :blocked :blocked
+          :partial :partial
           (let [r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
             (if (#{"dug" "missing"} (.-status r))
               (recur more)
@@ -98,7 +100,7 @@
         (if (empty? logs)
           :done
           (let [r (await (dig-up! c (take logs-per-round logs)))]
-            (if (= :ok r)
+            (if (#{:ok :partial} r)
               :continue
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
 

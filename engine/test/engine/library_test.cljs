@@ -280,3 +280,16 @@
     (is (= [] (scenario/problems catalog/catalog s)))
     (is (= [:hostile-near :health-low :night-and-bed-known] (mapv :trigger (:register s))))
     (is (= [:harvest-wood :deposit] (mapv :job (:queue s))))))
+
+(deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (tree 90 0 "oak" 3)})]
+          (core/submit! eng :fell-tree {:species "oak" :radius 120} {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
+          (is (nil? (:failures (mem/scope (:store eng) :job))) "a partial walk is progress, not a failure")
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [] (:list (core/state eng))))
+          (is (= 3 (count (calls p "dig")))))))))

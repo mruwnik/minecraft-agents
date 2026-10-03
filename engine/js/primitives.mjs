@@ -35,7 +35,7 @@ const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
 const entityKind = e => {
   if (e.type === 'player') return 'player'
-  if (e.name === 'item' || e.name === 'item_stack' || e.objectType === 'Item') return 'item'
+  if (e.name === 'item' || e.name === 'item_stack' || e.displayName === 'Item') return 'item'
   if (e.type === 'hostile' || /hostile/i.test(e.kind ?? '')) return 'hostile'
   if (['passive', 'animal', 'ambient', 'water_creature'].includes(e.type) || /passive|animal/i.test(e.kind ?? '')) return 'passive'
   return 'other'
