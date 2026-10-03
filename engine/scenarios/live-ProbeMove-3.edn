@@ -1,0 +1,4 @@
+;; ProbeMove live test: pace between two points 30 blocks apart (8 rounds of 3 laps).
+{:register []
+ :queue [(seq (jobs.movement.look-around {:every-ms 3000})
+              (jobs.movement.pace {:a {:x 2860 :y 161 :z 3250} :b {:x 2890 :y 161 :z 3250}}))]}

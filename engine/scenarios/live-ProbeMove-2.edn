@@ -1,0 +1,6 @@
+;; ProbeMove live test: one go-to across a hazard course (the tester rewrites :pos per course).
+;; The look-around first gives the target's chunks time to arrive after login: a go-to started
+;; at once burns its blocked tries on instant noPath results while they load.
+{:register []
+ :queue [(seq (jobs.movement.look-around {:every-ms 3000})
+              (jobs.movement.go-to {:pos {:x 2902 :y 161 :z 3216}}))]}

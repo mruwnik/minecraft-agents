@@ -1,0 +1,6 @@
+;; ProbeMove live test: wait-for-day held at the head of the list, look-around queued behind it,
+;; and a :burning reflex reporting through jobs.debug.notify (does a reflex still cut in while it waits?).
+{:register [{:trigger :burning :persistence :cooldown :cooldown-s 5
+             :job (jobs.debug.notify {:text "burning fired"})}]
+ :queue [(hold (jobs.time.wait-for-day))
+         (repeat (jobs.movement.look-around))]}
