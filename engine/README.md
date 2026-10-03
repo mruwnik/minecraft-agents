@@ -181,7 +181,7 @@ Extra fields on the result:
   the cell that receives the liquid (it must be air or a replaceable block, else `occupied`, and have a solid
   neighbour, else `no-support`),
   or for an empty `bucket` the liquid cell to scoop (`missing` when it holds none). The body equips the bucket, looks
-  at the supporting block (or the liquid), calls `activateItem`, and waits up to 1.5 s for the cell to change:
+  at the supporting block (or the liquid), calls `activateItem`, and waits up to 2 s for the cell to change or the inventory to show the filled (scoop) or emptied (pour) bucket, whichever comes first (the block update can arrive late):
   `placed` (`block` is `water`, `lava` or `bucket`), else `{status: 'failed', reason: 'unchanged'}`.
 - `collect`: `gained` (`[{name, count}]`).
 - `inspectContainer`: `items` (`[{name, count, slot}]`).

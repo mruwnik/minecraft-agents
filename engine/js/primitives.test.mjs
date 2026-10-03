@@ -897,3 +897,29 @@ test('swim toward: a cut releases both controls', async () => {
 test('swim toward with a bad target rejects with bad-args', async () => {
   await assert.rejects(rig(world).p.swim('t1', { toward: { x: 1 } }), err => err.code === 'bad-args')
 })
+
+// ---- a bucket use counts when the inventory changed even if the block update is late ----
+
+test('a scoop succeeds when the held bucket became a water_bucket though the cell still reads water', async () => {
+  const bucket = { name: 'bucket', count: 1, slot: 36 }
+  const items = [bucket]
+  const { p } = rig({ blocks: { '0,63,0': 'stone', '1,64,0': 'water' }, items, onActivate: () => { items.splice(0, 1, { name: 'water_bucket', count: 1, slot: 36 }) } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'placed', block: 'bucket' })
+})
+
+test('a scoop succeeds when the cell turns to air shortly after the activation', async () => {
+  const blocks = { '0,63,0': 'stone', '1,64,0': 'water' }
+  const { p } = rig({ blocks, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => { setTimeout(() => { delete blocks['1,64,0'] }, 5) } })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'placed')
+})
+
+test('a pour succeeds when the water_bucket became a bucket though the cell still reads air', async () => {
+  const items = [{ name: 'water_bucket', count: 1, slot: 36 }]
+  const { p } = rig({ blocks: { '0,63,0': 'stone', '1,63,0': 'stone' }, items, onActivate: () => { items.splice(0, 1, { name: 'bucket', count: 1, slot: 36 }) } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'placed', block: 'water' })
+})
+
+test('a scoop where neither the cell nor the inventory changes still fails unchanged', async () => {
+  const { p } = rig({ blocks: { '1,64,0': 'water' }, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => {} })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'failed', reason: 'unchanged' })
+})

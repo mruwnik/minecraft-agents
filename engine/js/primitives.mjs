@@ -46,7 +46,7 @@ const badArgs = message => codedError('bad-args', message)
 const isCut = err => err?.code === 'cut'
 // a mineflayer rejection is a domain failure: a status, never a throw (only cut and bad-args reject)
 const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
-const BUCKET_WAIT_S = 1.5
+const BUCKET_WAIT_S = 2
 const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
 const entityKind = e => {
@@ -377,14 +377,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const aim = scoop ? there : supportFor(p)?.ref
     if (!aim) return { status: 'no-support' }
     if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+    const count = name => inventory().filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
+    const filledName = `${there?.name}_bucket`
+    const [filledBefore, heldBefore] = [count(filledName), count(item.name)]
     ctx.alive()
     await bot.equip(item, 'hand')
     ctx.alive()
     await bot.lookAt(aim.position.offset(0.5, 0.5, 0.5), true)
     ctx.alive()
     await bot.activateItem()
+    // The block update can arrive after the window while the inventory already changed, so either one counts: the
+    // cell flipped, or the held bucket turned into the filled one (scoop) / the emptied one (pour).
+    const cellChanged = () => { const now = bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name)) }
+    const itemChanged = () => scoop ? count(filledName) > filledBefore : count(item.name) < heldBefore
+    const changed = () => cellChanged() || itemChanged()
     const deadline = Date.now() + BUCKET_WAIT_S * 1000 * timeScale
-    const changed = () => { const now = bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name)) }
     while (!changed() && Date.now() < deadline) {
       await sleepMs(POLL_MS * timeScale)
       ctx.alive()
