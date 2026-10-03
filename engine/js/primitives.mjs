@@ -220,6 +220,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const here = () => xyz(bot.entity.position)
+  // the cell the pathfinder plans from: one up when standing on a block lower than a cube (farmland), as it offsets
+  const standingCell = () => {
+    const p = bot.entity.position
+    const floored = vec(p).floored()
+    const low = p.y - floored.y > 0.001 && bot.entity.onGround && bot.blockAt(floored)?.boundingBox === 'block'
+    return low ? floored.offset(0, 1, 0) : floored
+  }
   const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.height ?? 1.62), z: bot.entity.position.z })
   const inventory = () => bot.inventory.items()
   const countsNow = () => itemCounts(inventory())
@@ -521,7 +528,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       : new goals.GoalNear(target.x, target.y, target.z, range)
     // `reached` is only what the pathfinder promised: goto resolves on a noPath update with an empty path, so the
     // goal itself is checked against where the body stands.
-    const satisfied = () => !capped && goal.isEnd(vec(here()).floored())
+    const satisfied = () => !capped && goal.isEnd(standingCell())
     let hop = null
     const outcome = (reached) => {
       const distance = dist(here(), target)
@@ -534,7 +541,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => {
       const first = await walk(ctx, goal)
       // a hop that starts underground may have no surface to end on: head for the XZ point instead
-      if (!capped || first.reason !== 'noPath' || goal.open(vec(here()).floored())) return outcome(first)
+      if (!capped || first.reason !== 'noPath' || goal.open(standingCell())) return outcome(first)
       hop = 'xz'
       return outcome(await walk(ctx, new goals.GoalNearXZ(hx, hz, 2)))
     })

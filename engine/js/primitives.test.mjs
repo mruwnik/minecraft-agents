@@ -740,6 +740,22 @@ test('moveTo: a goto that resolves with the body moved but short of the goal is 
   assert.equal(result.status, 'partial')
 })
 
+// A body on a block lower than a cube (farmland) is planned from the cell above, so that cell is where it stands.
+const onFarmland = (onGround) => {
+  const { bot, p } = rig({ ...world, blocks: { '0,100,0': 'farmland' }, pos: [0, 100.9375, 0] })
+  bot.entity.onGround = onGround
+  bot.pathfinder.goto = () => { bot.emit('path_update', { status: 'success', path: [] }); return Promise.resolve() }
+  return p
+}
+
+test('moveTo: standing on farmland, on the ground, the cell above counts: arrived', async () => {
+  assert.equal((await onFarmland(true).moveTo('t1', { pos: at(1, 101, 0) })).status, 'arrived')
+})
+
+test('moveTo: standing on farmland but airborne, the floored cell counts: not arrived', async () => {
+  assert.notEqual((await onFarmland(false).moveTo('t1', { pos: at(1, 101, 0) })).status, 'arrived')
+})
+
 test('moveTo: a goto that resolves within range is arrived', async () => {
   const { bot, p } = rig(world)
   bot.pathfinder.goto = () => { bot.entity.position = new Vec3(29.5, 64, 0.5); return Promise.resolve() }
