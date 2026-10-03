@@ -29,6 +29,12 @@ const TOUCH_NAMES = new Set(['sweet_berry_bush', 'wither_rose', 'cactus'])
 const SLOW_NAMES = new Set(['soul_sand', 'honey_block'])
 const LIT_CAMPFIRES = new Set(['campfire', 'soul_campfire'])
 
+// the direction code a body walks to climb a bottom straight stairs block, as the planner numbers its cardinal moves:
+// the high back is on the facing side (facing=north has its tall half at z 0..0.5), so you enter from the opposite side.
+// Corner shapes stay 0: their tall part blocks a centred entry.
+const STAIR_UP = { east: 1, west: 2, south: 3, north: 4 }
+const STAIRS = /_stairs$/
+
 const sixteenths = v => Math.round(v * 16)
 
 const kindOf = (name, props, top) => {
@@ -55,6 +61,7 @@ export function buildStateTable (registry) {
   const base = new Uint8Array(size).fill(16)
   const kind = new Uint8Array(size)
   const hazard = new Uint8Array(size)
+  const stairUp = new Uint8Array(size)
   for (const block of registry.blocksArray) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) {
       const state = Block.fromStateId(id, 0)
@@ -65,9 +72,10 @@ export function buildStateTable (registry) {
       base[id] = shapes.reduce((m, s) => Math.min(m, sixteenths(s[1])), 16)
       kind[id] = kindOf(block.name, props, top[id])
       hazard[id] = hazardOf(block.name, props)
+      if (STAIRS.test(block.name) && props.half === 'bottom' && props.shape === 'straight') stairUp[id] = STAIR_UP[props.facing] ?? 0
     }
   }
-  return { top, base, kind, hazard }
+  return { top, base, kind, hazard, stairUp }
 }
 
 let shared

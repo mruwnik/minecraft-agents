@@ -59,6 +59,26 @@ for (const [name, props, top, base, kind, hazard] of cases) {
   })
 }
 
+// walking direction that climbs a bottom straight stairs block: 1 east, 2 west, 3 south, 4 north; 0 for anything else
+const stairCases = [
+  ['oak_stairs', { facing: 'east', half: 'bottom', shape: 'straight' }, 1],
+  ['oak_stairs', { facing: 'west', half: 'bottom', shape: 'straight' }, 2],
+  ['oak_stairs', { facing: 'south', half: 'bottom', shape: 'straight' }, 3],
+  ['oak_stairs', { facing: 'north', half: 'bottom', shape: 'straight' }, 4],
+  ['stone_brick_stairs', { facing: 'north', half: 'bottom', shape: 'straight' }, 4],
+  ['oak_stairs', { facing: 'north', half: 'top', shape: 'straight' }, 0],
+  ['oak_stairs', { facing: 'north', half: 'bottom', shape: 'inner_left' }, 0],
+  ['oak_stairs', { facing: 'north', half: 'bottom', shape: 'outer_right' }, 0],
+  ['oak_slab', { type: 'bottom' }, 0],
+  ['stone', {}, 0]
+]
+
+for (const [name, props, expected] of stairCases) {
+  test(`stairUp: ${name} ${JSON.stringify(props)}`, () => {
+    assert.equal(table.stairUp[stateId(name, props)], expected)
+  })
+}
+
 test('state table is sized to the highest state id', () => {
   const max = registry.blocksArray.reduce((m, b) => Math.max(m, b.maxStateId), 0)
   assert.equal(table.top.length, max + 1)

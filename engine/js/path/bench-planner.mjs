@@ -6,9 +6,8 @@ const STATUS = { found: 'success', partial: 'partial', none: 'noPath' }
 
 const table = defaultStateTable() // once per process
 
-// PLANNER_LOOSE_CORNERS=1 lets diagonals pass one blocked side column, as mineflayer-pathfinder's do
 export function plan (snapshot, query, options = {}) {
-  const r = search(snapshot, query, { table, strictCorners: process.env.PLANNER_LOOSE_CORNERS === undefined, ...options })
+  const r = search(snapshot, query, { table, ...options })
   return {
     status: STATUS[r.status],
     reason: r.reason,
