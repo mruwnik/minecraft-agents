@@ -79,7 +79,8 @@
   "Dig the logs in order, walking in reach first. Commits the replant debt
   when the base log is dug. Resolves to :ok, :partial (the walk made progress
   but is not in reach yet; call again) or a non-ok walk or dig status for the
-  caller to count as a failure."
+  caller to count as a failure (:unreachable, :cannot and :out-of-reach mean
+  the tree cannot be dug from here and are marked unreachable by the round)."
   [c logs]
   (loop [[l & more] logs]
     (if-not l
@@ -146,6 +147,7 @@
             (case r
               :ok (do (ctx/commit! c #(assoc % :partials 0)) :continue)
               (:partial :blocked) (walk-failed! c r)
+              (:unreachable :cannot :out-of-reach) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
 
 (defn fell-tree-ready? [p memory args]

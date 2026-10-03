@@ -139,6 +139,41 @@
           (is (= 6 (count (calls p "dig"))) "alternating partials never reach three in a row")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
+(defn dig-unreachable-at
+  "Make the dig primitive answer unreachable for logs in column x."
+  [p x]
+  (.override (.-world p) "dig"
+             (fn ^:async f [token args impl]
+               (if (= x (.-x (.-pos args)))
+                 #js {:status "unreachable"}
+                 (await (impl token args))))))
+
+(deftest fell-tree-skips-a-tree-whose-logs-cannot-be-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (tree 12 0 "oak" 3))})]
+          (dig-unreachable-at p 8)
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [8 12 12 12] (dig-xs p)) "one failed dig on the ledge tree, then the next tree is felled")
+          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+              "no debt for the tree that was never dug")
+          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+
+(deftest fell-tree-warns-and-finishes-when-the-only-tree-cannot-be-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3)})]
+          (dig-unreachable-at p 8)
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [] (:list (core/state eng))))
+          (is (= [8] (dig-xs p)) "one dig attempt, no retries")
+          (is (nil? (get-in (common eng) [:debts :replant])))
+          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+
 ;; ------------------------------------------------------------ collect-drops
 
 (deftest collect-drops-one-per-round-nearest-first-with-filter
