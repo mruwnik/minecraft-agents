@@ -13,6 +13,7 @@ import { say, createLimiter, cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { interactWith, mobFields } from './interact.mjs'
+import { emptyHand } from './unequip.mjs'
 import { missingPatches } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 
@@ -916,6 +917,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
   }
 
+  const unequip = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
+    return act(token, { boundS: 2 }, ctx => emptyHand(bot, ctx))
+  }
+
   const sleep = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'sleep needs pos {x, y, z}')
@@ -1170,7 +1177,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, interact, sleep, look, swim, useOn })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, interact, unequip, sleep, look, swim, useOn })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

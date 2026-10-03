@@ -83,6 +83,7 @@ export function fakeInteract (s) {
     if (refused) return { status: 'cannot', reason: refused, ...none }
     if (item && !carried(item)) return { status: 'no-item', ...none }
     if (dist(s.self.pos, e.pos) > REACH) return { status: 'out-of-reach', ...none }
+    if (!item && s.self.held && s.inventory.length >= 36) return { status: 'full', ...none }
     s.self.held = item
     if (e.mounts) return { status: 'failed', reason: 'mounted', ...none }
     if (e.opens) return { status: 'failed', reason: 'opened-window', ...none }

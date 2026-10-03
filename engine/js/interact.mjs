@@ -1,6 +1,7 @@
 // Using an item (or the empty hand) on an entity: feed, shear, lead, unleash. The server answers none of these with a
 // result, so the call watches for what changed and reports it.
 import vec3 from 'vec3'
+import { emptyHand } from './unequip.mjs'
 
 export const INTERACT_WAIT_MS = 500
 export const LOVE_STATUS = 18
@@ -77,8 +78,13 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
   const eye = bot.entity.position.offset(0, bot.entity.height ?? DEFAULT_EYE, 0)
   if (eye.distanceTo(middle(target)) > reach) return { status: 'out-of-reach' }
 
-  await (item ? bot.equip(item, 'hand') : bot.unequip('hand'))
-  ctx.alive()
+  if (item) {
+    await bot.equip(item, 'hand')
+    ctx.alive()
+  } else {
+    const emptied = await emptyHand(bot, ctx)
+    if (emptied.status === 'full') return { status: 'full' }
+  }
   const before = { count: carried(bot, a.item), durabilityUsed: bot.heldItem?.durabilityUsed ?? 0, fields: mobFields(bot, target) }
 
   let love = false

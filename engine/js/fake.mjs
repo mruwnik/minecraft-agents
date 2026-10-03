@@ -5,6 +5,7 @@ import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
+import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
@@ -381,6 +382,7 @@ export function createFake (spec = {}) {
   const overrides = new Map()
   const acts = defaultActs(s, event => primitives.world.emit(event))
   acts.interact = fakeInteract(s)
+  acts.unequip = fakeUnequip(s)
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
   let away = null // promise of the body being back, while offline

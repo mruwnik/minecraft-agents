@@ -36,6 +36,7 @@ const acting = [
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
   { name: 'interact', args: { id: 8, item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
+  { name: 'unequip', args: {}, hang: 'unequip', cleanup: null, timeout: 'timeout', over: { held: { name: 'bread', count: 2 } } },
   { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'write', timeout: 'timeout', over: { entities: {} } },
   { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' },
   { name: 'useOn', args: { pos: at(2, 64, 0) }, hang: 'activateBlock', cleanup: null, timeout: 'timeout' },

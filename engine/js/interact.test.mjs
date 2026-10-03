@@ -21,7 +21,7 @@ const WOOL = 9
 const entity = (name, extra = {}) => ({ id: 5, name, position: vec3(1, 64, 0), height: 1.4, ...extra })
 
 // a hand-made bot; `onUse(bot, target)` scripts what the use does to the world
-const makeBot = ({ target = entity('sheep'), items = [], held = null, onUse = () => {}, onSneak = () => {}, at = vec3(0, 64, 0) } = {}) => {
+const makeBot = ({ target = entity('sheep'), items = [], held = null, onUse = () => {}, onSneak = () => {}, at = vec3(0, 64, 0), slots = {}, free = 9 } = {}) => {
   const bot = new EventEmitter()
   const calls = []
   const controls = []
@@ -32,7 +32,7 @@ const makeBot = ({ target = entity('sheep'), items = [], held = null, onUse = ()
     entities: target ? { [target.id]: target } : {},
     entity: { id: 4, position: at, height: 1.62 },
     heldItem: held,
-    inventory: { items: () => items },
+    inventory: { items: () => items, slots, firstEmptyInventorySlot: () => free },
     _client: new EventEmitter(),
     setControlState: (name, on) => { controls.push([name, on]); name === 'sneak' && on && onSneak(bot) },
     equip: async item => { calls.push('equip'); bot.heldItem = item },
@@ -111,6 +111,13 @@ const scenarios = [
     calls: ['unequip', 'lookAt', 'useOn']
   },
   {
+    label: 'empty hand asked with no room is full',
+    bot: { target: entity('cow'), held: wheat(), slots: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [36 + i, wheat()])), free: null },
+    a: { id: 5 },
+    expect: { status: 'full' },
+    calls: []
+  },
+  {
     label: 'holder -1 is detached too',
     bot: { target: entity('cow'), held: wheat(), onUse: bot => bot._client.emit('attach_entity', { entityId: 5, vehicleId: -1 }) },
     a: { id: 5 },
@@ -134,14 +141,14 @@ const scenarios = [
     bot: { target: entity('pig'), onUse: bot => { bot.vehicle = { id: 9 } }, onSneak: bot => bot._client.emit('set_passengers', { entityId: 9, passengers: [] }) },
     a: { id: 5 },
     expect: { status: 'failed', reason: 'mounted', consumed: 0, worn: 0, love: false, leash: null, changed: {} },
-    calls: ['unequip', 'lookAt', 'useOn']
+    calls: ['lookAt', 'useOn']
   },
   {
     label: 'use that opens a window',
     bot: { target: entity('pig'), onUse: bot => { bot.currentWindow = { id: 1 } } },
     a: { id: 5 },
     expect: { status: 'failed', reason: 'opened-window', consumed: 0, worn: 0, love: false, leash: null, changed: {} },
-    calls: ['unequip', 'lookAt', 'useOn', 'closeWindow']
+    calls: ['lookAt', 'useOn', 'closeWindow']
   },
   {
     label: 'nothing happens',

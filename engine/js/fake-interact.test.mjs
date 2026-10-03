@@ -19,6 +19,7 @@ const cases = [
   { label: 'shear sheared', held: 'shears', ent: [{ ...cow, name: 'sheep', sheared: true }], inv: [{ name: 'shears', count: 1 }], args: { id: 1, item: 'shears' }, status: 'no-effect' },
   { label: 'lead', held: 'lead', ent: [cow], inv: [{ name: 'lead', count: 1 }], args: { id: 1, item: 'lead' }, status: 'used', consumed: 1, leash: 'attached', field: ['leashed', true] },
   { label: 'empty hand unleashes', ent: [{ ...cow, leashed: true }], args: { id: 1 }, status: 'used', leash: 'detached', held: null, field: ['leashed', false], spawned: 'lead' },
+  { label: 'empty hand with no room is full', held: 'wheat', ent: [cow], inv: Array.from({ length: 36 }, (_, i) => ({ name: `item_${i}`, count: 1 })), args: { id: 1 }, status: 'full', start: 'wheat', held: 'wheat' },
   { label: 'refused villager', ent: [{ ...cow, name: 'villager' }], args: { id: 1 }, status: 'cannot', reason: 'opens-window' },
   { label: 'refused horse before no-item', ent: [{ ...cow, name: 'horse' }], args: { id: 1, item: 'saddle' }, status: 'cannot', reason: 'mounts' },
   { label: 'refused boat', ent: [{ ...cow, name: 'oak_boat' }], args: { id: 1 }, status: 'cannot', reason: 'mounts' },
@@ -29,7 +30,7 @@ const cases = [
 
 for (const c of cases) {
   test(`interact: ${c.label}`, async () => {
-    const p = createFake({ entities: c.ent, inventory: c.inv ?? [] })
+    const p = createFake({ entities: c.ent, inventory: c.inv ?? [], self: { held: c.start ?? null } })
     p.setOwner('t')
     const r = await p.interact('t', c.args)
     const count = (n) => p.world.state.inventory.find(i => i.name === n)?.count
