@@ -1,0 +1,7 @@
+;; Cut and replant oak, then put the wood in a known chest. Needs a :chest
+;; place in common memory for the deposit to run, and a :bed place for sleep.
+{:register [{:trigger :hostile-near}
+            {:trigger :health-low}
+            {:trigger :night-and-bed-known}]
+ :queue [{:job :harvest-wood :args {:species "oak" :radius 16}}
+         {:job :deposit :args {}}]}

@@ -357,6 +357,63 @@ engine state and start from the scenario. The scenario is validated against
 the catalog before connecting. `--state-dir <dir>` overrides the
 repo's `state/`.
 
+## Job library
+
+Jobs live in `engine.jobs.forestry`, `engine.jobs.storage` and
+`engine.jobs.survival`, helpers in `engine.jobs.util`. All are registered in
+`engine.catalog`. Every round re-reads the world and does a bounded piece.
+Positions in memory are `{:x :y :z}` maps. Failed rounds are counted in job
+memory as `:failures`; after three the job emits a warn and ends.
+
+| job | args | precondition | job memory | commits to common |
+|---|---|---|---|---|
+| `:fell-tree` | `{:species nil :radius 16}` | `:not-yet` until a tree (log column with leaves near its top) is in radius, or the column is already chosen | `:column {:x :z}`, `:species`, `:base` pos | `[:debts :replant]` gets `{:pos base :species}` once, when the tree is chosen |
+| `:collect-drops` | `{:radius 16 :filter [names] or nil}` | none | `:skipped` ids of unreachable items | none |
+| `:plant-sapling` | `{:at pos or nil :species nil}` | `:not-yet` without a matching sapling carried, or while the target still holds a log | none | removes the planted debt from `[:debts :replant]` |
+| `:deposit` | `{:chest pos or nil :items [names] or nil}` | `false` while no chest is known | none | none |
+| `:harvest-wood` | `{:species nil :radius 16 :filter nil}` | none | children under slots `:fell`, `:collect`, `:plant` | as its children |
+| `:retreat` | `{:radius 8 :step 8}` | none | `:moves` count | none |
+| `:sleep` | none | `false` without a known bed, `:not-yet` by day | none | none |
+
+- `:fell-tree` digs up to two logs per round of the chosen column, lowest
+  first, and is done when the column has no logs. It walks with `moveTo`
+  directly (range 3) rather than a `:go-to` child, since one walk and one dig
+  are a single round.
+- `:collect-drops` calls `collect` once per round for the nearest matching
+  item entity (the primitive walks itself). Done when none match in radius.
+- `:plant-sapling` without `:at` plants at the first debt (of `:species` when
+  given), walks within 3, equips, places. `occupied` counts as planted.
+  With no debt and no `:at` it is done at once.
+- `:deposit` takes the chest from `:chest`, else the first `[:places :chest]`
+  in common memory. Without `:items` it deposits everything except tools and
+  armour (suffixes `_pickaxe _axe _shovel _hoe _sword _helmet _chestplate
+  _leggings _boots`, plus shears, bow, crossbow, fishing_rod, flint_and_steel,
+  shield, trident), one stack per round. Warn kind `chest_unusable`.
+- `:harvest-wood` steps `:fell-tree`, `:collect-drops` (filter defaults to the
+  species' log, sapling, stick and apple) and `:plant-sapling` in order and
+  returns the first child result that is not `:done`. It waits (`:not-ready`)
+  while no sapling is carried, so a tree with no sapling drop stalls it on the
+  list rather than failing.
+- `:retreat` walks `:step` blocks directly away from the nearest hostile per
+  round, at most five walks, then gives up with a `retreat_gave_up` warn.
+- `:sleep` walks within 2 of the first `[:places :bed]` and calls `sleep`.
+  `sleeping` and `not-night` are done; a taken bed or nearby monster retries
+  three times; a missing bed warns `bed_missing` and ends.
+
+Triggers (`engine.triggers`):
+
+| trigger | holds when | job | persistence |
+|---|---|---|---|
+| `:health-low` | health at most 8 | `:eat` | cooldown 30 s |
+| `:hostile-near` | a hostile within 8 blocks; the radius is fixed in the trigger, the job's `:radius` arg is overridable | `:retreat` `{:radius 8}` | cooldown 5 s |
+| `:night-and-bed-known` | not day and a `[:places :bed]` is known | `:sleep` | cooldown 60 s |
+| `:inventory-nearly-full` | 30 or more carried stacks and a `[:places :chest]` is known | `:deposit` | cooldown 60 s |
+
+`:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
+total; the real inventory has 36 main slots, so 30 is a threshold, not a
+measurement. `scenarios/woodcutter.edn` uses the first three triggers plus
+`[:harvest-wood :deposit]`.
+
 ## Not built (hooks only)
 
 Claims, no-touch regions, flapping counters, no-progress detectors, the HTTP
