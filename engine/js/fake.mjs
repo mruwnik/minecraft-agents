@@ -135,6 +135,13 @@ function defaultActs (s) {
 
     async place (token, { pos, item }) {
       if (!near(pos)) return { status: 'unreachable' }
+      if (item === 'bucket') { // scoops the water cell it is aimed at
+        if (blockName(pos) !== 'water') return { status: 'missing' }
+        if (takeItem(s.inventory, 'bucket', 1) === 0) return { status: 'no-item' }
+        addItem(s.inventory, 'water_bucket', 1)
+        s.blocks.delete(key(pos))
+        return { status: 'placed', block: 'bucket' }
+      }
       if (blockName(pos) !== 'air') return { status: 'occupied' }
       if (takeItem(s.inventory, item, 1) === 0) return { status: 'no-item' }
       if (item === 'water_bucket') { // pours water and leaves the empty bucket

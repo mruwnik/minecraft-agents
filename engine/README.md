@@ -161,7 +161,11 @@ Extra fields on the result:
 - `swim`: `oxygen` (`{before, after}`, the air level when the call started and ended).
 - `dig`: `block` (name dug), `drops` (`[{id, name, count, pos}]`, the item
   entities that appeared within 2 blocks during up to 1 s after the break).
-- `place`: `block` (name placed).
+- `place`: `block` (name placed). Buckets (`bucket`, `water_bucket`, `lava_bucket`) are used, not placed: `pos` is
+  the cell that receives the liquid (it must be air, else `occupied`, and have a solid neighbour, else `no-support`),
+  or for an empty `bucket` the liquid cell to scoop (`missing` when it holds none). The body equips the bucket, looks
+  at the supporting block (or the liquid), calls `activateItem`, and waits up to 1.5 s for the cell to change:
+  `placed` (`block` is `water`, `lava` or `bucket`), else `{status: 'failed', reason: 'unchanged'}`.
 - `collect`: `gained` (`[{name, count}]`).
 - `inspectContainer`: `items` (`[{name, count, slot}]`).
 - `transfer`: `moved` (count).
@@ -758,7 +762,7 @@ measurement.
 The survival jobs pass against the fake only. What they assume about the real
 server and mineflayer, none of it checked live:
 
-- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returns `occupied`; a bucket needs a use-item primitive.
+- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returns `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` (see the `place` result above); not yet re-checked live.
 - Verified live: `unstick`'s pillar attempt cannot work. The server refuses
   `place` into the body's own cell ("the block is still air") because the body
   occupies it; without a jump primitive there is no way round that, and `place`

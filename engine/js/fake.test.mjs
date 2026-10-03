@@ -302,3 +302,14 @@ test('swim can be told to fail: timeout, nothing moves', async () => {
 test('swim with a stale token rejects with cut', async () => {
   await assert.rejects(owned(sea).swim('other'), { code: 'cut' })
 })
+
+test('place with a water bucket pours water and swaps in an empty bucket; bucket scoops it back', async () => {
+  const p = owned({ blocks: { '1,63,0': 'dirt' }, inventory: [{ name: 'water_bucket', count: 1 }] })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'placed')
+  assert.equal(p.blockAt(at(1, 64, 0)).name, 'water')
+  assert.deepEqual(p.self().inventory.map(i => i.name), ['bucket'])
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'placed')
+  assert.equal(p.blockAt(at(1, 64, 0)).name, 'air')
+  assert.deepEqual(p.self().inventory.map(i => i.name), ['water_bucket'])
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'missing')
+})

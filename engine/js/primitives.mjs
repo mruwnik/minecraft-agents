@@ -42,6 +42,7 @@ const badArgs = message => codedError('bad-args', message)
 const isCut = err => err?.code === 'cut'
 // a mineflayer rejection is a domain failure: a status, never a throw (only cut and bad-args reject)
 const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
+const BUCKET_WAIT_S = 1.5
 const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
 const entityKind = e => {
@@ -299,11 +300,44 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([dx, dy, dz]) => ({ ref: bot.blockAt(new Vec3(p.x + dx, p.y + dy, p.z + dz)), face: new Vec3(-dx, -dy, -dz) }))
     .find(({ ref }) => ref && !isAir(ref.name) && ref.boundingBox === 'block')
 
+  const isBucket = name => name === 'bucket' || name.endsWith('_bucket')
+  const isLiquid = name => name === 'water' || name === 'lava'
+
+  // A bucket is used, not placed: look at the block the liquid goes on (or at the liquid to scoop) and activate the
+  // item, then check that the cell p changed within a short bound.
+  const useBucket = async (ctx, item, p) => {
+    const scoop = item.name === 'bucket'
+    const there = bot.blockAt(vec(p))
+    if (scoop && !(there && isLiquid(there.name))) return { status: 'missing' }
+    if (!scoop && there && !isAir(there.name)) return { status: 'occupied' }
+    const aim = scoop ? there : supportFor(p)?.ref
+    if (!aim) return { status: 'no-support' }
+    if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+    ctx.alive()
+    await bot.equip(item, 'hand')
+    ctx.alive()
+    await bot.lookAt(aim.position.offset(0.5, 0.5, 0.5), true)
+    ctx.alive()
+    await bot.activateItem()
+    const deadline = Date.now() + BUCKET_WAIT_S * 1000 * timeScale
+    const changed = () => { const now = bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name)) }
+    while (!changed() && Date.now() < deadline) {
+      await sleepMs(POLL_MS * timeScale)
+      ctx.alive()
+    }
+    if (!changed()) return { status: 'failed', reason: 'unchanged' }
+    return { status: 'placed', block: scoop ? 'bucket' : item.name.replace('_bucket', '') }
+  }
+
   const place = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos) && typeof a.item === 'string', 'place needs pos {x, y, z} and item')
     const p = cell(a.pos)
     return act(token, { boundS: 5 }, async ctx => {
+      if (isBucket(a.item)) {
+        const bucket = inventory().find(i => i.name === a.item)
+        return bucket ? useBucket(ctx, bucket, p) : { status: 'no-item' }
+      }
       const there = bot.blockAt(vec(p))
       if (there && !isAir(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied' }
       const item = inventory().find(i => i.name === a.item)

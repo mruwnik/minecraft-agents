@@ -653,3 +653,38 @@ test('a rejection does not hide a cut: the token check still wins', async () => 
   const { p } = rig({ ...world, reject: { dig: 'Digging aborted' } })
   await assert.rejects(p.dig('old', { pos: at(2, 64, 0) }), cutError)
 })
+
+// ---- buckets ----
+
+const bucketRig = ({ blocks, onActivate, item }) => {
+  const all = { '0,63,0': 'stone', '1,63,0': 'stone', ...blocks } // the stub reads this object live, so onActivate edits the world
+  return rig({ blocks: all, items: [{ name: item, count: 1, slot: 36 }], onActivate: () => onActivate(all) })
+}
+
+test('place with a water bucket looks at the support and activates the item instead of placing a block', async () => {
+  const { bot, p } = bucketRig({ blocks: {}, item: 'water_bucket', onActivate: blocks => { blocks['1,64,0'] = 'water' } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'placed', block: 'water' })
+  assert.deepEqual(names(bot).filter(n => ['equip', 'lookAt', 'activateItem', 'placeBlock'].includes(n)), ['equip', 'lookAt', 'activateItem'])
+})
+
+test('a bucket that changes nothing resolves failed unchanged within the bound', async () => {
+  const { p } = bucketRig({ blocks: {}, item: 'water_bucket', onActivate: () => {} })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'failed', reason: 'unchanged' })
+})
+
+test('an empty bucket scoops the water at the target cell', async () => {
+  const { bot, p } = bucketRig({ blocks: { '1,64,0': 'water' }, item: 'bucket', onActivate: blocks => { delete blocks['1,64,0'] } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'placed', block: 'bucket' })
+  assert.equal(names(bot).includes('activateItem'), true)
+})
+
+test('scooping where there is no liquid is missing, pouring into a solid is occupied', async () => {
+  const noop = () => {}
+  assert.equal((await bucketRig({ blocks: {}, item: 'bucket', onActivate: noop }).p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'missing')
+  assert.equal((await bucketRig({ blocks: { '1,64,0': 'stone' }, item: 'water_bucket', onActivate: noop }).p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'occupied')
+})
+
+test('a bucket not carried is no-item', async () => {
+  const { p } = bucketRig({ blocks: {}, item: 'bread', onActivate: () => {} })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'no-item')
+})
