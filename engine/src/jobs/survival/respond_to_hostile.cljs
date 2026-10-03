@@ -20,10 +20,12 @@
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
 (defn near
-  "The hostiles that count: melee ones within :radius, ranged ones within :ranged-radius."
+  "The hostiles that count: visible ones, melee within :radius and ranged
+  within :ranged-radius. One behind a wall cannot reach or shoot the body, so
+  it is left alone, as the hostile-near trigger does."
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)]
-    (combat/hostiles (:primitives c) radius {:ranged-radius ranged-radius})))
+    (combat/hostiles (:primitives c) radius {:ranged-radius ranged-radius :sight :only})))
 
 (defn check [c]
   (boolean (seq (near c))))

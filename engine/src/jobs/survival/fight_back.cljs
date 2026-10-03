@@ -26,10 +26,11 @@
   (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures))
 
 (defn in-range
-  "The hostiles within :range (ranged ones within :ranged-range), nearest first."
+  "The hostiles within :range (ranged ones within :ranged-range): the visible
+  ones nearest first, then the hidden ones."
   [c]
   (let [{:keys [range ranged-range]} (:args c)]
-    (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})))
+    (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer})))
 
 (defn targets
   "The hostiles in range not given up on, nearest first."

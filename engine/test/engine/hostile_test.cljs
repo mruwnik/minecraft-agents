@@ -353,3 +353,23 @@
         (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks dead-end :entities [(zombie 0 3)]}))]
           (is (zero? (count (calls p "moveTo"))) "a two-block side step gains nothing on the zombie")
           (is (= 1 (count (calls p "attack")))))))))
+
+;; ------------------------------------------------------- sight
+
+(deftest respond-ignores-a-hostile-it-cannot-see
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory sword :blocks wall :entities [(zombie 5 0)]})]
+          (core/submit! eng respond {})
+          (is (nil? (core/tick! eng)) "only a zombie behind the wall: nothing to respond to")
+          (is (zero? (count (calls p "moveTo")))))))))
+
+(deftest fight-back-goes-for-a-visible-hostile-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round '(jobs.survival.fight-back {:range 8})
+                                              {:inventory sword :blocks wall :entities [(zombie 1 5 0) (zombie 2 0 6)]}))]
+          (is (= [2] (mapv #(.-id (.-args %)) (calls p "attack")))
+              "the nearer zombie is behind the wall; the visible one is fought"))))))
