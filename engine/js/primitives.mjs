@@ -14,6 +14,7 @@ import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { missingPatches } from './deps-check.mjs'
+import { wrapBlockAt } from './offset-shapes.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -988,6 +989,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   let stalled = false
   const bindEvents = target => {
     if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
+    wrapBlockAt(target) // physics collides with bamboo/dripstone where the server has them, not at minecraft-data's fixed box
     lastTick = Date.now()
     stalled = false
     settleFromNow()

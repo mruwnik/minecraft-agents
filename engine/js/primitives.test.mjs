@@ -1243,6 +1243,14 @@ test('a bound bot has half-width 0.31, the initial one and a reconnected one', a
   await p.close()
 })
 
+test('a bound bot reads blocks through the server-shape wrapper, once per reconnect', async () => {
+  const first = stubBot(world)
+  const original = first.blockAt
+  createPrimitivesFromBot(first, { timeScale: SCALE })
+  assert.notEqual(first.blockAt, original)
+  assert.equal(first.blockAt(new Vec3(2, 64, 0)).name, 'oak_log')
+})
+
 test('swim toward leaves the half-width alone', async () => {
   const blocks = pool()
   const { bot, p } = rig({ blocks })
