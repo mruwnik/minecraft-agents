@@ -73,3 +73,53 @@
           (core/register-reflex! eng {:id :notify-burning :trigger :burning :job '(jobs.debug.notify {:text "burning fired"})})
           (await (core/tick! eng))
           (is (= 1 (count (notify-events seen)))))))))
+
+(defn chat-lines [p] (mapv #(.-message %) (.. p -world -state -chat)))
+
+(defn ^:async notify-chat
+  "Run notify with args on a fake world, with prep called on the primitives first; [p seen eng]."
+  [args prep]
+  (let [{:keys [eng p seen]} (setup {})]
+    (prep p)
+    (core/submit! eng (list 'jobs.debug.notify args) {})
+    (await (core/tick! eng))
+    [p seen eng]))
+
+(deftest chat-true-sends-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[p _ eng] (await (notify-chat {:text "hello" :chat? true} identity))]
+          (is (= ["hello"] (chat-lines p)))
+          (is (empty? (:list (core/state eng)))))))))
+
+(deftest chat-false-sends-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[p] (await (notify-chat {:text "hello" :chat? false} identity))]
+          (is (empty? (chat-lines p))))))))
+
+(deftest a-blocked-chat-still-finishes-done-and-is-reported
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ seen eng] (await (notify-chat {:text "hello" :chat? true}
+                                               #(.override (.-world %) "chat" (fn ^:async f [_ _ _] #js {:status "blocked" :reason "rate"}))))
+              failed (filterv #(= :notify.chat-failed (:kind %)) @seen)]
+          (is (empty? (:list (core/state eng))) "done")
+          (is (= 1 (count failed)))
+          (is (= :info (:level (first failed))))
+          (is (re-find #"blocked" (:text (first failed))))
+          (is (re-find #"rate" (:text (first failed)))))))))
+
+(deftest a-command-text-is-refused-by-the-fake-and-not-recorded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[p seen eng] (await (notify-chat {:text "/op me" :chat? true} identity))
+              failed (filterv #(= :notify.chat-failed (:kind %)) @seen)]
+          (is (empty? (chat-lines p)))
+          (is (empty? (:list (core/state eng))))
+          (is (re-find #"cannot" (:text (first failed))))
+          (is (re-find #"command" (:text (first failed)))))))))
