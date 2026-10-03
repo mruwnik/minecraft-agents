@@ -69,6 +69,12 @@
   .body.off .name { color: var(--down); }
   .body .meta { color: var(--dim); }
   .body .doing { color: var(--place); }
+  .body.engine { cursor: default; }
+  .body.engine:hover { background: none; }
+  .body.engine.off .name { color: var(--down); }
+  .body .ev { font-size: 11px; color: var(--dim); overflow-wrap: anywhere; }
+  .body .ev.warn { color: var(--place); }
+  .body .ev.error { color: #f0907e; }
   #down { margin-top: 8px; line-height: 1.6; }
   #lookimg { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; cursor: zoom-in; }
   #lookOverlay { position: fixed; inset: 0; background: rgba(10,12,16,0.8); display: flex; align-items: center; justify-content: center; z-index: 50; }
@@ -418,7 +424,7 @@ const makeMap = name => {
     ctx.font = '11px ui-monospace, monospace'
     ctx.fillStyle = '#dfe4ec'
     ctx.fillText(body.name, px + 10, py - 2)
-    const under = `${body.state.hp}hp ${body.state.food}f${body.state.doing ? ' · ' + body.state.doing : ''}`
+    const under = body.engine ? (body.engine.job?.name ?? 'idle') : `${body.state.hp}hp ${body.state.food}f${body.state.doing ? ' · ' + body.state.doing : ''}`
     ctx.fillStyle = '#8b95a5'
     ctx.fillText(under, px + 10, py + 10)
     const w = Math.max(ctx.measureText(body.name).width, ctx.measureText(under).width) + 12
@@ -485,7 +491,9 @@ const makeMap = name => {
     draw()
   })
 
+  // an engine body has no HTTP API behind the popup (look, screen, whisper), so it cannot be picked
   const pick = at => bodyDots()
+    .filter(d => !d.body.engine)
     .map(d => ({ ...d, dist: Math.hypot(d.px - at.px, d.py - at.py) }))
     .filter(d => d.dist <= 14)
     .sort((a, b) => a.dist - b.dist)[0] ?? null
@@ -567,13 +575,31 @@ const bodyCard = body => {
   return card
 }
 
-// a body that is down is the ordinary case (eleven folders, three bodies): one quiet line, with the reason on hover
+const ago = ms => ms < 60000 ? `${Math.round(ms / 1000)}s ago` : ms < 3600000 ? `${Math.round(ms / 60000)}m ago` : `${Math.round(ms / 3600000)}h ago`
+
+// an engine body is read from its event file, never selected: a card whether it is up or down (that is how a stop shows)
+const engineCard = body => {
+  const e = body.engine
+  const card = document.createElement('div')
+  card.className = `body engine${body.up ? '' : ' off'}`
+  const head = line('', '')
+  head.append(tag('span', 'name', body.name), ' ', tag('span', 'meta', e.ageMs === null ? 'down' : `${body.up ? 'up' : 'down'} · ${ago(e.ageMs)}`))
+  card.append(head, line('doing', `${e.job?.name ?? 'no job'}${e.reflex ? ` · reflex ${e.reflex}` : ''}`))
+  card.append(line('meta', `${e.warn10m} warn · ${e.error10m} error (10 min)`))
+  e.recent.forEach(r => card.append(line(`ev ${r.level}`, r.text)))
+  return card
+}
+
+// a body that is down is the ordinary case (eleven folders, three bodies): one quiet line, with the reason on hover.
+// Engine bodies are the exception: their card stays up, down or not.
 const renderList = () => {
-  const up = snap.bodies.filter(b => b.up)
-  const off = snap.bodies.filter(b => !b.up)
+  const api = snap.bodies.filter(b => !b.engine)
+  const up = api.filter(b => b.up)
+  const off = api.filter(b => !b.up)
   const list = el('list')
   list.textContent = ''
   up.forEach(b => list.append(bodyCard(b)))
+  snap.bodies.filter(b => b.engine).forEach(b => list.append(engineCard(b)))
   const down = el('down')
   down.textContent = off.length ? `down: ${off.map(b => b.name).join(', ')}` : ''
   down.title = off.map(b => `${b.name}: ${b.error}`).join('\n')
@@ -1113,7 +1139,7 @@ const applyState = s => {
   const humans = total('humans')
   el('status').textContent = `updated ${new Date(s.at).toLocaleTimeString()}`
   el('counts').textContent = `${up.length}/${s.bodies.length} up · ${total('places')} places · ${total('zones')} zones · ${humans} ${humans === 1 ? 'human' : 'humans'} in sight${s.villageError ? ` · village data: ${s.villageError}` : ''}`
-  el('clock').textContent = up[0]?.state?.time ?? 'no body online'
+  el('clock').textContent = up.find(b => !b.engine)?.state?.time ?? 'no body online'
   showWorlds(s.worlds)
   renderList()
   renderPlaces()

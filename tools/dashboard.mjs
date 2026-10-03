@@ -17,6 +17,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, parseWorldList, resolveWorld, scopeSnapshot, scopeChatSources, agentInWorld, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, parsePlan } from './dashboard/map.mjs'
+import { foldEngine, engineView, emptyEngine, parseEngineAgents, engineBody, completeLines, dropTornHead, parseEngineLines, decodeBytes } from './dashboard/engine.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
@@ -40,6 +41,7 @@ const SRC_DIR = path.join(ROOT, 'src')
 const TEXTURES = path.join(ROOT, 'textures')
 const PORT = Number(process.env.PORT ?? 3700)
 const POLL_MS = 2000
+const ENGINE_FIRST_READ_BYTES = 4 * 1024 * 1024 // ~10 minutes of debug-heavy engine events
 const LOOK_FILE = 'dashboard-look.png'
 const CHAT_TAIL_BYTES = 64 * 1024
 const CHAT_PAGE_LINES = 300   // what the page shows: inlined on load, then polled from /api/chat
@@ -64,11 +66,17 @@ const readText = file => {
 
 const readJson = (file, fallback) => parseJson(readText(file)) ?? fallback
 
+// an agent folder is an ENGINE body when engine/events.jsonl exists: it serves no HTTP API, so it is never polled
+const isEngineFolder = name => fs.existsSync(path.join(AGENTS_DIR, name, 'engine', 'events.jsonl'))
+const engineEventsFile = name => path.join(AGENTS_DIR, name, 'engine', 'events.jsonl')
+
 // re-read every cycle: a new agent folder appears while this runs, and an agent is cheap to describe
-const readAgents = () => {
+const agentEntries = () => {
   const dirs = fs.existsSync(AGENTS_DIR) ? fs.readdirSync(AGENTS_DIR, { withFileTypes: true }).filter(e => e.isDirectory()) : []
-  return parseAgents(dirs.map(e => ({ name: e.name, text: readText(path.join(AGENTS_DIR, e.name, 'config.json')) })))
+  return dirs.map(e => ({ name: e.name, text: readText(path.join(AGENTS_DIR, e.name, 'config.json')) }))
 }
+const readAgents = () => parseAgents(agentEntries().filter(e => !isEngineFolder(e.name)))
+const readEngineAgents = () => parseEngineAgents(agentEntries().filter(e => isEngineFolder(e.name)))
 
 // re-read every ask, like the agents: a world appears while this runs. A folder is a world once it holds world.json.
 const readWorlds = () => (fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR, { withFileTypes: true }) : [])
@@ -113,7 +121,7 @@ const ask = (port, action, args, timeoutMs) => new Promise(resolve => {
 const polls = {}
 let agents = []
 // the names the agents play under: any other player some body sees, or any other speaker in chat, is a human
-const agentNames = () => [...new Set(agents.flatMap(a => [a.name, a.username]))]
+const agentNames = () => [...new Set([...agents, ...readEngineAgents()].flatMap(a => [a.name, a.username]))]
 
 const pollOnce = async () => {
   agents = readAgents()
@@ -126,8 +134,47 @@ const pollOnce = async () => {
   }))
 }
 
+// ---------------------------------------------------------------- engine bodies
+// Per body: how far into events.jsonl we have read, the folded state, and the bytes of a line still being written.
+// Each poll reads only what was appended since; a file that shrank starts over from its tail.
+const engines = {}
+
+const readRange = (file, start, end) => {
+  const fd = fs.openSync(file, 'r')
+  try {
+    const buf = Buffer.alloc(end - start)
+    fs.readSync(fd, buf, 0, buf.length, start)
+    return buf
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+const readEngine = name => {
+  const file = engineEventsFile(name)
+  const size = fs.statSync(file).size
+  const cached = engines[name]
+  const fresh = !cached || size < cached.offset
+  const from = fresh ? Math.max(0, size - ENGINE_FIRST_READ_BYTES) : cached.offset
+  const previous = fresh ? { state: emptyEngine, rest: new Uint8Array(0) } : cached
+  if (!fresh && size === cached.offset) return cached.state
+  const chunk = readRange(file, from, size)
+  const { complete, rest } = completeLines(previous.rest, fresh && from > 0 ? dropTornHead(chunk) : chunk)
+  const state = foldEngine(previous.state, parseEngineLines(decodeBytes(complete)))
+  engines[name] = { offset: size, state, rest }
+  return state
+}
+
+const engineBodies = now => readEngineAgents().map(agent => {
+  try {
+    return engineBody(agent, engineView(readEngine(agent.name), now))
+  } catch (error) {
+    return engineBody(agent, { ...engineView(emptyEngine, now), error: `events unreadable: ${error.message}` })
+  }
+})
+
 const snapshot = worldName => {
-  const bodies = mergeBodies(agents, polls)
+  const bodies = [...mergeBodies(agents, polls), ...engineBodies(Date.now())]
   const worlds = readWorlds()
   const villageData = villageSnapshot(worlds), villages = villageData.villages
   const full = {
