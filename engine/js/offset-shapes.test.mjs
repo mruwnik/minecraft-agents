@@ -67,7 +67,7 @@ test('pointed_dripstone is re-centred with max 0.125', () => {
 
 test('wrapBlockAt wraps once and passes null through', () => {
   let calls = 0
-  const bot = { blockAt: pos => { calls++; return pos.x === 99 ? null : blockNamed('bamboo', pos.x, pos.y, pos.z) } }
+  const bot = { registry, blockAt: pos => { calls++; return pos.x === 99 ? null : blockNamed('bamboo', pos.x, pos.y, pos.z) } }
   wrapBlockAt(bot)
   const wrapped = bot.blockAt
   wrapBlockAt(bot)
@@ -75,4 +75,38 @@ test('wrapBlockAt wraps once and passes null through', () => {
   closeBox(bot.blockAt(new Vec3(5, 64, 9), false).shapes[0], bambooBox(5, 9))
   assert.equal(calls, 1)
   assert.equal(bot.blockAt(new Vec3(99, 64, 0)), null)
+})
+
+test('wrapBlockAt returns ordinary blocks untouched and re-centres bamboo', () => {
+  const stone = blockNamed('stone', 5, 64, 9)
+  const shapes = stone.shapes
+  const bot = {
+    registry,
+    blockAt: pos => pos.y === 64 ? stone : blockNamed('bamboo', pos.x, pos.y, pos.z)
+  }
+  wrapBlockAt(bot)
+  const got = bot.blockAt(new Vec3(5, 64, 9))
+  assert.equal(got, stone)
+  assert.equal(got.shapes, shapes)
+  closeBox(bot.blockAt(new Vec3(5, 65, 9)).shapes[0], bambooBox(5, 9))
+})
+
+test('live: pointed_dripstone tip (up) at (1037, 101, -2992) spans x 1037.4375..1037.8125, z -2991.8125..-2991.4375', () => {
+  // live, a body walking west along z -2991.625 was held by the server at x 1038.12-1038.13 (= 1037.8125 + 0.31)
+  const block = Block.fromProperties('pointed_dripstone', { thickness: 'tip', vertical_direction: 'up', waterlogged: false }, 0)
+  block.position = new Vec3(1037, 101, -2992)
+  const [box] = serverShapes(block)
+  close(1037 + box[0], 1037.4375, 0.001)
+  close(1037 + box[3], 1037.8125, 0.001)
+  close(-2992 + box[2], -2991.8125, 0.001)
+  close(-2992 + box[5], -2991.4375, 0.001)
+})
+
+test('live: bamboo at (1012, 101, -2992) spans x 1012.190..1012.377, z -2991.477..-2991.290', () => {
+  // live, a body walking east along z -2991.30 was held at x 1011.88-1011.89 (= 1012.19 - 0.31)
+  const [box] = serverShapes(blockNamed('bamboo', 1012, 101, -2992))
+  close(1012 + box[0], 1012.190, 0.002)
+  close(1012 + box[3], 1012.377, 0.002)
+  close(-2992 + box[2], -2991.477, 0.002)
+  close(-2992 + box[5], -2991.290, 0.002)
 })

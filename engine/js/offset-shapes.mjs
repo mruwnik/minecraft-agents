@@ -24,10 +24,16 @@ export function withServerShapes (block) {
   return block
 }
 
-// mineflayer's physics reads blocks through bot.blockAt; idempotent
+// mineflayer's physics reads blocks through bot.blockAt for every nearby cell every tick: one type-id comparison, no allocation; idempotent
 export function wrapBlockAt (bot) {
-  if (bot.blockAt[WRAPPED]) return
+  if (!bot.blockAt || bot.blockAt[WRAPPED] || !bot.registry?.blocksByName) return // fake bots have no registry
   const original = bot.blockAt
-  bot.blockAt = (...args) => withServerShapes(original.apply(bot, args))
+  const bambooType = bot.registry.blocksByName.bamboo.id
+  const dripstoneType = bot.registry.blocksByName.pointed_dripstone.id
+  bot.blockAt = (pos, extraInfos) => {
+    const block = original.call(bot, pos, extraInfos)
+    if (block && (block.type === bambooType || block.type === dripstoneType)) block.shapes = serverShapes(block)
+    return block
+  }
   bot.blockAt[WRAPPED] = true
 }

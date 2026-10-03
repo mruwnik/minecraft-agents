@@ -1245,6 +1245,7 @@ test('a bound bot has half-width 0.31, the initial one and a reconnected one', a
 
 test('a bound bot reads blocks through the server-shape wrapper, once per reconnect', async () => {
   const first = stubBot(world)
+  first.registry = { ...first.registry, blocksByName: { bamboo: { id: 1 }, pointed_dripstone: { id: 2 } } }
   const original = first.blockAt
   createPrimitivesFromBot(first, { timeScale: SCALE })
   assert.notEqual(first.blockAt, original)
