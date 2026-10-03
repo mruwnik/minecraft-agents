@@ -196,6 +196,35 @@
 (defonce loading (atom 0))
 (defonce on-tile-loaded (atom nil))
 (defonce redraw-queued (atom false))
+(defonce coverage-path-cache (atom nil))
+(def tile-retry-ms 5000)
+
+(defn release-terrain-cache! []
+  (reset! coverage-path-cache nil))
+
+(defn coverage-path-key [world index scale]
+  {:world world :index index :scale scale})
+
+(defn coverage-path-cache-matches? [cached key]
+  (and cached
+       (= (:world cached) (:world key))
+       (identical? (:index cached) (:index key))
+       (= (:scale cached) (:scale key))))
+
+(defn retry-same-image? [current failed]
+  (identical? current failed))
+
+(defn coverage-path [world index scale]
+  (let [key (coverage-path-key world index scale)
+        cached @coverage-path-cache]
+    (if (coverage-path-cache-matches? (:key cached) key)
+      (:path cached)
+      (let [path (js/Path2D.)
+            cell-size (/ (max 1 (- (* mm/tile-blocks scale) 0.5)) scale)]
+        (doseq [[[cx cz] _] index]
+          (.rect path (* cx mm/tile-blocks) (* cz mm/tile-blocks) cell-size cell-size))
+        (reset! coverage-path-cache {:key key :path path})
+        path))))
 
 (defn queue-redraw! []
   (when-not @redraw-queued
@@ -210,7 +239,17 @@
         done! (fn [] (swap! loading dec) (queue-redraw!))]
     (swap! loading inc)
     (set! (.-onload img) done!)
-    (set! (.-onerror img) (fn [] (aset img "failed" true) (done!)))
+    (set! (.-onerror img)
+          (fn []
+            (aset img "failed" true)
+            (done!)
+            ;; A broken URL must not stay failed in the LRU forever, but a persistent error should not
+            ;; trigger a request on every redraw either. Retry only while this failed image is still current.
+            (js/setTimeout (fn []
+                             (when (retry-same-image? (.get tile-images url) img)
+                               (.delete tile-images url)
+                               (queue-redraw!)))
+                           tile-retry-ms)))
     (set! (.-src img) url)
     (tiles/lru-put! tile-images image-cap url img)
     nil))
@@ -225,14 +264,17 @@
       (>= @loading max-loading) nil
       :else (start-load! url))))
 
-(defn draw-terrain! [ctx {:keys [view canvas tile-index tile-world]}]
-  (let [{:keys [mode items]} (mm/visible-terrain view canvas tile-index)]
+(defn draw-terrain! [ctx {:keys [view canvas tile-index tile-world]} dpr]
+  (let [mode (mm/terrain-mode view canvas)]
     (.save ctx)
     (set! (.-imageSmoothingEnabled ctx) false)
     (if (= mode :coverage)
       (do (set! (.-fillStyle ctx) coverage-color)
-          (doseq [{:keys [px py size]} items] (.fillRect ctx px py (max 1 (- size 0.5)) (max 1 (- size 0.5)))))
-      (do (doseq [{:keys [px py size] :as t} items
+          (.setTransform ctx (* dpr (:scale view)) 0 0 (* dpr (:scale view))
+                         (* -1 dpr (:scale view) (:origin-x view))
+                         (* -1 dpr (:scale view) (:origin-z view)))
+          (.fill ctx (coverage-path tile-world tile-index (:scale view))))
+      (do (doseq [{:keys [px py size] :as t} (:items (mm/visible-terrain view canvas tile-index))
                   :let [img (tile-image (tile-url tile-world t))]
                   :when img]
             ;; a hair larger than the cell, so no seam shows between neighbours at fractional scales
@@ -240,20 +282,24 @@
     (.restore ctx)
     mode))
 
+(defn canvas-size! [canvas w h dpr]
+  (set! (.-width canvas) (* w dpr))
+  (set! (.-height canvas) (* h dpr)))
+
 (defn draw! [canvas model]
   (let [{:keys [w h]} (:canvas model)
         ctx (when (and canvas w h (:view model)) (.getContext canvas "2d"))
         dpr (or js/window.devicePixelRatio 1)]
     (when canvas
-      (set! (.-width canvas) (* w dpr))
-      (set! (.-height canvas) (* h dpr)))
+      (canvas-size! canvas w h dpr))
     (when ctx
       (.setTransform ctx dpr 0 0 dpr 0 0)
       (.clearRect ctx 0 0 w h)
       (set! (.-font ctx) label-font)
       (let [lay (layout model)
-            mode (when (and (:terrain? model) (:tile-index model) (:tile-world model)) (draw-terrain! ctx model))]
-        (when (= mode :coverage)
+            terrain-mode (when (and (:terrain? model) (:tile-index model) (:tile-world model))
+                           (draw-terrain! ctx model dpr))]
+        (when (= terrain-mode :coverage)
           (set! (.-fillStyle ctx) "rgba(215,220,228,0.75)")
           (set! (.-textBaseline ctx) "top")
           (.fillText ctx "zoom in for terrain (shaded: dumped columns)" 10 8))
@@ -284,6 +330,7 @@
 (defn map-view []
   (let [wrap (atom nil)
         canvas (atom nil)
+        resize-observer (atom nil)
         model (atom nil)
         drag (atom nil)
         redraw! #(draw! @canvas @model)
@@ -298,11 +345,18 @@
      {:component-did-mount
       (fn []
         (.addEventListener @canvas "wheel" on-wheel #js {:passive false})
-        (.observe (js/ResizeObserver. measure!) @wrap)
+        (let [observer (js/ResizeObserver. measure!)]
+          (reset! resize-observer observer)
+          (.observe observer @wrap))
         (reset! on-tile-loaded redraw!)
         (measure!)
         (redraw!))
-      :component-will-unmount #(reset! on-tile-loaded nil)
+      :component-will-unmount (fn []
+                                (.removeEventListener @canvas "wheel" on-wheel)
+                                (when-let [observer @resize-observer] (.disconnect observer))
+                                (reset! resize-observer nil)
+                                (reset! on-tile-loaded nil)
+                                (release-terrain-cache!))
       :component-did-update redraw!
       :reagent-render
       (fn []

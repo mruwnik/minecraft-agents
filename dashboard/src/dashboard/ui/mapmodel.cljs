@@ -97,13 +97,17 @@
   {:cx cx :cz cz :mtime mtime :size (* tile-blocks scale)
    :px (* (- (* cx tile-blocks) origin-x) scale) :py (* (- (* cz tile-blocks) origin-z) scale)})
 
+(defn terrain-mode [view canvas]
+  (let [{:keys [cx1 cx2 cz1 cz2]} (tile-range view canvas)
+        count-in-view (* (inc (- cx2 cx1)) (inc (- cz2 cz1)))]
+    (if (<= count-in-view max-terrain-tiles) :tiles :coverage)))
+
 (defn visible-terrain
   "{:mode :tiles | :coverage, :items [tile]} for the dumped columns ({[cx cz] mtime}) in view. Up to max-terrain-tiles
   columns in view are :tiles, to be drawn as pictures; more are :coverage, drawn as plain marks."
   [view canvas index]
-  (let [{:keys [cx1 cx2 cz1 cz2]} (tile-range view canvas)
-        count-in-view (* (inc (- cx2 cx1)) (inc (- cz2 cz1)))]
-    (if (<= count-in-view max-terrain-tiles)
+  (let [{:keys [cx1 cx2 cz1 cz2]} (tile-range view canvas)]
+    (if (= :tiles (terrain-mode view canvas))
       {:mode :tiles
        :items (vec (for [cz (range cz1 (inc cz2)) cx (range cx1 (inc cx2))
                          :let [mtime (get index [cx cz])]
