@@ -245,11 +245,12 @@ function defaultActs (s, emit) {
       const e = entity(id)
       if (!e) return { status: 'gone' }
       if (!near(e.pos)) return { status: 'out-of-reach' }
+      if (e.invulnerable) return { status: 'hit', health: e.health, hurt: false }
       e.health -= 5
-      if (e.health > 0) return { status: 'hit', health: e.health }
+      if (e.health > 0) return { status: 'hit', health: e.health, hurt: true }
       s.entities.splice(s.entities.indexOf(e), 1)
       for (const d of e.drops ?? []) spawnItem(e.pos, d.name, d.count)
-      return { status: 'killed', health: 0 }
+      return { status: 'killed', health: 0, hurt: true }
     },
 
     async sleep (token, { pos }) {

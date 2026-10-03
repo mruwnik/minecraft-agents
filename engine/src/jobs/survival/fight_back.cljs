@@ -42,10 +42,6 @@
   (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
        (boolean (seq (targets c)))))
 
-(defn ^:async equip-best! [c weapon]
-  (when (and weapon (not= weapon (.-held (.self (:primitives c)))))
-    (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
-
 (defn note-blocked!
   "Count a blocked walk towards target; warn once when it is given up on."
   [c target]
@@ -89,7 +85,7 @@
       (nil? target) (if (empty? (in-range c)) :done :declined)
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) :continue
       :else
-      (do (await (equip-best! c (combat/best-weapon p weapons)))
+      (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
           (await (swing! c target))
           (cond
             (empty? (in-range c)) :done

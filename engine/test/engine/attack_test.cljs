@@ -1,0 +1,256 @@
+(ns engine.attack-test
+  "jobs.combat.attack and its helpers against the fake world."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.hostile-test :as h]
+            [engine.jobs.combat :as combat]
+            [engine.test-util :as tu]
+            [jobs.combat.attack :as attack]))
+
+(defn spec [args] (list 'jobs.combat.attack args))
+
+(defn ent
+  ([id name kind x] (ent id name kind x {}))
+  ([id name kind x more] (merge {:id id :name name :kind kind :pos {:x x :y 64 :z 0}} more)))
+
+(defn zed [id x] (ent id "zombie" "hostile" x))
+
+(defn ^:async run-ticks
+  "Tick n times, the clock moving step ms before each."
+  [{:keys [eng clock]} n step]
+  (dotimes [_ n]
+    (swap! clock + step)
+    (await (core/tick! eng))))
+
+(defn ^:async scenario
+  "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
+  [args world n]
+  (let [s (h/setup world)]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n 700))
+    s))
+
+(defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
+
+(defn done-event [{:keys [seen]}] (first (filter #(= :attack.done (:kind %)) @seen)))
+
+(defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
+
+;; ------------------------------------------------------------ pure helpers
+
+(deftest attack-gap-ms-is-the-held-weapons-cooldown
+  (doseq [[item ms] [["wooden_sword" 625] ["diamond_sword" 625] ["netherite_sword" 625]
+                     ["wooden_axe" 1250] ["stone_axe" 1250] ["iron_axe" 1112]
+                     ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
+                     ["iron_pickaxe" 250] ["stick" 250] [nil 250]]]
+    (is (= ms (combat/attack-gap-ms item)) (str item))))
+
+(deftest target-list-normalises-to-a-vector
+  (doseq [[in out] [[nil []] [[] []] [7 [7]] ["zombie" ["zombie"]] [[7 "Alex"] [7 "Alex"]] ['(7 8) [7 8]]]]
+    (is (= out (attack/target-list in)) (str in))))
+
+(defn js-ent [kind name & [username id]]
+  #js {:id (or id 1) :kind kind :name name :username username})
+
+(deftest matches-by-id-username-and-mob-type
+  (doseq [[targets e killed expected note]
+          [[[7] (js-ent "hostile" "zombie" nil 7) #{} true "an id"]
+           [[7] (js-ent "hostile" "zombie" nil 8) #{} false "another id"]
+           [["zombie"] (js-ent "hostile" "zombie") #{} true "a mob type"]
+           [["zombie"] (js-ent "passive" "cow") #{} false "another type"]
+           [["Alex"] (js-ent "player" "Alex" "Alex") #{} true "a username"]
+           [["Alex"] (js-ent "player" "Alex" "Alex") #{"Alex"} false "a killed player"]
+           [["player"] (js-ent "player" "Alex" "Alex") #{} false "players never match by type"]
+           [["item"] (js-ent "item" "item") #{} false "items never match"]
+           [[3] (js-ent "item" "item" nil 3) #{} false "items never match, even by id"]
+           [[3] (js-ent "player" "Fake" "Fake" 3) #{} false "never self by id"]
+           [["Fake"] (js-ent "player" "Fake" "Fake") #{} false "never self by name"]]]
+    (is (= expected (attack/matches? targets "Fake" killed e)) note)))
+
+;; ------------------------------------------------------------------ the job
+
+(deftest kills-an-id-then-clears-after-lost-s
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 4))]
+          (is (= [7 7 7 7] (attacked s)) "four hits at 5 damage")
+          (is (= ["j1"] (:list (core/state eng))) "still running until nothing was seen for :lost-s")
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (finished? s))
+          (is (= :cleared (:reason (done-event s))))
+          (is (= [7] (:killed (done-event s)))))))))
+
+(deftest kills-every-id-of-a-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7 8]} {:inventory h/sword :entities [(zed 7 3) (zed 8 2)]} 8))]
+          (is (= (set [7 8]) (set (attacked s))))
+          (is (= 8 (count (attacked s)))))))))
+
+(deftest kills-a-player-by-username
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets ["Alex"]} {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 4))]
+          (is (= [9 9 9 9] (attacked s)))
+          (is (empty? (.-entities (.-state (.-world p)))) "the player is dead"))))))
+
+(deftest a-mob-type-takes-every-mob-of-it-and-no-cows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets ["zombie"]}
+                                                 {:inventory h/sword :entities [(zed 7 3) (zed 8 2) (ent 9 "cow" "passive" 1)]} 9))]
+          (is (= (set [7 8]) (set (attacked s))))
+          (is (= [9] (mapv #(.-id %) (.-entities (.-state (.-world p))))) "the cow lives"))))))
+
+(deftest a-mixed-list-takes-nearest-first-and-moves-on-when-one-dies
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [5 "zombie" "Alex"]}
+                                 {:inventory h/sword
+                                  :entities [(ent 9 "Alex" "player" 3) (zed 7 2) (ent 5 "cow" "passive" 1)]} 12))]
+          (is (= (concat (repeat 4 5) (repeat 4 7) (repeat 4 9)) (attacked s))))))))
+
+(deftest nearest-target-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets ["zombie"]} {:inventory h/sword :entities [(zed 7 3) (zed 8 1)]} 8))]
+          (is (= (concat (repeat 4 8) (repeat 4 7)) (attacked s))))))))
+
+(deftest no-target-in-radius-fails-the-check
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zed 7 3) (zed 8 30)]})]
+          (core/submit! eng (spec {:targets [8 "skeleton"]}) {})
+          (is (nil? (core/tick! eng)))
+          (is (zero? (count (h/calls p "attack"))))
+          (is (zero? (count (h/calls p "equip")))))))))
+
+(deftest never-attacks-itself-nor-matches-players-by-type
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [3 "Fake" "zombie"]}
+                                 {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]} 4))]
+          (is (= [7 7 7 7] (attacked s))))
+        (doseq [targets [["player"] ["hostile"] [3 "Fake"]]]
+          (let [{:keys [eng]} (h/setup {:entities [(ent 3 "Fake" "player" 1) (ent 9 "Alex" "player" 2)]})]
+            (core/submit! eng (spec {:targets targets}) {})
+            (is (nil? (core/tick! eng)) (str targets))))))))
+
+(deftest gives-up-on-an-unreachable-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 4))
+              gave-up (events-of s :attack.gave-up)]
+          (is (zero? (count (attacked s))))
+          (is (= 3 (count (h/calls (:p s) "moveTo"))))
+          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) gave-up)))
+          (is (= :warn (:level (first gave-up))))
+          (is (finished? s))
+          (is (= :gave-up (:reason (done-event s))))
+          (is (= {7 :unreachable} (:given-up (done-event s)))))))))
+
+(deftest gives-up-on-a-target-that-takes-no-damage
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7]}
+                                 {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 5))]
+          (is (= 4 (count (attacked s))))
+          (is (= [[7 :no-damage]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
+          (is (finished? s))
+          (is (= :gave-up (:reason (done-event s)))))))))
+
+(deftest gives-up-after-max-hits-without-a-kill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7] :max-hits 3}
+                                 {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:health 1000})]} 4))]
+          (is (= 3 (count (attacked s))))
+          (is (= [[7 :too-many-hits]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
+          (is (= :gave-up (:reason (done-event s)))))))))
+
+(deftest times-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7] :timeout-s 3 :no-damage-hits 100 :max-hits 1000}
+                                 {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
+          (is (finished? s))
+          (is (= :timeout (:reason (done-event s))))
+          (is (= 1 (count (events-of s :attack.timeout)))))))))
+
+(deftest equips-the-weapon-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 3))]
+          (is (= 3 (count (attacked s))))
+          (is (= 1 (count (h/calls p "equip")))))))))
+
+(deftest a-killed-player-respawning-under-a-new-id-is-left-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p clock eng] :as s} (await (scenario {:targets ["Alex"]}
+                                                           {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 4))]
+          (.push (.-entities (.-state (.-world p)))
+                 #js {:id 20 :name "Alex" :username "Alex" :kind "player" :health 20 :pos (tu/pos 2 64 0)})
+          (await (run-ticks s 2 700))
+          (is (= [9 9 9 9] (attacked s)))
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= :cleared (:reason (done-event s))))
+          (is (= [9] (:killed (done-event s)))))))))
+
+(deftest at-most-one-swing-per-gap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (await (h/first-round (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 2)]}))]
+          (is (= 1 (count (attacked s))))
+          (await (core/tick! eng))
+          (swap! clock + 100)
+          (await (core/tick! eng))
+          (is (= 1 (count (attacked s))) "inside the sword's 625 ms")
+          (swap! clock + 600)
+          (await (core/tick! eng))
+          (is (= 2 (count (attacked s)))))))))
+
+(deftest a-started-job-stays-until-lost-s-after-its-target-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock p] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
+          (set! (.. p -world -state -entities) #js [])
+          (await (run-ticks s 2 700))
+          (is (= ["j1"] (:list (core/state eng))) "nothing to attack, still started")
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (finished? s))
+          (is (= :cleared (:reason (done-event s)))))))))
+
+(deftest a-recently-struck-target-that-vanishes-counts-as-killed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[wait killed] [[700 [7]] [3000 []]]]
+          (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
+            (set! (.. p -world -state -entities) #js [])
+            (swap! clock + wait)
+            (await (core/tick! eng))
+            (swap! clock + 6000)
+            (await (core/tick! eng))
+            (is (= killed (:killed (done-event s))) (str wait))))))))

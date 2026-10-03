@@ -154,6 +154,16 @@ test('attack hits then kills', async () => {
   assert.equal((await p.attack('t1', { id: 5 })).status, 'gone')
 })
 
+test('attack reports hurt, and an invulnerable entity takes no damage', async () => {
+  const p = owned({ entities: [
+    { id: 5, name: 'zombie', kind: 'hostile', pos: at(2, 64, 0), health: 6 },
+    { id: 6, name: 'zombie', kind: 'hostile', pos: at(2, 64, 1), invulnerable: true }
+  ] })
+  assert.deepEqual(await p.attack('t1', { id: 6 }), { status: 'hit', health: 20, hurt: false })
+  assert.deepEqual(await p.attack('t1', { id: 5 }), { status: 'hit', health: 1, hurt: true })
+  assert.deepEqual(await p.attack('t1', { id: 5 }), { status: 'killed', health: 0, hurt: true })
+})
+
 test('sleep works at night on a bed and makes it morning', async () => {
   const p = owned({ time: 1000, blocks: { '1,64,0': 'red_bed' } })
   assert.equal((await p.sleep('t1', { pos: at(1, 64, 0) })).status, 'not-night')

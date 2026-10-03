@@ -2,6 +2,7 @@
   "Helpers the survival jobs share: reading hostiles off sensing and ranking
   the weapons carried."
   (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
             [engine.jobs.util :as u]))
 
 (def default-weapons
@@ -54,6 +55,22 @@
        (filter #(weapon? weapons %))
        (sort-by weapon-score >)
        first))
+
+(defn ^:async equip-best!
+  "Hold weapon in hand unless it is already held; nil does nothing."
+  [c weapon]
+  (when (and weapon (not= weapon (.-held (.self (:primitives c)))))
+    (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
+
+(def axe-gap-ms
+  {"wooden_axe" 1250 "stone_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
+
+(defn attack-gap-ms
+  "The full-strength attack cooldown, in ms, of the held item (nil: a fist)."
+  [item-name]
+  (cond
+    (and item-name (str/ends-with? item-name "_sword")) 625
+    :else (get axe-gap-ms item-name 250)))
 
 (def mob-max-health
   "Full health of the common hostiles; unknown ones count as 20."

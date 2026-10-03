@@ -306,7 +306,7 @@ p.world.die()            // emits died (pos, inventory, experience), drops the i
 Fake semantics: `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
-inventory and emits one `picked-up` per gained item. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `attack` takes 5 health per swing. `sleep` succeeds at night on a
+inventory and emits one `picked-up` per gained item. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `attack` takes 5 health per swing and reports `hurt: true`; an entity with `invulnerable: true` takes none (`hit`, health unchanged, `hurt: false`). `sleep` succeeds at night on a
 cell whose block name ends in `_bed`, and sets the time to 0. `eat` raises
 `food` by 5 and consumes one item. A held call rejects with `cut` when the
 owner changes, exactly as the real layer must. Where the body stands decides
@@ -744,6 +744,7 @@ after three the job emits a warn and ends.
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
+| `jobs.combat.attack` | `{:targets [] :radius 16 :weapons :attack-gap-ms nil :lost-s 5 :timeout-s 120 :no-damage-hits 4 :max-hits 40 :walk-timeout-s 5}` | a listed target within `:radius`, or started | `:started :last-seen :last-attack :hits :quiet :health :fails :given-up :struck :killed :killed-players` | none; hands over `{:reason :killed :given-up}`; emits info `attack.done`, warns `attack.gave-up`, `attack.timeout` |
 | `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips remembered sources and returns `:declined` when nothing is in sight |
 | `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3}` | the night-unsafe condition; a round ends `:done` when asleep, roofed within `:roof-height` or not night, and `:declined` when no child could do anything | `:sleep-failed`, children `:sleep`, `:dig-in` | reads `:slept`; writes `:needs-bed` (cap 1, 1 day; the once-a-day `needs_bed` warn flag); dig-in writes `:shelter`, which nothing reads) |
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` (and `:roof`, `:target-y` in dig mode), `:placed` | writes `:shelter` (cap 10, 1 day) `{:pos :roof :state :built}` from the current feet and the cells it placed, plus `:door` in walls mode (history only), and `:dig-in-futile` `{:pos}` (cap 5, 10 min) when a dig yields nothing to roof the pit with; its check then declines while no block is carried and one lies within 8 blocks. Walls mode recomputes its cells from the current feet each round; dig mode rechooses if the body leaves its column and stops (`dig_in_failed`) when a dig yields nothing to roof the pit with |
@@ -803,6 +804,13 @@ after three the job emits a warn and ends.
   (`make-room.declined`, reason `nothing-to-toss`), and after `:max-rounds`
   rounds it declines with a `make-room.stalled` warn. Three failed tosses end
   it with a `make-room.toss-failed` warn.
+- `:attack` kills the entities `:targets` names (ids, player usernames, mob types) within `:radius`: nearest first,
+  best weapon, one swing per `:attack-gap-ms` (nil: the held weapon's cooldown, `combat/attack-gap-ms`). A target is
+  given up on (warn `attack.gave-up`, reason `:unreachable`, `:no-damage` or `:too-many-hits`) after three blocked
+  walks or out-of-reach swings, `:no-damage-hits` swings that did no damage, or `:max-hits` hits. A struck target
+  that vanishes within 2 s counts as killed; a killed player is not attacked again, even respawned. Done with
+  `:cleared` (nothing in `:radius` for `:lost-s`), `:gave-up` or `:timeout`. It does not guard health: the survival
+  register cuts it and it resumes.
 - `:retreat` walks `:step` blocks away from the nearest hostile per round,
   leaning towards the latest `:bed` or `:home` when that is not through the
   hostile, and turning up to 120 degrees to keep clear of `:hazard` cells and
@@ -881,6 +889,7 @@ server and mineflayer, none of it checked live:
 
 - `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returned `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` and treats fire, grass and snow as free (see the `place` result above); not yet re-checked live.
 - Verified live: placing into the body's own cell is refused by the server ("the block is still air"), so `unstick` pillars with `jumpPlace` instead: in a 3-deep 1x1 pit, count 3 places 3 blocks in about 1.9 s and leaves the body at ground level; with no block it returns `failed`/`no-item` at once, under a roof `failed`/`no-headroom`.
+- `jobs.combat.attack` judges damage by `attack`'s `hurt` (the server's entityHurt) since `health` is never present live; whether a creative player, an `Invulnerable` mob and PvP-off all report `hurt: false` is unchecked.
 - `breathe`, `extinguish` and `unstick` use `moveTo` with range 0 to step
   into a cell, water included.
 - `dig-in`'s roof placement may fail with no supporting neighbour
