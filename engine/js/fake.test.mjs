@@ -536,6 +536,40 @@ test('fakes do not share nested default self objects', () => {
   assert.deepEqual(second.world.state.self.effects, [])
 })
 
+test('place of a seed on farmland plants the crop at age 0 and consumes the seed', async () => {
+  const p = owned({ inventory: [{ name: 'wheat_seeds', count: 2 }], blocks: { '1,63,0': 'farmland' } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'wheat_seeds' }), { status: 'placed', block: 'wheat_seeds' })
+  assert.deepEqual(p.blockAt(at(1, 64, 0)), { name: 'wheat', pos: at(1, 64, 0), age: 0, properties: { age: 0 } })
+  assert.equal(p.blocks({ names: ['wheat'] })[0].age, 0)
+  assert.equal(p.self().inventory[0].count, 1)
+})
+
+test('place of a seed over anything but farmland fails and consumes nothing', async () => {
+  const p = owned({ inventory: [{ name: 'wheat_seeds', count: 2 }], blocks: { '1,63,0': 'stone' } })
+  const r = await p.place('t1', { pos: at(1, 64, 0), item: 'wheat_seeds' })
+  assert.equal(r.status, 'failed')
+  assert.match(r.reason, /still air/)
+  assert.equal(p.blockAt(at(1, 64, 0)).name, 'air')
+  assert.equal(p.self().inventory[0].count, 2)
+})
+
+for (const [item, crop] of [['wheat_seeds', 'wheat'], ['carrot', 'carrots'], ['potato', 'potatoes'], ['beetroot_seeds', 'beetroots']]) {
+  test(`place of ${item} plants ${crop}`, async () => {
+    const p = owned({ inventory: [{ name: item, count: 1 }], blocks: { '1,63,0': 'farmland' } })
+    assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item }), { status: 'placed', block: item })
+    assert.equal(p.blockAt(at(1, 64, 0)).name, crop)
+    assert.equal(p.blockAt(at(1, 64, 0)).age, 0)
+    assert.equal(p.self().inventory.length, 0)
+  })
+}
+
+test('a drops array spawns one item entity per name', async () => {
+  const p = owned({ blocks: { '1,64,0': 'wheat' }, ages: { '1,64,0': 7 }, drops: { wheat: ['wheat', 'wheat_seeds'] } })
+  const r = await p.dig('t1', { pos: at(1, 64, 0) })
+  assert.deepEqual(r.drops.map(d => [d.name, d.count]), [['wheat', 1], ['wheat_seeds', 1]])
+  assert.deepEqual(p.entities({ kind: 'item' }).map(e => e.item.name), ['wheat', 'wheat_seeds'])
+})
+
 test('a successful sleep puts the body in bed; an acting call then leaves it first', async () => {
   const p = owned({ time: 14000, skipNight: false, blocks: { '1,64,0': 'red_bed' } })
   assert.equal(p.self().isSleeping, false)

@@ -16,6 +16,7 @@ const REACH = 4.5
 const EYE = 1.62
 const BODY_MIDDLE = 0.9
 const SEE_THROUGH = new Set(['air', 'water', 'lava', 'fire', 'short_grass', 'tall_grass', 'snow', 'glass', 'glass_pane'])
+const CROPS = { wheat_seeds: 'wheat', carrot: 'carrots', potato: 'potatoes', beetroot_seeds: 'beetroots' }
 const FOODS = ['cooked_beef', 'cooked_porkchop', 'bread', 'baked_potato', 'cooked_chicken', 'carrot', 'apple', 'sweet_berries', 'beef', 'porkchop', 'mutton', 'chicken', 'rabbit']
 
 export const isDayAt = (t) => t < 12542 || t > 23460
@@ -162,8 +163,8 @@ function defaultActs (s, emit) {
       s.blocks.delete(key(pos))
       s.ages.delete(key(pos))
       s.states.delete(key(pos))
-      const dropName = s.drops[name] === undefined ? name : s.drops[name]
-      const drops = dropName ? [spawnItem(pos, dropName, 1)] : []
+      const dropped = s.drops[name] === undefined ? name : s.drops[name]
+      const drops = [dropped].flat().filter(Boolean).map(n => spawnItem(pos, n, 1))
       return { status: 'dug', block: name, drops: drops.map(e => ({ id: e.id, name: e.item.name, count: e.item.count, pos: { ...e.pos } })) }
     },
 
@@ -177,7 +178,15 @@ function defaultActs (s, emit) {
         return { status: 'placed', block: 'bucket' }
       }
       if (blockName(pos) !== 'air' && !isReplaceable(blockName(pos))) return { status: 'occupied' }
+      if (CROPS[item] && blockName({ ...pos, y: pos.y - 1 }) !== 'farmland') {
+        return { status: 'failed', reason: `Server refused to place ${item} at (${pos.x}, ${pos.y}, ${pos.z}): the block is still air` }
+      }
       if (takeItem(s.inventory, item, 1) === 0) return { status: 'no-item' }
+      if (CROPS[item]) { // a seed or tuber becomes the young crop
+        s.blocks.set(key(pos), CROPS[item])
+        s.ages.set(key(pos), 0)
+        return { status: 'placed', block: item }
+      }
       if (item === 'water_bucket') { // pours water and leaves the empty bucket
         addItem(s.inventory, 'bucket', 1)
         s.blocks.set(key(pos), 'water')
