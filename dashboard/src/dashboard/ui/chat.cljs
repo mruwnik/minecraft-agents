@@ -32,7 +32,7 @@
                       :on-change #(rf/dispatch [:chat-draft (.. % -target -value)])
                       :on-key-down #(when (and (= "Enter" (.-key %)) (not (.-isComposing (.-nativeEvent %))))
                                       (rf/dispatch [:chat-send]))}]
-     [:div.caption (cs/caption state)]]))
+     [:div.caption (cs/caption state @(rf/subscribe [:chat-sender]))]]))
 
 (defn chat-panel []
   (let [open? @(rf/subscribe [:chat-open?])]

@@ -18,6 +18,7 @@
    :chat-filter ""
    :hide-whispers? false
    :chat-send cs/initial
+   :chat-sender nil
    :detail-body (logic/body-from-search search)
    :detail-events []
    :detail-chip :all

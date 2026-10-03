@@ -37,10 +37,10 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
   `doc` is the `(def doc ...)` string, `args` the `(def args ...)` map printed as EDN (one entry per line), `backoff` whether
   the namespace defines `backoff`; a file the reader rejects has `error` instead. `running` and `reflex` are the bodies whose
   job list or reflex register mentions the job, computed per request.
-- POST `/api/chat/send`, body `{text}` (JSON, at most 4 KB): sends the fixed command `tellraw @a {"text":"<Dan> <text>"}`
+- POST `/api/chat/send`, body `{text}` (JSON, at most 4 KB): sends the fixed command `tellraw @a {"text":"<dashboard> <text>"}`
   over RCON, so engine bodies hear it as a chat event. There is no target: a `target` (or any other) field gets 400.
   The text component is built with `JSON.stringify`; control characters, newlines and section codes are stripped, the text
-  is capped at 256 chars and must not be empty. The sender is env `DASHBOARD_CHAT_AS` (default `Dan`, must match
+  is capped at 256 chars and must not be empty. The sender is env `DASHBOARD_CHAT_AS` (default `dashboard`, must match
   `^[A-Za-z0-9_]{1,16}$`, checked at startup). Rate limit 1 per second and 5 per 30 s (429). Replies `{ok, command}`, 400 `{error}`,
   502 `{error}` when RCON fails. `DASHBOARD_CHAT_DRY=1` logs the command instead of sending. Code: `dashboard.chat-send`
   (pure), `dashboard.rcon` (socket, password read in-process).

@@ -65,7 +65,7 @@
  (fn [db [_ world data]]
    (if (not= world (:world db))
      db
-     (assoc db :chat (vec (:messages data))))))
+     (assoc db :chat (vec (:messages data)) :chat-sender (:sender data)))))
 
 (rf/reg-event-fx
  :set-world

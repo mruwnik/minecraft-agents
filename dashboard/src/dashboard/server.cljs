@@ -261,9 +261,12 @@
         (swap! tails assoc name tail)
         (:lines tail)))))
 
+(def chat-sender (chat-send/configured-sender (.-DASHBOARD_CHAT_AS js/process.env)))
+
 (defn chat-log [limit world-name]
   (let [agents (filterv #(= world-name (:world %)) (ee/parse-engine-agents (filter #(engine-folder? (:name %)) (agent-entries))))]
     {:at (js/Date.now)
+     :sender chat-sender
      :agents (agent-names agents)
      :messages (chat/merge-chat (mapv (fn [a] {:agent (:name a) :lines (try (chat-lines (:name a)) (catch :default _ []))}) agents) limit)}))
 
@@ -442,9 +445,8 @@
 
 ;; ---------------------------------------------------------------- chat send (POST /api/chat/send)
 ;; dashboard.chat-send validates the body and builds the fixed tellraw command; the runner is RCON (dashboard.rcon),
-;; or, with DASHBOARD_CHAT_DRY=1, one that only logs the command. The sender is DASHBOARD_CHAT_AS (default Dan).
+;; or, with DASHBOARD_CHAT_DRY=1, one that only logs the command. The sender is DASHBOARD_CHAT_AS (default "dashboard").
 (def chat-dry? (= "1" (.-DASHBOARD_CHAT_DRY js/process.env)))
-(def chat-sender (or (.-DASHBOARD_CHAT_AS js/process.env) "Dan"))
 (def chat-stamps (atom []))
 
 (defn run-chat-command! [command]

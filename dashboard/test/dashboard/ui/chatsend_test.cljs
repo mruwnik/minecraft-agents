@@ -30,11 +30,13 @@
     {:status :failed :ack-id 3} 3 :failed))
 
 (deftest captions
-  (are [state expected] (= expected (cs/caption state))
-    cs/initial "to everyone as Dan"
-    {:status :pending} "sending..."
-    {:status :sent} "sent"
-    {:status :failed :error "boom"} "boom"))
+  (are [state sender expected] (= expected (cs/caption state sender))
+    cs/initial nil "to everyone"
+    cs/initial "" "to everyone"
+    cs/initial "dashboard" "to everyone as dashboard"
+    {:status :pending} "dashboard" "sending..."
+    {:status :sent} nil "sent"
+    {:status :failed :error "boom"} "dashboard" "boom"))
 
 (deftest request-body
   (are [draft expected] (= expected (cs/request-body {:draft draft}))

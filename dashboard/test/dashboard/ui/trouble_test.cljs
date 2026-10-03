@@ -51,8 +51,8 @@
 (deftest sort-bodies-by-status-then-name
   (let [mk (fn [n o] (assoc (body o) :name n))
         bodies [(mk "Zed" {:up false}) (mk "Amy" {}) (mk "Bob" {:job {:id "j"}}) (mk "Cat" {:job {:id "j"}})
-                (mk "Dan" {:signals {:takeover? true}}) (mk "Abe" {:signals {:hurt-t now}}) (mk "Eve" {:signals {:takeover? true}})]]
-    (is (= ["Dan" "Eve" "Abe" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
+                (mk "Ann" {:signals {:takeover? true}}) (mk "Abe" {:signals {:hurt-t now}}) (mk "Eve" {:signals {:takeover? true}})]]
+    (is (= ["Ann" "Eve" "Abe" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
 
 (deftest counts
   (let [mk (fn [o] (body o))]

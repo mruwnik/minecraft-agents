@@ -10,6 +10,13 @@
 (def window-ms 30000)
 (def window-max 5)
 
+(def default-sender "dashboard")
+
+(defn configured-sender
+  "The sender the owner configured (env DASHBOARD_CHAT_AS), else the neutral label."
+  [configured]
+  (if (str/blank? configured) default-sender configured))
+
 (defn valid-sender? [s] (and (string? s) (boolean (re-matches sender-re s))))
 
 (def section-code (js/RegExp. "§[\\s\\S]" "gu"))

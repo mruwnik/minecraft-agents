@@ -6,7 +6,12 @@
 
 (deftest sender-names
   (are [s ok] (= ok (cs/valid-sender? s))
-    "Dan" true, "a_b9" true, "" false, "a b" false, (apply str (repeat 17 "x")) false, "Dan\"}" false, nil false))
+    "Ann" true, "a_b9" true, "" false, "a b" false, (apply str (repeat 17 "x")) false, "Ann\"}" false, nil false))
+
+(deftest default-sender
+  (are [configured expected] (= expected (cs/configured-sender configured))
+    nil "dashboard", "" "dashboard", "Ann" "Ann")
+  (is (cs/valid-sender? (cs/configured-sender nil))))
 
 (deftest clean-text
   (are [in out] (= out (cs/clean-text in))
@@ -20,15 +25,15 @@
     nil ""))
 
 (deftest command-shape
-  (are [text expected] (= expected (payload (cs/command "Dan" text)))
-    "hi" {"text" "<Dan> hi"}
-    "say \"hi\"" {"text" "<Dan> say \"hi\""}
-    "a\\b\\" {"text" "<Dan> a\\b\\"}
-    "\"},{\"text\":\"x" {"text" "<Dan> \"},{\"text\":\"x"})
+  (are [text expected] (= expected (payload (cs/command "Ann" text)))
+    "hi" {"text" "<Ann> hi"}
+    "say \"hi\"" {"text" "<Ann> say \"hi\""}
+    "a\\b\\" {"text" "<Ann> a\\b\\"}
+    "\"},{\"text\":\"x" {"text" "<Ann> \"},{\"text\":\"x"})
   (is (= "tellraw @a " (subs (cs/command "Bob" "x") 0 11))))
 
 (deftest plan-validation
-  (are [body expected] (= expected (select-keys (cs/plan body {:sender "Dan" :stamps [] :now 1000}) [:status :json]))
+  (are [body expected] (= expected (select-keys (cs/plan body {:sender "Ann" :stamps [] :now 1000}) [:status :json]))
     nil {:status 413 :json {:error "body exceeds 4096 bytes"}}
     "nope" {:status 400 :json {:error "body must be JSON"}}
     "[1]" {:status 400 :json {:error "body must be a JSON object"}}
@@ -42,11 +47,11 @@
     "{\"text\":\"hi\"}" {}))
 
 (deftest plan-accepts
-  (is (= {:command "tellraw @a {\"text\":\"<Dan> hi\"}" :stamps [1000]}
-         (select-keys (cs/plan "{\"text\":\"hi\"}" {:sender "Dan" :stamps [] :now 1000}) [:command :stamps]))))
+  (is (= {:command "tellraw @a {\"text\":\"<Ann> hi\"}" :stamps [1000]}
+         (select-keys (cs/plan "{\"text\":\"hi\"}" {:sender "Ann" :stamps [] :now 1000}) [:command :stamps]))))
 
 (deftest rate-limit
-  (are [stamps now ok] (= ok (nil? (:status (cs/plan "{\"text\":\"hi\"}" {:sender "Dan" :stamps stamps :now now}))))
+  (are [stamps now ok] (= ok (nil? (:status (cs/plan "{\"text\":\"hi\"}" {:sender "Ann" :stamps stamps :now now}))))
     [] 100000 true
     [99500] 100000 false            ; under 1 s since the last
     [99000] 100000 true             ; exactly 1 s
@@ -54,8 +59,8 @@
     [60000 91000 92000 93000 94000] 100000 true    ; one fell out of the window
     [] 0 true)
   (is (= {:status 429 :json {:error "rate limit: 1 per second, 5 per 30 seconds"}}
-         (select-keys (cs/plan "{\"text\":\"hi\"}" {:sender "Dan" :stamps [99900] :now 100000}) [:status :json])))
-  (is (= [99900] (:stamps (cs/plan "{\"text\":\"hi\"}" {:sender "Dan" :stamps [99900] :now 100000})))))
+         (select-keys (cs/plan "{\"text\":\"hi\"}" {:sender "Ann" :stamps [99900] :now 100000}) [:status :json])))
+  (is (= [99900] (:stamps (cs/plan "{\"text\":\"hi\"}" {:sender "Ann" :stamps [99900] :now 100000})))))
 
 (deftest rejected-requests-do-not-use-the-budget
-  (is (= [99000] (:stamps (cs/plan "{}" {:sender "Dan" :stamps [99000] :now 100000})))))
+  (is (= [99000] (:stamps (cs/plan "{}" {:sender "Ann" :stamps [99000] :now 100000})))))

@@ -24,9 +24,11 @@
     (assoc state :status :idle)
     state))
 
-(defn caption [{:keys [status error]}]
+(defn caption
+  "The line under the composer. `sender` is what the server sends as, nil until the page has heard it."
+  [{:keys [status error]} sender]
   (case status
     :pending "sending..."
     :sent "sent"
     :failed error
-    "to everyone as Dan"))
+    (if (str/blank? sender) "to everyone" (str "to everyone as " sender))))
