@@ -13,13 +13,11 @@ const run = (args) => new Promise((resolve) => {
   execFile('node', [cli, ...args], (err, stdout, stderr) => resolve({ code: err ? err.code : 0, stdout, stderr }))
 })
 
-const stubBody = {
-  status: () => ({ offline: false, settling: false, pos: { x: 0, y: 1, z: 2 } }),
-  take: () => ({ ok: true }),
-  release: () => {},
-  drive: () => ({ pos: { x: 0, y: 1, z: 2 }, yaw: 0, pitch: 0 }),
-  stopDriving: () => {},
-  deadman: () => {}
+// Canned replies: the CLI is under test here, not the takeover rules.
+const handle = (method, p, body) => {
+  if (method === 'GET') return { status: 200, json: { ok: true, manual: { who: 'claude', why: 'cli test' } } }
+  if (body?.op === 'take') return { status: 200, json: { ok: true, manual: { who: body.who, why: body.why } } }
+  return { status: 200, json: { ok: false, reason: 'not-driver', holder: 'claude' } }
 }
 
 const stateDir = () => {
@@ -30,7 +28,7 @@ const stateDir = () => {
 
 test('the CLI takes and reports state against a live control socket', async () => {
   const state = stateDir()
-  const control = createControl({ socketPath: socketPathFor({ state, agent: 'Bob' }), body: stubBody })
+  const control = createControl({ socketPath: socketPathFor({ state, agent: 'Bob' }), handle })
   await control.listen()
   try {
     const taken = await run(['Bob', 'take', '--why', 'cli test', '--state', state])

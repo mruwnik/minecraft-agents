@@ -12,14 +12,15 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-'))
 const stateDir = path.join(root, 'state')
 const webDir = path.join(root, 'web')
 const engineDir = path.join(stateDir, 'agents', 'Bob', 'engine')
-const calls = []
-const body = {
-  status: () => ({ offline: false, settling: false, pos: { x: 0, y: 64, z: 0 } }),
-  take: (a) => { calls.push(['take', a]); return { ok: true } },
-  release: (a) => calls.push(['release', a]),
-  drive: (a) => { calls.push(['drive', a]); return { pos: { x: 0, y: 64, z: 0 }, yaw: 0, pitch: 0 } },
-  stopDriving: () => calls.push(['stop']),
-  deadman: () => calls.push(['deadman'])
+// Canned control replies: the proxy is under test here, not the takeover rules. The stub remembers the
+// last take and set so GET can echo them.
+const held = { manual: null }
+const handle = (method, p, body) => {
+  if (method === 'GET') return { status: 200, json: { ok: true, manual: held.manual } }
+  if (body.op === 'take') held.manual = { who: body.who, why: body.why, controls: {} }
+  if (body.op === 'set') held.manual.controls = { ...held.manual.controls, ...body.controls }
+  if (body.op === 'release') held.manual = null
+  return { status: 200, json: { ok: true, manual: held.manual } }
 }
 let control
 let server
@@ -35,7 +36,7 @@ const post = (p, msg, headers = {}) => fetch(`${base}${p}`, {
 before(async () => {
   fs.mkdirSync(engineDir, { recursive: true })
   fs.mkdirSync(webDir)
-  control = createControl({ socketPath: path.join(engineDir, 'control.sock'), body })
+  control = createControl({ socketPath: path.join(engineDir, 'control.sock'), handle })
   await control.listen()
   server = createViewServer({ stateDir, textureDir: webDir, webDir })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))

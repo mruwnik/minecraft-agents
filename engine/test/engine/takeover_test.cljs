@@ -1,6 +1,7 @@
 (ns engine.takeover-test
   "Manual takeover: take! cuts the holder like a reflex and pauses the scheduler until release!;
-  the manual state is never persisted."
+  the manual state is never persisted. handle and tick! apply engine.lease's rules; the wire contract in
+  test/contract/drive-contract.json runs through them here."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
@@ -140,12 +141,88 @@
     (takeover/take! eng me)
     (is (not (re-find #"manual|claude" (fs/readFileSync (path/join dir "engine.edn") "utf8"))))))
 
-(deftest the-adapter-speaks-the-control-interface
-  (let [{:keys [eng]} (setup {})
-        a (takeover/adapter eng)]
-    (is (= #{"offline" "settling" "pos"} (set (js/Object.keys (.status a)))))
-    (is (true? (.-ok (.take a #js {:who "claude" :why "x"}))))
-    (is (= 30 (.-yaw (.drive a #js {:look #js {:yaw 30}}))))
-    (.stopDriving a)
-    (.release a #js {:who "claude" :reason "released" :heldMs 3})
+(def opts {:idle-ms 15000})
+
+(defn call
+  "takeover/handle with a clj body (nil for none), the reply as clj {:status :json}."
+  [eng method path body]
+  (let [r (takeover/handle eng opts method path (clj->js body))]
+    {:status (.-status r) :json (js->clj (.-json r) :keywordize-keys true)}))
+
+(defn post [eng body] (call eng "POST" "/drive" body))
+
+(deftest handle-takes-drives-and-releases-through-the-wire
+  (let [{:keys [eng seen state]} (setup {})
+        taken (post eng {:op "take" :who "claude" :why "look around"})]
+    (is (= [200 true "claude"] [(:status taken) (get-in taken [:json :ok]) (get-in taken [:json :manual :who])]))
+    (is (true? (core/manual? eng)))
+    (is (= 1 (count (kinds-of seen :takeover_started))))
+    (let [set-r (post eng {:op "set" :who "claude" :controls {:forward true} :look {:yaw 30}})]
+      (is (= 30 (get-in set-r [:json :manual :yaw])))
+      (is (= {:forward true} (js->clj (.-controls state) :keywordize-keys true))))
+    (is (= {:ok true :manual nil} (:json (post eng {:op "release" :who "claude"}))))
+    (is (false? (core/manual? eng)))
+    (is (= {} (js->clj (.-controls state))))
+    (is (= ["claude" "released"] ((juxt :who :reason) (first (kinds-of seen :takeover_ended)))))))
+
+(deftest handle-refuses-a-take-the-engine-refuses
+  (let [{:keys [eng state]} (setup {})]
+    (set! (.-offline state) true)
+    (is (= {:ok false :reason "offline"} (:json (post eng {:op "take" :who "claude" :why "x"}))))
     (is (false? (core/manual? eng)))))
+
+(deftest tick-ends-an-idle-takeover-and-fires-the-dead-man
+  (let [{:keys [eng seen clock]} (setup {})]
+    (post eng {:op "take" :who "claude" :why "x"})
+    (post eng {:op "set" :who "claude" :controls {:forward true}})
+    (swap! clock + 1100)
+    (takeover/tick! eng opts)
+    (is (= "driver claude silent 1100 ms: controls released" (:text (first (kinds-of seen :drive_deadman)))))
+    (is (true? (core/manual? eng)))
+    (swap! clock + 13900)
+    (takeover/tick! eng opts)
+    (is (false? (core/manual? eng)))
+    (is (= ["idle" 15000] ((juxt :reason :held-ms) (first (kinds-of seen :takeover_ended)))))))
+
+(deftest close-ends-the-takeover-before-the-engine-stops
+  (let [{:keys [eng seen]} (setup {})]
+    (post eng {:op "take" :who "claude" :why "x"})
+    (takeover/close! eng)
+    (core/shutdown! eng)
+    (let [ks (mapv :kind @seen)]
+      (is (< (.indexOf ks :takeover_ended) (.indexOf ks :stopping)))
+      (is (= "shutdown" (:reason (first (kinds-of seen :takeover_ended))))))
+    (is (false? (.isOwner (:primitives eng) "m1")) "no owner token holds the body")
+    (is (false? (core/manual? eng)))))
+
+;; The wire contract: every scenario of the shared fixture through handle and tick!, exact equality.
+;; The one scenario skipped is "ping moves expiresAt": a ping is a heartbeat and no longer counts as input
+;; (the idle clock), so it does not move expiresAt; ping-does-not-move-expires-at below asserts that.
+
+(def contract (tu/read-json "test/contract/drive-contract.json"))
+(def skipped-scenarios #{"ping moves expiresAt"})
+
+(defn run-contract-step [{:keys [eng clock world state]} name {:keys [at status tick req expect]}]
+  (reset! clock (+ t0 at))
+  (cond
+    status (do (set! (.-offline state) (:offline status))
+               (.settle world (:settling status)))
+    tick (takeover/tick! eng opts)
+    :else (is (= expect (call eng (:method req) (:path req) (:body req))) (str name " at " at " " (pr-str req)))))
+
+(deftest every-drive-contract-scenario-matches-the-wire
+  (doseq [{:keys [name steps]} (remove #(skipped-scenarios (:name %)) contract)
+          :let [rig (setup {})]]
+    ;; the fake's self has no pos while offline; the fixture's GET still reports the last known {0 64 0}
+    (set! (.-self (:primitives (:eng rig))) (fn [] #js {:pos (tu/pos 0 64 0)}))
+    (doseq [step steps] (run-contract-step rig name step))))
+
+(deftest ping-does-not-move-expires-at
+  (let [{:keys [eng clock]} (setup {})]
+    (post eng {:op "take" :who "claude" :why "test"})
+    (reset! clock (+ t0 5000))
+    (is (= {:expiresAt 1015000 :idleLeftS 10} (select-keys (get-in (post eng {:op "ping" :who "claude"}) [:json :manual])
+                                                            [:expiresAt :idleLeftS])))
+    (reset! clock (+ t0 5100))
+    (is (= {:expiresAt 1015000 :idleLeftS 9.9} (select-keys (get-in (call eng "GET" "/drive" nil) [:json :manual])
+                                                             [:expiresAt :idleLeftS])))))

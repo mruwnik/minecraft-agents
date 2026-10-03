@@ -246,6 +246,28 @@
     (is (= 1 (count (calls-of rig :deadman))))
     (is (= (+ 1000 15000 0) expires))))
 
+;; a person holding W with the page pinging must not lose the body to the idle limit
+(deftest a-held-control-with-a-live-heartbeat-keeps-the-body
+  (let [rig (taken-rig)]
+    (post! rig {:op "set" :who "claude" :controls {:forward true}})
+    (doseq [_ (range 40)]
+      (advance! rig 500)
+      (post! rig {:op "ping" :who "claude"})
+      (tick! rig))
+    (is (empty? (calls-of rig :release)) "20 s held, past the 15 s idle limit")
+    (is (true? (:forward (controls-of rig))))))
+
+(deftest a-held-control-after-the-dead-man-fired-does-not-keep-the-body
+  (let [rig (taken-rig)]
+    (post! rig {:op "set" :who "claude" :controls {:forward true}})
+    (advance! rig 1100)
+    (tick! rig)
+    (is (= 1 (count (calls-of rig :deadman))))
+    (post! rig {:op "ping" :who "claude"})
+    (advance! rig 13900)
+    (tick! rig)
+    (is (= [[:release "claude" "idle" 15000]] (calls-of rig :release)))))
+
 ;; idle ends the takeover with reason idle
 (deftest idle-ends-the-takeover-with-reason-idle
   (let [rig (taken-rig {:opts {:idle-ms 60000}})]

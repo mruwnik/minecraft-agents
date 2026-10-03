@@ -183,6 +183,11 @@
   (let [l (assoc lease :yaw yaw :pitch pitch)]
     {:lease l :reply (ok {:manual (view l now) :pos pos})}))
 
+(defn untimed-held?
+  "Whether a control is held with no deadline (only a driver's next request or the dead-man ends it)."
+  [lease]
+  (boolean (some #(and (get (:controls lease) %) (not (contains? (:deadlines lease) %))) control-order)))
+
 (defn expire-holds [lease now release-ms]
   (let [expired (map key (filter (fn [[_ d]] (>= now d)) (:deadlines lease)))
         l (-> lease
@@ -190,7 +195,7 @@
               (update :deadlines #(apply dissoc % expired)))
         effects (mapv (fn [c] [:drive {:controls {c false}}]) expired)
         silent (- now (:last-beat l))
-        untimed-held? (some #(and (get (:controls l) %) (not (contains? (:deadlines l) %))) control-order)]
+        untimed-held? (untimed-held? l)]
     (cond
       (not untimed-held?) {:lease l :effects effects}
       (< silent release-ms) {:lease l :effects effects}
@@ -198,14 +203,22 @@
       :else {:lease (assoc l :controls all-false :deadlines {} :deadman? true)
              :effects (into effects [[:stop-driving] [:deadman (:who l) silent]])})))
 
+(defn holding-live?
+  "A control held without a deadline while the heartbeat is fresh: the person is holding it, which counts as input."
+  [lease now release-ms]
+  (and (untimed-held? lease) (< (- now (:last-beat lease)) release-ms)))
+
 (defn tick
-  "Time passing: offline and idle end the lease, due timed holds drop, the dead-man fires once per silence."
+  "Time passing: offline and idle end the lease, due timed holds drop, the dead-man fires once per silence.
+  A held control with a live heartbeat counts as input (refreshes :last-input)."
   [lease now world opts]
-  (cond
-    (nil? lease) {:lease nil :effects []}
-    (:offline world) {:lease nil :effects (ending lease "offline" now)}
-    (>= (- now (:last-input lease)) (:idle-ms lease)) {:lease nil :effects (ending lease "idle" now)}
-    :else (expire-holds lease now (:release-ms opts default-release-ms))))
+  (let [release-ms (:release-ms opts default-release-ms)
+        lease (cond-> lease (and lease (holding-live? lease now release-ms)) (assoc :last-input now))]
+    (cond
+      (nil? lease) {:lease nil :effects []}
+      (:offline world) {:lease nil :effects (ending lease "offline" now)}
+      (>= (- now (:last-input lease)) (:idle-ms lease)) {:lease nil :effects (ending lease "idle" now)}
+      :else (expire-holds lease now release-ms))))
 
 (defn close
   "Effects that end a held lease for shutdown."

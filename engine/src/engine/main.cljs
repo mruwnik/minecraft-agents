@@ -62,11 +62,10 @@
 (defn ^:async start-control!
   "Serve the manual-control socket under the engine dir; resolves to the control, or nil (with an
   error event) when it cannot listen."
-  [root eng cfg idle-s]
+  [root eng cfg opts]
   (let [create-control (.-createControl ((createRequire (str root "/")) "./js/control.mjs"))
         control (create-control #js {:socketPath (path/join (:engine-dir cfg) "control.sock")
-                                     :body (takeover/adapter eng)
-                                     :idleMs (* 1000 idle-s)})]
+                                     :handle (fn [method path body] (takeover/handle eng opts method path body))})]
     (try
       (await (.listen control))
       control
@@ -97,9 +96,10 @@
                               :body (:username cfg)})
             _ (reset! eng-ref eng)]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
-        (let [control (await (start-control! root eng cfg (:drive-idle-s opts)))
-              stop-ticks (core/start! eng {:tick-ms 250})]
-          {:engine eng :stop (fn [] (stop-ticks) (some-> control .close) (core/shutdown! eng) (.close p))})))))
+        (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
+              control (await (start-control! root eng cfg lease-opts))
+              stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(takeover/tick! eng lease-opts)})]
+          {:engine eng :stop (fn [] (stop-ticks) (takeover/close! eng) (some-> control .close) (core/shutdown! eng) (.close p))})))))
 
 (defn fail! [text]
   (.write js/process.stderr (str text "\n"))

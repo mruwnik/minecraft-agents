@@ -1,8 +1,11 @@
 (ns engine.takeover
-  "Manual takeover: someone drives the body by hand through the control socket (js/control.mjs).
+  "Manual takeover: someone drives the body by hand through the control socket (js/control.mjs, a
+  stateless adapter that calls handle). The rules are engine.lease's (pure); this namespace applies their
+  effects to the engine and is the only owner of the state: (:manual eng) holds the lease map plus :token.
   take! cuts the holder like a reflex and gives the ownership token to the driver; the scheduler
-  stands still (core/paused?) until release!. The manual state lives in its own atom, never in engine.edn."
-  (:require [engine.core :as core]))
+  stands still (core/paused?) until the lease ends. The manual state never reaches engine.edn."
+  (:require [engine.core :as core]
+            [engine.lease :as lease]))
 
 (defn take!
   "Take the body for who. {:ok true}, or {:ok false :reason r} (offline, settling, held-by <who>)."
@@ -39,16 +42,55 @@
   (core/emit! eng {:source :system :kind :drive_deadman :level :warn :who who :silent-ms silent-ms
                    :text (str "driver " who " silent " silent-ms " ms: controls released")}))
 
-(defn adapter
-  "The body interface js/control.mjs expects, over eng."
+(defn apply-effect!
+  "Do one lease effect to the engine; the answer (take's {:ok :reason}, drive's {:pos :yaw :pitch}) or nil."
+  [eng [kind & args]]
+  (case kind
+    :take (let [[who why] args] (take! eng {:who who :why why}))
+    :drive (js->clj (drive! eng (clj->js (first args))) :keywordize-keys true)
+    :stop-driving (.stopDriving (:primitives eng))
+    :release (let [[who reason held-ms] args] (release! eng {:who who :reason reason :held-ms held-ms}))
+    :deadman (let [[who silent-ms] args] (deadman! eng {:who who :silent-ms silent-ms}))))
+
+(defn store!
+  "Keep the lease (nil: nobody drives) in (:manual eng), with the ownership token the take left there."
+  [eng lease]
+  (let [token (:token @(:manual eng))]
+    (reset! (:manual eng) (some-> lease (assoc :token (or (:token lease) token))))))
+
+(defn world-of [eng]
+  {:offline (core/offline? eng)
+   :settling (core/settling? eng)
+   :pos (js->clj (.-pos (.self (:primitives eng))) :keywordize-keys true)})
+
+(defn finish
+  "The lease and reply once the pending question (:take, :drive) has its answer."
+  [{:keys [lease reply pending]} answer now]
+  (case pending
+    :take (lease/taken lease answer now)
+    :drive (lease/driven lease answer now)
+    {:lease lease :reply reply}))
+
+(defn handle
+  "One control request: method, path and the parsed JSON body (a JS value or nil). Returns #js {:status :json}."
+  [eng opts method path body]
+  (let [now (core/now eng)
+        req {:method method :path path :body (js->clj body :keywordize-keys true)}
+        r (lease/request @(:manual eng) req now (world-of eng) opts)
+        answers (mapv #(apply-effect! eng %) (:effects r))
+        {:keys [lease reply]} (finish r (first answers) now)]
+    (store! eng lease)
+    #js {:status (:status reply) :json (clj->js (:json reply))}))
+
+(defn tick!
+  "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man)."
+  [eng opts]
+  (let [{:keys [lease effects]} (lease/tick @(:manual eng) (core/now eng) (world-of eng) opts)]
+    (run! #(apply-effect! eng %) effects)
+    (store! eng lease)))
+
+(defn close!
+  "End a held takeover for shutdown (call before core/shutdown!)."
   [eng]
-  (let [p (:primitives eng)]
-    #js {:status (fn [] #js {:offline (core/offline? eng)
-                             :settling (core/settling? eng)
-                             :pos (.-pos (.self p))})
-         :take (fn [a] (let [{:keys [ok reason]} (take! eng {:who (.-who a) :why (.-why a)})]
-                         #js {:ok ok :reason reason}))
-         :release (fn [a] (release! eng {:who (.-who a) :reason (.-reason a) :held-ms (.-heldMs a)}))
-         :drive (fn [a] (drive! eng a))
-         :stopDriving (fn [] (.stopDriving p))
-         :deadman (fn [a] (deadman! eng {:who (.-who a) :silent-ms (.-silentMs a)}))}))
+  (run! #(apply-effect! eng %) (lease/close @(:manual eng) (core/now eng)))
+  (store! eng nil))

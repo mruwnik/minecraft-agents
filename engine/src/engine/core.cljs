@@ -1047,12 +1047,14 @@
 
 (defn start!
   "Tick every tick-ms until the returned stop fn is called. A tick that throws,
-  or whose round fails to settle, is reported as an error event; the loop goes on."
-  [eng {:keys [tick-ms] :or {tick-ms 250}}]
+  or whose round fails to settle, is reported as an error event; the loop goes on.
+  :before-tick, when given, runs at the top of each step (also while paused), before tick!."
+  [eng {:keys [tick-ms before-tick] :or {tick-ms 250}}]
   (let [stopped (atom false)]
     (letfn [(step []
               (when-not @stopped
                 (try
+                  (when before-tick (before-tick))
                   (some-> (tick! eng) (.catch #(report-tick-failure! eng %)))
                   (catch :default e
                     (report-tick-failure! eng e)))

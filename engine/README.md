@@ -814,6 +814,8 @@ op and does not reset the silence clock. An agent driving step by step must keep
 or take with a longer `--idle-s` (a `ping` keeps the lease alive without moving).
 The timers run in the body, so a dead CLI, view server or browser tab cannot leave it walking.
 
+Where the rules live: `engine.lease` holds them, pure; `engine.takeover` applies them to the engine and is ticked by the engine loop (also while paused); `engine/js/control.mjs` is a stateless socket adapter. A `ping` is a heartbeat (it restarts the dead-man clock) and does not count as input for the idle limit; a held control with a live heartbeat does count as input. `engine.lease/input-ops` is the one place that decides what counts as input.
+
 Events: `system.takeover_started` `{who why}`; `system.takeover_ended` `{who reason held-ms}` with reason `released`,
 `forced`, `idle`, `offline` or `shutdown`; `system.drive_deadman`.
 
