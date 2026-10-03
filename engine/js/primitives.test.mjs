@@ -2114,3 +2114,83 @@ test('body events: chat from the body itself is not reported, chat from others i
   bot.emit('chat', 'Dan', 'hi')
   assert.deepEqual(seen, [{ kind: 'chat', from: 'Dan', message: 'hi' }])
 })
+
+// transfer waits for the window's slot updates to stop before it closes the window, and measures what moved
+const SETTLE_SCALE = 0.1 // quiet 15 ms, cap 150 ms, bound 500 ms
+const transferRig = ({ onClick, moveCap, items = [] }) => {
+  const bot = stubBot({ items, containers: { '3,64,0': [{ name: 'bread', count: 32, slot: 0 }] }, blocks: { '3,64,0': 'chest' }, onClick, moveCap })
+  const p = createPrimitivesFromBot(bot, { timeScale: SETTLE_SCALE })
+  p.setOwner('t1')
+  const closedAt = []
+  const close = bot.closeWindow
+  bot.closeWindow = (...args) => { closedAt.push(Date.now()); return close(...args) }
+  return { bot, p, closedAt }
+}
+const withdraw12 = { pos: at(3, 64, 0), direction: 'withdraw', item: 'bread', count: 12 }
+const emitEvery = (win, ms, times, stamps) => {
+  for (let i = 1; i <= times; i++) setTimeout(() => { stamps.push(Date.now()); win.emit('updateSlot', 0) }, ms * i)
+}
+
+test('transfer does not close the window until the slot updates stop', async () => {
+  const stamps = []
+  const { p, closedAt } = transferRig({ onClick: win => emitEvery(win, 5, 4, stamps) })
+  const result = await p.transfer('t1', withdraw12)
+  assert.equal(stamps.length, 4)
+  assert.equal(closedAt.length, 2)
+  assert.ok(closedAt[0] - stamps.at(-1) >= 12, `closed ${closedAt[0] - stamps.at(-1)} ms after the last update`)
+  assert.deepEqual(result, { status: 'ok', moved: 12 })
+})
+
+test('transfer measures moved from the container: a click that moves 5 of 12 reports 5', async () => {
+  const { p } = transferRig({ onClick: () => {}, moveCap: 5 })
+  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 5 })
+})
+
+test('transfer measures a deposit from the container too', async () => {
+  const { p } = transferRig({ onClick: () => {}, moveCap: 3, items: [{ name: 'bread', count: 10, slot: 36 }] })
+  assert.deepEqual(await p.transfer('t1', { ...withdraw12, direction: 'deposit' }), { status: 'ok', moved: 3 })
+})
+
+test('transfer closes at the cap when updates never stop, within the 5 s bound', async () => {
+  const { p, closedAt } = transferRig({ onClick: win => { const t = setInterval(() => win.emit('updateSlot', 0), 5); setTimeout(() => clearInterval(t), 400) } })
+  const start = Date.now()
+  const result = await p.transfer('t1', withdraw12)
+  assert.equal(result.status, 'ok')
+  assert.equal(closedAt.length, 2)
+  assert.ok(closedAt[0] - start >= 140 && closedAt[0] - start < 400, `closed at ${closedAt[0] - start} ms`)
+})
+
+test('a cut during the settle wait rejects with cut and still closes the window', async () => {
+  const { p, bot } = transferRig({ onClick: win => { const t = setInterval(() => win.emit('updateSlot', 0), 5); setTimeout(() => clearInterval(t), 400) } })
+  const call = p.transfer('t1', withdraw12)
+  await new Promise(resolve => setTimeout(resolve, 40))
+  p.setOwner('t2')
+  await assert.rejects(call, cutError)
+  assert.ok(names(bot).includes('closeWindow'))
+})
+
+const openCount = bot => names(bot).filter(n => n === 'openContainer').length
+const staleView = win => { win.containerItems = () => [{ name: 'bread', count: 32, slot: 0 }] }
+
+test('transfer opens the container twice when it clicked, and once when there was nothing to move', async () => {
+  const { p, bot } = transferRig({ onClick: () => {} })
+  await p.transfer('t1', withdraw12)
+  assert.equal(openCount(bot), 2)
+  await p.transfer('t1', { ...withdraw12, item: 'cobblestone' })
+  assert.equal(openCount(bot), 3)
+})
+
+test('transfer measures moved from the reopened window, not the one that was clicked', async () => {
+  const { p } = transferRig({ onClick: staleView })
+  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 12 })
+})
+
+test('a cut during the reopen rejects with cut and closes the second window', async () => {
+  const { p, bot } = transferRig({ onClick: () => {} })
+  const open = bot.openContainer
+  let opened = 0
+  bot.openContainer = (...args) => { opened++; if (opened === 2) p.setOwner('t2'); return open(...args) }
+  await assert.rejects(p.transfer('t1', withdraw12), cutError)
+  assert.ok(names(bot).filter(n => n === 'closeWindow').length >= 2)
+  assert.equal(openCount(bot), 2)
+})

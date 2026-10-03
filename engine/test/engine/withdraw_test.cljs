@@ -135,35 +135,3 @@
         (let [{:keys [eng]} (setup {})]
           (is (= {:gave-up true :reason "missing" :short {"bread" 3}}
                  (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8)))))))))
-
-(defn resync-on-first-inspect!
-  "Make the fake's first inspectContainer also set the carried bread to n, as the client
-  inventory resync after a chest is opened does."
-  [p n]
-  (let [fired (atom false)]
-    (.override (.-world p) "inspectContainer"
-               (fn ^:async f [token args default-impl]
-                 (when (compare-and-set! fired false true)
-                   (set! (.-count (first (.. p -world -state -inventory))) n))
-                 (await (default-impl token args))))))
-
-(deftest withdraw-takes-only-what-the-resynced-inventory-is-short
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" [{:name "bread" :count 32}]}})]
-          (resync-on-first-inspect! p 10)
-          (let [result (await (child-outcome eng job {:chest chest :items {"bread" 12}} 8))]
-            (is (= [2] (mapv #(.-count (.-args %)) (calls p "transfer"))))
-            (is (= {"bread" 12} (inv p)))
-            (is (= {:gave-up false :short {}} result))))))))
-
-(deftest withdraw-moves-nothing-when-the-resync-shows-enough
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" [{:name "bread" :count 32}]}})]
-          (resync-on-first-inspect! p 12)
-          (let [result (await (child-outcome eng job {:chest chest :items {"bread" 12}} 8))]
-            (is (empty? (calls p "transfer")))
-            (is (= {:gave-up false :short {}} result))))))))

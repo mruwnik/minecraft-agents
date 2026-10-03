@@ -67,6 +67,8 @@ const POLL_MS = 50
 const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
 const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
+const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
+const SETTLE_CAP_MS = 1500 // ...or this long in all
 const DEFAULT_RADIUS = 16
 const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
@@ -765,6 +767,22 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       bot.closeWindow(win)
     }
   }
+  const containerCount = (win, name) => win.containerItems().filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
+  // mineflayer clicks in a burst on one stale stateId and the server answers each with a full window_items resync;
+  // closing before those land leaves the inventory view short. Wait until the window's slot updates go quiet (or the cap).
+  const settleWindow = async (ctx, win) => {
+    const quiet = Math.max(1, SETTLE_QUIET_MS * timeScale)
+    const deadline = Date.now() + SETTLE_CAP_MS * timeScale
+    let last = Date.now()
+    const touch = () => { last = Date.now() }
+    win.on('updateSlot', touch)
+    try {
+      while (Date.now() - last < quiet && Date.now() < deadline) await sleepMs(Math.min(quiet, Math.max(1, deadline - Date.now())) / 4 + 1)
+    } finally {
+      win.off('updateSlot', touch)
+    }
+    ctx.alive()
+  }
   const containerAt = p => {
     const block = bot.blockAt(vec(p))
     return block && CONTAINER.test(block.name) ? block : null
@@ -792,17 +810,27 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (!block) return { status: 'missing' }
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
       const type = bot.registry.itemsByName[a.item]?.id
-      return withWindow(ctx, block, async win => {
+      const clicked = await withWindow(ctx, block, async win => {
         const source = a.direction === 'deposit' ? inventory() : win.containerItems()
         const available = source.filter(i => i.name === a.item).reduce((sum, i) => sum + i.count, 0)
         const count = Math.min(a.count ?? available, available)
         if (count <= 0 || type === undefined) return { status: 'no-item', moved: 0 }
+        const before = containerCount(win, a.item)
         ctx.alive()
         const failure = await (a.direction === 'deposit' ? win.deposit(type, null, count) : win.withdraw(type, null, count)).then(() => null, err => err)
         ctx.alive()
         if (failure && !/full|room|space/i.test(failure.message)) throw failure
-        return failure ? { status: 'full', moved: 0 } : { status: 'ok', moved: count }
+        await settleWindow(ctx, win)
+        return { before, failure }
       })
+      if (clicked.status) return clicked
+      // The first open after a login can leave mineflayer's view stale (the click burst is stamped with an old stateId and
+      // the server's resyncs stop at an intermediate state); a fresh open carries the true slots.
+      const after = await withWindow(ctx, block, async win => containerCount(win, a.item))
+      const change = after - clicked.before
+      const moved = Math.max(0, a.direction === 'deposit' ? change : -change)
+      if (moved > 0) return { status: 'ok', moved }
+      return clicked.failure ? { status: 'full', moved: 0 } : { status: 'ok', moved: 0 }
     })
   }
 

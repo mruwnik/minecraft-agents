@@ -9,7 +9,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null, moveCap = Infinity, onClick = () => {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -28,11 +28,22 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
   }
   const ownColumn = v => { const p = bot.entity.position; return v.x === p.x && v.y === p.y && v.z === p.z }
-  const windowOf = pos => ({
-    containerItems: () => containers[pos] ?? [],
-    deposit: act('deposit'),
-    withdraw: act('withdraw')
-  })
+  // A window moves items in the stub's container (at most moveCap of them), then calls onClick(window) so a test can
+  // emit updateSlot the way mineflayer's late resyncs do.
+  const windowOf = pos => {
+    const win = new EventEmitter()
+    const move = (name, sign) => (type, meta, count) => {
+      const item = (containers[pos] ?? []).find(i => i.name === name)
+      if (item) item.count += sign * Math.min(count, moveCap)
+      onClick(win)
+    }
+    const names = { 1: 'bread', 2: 'cobblestone' }
+    return Object.assign(win, {
+      containerItems: () => containers[pos] ?? [],
+      deposit: act('deposit', (type, meta, count) => move(names[type], 1)(type, meta, count)),
+      withdraw: act('withdraw', (type, meta, count) => move(names[type], -1)(type, meta, count))
+    })
+  }
   Object.assign(bot, {
     username: 'Stub',
     entity: { position: new Vec3(...pos), height: 1.62, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
