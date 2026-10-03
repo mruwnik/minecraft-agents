@@ -8,6 +8,9 @@
 (def default-radius 16)
 (def logs-per-round 2)
 (def leaf-reach 3.5)
+(def max-partials
+  "Consecutive partial walks toward one tree before it counts as unreachable."
+  3)
 
 (defn log-name? [n] (str/ends-with? n "_log"))
 (defn leaves-name? [n] (str/ends-with? n "_leaves"))
@@ -25,9 +28,10 @@
 (defn find-tree
   "The nearest log column whose top log has leaves close by, as
   {:column {:x :z} :base pos :species name}, or nil. logs and leaves come
-  nearest first from scan."
-  [logs leaves]
-  (let [columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
+  nearest first from scan; columns in excluded (a set of [x z]) are skipped."
+  [logs leaves excluded]
+  (let [logs (remove (fn [{:keys [pos]}] (excluded [(:x pos) (:z pos)])) logs)
+        columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
         tree? (fn [col]
                 (let [top (apply max-key #(get-in % [:pos :y]) col)]
                   (some #(<= (u/dist (:pos top) (:pos %)) leaf-reach) leaves)))]
@@ -40,8 +44,13 @@
                    :species (species-of (:name base))}))))
           logs)))
 
-(defn tree-near [p radius species]
-  (find-tree (scan-logs p radius species) (scan p (+ radius 4) leaves-name?)))
+(defn tree-near
+  ([p radius species] (tree-near p radius species #{}))
+  ([p radius species excluded]
+   (find-tree (scan-logs p radius species) (scan p (+ radius 4) leaves-name?) excluded)))
+
+(defn unreachable-set [memory]
+  (set (map vec (:unreachable memory))))
 
 (defn add-debt
   "Replant debts with one for pos, once."
@@ -60,10 +69,17 @@
        (filter #(and (= (:x column) (get-in % [:pos :x])) (= (:z column) (get-in % [:pos :z]))))
        (sort-by #(get-in % [:pos :y]))))
 
+(defn record-debt!
+  "Commit the replant debt for the tree this job chose."
+  [c]
+  (let [{:keys [base species]} (ctx/mem c)]
+    (ctx/commit! c :common #(update-in % [:debts :replant] add-debt base species))))
+
 (defn ^:async dig-up!
-  "Dig the logs in order, walking in reach first. Resolves to :ok, :partial
-  (the walk made progress but is not in reach yet; call again) or a non-ok
-  walk or dig status for the caller to count as a failure."
+  "Dig the logs in order, walking in reach first. Commits the replant debt
+  when the base log is dug. Resolves to :ok, :partial (the walk made progress
+  but is not in reach yet; call again) or a non-ok walk or dig status for the
+  caller to count as a failure."
   [c logs]
   (loop [[l & more] logs]
     (if-not l
@@ -74,39 +90,69 @@
           :partial :partial
           (let [r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
             (if (#{"dug" "missing"} (.-status r))
-              (recur more)
+              (do (when (and (= "dug" (.-status r)) (= (:pos l) (:base (ctx/mem c))))
+                    (record-debt! c))
+                  (recur more))
               (keyword (.-status r)))))))))
 
 (defn choose-tree!
-  "Commit the column, species and base chosen for this instance, and the
-  replant debt; nil when no tree is in sight."
+  "Commit the column, species and base of the nearest tree not marked
+  unreachable; nil when no candidate is in sight."
   [c radius species]
-  (when-let [t (tree-near (:primitives c) radius species)]
-    (ctx/commit! c #(merge % (select-keys t [:column :species :base])))
-    (ctx/commit! c :common #(update-in % [:debts :replant] add-debt (:base t) (:species t)))
+  (when-let [t (tree-near (:primitives c) radius species (unreachable-set (ctx/mem c)))]
+    (ctx/commit! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
     t))
+
+(defn mark-unreachable!
+  "Remember the chosen column as unreachable and forget the choice."
+  [c]
+  (ctx/commit! c (fn [m] (-> m
+                             (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
+                             (dissoc :column :species :base)
+                             (assoc :partials 0)))))
+
+(defn walk-failed!
+  "Book a walk result of :blocked or :partial against the chosen tree."
+  [c r]
+  (let [partials (inc (:partials (ctx/mem c) 0))]
+    (if (or (= :blocked r) (>= partials max-partials))
+      (mark-unreachable! c)
+      (ctx/commit! c #(assoc % :partials partials)))
+    :continue))
 
 (defn ^:async fell-tree-round
   "args {:species name-or-nil :radius 16}. Picks a tree (log column with
   leaves) the first round and remembers the column, then digs up to two logs
   bottom-up per round. Commits the replant debt {:pos base :species} to
-  [:common :debts :replant]. Done when the column holds no logs."
+  [:common :debts :replant] when the base log is dug. A tree whose walk is
+  :blocked, or partial three times in a row, is remembered as unreachable and
+  the next candidate is chosen; with none left it warns tree_blocked and
+  finishes. Done when the column holds no logs."
   [c]
   (let [{:keys [species radius] :or {radius default-radius}} (:args c)
         chosen (or (:column (ctx/mem c)) (choose-tree! c radius species))]
-    (if-not chosen
-      :not-ready
+    (cond
+      (and (not chosen) (seq (:unreachable (ctx/mem c))))
+      (do (ctx/emit! c :tree_blocked :warn {:text "no reachable tree"})
+          :done)
+
+      (not chosen) :not-ready
+
+      :else
       (let [logs (column-logs (:primitives c) radius (ctx/mem c))]
         (if (empty? logs)
           :done
           (let [r (await (dig-up! c (take logs-per-round logs)))]
-            (if (#{:ok :partial} r)
-              :continue
+            (case r
+              :ok (do (ctx/commit! c #(assoc % :partials 0)) :continue)
+              (:partial :blocked) (walk-failed! c r)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
 
 (defn fell-tree-ready? [p memory args]
-  (or (boolean (:column (:job memory)))
-      (if (tree-near p (:radius args default-radius) (:species args)) true :not-yet)))
+  (let [m (:job memory)]
+    (or (boolean (:column m))
+        (boolean (seq (:unreachable m)))
+        (if (tree-near p (:radius args default-radius) (:species args)) true :not-yet))))
 
 (def fell-tree {:name :fell-tree :round fell-tree-round :precondition fell-tree-ready?})
 

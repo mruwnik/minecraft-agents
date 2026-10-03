@@ -78,6 +78,64 @@
           (is (nil? (core/tick! eng)) "logs without leaves are not a tree")
           (is (= [] (calls p "dig"))))))))
 
+;; fell-tree reachability
+
+(defn dig-xs [p] (mapv #(.-x (.-pos (.-args %))) (calls p "dig")))
+
+(deftest fell-tree-skips-a-blocked-tree-for-the-next-candidate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (tree 12 0 "oak" 3))
+                                           :unreachable ["8,64,0"]})]
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [12 12 12] (dig-xs p)) "only the reachable tree is dug")
+          (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (get-in (common eng) [:debts :replant]))
+              "no debt for the tree that was never felled")
+          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+
+(deftest fell-tree-warns-and-finishes-when-every-tree-is-blocked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3) :unreachable ["8,64,0"]})]
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "dig")))
+          (is (nil? (get-in (common eng) [:debts :replant])) "no debt without a felled tree")
+          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+
+(deftest fell-tree-gives-up-on-a-tree-after-three-partials-in-a-row
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3)})]
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "partial"}))
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (await (run-until-empty eng 2))
+          (is (empty? (:unreachable (mem/job (:store eng) ["j1"]))) "two partials are still progress")
+          (await (run-until-empty eng 10))
+          (is (= [] (calls p "dig")))
+          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+
+(deftest fell-tree-partials-reset-once-a-walk-succeeds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 6)})
+              calls-made (atom 0)]
+          (.override (.-world p) "moveTo"
+                     (fn ^:async f [token args impl]
+                       (if (odd? (swap! calls-made inc))
+                         #js {:status "partial"}
+                         (await (impl token args)))))
+          (core/submit! eng :fell-tree {:radius 20} {})
+          (is (pos? (await (run-until-empty eng 30))))
+          (is (= 6 (count (calls p "dig"))) "alternating partials never reach three in a row")
+          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+
 ;; ------------------------------------------------------------ collect-drops
 
 (deftest collect-drops-one-per-round-nearest-first-with-filter
