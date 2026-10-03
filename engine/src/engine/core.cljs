@@ -30,6 +30,7 @@
   progress or when the listed job goes, and cleared whenever the engine leaves
   a pause (reset-backoff!)."
   (:require [engine.composite :as composite]
+            [engine.chat :as chat]
             [engine.backoff :as backoff]
             [engine.events :as events]
             [engine.expr :as expr]
@@ -352,7 +353,7 @@
         p (:primitives eng)
         _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
         from (when (= :moveTo k) (self-pos p))
-        r (await (.call (aget p (name k)) p token args))
+        r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
         to (when (= :moveTo k) (self-pos p))]
     (when (= :moveTo k)
       (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)
@@ -1003,6 +1004,7 @@
              :tokens (atom 0)
              :manual (atom nil)
              :acts (atom {})
+             :said (atom [])
              :stalls (atom {})
              :rounds (atom {})
              :passes (atom {})

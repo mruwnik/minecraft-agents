@@ -2057,7 +2057,8 @@ test('craft and chat with bad args reject with bad-args', async () => {
   const { p } = rig()
   const bad = [['craft', {}], ['craft', { item: '' }], ['craft', { item: 'stick', count: 0 }], ['craft', { item: 'stick', count: 1.5 }], ['craft', { item: 'stick', table: { x: 1 } }],
     ['chat', {}], ['chat', { message: '   ' }], ['chat', { message: 'hi', to: '' }], ['chat', { message: 'hi', to: 'ab' }], ['chat', { message: 'hi', to: 'a b c' }], ['chat', { message: 'hi', to: 'x'.repeat(17) }],
-    ['chat', { message: ' \n\x00 ' }], ['chat', { message: '§' }]]
+    ['chat', { message: ' \n\x00 ' }], ['chat', { message: '§' }],
+    ['chat', { message: 'x'.repeat(257) }], ['chat', { message: 'x'.repeat(245), to: 'Steve' }]]
   for (const [name, args] of bad) await assert.rejects(p[name]('t1', args), err => err.code === 'bad-args', name)
 })
 

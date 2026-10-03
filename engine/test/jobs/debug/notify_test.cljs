@@ -79,7 +79,7 @@
 (defn ^:async notify-chat
   "Run notify with args on a fake world, with prep called on the primitives first; [p seen eng]."
   [args prep]
-  (let [{:keys [eng p seen]} (setup {})]
+  (let [{:keys [eng p seen]} (setup {:entities [{:kind "player" :username "Steve" :name "Steve" :pos {:x 2 :y 64 :z 0}}]})]
     (prep p)
     (core/submit! eng (list 'jobs.debug.notify args) {})
     (await (core/tick! eng))
@@ -123,3 +123,16 @@
           (is (empty? (:list (core/state eng))))
           (is (re-find #"cannot" (:text (first failed))))
           (is (re-find #"command" (:text (first failed)))))))))
+
+(deftest chat-with-to-whispers-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[p] (await (notify-chat {:text "psst" :chat? true :to "Steve"} identity))
+              lines (.. p -world -state -chat)]
+          (is (= 1 (count lines)))
+          (is (= "psst" (.-message (first lines))))
+          (is (= "Steve" (.-to (first lines)))))))))
+
+(deftest to-defaults-to-nil
+  (is (nil? (get-in (:args (get registry/jobs 'jobs.debug.notify)) [:to :default]))))
