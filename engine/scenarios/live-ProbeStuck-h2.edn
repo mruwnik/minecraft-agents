@@ -1,0 +1,22 @@
+;; ProbeStuck (composite-a) live case: hunt pigs count 3 keep 2
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}
+            {:trigger :burning :persistence :cooldown :cooldown-s 2
+             :job (jobs.survival.extinguish {:water-radius 6})}
+            {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :fight-health 12 :min-health 8})}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7}
+             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
+             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
+            {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.survival.shelter {:roof-height 4})}
+            {:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30 :job (jobs.survival.log-out)}
+            {:trigger :stuck :persistence :cooldown :cooldown-s 60
+             :job (jobs.maintenance.unstick)}
+            {:trigger :died :persistence :cooldown :cooldown-s 30
+             :job (jobs.survival.recover-drops {:collect-radius 6})}
+            {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
+             :job (jobs.storage.make-room {:free 4 :chest-range 32})}]
+ :queue [(hold (jobs.combat.hunt {:mob "pig" :count 3 :keep 2 :radius 16}))
+         (repeat (jobs.movement.look-around))]}
