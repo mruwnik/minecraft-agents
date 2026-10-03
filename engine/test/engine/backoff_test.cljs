@@ -21,7 +21,8 @@
     "blocked" true "failed" true "unreachable" true "cannot" true "timeout" true "gone" true
     "out-of-reach" true "no-item" true "no-support" true "no-headroom" true "occupied" true
     "full" true "disconnected" true "unsupported" true "not-night" true "monsters-near" true
-    "arrived" false "partial" false "dug" false "missing" false "placed" false "ok" false
+    "unchanged" true "no-room" true "missing" true
+    "arrived" false "partial" false "dug" false "used" false "placed" false "ok" false
     "hit" false "killed" false "collected" false "sleeping" false "landed" false
     "surfaced" false "done" false nil false))
 
@@ -136,12 +137,19 @@
   (ctx/update-mem! c update :n (fnil inc 0))
   :continue)
 
+(defn ^:async use-on-round
+  "One useOn, answered with whatever status holds."
+  [c]
+  (await (ctx/act c :useOn #js {:status @status}))
+  :continue)
+
 (def always (constantly true))
 
 (def jobs
   (merge registry/jobs
          {'script {:check always :round script-round :args {:statuses {:default []} :end {:default :continue}}}
           'bump {:check always :round bump-round}
+          'use-on {:check always :round use-on-round}
           'bump-once {:check always :round bump-once-round}
           'bump-decline {:check always :round bump-decline-round}
           'idle {:check always :round idle-round}
@@ -220,6 +228,19 @@
               (swap! delays conj d)
               (when (< i 6) (recur (+ t d) (inc i)))))
           (is (= [1000 2000 4000 8000 16000 30000 30000] @delays)))))))
+
+(deftest use-on-statuses-that-changed-nothing-back-off-and-used-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[st backs-off?] [["unchanged" true] ["no-room" true] ["missing" true] ["used" false]]]
+          (let [{:keys [eng p] :as r} (setup)]
+            (.override (.-world p) "useOn"
+                       (fn [_ args _] (js/Promise. (fn [resolve] (resolve #js {:status (.-status args)})))))
+            (reset! status st)
+            (core/submit! eng '(use-on) {})
+            (dotimes [_ 3] (await (tick-at r t0)))
+            (is (= backs-off? (some? (:until (entry eng "j1")))) st)))))))
 
 (deftest a-backing-off-job-gets-no-round-and-the-others-do
   (async done
