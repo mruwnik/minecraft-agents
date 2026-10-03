@@ -50,6 +50,7 @@ const page = (screen = DEFAULT_SCREEN, { clock, postAnswer = { ok: true, json: a
   }
   const context = {
     EventSource,
+    withWorld: url => url,   // the world selector is outside this slice: no world chosen
     el,
     selected: 'Chani',
     // select() also drives the body list and the map; both are outside this slice, so they are stubbed as no-ops
