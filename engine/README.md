@@ -191,7 +191,7 @@ Extra fields on the result:
 - `transfer`: `moved` (count).
 - `toss`: `count` (thrown; 0 on `no-item`).
 - `eat`: `item`, `food` (after eating).
-- `attack`: `health` (target's, when known).
+- `attack`: `health` (target's, when known; never live, mineflayer does not track other entities' health), `hurt` (whether the server reported the target damaged after the swing).
 - `offline`: `ms`, the wait actually used (clamped to 0..600000, rounded down).
 
 Offline is body state. `offline` quits the bot, emits the body event `offline`, waits `ms` (default 5 minutes, hard
@@ -931,7 +931,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `equip` | `bot.equip(item, dest)` |
 | `toss` | with `slot`: `bot.tossStack(bot.inventory.slots[slot])`. Otherwise sums the carried stacks of the item, `bot.toss(typeId, null, count)` with `count = min(count ?? total, total)`; nothing carried is `no-item` without touching the bot. Throws where the body looks |
 | `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
-| `attack` | one `bot.attack`, then about 100 ms to read the target's health; `killed` when the entity is gone or its health is 0 |
+| `attack` | one `bot.attack`, then waits up to 300 ms for `entityHurt` on the target or its removal; `killed` when the entity is gone or its health is 0, `hurt` when that event came or it was killed |
 | `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |
 | `look` | `lookAt` or `look` with force |
 

@@ -16,6 +16,7 @@ const MONSTER_RANGE = 8
 const DROP_RADIUS = 2
 const DROP_WAIT_S = 1
 const POLL_MS = 50
+const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
 const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
@@ -720,14 +721,24 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const target = bot.entities[a.id]
       if (!target) return { status: 'gone' }
       if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > ATTACK_REACH) return { status: 'out-of-reach' }
-      await bot.attack(target)
-      ctx.alive()
-      await sleepMs(POLL_MS * timeScale * 2)
-      ctx.alive()
+      let hurtSeen = false
+      const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }
+      bot.on('entityHurt', onHurt) // before the swing, so a fast event is not missed
+      try {
+        await bot.attack(target)
+        ctx.alive()
+        const deadline = Date.now() + HURT_WAIT_MS * timeScale
+        while (!hurtSeen && bot.entities[a.id] && Date.now() < deadline) {
+          await sleepMs(POLL_MS * timeScale)
+          ctx.alive()
+        }
+      } finally {
+        bot.removeListener('entityHurt', onHurt)
+      }
       const now = bot.entities[a.id]
       const health = typeof now?.health === 'number' ? now.health : undefined
       const killed = !now || (health !== undefined && health <= 0)
-      return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }) }
+      return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }), hurt: hurtSeen || killed }
     })
   }
 

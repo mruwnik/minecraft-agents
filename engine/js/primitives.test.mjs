@@ -137,6 +137,49 @@ for (const [name, args, over, status] of statuses) {
   })
 }
 
+// attack's `hurt`: the server's entityHurt for the target after the swing (mineflayer never sets health on others)
+const ownWorld = () => ({ ...world, entities: { ...world.entities } }) // tests here delete entities
+const hurtCases = [
+  ['an entityHurt for the target', bot => bot.emit('entityHurt', bot.entities[8]), { status: 'hit', hurt: true }],
+  ['no entityHurt', () => {}, { status: 'hit', hurt: false }],
+  ['an entityHurt for another entity', bot => bot.emit('entityHurt', { id: 99 }), { status: 'hit', hurt: false }],
+  ['the target removed', bot => { delete bot.entities[8] }, { status: 'killed', hurt: true }]
+]
+for (const [label, onSwing, expected] of hurtCases) {
+  test(`attack with ${label} reports hurt ${expected.hurt} and drops its listener`, async () => {
+    const { bot, p } = rig(ownWorld())
+    bot.attack = async () => { onSwing(bot) }
+    const result = await p.attack('t1', { id: 8 })
+    assert.equal(result.status, expected.status)
+    assert.equal(result.hurt, expected.hurt)
+    assert.equal(bot.listenerCount('entityHurt'), 0)
+  })
+}
+
+test('attack resolves early when entityHurt arrives after a delay', async () => {
+  const { bot, p } = rig(ownWorld())
+  bot.attack = async () => { setTimeout(() => bot.emit('entityHurt', bot.entities[8]), 20 * SCALE) }
+  assert.deepEqual(await p.attack('t1', { id: 8 }), { status: 'hit', health: 20, hurt: true })
+  assert.equal(bot.listenerCount('entityHurt'), 0)
+})
+
+test('attack resolves well under the 300 ms wait when entityHurt arrives, at timeScale 1', async () => {
+  const bot = stubBot(ownWorld())
+  const p = createPrimitivesFromBot(bot)
+  p.setOwner('t1')
+  bot.attack = async () => { bot.emit('entityHurt', bot.entities[8]) }
+  const started = Date.now()
+  assert.equal((await p.attack('t1', { id: 8 })).hurt, true)
+  assert.ok(Date.now() - started < 150)
+})
+
+test('attack drops its listener when the swing throws', async () => {
+  const { bot, p } = rig(ownWorld())
+  bot.attack = async () => { throw new Error('boom') }
+  assert.equal((await p.attack('t1', { id: 8 })).status, 'failed')
+  assert.equal(bot.listenerCount('entityHurt'), 0)
+})
+
 const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }]]
 for (const [name, args] of badArgs) {
   test(`${name} with bad args rejects with bad-args`, async () => {
