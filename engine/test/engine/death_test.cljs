@@ -1,0 +1,233 @@
+(ns engine.death-test
+  "Recovering drops after a death: the value and cost functions, the died
+  trigger and the recover-drops job against the fake world."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.core :as core]
+            [engine.library-test :refer [setup run-until-empty calls inv]]
+            [engine.memory :as mem]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [engine.triggers.died :as died]
+            [engine.value :as value]))
+
+;; ---------------------------------------------------------------- the value
+
+(def junk [{:name "wheat_seeds" :count 64} {:name "dirt" :count 64} {:name "cobblestone" :count 64}
+           {:name "oak_sapling" :count 3} {:name "stick" :count 12} {:name "dandelion" :count 2}])
+
+(def iron-kit [{:name "iron_pickaxe" :count 1} {:name "iron_chestplate" :count 1}
+               {:name "bow" :count 1} {:name "cooked_beef" :count 20}])
+
+(def netherite-kit [{:name "netherite_chestplate" :count 1}
+                    {:name "diamond_sword" :count 1 :enchants [{:name "sharpness" :lvl 5}]}
+                    {:name "stone_pickaxe" :count 1 :nbt {:Damage 0}}])
+
+(deftest inventory-value-tiers
+  (are [inventory level expected] (= expected (value/inventory-value inventory level))
+    [] 0 0
+    junk 0 0
+    iron-kit 0 16
+    netherite-kit 0 75
+    netherite-kit 10 80
+    junk 4 2
+    [{:name "stone_pickaxe" :count 1 :enchants []}] 0 1))
+
+(deftest inventory-value-counts-bulk-metals-only-in-quantity
+  (are [n expected] (= expected (value/inventory-value [{:name "iron_ingot" :count n}] 0))
+    3 1
+    7 1
+    8 5
+    32 5))
+
+(deftest inventory-value-treats-unknown-items-as-junk
+  (is (= 0 (value/inventory-value [{:name "mystery_item" :count 1}] 0))))
+
+;; ----------------------------------------------------------------- the cost
+
+(def here {:x 0 :y 64 :z 0})
+
+(defn cost [& {:keys [death now hostiles cause elapsed]
+               :or {death here now here hostiles [] cause "fall" elapsed 0}}]
+  (value/retrieval-cost death now hostiles cause elapsed))
+
+(deftest retrieval-cost-grows-with-distance
+  (is (= 0.0 (cost)))
+  (is (= 10.0 (cost :now {:x 100 :y 64 :z 0})))
+  (is (< (cost :now {:x 10 :y 64 :z 0}) (cost :now {:x 50 :y 64 :z 0}))))
+
+(deftest retrieval-cost-counts-hostiles-near-the-death-point-only
+  (let [near {:x 10 :y 64 :z 0}
+        far {:x 40 :y 64 :z 0}]
+    (is (= 10.0 (cost :hostiles [near])))
+    (is (= 20.0 (cost :hostiles [near near])))
+    (is (= 0.0 (cost :hostiles [far])))))
+
+(deftest retrieval-cost-grows-as-the-window-closes
+  (is (< (cost :elapsed 0) (cost :elapsed 60000) (cost :elapsed 240000) (cost :elapsed 299000))))
+
+(deftest retrieval-cost-is-infinite-at-the-end-of-the-window
+  (is (= js/Infinity (cost :elapsed 300000)))
+  (is (= js/Infinity (cost :elapsed 400000))))
+
+(deftest retrieval-cost-is-infinite-when-the-drops-are-unreachable-by-cause
+  (are [cause] (= js/Infinity (cost :cause cause))
+    "lava" "fire" "void" "Lava" :lava "in_fire" "out_of_world"))
+
+(deftest retrieval-cost-is-infinite-for-an-unknown-cause-without-a-position
+  (is (= js/Infinity (value/retrieval-cost nil here [] nil 0)))
+  (is (= 0.0 (cost :cause nil)) "an unknown cause with a position is fine"))
+
+;; --------------------------------------------------------------- the trigger
+
+(defn memory-with
+  "A memory view at now-ms with [kind t data] entries."
+  [now-ms & entries]
+  {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
+   :now now-ms})
+
+(defn died-holds [memory] ((:when died/died) nil memory {}))
+
+(def died-at [:died 1000 {:pos {:x 20 :y 64 :z 0} :inventory []}])
+
+(deftest died-trigger-holds-after-a-death
+  (is (true? (died-holds (memory-with 2000 died-at)))))
+
+(deftest died-trigger-does-not-hold-without-a-death
+  (is (false? (died-holds (memory-with 2000)))))
+
+(deftest died-trigger-does-not-hold-after-recovered
+  (is (false? (died-holds (memory-with 2000 died-at [:recovered 1500 {:decision :skip}]))))
+  (is (true? (died-holds (memory-with 2000 [:recovered 500 {:decision :skip}] died-at)))
+      "a recovery older than the death does not count"))
+
+(deftest died-trigger-does-not-hold-after-five-minutes
+  (is (true? (died-holds (memory-with (+ 1000 299000) died-at))))
+  (is (false? (died-holds (memory-with (+ 1000 300000) died-at)))))
+
+(deftest died-trigger-is-registered-and-runs-the-job
+  (is (= died/died (:died triggers/all)))
+  (is (= '(jobs.survival.recover-drops) (:job died/died))))
+
+;; ---------------------------------------------------- body events to memory
+
+(deftest died-and-respawned-body-events-land-in-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})
+              view #(mem/view (:store eng))]
+          (.emit (.-world p) #js {:kind "died" :pos #js {:x 5 :y 64 :z 7} :inventory #js [#js {:name "diamond" :count 2 :slot 0}]})
+          (.emit (.-world p) #js {:kind "respawned" :pos #js {:x 0 :y 64 :z 0} :dimension "overworld"})
+          (is (= {:pos {:x 5 :y 64 :z 7} :inventory [{:name "diamond" :count 2 :slot 0}]}
+                 (:data (mem/latest (view) :died))))
+          (is (= {:x 0 :y 64 :z 0} (:pos (:data (mem/latest (view) :respawned)))))
+          (is (= 1000000 (:t (mem/latest (view) :died)))))))))
+
+;; ------------------------------------------------------------------ the job
+
+(def death-pos {:x 20 :y 64 :z 0})
+(def diamonds [{:name "diamond_pickaxe" :count 1 :slot 0} {:name "diamond_sword" :count 1 :slot 1}])
+
+(defn drop-item [id x name]
+  {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
+
+(def drops [(drop-item 1 20 "diamond_pickaxe") (drop-item 2 21 "diamond_sword")])
+
+(defn die! [eng data] (mem/write! (:store eng) :died data))
+
+(defn recovered [eng] (:data (mem/latest (mem/view (:store eng)) :recovered)))
+
+(def job '(jobs.survival.recover-drops))
+
+(deftest recover-drops-skips-a-junk-inventory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory junk})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "moveTo")))
+          (is (= [] (calls p "collect")))
+          (is (= :skip (:decision (recovered eng))))
+          (is (= 0 (:value (recovered eng)))))))))
+
+(deftest recover-drops-skips-when-the-cause-was-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds :cause "lava"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [] (calls p "moveTo")))
+          (is (= :skip (:decision (recovered eng))))
+          (is (= :infinite (:cost (recovered eng)))))))))
+
+(deftest recover-drops-goes-and-collects-valuable-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 10)) 10))
+          (is (= [] (:list (core/state eng))))
+          (is (= [death-pos] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo"))))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items])))
+          (is (pos? (:value (recovered eng))))
+          (is (false? (died-holds (mem/view (:store eng)))) "the trigger is cleared"))))))
+
+(deftest recover-drops-abandons-when-the-death-point-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities drops :unreachable ["20,64,0"]})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 10)) 10))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "collect")))
+          (is (= :abandoned (:decision (recovered eng)))))))))
+
+(deftest recover-drops-abandons-when-the-window-closes-mid-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (swap! clock + 300000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "collect")))
+          (is (= :abandoned (:decision (recovered eng)))))))))
+
+(deftest recover-drops-abandons-when-nothing-is-left-at-the-death-point
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= {:decision :abandoned :items 0} (select-keys (recovered eng) [:decision :items]))))))))
+
+(deftest recover-drops-yields-to-a-hostile-and-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+              {:keys [eng p]} (setup {:entities (conj drops zombie)})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= [] (calls p "moveTo")) "no acting while a hostile is within the danger radius")
+          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
+          (let [st (.-state (.-world p))]
+            (set! (.-entities st) (.filter (.-entities st) (fn [e] (not= "hostile" (.-kind e))))))
+          (await (run-until-empty eng 10))
+          (is (= :collected (:decision (recovered eng)))))))))
