@@ -1,6 +1,6 @@
 // Measures the browser view in headless Chromium over CDP.
 //   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds]
-// --trace S: after the warm-up, records S seconds of the drawn camera (window.__view.camTrace) and adds `smooth`, `shownLatency` and `decodeMs`.
+// --trace S: after the warm-up, records S seconds of the drawn camera (window.__view.camTrace) and adds `smooth` (with dropped frames), `shownLatency`, `decodeMs`, `uploadMs` and `columnChange` (file mtime to drawn).
 // Prints one JSON line {url, angle, renderer, fps, frames, latency, loaded}. No dependencies (global fetch and WebSocket).
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -106,6 +106,7 @@ const percentile = (list, p) => (list.length ? [...list].sort((a, b) => a - b)[M
 
 const MOVING = 1e-4
 const TELEPORT = 8 // a camera step above this is a snap (server teleport), counted as a jump and left out of the stats
+const DROPPED_FRAME_MS = 25 // a frame later than this after the previous one is dropped at 60 fps
 const STUTTER_RUN = 30 // still frames between moving frames up to this many (0.5 s at 60 fps) count as stutter; longer is the body standing still
 const round = (v, digits = 4) => (v === null ? null : Math.round(v * 10 ** digits) / 10 ** digits)
 
@@ -146,6 +147,7 @@ const smoothness = trace => {
     cv: mean ? round(std / mean) : null,
     maxOverMedian: moving.length ? round(Math.max(...moving) / percentile(moving, 0.5)) : null,
     zeroFrames: stutterRuns(steps).filter(r => r <= STUTTER_RUN).reduce((a, b) => a + b, 0),
+    dropped: dts.filter(dt => dt > DROPPED_FRAME_MS).length,
     dtMs: { p50: round(percentile(dts, 0.5), 1), p95: round(percentile(dts, 0.95), 1), max: round(dts.length ? Math.max(...dts) : null, 1) }
   }
 }
@@ -172,13 +174,15 @@ const main = async () => {
     await cdp.send('Runtime.enable')
     await cdp.send('Page.enable')
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: Number(w), height: Number(h), deviceScaleFactor: 1, mobile: false })
+    // main-thread long tasks (> 50 ms by the browser's definition) from the start of the page, for every page version
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__longTasks = []; new PerformanceObserver(list => { for (const e of list.getEntries()) window.__longTasks.push(Math.round(e.duration * 10) / 10) }).observe({ entryTypes: ['longtask'] })` })
     await cdp.send('Page.navigate', { url })
     const ready = await waitUntil(() => cdp.evaluate('window.__view?.ready === true'), Number(values.timeout) * 1000, 'window.__view.ready')
     await sleep(2000)
-    if (values.trace) await cdp.evaluate('__view.camTrace.length = 0; __view.latencies.length = 0; __view.shownLatencies.length = 0; true')
+    if (values.trace) await cdp.evaluate('__view.camTrace.length = 0; __view.latencies.length = 0; __view.shownLatencies.length = 0; __view.decodeMs.length = 0; __view.uploadMs.length = 0; (__view.columnDrawn ??= []).length = 0; (__view.retargetMs ??= []).length = 0; __longTasks.length = 0; window.__mainDecode0 = { ...(__view.mainDecode ?? { ms: 0, columns: 0 }) }; (__view.slowUploads ??= []).length = 0; true')
     const first = await cdp.evaluate('({frames: __view.frames, t: performance.now()})')
     await sleep(Number(values.trace ?? values.seconds) * 1000)
-    const last = await cdp.evaluate('({shown: __view.shownLatencies, underruns: __view.underruns, delay: __view.delay, decode: __view.decodeMs, trace: __view.camTrace, frames: __view.frames, t: performance.now(), fps: __view.fps, latencies: __view.latencies, loaded: __view.loaded, wanted: __view.wanted, renderer: __view.renderer, size: [document.getElementById("view").width, document.getElementById("view").height]})')
+    const last = await cdp.evaluate('({shown: __view.shownLatencies, underruns: __view.underruns, delay: __view.delay, decode: __view.decodeMs, upload: __view.uploadMs, drawn: __view.columnDrawn ?? [], retarget: __view.retargetMs ?? [], longTasks: window.__longTasks ?? [], mainDecode: __view.mainDecode ?? null, mainDecode0: window.__mainDecode0 ?? null, slowUploads: __view.slowUploads ?? [], trace: __view.camTrace, frames: __view.frames, t: performance.now(), fps: __view.fps, latencies: __view.latencies, loaded: __view.loaded, wanted: __view.wanted, renderer: __view.renderer, size: [document.getElementById("view").width, document.getElementById("view").height]})')
     if (values.screenshot) {
       const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
       fs.writeFileSync(values.screenshot, Buffer.from(data, 'base64'))
@@ -197,7 +201,13 @@ const main = async () => {
       ...(values.trace ? {
         smooth: { ...smoothness(last.trace), underruns: last.underruns, delay: last.delay },
         shownLatency: { n: last.shown.length, p50: percentile(last.shown, 0.5), p95: percentile(last.shown, 0.95) },
-        decodeMs: { n: last.decode.length, p50: percentile(last.decode, 0.5), max: last.decode.length ? Math.max(...last.decode) : null }
+        decodeMs: { n: last.decode.length, p50: percentile(last.decode, 0.5), max: last.decode.length ? Math.max(...last.decode) : null },
+        uploadMs: { n: last.upload.length, p50: percentile(last.upload, 0.5), max: last.upload.length ? Math.max(...last.upload) : null },
+        retargetMs: { n: last.retarget.length, p50: percentile(last.retarget, 0.5), max: last.retarget.length ? Math.max(...last.retarget) : null },
+        longTasks: { n: last.longTasks.length, totalMs: round(last.longTasks.reduce((x, y) => x + y, 0), 1), maxMs: Math.max(0, ...last.longTasks) },
+        mainDecodeMs: last.mainDecode && last.mainDecode0 ? { total: round(last.mainDecode.ms - last.mainDecode0.ms, 1), columns: last.mainDecode.columns - last.mainDecode0.columns } : null,
+        slowUploads: last.slowUploads.slice(0, 8),
+        columnChange: { n: last.drawn.length, p50: percentile(last.drawn.map(d => d.drawnAt - d.mtime), 0.5), p95: percentile(last.drawn.map(d => d.drawnAt - d.mtime), 0.95) }
       } : {}),
       loaded: `${last.loaded}/${last.wanted}`,
       console: cdp.logs.slice(0, 10)

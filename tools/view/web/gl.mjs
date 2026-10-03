@@ -56,17 +56,22 @@ ivec3 wrapCell (ivec3 c) {
   return ivec3((c.x + uSlotOff.x) % uSize.x, c.y, (c.z + uSlotOff.y) % uSize.z);
 }
 
-// (sky, block) of a cell: open sky outside the window, dark below the world
+// the coarse flag of a cell's section: 0 the slot holds no column (its blocks and light are stale), 1 blocks, 2 all air
+uint sectionFlag (ivec3 c) {
+  return texelFetch(uCoarse, wrapCell(c) >> 4, 0).r;
+}
+
+// (sky, block) of a cell: open sky outside the window or in an unloaded slot, dark below the world
 vec2 cellLight (ivec3 c) {
   if (c.y < 0) return vec2(0.0);
-  if (!inWindow(c)) return vec2(15.0, 0.0);
+  if (!inWindow(c) || sectionFlag(c) == 0u) return vec2(15.0, 0.0);
   uint v = texelFetch(uLightTex, wrapCell(c), 0).r;
   return vec2(float(v >> 4), float(v & 15u));
 }
 
 // a full opaque cube: what occludes ambient light
 bool occludes (ivec3 c) {
-  if (!inWindow(c)) return false;
+  if (!inWindow(c) || sectionFlag(c) != 1u) return false;
   uint m = texelFetch(uBlocks, wrapCell(c), 0).r;
   if (m == 0u) return false;
   return int(texelFetch(uInfo, ivec2(0, int(m)), 0).w) == 0 && (texelFetch(uInfo, ivec2(1, int(m)), 0).r & (CUTOUT | TRANSLUCENT)) == 0u;
@@ -194,7 +199,7 @@ void main () {
   for (int i = 0; i < MAX_STEPS; i++) {
     if (!alive) break;
     ivec3 tc = ivec3((cell.x + uSlotOff.x) % uSize.x, cell.y, (cell.z + uSlotOff.y) % uSize.z);
-    if (texelFetch(uCoarse, ivec3(tc.x >> 4, tc.y >> 4, tc.z >> 4), 0).r == 0u) {
+    if (texelFetch(uCoarse, ivec3(tc.x >> 4, tc.y >> 4, tc.z >> 4), 0).r != 1u) {
       ivec3 slo = (cell >> 4) << 4;
       vec3 te = (vec3(slo) + s01 * 16.0 - o) * inv;
       int ax = te.x <= te.y && te.x <= te.z ? 0 : (te.y <= te.z ? 1 : 2);
@@ -436,19 +441,24 @@ export function createRenderer (canvas) {
 
   // mats is 16*height*16 material indices, x fastest then y then z; flags one byte per section, bottom first; light is
   // sky << 4 | block per cell in the same order
+  // slot flags: 0 no column (mats and light are stale and never read), 1 a section with blocks, 2 an all-air section
+  const putFlags = (sx, sz, flags) => {
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_3D, coarse)
+    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx, 0, sz, 1, world.sections, 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, flags)
+  }
   const uploadColumn = (sx, sz, mats16, flags, light) => {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_3D, blocks)
     gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_SHORT, mats16)
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_3D, coarse)
-    gl.texSubImage3D(gl.TEXTURE_3D, 0, sx, 0, sz, 1, world.sections, 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, flags)
+    putFlags(sx, sz, flags.map(f => (f ? 1 : 2)))
     gl.activeTexture(gl.TEXTURE5)
     gl.bindTexture(gl.TEXTURE_3D, lightTex)
     gl.texSubImage3D(gl.TEXTURE_3D, 0, sx * 16, 0, sz * 16, 16, world.height, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, light)
   }
-  // an unloaded slot is air with open sky, so the faces of loaded neighbours next to it are not shaded black
-  const clearSlot = (sx, sz) => uploadColumn(sx, sz, world.zeros, world.noFlags, world.openSky)
+  // an unloaded slot reads as air with open sky (so loaded neighbours are not shaded black): only its flags are zeroed,
+  // the stale blocks and light stay in the textures and every read checks the flag first
+  const clearSlot = (sx, sz) => putFlags(sx, sz, world.noFlags)
 
   const resize = (w, h) => {
     if (canvas.width !== w) canvas.width = w

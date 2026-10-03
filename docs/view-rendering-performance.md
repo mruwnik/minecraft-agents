@@ -138,7 +138,7 @@ How it works:
     velocity is mineflayer's per-tick value and correcting an extrapolation causes rubber-banding. An offline pose
     freezes the camera.
 
-Measured with `tools/view-pose-replay.mjs --synthetic`: a body walking a straight line at 4.317 blocks/s, back and
+Measured with `tools/view-pose-replay.mjs --synthetic walk`: a body walking a straight line at 4.317 blocks/s, back and
 forth over 20 blocks, with exact `t` and real timer jitter on the writes. The run served from a temp state directory
 and used `tools/view-web-bench.mjs --trace 30` at 1280x720 with vsync, on the same input for both modes. Columns:
 - **cv**: the coefficient of variation of the camera speed per frame, over the frames where the camera moves.
@@ -179,8 +179,43 @@ about one frame, and interpolation adds only its delay (about 80 ms at 20 Hz). B
 varied from 0.06 to 0.17 and did not follow the push mode. Each run covers only about six turnarounds, so the cv
 depends on where they fall.
 
-Column decoding on the main thread takes p50 9–12 ms and up to 34–62 ms per column. A burst of new columns can drop
-one or two frames (one 33 ms frame was seen during a load); the decoding should move to a Worker.
+### Column loading: decode Worker, cheap slot clears
+
+Columns are fetched on the main thread. The bytes are then transferred to a small pool of decode Workers
+(`tools/view/web/decoder.mjs` and `decode-worker.mjs`, 1–3 workers, at most 8 fetches in flight). The workers run
+`decodeColumn` (`column-work.mjs`: inflate, palette decode, state→material and light) and return the typed arrays as
+transferables. Jobs are dispatched nearest-to-the-eye first, with the priority evaluated at dispatch time, and a
+retarget cancels jobs that are no longer wanted. Uploads are capped at 4 ms of upload time per frame, with at least one
+upload per frame. `?worker=0` (or a browser with no Workers) runs the same `decodeColumn` on the main thread, one
+column per macrotask.
+
+A retarget (a teleport or walking into a new chunk) used to zero every changed slot in the 3D textures in one frame.
+A full re-window is about 57 MB of `texSubImage3D` and took 79 ms (p50, measured). Now `clearSlot` zeroes only the
+slot's coarse section flags (0 = no column, 1 = blocks, 2 = all air), and the shader treats an unflagged section as
+air with open-sky light. Its stale blocks are never read, so a retarget now takes 2.4 ms (p50, max 11.7 ms).
+
+Measured with `view-pose-replay.mjs --synthetic teleport|sprint` and `view-web-bench.mjs --trace 30`, 1280x720,
+interp on. The teleport replay jumps between two places ≥ 1000 blocks apart every 6 s; the sprint replay moves at
+5.6 blocks/s across column borders. "before" is the page before this change.
+
+| Run | max frame | frames > 25 ms | long tasks (n, total) | sync decode on main thread |
+| --- | --- | --- | --- | --- |
+| teleport, before | 66.7 ms | 10 | 4, 235 ms | 3088 ms over 1450 columns |
+| teleport, Worker | 16.8 ms | 0 | 0 | 0 |
+| teleport, `?worker=0` | 16.8 ms | 0 | 0 | 2988 ms over 1389 columns |
+| sprint, before | 16.8 ms | 0 | 0 | 421 ms |
+| sprint, Worker | 16.8 ms | 0 | 0 | 0 |
+| sprint, `?worker=0` | 16.8 ms | 0 | 0 | 450 ms |
+
+The fix that mattered was the cheap slot clear. On this machine the Worker has no measurable effect on dropped frames or
+long tasks: the synchronous part of a decode is about 2.2 ms per column, which fits inside a frame. The old `decodeMs`
+of about 9 ms included the awaited inflate's wall time, so it overstated the cost. The Worker is kept because it
+takes about 3 s of main-thread work off each teleport burst. That matters on a slower CPU, and the main-thread
+fallback is the same code.
+
+Column file change → drawn (60 s sprint replay, one touched column every second): p50 136 ms, p95 267 ms with the
+Worker, against 125 / 251 ms before. This latency comes from the server's 250 ms column poll, not from the decode. The
+next step there is the same `fs.watch` approach, on the chunks directory.
 
 The fps table above was measured with the flat-colour shader; the cost of textures and lighting is in the next
 section.
@@ -227,8 +262,7 @@ above the slab and the snow layer showing what is behind them. It exits 1 on a f
   buttons are crosses; chests use a plank texture. Doors and trapdoors use their bounding box with the door texture
   on every face.
 - Smooth lighting treats only full opaque cubes as occluders and does not light box sides from inside the box.
-- Columns are decoded on the main thread (about 9 ms each). A login burst of 289 columns stutters for a moment. Next
-  step: a Worker.
+- Column change notices come from a 250 ms poll of the chunk files around the eye (see "Column loading").
 
 ## 3. Folding it into the dashboard (`dashboard/`, ClojureScript)
 

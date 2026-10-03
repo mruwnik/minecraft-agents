@@ -1,12 +1,15 @@
 // The browser view: follows an agent's pose over server-sent events, keeps a toroidal window of chunk columns in the
 // GPU, and draws it every frame (see gl.mjs). window.__view exposes numbers for automated measurement.
 import { cameraBasis, directionFor } from './camera.mjs'
-import { inflate, parseColumnFile, decodeSections, lightColumn } from './decode.mjs'
+import { createDecoder } from './decoder.mjs'
 import { createRenderer } from './gl.mjs'
 import { poseInterpolator } from './interp.mjs'
 import { skyDarken, sceneTime } from './shading.mjs'
 
-const MAX_IN_FLIGHT = 6
+const MAX_IN_FLIGHT = 8 // column fetches at once
+const MAX_DECODING = 12 // columns fetched and waiting for a decode
+const UPLOAD_BUDGET_MS = 4 // GPU uploads per frame, at least one
+const COLUMN_DRAWN_KEEP = 500
 const LATENCY_KEEP = 200
 const TRACE_KEEP = 4000
 const DECODE_KEEP = 2000
@@ -41,7 +44,7 @@ const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
 }
 
-const view = window.__view = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], lightMs: [], uploadMs: [], loaded: 0, wanted: 0, ready: false, renderer: null }
+const view = window.__view = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], lightMs: [], uploadMs: [], columnDrawn: [], retargetMs: [], slowUploads: [], mainDecode: { ms: 0, columns: 0 }, loaded: 0, wanted: 0, ready: false, renderer: null }
 
 const state = {
   pose: null,
@@ -54,7 +57,10 @@ const state = {
   owners: new Map(), // slot "sx.sz" -> column key
   columns: new Map(), // wanted column key -> {cx, cz, dist, status: 'pending'|'loaded'|'missing'}
   needs: new Map(), // column key -> sequence of the request that would satisfy it
-  inFlight: new Set(),
+  inFlight: new Set(), // columns being fetched
+  decoding: new Map(), // column key -> sequence of the fetch whose bytes are queued or being decoded
+  uploads: new Map(), // column key -> {column, result, mtime} decoded and waiting for the GPU
+  eventMtimes: new Map(), // column key -> mtime of the latest column event not yet fetched
   seq: 0,
   free: null, // {eye, yaw, pitch} while the free camera is on
   pendingMtime: null,
@@ -65,6 +71,10 @@ const state = {
 }
 
 const gfx = createRenderer(canvas)
+const decoder = createDecoder({
+  makeWorker: params.get('worker') === '0' ? null : undefined, // ?worker=0 decodes on the main thread
+  priority: key => state.columns.get(key)?.dist ?? Infinity
+})
 view.renderer = gfx.renderer
 
 // ---- block table and columns ----
@@ -81,27 +91,9 @@ const loadTable = async version => {
   if (!texRes.ok) throw new Error(`textures for ${version}: HTTP ${texRes.status}`)
   const [json, bytes] = await Promise.all([res.json(), texRes.arrayBuffer()])
   state.table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
+  decoder.setTable({ format: json.format, materialOf: state.table.materialOf })
   gfx.setMaterials(json.materials)
   gfx.setTextures({ bytes: new Uint8Array(bytes), layers: json.textures.names.length, size: json.textures.size, levels: json.textures.levels })
-}
-
-// state ids of a decoded column to material indices in the texture's order (x fastest, then y, then z)
-const materialColumn = (ids, height, materialOf) => {
-  const mats = new Uint16Array(256 * height)
-  const flags = new Uint8Array(height >> 4)
-  for (let y = 0; y < height; y++) {
-    const section = y >> 4
-    const base = section * 4096 + ((y & 15) << 8)
-    for (let z = 0; z < 16; z++) {
-      for (let x = 0; x < 16; x++) {
-        const material = materialOf[ids[base + (z << 4 | x)]] ?? 0
-        if (material === 0) continue
-        mats[(z * height + y) * 16 + x] = material
-        flags[section] = 1
-      }
-    }
-  }
-  return { mats, flags }
 }
 
 const keepTiming = (list, ms) => {
@@ -113,17 +105,7 @@ const fetchColumn = async (world, cx, cz) => {
   const res = await fetch(`/columns/${world}/${cx}.${cz}.bin`)
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`column ${cx}.${cz}: HTTP ${res.status}`)
-  const bytes = new Uint8Array(await res.arrayBuffer())
-  const started = performance.now()
-  const raw = await inflate(bytes)
-  const { header, sections, light } = parseColumnFile(raw)
-  const { ids } = decodeSections(sections, { ...state.table.format, numSections: header.worldHeight >> 4 })
-  view.decodeMs.push(Math.round((performance.now() - started) * 10) / 10)
-  if (view.decodeMs.length > DECODE_KEEP) view.decodeMs.shift()
-  const lightStarted = performance.now()
-  const lit = lightColumn(light, header.worldHeight)
-  keepTiming(view.lightMs, performance.now() - lightStarted)
-  return { header, ids, light: lit }
+  return new Uint8Array(await res.arrayBuffer())
 }
 
 const keyOf = (cx, cz) => `${cx}.${cz}`
@@ -135,36 +117,74 @@ const ensureDims = header => {
   gfx.allocate(N, header.worldHeight)
 }
 
-const settle = (key, column, result) => {
+// a decoded column waits here for the frame's upload step
+const settle = (key, column, result, mtime) => {
   if (state.owners.get(slotKey(column.cx, column.cz)) !== key) return // the slot changed hands while fetching
   if (!result) {
     column.status = 'missing'
     return
   }
-  ensureDims(result.header)
-  const { mats, flags } = materialColumn(result.ids, state.dims.height, state.table.materialOf)
-  const uploadStarted = performance.now()
-  gfx.uploadColumn(mod(column.cx, N), mod(column.cz, N), mats, flags, result.light)
-  keepTiming(view.uploadMs, performance.now() - uploadStarted)
-  column.status = 'loaded'
+  state.uploads.set(key, { column, result, mtime })
+}
+
+// uploads the nearest decoded columns until the frame's budget is spent; returns the {key, mtime} drawn by this frame
+let uploadCount = 0
+const uploadStep = () => {
+  const started = performance.now()
+  const uploaded = []
+  const nearest = () => [...state.uploads.entries()].sort(([, a], [, b]) => a.column.dist - b.column.dist)[0]
+  for (let next = nearest(); next && (!uploaded.length || performance.now() - started < UPLOAD_BUDGET_MS); next = nearest()) {
+    const [key, { column, result, mtime }] = next
+    state.uploads.delete(key)
+    if (state.columns.get(key) !== column || state.owners.get(slotKey(column.cx, column.cz)) !== key) continue
+    ensureDims(result.header)
+    const uploadStarted = performance.now()
+    gfx.uploadColumn(mod(column.cx, N), mod(column.cz, N), result.mats, result.flags, result.light)
+    const uploadMs = performance.now() - uploadStarted
+    uploadCount++
+    keepTiming(view.uploadMs, uploadMs)
+    if (uploadMs > UPLOAD_BUDGET_MS) view.slowUploads.push({ ms: Math.round(uploadMs * 10) / 10, nthInFrame: uploaded.length, queued: state.uploads.size, total: uploadCount })
+    column.status = 'loaded'
+    if (mtime !== undefined) uploaded.push({ key, mtime })
+  }
+  return uploaded
 }
 
 const startFetch = async key => {
   const column = state.columns.get(key)
   const seq = state.needs.get(key)
+  const mtime = state.eventMtimes.get(key)
+  state.eventMtimes.delete(key)
   state.inFlight.add(key)
-  const result = await fetchColumn(state.pose.world, column.cx, column.cz).catch(error => {
+  const bytes = await fetchColumn(state.pose.world, column.cx, column.cz).catch(error => {
     console.error(`column ${key}:`, error)
     return null
   })
   state.inFlight.delete(key)
   if (state.needs.get(key) === seq) state.needs.delete(key)
-  if (state.columns.get(key) === column) settle(key, column, result)
+  if (state.columns.get(key) !== column) return pump()
+  if (!bytes) {
+    settle(key, column, null, mtime)
+    return pump()
+  }
+  state.decoding.set(key, seq)
+  pump()
+  const result = await decoder.decode(key, bytes)
+  if (state.decoding.get(key) !== seq) return // cancelled, or replaced by a newer fetch of the same column
+  state.decoding.delete(key)
+  if (result) {
+    view.decodeMs.push(Math.round(result.ms * 10) / 10)
+    keepTiming(view.lightMs, result.lightMs)
+    view.mainDecode.ms += result.mainMs
+    view.mainDecode.columns++
+    if (view.decodeMs.length > DECODE_KEEP) view.decodeMs.shift()
+  }
+  if (state.columns.get(key) === column) settle(key, column, result, mtime)
   pump()
 }
 
 const pump = () => {
-  while (state.inFlight.size < MAX_IN_FLIGHT && state.table) {
+  while (state.inFlight.size < MAX_IN_FLIGHT && state.decoding.size < MAX_DECODING && state.table) {
     const next = [...state.needs.keys()]
       .filter(key => !state.inFlight.has(key) && state.columns.has(key))
       .sort((a, b) => state.columns.get(a).dist - state.columns.get(b).dist)[0]
@@ -195,13 +215,21 @@ const retarget = (ccx, ccz) => {
   }
   for (const column of columns.values()) column.dist = Math.hypot(column.cx - ccx, column.cz - ccz)
   for (const key of state.needs.keys()) if (!columns.has(key)) state.needs.delete(key)
+  for (const key of [...state.decoding.keys()]) {
+    if (columns.has(key)) continue
+    state.decoding.delete(key)
+    decoder.cancel(key)
+  }
+  for (const key of [...state.uploads.keys()]) if (!columns.has(key)) state.uploads.delete(key)
+  for (const key of [...state.eventMtimes.keys()]) if (!columns.has(key)) state.eventMtimes.delete(key)
   state.columns = columns
   pump()
 }
 
-const onColumnEvent = ({ cx, cz }) => {
+const onColumnEvent = ({ cx, cz, mtime }) => {
   const key = keyOf(cx, cz)
   if (!state.columns.has(key)) return
+  state.eventMtimes.set(key, mtime)
   state.needs.set(key, ++state.seq)
   pump()
 }
@@ -218,7 +246,10 @@ const onPose = async ({ mtime, pose }) => {
   if (!state.table) await loadTable(pose.mcVersion)
   const ccx = Math.floor(pose.eye.x / 16)
   const ccz = Math.floor(pose.eye.z / 16)
-  if (ccx !== state.ccx || ccz !== state.ccz) retarget(ccx, ccz)
+  if (ccx === state.ccx && ccz === state.ccz) return
+  const started = performance.now()
+  retarget(ccx, ccz)
+  keepTiming(view.retargetMs, performance.now() - started)
 }
 
 const connect = name => {
@@ -303,7 +334,7 @@ const targetSize = () => {
 
 const settled = () => {
   if (!state.pose || !state.dims) return false
-  if (state.inFlight.size || state.needs.size) return false
+  if (state.inFlight.size || state.needs.size || state.decoding.size || state.uploads.size) return false
   return state.columns.size > 0
 }
 
@@ -312,9 +343,17 @@ const recordTrace = (ts, cam) => {
   if (view.camTrace.length > TRACE_KEEP) view.camTrace.shift()
 }
 
+// columns refetched after a file change count as drawn once the frame that uploaded them has been drawn
+const stampDrawn = uploaded => {
+  const drawnAt = Date.now()
+  for (const { key, mtime } of uploaded) view.columnDrawn.push({ key, mtime, drawnAt })
+  while (view.columnDrawn.length > COLUMN_DRAWN_KEEP) view.columnDrawn.shift()
+}
+
 const frame = (now, dt) => {
   const [w, h] = targetSize()
   gfx.resize(w, h)
+  const uploaded = uploadStep()
   if (!state.pose?.eye || !state.dims || state.ccx === null) return gfx.clear(0.78, 0.87, 1)
   const shown = (interpOn && interp.sample(Date.now())) || state.pose
   state.drawn = shown
@@ -332,6 +371,7 @@ const frame = (now, dt) => {
     slotOff: { x: mod(state.ccx - radius, N) * 16, z: mod(state.ccz - radius, N) * 16 },
     entities: entityBoxes(shown.entities ?? state.pose.entities, origin, cam.eye)
   })
+  stampDrawn(uploaded)
 }
 
 const keep = (list, value) => {
@@ -392,7 +432,7 @@ const renderOverlay = () => {
     `${agentName ?? '(no agent)'}  ${pose?.status ?? '-'}${state.free ? '  [free camera]' : ''}`,
     `fps ${view.fps}  ${canvas.width}x${canvas.height}  fov ${fov}  dist ${maxDist}`,
     `pose age ${pose ? Date.now() - pose.t : '-'} ms  ${interpOn ? `interp ${fmt(interp.delay())} ms` : 'interp off'}  file->frame ${lat.length ? lat[lat.length - 1] : '-'} ms (p50 ${fmt(percentile(lat, 0.5))})`,
-    `columns ${view.loaded}/${view.wanted}  in flight ${state.inFlight.size}  queued ${state.needs.size}${view.ready ? '  ready' : ''}`,
+    `columns ${view.loaded}/${view.wanted}  fetching ${state.inFlight.size}  decoding ${state.decoding.size}  to upload ${state.uploads.size}  queued ${state.needs.size}${view.ready ? '  ready' : ''}`,
     hud ? `hp ${fmt(hud.health)}  food ${fmt(hud.food)}  xp ${hud.xp?.level ?? '-'}  held ${hud.held ? `${hud.held.name} x${hud.held.count}` : '-'}` : 'hud -',
     view.renderer
   ]
