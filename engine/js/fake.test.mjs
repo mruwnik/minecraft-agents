@@ -503,3 +503,24 @@ for (const [settles, expected] of [[true, true], [false, false]]) {
     assert.equal(p.isSettling(), expected)
   })
 }
+
+test('drive records controls and look; a stale token throws cut', () => {
+  const p = owned()
+  p.drive('t1', { controls: { forward: true, jump: true } })
+  p.drive('t1', { controls: { jump: false }, look: { yaw: 90, pitch: 10 } })
+  assert.deepEqual(p.world.state.controls, { forward: true, jump: false })
+  assert.deepEqual([p.world.state.yaw, p.world.state.pitch], [90, 10])
+  p.drive('t1', { look: { dyaw: 300 } })
+  assert.equal(p.world.state.yaw, 30)
+  assert.throws(() => p.drive('old', { controls: { back: true } }), { code: 'cut' })
+  assert.equal(p.world.state.controls.back, undefined)
+})
+
+for (const [label, clear] of [['stopDriving', p => p.stopDriving()], ['an owner change', p => p.setOwner('t2')], ['a null owner', p => p.setOwner(null)]]) {
+  test(`fake drive: ${label} clears the controls`, () => {
+    const p = owned()
+    p.drive('t1', { controls: { forward: true } })
+    clear(p)
+    assert.deepEqual(p.world.state.controls, {})
+  })
+}

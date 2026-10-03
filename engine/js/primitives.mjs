@@ -78,6 +78,13 @@ const vec = p => new Vec3(p.x, p.y, p.z)
 
 const codedError = (code, message) => Object.assign(new Error(message), { code, [code === 'cut' ? 'cut' : 'badArgs']: true })
 export const cutError = () => codedError('cut', 'cut: the ownership token no longer matches')
+
+// Minecraft (F3) degrees <-> mineflayer radians. Yaw is normalised to 0..360, pitch clamped to -90..90.
+export const mcToMineflayerLook = ({ yaw, pitch }) => ({ yaw: Math.PI - yaw * Math.PI / 180, pitch: -pitch * Math.PI / 180 })
+export const mineflayerToMcLook = ({ yaw, pitch }) => {
+  const deg = 180 - yaw * 180 / Math.PI
+  return { yaw: ((deg % 360) + 360) % 360, pitch: Math.min(90, Math.max(-90, -pitch * 180 / Math.PI)) }
+}
 const badArgs = message => codedError('bad-args', message)
 const isCut = err => err?.code === 'cut'
 // a mineflayer rejection is a domain failure: a status, never a throw (only cut and bad-args reject)
@@ -815,6 +822,28 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  // Manual takeover: sets control states and rotation for the owner, synchronously. The first call with a token
+  // registers an inflight entry so that any owner change releases every control.
+  const driveNow = (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    if (isOffline()) return { status: 'offline' }
+    if (![...inflight].some(c => c.drive && c.token === token)) {
+      const call = { drive: true, token, cut: () => { inflight.delete(call); bot.clearControlStates() } }
+      inflight.add(call)
+    }
+    for (const [name, value] of Object.entries(a.controls ?? {})) bot.setControlState(name, value)
+    const l = a.look
+    if (l) {
+      const cur = mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 })
+      const yaw = isNum(l.yaw) ? l.yaw : cur.yaw + (isNum(l.dyaw) ? l.dyaw : 0)
+      const pitch = isNum(l.pitch) ? l.pitch : cur.pitch + (isNum(l.dpitch) ? l.dpitch : 0)
+      const mf = mcToMineflayerLook({ yaw, pitch: Math.min(90, Math.max(-90, pitch)) })
+      bot.look(mf.yaw, mf.pitch, true)
+    }
+    return { pos: here(), ...mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 }) }
+  }
+  const stopDriving = () => bot.clearControlStates()
+
   // Waits `ms` (clamped to 0..WAIT_MAX_MS, scaled by timeScale) without touching the bot; a cut rejects at once.
   const wait = async (token, a = {}) => {
     const ms = Math.min(Math.max(isNum(a.ms) ? a.ms : 0, 0), WAIT_MAX_MS)
@@ -1011,7 +1040,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.

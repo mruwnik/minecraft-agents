@@ -4,6 +4,7 @@
             [engine.fsutil :as fsu]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.takeover :as takeover]
             [engine.triggers :as triggers]
             ["fs" :as fs]
             ["path" :as path]
@@ -11,12 +12,13 @@
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :scenario nil :fresh? false :state-dir nil}]
+         opts {:agent nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 60}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))
       (= a "--scenario") (recur more (assoc opts :scenario b))
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
+      (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
       :else (recur (rest all) opts))))
 
@@ -57,6 +59,21 @@
       (seq issues) {:error (str "scenario problems: " (pr-str issues))}
       :else {:root root :cfg cfg :plan plan :state-dir state-dir})))
 
+(defn ^:async start-control!
+  "Serve the manual-control socket under the engine dir; resolves to the control, or nil (with an
+  error event) when it cannot listen."
+  [root eng cfg idle-s]
+  (let [create-control (.-createControl ((createRequire (str root "/")) "./js/control.mjs"))
+        control (create-control #js {:socketPath (path/join (:engine-dir cfg) "control.sock")
+                                     :body (takeover/adapter eng)
+                                     :idleMs (* 1000 idle-s)})]
+    (try
+      (await (.listen control))
+      control
+      (catch :default e
+        (core/emit! eng {:source :system :kind :control_unavailable :level :error :text (str (.-message e))})
+        nil))))
+
 (defn ^:async run
   "Start a body. Resolves to {:engine eng :stop f} or {:error text}."
   [{:keys [fresh?] :as opts}]
@@ -80,8 +97,9 @@
                               :body (:username cfg)})
             _ (reset! eng-ref eng)]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
-        (let [stop-ticks (core/start! eng {:tick-ms 250})]
-          {:engine eng :stop (fn [] (stop-ticks) (core/shutdown! eng) (.close p))})))))
+        (let [control (await (start-control! root eng cfg (:drive-idle-s opts)))
+              stop-ticks (core/start! eng {:tick-ms 250})]
+          {:engine eng :stop (fn [] (stop-ticks) (some-> control .close) (core/shutdown! eng) (.close p))})))))
 
 (defn fail! [text]
   (.write js/process.stderr (str text "\n"))

@@ -422,6 +422,16 @@
   [eng]
   (true? (.isSettling (:primitives eng))))
 
+(defn manual?
+  "Whether someone drives the body by hand (see engine.takeover). Not persisted."
+  [eng]
+  (some? @(:manual eng)))
+
+(defn paused?
+  "Whether the scheduler must stand still: offline, settling or under manual control."
+  [eng]
+  (or (offline? eng) (settling? eng) (manual? eng)))
+
 (defn judge-end!
   "Classify a reflex end now and apply the entry's persistence when its trigger
   still holds, the cooldown counted from the end's :ended-at; emit its one
@@ -442,13 +452,13 @@
 
 (defn end-reflex!
   "A reflex job ended on its own with outcome; classify and apply the entry's
-  persistence. While the body is settling or offline the senses cannot say
-  whether the trigger still holds: the end is deferred to the first ready tick."
+  persistence. While the body is settling, offline or under manual control the
+  senses cannot say whether the trigger still holds: the end is deferred to the first ready tick."
   [eng {:keys [id reflex]} outcome]
   (let [end {:reflex reflex :job id :outcome outcome :ended-at (now eng)
              :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))}]
     (drop-instance! eng id)
-    (if (or (settling? eng) (offline? eng))
+    (if (paused? eng)
       (swap! (:state eng) update :deferred-ends conj end)
       (judge-end! eng end {}))))
 
@@ -601,10 +611,10 @@
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
   started (resolving once that round is settled), or nil. Does nothing while
-  the body is offline or settling: no trigger is evaluated and no round starts.
+  the body is offline, settling or under manual control: no trigger is evaluated and no round starts.
   The first ready tick judges the reflex ends deferred meanwhile."
   [eng]
-  (when-not (or (offline? eng) (settling? eng))
+  (when-not (paused? eng)
     (judge-deferred-ends! eng)
     (tick-online! eng)))
 
@@ -830,6 +840,7 @@
              :state st
              :running (atom nil)
              :tokens (atom 0)
+             :manual (atom nil)
              :acts (atom {})
              :stalls (atom {})
              :stall-rounds stall-rounds

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPrimitives, createPrimitivesFromBot } from './primitives.mjs'
+import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
 
 // the calls a bot received, minus the blockAt reads waitForWorld makes
@@ -1695,4 +1695,81 @@ test('forcedMove measures from the last position the body was known at', async (
     bot.emit('forcedMove')
   }
   assert.equal(p.isSettling(), false)
+})
+
+// ---- drive (manual takeover) ----
+
+const near = (a, b) => Math.abs(a - b) < 1e-9
+
+for (const [label, mc, mf] of [
+  ['south', { yaw: 0, pitch: 0 }, { yaw: Math.PI, pitch: 0 }],
+  ['west, looking down', { yaw: 90, pitch: 90 }, { yaw: Math.PI / 2, pitch: -Math.PI / 2 }],
+  ['north, looking up', { yaw: 180, pitch: -90 }, { yaw: 0, pitch: Math.PI / 2 }]
+]) {
+  test(`look conversion: ${label}`, () => {
+    const to = mcToMineflayerLook(mc)
+    assert.ok(near(to.yaw, mf.yaw) && near(to.pitch, mf.pitch))
+    const back = mineflayerToMcLook(mf)
+    assert.ok(near(back.yaw, mc.yaw) && near(back.pitch, mc.pitch))
+  })
+}
+
+for (const [label, mc, want] of [
+  ['pitch clamps high', { yaw: 10, pitch: 120 }, { yaw: 10, pitch: 90 }],
+  ['pitch clamps low', { yaw: 10, pitch: -120 }, { yaw: 10, pitch: -90 }],
+  ['yaw wraps over 360', { yaw: 370, pitch: 0 }, { yaw: 10, pitch: 0 }],
+  ['yaw wraps below 0', { yaw: -90, pitch: 0 }, { yaw: 270, pitch: 0 }]
+]) {
+  test(`look conversion round trip normalises: ${label}`, () => {
+    const back = mineflayerToMcLook(mcToMineflayerLook(mc))
+    assert.ok(near(back.yaw, want.yaw) && near(back.pitch, want.pitch))
+  })
+}
+
+test('drive with the owner token sets control states and looks, and returns pos and degrees', () => {
+  const { bot, p } = rig({})
+  const res = p.drive('t1', { controls: { forward: true, sprint: true }, look: { yaw: 90, pitch: 10 } })
+  assert.deepEqual(bot.controlState, { forward: true, sprint: true })
+  assert.ok(near(bot.entity.yaw, Math.PI / 2) && near(bot.entity.pitch, -10 * Math.PI / 180))
+  assert.ok(near(res.yaw, 90) && near(res.pitch, 10))
+  assert.deepEqual(res.pos, p.self().pos)
+})
+
+test('drive with a relative look adds to the current degrees', () => {
+  const { p } = rig({})
+  p.drive('t1', { look: { yaw: 350, pitch: 80 } })
+  const res = p.drive('t1', { look: { dyaw: 20, dpitch: 30 } })
+  assert.ok(near(res.yaw, 10) && near(res.pitch, 90))
+})
+
+test('drive keeps the current value for a missing look key', () => {
+  const { p } = rig({})
+  p.drive('t1', { look: { yaw: 45, pitch: 20 } })
+  const res = p.drive('t1', { look: { pitch: -5 } })
+  assert.ok(near(res.yaw, 45) && near(res.pitch, -5))
+})
+
+test('drive with a stale token throws cut and sets nothing', () => {
+  const { bot, p } = rig({})
+  assert.throws(() => p.drive('old', { controls: { forward: true }, look: { yaw: 90, pitch: 0 } }), { code: 'cut' })
+  assert.deepEqual(bot.controlState, {})
+  assert.ok(!names(bot).includes('look'))
+})
+
+for (const next of ['t2', null]) {
+  test(`setOwner(${next}) after drive clears the control states`, () => {
+    const { bot, p } = rig({})
+    p.drive('t1', { controls: { forward: true } })
+    p.drive('t1', { controls: { jump: true } })
+    p.setOwner(next)
+    assert.deepEqual(bot.controlState, {})
+    assert.equal(names(bot).filter(n => n === 'clearControlStates').length, 1)
+  })
+}
+
+test('stopDriving clears the control states without a token', () => {
+  const { bot, p } = rig({})
+  p.drive('t1', { controls: { forward: true } })
+  p.stopDriving()
+  assert.deepEqual(bot.controlState, {})
 })

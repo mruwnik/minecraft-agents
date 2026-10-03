@@ -65,6 +65,9 @@ function initialState (spec) {
     swimFails: spec.swimFails ?? false,
     nextEntityId: 1000,
     offline: false,
+    controls: {},
+    yaw: 0,
+    pitch: 0,
     settles: spec.settles ?? false, // coming back (offline, respawn) opens a settling window until world.settle(false)
     settling: false,
     offlineScale: spec.offlineScale ?? 0.001 // offline waits ms * this, so tests need not sit out minutes
@@ -341,6 +344,7 @@ export function createFake (spec = {}) {
 
   const primitives = {
     setOwner (token) {
+      if (token !== owner) s.controls = {}
       owner = token
       if (sleeper && sleeper.token !== token) sleeper.wake()
       for (const p of [...pending]) {
@@ -350,6 +354,20 @@ export function createFake (spec = {}) {
       }
     },
     isOwner: (token) => token === owner,
+
+    // Manual takeover: records controls (booleans) and the look in Minecraft degrees on the state.
+    drive (token, { controls = {}, look } = {}) {
+      checkOwner(token)
+      Object.assign(s.controls, controls)
+      if (look) {
+        const yaw = look.yaw ?? s.yaw + (look.dyaw ?? 0)
+        const pitch = look.pitch ?? s.pitch + (look.dpitch ?? 0)
+        s.yaw = ((yaw % 360) + 360) % 360
+        s.pitch = Math.min(90, Math.max(-90, pitch))
+      }
+      return { pos: { ...s.self.pos }, yaw: s.yaw, pitch: s.pitch }
+    },
+    stopDriving () { s.controls = {} },
 
     isOffline: () => s.offline,
     isSettling: () => !s.offline && s.settling,
