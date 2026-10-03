@@ -9,6 +9,7 @@
             [dashboard.chat :as chat]
             [dashboard.engine-edn :as engine-edn]
             [dashboard.engine-events :as ee]
+            [dashboard.items :as items]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
             [dashboard.routes :as routes]
@@ -312,6 +313,66 @@
   (-> @thumbnailer
       (.then (fn [t] (send-json-js! res 200 ((:stats t)))))))
 
+;; ---------------------------------------------------------------- the live view, on this origin
+;; js/viewmount.mjs builds tools/view/serve.mjs's request handler without listening; its paths (/view, /pose/, /hud/,
+;; /drive/, /web/ ...) are forwarded to it. Loaded once at startup, like the thumbnailer; absent when it fails to load.
+(def viewmount-module (or (.-VIEWMOUNT_MODULE js/process.env) (.join path dashboard-dir "js" "viewmount.mjs")))
+
+(defonce view-mount (atom nil))
+
+(defn load-view-mount []
+  (-> (import-esm (.-href (.pathToFileURL url viewmount-module)))
+      (.then (fn [m] (reset! view-mount ((.-mountView m) #js {:repo repo-root :stateDir (.join path root "state")}))))
+      (.catch (fn [e] (js/console.error (str "live view disabled: " (ex-message e)))))))
+
+(defn view-request? [req]
+  (when-let [m @view-mount]
+    (.handles m (.-pathname (js/URL. (.-url req) "http://dashboard")))))
+
+;; ---------------------------------------------------------------- one body's action log
+;; the last bytes of events.jsonl, filtered to what the popup lists; cached per folder until the file's size changes
+(def log-tail-bytes (* 1024 1024))
+(def log-cache (atom {}))
+(def default-log-limit 300)
+(def max-log-limit 2000)
+
+(defn log-limit [text]
+  (let [n (js/parseInt text 10)]
+    (if (and (not (js/isNaN n)) (pos? n)) (min n max-log-limit) default-log-limit)))
+
+(defn read-log [name]
+  (let [file (events-file name)
+        size (.-size (.statSync fs file))
+        cached (get @log-cache name)]
+    (if (= size (:size cached))
+      (:events cached)
+      (let [start (max 0 (- size log-tail-bytes))
+            bytes (read-range file start size)
+            whole (if (pos? start) (ee/drop-torn-head bytes) bytes)
+            events (mapv ee/log-entry (filter ee/log-worthy? (ee/parse-event-lines (ee/decode-bytes whole))))]
+        (swap! log-cache assoc name {:size size :events events})
+        events))))
+
+(defn send-events! [res name query]
+  (if-not (engine-folder? name)
+    (send-json! res 404 {:error (str "no engine body called " name)})
+    (send-json! res 200 {:at (js/Date.now) :body name
+                         :events (vec (take-last (log-limit (.get query "limit")) (read-log name)))})))
+
+;; ---------------------------------------------------------------- item pictures
+;; The textures the view uses (repo textures/: blocks at the top, items under item/): the first candidate that exists.
+(def textures-dir (.join path repo-root "textures"))
+
+(defn send-item-icon! [res name]
+  (let [file (->> (items/icon-candidates name)
+                  (map #(.join path textures-dir %))
+                  (filter file-exists?)
+                  first)]
+    (if-not file
+      (send-json! res 404 {:error (str "no picture for " name)})
+      (do (.writeHead res 200 #js {"content-type" "image/png" "cache-control" "public, max-age=3600"})
+          (.end res (.readFileSync fs file))))))
+
 (def route-list
   "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
 
@@ -360,6 +421,8 @@
         :page (send-file! res (.join path public-dir "index.html"))
         :static (serve-static! res request-path)
         :thumb (send-thumb! res blueprint-name)
+        :item-icon (send-item-icon! res blueprint-name)
+        :events (send-events! res blueprint-name query)
         :thumbs-stats (send-thumbs-stats! res)
         :worlds (send-json! res 200 {:worlds (read-world-list)})
         :villagers-api (send-json-js! res 200 (legacy/villagers repo-root root))
@@ -374,7 +437,9 @@
 
 (defn handler [req res]
   (try
-    (handle! req res)
+    (if (view-request? req)
+      (.handle @view-mount req res)
+      (handle! req res))
     (catch :default e
       (if (.-headersSent res)
         (.end res)
@@ -383,5 +448,7 @@
 (defn main []
   (let [port (js/Number (or (.-PORT js/process.env) 3701))
         server (.createServer http handler)]
-    (.listen server port "127.0.0.1"
-             #(println (str "dashboard on http://127.0.0.1:" port " (root " root ")")))))
+    (-> (load-view-mount)
+        (.then (fn [_]
+                 (.listen server port "127.0.0.1"
+                          #(println (str "dashboard on http://127.0.0.1:" port " (root " root ")"))))))))

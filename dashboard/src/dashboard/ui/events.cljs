@@ -18,7 +18,8 @@
       :fx [[:dispatch [:fetch-worlds]]
            [:dispatch [:poll-state]]
            [:dispatch [:poll-chat]]
-           [:start-timers [[:state state-ms [:poll-state]] [:chat chat-ms [:poll-chat]]]]]})))
+           [:start-timers [[:state state-ms [:poll-state]] [:chat chat-ms [:poll-chat]]]]
+           (when-let [body (:detail-body initial)] [:dispatch [:open-detail body]])]})))
 
 (rf/reg-event-fx
  :fetch-worlds
@@ -98,8 +99,6 @@
 (rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
 (rf/reg-event-db :hide-whispers (fn [db [_ on?]] (assoc db :hide-whispers? on?)))
-(rf/reg-event-db :open-detail (fn [db [_ name]] (assoc db :detail-body name)))
-(rf/reg-event-db :close-detail (fn [db _] (assoc db :detail-body nil)))
 
 ;; The one handler for every action engine bodies do not support: log it, show it, call nothing.
 (rf/reg-event-fx

@@ -14,7 +14,11 @@
    :chat-open? true
    :chat-filter ""
    :hide-whispers? false
-   :detail-body nil
+   :detail-body (logic/body-from-search search)
+   :detail-events []
+   :detail-chip :all
+   :detail-text ""
+   :drive {}
    :notices {}})
 
 (defn world-of [db] (first (get-in db [:state :worlds])))

@@ -57,5 +57,10 @@
   (some-> (get @timers k) js/clearInterval)
   (swap! timers assoc k (js/setInterval #(rf/dispatch event) ms)))
 
+(rf/reg-fx :stop-timers
+           (fn [ks] (doseq [k ks]
+                      (some-> (get @timers k) js/clearInterval)
+                      (swap! timers dissoc k))))
+
 (rf/reg-fx :start-timers
            (fn [specs] (doseq [[k ms event] specs] (start-timer! k ms event))))

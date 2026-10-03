@@ -4,6 +4,7 @@
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.cards :as cards]
             [dashboard.ui.chat :as chat]
+            [dashboard.ui.detail :as detail]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.map :as map-ui]))
 
@@ -55,4 +56,4 @@
     [:div#work
      [:div#content content]
      [chat/chat-panel]]]
-   [bodies/detail-modal]])
+   [detail/modal]])

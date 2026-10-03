@@ -48,3 +48,15 @@
            ["/nope" {:kind :unknown}]]]
     (testing url
       (is (= expected (routes/route url))))))
+
+(deftest detail-routes
+  (doseq [[url expected]
+          [["/api/item-icon/bread.png" {:kind :item-icon :name "bread"}]
+           ["/api/item-icon/oak_log.png" {:kind :item-icon :name "oak_log"}]
+           ["/api/item-icon/Bread.png" {:kind :unknown}]
+           ["/api/item-icon/../x.png" {:kind :unknown}]
+           ["/api/events/ProbeMove?limit=300" {:kind :events :name "ProbeMove"}]
+           ["/api/events/Probe-Move_2" {:kind :events :name "Probe-Move_2"}]
+           ["/api/events/" {:kind :unknown}]
+           ["/api/events/a/b" {:kind :unknown}]]]
+    (is (= expected (routes/route url)) url)))

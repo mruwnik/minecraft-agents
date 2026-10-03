@@ -231,3 +231,25 @@
            ["never" [(ev 1)] false]]]
     (testing title
       (is (= expected (boolean (:takeover? (signals events))))))))
+
+(deftest log-entries
+  (doseq [[title e worthy?]
+          [["a job completing" (ev 1 {:kind "completed"}) true]
+           ["a heartbeat" (ev 1 {:kind "round_started"}) false]
+           ["a yield" (ev 1 {:kind "yielded"}) false]
+           ["memory saves" (ev 1 {:source "memory" :kind "saved" :level "debug"}) false]
+           ["memory written note" (ev 1 {:kind "memory_written" :level "debug"}) false]
+           ["view stats" (ev 1 {:source "body" :kind "view.stats"}) false]
+           ["an action start (debug)" (ev 1 {:source "action" :kind "started" :level "debug"}) true]
+           ["other debug noise" (ev 1 {:source "path" :kind "x" :level "debug"}) false]
+           ["a warning" (ev 1 {:source "path" :kind "x" :level "warn"}) true]]]
+    (is (= worthy? (ee/log-worthy? e)) title)))
+
+(deftest log-entry-shape
+  (is (= {:t 1 :seq 2 :level "info" :source "job" :kind "completed" :name "n" :text nil :error nil :args {:a 1} :reflex nil :ms nil}
+         (ee/log-entry {:t 1 :seq 2 :level "info" :source "job" :kind "completed" :name "n" :args {:a 1} :inventory [1 2 3] :pos {:x 1}}))))
+
+(deftest log-tail
+  (let [events (mapv #(ev % (if (even? %) {:kind "yielded"} {:kind "completed"})) (range 1 11))]
+    (is (= [7 9] (mapv :seq (ee/log-tail events 2))))
+    (is (= [1 3 5 7 9] (mapv :seq (ee/log-tail events 99))))))

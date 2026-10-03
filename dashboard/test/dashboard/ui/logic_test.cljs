@@ -98,3 +98,16 @@
   (is (= "03:04:05" (l/clock-ms-text (.getTime (js/Date. 2020 0 1 3 4 5)))))
   (is (= "x" (l/clock-ms-text "x"))))
 
+
+(deftest with-body-cases
+  (doseq [[pathname search body expected]
+          [["/" "" "Bob" "/?body=Bob"]
+           ["/" "?world=w1" "Bob" "/?world=w1&body=Bob"]
+           ["/" "?world=w1&body=Al" "Bob" "/?world=w1&body=Bob"]
+           ["/" "?world=w1&body=Bob" nil "/?world=w1"]
+           ["/map" "?body=Bob" nil "/map"]]]
+    (is (= expected (l/with-body pathname search body)))))
+
+(deftest body-from-search-cases
+  (doseq [[search expected] [["" nil] ["?body=" nil] ["?body=Bob" "Bob"] ["?world=x&body=Probe_1" "Probe_1"]]]
+    (is (= expected (l/body-from-search search)))))

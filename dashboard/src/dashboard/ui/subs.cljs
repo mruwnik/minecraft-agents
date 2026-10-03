@@ -1,12 +1,15 @@
 (ns dashboard.ui.subs
   (:require [re-frame.core :as rf]
             [dashboard.ui.db :as db]
+            [dashboard.ui.detail-model :as detail-model]
+            [dashboard.ui.drive :as drive]
+            [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.trouble :as trouble]))
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :notices :chat :worlds]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -69,3 +72,29 @@
  :<- [:selected]
  (fn [[view canvas bodies places zones humans selected] _]
    {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :selected selected}))
+
+(rf/reg-sub
+ :detail-model
+ :<- [:detail-body]
+ :<- [:split-bodies]
+ :<- [:detail-events]
+ :<- [:now]
+ (fn [[name {:keys [engine]} events now] _]
+   (detail-model/detail-model (first (filter #(= name (:name %)) engine)) (or now 0) (eventlog/current-action events))))
+
+(rf/reg-sub
+ :detail-rows
+ :<- [:detail-events]
+ :<- [:detail-chip]
+ :<- [:detail-text]
+ (fn [[events chip text] _] (eventlog/rows events {:chip chip :text text})))
+
+(rf/reg-sub
+ :drive-banner
+ :<- [:drive]
+ (fn [d _] (drive/banner d (or (:at d) 0))))
+
+(rf/reg-sub
+ :driving-now?
+ :<- [:drive]
+ (fn [d _] (drive/driving-now? d)))

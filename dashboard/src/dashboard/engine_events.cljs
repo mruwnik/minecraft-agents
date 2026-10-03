@@ -153,3 +153,25 @@
 ;; an agent folder with no engine/events.jsonl is an old HTTP-API body: listed, never contacted
 (defn unsupported-body [agent]
   (assoc agent :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil))
+
+;; ---------------------------------------------------------------- the action log
+;; What a body's popup lists: the events people read, not memory saves, heartbeats and path debug.
+(defn log-worthy? [e]
+  (let [{:keys [source kind level]} e]
+    (cond
+      (= "memory" source) false
+      (= "memory_written" kind) false
+      (and (= "job" source) (heartbeats kind)) false
+      (and (= "body" source) (= "view.stats" kind)) false
+      (= "action" source) true
+      :else (boolean (levels-shown level)))))
+
+;; only the fields the log shows: inventories and path dumps in other events never leave the server
+(defn log-entry [e]
+  {:t (:t e) :seq (:seq e) :level (:level e) :source (:source e) :kind (:kind e)
+   :name (:name e) :text (:text e) :error (:error e) :args (:args e) :reflex (:reflex e) :ms (:ms e)})
+
+(defn log-tail
+  "The last n log-worthy events of a list, oldest first."
+  [events n]
+  (vec (take-last n (filter log-worthy? events))))

@@ -4,6 +4,8 @@
 (def blueprint-re #"^/api/blueprint/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 (def unsupported-re #"^/api/(?:look|screen|actions|whisper|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
 (def thumb-re #"^/api/thumb/([A-Za-z0-9_-]+)\.png$")
+(def item-icon-re #"^/api/item-icon/([a-z0-9_]+)\.png$")
+(def events-re #"^/api/events/([A-Za-z0-9_-]+)$")
 (def static-re #"^/[A-Za-z0-9_./-]+\.(?:js|css|map|png|svg|ico|json|html|txt|woff2?)$")
 
 (def exact
@@ -33,6 +35,8 @@
     (or (exact path)
         (some->> (re-find blueprint-re path) second (assoc {:kind :blueprint} :name))
         (some->> (re-find thumb-re path) second (assoc {:kind :thumb} :name))
+        (some->> (re-find item-icon-re path) second (assoc {:kind :item-icon} :name))
+        (some->> (re-find events-re path) second (assoc {:kind :events} :name))
         (when (re-find unsupported-re path) {:kind :unsupported})
         (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})
         {:kind :unknown})))

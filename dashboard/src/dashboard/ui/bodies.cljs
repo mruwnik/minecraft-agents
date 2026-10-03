@@ -1,8 +1,11 @@
 (ns dashboard.ui.bodies
   "The Bodies page: one card per engine body, trouble first, and the detail modal."
-  (:require [re-frame.core :as rf]))
+  (:require [re-frame.core :as rf]
+            [dashboard.ui.trouble :as trouble]))
 
 (def status-label {:trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
+
+(defn short-label [s] (trouble/short-name s))
 
 (defn status-pill [status]
   [:span.pill.st {:class (name status)} (status-label status)])
@@ -22,7 +25,7 @@
      [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
      [:div.noview "no view"])
    (when (= status :offline) [:span.offline-tag offline])
-   [:div.overlay [:span.bname name] [status-pill status]]])
+   [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]])
 
 (defn body-card [{:keys [name status reason severity health food job event event-age event-level] :as card}]
   ^{:key name}
@@ -47,15 +50,3 @@
        (into [:div.cards] (map body-card) cards))
      (when (pos? foreign)
        [:div.footnote (str foreign " folders without an engine are not shown")])]))
-
-(defn detail-modal []
-  (when-let [name @(rf/subscribe [:detail-body])]
-    (let [card (first (filter #(= name (:name %)) @(rf/subscribe [:cards])))]
-      [:div.modal-back {:on-click #(rf/dispatch [:close-detail])}
-       [:div.modal {:on-click #(.stopPropagation %)}
-        [:div.modal-head [:h2 name] (when card [status-pill (:status card)]) [:span.spacer]
-         [:button {:on-click #(rf/dispatch [:close-detail])} "close"]]
-        (if-let [src (:thumb card)]
-          [:img.big {:src src :alt (str "view of " name)}]
-          [:div.noview.big "no view"])
-        (when-let [r (:reason card)] [:div.reason {:class (clojure.core/name (:severity card))} r])]])))

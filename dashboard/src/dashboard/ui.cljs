@@ -3,6 +3,7 @@
             [reagent.dom.client :as rdom]
             [re-frame.core :as rf]
             [dashboard.ui.bodies :as bodies]
+            [dashboard.ui.detail-events :as detail-events]
             [dashboard.ui.events]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.placeholder :as placeholder]
@@ -26,10 +27,11 @@
   [views/shell page [page-content page]])
 
 (defn on-key [e]
-  (when (= "Escape" (.-key e)) (rf/dispatch [:close-detail])))
+  (when (= "Escape" (.-key e)) (rf/dispatch [:escape])))
 
 (defn init []
   (let [page (logic/page-for-path (.-pathname js/location))]
     (.addEventListener js/document "keydown" on-key)
+    (.addEventListener js/window "message" detail-events/on-message)
     (rf/dispatch-sync [:init (.-search js/location) page])
     (.render (rdom/create-root (js/document.getElementById "app")) (r/as-element [root page]))))

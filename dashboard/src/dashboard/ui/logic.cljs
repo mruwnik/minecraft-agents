@@ -96,3 +96,15 @@
 (defn cooldown-text [reflex]
   (let [state (if (:cooling? reflex) "cooling" "ready")]
     (if (:cooldown-s reflex) (str state " (" (:cooldown-s reflex) "s)") state)))
+
+(defn body-from-search [search]
+  (let [b (.get (js/URLSearchParams. search) "body")]
+    (when-not (str/blank? b) b)))
+
+(defn with-body
+  "pathname + search with ?body= set to body, or removed when body is nil; other parameters stay."
+  [pathname search body]
+  (let [params (js/URLSearchParams. search)]
+    (if body (.set params "body" body) (.delete params "body"))
+    (let [text (.toString params)]
+      (if (str/blank? text) pathname (str pathname "?" text)))))

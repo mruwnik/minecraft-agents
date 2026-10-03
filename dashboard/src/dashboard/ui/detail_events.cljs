@@ -1,0 +1,134 @@
+(ns dashboard.ui.detail-events
+  "The body popup's state: open and close (with ?body= in the URL), the action-log poll, and manual takeover
+  (a 1 s poll of /drive/<name>, postMessage from the view page, take and release requests)."
+  (:require [re-frame.core :as rf]
+            [dashboard.ui.api :as api]
+            [dashboard.ui.drive :as drive]
+            [dashboard.ui.logic :as logic]))
+
+(def log-ms 2000)
+(def drive-ms 1000)
+(def log-limit 300)
+(def frame-id "view-frame")
+
+(defn drive-url [name] (str "/drive/" (js/encodeURIComponent name)))
+
+(defn body-url [body]
+  (logic/with-body (.-pathname js/location) (.-search js/location) body))
+
+(rf/reg-event-fx
+ :open-detail
+ (fn [{:keys [db]} [_ name]]
+   {:db (assoc db :detail-body name :detail-events [] :detail-chip :all :detail-text "" :drive {})
+    :replace-url (body-url name)
+    :fx [[:start-timers [[:detail-log log-ms [:poll-detail-log]] [:detail-drive drive-ms [:poll-drive]]]]
+         [:dispatch [:poll-detail-log]]
+         [:dispatch [:poll-drive]]]}))
+
+;; a body we drive is released before the popup goes away: through the view page when it can, else straight to the socket
+(rf/reg-event-fx
+ :close-detail
+ (fn [{:keys [db]} _]
+   (let [name (:detail-body db)
+         driving? (drive/driving-now? (:drive db))]
+     (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
+              :replace-url (body-url nil)
+              :stop-timers [:detail-log :detail-drive]}
+       (and name driving?) (assoc :drive-invoke {:op :release :name name :request (drive/release-request (:drive db)) :both? true})))))
+
+;; Esc: stop driving first, close when nobody is driven by us
+(rf/reg-event-fx
+ :escape
+ (fn [{:keys [db]} _]
+   (cond
+     (not (:detail-body db)) {}
+     (drive/driving-now? (:drive db)) {:dispatch [:drive-release]}
+     :else {:dispatch [:close-detail]})))
+
+(rf/reg-event-fx
+ :poll-detail-log
+ (fn [{:keys [db]} _]
+   (when-let [name (:detail-body db)]
+     {:fetch-json {:key :detail-log :url (logic/api-url (str "/api/events/" name) nil {:limit log-limit})
+                   :on-ok [:detail-log-ok name] :on-err [:detail-log-err name]}})))
+
+(rf/reg-event-db
+ :detail-log-ok
+ (fn [db [_ name data]]
+   (if (= name (:detail-body db)) (assoc db :detail-events (vec (:events data))) db)))
+
+(rf/reg-event-db :detail-log-err (fn [db _] db))
+
+(rf/reg-event-db :detail-chip (fn [db [_ chip]] (assoc db :detail-chip chip)))
+(rf/reg-event-db :detail-text (fn [db [_ text]] (assoc db :detail-text text)))
+
+;; ---------------------------------------------------------------- takeover
+(rf/reg-event-fx
+ :poll-drive
+ (fn [{:keys [db]} _]
+   (when-let [name (:detail-body db)]
+     {:fetch-json {:key :detail-drive :url (drive-url name)
+                   :on-ok [:drive-poll-ok name] :on-err [:drive-poll-err name]}})))
+
+(rf/reg-event-db
+ :drive-poll-ok
+ (fn [db [_ name data]]
+   (if (= name (:detail-body db)) (update db :drive drive/apply-poll (:manual data) (js/Date.now)) db)))
+
+;; no body listening (offline) or no reply: nobody drives it
+(rf/reg-event-db
+ :drive-poll-err
+ (fn [db [_ name _]]
+   (if (= name (:detail-body db)) (update db :drive drive/apply-poll nil (js/Date.now)) db)))
+
+(rf/reg-event-db
+ :drive-message
+ (fn [db [_ msg]] (update db :drive drive/apply-message msg (js/Date.now))))
+
+(rf/reg-event-fx
+ :drive-take
+ (fn [{:keys [db]} _]
+   {:db (assoc-in db [:drive :error] nil)
+    :drive-invoke {:op :take :name (:detail-body db) :request (drive/take-request)}}))
+
+(rf/reg-event-fx
+ :drive-release
+ (fn [{:keys [db]} _]
+   {:drive-invoke {:op :release :name (:detail-body db) :request (drive/release-request (:drive db))}}))
+
+(rf/reg-event-fx
+ :drive-reply
+ (fn [{:keys [db]} [_ data]]
+   (let [refused (when (false? (:ok data)) (str "refused: " (:reason data)))]
+     {:db (assoc-in db [:drive :error] refused)
+      :dispatch [:poll-drive]})))
+
+(rf/reg-event-fx
+ :drive-error
+ (fn [{:keys [db]} [_ text]]
+   {:db (assoc-in db [:drive :error] text)}))
+
+(defn frame-drive
+  "window.__drive of the view page in our iframe (same origin), when it has one."
+  []
+  (some-> (js/document.getElementById frame-id) .-contentWindow .-__drive))
+
+(defn post-request! [name request]
+  (api/post-json! {:url (drive-url name) :body (clj->js request) :on-ok [:drive-reply] :on-err [:drive-error]}))
+
+;; the view page's own __drive.take/release when it has them (it then knows it is driving), else the socket via the proxy
+(rf/reg-fx
+ :drive-invoke
+ (fn [{:keys [op name request both?]}]
+   (let [page (frame-drive)
+         f (when page (aget page (clojure.core/name op)))]
+     (when (fn? f) (.call f page))
+     (when (or both? (not (fn? f))) (post-request! name request)))))
+
+(defn on-message
+  "A window message: only the view page in our own iframe is believed."
+  [e]
+  (let [frame (js/document.getElementById frame-id)]
+    (when (and frame (= (.-origin e) (.-origin js/location)) (identical? (.-source e) (.-contentWindow frame)))
+      (when-let [msg (drive/parse-message (js->clj (.-data e) :keywordize-keys true))]
+        (rf/dispatch [:drive-message msg])))))
