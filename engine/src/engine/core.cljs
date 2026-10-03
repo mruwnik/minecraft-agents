@@ -21,6 +21,15 @@
             [engine.memory :as mem]
             ["path" :as path]))
 
+(def default-stall-rounds
+  "Rounds of a holding job with no act call and no change to its memory
+  before a job.stalled warn."
+  20)
+
+(def default-sweep-ms
+  "How often tick! sweeps and saves memory."
+  60000)
+
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
    :cursor 0 :resume nil :current nil :pending-reflex nil :next-id 1})
@@ -141,6 +150,9 @@
 
 (defn save-memory! [eng]
   (mem/save! (:store eng)))
+
+(defn job-memory [eng id]
+  (mem/job-mem (mem/view (:store eng)) id []))
 
 (defn drop-instance! [eng id]
   (swap! (:state eng) #(cond-> (update % :instances dissoc id)
@@ -341,6 +353,22 @@
         (end-reflex! eng run))
     (end-reflex! eng run)))
 
+(defn watch-progress!
+  "After a round of a holding listed job: count rounds with no act call and
+  no change to its memory, and warn once when the count reaches the limit.
+  Any progress resets the count."
+  [eng {:keys [id acts-before mem-before]}]
+  (let [inst (get-in (state eng) [:instances id])
+        moved? (or (not= acts-before (get @(:acts eng) id 0))
+                   (not= mem-before (job-memory eng id)))
+        n (if moved? 0 (inc (get @(:stalls eng) id 0)))]
+    (when (:hold? inst)
+      (swap! (:stalls eng) assoc id n)
+      (when (= n (:stall-rounds eng))
+        (emit! eng (merge (job-fields eng id)
+                          {:source :job :kind :stalled :level :warn :rounds n
+                           :text (str "no act call and no memory change for " n " rounds")}))))))
+
 (defn settle!
   "Book a finished round, unless it was cut (its token is no longer current)."
   [eng run outcome]
@@ -349,7 +377,8 @@
     (set-owner! eng nil)
     (if (:reflex run)
       (settle-reflex! eng run outcome)
-      (settle-listed! eng run outcome))
+      (do (settle-listed! eng run outcome)
+          (watch-progress! eng run)))
     (save-memory! eng))
   nil)
 
@@ -365,7 +394,9 @@
                              (= id (:resume s)) (assoc :resume nil)
                              (= id (:pending-reflex s)) (assoc :pending-reflex nil)))))
         inst (get-in s [:instances id])
-        run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
+        run {:id id :token token :reflex (:reflex inst) :round (:round inst)
+             :acts-before (get @(:acts eng) id 0)
+             :mem-before (job-memory eng id)}]
     (reset! (:running eng) run)
     (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :info}))
     (-> (run-round eng run inst)
@@ -433,6 +464,9 @@
   started (resolving once that round is settled), or nil."
   [eng]
   (expire-changes! eng)
+  (when (>= (- (now eng) @(:last-sweep eng)) (:sweep-ms eng))
+    (reset! (:last-sweep eng) (now eng))
+    (save-memory! eng))
   (let [order (effective-register (state eng) (now eng))
         firing (evaluate-register! eng order)
         h (holder eng)]
@@ -566,8 +600,10 @@
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
   memory.edn when present, sweeps memory and appends a :restart entry.
-  Options: :primitives :catalog :dir :now :events :body."
-  [{:keys [primitives catalog dir now events body] :or {now js/Date.now}}]
+  Options: :primitives :catalog :dir :now :events :body, :stall-rounds
+  (default 20) and :sweep-ms (default 60000)."
+  [{:keys [primitives catalog dir now events body stall-rounds sweep-ms]
+    :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
@@ -582,7 +618,11 @@
              :state st
              :running (atom nil)
              :tokens (atom 0)
-             :acts (atom {})}]
+             :acts (atom {})
+             :stalls (atom {})
+             :stall-rounds stall-rounds
+             :sweep-ms sweep-ms
+             :last-sweep (atom (now))}]
     (add-watch st ::persist (fn [_ _ old new] (when (not= old new) (fsu/write-edn! file new))))
     (fsu/write-edn! file (state eng))
     (set-owner! eng nil)

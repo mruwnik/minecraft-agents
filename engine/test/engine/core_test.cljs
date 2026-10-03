@@ -582,3 +582,86 @@
           (is (= :cut (try (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
                            (catch :default e (when (core/cut? e) :cut)))))
           (is (= 0 (.-length (.-calls (.-world p))))))))))
+
+;; ---------------------------------------------------------------- no progress
+
+(defn ^:async spin-round [_] :continue)
+
+(defn ^:async look-round [c]
+  (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
+  :continue)
+
+(def stall-catalog
+  (update catalog :jobs merge {:spin {:name :spin :check always :round spin-round}
+                               :looker {:name :looker :check always :round look-round}}))
+
+(defn stall-setup [opts]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)
+        eng (core/create (merge {:primitives (tu/fake {}) :catalog stall-catalog :dir (tu/tmp-dir)
+                                 :now #(deref clock)
+                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                                opts))]
+    {:eng eng :seen seen :clock clock}))
+
+(defn stalls [seen] (filterv #(= [:job :stalled] [(:source %) (:kind %)]) @seen))
+
+(deftest a-holding-job-without-acts-or-memory-changes-warns-once-after-n-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 3})]
+          (core/submit! eng :spin {} {:hold? true})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= [] (stalls seen)))
+          (await (core/tick! eng))
+          (is (= [[:warn "j1" 3]] (mapv (juxt :level :job :rounds) (stalls seen))))
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= 1 (count (stalls seen))) "once per spell, and no cap: it keeps running")
+          (is (= ["j1"] (listed eng))))))))
+
+(deftest acting-or-changing-memory-is-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
+          (core/submit! eng :looker {} {:hold? true})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (core/cancel! eng "j1")
+          (core/submit! eng :count {} {:hold? true})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [] (stalls seen))))))))
+
+(deftest a-job-that-is-not-holding-is-not-watched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
+          (core/submit! eng :spin {} {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [] (stalls seen))))))))
+
+(deftest the-default-is-twenty-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (stall-setup {})]
+          (core/submit! eng :spin {} {:hold? true})
+          (dotimes [_ 19] (await (core/tick! eng)))
+          (is (= [] (stalls seen)))
+          (await (core/tick! eng))
+          (is (= 1 (count (stalls seen)))))))))
+
+;; ---------------------------------------------------------------- sweep timer
+
+(deftest ticks-sweep-memory-on-a-timer
+  (let [{:keys [eng clock dir]} (setup)
+        store (:store eng)]
+    (mem/write! store :seen {} {:cap 5 :ttl 1000})
+    (mem/save! store)
+    (swap! clock + 2000)
+    (core/tick! eng)
+    (is (some? (get-in (memory-on-disk dir) [:entries :seen])) "not yet: the timer has not run")
+    (swap! clock + core/default-sweep-ms)
+    (core/tick! eng)
+    (is (nil? (get-in (memory-on-disk dir) [:entries :seen])))))
