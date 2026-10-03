@@ -1,0 +1,4 @@
+;; Log-out live test, body B: the night-unsafe trigger alone, against notify.
+{:register [{:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.debug.notify {:text "night-unsafe fired"})}]
+ :queue [(repeat (jobs.movement.look-around))]}

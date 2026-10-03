@@ -1,0 +1,6 @@
+;; ProbeWater live test: the real breathe and extinguish reflexes only.
+{:register [{:trigger :suffocating :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}
+            {:trigger :burning
+             :job (jobs.survival.extinguish {:water-radius 6})}]
+ :queue [(repeat (jobs.movement.look-around))]}

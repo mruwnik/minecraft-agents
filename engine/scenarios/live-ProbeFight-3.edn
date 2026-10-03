@@ -1,0 +1,6 @@
+;; ProbeFight re-test: hostiles above health as in survival.edn, nothing else.
+{:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :fight-health 12 :min-health 8})}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7}
+             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}]
+ :queue [(repeat (jobs.movement.look-around))]}
