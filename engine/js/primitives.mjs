@@ -17,6 +17,12 @@ const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|drop
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
+const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
+const OFFLINE_MAX_MS = 10 * 60 * 1000
+const RECONNECT_TRIES = 3
+const RECONNECT_RETRY_MS = 5000
+const POSE_SLEEPING = 2
+const FLAG_ON_FIRE = 0x01
 
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 const xyz = v => ({ x: v.x, y: v.y, z: v.z })
@@ -54,6 +60,15 @@ const stackOf = (bot, slot) => {
   return { name: slot.name ?? bot.registry?.items?.[id]?.name ?? 'unknown', count }
 }
 
+// The index of a named entity-metadata field: the registry knows it per entity type, the older fixed layout is the fallback.
+const metaIndex = (bot, e, key, fallback) => {
+  const at = bot.registry?.entitiesByName?.[e.name]?.metadataKeys?.indexOf(key)
+  return at >= 0 ? at : fallback
+}
+const metaValue = (bot, e, key, fallback) => e.metadata?.[metaIndex(bot, e, key, fallback)]
+const burning = (bot, e) => ((metaValue(bot, e, 'shared_flags', 0) ?? 0) & FLAG_ON_FIRE) !== 0
+const lyingDown = (bot, e) => metaValue(bot, e, 'pose', 6) === POSE_SLEEPING
+
 const attempt = f => { try { return f() } catch { return null } }
 
 // getDroppedItem throws or returns null when the library cannot read the slot (it reads one fixed metadata index),
@@ -67,7 +82,11 @@ const gained = (before, after) => Object.entries(after)
   .filter(g => g.count > 0)
 
 // Builds the primitives over an already spawned bot. `timeScale` multiplies every time bound (tests shrink it).
-export function createPrimitivesFromBot (bot, { timeScale = 1 } = {}) {
+// `reconnect` (internal; createPrimitives passes it) makes a fresh spawned bot with the same connection params and
+// enables `offline`; without it `offline` is unsupported.
+export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null } = {}) {
+  let bot = initialBot
+  let closed = false
   let owner = null
   const inflight = new Set()
   const listeners = new Set()
@@ -124,6 +143,8 @@ export function createPrimitivesFromBot (bot, { timeScale = 1 } = {}) {
 
   // ---- sensing ----
 
+  const feetIn = name => bot.blockAt(vec(cell(here())))?.name === name
+
   const self = () => {
     const timeOfDay = bot.time.timeOfDay
     return {
@@ -131,6 +152,14 @@ export function createPrimitivesFromBot (bot, { timeScale = 1 } = {}) {
       pos: here(),
       health: bot.health,
       food: bot.food,
+      foodSaturation: bot.foodSaturation,
+      oxygen: bot.oxygenLevel ?? 20,
+      onFire: burning(bot, bot.entity),
+      inWater: bot.entity.isInWater ?? feetIn('water'),
+      inLava: bot.entity.isInLava ?? feetIn('lava'),
+      isSleeping: Boolean(bot.isSleeping),
+      experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
+      dimension: bot.game?.dimension,
       timeOfDay,
       isDay: timeOfDay < 12542 || timeOfDay > 23460,
       held: bot.heldItem?.name ?? null,
@@ -152,7 +181,9 @@ export function createPrimitivesFromBot (bot, { timeScale = 1 } = {}) {
         kind: k,
         pos: xyz(e.position),
         distance,
-        ...(k === 'item' && { item: droppedItem(bot, e) })
+        ...(k === 'item' && { item: droppedItem(bot, e) }),
+        ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
+        ...(e.name === 'creeper' && { creeper: true })
       }))
   }
 
@@ -395,32 +426,92 @@ export function createPrimitivesFromBot (bot, { timeScale = 1 } = {}) {
   // ---- body events ----
 
   const emit = event => listeners.forEach(fn => fn(event))
-  let lastHealth = bot.health
-  bot.on('health', () => {
-    if (bot.health < lastHealth) emit({ kind: 'hurt', health: bot.health, food: bot.food })
-    lastHealth = bot.health
-  })
-  bot.on('death', () => emit({ kind: 'died', pos: here() }))
-  bot.on('respawn', () => emit({ kind: 'respawned' }))
-  bot.on('chat', (from, message) => emit({ kind: 'chat', from, message }))
-  bot.on('wake', () => emit({ kind: 'woke' }))
-  bot.on('spawn', () => emit({ kind: 'spawned' }))
-  bot.on('end', reason => emit({ kind: 'disconnected', reason: String(reason) }))
-  bot.on('kicked', reason => emit({ kind: 'disconnected', reason: JSON.stringify(reason) }))
+  const inventoryNow = () => inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
+
+  // Wires one bot's events to the listeners; returns the function that unwires them.
+  const bindEvents = target => {
+    let lastHealth = target.health
+    let respawning = false
+    const handlers = {
+      health: () => {
+        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
+        lastHealth = target.health
+      },
+      death: () => emit({ kind: 'died', pos: here(), inventory: inventoryNow() }),
+      respawn: () => { respawning = true },
+      chat: (from, message) => emit({ kind: 'chat', from, message }),
+      wake: () => emit({ kind: 'woke' }),
+      spawn: () => {
+        emit({ kind: 'spawned' })
+        if (!respawning) return
+        respawning = false
+        emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
+      },
+      end: reason => emit({ kind: 'disconnected', reason: String(reason) }),
+      kicked: reason => emit({ kind: 'disconnected', reason: JSON.stringify(reason) })
+    }
+    Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
+    return () => Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
+  }
+  let unbind = bindEvents(bot)
   const onBodyEvent = listener => {
     listeners.add(listener)
     return () => listeners.delete(listener)
   }
 
+  // ---- offline ----
+
+  // wait that a cut or close can end early; resolves true when it ran its full course
+  const waitOrWake = (ms, call) => new Promise(resolve => {
+    const timer = setTimeout(() => resolve(true), ms)
+    call.wake = () => { clearTimeout(timer); resolve(false) }
+  })
+
+  // a fresh bot, retried a few times; null when close() came first (a bot made meanwhile is quit)
+  const reconnectBot = async () => {
+    for (let attempt = 1; ; attempt++) {
+      if (closed) return null
+      const fresh = await reconnect().then(b => ({ b }), error => ({ error }))
+      if (fresh.b && closed) { fresh.b.quit(); return null }
+      if (fresh.b) return fresh.b
+      if (attempt >= RECONNECT_TRIES) throw fresh.error
+      await sleepMs(RECONNECT_RETRY_MS * timeScale)
+    }
+  }
+
+  // Leaves the server for `ms`, then comes back with the same connection params. A cut ends the wait early (the body
+  // is never left offline) and the call resolves 'cut'; close() cancels the reconnect and resolves 'closed'.
+  const offline = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms >= 0), 'offline needs ms, a number of milliseconds of at least 0')
+    if (!reconnect) return { status: 'unsupported' }
+    const ms = Math.floor(Math.min(a.ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
+    const call = { token, cut: () => call.wake?.(), wake: null }
+    inflight.add(call)
+    emit({ kind: 'offline', ms })
+    unbind()
+    bot.quit()
+    const full = await waitOrWake(ms * timeScale, call)
+    inflight.delete(call)
+    const fresh = await reconnectBot().catch(error => { emit({ kind: 'disconnected', reason: String(error.message) }); throw error })
+    if (!fresh) return { status: 'closed' }
+    bot = fresh
+    unbind = bindEvents(bot)
+    emit({ kind: 'online', pos: here() })
+    return full && isOwner(token) ? { status: 'ok', ms } : { status: 'cut' }
+  }
+
   const close = async () => {
+    closed = true
     setOwner(null)
     bot.quit()
   }
 
-  return { setOwner, isOwner, self, entities, blocks, blockAt, moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, onBodyEvent, close }
+  return { setOwner, isOwner, self, entities, blocks, blockAt, moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.
-export async function createPrimitives (opts) {
-  return createPrimitivesFromBot(await connectBot(opts))
+// `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
+export async function createPrimitives (opts, { connect = connectBot, timeScale = 1 } = {}) {
+  return createPrimitivesFromBot(await connect(opts), { timeScale, reconnect: () => connect(opts) })
 }

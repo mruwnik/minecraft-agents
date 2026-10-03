@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPrimitivesFromBot } from './primitives.mjs'
-import { stubBot, names } from './stub-bot.mjs'
+import { createPrimitives, createPrimitivesFromBot } from './primitives.mjs'
+import { stubBot, names, Vec3 } from './stub-bot.mjs'
 
 const at = (x, y, z) => ({ x, y, z })
 const SCALE = 0.01 // every time bound shrinks 100 times: 20 s becomes 200 ms
@@ -140,7 +140,7 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['food', 'health', 'held', 'inventory', 'isDay', 'pos', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'oxygen', 'pos', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -202,16 +202,280 @@ test('body events: health drop is hurt, death and respawn are forwarded, unsubsc
   bot.emit('health')
   bot.emit('death')
   bot.emit('respawn')
+  bot.emit('spawn')
   bot.emit('chat', 'Dan', 'hi')
   off()
   bot.emit('wake')
-  assert.deepEqual(seen.map(e => e.kind), ['hurt', 'died', 'respawned', 'chat'])
+  assert.deepEqual(seen.map(e => e.kind), ['hurt', 'died', 'spawned', 'respawned', 'chat'])
   assert.equal(seen[0].health, 14)
-  assert.deepEqual(seen[3], { kind: 'chat', from: 'Dan', message: 'hi' })
+  assert.deepEqual(seen[4], { kind: 'chat', from: 'Dan', message: 'hi' })
 })
 
 test('close quits the bot', async () => {
   const { bot, p } = rig(world)
   await p.close()
   assert.deepEqual(names(bot), ['quit'])
+})
+
+// ---- survival sensing ----
+
+const withBot = (patch, spec = world) => {
+  const bot = stubBot(spec)
+  patch(bot)
+  return createPrimitivesFromBot(bot, { timeScale: SCALE })
+}
+const keysFor = metadataKeys => ({ entitiesByName: { player: { metadataKeys } } })
+
+test('self reports vitals from the bot', () => {
+  const p = withBot(bot => Object.assign(bot, { health: 7, food: 3, foodSaturation: 1.5, oxygenLevel: 11, isSleeping: true, game: { dimension: 'the_nether' }, experience: { level: 4, points: 90, progress: 0.25 } }))
+  const s = p.self()
+  assert.deepEqual([s.health, s.food, s.foodSaturation, s.oxygen, s.isSleeping, s.dimension], [7, 3, 1.5, 11, true, 'the_nether'])
+  assert.deepEqual(s.experience, { level: 4, points: 90, progress: 0.25 })
+})
+
+test('self has sane values on a bot that never sent them', () => {
+  const s = createPrimitivesFromBot(stubBot(world), { timeScale: SCALE }).self()
+  assert.deepEqual([s.oxygen, s.isSleeping, s.onFire, s.inWater, s.inLava], [20, false, false, false, false])
+  assert.deepEqual(s.experience, { level: 0, points: 0, progress: 0 })
+})
+
+// onFire reads bit 0x01 of the shared-flags metadata byte; its index comes from the registry when it knows it.
+const fireCases = [
+  ['flag bit set', [1], undefined, true],
+  ['fire and crouching', [3], undefined, true],
+  ['crouching only', [2], undefined, false],
+  ['no flags', [0], undefined, false],
+  ['no metadata', undefined, undefined, false],
+  ['index from the registry', [0, 0, 1], ['x', 'y', 'shared_flags'], true],
+  ['registry index holds no fire', [1, 0, 0], ['x', 'y', 'shared_flags'], false]
+]
+for (const [label, metadata, keys, expected] of fireCases) {
+  test(`self.onFire with ${label} is ${expected}`, () => {
+    const p = withBot(bot => {
+      bot.entity.metadata = metadata
+      bot.entity.name = 'player'
+      if (keys) bot.registry = { ...bot.registry, ...keysFor(keys) }
+    })
+    assert.equal(p.self().onFire, expected)
+  })
+}
+
+// inWater and inLava prefer the physics flags, and read the block at the feet when physics has not run
+const liquidCases = [
+  ['isInWater set', { isInWater: true }, {}, [true, false]],
+  ['isInLava set', { isInLava: true }, {}, [false, true]],
+  ['flags false despite a water block', { isInWater: false, isInLava: false }, { '0,64,0': 'water' }, [false, false]],
+  ['no flags, water at the feet', {}, { '0,64,0': 'water' }, [true, false]],
+  ['no flags, lava at the feet', {}, { '0,64,0': 'lava' }, [false, true]],
+  ['no flags, stone at the feet', {}, { '0,64,0': 'stone' }, [false, false]]
+]
+for (const [label, entityFlags, blocks, expected] of liquidCases) {
+  test(`self.inWater and inLava with ${label}`, () => {
+    const p = withBot(bot => Object.assign(bot.entity, entityFlags), { ...world, blocks })
+    const s = p.self()
+    assert.deepEqual([s.inWater, s.inLava], expected)
+  })
+}
+
+test('entities tells sleeping players from standing ones and gives usernames', () => {
+  const player = (id, pose) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(id, 64, 0), metadata: pose === undefined ? [] : [0, 0, 0, 0, 0, 0, pose] })
+  const p = withBot(bot => { bot.entities = { 1: player(1, 2), 2: player(2, 0), 3: player(3) } })
+  const found = p.entities({ kind: 'player' })
+  assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
+})
+
+test('entities finds the pose index through the registry', () => {
+  const p = withBot(bot => {
+    bot.registry = { ...bot.registry, ...keysFor(['shared_flags', 'pose']) }
+    bot.entities = { 1: { id: 1, type: 'player', name: 'player', username: 'A', position: at(1, 64, 0), metadata: [0, 2] } }
+  })
+  assert.equal(p.entities({})[0].sleeping, true)
+})
+
+test('entities does not put sleeping or username on mobs', () => {
+  const [zombie] = rig(world).p.entities({ kind: 'hostile' })
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'id', 'kind', 'name', 'pos'])
+})
+
+const mobCases = [
+  ['a creeper typed hostile', { name: 'creeper', type: 'hostile' }, 'hostile', true],
+  ['a zombie typed hostile', { name: 'zombie', type: 'hostile' }, 'hostile', false],
+  ['a creeper with only a hostile kind', { name: 'creeper', kind: 'Hostile mobs' }, 'hostile', true],
+  ['a cow', { name: 'cow', type: 'animal', kind: 'Passive mobs' }, 'passive', false]
+]
+for (const [label, fields, kind, creeper] of mobCases) {
+  test(`entities classifies ${label}`, () => {
+    const p = withBot(bot => { bot.entities = { 5: { id: 5, position: at(3, 64, 0), ...fields } } })
+    const [e] = p.entities({})
+    assert.deepEqual([e.kind, e.name, Boolean(e.creeper)], [kind, fields.name, creeper])
+  })
+}
+
+// ---- death and respawn events ----
+
+test('the died event carries the death position and the inventory at that moment', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.entity.position = new Vec3(4, 70, 2)
+  bot.emit('death')
+  bot.entity.position = new Vec3(0, 64, 0)
+  assert.deepEqual(seen, [{ kind: 'died', pos: at(4, 70, 2), inventory: [{ name: 'bread', count: 2, slot: 36 }, { name: 'cobblestone', count: 4, slot: 37 }] }])
+})
+
+test('the respawned event waits for the spawn and carries the new position and dimension', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.game = { dimension: 'overworld' }
+  bot.emit('respawn')
+  assert.deepEqual(seen, [])
+  bot.entity.position = new Vec3(100, 65, -3)
+  bot.emit('spawn')
+  assert.deepEqual(seen, [{ kind: 'spawned' }, { kind: 'respawned', pos: at(100, 65, -3), dimension: 'overworld' }])
+  bot.emit('spawn')
+  assert.deepEqual(seen.map(e => e.kind), ['spawned', 'respawned', 'spawned'])
+})
+
+// ---- offline ----
+
+const MIN = 60000
+const online = async (extra = {}) => {
+  const bots = []
+  const opts = { host: 'h', port: 1, username: 'u' }
+  const seenOpts = []
+  const connect = extra.connect ?? (async o => { seenOpts.push(o); const b = stubBot(world); bots.push(b); return b })
+  const p = await createPrimitives(opts, { connect, timeScale: extra.timeScale ?? 0.0001 })
+  p.setOwner('t1')
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  return { p, bots, seen, seenOpts, opts }
+}
+
+test('offline quits, waits, reconnects with the same params and rebinds every primitive', async () => {
+  const { p, bots, seen, seenOpts, opts } = await online()
+  const result = await p.offline('t1', { ms: 1000 })
+  assert.deepEqual(result, { status: 'ok', ms: 1000 })
+  assert.equal(bots.length, 2)
+  assert.deepEqual(seenOpts, [opts, opts])
+  assert.deepEqual(names(bots[0]), ['quit'])
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
+  bots[1].health = 7
+  assert.equal(p.self().health, 7)
+  await p.look('t1', { yaw: 0, pitch: 0 })
+  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), ['look'])
+  assert.deepEqual(names(bots[0]), ['quit'])
+})
+
+test('offline reports its ms in the events and the online event carries the position', async () => {
+  const { p, seen } = await online()
+  await p.offline('t1', { ms: 1000 })
+  assert.deepEqual(seen, [{ kind: 'offline', ms: 1000 }, { kind: 'online', pos: at(0, 64, 0) }])
+})
+
+test('events of the new bot reach listeners and the old bot goes quiet', async () => {
+  const { p, bots, seen } = await online()
+  await p.offline('t1', { ms: 1000 })
+  bots[0].emit('end', 'quit')
+  bots[0].emit('chat', 'Dan', 'ghost')
+  bots[1].emit('chat', 'Dan', 'hi')
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online', 'chat'])
+})
+
+const clampCases = [[undefined, 5 * MIN], [null, 5 * MIN], [100 * MIN, 10 * MIN], [0, 0], [12.7, 12]]
+for (const [ms, expected] of clampCases) {
+  test(`offline with ms ${ms} waits ${expected}`, async () => {
+    const { p } = await online({ timeScale: 1e-6 })
+    assert.equal((await p.offline('t1', ms === undefined ? {} : { ms })).ms, expected)
+  })
+}
+
+for (const ms of ['soon', -5, NaN, Infinity]) {
+  test(`offline with ms ${ms} rejects with bad-args and stays online`, async () => {
+    const { p, bots } = await online()
+    await assert.rejects(p.offline('t1', { ms }), err => err.code === 'bad-args')
+    assert.equal(bots.length, 1)
+    assert.deepEqual(names(bots[0]), [])
+  })
+}
+
+test('offline with a stale token rejects with cut and never quits', async () => {
+  const { p, bots } = await online()
+  await assert.rejects(p.offline('old', { ms: 1000 }), err => err.code === 'cut')
+  assert.deepEqual(names(bots[0]), [])
+})
+
+test('offline from createPrimitivesFromBot is unsupported and leaves the bot alone', async () => {
+  const { bot, p } = rig(world)
+  assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'unsupported' })
+  assert.deepEqual(names(bot), [])
+})
+
+test('a cut during the wait still reconnects, then resolves cut', async () => {
+  const { p, bots, seen } = await online()
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  p.setOwner('t2')
+  assert.deepEqual(await pending, { status: 'cut' })
+  assert.equal(bots.length, 2)
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
+  assert.equal(p.self().username, 'Stub')
+})
+
+test('close during the wait cancels the reconnect', async () => {
+  const { p, bots, seen } = await online()
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  await p.close()
+  assert.deepEqual(await pending, { status: 'closed' })
+  assert.equal(bots.length, 1)
+  assert.deepEqual(seen.map(e => e.kind), ['offline'])
+})
+
+test('close while the reconnect is in flight quits the bot it produces', async () => {
+  const bots = []
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let calls = 0
+  const connect = async () => {
+    calls += 1
+    if (calls > 1) await gate
+    const b = stubBot(world)
+    bots.push(b)
+    return b
+  }
+  const { p, seen } = await online({ connect })
+  const pending = p.offline('t1', { ms: 1 })
+  while (calls < 2) await new Promise(resolve => setTimeout(resolve, 1))
+  await p.close()
+  release()
+  assert.deepEqual(await pending, { status: 'closed' })
+  assert.deepEqual(names(bots[1]), ['quit'])
+  assert.deepEqual(seen.map(e => e.kind), ['offline'])
+})
+
+test('a failed reconnect is retried', async () => {
+  let calls = 0
+  const bots = []
+  const connect = async () => {
+    calls += 1
+    if (calls === 2) throw new Error('refused')
+    const b = stubBot(world)
+    bots.push(b)
+    return b
+  }
+  const { p, seen } = await online({ connect })
+  assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'ok', ms: 1000 })
+  assert.equal(calls, 3)
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
+})
+
+test('a reconnect that keeps failing rejects and reports the body disconnected', async () => {
+  let calls = 0
+  const connect = async () => {
+    calls += 1
+    if (calls > 1) throw new Error('refused')
+    return stubBot(world)
+  }
+  const { p, seen } = await online({ connect })
+  await assert.rejects(p.offline('t1', { ms: 1000 }), /refused/)
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'disconnected'])
 })
