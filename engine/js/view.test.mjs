@@ -995,3 +995,52 @@ test('relight cost: one torch, a mining burst along a tunnel, and changes spread
   assert.equal(report['one torch warm'].boxes, 1)
   assert.equal(report['20 spread 40 apart'].boxes + report['20 spread 40 apart'].carried >= 20, true)
 })
+
+// ---- biomes.json ----
+
+const biomesPath = dir => path.join(dir, 'worlds', 'w', 'biomes.json')
+const withBiomes = (bot, list) => { bot.registry = { ...bot.registry, biomesArray: list }; return bot }
+const entries = [{ id: 1, name: 'plains' }, { id: 0, name: 'badlands', extra: 1 }, { id: 2, name: 'minecraft:desert' }]
+
+test('attach writes the server biome registry, sorted by id, without the namespace', async () => {
+  const { view, dir } = makeView(withBiomes(fakeBot(), entries))
+  await view.idle()
+  assert.deepEqual(readJson(biomesPath(dir)), {
+    v: 1, mcVersion: VERSION, biomes: [{ id: 0, name: 'badlands' }, { id: 1, name: 'plains' }, { id: 2, name: 'desert' }]
+  })
+})
+
+test('a second attach with the same registry does not rewrite biomes.json; a different one does', async () => {
+  const { view, dir } = makeView(withBiomes(fakeBot(), entries))
+  await view.idle()
+  const old = new Date(1000)
+  fs.utimesSync(biomesPath(dir), old, old)
+  view.attach(withBiomes(fakeBot(), entries))
+  await view.idle()
+  assert.equal(fs.statSync(biomesPath(dir)).mtimeMs, 1000)
+  view.attach(withBiomes(fakeBot(), [...entries, { id: 3, name: 'jungle' }]))
+  await view.idle()
+  assert.notEqual(fs.statSync(biomesPath(dir)).mtimeMs, 1000)
+  assert.equal(readJson(biomesPath(dir)).biomes.length, 4)
+})
+
+test('a broken biomes.json is replaced', async () => {
+  const dir = tmp()
+  fs.mkdirSync(path.dirname(biomesPath(dir)), { recursive: true })
+  fs.writeFileSync(biomesPath(dir), '{nope')
+  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', enabled: true })
+  view.attach(withBiomes(fakeBot(), entries))
+  await view.idle()
+  assert.equal(readJson(biomesPath(dir)).biomes.length, 3)
+})
+
+test('a bot without a biome registry writes no biomes.json and does not throw', async () => {
+  const { view, dir } = makeView(fakeBot())
+  await view.idle()
+  assert.equal(fs.existsSync(biomesPath(dir)), false)
+  const bare = fakeBot()
+  delete bare.registry
+  view.attach(bare)
+  await view.idle()
+  assert.equal(fs.existsSync(biomesPath(dir)), false)
+})

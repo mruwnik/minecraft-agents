@@ -11,8 +11,13 @@ Disable everything with `BODY_VIEW=0` (no directories are created). Enabled by d
 | File | Shared by | Written |
 | --- | --- | --- |
 | `state/worlds/<world>/chunks/<cx>.<cz>.bin` | every body in the world | on chunk load and block update |
+| `state/worlds/<world>/biomes.json` | every body in the world | on attach, only if the content differs from the file |
 | `state/agents/<name>/view/pose.json` | one agent | a write attempt on every physics tick (about 20 a second), only if changed, at least every 2 s; `BODY_VIEW_POSE_HZ` > 0 switches to a timer at that rate |
 | `state/agents/<name>/view/hud.json` | one agent | on change, at most once per second |
+
+`biomes.json` is `{"v":1,"mcVersion":...,"biomes":[{"id":0,"name":"badlands"},...]}`, sorted by id, names without the
+`minecraft:` prefix. It is the server's own biome registry (from its login `registry_data`), which the biome ids inside
+chunk data index; ids differ between servers and versions. Not written when the bot has no biome registry.
 
 All writes are atomic: write `<file>.tmp.<pid>`, then `rename`. A reader never sees a partial file.
 `state/` is ignored by the root `.gitignore`.

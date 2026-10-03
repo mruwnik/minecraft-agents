@@ -30,6 +30,7 @@ const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 // ---- files ----
 
 export const columnFile = (stateDir, world, cx, cz) => path.join(stateDir, 'worlds', world, 'chunks', `${cx}.${cz}.bin`)
+export const biomesFile = (stateDir, world) => path.join(stateDir, 'worlds', world, 'biomes.json')
 export const poseFile = (stateDir, agent) => path.join(stateDir, 'agents', agent, 'view', 'pose.json')
 export const hudFile = (stateDir, agent) => path.join(stateDir, 'agents', agent, 'view', 'hud.json')
 
@@ -734,6 +735,20 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     ]
   }
 
+  // the server's biome registry (chunk data's biome ids index it), only rewritten when it changed
+  const writeBiomes = async target => {
+    const list = target.registry?.biomesArray ?? Object.values(target.registry?.biomes ?? {})
+    if (!list.length) return
+    const biomes = list
+      .map(b => ({ id: b.id, name: String(b.name).replace(/^minecraft:/, '') }))
+      .sort((a, b) => a.id - b.id)
+    const content = JSON.stringify({ v: VIEW_VERSION, mcVersion: target.version, biomes })
+    const file = biomesFile(stateDir, world)
+    const existing = await fs.promises.readFile(file, 'utf8').catch(() => null)
+    if (existing === content) return
+    await writeAtomic(file, content)
+  }
+
   const attach = target => {
     unhook()
     overlays.clear()
@@ -747,6 +762,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     // columns that arrived before attach (the spawn column) never fire chunkColumnLoad for us
     const loaded = target.world?.getColumns?.() ?? []
     loaded.forEach(({ chunkX, chunkZ }) => markColumn(Number(chunkX), Number(chunkZ)))
+    track(writeBiomes(target)).catch(reportError)
     const tableStart = performance.now()
     try { tableFor(target) } catch (err) { reportError(err) }
     stats.relightTableMs += performance.now() - tableStart
