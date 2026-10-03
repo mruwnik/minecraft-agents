@@ -3,7 +3,9 @@
             [cljs.reader :as reader]
             [engine.event-api :as event-api]
             [engine.events :as events]
+            [engine.registry :as registry]
             [engine.test-util :as tu]
+            [engine.triggers :as triggers]
             ["http" :as http]
             ["path" :as path]))
 
@@ -28,18 +30,33 @@
 (defn edn-response [response]
   (reader/read-string (:text response)))
 
+(deftest resumed-job-is-not-reported-as-merely-queued
+  (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
+  (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
+
 (deftest unix-api-serves-edn-snapshot-events-and-resolution
   (async done
     (let [dir (tu/tmp-dir)
           socket-path (path/join dir "events.sock")
           stream (events/make {:generation-id "gen-api"})
-          primitives #js {:self (fn [] #js {:username "TestBody" :pos #js {:x 1 :y 2 :z 3}})
+          primitives #js {:self (fn [] #js {:username "TestBody" :pos #js {:x 1 :y 2 :z 3}
+                                             :health 18 :food 15})
                           :isOffline (fn [] false)
                           :isSettling (fn [] true)}
           eng {:events stream
                :state (atom {:generation-id "gen-api"
-                             :attention {"req-1" {:request-id "req-1" :job-id "j1"}}})
+                             :list ["j1"] :current "j1"
+                             :instances {"j1" {:id "j1" :round 2 :hold? true
+                                               :spec {:op :leaf :job 'jobs.movement.look-around
+                                                      :args {:every-ms 2500}}}}
+                             :attention {"req-1" {:request-id "req-1" :job-id "j1"
+                                                  :reason :round-failed :updated-at 123
+                                                  :event {:kind :failed :message "needs attention"}}}})
                :primitives primitives
+               :jobs registry/jobs
+               :triggers triggers/all
+               :running (atom {:id "j1" :round 2 :reflex :health-low})
+               :manual (atom nil)
                :now (constantly 123)}
           server (event-api/create socket-path eng)
           sid (:stream-id (events/cursor stream))]
@@ -61,6 +78,57 @@
                         (is (= false (:offline snapshot)))
                         (is (= true (:settling snapshot)))
                         (is (contains? (:outstanding snapshot) "req-1"))
+                        (request socket-path "GET" "/status?limit=2" {} nil))))
+             (.then (fn [response]
+                      (let [status (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (.startsWith (:content-type response) "application/edn"))
+                        (is (= :settling (:mode status)))
+                        (is (= {:x 1 :y 2 :z 3} (:position status)))
+                        (is (= 18 (:health status)))
+                        (is (= 15 (:food status)))
+                        (is (= "j1" (get-in status [:current :id])))
+                        (is (= :running (get-in status [:current :status])))
+                        (is (= :health-low (get-in status [:current :reflex])))
+                        (is (= "jobs.movement.look-around" (get-in status [:current :name])))
+                        (is (= {:total 0 :items [] :more? false} (:failed status)))
+                        (is (= "req-1" (get-in status [:outstanding :items 0 :request-id])))
+                        (request socket-path "GET" "/job?id=j1" {} nil))))
+             (.then (fn [response]
+                      (let [job (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (= {:every-ms 2500} (:args job)))
+                        (is (= true (:hold? job)))
+                        (is (= :running (:status job)))
+                        (is (= true (:current? job)))
+                        (request socket-path "GET"
+                                 "/catalog?kind=job&name=jobs.movement.look-around" {} nil))))
+             (.then (fn [response]
+                      (let [job (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (= :job (:kind job)))
+                        (is (= 2000 (get-in job [:args :every-ms :default])))
+                        (is (string? (:doc job)))
+                        (request socket-path "GET" "/catalog?kind=trigger&name=health-low" {} nil))))
+             (.then (fn [response]
+                      (let [trigger (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (= :trigger (:kind trigger)))
+                        (is (= :health-low (:name trigger)))
+                        (is (= :cooldown (:persistence trigger)))
+                        (request socket-path "GET"
+                                 "/catalog?kind=jobs&prefix=jobs.movement.&limit=1&offset=0" {} nil))))
+             (.then (fn [response]
+                      (let [listing (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (= ["jobs.movement.follow"] (:items listing)))
+                        (is (= 1 (:next-offset listing)))
+                        (request socket-path "GET" "/catalog?kind=triggers&prefix=health" {} nil))))
+             (.then (fn [response]
+                      (let [listing (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (= ["health-low"] (:items listing)))
+                        (is (nil? (:next-offset listing)))
                         (request socket-path "GET"
                                  (str "/events?stream-id=" (js/encodeURIComponent sid)
                                       "&after=0&limit=10") {} nil))))
