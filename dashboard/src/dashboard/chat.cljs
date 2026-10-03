@@ -7,25 +7,38 @@
 (defn epoch-ms [t]
   (if (string? t) (js/Date.parse t) t))
 
-;; An engine event {source "chat" kind "said"|"whisper" from message} or an old-style {type "chat"|"whisper" t iso}.
+;; Chat shapes: a body's engine event {source "body" kind "chat" from message} (what others said, heard by that
+;; body), the older {source "chat" kind "said"|"whisper"}, {type "chat"|"whisper" t iso}, and the body's own
+;; chat order {source "action" kind "started" name "chat" args {message to}} (from = the body itself).
+(defn own-chat? [e]
+  (and (= "action" (:source e)) (= "started" (:kind e)) (= "chat" (:name e))))
+
 (defn talk-kind [e]
   (cond
+    (and (= "body" (:source e)) (= "chat" (:kind e))) "chat"
     (and (= "chat" (:source e)) (= "said" (:kind e))) "chat"
     (and (= "chat" (:source e)) (= "whisper" (:kind e))) "whisper"
+    (own-chat? e) (if (get-in e [:args :to]) "whisper" "chat")
     (#{"chat" "whisper"} (:type e)) (:type e)))
+
+(defn talk-from [agent e] (if (own-chat? e) agent (:from e)))
+(defn talk-to [agent e]
+  (cond
+    (own-chat? e) (get-in e [:args :to])
+    (= "whisper" (talk-kind e)) agent))
+(defn talk-message [e] (str (if (own-chat? e) (get-in e [:args :message]) (:message e))))
 
 (defn talk? [e]
   (and (map? e) (talk-kind e)
        (let [t (epoch-ms (:t e))] (and (number? t) (not (js/Number.isNaN t))))
-       (string? (:from e))))
+       (or (own-chat? e) (string? (:from e)))))
 
 (defn talk-line [agent e]
-  (let [kind (talk-kind e)]
-    {:t (epoch-ms (:t e))
-     :from (:from e)
-     :to (when (= "whisper" kind) agent)
-     :kind kind
-     :message (str (:message e))}))
+  {:t (epoch-ms (:t e))
+   :from (talk-from agent e)
+   :to (talk-to agent e)
+   :kind (talk-kind e)
+   :message (talk-message e)})
 
 (defn identity-of [m] [(:from m) (:to m) (:message m)])
 

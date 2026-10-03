@@ -1,5 +1,6 @@
 (ns dashboard.ui.jobsmodel-test
   (:require [cljs.test :refer [deftest is are]]
+            [clojure.string :as str]
             [dashboard.ui.jobsmodel :as jm]))
 
 (def jobs
@@ -55,3 +56,23 @@
     "short" false
     (apply str (repeat 421 "x")) true
     (str (apply str (repeat 300 "x")) "\n\n" (apply str (repeat 300 "y"))) true))
+
+(def long-sentence (str (str/join " " (repeat 60 "word")) "."))
+
+(deftest summaries
+  (are [job expected] (= expected (jm/summary job))
+    {:doc nil :ns-doc nil} {:text "" :more? false}
+    {:doc "Short."} {:text "Short." :more? false}
+    {:doc "No full stop"} {:text "No full stop" :more? false}
+    {:doc "First one. Second one."} {:text "First one." :more? true}
+    {:doc "First!\n\nSecond"} {:text "First!" :more? true}
+    {:doc nil :ns-doc "Go. Far."} {:text "Go." :more? true}
+    {:doc "Pi is 3.14 ok. More"} {:text "Pi is 3.14 ok." :more? true}
+    {:doc long-sentence} {:text (str (str/join " " (repeat 40 "word")) "…") :more? true}))
+
+(deftest arg-counts
+  (are [args n] (= n (jm/arg-count args))
+    nil 0
+    "{}" 0
+    "{:laps {:doc \"x\", :default 1}}" 1
+    "{:mob {:doc \"a\\nb\"}\n :count {:doc \"c\"}\n :radius {:doc \"r\"}}" 3))

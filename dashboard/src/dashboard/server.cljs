@@ -26,7 +26,8 @@
 (def worlds-dir (.join path root "state" "worlds"))
 
 (def first-read-bytes (* 4 1024 1024)) ; ~10 minutes of debug-heavy engine events
-(def chat-tail-bytes (* 64 1024))
+(def chat-tail-bytes (* 4 1024 1024))
+(def chat-keep 2000)
 (def max-preview-bytes (* 2 1024 1024))
 
 ;; ---------------------------------------------------------------- files
@@ -215,21 +216,30 @@
            :selected world-name)))
 
 ;; ---------------------------------------------------------------- chat
-(defn read-chat-tail [file]
-  (let [size (.-size (.statSync fs file))
-        start (max 0 (- size chat-tail-bytes))
-        bytes (read-range file start size)
-        whole (if (pos? start) (ee/drop-torn-head bytes) bytes)]
-    {:size size :lines (filterv chat/talk? (ee/parse-event-lines (ee/decode-bytes whole)))}))
+(defn talk-lines-of [bytes]
+  (filterv chat/talk? (ee/parse-event-lines (ee/decode-bytes bytes))))
 
-;; the tail is kept per folder and re-read only when the file's size changed
+;; First sight of a file: its last chat-tail-bytes. After that only the bytes appended since (a line still being
+;; written is carried to the next read); a file that shrank starts over. Position events flood the file, so a small
+;; tail would forget a chat line within minutes.
+(defn read-chat-tail [file cached]
+  (let [size (.-size (.statSync fs file))
+        fresh? (or (nil? cached) (< size (:size cached)))
+        start (if fresh? (max 0 (- size chat-tail-bytes)) (:size cached))
+        raw (read-range file start size)
+        bytes (if (and fresh? (pos? start)) (ee/drop-torn-head raw) raw)
+        {:keys [complete rest]} (ee/complete-lines (if fresh? (js/Uint8Array. 0) (:rest cached)) bytes)]
+    {:size size
+     :rest rest
+     :lines (vec (take-last chat-keep (into (if fresh? [] (:lines cached)) (talk-lines-of complete))))}))
+
 (defn chat-lines [name]
   (let [file (events-file name)
         size (.-size (.statSync fs file))
         cached (get @tails name)]
     (if (= size (:size cached))
       (:lines cached)
-      (let [tail (read-chat-tail file)]
+      (let [tail (read-chat-tail file cached)]
         (swap! tails assoc name tail)
         (:lines tail)))))
 

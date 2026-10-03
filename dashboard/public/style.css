@@ -123,7 +123,10 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .dbanner { display: flex; align-items: center; gap: 12px; padding: 4px 10px; border-radius: 5px; flex: 1; }
 .dbanner.ours { background: rgba(248,81,73,.18); border: 1px solid var(--danger); color: #ffb3ad; }
 .dbanner.other { background: rgba(210,153,34,.16); border: 1px solid var(--trouble); color: var(--trouble); }
-.dbanner .countdown { font-family: var(--mono); font-size: 12px; }
+.dbanner .countdown { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.dbanner b, .dbanner .release { white-space: nowrap; }
+.dchrome .dbanner { flex: 1 1 0; min-width: 0; }
+.dchrome .dbanner ~ .spacer { flex: 0 0 0; }
 .release { margin-left: auto; background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 700; font-size: 14px; padding: 6px 18px; }
 .release:hover { background: #ff6a62; }
 .viewarea { flex: 1; min-height: 0; container-type: size; display: flex; align-items: center; justify-content: center; background: #05070a; border-radius: 4px; }
