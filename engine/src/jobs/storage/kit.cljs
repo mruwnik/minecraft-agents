@@ -31,7 +31,11 @@
   the next is tried. A short result drops the kept inspect, so the next round inspects again
   (an ok act, so short crafts alone never trip the backoff). Food short is made as bread from wheat (chest or body) in
   batches of 3. The result gets :missing {kind text} for what could not be made
-  (\"no-table\" ends the phase for every short kind), only when non-empty.")
+  (\"no-table\" and \"full\" (inventory full) end the phase for every short kind),
+  only when non-empty. A craft phase that ends with a non-empty :missing is
+  remembered as :no-craft in body memory for 10 minutes: while it lives, a take
+  phase that would enter the craft phase finishes at once with the short and the
+  remembered :missing of the kinds still short.")
 
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
@@ -99,7 +103,9 @@
      needs)))
 
 (defn check
-  "A chest is known."
+  "A chest is known. A complete kit is not a false check: the job must stay
+  admitted to report {:short {}} (a parent reads it), and its first round
+  then ends at once without walking or inspecting."
   [c]
   (boolean (deposit/chest-of (ctx/view c) (:args c))))
 
@@ -122,7 +128,11 @@
 
 (def craft-keys [:phase :try :ruled :why :missing :steps :chest-items])
 
-(def table-reasons #{"no-table" "not-a-table" "unreachable"})
+(def table-reasons #{"no-table" "not-a-table" "unreachable" "full"})
+
+(def no-craft-ms (* 10 60 1000))
+
+(def no-craft-policy {:cap 1 :ttl no-craft-ms})
 
 (defn mkey
   "Memory key of a kind: the keyword :food is kept as the string \"food\"."
@@ -243,7 +253,23 @@
         short (into {} still)]
     (when (seq short)
       (ctx/emit! c :kit.short :info {:short short :text (str "kit still short " (pr-str short) (when (seq missing) (str ", missing " (pr-str missing))))}))
+    (when (seq missing) (ctx/remember! c :no-craft {:missing missing} no-craft-policy))
     (ctx/result! c (cond-> {:gave-up false :short short} (seq missing) (assoc :missing missing)))
+    :done))
+
+(defn remembered-missing
+  "The :missing of the live :no-craft entry restricted to the kinds in short, or nil."
+  [c short]
+  (when (pos? (ctx/count-in c :no-craft no-craft-ms))
+    (let [missing (:missing (:data (ctx/latest c :no-craft)))]
+      (not-empty (into {} (filter (fn [[k _]] (contains? short k))) missing)))))
+
+(defn finish-uncrafted!
+  "Finish without a craft phase: the short, plus what the remembered failure says."
+  [c short]
+  (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
+  (let [missing (remembered-missing c short)]
+    (ctx/result! c (cond-> {:gave-up false :short short} missing (assoc :missing missing)))
     :done))
 
 (defn ^:async load-chest!
@@ -311,6 +337,8 @@
               (let [inv (u/inventory (:primitives c))
                     {:keys [take short]} (plan still inv (stacks-of (.-items seen)))]
                 (cond
+                  (and (empty? take) (:craft a) (pos? (ctx/count-in c :no-craft no-craft-ms)))
+                  (finish-uncrafted! c short)
                   (and (empty? take) (:craft a))
                   (do (ctx/update-mem! c assoc :phase :craft :chest-items (stacks-of (.-items seen)))
                       :continue)

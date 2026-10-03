@@ -16,7 +16,7 @@
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async run-until-empty [eng n]
   (loop [i 0]
@@ -225,3 +225,48 @@
           (is (= {:gave-up false :short {}} result))
           (is (= 1 (get inv "stone_hoe")))
           (is (= 4 (get chest "stick"))))))))
+
+;; ------------------------------------------------------------------ check, full inventory, remembered failures
+
+(deftest kit-craft-ends-done-when-the-inventory-is-full
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [packed (concat (repeat 34 {:name "dirt" :count 64}) [{:name "cobblestone" :count 2} {:name "stick" :count 2}])
+              {:keys [result p]} (await (craft-run {:contents [{:name "dirt" :count 4}] :carried packed}))]
+          (is (= {:gave-up false :short {"hoe" 1} :missing {"hoe" "full"}} result))
+          (is (empty? (calls p "toss"))))))))
+
+(defn ^:async two-runs
+  "Run the kit twice on one engine with a dirt-only chest, advancing the clock by gap between: [first second third crafts-after-each]."
+  [gaps]
+  (let [{:keys [eng p clock]} (setup {:containers {"10,64,0" [{:name "dirt" :count 4}]} :blocks table :recipes hoe-recipes})]
+    (loop [gaps gaps out []]
+      (if (empty? gaps)
+        out
+        (let [_ (swap! clock + (first gaps))
+              r (await (child-outcome eng job hoe-args 60))]
+          (recur (rest gaps) (conj out [r (count (calls p "craft")) (count (calls p "inspectContainer"))])))))))
+
+(deftest kit-remembers-a-failed-craft-so-repeat-does-not-retry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [missing {:gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}
+              [[r1 c1] [r2 c2] [r3 c3]] (await (two-runs [0 1000 (* 11 60 1000)]))]
+          (is (= missing r1))
+          (is (pos? c1))
+          (is (= missing r2))
+          (is (= c1 c2) "no craft call while the failure is remembered")
+          (is (= missing r3))
+          (is (> c3 c2) "tried again after the memory expired"))))))
+
+(deftest kit-complete-ends-at-once-without-walking-or-inspecting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "stone_hoe" :count 2} {:name "bread" :count 12}]
+                                      :containers {"10,64,0" full-chest}})
+              result (await (child-outcome eng job kit-args 4))]
+          (is (= {:gave-up false :short {}} result))
+          (is (empty? (.-calls (.-world p))) "no walk, inspect or transfer call"))))))

@@ -1,0 +1,3 @@
+;; kit craft live: kit repeated, a failed craft must not be retried each round
+{:register []
+ :queue [(repeat (jobs.storage.kit {:chest {:x 9000 :y 101 :z 9000} :tools ["hoe"] :spare 0 :food 0}))]}
