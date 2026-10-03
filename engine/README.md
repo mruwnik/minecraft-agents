@@ -104,7 +104,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
@@ -113,6 +113,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 - `health` 0..20 and `food` 0..20; `foodSaturation` is the hidden saturation (0..20).
 - `oxygen` 0..20 bubbles (`bot.oxygenLevel`; 20 until the server reports air).
+- `chunkLoaded`: false when the column under the body is not loaded (`bot.blockAt` of the body's position is null); mineflayer's physics then emits no tick and the body hangs frozen.
 - `effects`: the active status effects, `[{name, amplifier, duration}]` (`[]` when none), from `bot.entity.effects`
   with the name looked up in `bot.registry.effects` and normalised to snake_case without namespace (the registry
   says `FireResistance`; `self()` says `fire_resistance`). The burning trigger ignores a body with `fire_resistance`.
@@ -239,7 +240,7 @@ means the body never left the ground, or did not end a block higher. The result 
 `partial` when some were, `failed` when none. Cut-aware like `swim`: jump is released on every exit. Not yet verified live
 (unit tests on the stub bot and the fake only).
 
-With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or (dry) are within 1.5 blocks of the target's cell centre, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. While it swims toward a target the body's collision half-width is 0.31 instead of 0.3 (restored on every exit): verified live on 26.1, a body resting flush against the rim wall is snapped back by the server every tick (a forced move per tick) so the water-exit impulse never lands, while 0.31 climbs onto the rim in about a second. The fake lands the body on the target when it is within 6 blocks and standable, else times out.
+With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or (dry) are within 1.5 blocks of the target's cell centre, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. Every bound bot has collision half-width 0.31 instead of mineflayer's 0.3: verified live on 26.1, a body whose box touches a block face exactly (flush against a rim wall or a step, or beside a block it walks past) has every move rejected and is set back about 20 times a second, so the water-exit impulse never lands (2 of 2 walks past one block stuck 25 s at 0.3; 3 of 3 took under a second at 0.31). The fake lands the body on the target when it is within 6 blocks and standable, else times out.
 
 `swim` without `toward` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
 pathfinder has no swim-up move and `moveTo` cannot surface a submerged body. It releases jump on every exit:
@@ -258,7 +259,7 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
-(`from`, `message`), `picked-up` (`item`, `count`: the body picked up an item entity), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `world-not-loaded` (`ms`, warn level: the column under the body did not load within 10 s after spawn or a reconnect; the body is used anyway), `offline` (`ms`), `online` (`pos`). `died` is
+(`from`, `message`), `picked-up` (`item`, `count`: the body picked up an item entity), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `world-not-loaded` (`ms`, warn level: the column under the body did not load within 10 s after spawn or a reconnect; the body is used anyway), `physics-stalled` (`pos`, `ms`, warn level: no physics tick for 2 s because the column under the body is not loaded; the walk goal is cleared and controls released), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
 it carried. An instant death (`/kill`, void, damage) has the server clear the slots before the event is read, so when the live inventory is empty `inventory` is the last snapshot of the living body (taken on each health event above 0 and about once a second of physics ticks); `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death

@@ -1277,3 +1277,10 @@
     (.emit (.-world p) #js {:kind "world-not-loaded" :ms 10000})
     (is (= [[:world-not-loaded :warn]]
            (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+
+
+(deftest physics-stalled-is-a-warn-level-event
+  (let [{:keys [p seen]} (setup)]
+    (.emit (.-world p) #js {:kind "physics-stalled" :pos #js {:x 0 :y 64 :z 0} :ms 2100})
+    (is (= [[:physics-stalled :warn]]
+           (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))

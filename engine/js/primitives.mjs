@@ -34,6 +34,14 @@ const RECONNECT_TRIES = 3
 const RECONNECT_RETRY_MS = 5000
 const WORLD_TIMEOUT_MS = 10000
 const WORLD_POLL_MS = 50
+const PHYSICS_STALL_MS = 2000 // no physicsTick this long over an unloaded column: the body hangs frozen
+const STALL_POLL_MS = 250
+// Every bound body is 0.01 wider than mineflayer's 0.3: the server rejects every move of a body whose box touches a
+// block face exactly (pressed against a step, or the side of a block it walks past) and sets it back to the same
+// position about 20 times a second, indefinitely. Verified live against 26.1: 2 of 2 walks past one block on a flat
+// stone pad stuck 25 s at 0.3, 3 of 3 took 0.7-1 s with no setbacks at 0.31 (same on a leaf-litter hillside where
+// every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out at 0.31.
+const BODY_HALF_WIDTH = 0.31
 const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 const STEP_RISE = 1.0
@@ -298,6 +306,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const effects = () => Object.values(bot.entity.effects ?? {})
     .map(e => ({ name: effectName(e.id), amplifier: e.amplifier, duration: e.duration }))
 
+  // false while the column under the body is not loaded: mineflayer's physics then skips its tick and the body hangs.
+  const columnLoaded = () => Boolean(bot.blockAt(bot.entity.position))
+
   const self = () => {
     if (isOffline()) return { status: 'offline' }
     const timeOfDay = bot.time.timeOfDay
@@ -312,6 +323,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       inWater: bot.entity.isInWater ?? feetIn('water'),
       inLava: bot.entity.isInLava ?? feetIn('lava'),
       onGround: Boolean(bot.entity.onGround),
+      chunkLoaded: columnLoaded(),
       isSleeping: Boolean(bot.isSleeping),
       effects: effects(),
       experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
@@ -411,11 +423,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const dry = () => bot.blockAt(vec(cell(here())))?.name !== 'water'
   const standing = () => dry() && bot.blockAt(vec({ ...cell(here()), y: cell(here()).y - 1 }))?.boundingBox === 'block'
 
-  // Swimming toward a rim, the body is made 0.01 wider: the server rejects a client body that rests flush against a
-  // wall and snaps it back every tick, so the water-exit impulse of the physics never lands. Verified live against
-  // 26.1: half-width 0.3 stays pressed on the rim wall, 0.31 climbs out. Restored on every exit.
-  const SWIM_HALF_WIDTH = 0.31
-
   const swim = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
@@ -426,12 +433,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const result = status => ({ status, oxygen: { before, after: oxygenNow() } })
     return act(token, { boundS: ms / 1000, onTimeout: () => result('timeout') }, async ctx => {
       const pressed = new Set()
-      const physics = bot.physics
-      const width = physics?.playerHalfWidth
       const press = control => { if (!pressed.has(control)) { pressed.add(control); bot.setControlState(control, true) } }
       const release = () => {
         for (const control of [...pressed]) { pressed.delete(control); bot.setControlState(control, false) }
-        if (physics && width !== undefined) physics.playerHalfWidth = width
       }
       ctx.onAbort(release)
       try {
@@ -442,7 +446,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           if (arrived()) return result('landed')
           await bot.lookAt(vec(there), true)
           ctx.alive()
-          if (physics && width !== undefined) physics.playerHalfWidth = SWIM_HALF_WIDTH
           while (!arrived()) {
             press('jump')
             press('forward')
@@ -806,7 +809,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const inventoryNow = () => inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
 
   // Wires one bot's events to the listeners; returns the function that unwires them.
+  let lastTick = Date.now() // of the current bot's physics; the watchdog below reads it
+  let stalled = false
   const bindEvents = target => {
+    if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
+    lastTick = Date.now()
+    stalled = false
     let lastHealth = target.health
     let respawning = false
     // The server clears the slots of an instant death (/kill, void, damage) before the death event is read, so the
@@ -816,7 +824,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let ticks = 0
     const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
     const handlers = {
-      physicsTick: () => { if (++ticks % 20 === 0) remember() },
+      physicsTick: () => { lastTick = Date.now(); stalled = false; if (++ticks % 20 === 0) remember() },
       health: () => {
         remember()
         if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
@@ -853,6 +861,19 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
   let down = false
   let unbind = bindEvents(bot)
+
+  // Physics-stall watchdog: the column under the body unloaded and no tick for PHYSICS_STALL_MS. Once per stall it
+  // reports, drops the walk goal and releases the controls; the next physicsTick re-arms it.
+  const watchdog = setInterval(() => {
+    if (closed || down || isOffline() || stalled) return
+    const ms = Date.now() - lastTick
+    if (ms <= PHYSICS_STALL_MS * timeScale || columnLoaded()) return
+    stalled = true
+    emit({ kind: 'physics-stalled', pos: here(), ms })
+    bot.pathfinder?.setGoal(null)
+    bot.clearControlStates()
+  }, Math.max(STALL_POLL_MS * timeScale, 10)) // not below 10 ms: tests shrink time a lot and leave bodies unclosed
+  watchdog.unref()
   const onBodyEvent = listener => {
     listeners.add(listener)
     pending.splice(0).forEach(e => listener(e)) // events from before anyone listened (createPrimitives' wait)
@@ -954,6 +975,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const close = async () => {
     closed = true
+    clearInterval(watchdog)
     setOwner(null)
     await view?.detach()
     view?.stop()

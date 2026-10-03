@@ -191,7 +191,7 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -1037,31 +1037,25 @@ test('the view attaches to every bot, detaches while offline and on close, then 
   assert.deepEqual(calls, [['attach', first], ['detach'], ['attach', second], ['detach'], ['stop']])
 })
 
-// The server rejects a client body that rests flush against a wall (it snaps the body back every tick, so the
-// water-exit impulse never lands). Verified live: a half-width of 0.31 instead of 0.3 climbs out; 0.3 never does.
+// Every bound body gets half-width 0.31 (mineflayer's 0.3 has the server reject every move of a body flush against a block face).
 
-test('swim toward widens the body slightly while it swims and restores the width on every exit', async () => {
-  const widths = []
-  const blocks = pool()
-  const { bot, p } = rig({ blocks })
-  const original = bot.setControlState
-  bot.setControlState = (...args) => { widths.push(bot.physics.playerHalfWidth); return original(...args) }
-  setTimeout(() => { delete blocks['0,64,0'] }, 5)
-  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'landed')
-  assert.ok(widths.length > 0 && widths.every(w => w === 0.31), `widths while pressing: ${widths}`)
-  assert.equal(bot.physics.playerHalfWidth, 0.3)
+test('a bound bot has half-width 0.31, the initial one and a reconnected one', async () => {
+  const first = stubBot(world)
+  const second = stubBot(world)
+  const p = createPrimitivesFromBot(first, { timeScale: SCALE, reconnect: async () => second })
+  assert.equal(first.physics.playerHalfWidth, 0.31)
+  p.setOwner('t1')
+  await p.offline('t1', { ms: 1 })
+  assert.equal(second.physics.playerHalfWidth, 0.31)
+  await p.close()
 })
 
-test('swim toward restores the width after a timeout and after a cut', async () => {
-  const timed = rig({ blocks: pool() })
-  await timed.p.swim('t1', { ms: 3000, toward: rim })
-  assert.equal(timed.bot.physics.playerHalfWidth, 0.3)
-  const cut = rig({ blocks: pool() })
-  const call = cut.p.swim('t1', { ms: 3000, toward: rim })
-  await new Promise(resolve => setTimeout(resolve, 5))
-  cut.p.setOwner('t2')
-  await assert.rejects(call, cutError)
-  assert.equal(cut.bot.physics.playerHalfWidth, 0.3)
+test('swim toward leaves the half-width alone', async () => {
+  const blocks = pool()
+  const { bot, p } = rig({ blocks })
+  setTimeout(() => { delete blocks['0,64,0'] }, 5)
+  await p.swim('t1', { ms: 3000, toward: rim })
+  assert.equal(bot.physics.playerHalfWidth, 0.31)
 })
 
 test('swim toward is not landed while still in the water next to the target', async () => {
@@ -1523,4 +1517,77 @@ test('a reconnect into a world that never loads adopts anyway and emits world-no
   await p.offline('t1', { ms: 1 })
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'world-not-loaded', 'online'])
   assert.equal(seen[1].ms, 100)
+})
+
+test('self reports chunkLoaded from the column under the body', () => {
+  const { bot, p } = rig({ unloaded: true })
+  assert.equal(p.self().chunkLoaded, false)
+  bot.loadWorld()
+  assert.equal(p.self().chunkLoaded, true)
+})
+
+// Physics-stall watchdog: mineflayer emits no physicsTick while the column under the body is unloaded.
+const stallRig = (spec = {}) => {
+  const bot = stubBot(spec)
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  return { bot, p, seen }
+}
+const STALL_WAIT = 80 // well past 2 s * SCALE and a few watchdog periods
+const stalls = seen => seen.filter(e => e.kind === 'physics-stalled')
+
+test('an unloaded column with no physics tick emits physics-stalled once, clears the goal and releases the controls', async () => {
+  const { bot, p, seen } = stallRig({ unloaded: true })
+  await sleep(STALL_WAIT * 2)
+  assert.equal(stalls(seen).length, 1)
+  assert.deepEqual(stalls(seen)[0].pos, { x: 0, y: 64, z: 0 })
+  assert.ok(stalls(seen)[0].ms >= 2000 * SCALE)
+  assert.deepEqual(bot.calls.filter(c => c.name === 'setGoal').map(c => c.args), [[null]])
+  assert.equal(names(bot).filter(n => n === 'clearControlStates').length, 1)
+  await p.close()
+})
+
+for (const [label, ticking, unloaded] of [['a loaded column without ticks', false, false], ['ticks arriving over an unloaded column', true, true]]) {
+  test(`${label} emits nothing`, async () => {
+    const { bot, p, seen } = stallRig({ unloaded })
+    const timer = setInterval(() => bot.emit('physicsTick'), ticking ? 2 : 1e6)
+    await sleep(STALL_WAIT)
+    clearInterval(timer)
+    assert.equal(stalls(seen).length, 0)
+    await p.close()
+  })
+}
+
+test('a physics tick re-arms the watchdog: a second stall emits a second event', async () => {
+  const { bot, p, seen } = stallRig({ unloaded: true })
+  await sleep(STALL_WAIT)
+  bot.emit('physicsTick')
+  await sleep(STALL_WAIT)
+  assert.equal(stalls(seen).length, 2)
+  await p.close()
+})
+
+test('a reconnected bot starts with a fresh last-tick time', async () => {
+  const first = stubBot({})
+  const second = stubBot({})
+  const p = createPrimitivesFromBot(first, { timeScale: SCALE, reconnect: async () => second })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  p.setOwner('t1')
+  await sleep(STALL_WAIT)
+  await p.offline('t1', { ms: 1 })
+  second.unloadWorld()
+  await sleep(5)
+  assert.equal(stalls(seen).length, 0)
+  await sleep(STALL_WAIT)
+  assert.equal(stalls(seen).length, 1)
+  await p.close()
+})
+
+test('close stops the watchdog', async () => {
+  const { p, seen } = stallRig({ unloaded: true })
+  await p.close()
+  await sleep(STALL_WAIT * 2)
+  assert.equal(stalls(seen).length, 0)
 })

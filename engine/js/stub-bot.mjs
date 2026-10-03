@@ -25,6 +25,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     if (name === undefined) return { name: 'air', position: new Vec3(v.x, v.y, v.z), boundingBox: 'empty', diggable: false, getProperties: () => ({}) }
     return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
   }
+  const ownColumn = v => { const p = bot.entity.position; return v.x === p.x && v.y === p.y && v.z === p.z }
   const windowOf = pos => ({
     containerItems: () => containers[pos] ?? [],
     deposit: act('deposit'),
@@ -44,7 +45,9 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     physics: { playerHalfWidth: 0.3 },
     calls,
     loadWorld: () => { notLoaded = false },
-    blockAt: v => { calls.push({ name: 'blockAt', args: [v] }); return blockAt(v) },
+    unloadWorld: () => { notLoaded = true },
+    // the probe at the body's own position (chunkLoaded, the physics watchdog) is not a world read worth recording
+    blockAt: v => { if (!ownColumn(v)) calls.push({ name: 'blockAt', args: [v] }); return blockAt(v) },
     findBlocks: ({ matching, maxDistance, count }) => {
       const found = Object.keys(blocks).map(k => new Vec3(...k.split(',').map(Number)))
         .filter(p => matching(blockAt(p)) && p.distanceTo(bot.entity.position) <= maxDistance)
