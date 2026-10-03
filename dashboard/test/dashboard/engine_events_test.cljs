@@ -340,3 +340,28 @@
       nil true)
     (is (= "view offline" (:error (ee/with-view-status up-view {:status "offline" :poseMtimeMs (+ online-t 500)}))))
     (is (= false (:up (ee/with-view-status (view [(ev 1)] (+ t0 99000)) {:status "online" :poseMtimeMs t0}))))))
+
+(def base-view {:up true :signals {:hp 20} :pos {:x 0}})
+(def base-ctx {:position {:x 1} :cursor 7 :generation-id "g1" :outstanding {:a 1}
+               :scheduler-summary {:jobs ["a"]} :offline? false :snap-present? true :settling? false})
+
+(deftest body-view-merges-scheduler-summary
+  (let [v (ee/body-view base-view base-ctx)]
+    (is (some? v))
+    (is (= {:up true :signals {:hp 20} :pos {:x 1} :cursor 7 :generation-id "g1"
+            :outstanding {:a 1} :jobs ["a"]}
+           v))))
+
+(deftest body-view-offline-error
+  (are [snap? err] (= {:up false :error err}
+                      (select-keys (ee/body-view base-view (assoc base-ctx :offline? true :snap-present? snap?))
+                                   [:up :error]))
+    true "disconnected"
+    false "event service unavailable"))
+
+(deftest body-view-settling
+  (are [settling? expected] (= expected
+                               (:settling (ee/body-view base-view (assoc base-ctx :settling? settling?))))
+    true true
+    false nil)
+  (is (not (contains? (ee/body-view base-view base-ctx) :settling))))

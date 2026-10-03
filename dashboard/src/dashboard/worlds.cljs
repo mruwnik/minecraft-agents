@@ -40,3 +40,15 @@
 (defn agent-in-world? [agents name world-name]
   (or (nil? world-name)
       (boolean (some #(and (= name (:name %)) (= world-name (:world %))) agents))))
+
+;; JSON legend keys are single characters such as "~" or "#"; keywordized they
+;; print as :~ and the browser's cljs.reader cannot read them back
+(defn readable-place [place]
+  (let [legend (get-in place [:structure :legend])]
+    (if (map? legend)
+      (assoc-in place [:structure :legend]
+                (into {} (map (fn [[k v]] [(name k) v])) legend))
+      place)))
+
+(defn readable-places [places]
+  (mapv readable-place places))

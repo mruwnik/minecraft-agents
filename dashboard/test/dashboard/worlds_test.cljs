@@ -1,5 +1,6 @@
 (ns dashboard.worlds-test
   (:require [cljs.test :refer [deftest is testing]]
+            [cljs.reader :as reader]
             [dashboard.worlds :as worlds]))
 
 (deftest parse-world-list-sorted-with-host-and-port
@@ -62,3 +63,21 @@
              ["an agent with no world" "Free" "main" false]]]
       (testing why
         (is (= expected (worlds/agent-in-world? agents name world)))))))
+
+(def tilde-place {:name "hut" :structure {:legend {(keyword "~") "water" (keyword "#") "wall" :w "wood"} :rows ["#~w"]}})
+
+(deftest readable-places-stringifies-legend-keys
+  (is (= [{:name "hut" :structure {:legend {"~" "water" "#" "wall" "w" "wood"} :rows ["#~w"]}}]
+         (worlds/readable-places [tilde-place]))))
+
+(deftest readable-places-leaves-other-places-alone
+  (let [places [{:name "a"}
+                {:name "b" :structure {:rows ["x"]}}
+                {:name "c" :structure {:legend "text"}}
+                {:name "d" :structure nil}]]
+    (is (= places (worlds/readable-places places)))))
+
+(deftest readable-places-survive-the-edn-reader
+  (is (thrown? js/Error (reader/read-string (pr-str [tilde-place]))))
+  (is (= [{:name "hut" :structure {:legend {"~" "water" "#" "wall" "w" "wood"} :rows ["#~w"]}}]
+         (reader/read-string (pr-str (worlds/readable-places [tilde-place]))))))

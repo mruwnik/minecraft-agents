@@ -153,6 +153,16 @@
        :error10m (count-level "error")
        :signals (:signals state)})))
 
+(defn body-view
+  "The engine view for one body: the folded view plus live position/cursor/outstanding, the scheduler summary merged over it,
+  then the offline override and the settling flag."
+  [engine-view {:keys [position cursor generation-id outstanding scheduler-summary offline? snap-present? settling?]}]
+  (cond-> (-> engine-view
+              (assoc :pos position :cursor cursor :generation-id generation-id :outstanding outstanding)
+              (merge scheduler-summary))
+    offline? (assoc :up false :error (if snap-present? "disconnected" "event service unavailable"))
+    settling? (assoc :settling true)))
+
 ;; pose.json's status "offline", written after the connect, also takes a body down (the pose is newer than the last spawn).
 (defn with-view-status [engine pose]
   (if (and (:up engine)

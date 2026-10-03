@@ -90,7 +90,7 @@
   (mapv (fn [n]
           (let [dir (.join path worlds-dir n)]
             {:name n
-             :places (read-json (.join path dir "places.json") [])
+             :places (worlds/readable-places (read-json (.join path dir "places.json") []))
              :zones (read-json (.join path dir "zones.json") [])
              :clock (read-json (.join path dir "clock.json") nil)}))
         (world-names)))
@@ -313,14 +313,14 @@
         offline? (or (and canonical? live-error)
                      (true? (:offline snap))
                      (and canonical? (nil? snap)))
-        view (cond-> (-> engine-view
-                         (assoc :pos position
-                                :cursor (:cursor live)
-                                :generation-id (:generation-id snap)
-                                :outstanding outstanding)
-                         scheduler-summary)
-               offline? (assoc :up false :error (if snap "disconnected" "event service unavailable"))
-               (:settling snap) (assoc :settling true))]
+        view (ee/body-view engine-view {:position position
+                                        :cursor (:cursor live)
+                                        :generation-id (:generation-id snap)
+                                        :outstanding outstanding
+                                        :scheduler-summary scheduler-summary
+                                        :offline? offline?
+                                        :snap-present? (some? snap)
+                                        :settling? (boolean (:settling snap))})]
     (assoc (ee/engine-body agent (ee/with-view-status view pose-view))
            :state (when position {:pos position})
            :outstanding outstanding
@@ -357,7 +357,7 @@
 
 (defn attach-villages [worlds villages]
   (mapv (fn [w]
-          (assoc w :places (from-js (legacy/attach-village-status repo-root (to-js (:places w)) villages))))
+          (assoc w :places (worlds/readable-places (from-js (legacy/attach-village-status repo-root (to-js (:places w)) villages)))))
         worlds))
 
 (declare send-edn!)
