@@ -1,0 +1,4 @@
+;; ProbeAttack live case: :absent :wait, a husk summoned 10 s after the start is attacked
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "husk" :absent :wait}))
+         (repeat (jobs.movement.look-around))]}
