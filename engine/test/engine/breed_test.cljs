@@ -172,6 +172,91 @@
           (is (= ["u1" "u2"] (:fed (done-event s))))
           (is (= 0 (count-of s "wheat")) "each cow ate one wheat, none twice"))))))
 
+;; ------------------------------------------------------------ the hand
+
+(def axe [{:name "iron_axe" :count 1}])
+
+(defn held-at-end [{:keys [p]}] (.-held (.self p)))
+(defn call-names [{:keys [p]}] (mapv #(.-name %) (.-calls (.-world p))))
+(defn args-of [{:keys [p]} name] (mapv #(js->clj (.-args %) :keywordize-keys true) (h/calls p name)))
+
+(deftest puts-the-previous-item-back-in-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:self {:held "iron_axe"} :inventory (into (wheat 2) axe) :entities [(cow 1 2) (cow 2 3)]} 4))
+              names (call-names s)]
+          (is (= :fed (:reason (done-event s))))
+          (is (= "iron_axe" (held-at-end s)))
+          (is (= :restored (:hand (done-event s))))
+          (is (= [{:item "iron_axe"}] (args-of s "equip")))
+          (is (< (.lastIndexOf names "interact") (.lastIndexOf names "equip"))))))))
+
+(deftest empties-the-hand-when-it-was-empty
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 4))]
+          (is (= :fed (:reason (done-event s))))
+          (is (nil? (held-at-end s)))
+          (is (= :emptied (:hand (done-event s))))
+          (is (= 1 (count (h/calls (:p s) "unequip"))))
+          (is (empty? (h/calls (:p s) "equip"))))))))
+
+(deftest empties-the-hand-when-the-previous-item-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:self {:held "stick"} :inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 4))]
+          (is (= :fed (:reason (done-event s))))
+          (is (nil? (held-at-end s)))
+          (is (= :emptied (:hand (done-event s))))
+          (is (empty? (h/calls (:p s) "equip")))
+          (is (= 1 (count (h/calls (:p s) "unequip")))))))))
+
+(deftest a-full-inventory-keeps-the-food-in-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [others (mapv #(hash-map :name (str "item_" %) :count 1) (range 35))
+              s (await (scenario {:mob "cow"} {:inventory (into (wheat 3) others) :entities [(cow 1 2) (cow 2 3)]} 4))]
+          (is (= :fed (:reason (done-event s))))
+          (is (= :full (:hand (done-event s))))
+          (is (= "wheat" (held-at-end s)))
+          (is (= 1 (count (events-of s :breed.hand-full))))
+          (is (= :warn (:level (first (events-of s :breed.hand-full))))))))))
+
+(deftest touches-no-hand-when-nothing-was-fed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:self {:held "iron_axe"} :inventory axe :entities [(cow 1 2) (cow 2 3)]} 4))]
+          (is (= :no-food (:reason (done-event s))))
+          (is (empty? (h/calls (:p s) "equip")))
+          (is (empty? (h/calls (:p s) "unequip")))
+          (is (not (contains? (done-event s) :hand)))
+          (is (= "iron_axe" (held-at-end s))))))))
+
+(deftest a-cut-job-restores-the-hand-when-it-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (h/setup {:self {:held "iron_axe"} :inventory (into (wheat 2) axe) :entities [(cow 1 2) (cow 2 3)]})
+              release (.hold (.-world p) "interact")]
+          (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
+          (let [round (core/tick! eng)]
+            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (await round)
+            (release))
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (await (run-ticks s 4 700))
+          (is (finished? s))
+          (is (= :fed (:reason (done-event s))))
+          (is (= "iron_axe" (held-at-end s)))
+          (is (= :restored (:hand (done-event s))))
+          (is (= [{:item "iron_axe"}] (args-of s "equip"))))))))
+
 ;; ------------------------------------------------------------ keys, babies, refusals
 
 (deftest no-effect-is-a-failure-for-backoff

@@ -32,7 +32,15 @@
   with the reason of that rule, after three fruitless rounds in a row (blocked
   walks, refusals, out-of-reach, cannot or failed feedings), before the engine
   would back it off. The check
-  always passes, so a cut job resumes and ends itself.")
+  always passes, so a cut job resumes and ends itself.
+  Animals follow a body holding their food, so the hand is given back: right
+  before the first feeding the job notes what the hand holds, and when it ends
+  (every reason) it equips that item again when still carried, else empties the
+  hand (unequip). The handover then has :hand, :restored (equipped the previous
+  item), :emptied (unequipped, or already empty) or :full (no free slot: the
+  food stays in hand, and a warn breed.hand-full); no :hand when nothing was
+  fed. A cut job restores the hand when it resumes and ends; a job cancelled
+  while cut does not (there is no cancel hook).")
 
 (def args
   {:mob {:doc "the mob type to breed, such as \"cow\"" :default nil}
@@ -46,19 +54,46 @@
 
 (defn check [_c] true)
 
-(defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+(defn ^:async restore-hand!
+  "Put the hand back as note-hand! found it. Resolves to :restored, :emptied
+  or :full (the food stays in hand)."
+  [c before]
+  (if (some #(= before (:name %)) (u/inventory (:primitives c)))
+    (do (await (ctx/act c :equip #js {:item before})) :restored)
+    (let [r (await (ctx/act c :unequip #js {}))]
+      (if (= "full" (.-status r)) :full :emptied))))
+
+(defn ^:async hand-result
+  "{:hand outcome} once the hand was noted, else {}."
+  [c]
+  (let [m (ctx/mem c)]
+    (if-not (:hand-noted m)
+      {}
+      (let [outcome (await (restore-hand! c (:hand-before m)))]
+        (when (= :full outcome)
+          (ctx/emit! c :breed.hand-full :warn {:text "no free slot: the food stays in hand"}))
+        {:hand outcome}))))
+
+(defn note-hand!
+  "Remember what the hand holds, once per run."
+  [c]
+  (when-not (:hand-noted (ctx/mem c))
+    (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true)))
+
+(defn ^:async finish!
+  "Put the hand back, emit the outcome, hand it to the parent and end the job."
   [c reason]
-  (let [m (ctx/mem c)
+  (let [hand (await (hand-result c))
+        m (ctx/mem c)
         {:keys [mob radius]} (:args c)
         p (:primitives c)
-        result {:reason reason
+        result (merge hand {:reason reason
                 :fed (vec (:fed m))
                 :refused (vec (:refused m))
                 :given-up (:given-up m {})
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
-                :babies (count (animals/babies p mob radius))}]
+                :babies (count (animals/babies p mob radius))})]
     (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)))))
     (when (not= :fed reason)
       (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason))}))
@@ -123,6 +158,7 @@
   [c animal food]
   (let [k (animals/key-of animal)
         _ (ctx/update-mem! c assoc :food food)
+        _ (note-hand! c)
         r (await (ctx/act c :interact #js {:id (.-id animal) :item food}))]
     (case (.-status r)
       "used" (cond
@@ -150,8 +186,8 @@
               :there (await (feed! c animal food))
               :continue)]
     (cond
-      (= :no-food fed) (finish! c :no-food)
-      (>= (:in-row (ctx/mem c) 0) max-in-row) (finish! c (out-reason c))
+      (= :no-food fed) (await (finish! c :no-food))
+      (>= (:in-row (ctx/mem c) 0) max-in-row) (await (finish! c (out-reason c)))
       :else :continue)))
 
 (defn bees-indoors?
@@ -168,10 +204,10 @@
           food (animals/food-carried (:primitives c) mob)
           cands (candidates c)]
       (cond
-        (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout)
-        (not (contains? animals/breeding-food mob)) (finish! c :unknown-mob)
-        (bees-indoors? c) (finish! c :bees-indoors)
-        (>= (count (:fed m)) n) (finish! c :fed)
-        (nil? food) (finish! c :no-food)
-        (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (finish! c (out-reason c))
+        (>= (- now (:started m)) (* 1000 timeout-s)) (await (finish! c :timeout))
+        (not (contains? animals/breeding-food mob)) (await (finish! c :unknown-mob))
+        (bees-indoors? c) (await (finish! c :bees-indoors))
+        (>= (count (:fed m)) n) (await (finish! c :fed))
+        (nil? food) (await (finish! c :no-food))
+        (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
         :else (await (engage! c (first cands) food))))))
