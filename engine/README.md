@@ -26,7 +26,7 @@ Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
 
 Layout:
 
-- `js/primitives.mjs` the real mineflayer layer (not written yet; another agent's).
+- `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub bot for the primitive tests.
 - `js/fake.mjs` a scriptable fake world with the same interface, for tests.
 - `src/engine/` `core` (list, register, scheduler), `memory`, `events`,
   `ctx` (helpers job rounds call), `conditions` (data conditions for yields),
@@ -352,3 +352,48 @@ repo's `state/`.
 Claims, no-touch regions, flapping counters, no-progress detectors, the HTTP
 API, multi-body, soft pathfinding weights, a reflex pointing at a listed
 instance (a register entry may carry `:instance` later).
+
+## Primitives: implementation notes
+
+`js/primitives.mjs` exports `createPrimitives({host, port, username, auth, version?})` as the contract says, plus
+`createPrimitivesFromBot(bot, {timeScale = 1})` over an already spawned bot (the tests use it with
+`js/stub-bot.mjs`; `timeScale` shrinks every time bound). `js/connect.mjs` exports `readAgentConfig({stateDir,
+agent})` (defaults, then `state/agents/<name>/config.json`, then the world's `{host, port}`; defaults copied from
+`src/config.mjs`), `connectBot(cfg)` and `connectAgent({stateDir, agent})` (`{bot, disconnect}`). Nothing connects on
+import. `mineflayer`, `mineflayer-pathfinder` and `vec3` resolve from the repo root `node_modules`; the engine's own
+`package.json` does not list them yet.
+
+Every acting call goes through one wrapper. It checks the token on entry, registers the call, and races the work
+against the time bound and against `setOwner`. A cut or a timeout runs the cleanups the work registered, ends the call,
+and makes the work's own `alive()` check throw, so nothing it does later reaches the bot. A cut rejects with an error
+that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'`.
+
+| primitive | what it does to the bot |
+|---|---|
+| `moveTo` | `pathfinder.goto(GoalNear)`. Beyond `maxDistance` it walks a `GoalNearXZ` point that far along the straight line, so the result is `partial`. Cleanup: `setGoal(null)`, `clearControlStates`. After the bound or a pathfinder failure: `partial` if at least 1 block closer, else `blocked`. Movements are built by `connect.mjs` with digging, towers and scaffolding off |
+| `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
+| `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
+| `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
+| `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
+| `equip` | `bot.equip(item, dest)` |
+| `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
+| `attack` | one `bot.attack`, then about 100 ms to read the target's health; `killed` when the entity is gone or its health is 0 |
+| `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |
+| `look` | `lookAt` or `look` with force |
+
+Sensing reads `bot.entities`, `bot.findBlocks` and `bot.blockAt` directly and never waits. Body events come from the
+bot's `health` (a drop is `hurt`), `death`, `respawn`, `chat`, `wake`, `spawn`, `end` and `kicked` events.
+
+Known gaps:
+
+- No tool selection before `dig`; the bot digs with whatever is in hand.
+- `moveTo` has no no-progress detector: a stuck walk ends at the time bound as `blocked` or `partial`.
+- The `hurt` event has no `cause`. `isDay` ignores thunderstorms for `sleep`.
+- `eat` relies on `bot.consume()`; on a server that never sends the finish status it can only time out (the `food`
+  rise check softens this). Not exercised against a real server.
+- Everything is tested against a stub bot only: reach numbers, window handling and the pathfinder are unverified live.
+
+### Deviations
+
+- `createPrimitives` accepts an optional `version` (default as in `src/config.mjs`).
+- Timeouts resolve with a status as the contract says, not by rejecting; only cuts and bad args reject.
