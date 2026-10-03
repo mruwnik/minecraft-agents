@@ -251,3 +251,25 @@
     (is (= [2 1] (ids (combat/hostiles p 8))) "two arguments: unchanged, nearest first, sight ignored")
     (is (= [1] (ids (combat/hostiles p 8 {:sight :only}))))
     (is (= [1 2] (ids (combat/hostiles p 8 {:sight :prefer}))) "prefer: visible first, then the rest")))
+
+;; ------------------------------------------------------- unreachable hostiles
+
+(defn walks-to [p pos]
+  (count (filter #(let [a (.. % -args -pos)] (and (= (:x pos) (.-x a)) (= (:z pos) (.-z a)))) (calls p "moveTo"))))
+
+(deftest respond-retreats-from-a-hostile-it-cannot-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
+          (core/submit! eng respond {})
+          (dotimes [_ 3]
+            (await (core/tick! eng))
+            (swap! clock + 1000))
+          (is (= 3 (walks-to p {:x 6 :z 0})) "three blocked walks towards the zombie")
+          (is (< (:x (last-move p)) 0) "then it walks away instead")
+          (dotimes [_ 3]
+            (await (core/tick! eng))
+            (swap! clock + 1000))
+          (is (= 3 (walks-to p {:x 6 :z 0})) "the unreachable zombie is not walked at again")
+          (is (zero? (count (calls p "attack")))))))))
