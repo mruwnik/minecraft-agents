@@ -24,7 +24,9 @@ The cost per pixel is linear, so the CPU path cannot reach a live 720p view. The
 
 `node tools/view-serve.mjs [--port 3702] [--host 127.0.0.1]`, then open `http://127.0.0.1:3702/?agent=<Name>`.
 URL params: `agent`, `radius` (columns, default 8), `w`/`h` (fixed render size), `fov` (default 70, horizontal, the
-same as the Node renderer), `dist` (blocks, default radius*16).
+same as the Node renderer), `dist` (blocks, default radius*16), `time` (ticks, overrides the pose's `timeOfDay`, e.g.
+`&time=18000` for midnight) and `rain` (0..1, overrides the pose's `rain`). `time` only changes the shading: the
+dumped sky light does not depend on the time of day.
 
 Server (`tools/view/serve.mjs`, no dependencies beyond the repo's own):
 - `GET /agents`: the agents that have a pose file.
@@ -32,11 +34,21 @@ Server (`tools/view/serve.mjs`, no dependencies beyond the repo's own):
   `hud` `{mtime, hud}`, and `column` `{cx, cz, mtime}` when a column file within R of the eye changes. Columns are
   polled every 250 ms.
 - `GET /columns/<world>/<cx>.<cz>.bin`: the raw deflated file. `GET /hud/<Name>`.
-- `GET /blocks/<mcVersion>.json`: the material table, ~226 KB for 26.1 (29873 states, 1269 materials, 0.3 s to build
-  and then cached). It maps each state id to a material (`name|kind`, kind is cube/partial/cross/water/lava). Each
-  material has a top, side and bottom colour, which are the alpha-weighted average of the face texture in `textures/`,
-  tinted. The table also includes the column `format` the decoder needs (`tools/view/materials.mjs`,
+- `GET /blocks/<mcVersion>.json`: the material table, ~700 KB for 26.1 (29873 states, 3441 materials). It maps each
+  state id to a material, deduplicated by content. A material has a `kind` (cube/box/cross/water/lava), `tex` (texture
+  layer for top, side and bottom, -1 when there is no texture file), `box` (bounding box of the collision shapes in
+  1/16 units, with visual overrides for snow layers, rails, pressure plates, powder snow, soul sand, mud), `flags`
+  (CUTOUT 1, TRANSLUCENT 2, AXIS_X 4, AXIS_Z 8, EMISSIVE 16, CULL_SAME 32), `emit` (registry light emission) and the
+  old average top/side/bottom colours (the fallback when there is no texture). The table also includes the column
+  `format` the decoder needs and `textures: {size, levels, names}` (`tools/view/materials.mjs`,
   `tools/view/web-format.mjs`).
+- `GET /textures/<mcVersion>.bin`: the texture array, ~1.1 MB for 797 layers: 16x16 RGBA, 5 mip levels, level-major
+  (all layers of level 0, then level 1, ...). Built from `textures/` by `tools/view/textures.mjs`: the first frame of
+  animated strips, 32-wide textures box-downsampled, the fixed temperate grass/foliage/water tints of
+  `src/vision/renderer.mjs` baked in (there is no biome colormap in `textures/`, so no per-biome tint). Mips use an
+  alpha-weighted colour, and binary-alpha textures (leaves, plants, glass) keep their alpha coverage at each level so
+  the shader's 0.5 alpha test neither empties nor fills them at a distance. Table and textures are built together once
+  per version (about 1.8 s) and cached.
 
 Page (`tools/view/web/`):
 - `decode.mjs` inflates the file with `DecompressionStream`. It decodes the 1.18+ paletted containers (single,
@@ -44,11 +56,32 @@ Page (`tools/view/web/`):
   against prismarine on synthetic columns (1.20.4, 1.21.4, 26.1) and on 3 real files.
 - `camera.mjs` builds the basis of `cameraFor` in `src/vision/renderer.mjs`. It is tested against `directionFor` and
   the renderer's side convention.
+- `decode.mjs` also decodes the `light` part (`decodeLight`): one byte per cell, `sky << 4 | block`, in the vanilla
+  nibble order of the dumped bytes. A section with no sky data that is not flagged empty counts as open sky (15).
+  Note: prismarine's `getSkyLight`/`getBlockLight` on a restored column (and so mineflayer's `block.light`) scramble
+  the x order inside each 16-cell row, because `loadParsedLight` reads the vanilla byte arrays as big-endian longs.
+  The dump file itself is right; do not use prismarine light values as ground truth.
 - `gl.mjs` keeps a toroidal R16UI 3D texture of material ids for (2R+1)² columns at full height (272x384x272 at
-  R=8), with one 16x384x16 `texSubImage3D` per column, and an R8UI section-occupancy texture. A WebGL2 fragment shader
-  does a two-level DDA: it skips empty 16³ sections, then steps through blocks. It applies face shading
-  (1/0.5/0.8/0.62), draws plants (cross) as an inner box and blends one water layer, then adds a sky gradient, fog and
-  night dimming. Entities are drawn as boxes, up to 64.
+  R=8), an R8UI light texture of the same size, both with one 16x384x16 `texSubImage3D` per column, and an R8UI
+  section-occupancy texture. A WebGL2 fragment shader does a two-level DDA: it skips empty 16³ sections, then steps
+  through blocks. At a hit:
+  - **Textures**: a `TEXTURE_2D_ARRAY` with mips, Minecraft's face UVs (`faceUV` in `shading.mjs`, mirrored in GLSL),
+    logs with `axis` x/z turned, the mip level from distance and the angle to the face (derivatives are discontinuous
+    across voxels). Cutout blocks (leaves, glass, plants, doors) are alpha-tested at 0.5 and the ray goes on through
+    transparent texels; faces between two blocks of the same glass are culled. Plants are Minecraft's two diagonal
+    quads. Water and translucent blocks (stained glass, ice, slime) blend once per run of the same material.
+  - **Partial blocks**: kind `box` is intersected with its bounding box inside the cell, so slabs, snow layers,
+    carpets, farmland, paths, doors, trapdoors and fence posts have their real size, and a ray passes over them.
+    Stairs, connected fences and walls are their bounding box (stairs a full cube).
+  - **Light**: Minecraft's lightmap (`lightColor` in `shading.mjs`: the f/(4-3f) brightness curve, block light ×1.5
+    with the warm tint, sky light scaled by `skyDarken(time, rain)` and tinted blue at night, the 0.04 grey floor and
+    the default 0.5 gamma). Full-cube and box faces get smooth lighting with ambient occlusion: each corner averages
+    the light of the cell the face looks into and its three neighbours around that corner (an opaque neighbour takes
+    the centre's light and darkens the corner to 0.2), interpolated across the face; a face inside its cell (a slab
+    top) looks into the cell itself. Plants, water and glass take their own cell's light, emissive blocks are full
+    bright, entities take the light of the cell in front of them. Outside the window counts as open sky. Face shading
+    is Minecraft's (1/0.5/0.8/0.6), the sky fades to a night colour with the same darkening, and fog is unchanged.
+  Entities are drawn as boxes, up to 64.
 - `app.mjs` provides the agent picker and the SSE connection. It fetches columns nearest-first with 6 in flight and
   refetches a column on its `column` event. The overlay shows fps, pose age, file→frame latency, columns
   loaded/wanted and HUD numbers. Press F for a free camera (mouse look + WASD). `window.__view` exposes the stats for
@@ -149,13 +182,53 @@ depends on where they fall.
 Column decoding on the main thread takes p50 9–12 ms and up to 34–62 ms per column. A burst of new columns can drop
 one or two frames (one 33 ms frame was seen during a load); the decoding should move to a Worker.
 
+The fps table above was measured with the flat-colour shader; the cost of textures and lighting is in the next
+section.
+
+### Textures, lighting and partial blocks: cost
+
+Measured on a frozen copy of a test scene (a row of blocks, slabs, snow layers 1–8, plants, a tree, a stone-brick
+room with a torch and a glowstone; 289 columns, Vulkan, `fov=90`, unthrottled, 4 s per run). The flat-colour page is
+the one from commit 03e2b61 served over the same state:
+
+| Page | SceneDay 1280x720 | SceneDay 1920x1080 | SceneRoom 1280x720 | SceneRoom 1920x1080 |
+| --- | --- | --- | --- | --- |
+| flat colours (before) | 2289 fps | 1051 fps | 7404 fps | 4195 fps |
+| + textures | 2056 | 957 | 7846 | 3799 |
+| + lighting, smooth light, AO | 1387 | 598 | 3098 | 1409 |
+| + partial boxes (now) | 1528 | 695 | 3493 | 1577 |
+
+With vsync it stays at 60 fps everywhere; the worst case above (1920x1080 outdoors, 695 fps) is 1.4 ms of GPU time
+a frame. The run-to-run spread of these numbers is about ±10 %. Live, with `fs.watch` push, file→frame latency was
+9 / 18 ms (p50/p95) at 1280x720 and 12 / 17 ms at 1920x1080 on a standing body.
+
+Per column, on the main thread (289-column load, `window.__view.decodeMs/lightMs/uploadMs`): inflate + block decode
+p50 8.7 ms / p95 12.4 ms (unchanged), light decode and reorder p50 0.5 / p95 0.7 ms, the three `texSubImage3D` calls
+p50 0.1 / p95 0.2 ms of CPU (98 KB more per column for light; the GPU copy is asynchronous). Texture array upload:
+once per page, 1.1 MB. So the new work per column walked into is about 0.6 ms on top of the existing 9 ms decode.
+
+Regression check: `node tools/view-web-check.mjs [--lighting] [--out dir]` writes a synthetic world
+(`tools/view/fixture.mjs`: a wall with lit, dark, leaf-with-red-wool-behind and diamond stripes, a torch-lit floor
+patch, a bottom slab and a snow layer with blocks behind them), serves it, renders it in headless Chromium on the GPU
+and asserts pixel statistics per region: textured (std), the diamond face colour against its texture's average, leaf
+holes showing red, the dark stripe below 0.35 of the lit one, night below 0.5 of day, the torch patch warm, the space
+above the slab and the snow layer showing what is behind them. It exits 1 on a failure.
+
 ### Known gaps
-- 'partial' blocks (slabs, snow layers, stairs) are drawn as full cubes, which makes snow layers look like walls at eye
-  level. The fix is to send per-state heights or boxes in the material table.
-- The page uses flat average colours and no textures yet. Next step: a 16x16 `TEXTURE_2D_ARRAY` atlas with
-  top/side/bottom layer indices per material.
-- Columns are decoded on the main thread. A login burst of 289 columns stutters for a moment. Next step: a Worker.
-- Pose updates are polled. `fs.watch` or pushing poses straight from the body would cut ~25 ms of the latency.
+- The body does not re-dump a column when only its light changes: `engine/js/view.mjs` marks columns dirty on
+  `chunkColumnLoad` and `blockUpdate`, and mineflayer applies the `update_light` packet without an event. A torch
+  placed live shows no light until the column is loaded again, even in its own column (the light packet comes after
+  the 500 ms flush), and neighbouring columns it lights are never rewritten.
+- Grass, foliage and water use one fixed tint (no biome colours: `textures/` has no colormaps; the biome ids are in
+  the dumped sections and are skipped by the decoder).
+- Animated textures (water, lava, fire, portals) show their first frame. Water is a full cube (a source's surface is
+  at 14/16), with no flow texture.
+- Stairs are full cubes; connected fences, walls and panes are their bounding box; torches, signs, levers and
+  buttons are crosses; chests use a plank texture. Doors and trapdoors use their bounding box with the door texture
+  on every face.
+- Smooth lighting treats only full opaque cubes as occluders and does not light box sides from inside the box.
+- Columns are decoded on the main thread (about 9 ms each). A login burst of 289 columns stutters for a moment. Next
+  step: a Worker.
 
 ## 3. Folding it into the dashboard (`dashboard/`, ClojureScript)
 
