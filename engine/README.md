@@ -97,10 +97,31 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, timeOfDay, isDay, held, inventory}` where `timeOfDay` is 0..23999, `isDay` is `timeOfDay < 12542 \|\| timeOfDay > 23460`, `held` is an item name or null, `inventory` is `[{name, count, slot}]` |
-| `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, item?}]` sorted by distance; `item` is `{name, count}` for dropped items |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos}`, or `null` when the chunk is not loaded |
+
+`self()` fields:
+
+- `health` 0..20 and `food` 0..20; `foodSaturation` is the hidden saturation (0..20).
+- `oxygen` 0..20 bubbles (`bot.oxygenLevel`; 20 until the server reports air).
+- `onFire`: bit `0x01` of the entity's shared-flags metadata byte. mineflayer 4.39 has no `onFire` field, so this
+  reads `bot.entity.metadata[i]` where `i` is the index of `shared_flags` in the registry's `metadataKeys` for the
+  entity (0 if the registry does not know it). The server only sends the byte when it changes, so it is accurate
+  after the first update and false before it.
+- `inWater`, `inLava`: `bot.entity.isInWater` / `isInLava`, which the physics plugin sets every tick; if physics
+  has not run yet, whether the block at the feet is `water` / `lava`.
+- `isSleeping`: `bot.isSleeping`.
+- `experience`: `{level, points, progress}` (`progress` 0..1 through the current level; zeros before the server sends any).
+- `dimension`: `bot.game.dimension` as the protocol version spells it (for example `overworld` or `minecraft:overworld`).
+- `timeOfDay` is 0..23999, `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`, `held` is an item name or null,
+  `inventory` is `[{name, count, slot}]`.
+
+`entities()` extras: `item` is `{name, count}` for dropped items. Players also carry `username` and `sleeping`
+(the pose metadata field equals 2, found through the registry's `metadataKeys`, else index 6; the server sends it only
+when it changes). Hostile classification is `entity.type === 'hostile'` (the registry's type) or a `kind` naming
+hostile mobs; creepers additionally carry `creeper: true` (their `name` is `creeper` too).
 
 Remembered places (a known bed, a known chest) are not primitives. They are
 `:bed` and `:chest` entries in body memory; see `engine.memory/place` below.
@@ -120,6 +141,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
 | `look(token, a)` | `{pos}` or `{yaw, pitch}` | `ok` | 1 s | none needed |
+| `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
 Extra fields on the result:
 
@@ -132,6 +154,17 @@ Extra fields on the result:
 - `transfer`: `moved` (count).
 - `eat`: `item`, `food` (after eating).
 - `attack`: `health` (target's, when known).
+- `offline`: `ms`, the wait actually used (clamped to 0..600000, rounded down).
+
+`offline` quits the bot, emits the body event `offline`, waits `ms` (default 5 minutes, hard maximum 10 minutes),
+reconnects with the same connection params (up to 3 tries, 5 s apart), rebinds the library bot so every other
+primitive and every listener works on the new bot, emits `online`, and resolves `{status: 'ok', ms}`. It does not
+use the cut-on-token-change rule of the other primitives, because the body must never stay offline: a cut ends the
+wait early, the body reconnects, and the call resolves `{status: 'cut'}`. `close()` during the wait or the reconnect
+cancels it and resolves `{status: 'closed'}` (a bot the reconnect already produced is quit). If every reconnect try
+fails it emits `disconnected` and rejects with the last error. Only `createPrimitives`, which owns the connection
+params, supports it; `createPrimitivesFromBot` resolves `{status: 'unsupported'}` without touching the bot. A stale
+token rejects with `cut` on entry and bad `ms` (not a number, negative) with `bad-args`.
 
 Reach for `dig`, `place`, `inspectContainer`, `transfer`, `sleep` and
 `attack` is the caller's job: walk there first with `moveTo` (`range` 2 to 3).
@@ -144,8 +177,12 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 ```
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
-`hurt` (`health`, `food`, `cause?`), `died` (`pos`), `respawned`, `chat`
-(`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`). The engine
+`hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`), `respawned` (`pos`, `dimension`), `chat`
+(`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
+emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
+it carried, before the server clears it. `respawned` is emitted at the first `spawned` after the library's respawn
+signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). `offline`
+and `online` are the two ends of the `offline` primitive; after `online` the `bot` underneath is a new one. The engine
 turns each into an entry of that kind in body memory (see Memory).
 
 ### Lifecycle
@@ -155,7 +192,10 @@ turns each into an entry of that kind in body memory (see Memory).
 ### The fake
 
 `createFake(spec)` in `js/fake.mjs` returns the primitives plus a `world`
-handle for tests:
+handle for tests. It has the same sensing fields as above (`spec.self` may set `oxygen`, `onFire`, `inWater`,
+`inLava`, `isSleeping`, `foodSaturation`, `experience`, `dimension`; player entities default to `sleeping: false` and
+`username` equal to `name`). Its `offline` flips `world.state.offline`, emits `offline` and `online`, and waits
+`ms * spec.offlineScale` (default 0.001, so 5 minutes is 0.3 s) before resolving the same results. The handle:
 
 ```js
 const p = createFake({
@@ -518,7 +558,9 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `look` | `lookAt` or `look` with force |
 
 Sensing reads `bot.entities`, `bot.findBlocks` and `bot.blockAt` directly and never waits. Body events come from the
-bot's `health` (a drop is `hurt`), `death`, `respawn`, `chat`, `wake`, `spawn`, `end` and `kicked` events.
+bot's `health` (a drop is `hurt`), `death`, `respawn` (remembered, then reported as `respawned` at the next `spawn`),
+`chat`, `wake`, `spawn`, `end` and `kicked` events. The listeners are bound per bot, and `offline` unbinds the old bot
+before it quits so its `end` does not report a `disconnected`.
 
 Known gaps:
 
