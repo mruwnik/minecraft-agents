@@ -1,7 +1,8 @@
 (ns dashboard.ui.plansmodel
   "Pure rules of the Plans page: the plan tree, the completion bar, the layer grid geometry and cell texts.
   Input is the JSON /api/plans and /api/plan/<id> serve, keywordized."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [dashboard.blockcolour :as bc]))
 
 (def green "#3fb950")
 (def red "#f85149")
@@ -80,16 +81,82 @@
   [(+ min-x c) y (+ min-z r)])
 
 (defn cell-text
-  "What the tooltip says under the cursor; cell is nil where the plan wants nothing."
+  "What the tooltip says under the cursor, in every mode: the answer, what the plan wants and what was found (nothing
+  was found where the chunk was never dumped); cell is nil where the plan wants nothing."
   [[x y z] cell]
   (let [where (str x " " y " " z)]
     (if-not cell
       (str where ": not part of the plan")
       (let [{:keys [s e a el]} cell]
-        (case s
-          "match" (str where ": match, " a " (" el ")")
-          "unknown" (str where ": unknown, wanted " e ", chunk not dumped (" el ")")
-          (str where ": " s ", wanted " e ", found " a " (" el ")"))))))
+        (str where ": " s ", wanted " e (if a (str ", found " a) ", chunk not dumped") " (" el ")")))))
+
+;; ---------------------------------------------------------------- modes and views
+(def modes ["plan" "world" "diff"])
+(def default-mode "diff")
+(def default-view :bird)
+
+(defn cell-fill
+  "The colour a cell is drawn in under a mode: the plan's block, the block found, or the colour of the answer. nil
+  draws nothing (a clear want, air)."
+  [mode {:keys [s w a]}]
+  (case mode
+    "plan" (some-> w bc/block-colour)
+    "world" (some-> a bc/block-colour)
+    (get status-colors s grey)))
+
+(defn hatched?
+  "Cells nobody dumped are marked in world mode."
+  [mode {:keys [a]}]
+  (and (= "world" mode) (nil? a)))
+
+(def worst-rank {"wrong" 0 "missing" 1 "extra" 2 "unknown" 3 "match" 4})
+
+(defn pick-in-column
+  "The cell a column shows from above under a mode; cells are listed top first."
+  [mode cells]
+  (case mode
+    "plan" (or (first (filter :w cells)) (first cells))
+    "world" (or (first (filter #(and (:a %) (not (bc/air? (:a %)))) cells)) (first cells))
+    (first (sort-by #(get worst-rank (:s %) 5) cells))))
+
+(defn bird-rows
+  "The layers seen from straight above, as one grid of cells (each with its :y), by the column rule of the mode (see
+  bird-rule). Only the cells the plan has are looked at; a column the plan has nothing in is nil."
+  [layers mode]
+  (if (empty? layers)
+    []
+    (let [top-first (sort-by :y > layers)
+          rows (count (:rows (first layers)))
+          cols (count (first (:rows (first layers))))]
+      (vec (for [r (range rows)]
+             (vec (for [c (range cols)]
+                    (pick-in-column mode (keep (fn [{:keys [y rows]}] (some-> (get-in rows [r c]) (assoc :y y))) top-first)))))))))
+
+(defn bird-rule [mode]
+  (case mode
+    "plan" "Bird's eye, plan: each column shows its topmost wanted block (clear cells never cover one)."
+    "world" "Bird's eye, world: each column shows the topmost block found within the plan's own cells of that column (air skipped)."
+    "Bird's eye, diff: each column shows its worst answer: wrong over missing over extra over unknown over match, so a problem under a roof stays visible."))
+
+(defn age-text [ms]
+  (cond
+    (< ms 1000) "just now"
+    (< ms 60000) (str (quot ms 1000) " s ago")
+    (< ms 3600000) (str (quot ms 60000) " min ago")
+    (< ms 86400000) (str (quot ms 3600000) " h ago")
+    :else (str (quot ms 86400000) " d ago")))
+
+(defn checked-text
+  "When the world under the plan was last seen: the age of the oldest and newest chunk dump ({:chunks :dumped :oldest
+  :newest :now}, times in ms)."
+  [{:keys [chunks dumped oldest newest now] :as checked}]
+  (cond
+    (nil? checked) "last check unknown"
+    (zero? (or dumped 0)) "no chunk of this plan was ever dumped"
+    :else (let [new-age (age-text (- now newest))
+                old-age (age-text (- now oldest))]
+            (str "checked " (if (= new-age old-age) new-age (str new-age " to " old-age))
+                 (when (< dumped chunks) (str ", " dumped " of " chunks " chunks dumped"))))))
 
 (defn cell-size [cols rows width height]
   (if-not (and (pos? cols) (pos? rows))

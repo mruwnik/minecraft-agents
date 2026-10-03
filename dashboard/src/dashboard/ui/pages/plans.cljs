@@ -36,7 +36,15 @@
                ^{:key file} [:div.err [:b file] (into [:ul] (map (fn [e] [:li e])) errors)])))]))
 
 ;; ---------------------------------------------------------------- the layer grid
-(defn paint-grid! [canvas rows size selected-element]
+(defn hatch! [ctx x y size]
+  (set! (.-strokeStyle ctx) "#8b949e")
+  (set! (.-lineWidth ctx) 1)
+  (.beginPath ctx)
+  (.moveTo ctx x (+ y size))
+  (.lineTo ctx (+ x size) y)
+  (.stroke ctx))
+
+(defn paint-grid! [canvas rows size selected-element mode]
   (let [cols (count (first rows))
         dpr (or js/window.devicePixelRatio 1)
         ctx (.getContext canvas "2d")]
@@ -52,34 +60,36 @@
             :when cell
             :let [x (* dx size) y (* dz size)]]
       (set! (.-globalAlpha ctx) (if (pm/dimmed? selected-element cell) 0.22 1))
-      (set! (.-fillStyle ctx) (get pm/status-colors (:s cell) pm/grey))
-      (.fillRect ctx x y size size)
+      (when-let [fill (pm/cell-fill mode cell)]
+        (set! (.-fillStyle ctx) fill)
+        (.fillRect ctx x y size size))
+      (when (pm/hatched? mode cell) (hatch! ctx x y size))
       (set! (.-fillStyle ctx) "rgba(0,0,0,0.30)")
       (.fillRect ctx (+ x (dec size)) y 1 size)
       (.fillRect ctx x (+ y (dec size)) size 1))
     (set! (.-globalAlpha ctx) 1)))
 
-(defn layer-grid [_rows _grid _y _element]
+(defn layer-grid [_rows _grid _y _element _mode]
   (let [canvas (atom nil)
         wrap (atom nil)
         hover (r/atom nil)
         props (atom nil)
         size (atom pm/max-cell)
         draw! (fn []
-                (when-let [{:keys [rows element]} (and @canvas @props)]
+                (when-let [{:keys [rows element mode]} (and @canvas @props)]
                   (when (seq rows)
                     (let [avail (max 200 (- (.-clientWidth @wrap) 24))]
                       (reset! size (pm/cell-size (count (first rows)) (count rows) avail 640))
-                      (paint-grid! @canvas rows @size element)))))]
+                      (paint-grid! @canvas rows @size element mode)))))]
     (r/create-class
      {:component-did-mount (fn [] (.observe (js/ResizeObserver. draw!) @wrap) (draw!))
       :component-did-update (fn [this]
-                              (let [[_ rows grid y element] (r/argv this)]
-                                (reset! props {:rows rows :grid grid :y y :element element}))
+                              (let [[_ rows grid y element mode] (r/argv this)]
+                                (reset! props {:rows rows :grid grid :y y :element element :mode mode}))
                               (draw!))
       :reagent-render
-      (fn [rows grid y element]
-        (reset! props {:rows rows :grid grid :y y :element element})
+      (fn [rows grid y element mode]
+        (reset! props {:rows rows :grid grid :y y :element element :mode mode})
         [:div.gridwrap {:ref #(reset! wrap %)}
          [:canvas.plan-grid
           {:ref #(reset! canvas %)
@@ -88,23 +98,45 @@
                             (let [rect (.getBoundingClientRect @canvas)
                                   [c rr] (pm/cell-at @size (count (first rows)) (count rows)
                                                      (- (.-clientX e) (.-left rect)) (- (.-clientY e) (.-top rect)))]
-                              (reset! hover (when c {:pos (pm/world-pos grid y [c rr]) :cell (get-in rows [rr c])}))))}]
+                              (reset! hover (when c (let [cell (get-in rows [rr c])] {:pos (pm/world-pos grid (or (:y cell) y) [c rr]) :cell cell})))))}]
          [:div.cellinfo
           (if-let [{:keys [pos cell]} @hover]
             [:span.mono (pm/cell-text pos cell)]
             [:span.dim "hover a cell"])]])})))
 
-(defn legend []
-  (into [:div.plan-legend]
-        (for [[k label] [["match" "match"] ["missing" "missing (air)"] ["wrong" "wrong block"] ["extra" "extra (should be air)"]
-                         ["unknown" "not dumped"]]]
-          ^{:key k} [:span [:i {:style {:background (get pm/status-colors k)}}] label])))
+(defn legend [mode view]
+  [:div.plan-legend
+   (case mode
+     "plan" [:span [:i.blank] "clear (nothing wanted)"]
+     "world" [:span [:i.blank] "air"]
+     nil)
+   (when (= "world" mode) [:span [:i.hatch] "not dumped"])
+   (when (= "diff" mode)
+     (for [[k label] [["match" "match"] ["missing" "missing (air)"] ["wrong" "wrong block"] ["extra" "extra (should be air)"]
+                      ["unknown" "not dumped"]]]
+       ^{:key k} [:span [:i {:style {:background (get pm/status-colors k)}}] label]))
+   (when (not= "diff" mode)
+     [:span.dim (if (= "plan" mode) "colours are the blocks the plan wants" "colours are the blocks found at the last check")])
+   (when (= :bird view) [:span.dim (pm/bird-rule mode)])])
 
-(defn layer-selector [layers current]
-  (into [:div.layers [:span.dim "layer y"]]
+(defn switch [label options current event]
+  (into [:div.layers [:span.dim label]]
+        (for [[value text] options]
+          ^{:key (str value)}
+          [:button.chip {:class (when (= value current) "on") :on-click #(rf/dispatch [event value])} text])))
+
+(defn mode-switch [mode checked]
+  [:div.mode-switch
+   [switch "show" [["plan" "plan"] ["world" "world"] ["diff" "diff"]] mode :plans/mode]
+   [:span.dim.checked (pm/checked-text checked)]])
+
+(defn layer-selector [layers view current]
+  (into [:div.layers [:span.dim "view"]
+         [:button.chip {:class (when (= :bird view) "on") :on-click #(rf/dispatch [:plans/view :bird])} "bird's eye"]
+         [:span.dim "layer y"]]
         (for [{:keys [y]} layers]
           ^{:key y}
-          [:button.chip {:class (when (= y current) "on") :on-click #(rf/dispatch [:plans/layer y])} (str y)])))
+          [:button.chip {:class (when (and (= :layer view) (= y current)) "on") :on-click #(rf/dispatch [:plans/layer y])} (str y)])))
 
 ;; ---------------------------------------------------------------- elements
 (defn element-row [selected {:keys [id kind content counts cells error ref where bounds]}]
@@ -154,14 +186,16 @@
 
 (defn plan-detail []
   (let [{:keys [detail detail-failed selected element]} @(rf/subscribe [:plans])
-        current @(rf/subscribe [:plan-layer-y])]
+        current @(rf/subscribe [:plan-layer-y])
+        {:keys [view mode]} @(rf/subscribe [:plan-view-state])]
     (cond
       (nil? selected) [:main.plan-detail [:div.dim.pempty "pick a plan"]]
       detail-failed [:main.plan-detail [:div.err detail-failed]]
       (nil? detail) [:main.plan-detail [:div.dim.pempty "loading..."]]
       :else
-      (let [{:keys [name kind status owner note region counts layers grid errors spots assign]} detail
-            layer (first (filter #(= current (:y %)) layers))]
+      (let [{:keys [name kind status owner note region counts layers grid errors spots assign checked]} detail
+            layer (first (filter #(= current (:y %)) layers))
+            rows (if (= :bird view) (pm/bird-rows layers mode) (:rows layer))]
         [:main.plan-detail
          [:div.phead
           [:h2 name] [:span.pill kind] [:span {:class (str "pill pstatus " status)} status]
@@ -177,11 +211,12 @@
           [:div.plan-els [elements-table detail element] [spots-table spots] [assign-table assign]]
           (when (seq layers)
             [:section.plan-layers
-             [layer-selector layers current]
-             [legend]
-             (when layer
-               (let [cropped (pm/crop-grid (:rows layer) grid (:bounds (first (filter #(= element (:id %)) (:elements detail)))))]
-                 ^{:key [selected current element]} [layer-grid (:rows cropped) (:grid cropped) current element]))])]]))))
+             [mode-switch mode checked]
+             [layer-selector layers view current]
+             [legend mode view]
+             (when (seq rows)
+               (let [cropped (pm/crop-grid rows grid (:bounds (first (filter #(= element (:id %)) (:elements detail)))))]
+                 ^{:key [selected view current element]} [layer-grid (:rows cropped) (:grid cropped) current element mode]))])]]))))
 
 (defn page []
   [:main.plans-page [plan-list] [plan-detail]])

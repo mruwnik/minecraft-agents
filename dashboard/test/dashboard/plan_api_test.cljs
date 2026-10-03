@@ -78,5 +78,17 @@
   (let [d (api/detail {:dir dir :blueprint-dir (.join path dir "missing") :block-at nothing-dumped} "claude-village")]
     (is (= ["jizo-hut" "west-hut" "jizo-hut/bed" "jizo-hut/chest"] (map :element (:errors d))))))
 
+(deftest detail-says-when-the-world-was-last-checked
+  (let [d (api/detail (assoc (opts nothing-dumped) :column-mtime (fn [cx _] (when (= cx -2) 5000))) "jizo-farm")]
+    (are [path expected] (= expected (get-in d path))
+      [:checked :oldest] 5000
+      [:checked :newest] 5000
+      [:checked :dumped] 1)
+    (is (number? (get-in d [:checked :now])))
+    (is (<= 1 (get-in d [:checked :chunks])))))
+
+(deftest detail-without-a-dump-clock-has-no-checked
+  (is (nil? (:checked (api/detail (opts nothing-dumped) "jizo-farm")))))
+
 (deftest detail-of-an-unknown-plan-is-nil
   (is (nil? (api/detail (opts nothing-dumped) "nope"))))

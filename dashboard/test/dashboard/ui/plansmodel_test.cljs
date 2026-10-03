@@ -1,5 +1,7 @@
 (ns dashboard.ui.plansmodel-test
   (:require [cljs.test :refer [deftest are is]]
+            [clojure.string :as str]
+            [dashboard.blockcolour :as bc]
             [dashboard.ui.plansmodel :as pm]))
 
 (deftest sort-plans-by-name
@@ -61,11 +63,90 @@
 (deftest cell-text
   (are [cell expected] (= expected (pm/cell-text [1 63 -2] cell))
     nil "1 63 -2: not part of the plan"
-    {:s "match" :e "wheat" :a "wheat" :el "plot"} "1 63 -2: match, wheat (plot)"
+    {:s "match" :e "wheat" :a "wheat" :el "plot"} "1 63 -2: match, wanted wheat, found wheat (plot)"
     {:s "missing" :e "wheat" :a "air" :el "plot"} "1 63 -2: missing, wanted wheat, found air (plot)"
     {:s "wrong" :e "wheat" :a "carrots" :el "plot"} "1 63 -2: wrong, wanted wheat, found carrots (plot)"
-    {:s "extra" :e "air" :a "oak_leaves" :el "clear"} "1 63 -2: extra, wanted air, found oak_leaves (clear)"
+    {:s "extra" :e "clear" :a "oak_leaves" :el "clear"} "1 63 -2: extra, wanted clear, found oak_leaves (clear)"
     {:s "unknown" :e "wheat" :a nil :el "plot"} "1 63 -2: unknown, wanted wheat, chunk not dumped (plot)"))
+
+;; two layers over a 2 x 2 area; a cell is {:s status :e wanted text :w wanted block (nil for clear) :a found :el element}
+(defn c [s w a] {:s s :e (or w "clear") :w w :a a :el "p"})
+
+(def layers
+  [{:y 64 :rows [[(c "match" "stone" "stone") (c "wrong" "stone" "dirt")]
+                 [(c "missing" "wheat" "air") nil]]}
+   {:y 65 :rows [[(c "match" nil "air") (c "match" "oak_planks" "oak_planks")]
+                 [nil (c "unknown" "stone" nil)]]}
+   {:y 66 :rows [[nil (c "extra" nil "oak_leaves")]
+                 [nil nil]]}])
+
+(defn picked [mode] (mapv (fn [row] (mapv #(some-> % (select-keys [:y :s])) row)) (pm/bird-rows layers mode)))
+
+(deftest bird-plan-shows-the-topmost-wanted-cell-clear-cells-do-not-cover
+  (is (= [[{:y 64 :s "match"} {:y 65 :s "match"}]
+          [{:y 64 :s "missing"} {:y 65 :s "unknown"}]]
+         (picked "plan"))))
+
+(deftest bird-world-shows-the-topmost-block-found-in-the-plans-cells
+  (is (= [[{:y 64 :s "match"} {:y 66 :s "extra"}]
+          [{:y 64 :s "missing"} {:y 65 :s "unknown"}]]
+         (picked "world"))))
+
+(deftest bird-diff-shows-the-worst-answer-of-the-column
+  (is (= [[{:y 65 :s "match"} {:y 64 :s "wrong"}]
+          [{:y 64 :s "missing"} {:y 65 :s "unknown"}]]
+         (picked "diff"))))
+
+(deftest bird-diff-takes-the-topmost-of-equally-bad-cells
+  (let [two [{:y 1 :rows [[(c "missing" "stone" "air")]]} {:y 2 :rows [[(c "missing" "stone" "air")]]}]]
+    (is (= 2 (:y (get-in (pm/bird-rows two "diff") [0 0]))))))
+
+(deftest bird-world-shows-an-all-air-column-as-its-top-cell
+  (let [two [{:y 1 :rows [[(c "missing" "stone" "air")]]} {:y 2 :rows [[(c "missing" "stone" "air")]]}]]
+    (is (= 2 (:y (get-in (pm/bird-rows two "world") [0 0]))))))
+
+(deftest bird-rows-of-no-layers-are-empty
+  (is (= [] (pm/bird-rows [] "diff"))))
+
+(deftest cell-fill-by-mode
+  (are [mode cell expected] (= expected (pm/cell-fill mode cell))
+    "diff" (c "wrong" "stone" "dirt") pm/red
+    "diff" (c "unknown" "stone" nil) pm/grey
+    "plan" (c "wrong" "stone" "dirt") (bc/block-colour "stone")
+    "plan" (c "match" nil "oak_leaves") nil
+    "plan" (c "match" "wheat" "wheat") (bc/block-colour "wheat")
+    "world" (c "wrong" "stone" "dirt") (bc/block-colour "dirt")
+    "world" (c "missing" "stone" "air") nil
+    "world" (c "unknown" "stone" nil) nil))
+
+(deftest cells-not-dumped-are-marked-in-world-mode-only
+  (are [mode cell expected] (= expected (pm/hatched? mode cell))
+    "world" (c "unknown" "stone" nil) true
+    "world" (c "match" "stone" "stone") false
+    "plan" (c "unknown" "stone" nil) false
+    "diff" (c "unknown" "stone" nil) false))
+
+(deftest bird-rule-text-names-the-rule-of-each-mode
+  (are [mode fragment] (str/includes? (pm/bird-rule mode) fragment)
+    "plan" "topmost wanted"
+    "world" "topmost block found"
+    "diff" "wrong over missing"))
+
+(deftest checked-text-says-how-old-the-dumps-are
+  (are [checked expected] (= expected (pm/checked-text checked))
+    nil "last check unknown"
+    {:chunks 3 :dumped 0 :now 100000} "no chunk of this plan was ever dumped"
+    {:chunks 2 :dumped 2 :oldest 40000 :newest 40000 :now 100000} "checked 1 min ago"
+    {:chunks 2 :dumped 2 :oldest 10000 :newest 99000 :now 100000} "checked 1 s ago to 1 min ago"
+    {:chunks 4 :dumped 2 :oldest 40000 :newest 97000 :now 4000000} "checked 1 h ago, 2 of 4 chunks dumped"))
+
+(deftest age-text-picks-the-unit
+  (are [ms expected] (= expected (pm/age-text ms))
+    0 "just now"
+    5000 "5 s ago"
+    125000 "2 min ago"
+    7300000 "2 h ago"
+    200000000 "2 d ago"))
 
 (deftest cell-size-fits-the-box
   (are [cols rows w h expected] (= expected (pm/cell-size cols rows w h))

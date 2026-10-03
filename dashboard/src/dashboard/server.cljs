@@ -741,7 +741,8 @@
   (let [blocks (blocks-for module world-name)]
     {:dir (.join path worlds-dir world-name "plans")
      :blueprint-dir plan-blueprints-dir
-     :block-at (fn [x y z] (.blockAt blocks x y z))}))
+     :block-at (fn [x y z] (.blockAt blocks x y z))
+     :column-mtime (fn [cx cz] (column-mtime world-name cx cz))}))
 
 (defn plan-list [module world-name]
   (let [cached (get @plan-summaries world-name)]
@@ -755,6 +756,8 @@
   (-> @worldblocks-loaded
       (.then (fn [module]
                (if-not plan-id
+(declare column-mtime)
+
                  (send-json! res 200 (plan-list module world-name))
                  (if-let [found (plan-api/detail (plan-opts module world-name) plan-id)]
                    (send-json! res 200 found)

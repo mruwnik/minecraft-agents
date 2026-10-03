@@ -13,11 +13,15 @@
     (when-let [block (block-at x y z)]
       {:name (.-name block) :state (js->clj (.-state block))})))
 
-(defn compare-one [p blueprints block-at]
-  (let [expansion (shape/expand p blueprints)]
-    (assoc (cmp/compare-plan expansion (world-blocks block-at))
-           :region (cmp/bounds (:cells expansion))
-           :spots (:spots expansion))))
+(defn compare-one
+  "mtime-of (cx cz -> ms or nil), when given, adds :checked: the age of the chunk dumps under the plan."
+  ([p blueprints block-at] (compare-one p blueprints block-at nil))
+  ([p blueprints block-at mtime-of]
+   (let [expansion (shape/expand p blueprints)]
+     (cond-> (assoc (cmp/compare-plan expansion (world-blocks block-at))
+                    :region (cmp/bounds (:cells expansion))
+                    :spots (:spots expansion))
+       mtime-of (assoc :checked (assoc (cmp/checked (:cells expansion) mtime-of) :now (js/Date.now)))))))
 
 (defn header [id p]
   {:id id :name id :status (:status p) :note (:note p) :children []})
@@ -42,12 +46,12 @@
 
 (defn detail
   "The full comparison of one plan (parts as elements with content text, layers, grid, spots, assignments, errors),
-  nil for an unknown id."
-  [{:keys [block-at] :as opts} id]
+  nil for an unknown id. :column-mtime (cx cz -> ms or nil) adds :checked."
+  [{:keys [block-at column-mtime] :as opts} id]
   (let [{:keys [plans blueprints]} (read-all opts)]
     (when-let [p (get plans id)]
-      (let [result (compare-one p blueprints block-at)]
+      (let [result (compare-one p blueprints block-at column-mtime)]
         (merge (header id p)
-               (select-keys result [:region :counts :elements :layers :grid :errors :spots])
+               (select-keys result [:region :counts :elements :layers :grid :errors :spots :checked])
                {:percent (get-in result [:counts :percent])
                 :assign (shape/assignment-answers p)})))))

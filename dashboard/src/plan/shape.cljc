@@ -354,3 +354,18 @@
             (if (empty? state)
               (:block want)
               (str (:block want) "[" (str/join "," (for [[k v] (sort-by key state)] (str (name k) "=" (state-text v)))) "]")))))
+
+(defn want-block
+  "The block a want is drawn as: its name, the first choice of an :any, the plant of a crop, the leaves of a tree;
+  nil for :clear."
+  [want]
+  (cond
+    (= :clear want) nil
+    (string? want) want
+    (vector? want) (want-block (second want))
+    (contains? want :crop) (first (remove #(str/starts-with? % "attached_") (crop-names (:crop want))))
+    (contains? want :tree) (case (:tree want)
+                             "crimson" "nether_wart_block"
+                             "warped" "warped_wart_block"
+                             (str (:tree want) "_leaves"))
+    :else (:block want)))

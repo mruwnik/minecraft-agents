@@ -8,6 +8,22 @@
 
 (def plans-ms 10000)
 
+(defn view-state
+  "What the plan detail is drawn as: :view (:bird, or :layer for the chosen y) and :mode (\"plan\", \"world\" or \"diff\")."
+  [plans]
+  {:view (or (:view plans) pm/default-view) :mode (or (:mode plans) pm/default-mode)})
+
+(defn with-layer [plans y] (assoc plans :layer y :view :layer))
+(defn with-view [plans view] (assoc plans :view view))
+(defn with-mode [plans mode] (assoc plans :mode mode))
+
+;; the view and the mode are the viewer's, kept while moving between plans and worlds
+(defn with-selected [plans name]
+  (assoc plans :selected name :detail nil :detail-failed nil :layer nil :element nil))
+
+(defn after-world-change [plans]
+  (select-keys plans [:active? :selected-wanted? :view :mode]))
+
 (defn selected-from-search []
   (.get (js/URLSearchParams. (.-search js/location)) "plan"))
 
@@ -72,11 +88,13 @@
 (rf/reg-event-fx
  :plans/select
  (fn [{:keys [db]} [_ name]]
-   {:db (update db :plans assoc :selected name :detail nil :detail-failed nil :layer nil :element nil)
+   {:db (update db :plans with-selected name)
     :replace-url (url-with-plan name)
     :fx [[:dispatch [:plans/fetch-detail name]]]}))
 
-(rf/reg-event-db :plans/layer (fn [db [_ y]] (assoc-in db [:plans :layer] y)))
+(rf/reg-event-db :plans/layer (fn [db [_ y]] (update db :plans with-layer y)))
+(rf/reg-event-db :plans/view (fn [db [_ view]] (update db :plans with-view view)))
+(rf/reg-event-db :plans/mode (fn [db [_ mode]] (update db :plans with-mode mode)))
 
 ;; clicking the selected element again clears the selection; selecting one shows the layer where it starts
 (rf/reg-event-db
@@ -96,10 +114,11 @@
  :plans/world-changed
  (fn [{:keys [db]} _]
    (let [active? (get-in db [:plans :active?])]
-     {:db (update db :plans select-keys [:active? :selected-wanted?])
+     {:db (update db :plans after-world-change)
       :fx [(when active? [:dispatch [:plans/fetch]])]})))
 
 (rf/reg-sub :plans (fn [db _] (:plans db)))
+(rf/reg-sub :plan-view-state :<- [:plans] (fn [plans _] (view-state plans)))
 (rf/reg-sub :plan-items :<- [:plans] (fn [p _] (:items p)))
 
 (rf/reg-sub

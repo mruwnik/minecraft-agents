@@ -399,6 +399,11 @@ canvas.plan-grid { cursor: default; border: 1px solid var(--line); image-renderi
 .plan-bill { margin-top: 14px; }
 .plan-bill h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
 .bill { display: grid; grid-template-columns: max-content max-content; gap: 2px 12px; }
+.plan-legend { flex-wrap: wrap; }
+.plan-legend i.blank { background: #12151b; border: 1px solid #3a414c; }
+.plan-legend i.hatch { background: linear-gradient(135deg, #12151b 45%, #8b949e 45% 55%, #12151b 55%); border: 1px solid #3a414c; }
+.mode-switch { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.mode-switch .layers { margin-bottom: 0; }
 .bill .n { text-align: right; color: var(--dim); font-family: var(--mono); }
 .stats.on { background: #243245; border-color: var(--accent); }
 /* plans v2 */

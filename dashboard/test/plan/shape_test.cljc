@@ -332,3 +332,15 @@
     {:crop "wheat"} "crop wheat"
     {:tree "oak"} "tree oak"
     :clear "clear"))
+
+(deftest want-block-is-the-block-a-want-is-drawn-as
+  (are [want block] (= block (shape/want-block want))
+    "oak_fence" "oak_fence"
+    {:block "oak_door" :facing :north} "oak_door"
+    [:any "cobblestone" {:block "stone_bricks"}] "cobblestone"
+    [:any {:block "oak_stairs" :facing :east} "stone"] "oak_stairs"
+    {:crop "wheat"} "wheat"
+    {:crop "melon"} "melon_stem"
+    {:tree "oak"} "oak_leaves"
+    {:tree "crimson"} "nether_wart_block"
+    :clear nil))

@@ -49,12 +49,20 @@
     (are [path expected] (= expected (get-in r path))
       [:layers 0 :y] 64
       [:layers 1 :y] 65
-      [:layers 0 :rows 0 0] {:s "match" :e "crop wheat" :a "wheat" :el "a"}
-      [:layers 0 :rows 0 1] {:s "missing" :e "crop wheat" :a "air" :el "a"}
-      [:layers 0 :rows 0 5] {:s "unknown" :e "stone" :a nil :el "b"}
+      [:layers 0 :rows 0 0] {:s "match" :e "crop wheat" :w "wheat" :a "wheat" :el "a"}
+      [:layers 0 :rows 0 1] {:s "missing" :e "crop wheat" :w "wheat" :a "air" :el "a"}
+      [:layers 0 :rows 0 5] {:s "unknown" :e "stone" :w "stone" :a nil :el "b"}
       [:layers 0 :rows 1 0] nil
-      [:layers 1 :rows 1 0] {:s "extra" :e "clear" :a "oak_leaves" :el "b"})))
+      [:layers 1 :rows 1 0] {:s "extra" :e "clear" :w nil :a "oak_leaves" :el "b"})))
 
 (deftest empty-expansion
   (is (= {:counts cmp/zero-counts :elements [] :layers [] :grid nil :errors []}
          (cmp/compare-plan {:cells [] :parts []} (fn [_] nil)))))
+
+(deftest checked-is-the-age-of-the-chunk-dumps-the-plan-stands-on
+  (let [cells [{:pos [0 64 0]} {:pos [15 70 15]} {:pos [16 64 0]} {:pos [-1 64 0]} {:pos [40 64 40]}]
+        times {[0 0] 1000 [1 0] 3000 [-1 0] 2000}]
+    (are [cells expected] (= expected (cmp/checked cells (fn [cx cz] (get times [cx cz]))))
+      cells {:chunks 4 :dumped 3 :oldest 1000 :newest 3000}
+      [{:pos [40 64 40]}] {:chunks 1 :dumped 0 :oldest nil :newest nil}
+      [] {:chunks 0 :dumped 0 :oldest nil :newest nil})))

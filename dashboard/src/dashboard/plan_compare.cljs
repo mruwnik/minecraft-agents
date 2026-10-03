@@ -27,7 +27,18 @@
        :max [(axis 0 max) (axis 1 max) (axis 2 max)]})))
 
 (defn grid-cell [{:keys [status want found part]}]
-  {:s (name status) :e (shape/want-text want) :a found :el part})
+  {:s (name status) :e (shape/want-text want) :w (shape/want-block want) :a found :el part})
+
+(defn chunk-of [[x _ z]] [(bit-shift-right x 4) (bit-shift-right z 4)])
+
+(defn checked
+  "When the world was last seen under the cells: the chunk columns they stand in, how many of those were dumped, and
+  the oldest and newest dump time (mtime-of cx cz -> ms or nil when not dumped)."
+  [cells mtime-of]
+  (let [chunks (distinct (map (comp chunk-of :pos) cells))
+        times (keep (fn [[cx cz]] (mtime-of cx cz)) chunks)]
+    {:chunks (count chunks) :dumped (count times)
+     :oldest (when (seq times) (apply min times)) :newest (when (seq times) (apply max times))}))
 
 (defn layers
   "One top-down grid per y that holds cells: {:y y :rows [[cell-or-nil ...]]} over the x/z bounds of all the cells
