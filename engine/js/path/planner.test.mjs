@@ -23,7 +23,7 @@ test('flat walk of 10 blocks: found, 11 steps, walking speed, no risk', () => {
   assert.deepEqual(lastCell(r), [12, 64, 2])
   assert.equal(r.path.steps.length, 11)
   assert.ok(Math.abs(r.path.cost.seconds - 10 / 4.317) < 0.01)
-  assert.deepEqual({ ...r.path.cost, seconds: 0 }, { seconds: 0, risk: 0, maxDrop: 0, jumps: 0, unknown: 0 })
+  assert.deepEqual({ ...r.path.cost, seconds: 0 }, { seconds: 0, risk: 0, maxDrop: 0, jumps: 0, climbed: 0, opens: 0, unknown: 0 })
   assert.ok(r.expanded > 0 && r.ms >= 0)
 })
 

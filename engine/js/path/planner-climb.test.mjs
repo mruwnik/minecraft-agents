@@ -1,0 +1,183 @@
+// Climbing: ladders, vines, scaffolding and trapdoors over ladders, on the live courses and on small hand-built worlds.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { courseSnapshot } from './courses.mjs'
+import { fixtureSnapshot } from './fixture.mjs'
+import { plan, MOVE, DEFAULT_COSTS } from './planner.mjs'
+
+const planCourse = (name, options) => {
+  const { snapshot, from, goal } = courseSnapshot(name)
+  return plan(snapshot, { from, goal }, options)
+}
+const verdict = r => `${r.status}${r.reason ? `/${r.reason}` : ''}`
+const moveSet = r => new Set(r.path.steps.map(s => s.move))
+const near = (x, y, z) => ({ kind: 'near', x, y, z, range: 1 })
+
+const found = [
+  'ladder-up', 'ladder-down', 'vine-up', 'vine-down', 'ladder6', 'vines6',
+  'lad-shaft20-up', 'lad-shaft20-down', 'lad-wall20-up', 'lad-wall20-down',
+  'lad-raised1', 'lad-trap-open', 'lad-trap-closed', 'twisting-up', 'scaffold-up', 'scaffold-down', 'weeping'
+]
+for (const name of found) {
+  test(`course ${name}: found`, () => {
+    const r = planCourse(name)
+    const goal = courseSnapshot(name).goal
+    assert.equal(verdict(r), 'found')
+    assert.ok(Math.hypot(r.path.steps.at(-1).x - goal.x, r.path.steps.at(-1).z - goal.z) <= 1.5)
+    assert.ok(Math.abs(r.path.steps.at(-1).y - goal.y) <= 1)
+  })
+}
+
+// [course, the move it must use]
+const uses = [
+  ['lad-raised1', MOVE.JUMP_CLIMB],
+  ['lad-trap-closed', MOVE.OPEN],
+  ['ladder-up', MOVE.CLIMB_UP],
+  ['vine-up', MOVE.CLIMB_UP],
+  ['twisting-up', MOVE.CLIMB_UP],
+  ['scaffold-up', MOVE.CLIMB_UP],
+  ['ladder-down', MOVE.CLIMB_DOWN],
+  ['vine-down', MOVE.CLIMB_DOWN],
+  ['scaffold-down', MOVE.CLIMB_DOWN],
+  ['lad-wall20-down', MOVE.CLIMB_DOWN]
+]
+for (const [name, move] of uses) {
+  test(`course ${name} uses move ${move}`, () => {
+    assert.ok(moveSet(planCourse(name)).has(move))
+  })
+}
+
+test('the closed wooden trapdoor over the ladder is one OPEN, recorded with its block position', () => {
+  const { path } = planCourse('lad-trap-closed')
+  const opens = path.steps.filter(s => s.move === MOVE.OPEN)
+  assert.equal(opens.length, 1)
+  assert.deepEqual(opens[0].opens, [{ x: 2880, y: 166, z: 3216 }])
+  assert.equal(path.cost.opens, 1)
+})
+
+test('an open trapdoor over a ladder of its facing costs no OPEN', () => {
+  const { path } = planCourse('lad-trap-open')
+  assert.equal(path.cost.opens, 0)
+  assert.ok(path.cost.climbed >= 5)
+})
+
+// [course, blocks climbed]: ladder cells 161..166 are 5 climbs and the step up; the 20 high shafts are 19 or 20
+test('the cost vector counts blocks climbed, up and down', () => {
+  assert.equal(planCourse('ladder-up').path.cost.climbed, 5)
+  assert.equal(planCourse('ladder-down').path.cost.climbed, 5)
+  assert.equal(planCourse('weeping').path.cost.climbed, 0)
+})
+
+const summaries = [
+  ['ladder-up', /ladder up 5/],
+  ['vine-down', /vines down/],
+  ['scaffold-up', /scaffolding up/],
+  ['lad-trap-closed', /opens 1 trapdoor/]
+]
+for (const [name, pattern] of summaries) {
+  test(`summary of ${name} matches ${pattern}`, () => {
+    assert.match(planCourse(name).path.summary, pattern)
+  })
+}
+
+test('a climbed block costs climbUp seconds up and climbDown seconds down, both overridable through options.costs', () => {
+  const base = planCourse('ladder-up').path.cost
+  const slow = planCourse('ladder-up', { costs: { climbUp: 5 } }).path.cost
+  assert.ok(Math.abs(slow.seconds - base.seconds - base.climbed * (5 - DEFAULT_COSTS.climbUp)) < 1e-6)
+  const down = planCourse('ladder-down').path.cost
+  const slowDown = planCourse('ladder-down', { costs: { climbDown: 3 } }).path.cost
+  assert.ok(Math.abs(slowDown.seconds - down.seconds - down.climbed * (3 - DEFAULT_COSTS.climbDown)) < 1e-6)
+})
+
+test('an OPEN costs costs.open seconds', () => {
+  const base = planCourse('lad-trap-closed').path.cost.seconds
+  const dear = planCourse('lad-trap-closed', { costs: { open: 11 } }).path.cost.seconds
+  assert.ok(Math.abs(dear - base - (11 - DEFAULT_COSTS.open)) < 1e-6)
+})
+
+test('default costs are the vanilla rates', () => {
+  assert.deepEqual(
+    { up: DEFAULT_COSTS.climbUp, down: DEFAULT_COSTS.climbDown, open: DEFAULT_COSTS.open },
+    { up: 0.43, down: 0.33, open: 1.0 }
+  )
+})
+
+// the tunnel opens on the ladder's back, where its own 3/16 strip of collision stands: a 0.62 body cannot pass it
+test('lad-midlanding: no way east out of the ladder cell, through the ladder strip', () => {
+  assert.notEqual(planCourse('lad-midlanding').status, 'found')
+})
+
+// ---- the ladder with a gap ----
+
+test('lad-gap going up: refused through the one block gap, with its own reason', () => {
+  const r = planCourse('lad-gap')
+  assert.notEqual(r.status, 'found')
+  assert.equal(r.reason, 'ladder-gap')
+})
+
+const gapDown = () => {
+  const { snapshot } = courseSnapshot('lad-gap')
+  return plan(snapshot, { from: { x: 2886, y: 171, z: 3216, px: 2886.5, pz: 3216.5 }, goal: near(2860, 161, 3216) })
+}
+test('lad-gap going down: the short fall through the gap is caught by the ladder below', () => {
+  const r = gapDown()
+  assert.equal(verdict(r), 'found')
+  assert.ok(r.path.steps.some((s, k) => s.move === MOVE.DROP && r.path.steps[k - 1].x === 2880 && r.path.steps[k - 1].y === 165))
+})
+
+// ---- hand-built worlds: stone floor to y 63, so feet cells are y 64 ----
+
+const world = fill => fixtureSnapshot({ fill: [[-2, 60, -2, 60, 63, 40, 'stone'], ...fill] })
+const run = (snapshot, from, goal, options) => plan(snapshot, { from, goal }, options)
+const from5 = { x: 2, y: 64, z: 5 }
+
+// a ladder up the west face of a stone block 10 high, exit at the top
+const shaft = world([
+  [10, 64, 0, 20, 73, 10, 'stone'],
+  [9, 64, 5, 9, 73, 5, 'ladder', { facing: 'west' }]
+])
+test('a ladder up a wall 10 high with the exit at the top: found, climbing 9 or 10', () => {
+  const r = run(shaft, from5, near(15, 74, 5))
+  assert.equal(r.status, 'found')
+  assert.ok(r.path.cost.climbed >= 9)
+  assert.match(r.path.summary, /ladder up (9|10)/)
+})
+
+// a one-wide shaft with a ladder up to a trapdoor ceiling; the cap beside it is the goal's floor
+const trapShaft = trap => world([
+  [8, 64, 4, 10, 72, 6, 'stone'],
+  [9, 64, 5, 9, 72, 5, 'air'],
+  [8, 64, 5, 8, 65, 5, 'air'],
+  [11, 72, 4, 15, 72, 6, 'stone'],
+  [9, 64, 5, 9, 71, 5, 'ladder', { facing: 'west' }],
+  [9, 72, 5, 9, 72, 5, trap, { half: 'top', open: false, facing: 'east' }]
+])
+// [trapdoor, statuses it may end in]: iron ones cannot be opened by hand
+const trapCases = [['oak_trapdoor', ['found']], ['copper_trapdoor', ['found']], ['iron_trapdoor', ['partial', 'none']]]
+for (const [trap, statuses] of trapCases) {
+  test(`a closed ${trap} over the ladder: ${statuses[0]}`, () => {
+    const r = run(trapShaft(trap), from5, near(13, 73, 5))
+    assert.ok(statuses.includes(r.status), r.status)
+  })
+}
+
+// a vine shaft cut into a platform: weeping vines from the top (y 69) to y 65, floor under them at y 64
+const vineShaft = world([
+  [5, 64, 0, 14, 69, 10, 'stone'],
+  [13, 64, 5, 13, 69, 5, 'air'],
+  [14, 64, 5, 14, 65, 5, 'air'],
+  [13, 65, 5, 13, 68, 5, 'weeping_vines_plant'],
+  [13, 69, 5, 13, 69, 5, 'weeping_vines']
+])
+test('weeping vines down a shaft: found, down the vines and out along the floor', () => {
+  const r = run(vineShaft, { x: 8, y: 70, z: 5 }, near(18, 64, 5))
+  assert.equal(r.status, 'found')
+  assert.ok(r.path.cost.climbed >= 4)
+  assert.match(r.path.summary, /vines down/)
+})
+
+test('the same vines going up from the floor: found', () => {
+  const r = run(vineShaft, { x: 18, y: 64, z: 5 }, near(8, 70, 5))
+  assert.equal(r.status, 'found')
+  assert.match(r.path.summary, /vines up/)
+})

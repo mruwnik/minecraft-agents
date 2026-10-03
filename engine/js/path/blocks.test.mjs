@@ -137,3 +137,32 @@ for (const [name, props, boxes] of boxCases) {
     assert.deepEqual(boxesOf(stateId(name, props)), boxes)
   })
 }
+
+// [block, props, climb, climbName, facing, floor]: climb 1 climbable, 2 open trapdoor (climbable over a ladder of its
+// facing), 3 closed trapdoor a hand opens; climbName 1 ladder, 2 vines, 3 scaffolding; floor: what a body can stand on
+const climbCases = [
+  ['stone', {}, 0, 0, 0, 16],
+  ['oak_slab', { type: 'bottom' }, 0, 0, 0, 8],
+  ['ladder', { facing: 'west' }, 1, 1, 2, 0],
+  ['vine', { east: true }, 1, 2, 0, 0],
+  ['twisting_vines_plant', {}, 1, 2, 0, 0],
+  ['weeping_vines', {}, 1, 2, 0, 0],
+  ['cave_vines', {}, 1, 2, 0, 0],
+  ['scaffolding', {}, 1, 3, 0, 16],
+  ['oak_trapdoor', { half: 'top', open: true, facing: 'west' }, 2, 0, 2, 16],
+  ['oak_trapdoor', { half: 'top', open: false, facing: 'east' }, 3, 0, 1, 16],
+  ['iron_trapdoor', { half: 'top', open: false, facing: 'east' }, 0, 0, 1, 16],
+  ['iron_trapdoor', { half: 'top', open: true, facing: 'east' }, 2, 0, 1, 16]
+]
+
+for (const [name, props, climb, climbName, facing, floor] of climbCases) {
+  test(`climb data: ${name} ${JSON.stringify(props)}`, () => {
+    const id = stateId(name, props)
+    assert.deepEqual({ climb: table.climb[id], climbName: table.climbName[id], facing: table.facing[id], floor: table.floor[id] }, { climb, climbName, facing, floor })
+  })
+}
+
+test('scaffolding has no collision for a body inside it, but is a floor to stand on', () => {
+  const id = stateId('scaffolding', {})
+  assert.deepEqual({ top: table.top[id], boxes: boxesOf(id), kind: table.kind[id] }, { top: 0, boxes: [], kind: CLIMB })
+})

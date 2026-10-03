@@ -9,6 +9,13 @@
 // 29/16 tall from the stand height, must have no collision, no fluid and no AVOID hazard. Water is not entered at
 // all in stage 1 (drops into it are refused too), but a diagonal may brush past it.
 //
+// Climbing: a feet cell holding a climbable (ladder, vines, scaffolding; an open trapdoor directly above a ladder of its facing;
+// a closed wooden trapdoor above a ladder, which costs an OPEN to enter) is a climb node: standable with no floor, h = 0.
+// Moves between climb cells are vertical (CLIMB_UP / CLIMB_DOWN, OPEN into a closed trapdoor), a standable cell under a
+// climbable is left by a JUMP_CLIMB, and the top of a ladder is left sideways like any cell. Up through a gap in a ladder is
+// refused (the feet leave the ladder), down through one is a short fall caught below. Every cost the policy might want to
+// change is in DEFAULT_COSTS, overridable by options.costs.
+//
 // Tight cells: where a block that leaves part of its cell empty (fence, bamboo, cocoa, wall, ladder...: `partial`) lies within
 // one cell of the body, rows y-1..y+2, whether the 0.62 wide body fits depends on where in the cell it stands. There the
 // cell is not one node but one per region of the free-position mask (space.mjs: 17x17 positions at 1/16, 4-connected
@@ -18,10 +25,14 @@
 // cardinal chain covers them), as are drops and gap jumps out of or into one. A search box (margin, yMargin) bounds
 // the nodes, and a backward flood from the goal, run only once the search has spent floodAfter expansions, reports a goal nothing can reach.
 import { UNLOADED } from './snapshot.mjs'
-import { defaultStateTable, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW } from './blocks.mjs'
+import { defaultStateTable, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING } from './blocks.mjs'
 import { boxesNear, freeMask, labelRegions, GRID } from './space.mjs'
 
-export const MOVE = { START: 0, WALK: 1, DIAGONAL: 2, JUMP: 3, DROP: 4, GAP: 5, CORNER: 6 }
+export const MOVE = { START: 0, WALK: 1, DIAGONAL: 2, JUMP: 3, DROP: 4, GAP: 5, CORNER: 6, CLIMB_UP: 7, CLIMB_DOWN: 8, JUMP_CLIMB: 9, OPEN: 10 }
+
+// seconds for the moves climbing adds: per block climbed up and down, a jump from the floor into a ladder one block up, and
+// opening a trapdoor by hand
+export const DEFAULT_COSTS = { climbUp: 0.43, climbDown: 0.33, jumpClimb: 0.5, open: 1.0 }
 
 const BODY = 29 // 1.8 blocks in 1/16, rounded up
 const STEP = 9 // 0.6 blocks
@@ -54,6 +65,8 @@ const CENTRE = { px: 8, pz: 8 } // the representative point of an ordinary cell,
 const packShape = (region, tight, px, pz, crossed, crossX, crossZ) =>
   region | (tight ? 16 | px << 5 | pz << 10 : 0) | (crossed ? 1 << 15 | crossX << 16 | crossZ << 21 : 0)
 
+const CLIMBS = new Set([MOVE.CLIMB_UP, MOVE.CLIMB_DOWN, MOVE.JUMP_CLIMB, MOVE.OPEN]) // moves that climb a block
+
 const CARDINAL = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 const DIAGONAL = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
 const AROUND = [...CARDINAL, ...DIAGONAL]
@@ -67,13 +80,40 @@ export function createSearch (snapshot, query, options = {}) {
     table = defaultStateTable(),
     goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48
   } = options
-  const { top, base, kind, hazard, stairUp, partial } = table
+  const costs = { ...DEFAULT_COSTS, ...options.costs }
+  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special } = table
   const { stateAt, minY } = snapshot
+  const rawAt = stateAt
   const { from, goal } = query
   const goalRange = goal.range ?? 0
   const slack = OCTILE_SLACK * goalRange
 
   // ---- the world, as the body sees it ----
+
+  // does the climbable state `id` (climb[id] = cl) at x,y,z make its cell one the body climbs in?
+  const climbCell = (cl, id, x, y, z) => {
+    if (cl === CLIMB_INSIDE) return true
+    const below = rawAt(x, y - 1, z)
+    if (below === UNLOADED || climbName[below] !== LADDER) return false
+    return cl === CLIMB_TRAP_SHUT || facing[id] === facing[below]
+  }
+  const climbHere = (x, y, z) => {
+    const id = rawAt(x, y, z)
+    if (id === UNLOADED) return false
+    const cl = climb[id]
+    return cl !== 0 && climbCell(cl, id, x, y, z)
+  }
+  // a closed wooden trapdoor above a ladder: entering the cell costs an OPEN
+  const shutAt = (x, y, z) => {
+    const id = rawAt(x, y, z)
+    return id !== UNLOADED && climb[id] === CLIMB_TRAP_SHUT && climbName[rawAt(x, y - 1, z)] === LADDER
+  }
+  // what the free-space masks read: a closed wooden trapdoor over a ladder is one the climb opens, so there it reads as air
+  const view = { stateAt: (x, y, z) => {
+    const id = stateAt(x, y, z)
+    return climb[id] === CLIMB_TRAP_SHUT && climbName[stateAt(x, y - 1, z)] === LADDER ? 0 : id
+  } }
+  let allowShut = false // standH refuses a shut trapdoor's cell unless the caller pays for opening it
 
   // is the column at x,z free for a body spanning lo..hi (1/16 absolute)? Also false for fluid, NARROW, AVOID, unloaded.
   const clear = (x, z, lo, hi) => {
@@ -106,10 +146,38 @@ export function createSearch (snapshot, query, options = {}) {
   let support = 0 // state id the last standH stood on
   let touch = 0 // DAMAGE_TOUCH cells inside the last standH body
 
+  // does the body fit in the column of feet cell y at x,z, its feet at absolute lo (1/16)? `id` stands for the feet cell itself.
+  // Sets `touch`. Collision that leaves gaps is for the tight-cell mask to judge, not for refusing the cell.
+  const fits = (x, y, z, lo, id) => {
+    const hi = lo + BODY
+    const last = (hi - 1) >> 4
+    let touched = 0
+    for (let k = y; k <= last; k++) {
+      const cid = k === y ? id : stateAt(x, k, z)
+      if (cid === UNLOADED) return false
+      const ct = top[cid]
+      const kd = kind[cid]
+      if (kd === WATER || kd === LAVA || hazard[cid] === HAZARD_AVOID) return false
+      if (!partial[cid] && (ct > 0 && k * 16 + ct > lo && k * 16 + base[cid] < hi || kd === NARROW)) return false
+      if (hazard[cid] === DAMAGE_TOUCH) touched++
+    }
+    touch = touched
+    return true
+  }
+
   // stand height at a feet cell, or -1
   const standH = (x, y, z) => {
-    const id = stateAt(x, y, z)
-    if (id === UNLOADED) return -1
+    const raw = rawAt(x, y, z)
+    if (raw === UNLOADED) return -1
+    const cl = climb[raw]
+    if (cl !== 0 && climbCell(cl, raw, x, y, z)) {
+      // the body hangs in the climbable: no floor, feet at the cell's floor
+      const shut = cl === CLIMB_TRAP_SHUT
+      if (shut && !allowShut) return -1
+      support = raw
+      return fits(x, y, z, y * 16, shut ? 0 : raw) ? 0 : -1
+    }
+    const id = raw
     const t = top[id]
     let h
     // a block, a stairs: not a place to stand in. A partial one (fence, bamboo, wall, gate) leaves room at the cell's
@@ -123,29 +191,14 @@ export function createSearch (snapshot, query, options = {}) {
     } else {
       const below = stateAt(x, y - 1, z)
       if (below === UNLOADED) return -1
-      const tb = top[below]
+      const tb = floor[below]
       const hz = hazard[below]
       // a lower top is that cell's own stand height, not ground for this one
       if (tb < WHOLE || kind[below] === NARROW || hz === HAZARD_AVOID || hz === DAMAGE_TOUCH) return -1
       h = tb - WHOLE
       support = below
     }
-    const lo = y * 16 + h
-    const hi = lo + BODY
-    const last = (hi - 1) >> 4
-    let touched = 0
-    for (let k = y; k <= last; k++) {
-      const cid = k === y ? id : stateAt(x, k, z)
-      if (cid === UNLOADED) return -1
-      const ct = top[cid]
-      const kd = kind[cid]
-      if (kd === WATER || kd === LAVA || hazard[cid] === HAZARD_AVOID) return -1
-      // collision that leaves gaps is for the tight-cell mask to judge, not for refusing the cell
-      if (!partial[cid] && (ct > 0 && k * 16 + ct > lo && k * 16 + base[cid] < hi || kd === NARROW)) return -1
-      if (hazard[cid] === DAMAGE_TOUCH) touched++
-    }
-    touch = touched
-    return h
+    return fits(x, y, z, y * 16 + h, id) ? h : -1
   }
 
   const lavaAt = (x, y, z) => {
@@ -366,13 +419,13 @@ export function createSearch (snapshot, query, options = {}) {
     columnFlags[slot] = flag
     return flag
   }
-  // no section the block of cells x +-r, z +-r, rows y-below..y+above touches holds a partial block: the usual case, answered
+  // no section the block of cells x +-r, z +-r, rows y-below..y+above touches holds a partial block or a climbable: the usual case, answered
   // without reading cells
   const sectionsClear = (x, y, z, r, below, above) => {
     const sy1 = (y + above - minY) >> 4
     for (let sy = (y - below - minY) >> 4; sy <= sy1; sy++) {
       for (let sz = (z - r) >> 4; sz <= (z + r) >> 4; sz++) {
-        for (let sx = (x - r) >> 4; sx <= (x + r) >> 4; sx++) if (snapshot.sectionHas(partial, sx, sy, sz)) return false
+        for (let sx = (x - r) >> 4; sx <= (x + r) >> 4; sx++) if (snapshot.sectionHas(special, sx, sy, sz)) return false
       }
     }
     return true
@@ -402,7 +455,7 @@ export function createSearch (snapshot, query, options = {}) {
     if (shape !== undefined) return shape
     const t = performance.now()
     const lo = lo16 / 16
-    const mask = freeMask(boxesNear(snapshot, table, x, y, z, lo, lo + BODY_BLOCKS), x, z)
+    const mask = freeMask(boxesNear(view, table, x, y, z, lo, lo + BODY_BLOCKS), x, z)
     const { labels, regs } = labelRegions(mask)
     shape = { mask, labels, regs, centre: labels[8 * GRID + 8] }
     maskCache.set(key, shape)
@@ -417,16 +470,16 @@ export function createSearch (snapshot, query, options = {}) {
 
   // The region of a boundary point in a cell's own mask. Where the two cells' heights differ the point can be blocked only by
   // the step itself (the body crosses at the higher level, then settles), so a blocked point takes the region of the nearest
-  // free position within SNAP/16.
+  // free position within SNAP/16: a whole cell (GRID) for a body leaving a climbable by a rise, or falling onto one.
   const SNAP = 6
-  const regionNear = (shape, p) => {
+  const regionNear = (shape, p, snap = SNAP) => {
     if (shape.labels[p] >= 0) return shape.labels[p]
     const pi = p % GRID
     const pj = (p - pi) / GRID
     let best = -1
     let bestD = Infinity
-    for (let j = Math.max(0, pj - SNAP); j <= Math.min(GRID - 1, pj + SNAP); j++) {
-      for (let i = Math.max(0, pi - SNAP); i <= Math.min(GRID - 1, pi + SNAP); i++) {
+    for (let j = Math.max(0, pj - snap); j <= Math.min(GRID - 1, pj + snap); j++) {
+      for (let i = Math.max(0, pi - snap); i <= Math.min(GRID - 1, pi + snap); i++) {
         const label = shape.labels[j * GRID + i]
         const d = (i - pi) ** 2 + (j - pj) ** 2
         if (label >= 0 && d < bestD) { best = label; bestD = d }
@@ -443,7 +496,7 @@ export function createSearch (snapshot, query, options = {}) {
 
   // the cardinal move c from cell A (region `region`, or every region when -1) to cell B, either of them tight: one edge per
   // region of B that a boundary point free for both leads to. Costs are those of the plain move, plus TIGHT_S into a tight cell.
-  const tightMove = (i, x, y, z, h, region, c, x2, y2, z2, h1, move, dsec, drisk, slowTo) => {
+  const tightMove = (i, x, y, z, h, region, c, x2, y2, z2, h1, move, dsec, drisk, slowTo, snapA = SNAP) => {
     const loA = y * 16 + h
     const loB = y2 * 16 + h1
     const top = Math.max(loA, loB) // the body straddles the boundary at the higher of the two heights
@@ -451,8 +504,8 @@ export function createSearch (snapshot, query, options = {}) {
     const tightB = isTight(x2, y2, z2)
     const ownA = shapeOf(x, y, z, loA)
     const ownB = shapeOf(x2, y2, z2, loB)
-    const jointA = loA === top ? ownA : shapeOf(x, y, z, top)
-    const jointB = loB === top ? ownB : shapeOf(x2, y2, z2, top)
+    const jointA = loA === top ? ownA : shapeOf(x, Math.max(y, y2), z, top)
+    const jointB = loB === top ? ownB : shapeOf(x2, Math.max(y, y2), z2, top)
     const first = region < 0 ? 0 : region
     const last = region < 0 ? (tightA ? ownA.regs.length - 1 : 0) : region
     const sec = dsec + (tightB ? TIGHT_S : 0)
@@ -464,8 +517,8 @@ export function createSearch (snapshot, query, options = {}) {
       for (let t = 0; t <= 16; t++) {
         const pa = indexA(c, t)
         const pb = indexB(c, t)
-        if (!jointA.mask[pa] || !jointB.mask[pb] || regionNear(ownA, pa) !== label) continue
-        const lb = regionNear(ownB, pb)
+        if (!jointA.mask[pa] || !jointB.mask[pb] || regionNear(ownA, pa, snapA) !== label) continue
+        const lb = regionNear(ownB, pb, move === MOVE.DROP ? GRID : SNAP)
         const rb = tightB ? lb : lb === ownB.centre ? 0 : -1
         if (rb < 0 || rb >= REGIONS) continue
         const repB = tightB ? ownB.regs[rb] : CENTRE
@@ -480,6 +533,48 @@ export function createSearch (snapshot, query, options = {}) {
         const crossX = c === 0 ? 0 : c === 1 ? 16 : t
         const crossZ = c === 2 ? 0 : c === 3 ? 16 : t
         edge(x2, y2, z2, h1, move, i, sec, drisk, slowTo, 0, packShape(rb, tightB, rep.px, rep.pz, true, crossX, crossZ))
+      }
+    }
+  }
+
+  // A vertical move in one column from cell y (stand height h, region `region` or every one when -1) to cell y2: climbing, a jump
+  // into a ladder, a fall. The body stays at one position (x + i/16, z + j/16) all the way, so it must fit there at the
+  // start, the end and every cell between: one edge per pair of regions that such a position joins, the position nearest
+  // the middle of the two regions' points being the crossing.
+  const bestD = new Float64Array(REGIONS)
+  const bestAt = new Int16Array(REGIONS)
+  const verticalMove = (i, x, y, z, h, region, y2, h2, move, dsec, drisk, slowTo) => {
+    const tightA = isTight(x, y, z)
+    const tightB = isTight(x, y2, z)
+    if (!tightA && !tightB) return edge(x, y2, z, h2, move, i, dsec, drisk, slowTo)
+    const ownA = shapeOf(x, y, z, y * 16 + h)
+    const ownB = shapeOf(x, y2, z, y2 * 16 + h2)
+    const between = []
+    for (let k = Math.min(y, y2) + 1; k < Math.max(y, y2); k++) between.push(shapeOf(x, k, z, k * 16).mask)
+    const first = region < 0 ? 0 : region
+    const last = region < 0 ? (tightA ? ownA.regs.length - 1 : 0) : region
+    for (let ra = first; ra <= last && ra < REGIONS; ra++) {
+      const labelA = tightA ? ra : ownA.centre
+      if (labelA < 0) continue
+      const repA = tightA ? ownA.regs[ra] : CENTRE
+      bestD.fill(Infinity)
+      for (let p = 0; p < GRID * GRID; p++) {
+        if (!ownA.mask[p] || ownA.labels[p] !== labelA || !ownB.mask[p] || (between.length > 0 && between.some(m => !m[p]))) continue
+        const lb = ownB.labels[p]
+        const rb = tightB ? lb : lb === ownB.centre ? 0 : -1
+        if (rb < 0 || rb >= REGIONS) continue
+        const repB = tightB ? ownB.regs[rb] : CENTRE
+        const pi = p % GRID
+        const pj = (p - pi) / GRID
+        const d = (pi - (repA.px + repB.px) / 2) ** 2 + (pj - (repA.pz + repB.pz) / 2) ** 2
+        if (d < bestD[rb]) { bestD[rb] = d; bestAt[rb] = p }
+      }
+      for (let rb = 0; rb < REGIONS; rb++) {
+        if (bestD[rb] === Infinity) continue
+        const rep = tightB ? ownB.regs[rb] : CENTRE
+        const p = bestAt[rb]
+        const pi = p % GRID
+        edge(x, y2, z, h2, move, i, dsec, drisk, slowTo, 0, packShape(rb, tightB, rep.px, rep.pz, true, pi, (p - pi) / GRID))
       }
     }
   }
@@ -515,6 +610,15 @@ export function createSearch (snapshot, query, options = {}) {
     // when no section near the cell holds a partial block, no cell this expansion looks at is tight
     quiet = sectionsClear(x, y, z, 2, 2, 3)
     const tightSrc = tightAt(x, y, z)
+    // (the same quiet test as for tight cells: no climbable within reach of the cell either)
+    const climbing = !quiet && climbHere(x, y, z)
+    if (climbing) {
+      climbUp(i, x, y, z, h, region)
+      climbDown(i, x, y, z, h, region)
+    } else if (!quiet) {
+      jumpClimb(i, x, y, z, h, region)
+      if (climbHere(x, y - 1, z)) climbDown(i, x, y, z, h, region) // standing on scaffolding: sneak down into it
+    }
 
     for (let c = 0; c < 4; c++) {
       const x2 = x + CARDINAL[c][0]
@@ -525,20 +629,20 @@ export function createSearch (snapshot, query, options = {}) {
         const walk = WALK_S * (1 + SLOW_EXTRA * (slowFrom + enterSlow))
         // climbing a stairs block in its direction is a walk, though the node above it is a whole block up
         const climbs = stairUp[support] === c + 1 && delta <= WHOLE
-        const walks = delta <= STEP || climbs
+        // (the body steps off a climbable without a jump: it is already rising)
+        const walks = delta <= STEP || climbs || (climbing && delta <= JUMP_UP)
         // a jump needs headroom over the start column; a tight start's mask checks that itself
         if (!walks && !(delta <= JUMP_UP && (tightSrc || clear(x, z, h0, ty * 16 + h1 + BODY)))) continue
         const sec = walks ? walk : walk + JUMP_S
         const move = walks ? MOVE.WALK : MOVE.JUMP
-        if (tightSrc || tightAt(x2, ty, z2)) tightMove(i, x, y, z, h, region, c, x2, ty, z2, h1, move, sec, enterRisk, enterSlow)
+        if (tightSrc || tightAt(x2, ty, z2)) tightMove(i, x, y, z, h, region, c, x2, ty, z2, h1, move, sec, enterRisk, enterSlow, climbing && delta > STEP ? GRID : SNAP)
         else edge(x2, ty, z2, h1, move, i, sec, enterRisk, enterSlow)
         continue
       }
-      if (tightSrc) continue // no drops or gap jumps out of a tight cell
       // no ground ahead at our level: the body must at least fit in the column to leave the edge
       if (!clear(x2, z2, h0, h0 + BODY)) continue
-      expandDrop(i, x, y, z, x2, z2, h0, slowFrom)
-      expandGap(i, x, y, z, c, h0)
+      expandDrop(i, x, y, z, h, region, c, x2, z2, h0, slowFrom, tightSrc)
+      if (!tightSrc) expandGap(i, x, y, z, c, h0) // no gap jumps out of a tight cell
     }
 
     if (tightSrc) return
@@ -570,8 +674,73 @@ export function createSearch (snapshot, query, options = {}) {
     }
   }
 
+  // ---- climbing ----
+
+  let gapSeen = false // a ladder was refused because the feet would leave it at a gap
+
+  // the cell (x, y2, z) as the next node of a vertical move: standH with a shut trapdoor allowed (its cost added), or -1
+  let entersShut = false
+  const enterCell = (x, y2, z) => {
+    const was = allowShut
+    allowShut = true
+    entersShut = shutAt(x, y2, z)
+    const h2 = landing(x, y2, z)
+    allowShut = was
+    return h2
+  }
+
+  // a climbable one block up (or the deck of scaffolding, or a trapdoor to open); a gap above refuses the climb
+  const climbUp = (i, x, y, z, h, region) => {
+    const h2 = enterCell(x, y + 1, z)
+    if (h2 < 0) {
+      for (let k = 2; k <= 3 && !gapSeen; k++) {
+        const free = id => id !== UNLOADED && top[id] === 0 && kind[id] !== WATER && kind[id] !== LAVA
+        gapSeen = climbHere(x, y + k, z) && free(stateAt(x, y + 1, z)) && (k === 2 || free(stateAt(x, y + 2, z)))
+      }
+      return
+    }
+    const sec = costs.climbUp + (entersShut ? costs.open : 0)
+    verticalMove(i, x, y, z, h, region, y + 1, h2, entersShut ? MOVE.OPEN : MOVE.CLIMB_UP, sec, enterRisk, enterSlow)
+  }
+
+  // a climbable or standable cell one block down; else, through free cells, a short fall onto the first climbable or floor
+  const climbDown = (i, x, y, z, h, region) => {
+    const h2 = enterCell(x, y - 1, z)
+    if (h2 >= 0) {
+      const sec = costs.climbDown + (entersShut ? costs.open : 0)
+      verticalMove(i, x, y, z, h, region, y - 1, h2, entersShut ? MOVE.OPEN : MOVE.CLIMB_DOWN, sec, enterRisk, enterSlow)
+      return
+    }
+    const free = stateAt(x, y - 1, z)
+    if (free === UNLOADED || top[free] > 0 || kind[free] === WATER || kind[free] === LAVA || hazard[free] === HAZARD_AVOID) return
+    const from16 = y * 16 + h
+    for (let y3 = y - 2; y3 >= y - maxDrop - 1; y3--) {
+      const id = stateAt(x, y3, z)
+      if (id === UNLOADED || kind[id] === LAVA || kind[id] === WATER || hazard[id] === HAZARD_AVOID) return
+      const h3 = landing(x, y3, z)
+      if (h3 < 0) {
+        if (top[id] > 0) return
+        continue
+      }
+      const fall = from16 - (y3 * 16 + h3)
+      if (fall > maxDrop * 16) return
+      verticalMove(i, x, y, z, h, region, y3, h3, MOVE.DROP, 0.25 * Math.sqrt(fall / 16), enterRisk + fallDamage(fall), enterSlow)
+      return
+    }
+  }
+
+  // from the floor, a jump puts the feet into a climbable one block up
+  const jumpClimb = (i, x, y, z, h, region) => {
+    const id = rawAt(x, y + 1, z)
+    if (id === UNLOADED || climb[id] === 0 || climb[id] === CLIMB_TRAP_SHUT) return
+    const h2 = landing(x, y + 1, z)
+    if (h2 < 0) return
+    verticalMove(i, x, y, z, h, region, y + 1, h2, MOVE.JUMP_CLIMB, costs.jumpClimb, enterRisk, enterSlow)
+  }
+
   // walk off an edge into the first standable cell below the neighbour column
-  const expandDrop = (i, x, y, z, x2, z2, h0, slowFrom) => {
+  // (out of a tight cell, or into one, only onto a climbable: the body grabs it as it falls past)
+  const expandDrop = (i, x, y, z, h, region, c, x2, z2, h0, slowFrom, tightSrc) => {
     for (let y2 = y - 1; y2 >= y - maxDrop - 1; y2--) {
       const id = stateAt(x2, y2, z2)
       if (id === UNLOADED || kind[id] === LAVA || kind[id] === WATER || hazard[id] === HAZARD_AVOID) return
@@ -580,11 +749,13 @@ export function createSearch (snapshot, query, options = {}) {
         if (top[id] > 0) return
         continue
       }
-      if (isTight(x2, y2, z2)) return
+      const tightDrop = tightSrc || isTight(x2, y2, z2)
+      if (tightDrop && !climbHere(x2, y2, z2)) return
       const fall = h0 - (y2 * 16 + h1)
       if (fall > maxDrop * 16) return
       const sec = WALK_S * (1 + SLOW_EXTRA * (slowFrom + enterSlow)) + 0.25 * Math.sqrt(Math.max(0, fall) / 16)
-      edge(x2, y2, z2, h1, MOVE.DROP, i, sec, enterRisk + fallDamage(fall), enterSlow)
+      if (tightDrop) tightMove(i, x, y, z, h, region, c, x2, y2, z2, h1, MOVE.DROP, sec, enterRisk + fallDamage(fall), enterSlow)
+      else edge(x2, y2, z2, h1, MOVE.DROP, i, sec, enterRisk + fallDamage(fall), enterSlow)
       return
     }
   }
@@ -696,9 +867,11 @@ export function createSearch (snapshot, query, options = {}) {
     }
     if (seed.includes(startKey)) return false
     edge = probe
+    allowShut = true // a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
     let open = false
     for (let head = 0; head < queue.length && !open && seen.size <= goalFlood; head++) {
       ;[fx, fy, fz] = queue[head]
+      for (let dy = -1; dy <= maxDrop + 1; dy++) if (dy !== 0) open ||= visit(fx, fy + dy, fz) // climbs and falls in the column
       for (const [dx, dz] of AROUND) {
         for (let dy = -1; dy <= maxDrop + 1; dy++) open ||= visit(fx + dx, fy + dy, fz + dz)
       }
@@ -709,6 +882,7 @@ export function createSearch (snapshot, query, options = {}) {
       }
     }
     edge = consider
+    allowShut = false
     flooded = seen.size
     return !open && seen.size <= goalFlood
   }
@@ -802,24 +976,43 @@ export function createSearch (snapshot, query, options = {}) {
         x: xs[i], y: ys[i], z: zs[i], h: hs[i], move: moves[i], corner: corners[i] === 1,
         px: xs[i] + (tight ? (shape >> 5 & 31) / 16 : 0.5), pz: zs[i] + (tight ? (shape >> 10 & 31) / 16 : 0.5)
       }
+      if (moves[i] === MOVE.OPEN) step.opens = [{ x: xs[i], y: ys[i], z: zs[i] }]
       if (shape >> 15 & 1) { step.cx = xs[i] + (shape >> 16 & 31) / 16; step.cz = zs[i] + (shape >> 21 & 31) / 16 }
       out.push(step)
     }
     return out.reverse()
   }
 
+  // "ladder up 9": consecutive climbing legs on one kind of climbable in one direction are one run
+  const CLIMB_NAMES = { [LADDER]: 'ladder', [VINES]: 'vines', [SCAFFOLDING]: 'scaffolding' }
+  const climbedOn = (s, p) => CLIMB_NAMES[climbName[rawAt(s.x, s.y, s.z)] || climbName[rawAt(p.x, p.y, p.z)]]
+  const climbRuns = legs => {
+    const runs = []
+    let prev = null
+    for (const { s, p } of legs) {
+      if (!CLIMBS.has(s.move)) { prev = null; continue }
+      const key = `${climbedOn(s, p)} ${s.y > p.y ? 'up' : 'down'}`
+      if (prev?.key === key) prev.n++
+      else runs.push(prev = { key, n: 1 })
+    }
+    return runs.map(({ key, n }) => `${key} ${n}`)
+  }
+
   const summarize = steps => {
     const legs = steps.slice(1).map((s, k) => ({ s, p: steps[k] }))
     const blocks = Math.round(legs.reduce((sum, { s, p }) => sum + Math.hypot(s.x - p.x, s.z - p.z), 0))
-    const rise = ({ s, p }) => s.move !== MOVE.DROP && s.move !== MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h
+    const rise = ({ s, p }) => !CLIMBS.has(s.move) && s.move !== MOVE.DROP && s.move !== MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h
     const ups = legs.filter(rise).length
     const falls = legs.filter(({ s }) => s.move === MOVE.DROP).map(({ s, p }) => Math.round((p.y * 16 + p.h - s.y * 16 - s.h) / 16)).filter(f => f >= 2)
     const gaps = legs.filter(({ s }) => s.move === MOVE.GAP).length
     const slides = steps.filter(s => s.corner).length
     const gapUps = legs.filter(({ s, p }) => s.move === MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h).length
     const lava = steps.some(s => lavaNear(s.x, s.y, s.z))
+    const opens = steps.filter(s => s.move === MOVE.OPEN).length
     return [
       `${blocks} blocks`,
+      ...climbRuns(legs),
+      opens > 0 && `opens ${opens} trapdoor${opens > 1 ? 's' : ''}`,
       ups > 0 && (ups === 1 ? '1 step up' : `${ups} steps up`),
       falls.length === 1 && `1 drop of ${falls[0]}`,
       falls.length > 1 && `${falls.length} drops, deepest ${Math.max(...falls)}`,
@@ -833,8 +1026,10 @@ export function createSearch (snapshot, query, options = {}) {
   const pathTo = node => {
     const steps = stepsTo(node)
     const drops = steps.slice(1).map((s, k) => s.move === MOVE.DROP ? (steps[k].y * 16 + steps[k].h - s.y * 16 - s.h) / 16 : 0)
-    const jumps = steps.filter(s => s.move === MOVE.JUMP || s.move === MOVE.GAP).length
-    const cost = { seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, unknown: 0 }
+    const jumps = steps.filter(s => s.move === MOVE.JUMP || s.move === MOVE.GAP || s.move === MOVE.JUMP_CLIMB).length
+    const climbed = steps.filter(s => CLIMBS.has(s.move)).length
+    const opens = steps.filter(s => s.move === MOVE.OPEN).length
+    const cost = { seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, climbed, opens, unknown: 0 }
     return { steps, cost, summary: summarize(steps) }
   }
 
@@ -845,6 +1040,8 @@ export function createSearch (snapshot, query, options = {}) {
     const base = { ms: elapsed, expanded, stats }
     if (reason === 'start-not-standable' || reason === 'goal-not-standable') return { status: 'none', reason, ...base, path: null }
     if (reason === null) return { status: 'found', reason, ...base, path: pathTo(goalNode) }
+    // an exhausted search that turned a ladder away at a gap says so
+    if (reason === 'exhausted' && gapSeen) reason = 'ladder-gap'
     const partial = (why) => ({ status: 'partial', reason: why, ...base, path: best === -1 ? null : pathTo(best) })
     if (reason === 'budget') return partial('budget')
     if (goalUnloaded) return partial('goal-unloaded')
