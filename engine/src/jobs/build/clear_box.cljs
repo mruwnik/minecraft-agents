@@ -69,16 +69,40 @@
       (skip! c pos reason)
       (ctx/update-mem! c assoc-in [:tries pos] n))))
 
+(defn under-foot
+  "The set of cells the body stands on or in: the cell below its feet, and its
+  feet and head cells."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)
+        fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
+    #{{:x fx :y (dec fy) :z fz} {:x fx :y fy :z fz} {:x fx :y (inc fy) :z fz}}))
+
 (defn target
-  "The pending [pos name] at the highest y among the loaded cells, nearest the
-  body; with none loaded, the nearest unloaded one."
+  "The pending [pos name] at the highest y among the loaded cells not under the
+  body's feet, nearest the body; with none loaded, the nearest unloaded one.
+  Under-foot cells are picked only when nothing else is pending (nil then)."
   [c todo]
   (let [me (u/self-pos c)
-        loaded (filter second todo)]
-    (if (empty? loaded)
-      (apply min-key #(u/dist me (first %)) todo)
-      (let [top (apply max (map #(:y (first %)) loaded))]
-        (apply min-key #(u/dist me (first %)) (filter #(= top (:y (first %))) loaded))))))
+        feet (under-foot c)
+        others (remove #(and (second %) (feet (first %))) todo)
+        loaded (filter second others)]
+    (cond
+      (empty? others) nil
+      (empty? loaded) (apply min-key #(u/dist me (first %)) others)
+      :else (let [top (apply max (map #(:y (first %)) loaded))]
+              (apply min-key #(u/dist me (first %)) (filter #(= top (:y (first %))) loaded))))))
+
+(defn ^:async step-off!
+  "Only under-foot cells are left: move to just west of the box at the feet
+  level. A blocked step bumps the cell the body is standing on."
+  [c todo]
+  (let [me (u/self-pos c)
+        min-x (apply min (map :x (cells (:args c))))
+        dest {:x (dec min-x) :y (js/Math.floor (:y me)) :z (js/Math.floor (:z me))}
+        r (await (ctx/act c :moveTo (clj->js {:pos dest :range 0})))]
+    (when (= "blocked" (.-status r))
+      (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))
+    :continue))
 
 (defn finish! [c]
   (let [mem (ctx/mem c)
@@ -100,8 +124,8 @@
         todo (pending c)]
     (if (empty? todo)
       (finish! c)
-      (let [[pos n] (target c todo)
-            w (await (u/walk-near! c pos 3))]
+      (if-let [[pos n] (target c todo)]
+        (let [w (await (u/walk-near! c pos 3))]
         (case w
           :partial :continue
           :blocked (do (bump! c pos :unreachable) :continue)
@@ -116,4 +140,5 @@
                                                         (= "dug" status) (update :dug (fnil inc 0))))
                 "cannot" (skip! c pos :cannot)
                 (bump! c pos :refused)))
-            :continue)))))))
+            :continue))))
+        (await (step-off! c todo))))))

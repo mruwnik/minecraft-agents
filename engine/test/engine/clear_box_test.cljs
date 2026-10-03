@@ -170,3 +170,32 @@
           (.clear (.. p -world -state -unloaded))
           (await (run-until-empty eng 12))
           (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} @out)))))))
+
+(defn act-trail
+  "[[name x] ...] of the moveTo and dig calls in order."
+  [p]
+  (->> (.-calls (.-world p))
+       (filter #(#{"moveTo" "dig"} (.-name %)))
+       (mapv #(vector (.-name %) (.-x (or (.-pos (.-args %)) #js {}))))))
+
+(deftest clear-box-digs-the-others-before-the-cell-under-foot-then-steps-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:from {:x 1 :y 63 :z 1} :to {:x 2 :y 63 :z 1}}
+              {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt" "2,63,1" "dirt"}
+                                      :self {:pos {:x 1.5 :y 64 :z 1.5}}})
+              result (await (child-outcome eng job args 20))]
+          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} result))
+          (is (= [["dig" 2] ["moveTo" 0] ["dig" 1]] (act-trail p))))))))
+
+(deftest clear-box-steps-off-a-lone-cell-under-foot-before-digging-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}
+              {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt"}
+                                      :self {:pos {:x 1.5 :y 64 :z 1.5}}})
+              result (await (child-outcome eng job args 20))]
+          (is (= {:dug 1 :skipped {} :kept 0 :fluids {}} result))
+          (is (= [["moveTo" 0] ["dig" 1]] (act-trail p))))))))
