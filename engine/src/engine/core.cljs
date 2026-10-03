@@ -907,7 +907,7 @@
     {:x (.-x pos) :y (.-y pos) :z (.-z pos)}))
 
 (def error-kinds #{"died" "error" "reconnect-failed"})
-(def warn-kinds #{"world-not-loaded" "physics-stalled"})
+(def warn-kinds #{"world-not-loaded" "physics-stalled" "dependency-patches-missing"})
 (def debug-kinds #{"picked-up"})
 
 (defn body-event-level [kind]

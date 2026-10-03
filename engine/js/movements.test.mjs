@@ -91,6 +91,21 @@ test('soul_fire in a 1-wide corridor blocks the way like fire', () => {
   assert.equal(result.status, 'noPath')
 })
 
+// portals are never entered: no cost, a ban (the 1-wide corridor has no other way)
+const PORTALS = ['nether_portal', 'end_portal', 'end_gateway']
+
+PORTALS.forEach(name => {
+  test(`${name} in a 1-wide corridor gives no path`, () => {
+    assert.equal(plan([...rect(-1, 9, 1, 1, 63, 'stone'), [4, 64, 1, name]], START, GOAL).status, 'noPath')
+  })
+
+  test(`${name} with a way round is never entered`, () => {
+    const result = plan([...floor(2), [4, 64, 1, name]], START, GOAL)
+    assert.equal(result.status, 'success')
+    assert.ok(!visits(result, n => n.x === 4 && n.y === 64 && n.z === 1))
+  })
+})
+
 const lavaPool = rect(3, 5, 0, 2, 63, 'lava')
 const poolFloor = z1 => rect(-1, 9, 0, z1, 63, 'stone')
 

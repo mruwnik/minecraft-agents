@@ -261,31 +261,61 @@
                                      'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
 
 (defn stub-move-to!
-  "Make p's moveTo answer the statuses in order (then arrived), \"stalled\"
-  being the reason of the blocked ones; returns an atom counting the calls."
-  [p statuses]
-  (let [left (atom statuses)
+  "Make p's moveTo answer the walks in order (then arrived): a status string, or
+  {:status :distance :hop}; \"stalled\" is the reason of the blocked ones.
+  Returns an atom counting the calls."
+  [p walks]
+  (let [left (atom walks)
         n (atom 0)]
     (set! (.-moveTo p)
           (fn [_token _args]
-            (let [s (or (first @left) "arrived")]
+            (let [w (or (first @left) "arrived")
+                  {:keys [status distance hop]} (if (string? w) {:status w} w)]
               (swap! left rest)
               (swap! n inc)
-              (js/Promise.resolve #js {:status s :reason (when (= "blocked" s) "stalled")}))))
+              (js/Promise.resolve #js {:status status :distance distance :hop hop
+                                       :reason (when (= "blocked" status) "stalled")}))))
     n))
 
-(deftest go-to-counts-only-consecutive-blocked-walks
+(defn walk-to-9
+  "Run go-to toward 9,64,9 (12.7 away) with the stubbed walks; {:outcome :calls :seen}."
+  [walks]
+  (let [{:keys [eng p seen]} (setup {})
+        n (stub-move-to! p walks)]
+    (-> (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 20)
+        (.then (fn [outcome] {:outcome outcome :calls @n :seen @seen})))))
+
+(def part (fn [d] {:status "partial" :distance d}))
+
+(deftest go-to-counts-consecutive-walks-without-a-new-best
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {})
-              n (stub-move-to! p ["blocked" "partial" "blocked" "partial" "blocked" "blocked" "blocked"])]
-          (is (= {:arrived false :reason :unreachable}
-                 (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 12))))
-          (is (= 7 @n) "a partial walk resets the count")
-          (is (= [{:status "blocked" :reason "stalled" :tries 3}]
-                 (->> @seen (filter #(= :unreachable (:kind %)))
+        (let [{:keys [outcome calls seen]} (await (walk-to-9 [(part 12.7) "blocked" (part 12.6) "blocked"]))]
+          (is (= {:arrived false :reason :unreachable} outcome))
+          (is (= 3 calls) "partials that do not beat the best by more than 1 count as fruitless")
+          (is (= [{:status "partial" :tries 3}]
+                 (->> seen (filter #(= :unreachable (:kind %)))
                       (mapv #(select-keys % [:status :reason :tries]))))))))))
+
+(deftest go-to-partial-with-a-new-best-resets-the-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [outcome calls]} (await (walk-to-9 [(part 10) "blocked" (part 8) "blocked" (part 6) "blocked" (part 4) "blocked"
+                                                          "blocked" "blocked"]))]
+          (is (= {:arrived false :reason :unreachable} outcome))
+          (is (= 10 calls) "improving partials never give up; the three blocked at the end do"))))))
+
+(deftest go-to-says-when-the-far-hop-fell-back-to-the-xz-point
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (walk-to-9 [{:status "partial" :distance 5 :hop "xz"}]))]
+          (is (= [{:target {:x 9 :y 64 :z 9}
+                   :text "far hop: no surface reachable from underground, walking to the XZ point"}]
+                 (->> seen (filter #(= :hop-fallback (:kind %)))
+                      (mapv #(select-keys % [:target :text]))))))))))
 
 (deftest go-to-emits-its-result-as-an-event
   (async done

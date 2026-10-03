@@ -7,6 +7,7 @@ const { Movements } = pf
 // extra cost, not a ban: crossing stays possible when it is the only way, and a detour of up to about this many blocks is preferred
 const BODY_COSTS = Object.freeze({ powder_snow: 30, cobweb: 40, sweet_berry_bush: 20, wither_rose: 20 })
 const FLOOR_COSTS = Object.freeze({ magma_block: 20, campfire: 40, soul_campfire: 40 })
+const PORTALS = ['nether_portal', 'end_portal', 'end_gateway'] // walking in teleports the body away; never entered
 const JUMP_HAZARDS = new Set(['lava', 'fire', 'soul_fire'])
 
 const nameAt = (bot, x, y, z) => bot.blockAt(new Vec3(x, y, z), false)?.name
@@ -36,6 +37,7 @@ export class SafeMovements extends Movements {
     this.infiniteLiquidDropdownDistance = false
     this.blocksToAvoid.delete(bot.registry.blocksByName.cobweb.id)
     this.blocksToAvoid.add(bot.registry.blocksByName.soul_fire.id)
+    for (const name of PORTALS) this.blocksToAvoid.add(bot.registry.blocksByName[name].id)
   }
 
   getNeighbors (node) {

@@ -873,7 +873,7 @@ after three the job emits a warn and ends.
 
 | job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count (consecutive blocked walks; a partial one resets it) | none; hands over `{:arrived bool :reason?}`, also emitted as a `:result` info event |
+| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count (consecutive walks without a new best distance, more than 1 below `:best`, the nearest any walk ended; a new best resets it), `:best` | none; hands over `{:arrived bool :reason?}`, also emitted as a `:result` info event |
 | `jobs.time.wait-for-day` | none | it is day | none | none |
 | `jobs.survival.eat` | `{:item nil :until 18 :allow-bad false}` | food below `:until` and something edible carried | none | writes `:fed` (cap 20, 6 h) |
 | `jobs.movement.look-around` | `{:every-ms 2000}` | always | none | writes `:looked` (cap 1, forever); looks in a random direction |

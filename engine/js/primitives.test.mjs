@@ -710,33 +710,102 @@ test('moveTo: a goto that resolves within range is arrived', async () => {
   assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0) })).status, 'arrived')
 })
 
-// moveTo: a capped hop stays on the surface (its goal needs open sky), and a walk with no progress ends early.
-const hopGoal = async sky => {
-  const { bot, p } = rig({ ...world, hang: ['goto'], skyLight: sky })
+// moveTo: a capped hop stays on the surface (its goal needs a column open to the sky), and a walk with no progress ends early.
+const hopGoal = async blocks => {
+  const { bot, p } = rig({ ...world, blocks: { ...world.blocks, ...blocks }, hang: ['goto'] })
   await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
   return bot.calls.find(c => c.name === 'goto').args[0]
 }
 
 test('moveTo: the hop toward a far target is not ended by a node under a roof', async () => {
-  assert.equal((await hopGoal(0)).isEnd(new Vec3(64, 64, 0)), false)
+  assert.equal((await hopGoal({ '64,69,0': 'stone' })).isEnd(new Vec3(64, 64, 0)), false)
+})
+
+test('moveTo: the hop toward a far target ends at a node under a leaf canopy only', async () => {
+  assert.equal((await hopGoal({ '64,69,0': 'oak_leaves' })).isEnd(new Vec3(64, 64, 0)), true)
 })
 
 test('moveTo: the hop toward a far target ends at a node in range under open sky', async () => {
-  assert.equal((await hopGoal(15)).isEnd(new Vec3(64, 64, 0)), true)
+  assert.equal((await hopGoal({})).isEnd(new Vec3(64, 64, 0)), true)
 })
 
 test('moveTo: the hop toward a far target is not ended by a node out of range', async () => {
-  assert.equal((await hopGoal(15)).isEnd(new Vec3(30, 64, 0)), false)
+  assert.equal((await hopGoal({})).isEnd(new Vec3(30, 64, 0)), false)
 })
 
-test('moveTo: the hop reads sky light from the bot at the time, and an unloaded block is not open sky', async () => {
-  const { bot, p } = rig({ ...world, hang: ['goto'], skyLight: 15, unloaded: true })
+test('moveTo: the hop is not ended by a node with an unloaded cell above it', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
   await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
+  const read = bot.blockAt
+  bot.blockAt = v => v.y === 100 ? null : read(v)
   assert.equal(bot.calls.find(c => c.name === 'goto').args[0].isEnd(new Vec3(64, 64, 0)), false)
 })
 
+test('moveTo: a capped hop that finds no path from under a roof is retried toward the XZ point, marked hop xz', async () => {
+  const { bot, p } = rig({ ...world, blocks: { ...world.blocks, '0,70,0': 'stone' } })
+  bot.pathfinder.goto = goal => { bot.calls.push({ name: 'goto', args: [goal] }); return bot.calls.filter(c => c.name === 'goto').length === 1 ? Promise.reject(Object.assign(new Error('x'), { name: 'NoPath' })) : new Promise(() => {}) }
+  const result = await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
+  const gotos = bot.calls.filter(c => c.name === 'goto')
+  assert.equal(gotos.length, 2)
+  assert.equal(gotos[1].args[0].constructor.name, 'GoalNearXZ')
+  assert.equal(result.hop, 'xz')
+})
+
+test('moveTo: a capped hop that finds no path under open sky is not retried', async () => {
+  const { bot, p } = rig(world)
+  bot.pathfinder.goto = goal => { bot.calls.push({ name: 'goto', args: [goal] }); return Promise.reject(Object.assign(new Error('x'), { name: 'NoPath' })) }
+  const result = await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
+  assert.equal(bot.calls.filter(c => c.name === 'goto').length, 1)
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'noPath')
+  assert.equal('hop' in result, false)
+})
+
+// walks only count time from the pathfinder's first path_update of the goto
+const update = bot => bot.emit('path_update', { status: 'success', path: [] })
+
+test('moveTo: a body that does not move at all after a path_update ends stalled in about STILL_S, well before STALL_S', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  setTimeout(() => update(bot), 1)
+  const started = Date.now()
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
+  const took = Date.now() - started
+  assert.equal(result.reason, 'stalled')
+  assert.ok(took >= 3.5 * 1000 * SCALE && took < 6 * 1000 * SCALE, `took ${took}`)
+})
+
+test('moveTo: a still body in water is not cut at STILL_S, only at STALL_S', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  bot.entity.isInWater = true
+  setTimeout(() => update(bot), 1)
+  const started = Date.now()
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
+  assert.equal(result.reason, 'stalled')
+  assert.ok(Date.now() - started >= 7.5 * 1000 * SCALE)
+})
+
+test('moveTo: a still body on a ladder is not cut at STILL_S, only at STALL_S', async () => {
+  const { bot, p } = rig({ ...world, blocks: { ...world.blocks, '0,64,0': 'ladder' }, hang: ['goto'] })
+  setTimeout(() => update(bot), 1)
+  const started = Date.now()
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
+  assert.equal(result.reason, 'stalled')
+  assert.ok(Date.now() - started >= 7.5 * 1000 * SCALE)
+})
+
+test('moveTo: a still body is not cut before the first path_update, and the cut follows it', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  const started = Date.now()
+  let cutAt = null
+  setTimeout(() => update(bot), 20 * 1000 * SCALE)
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 }).then(r => { cutAt = Date.now() - started; return r })
+  assert.equal(result.reason, 'stalled')
+  assert.ok(cutAt >= 23.5 * 1000 * SCALE, `cut at ${cutAt}`)
+})
+
 test('moveTo: a walk whose body never moves ends stalled well before its timeout', async () => {
-  const { p } = rig({ ...world, hang: ['goto'] })
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  setTimeout(() => update(bot), 1)
   const started = Date.now()
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
   assert.equal(result.status, 'blocked')
@@ -754,6 +823,7 @@ test('moveTo: a body that keeps moving is not cut by the stall rule and ends on 
 
 test('moveTo: a body that moved three blocks and then stopped is partial, stalled', async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
+  setTimeout(() => update(bot), 1)
   setTimeout(() => { bot.entity.position = new Vec3(3, 64, 0) }, 5)
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
   assert.equal(result.status, 'partial')

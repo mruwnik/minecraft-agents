@@ -3,9 +3,11 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Walk to :pos. A partial walk continues next round and resets the count;
-  three blocked walks in a row give up with an unreachable warn (last status
-  and reason). Hands over {:arrived true}, or {:arrived false :reason
+  "Walk to :pos. A walk that ends more than 1 closer than any before (:best)
+  is progress and resets the count; any other walk that does not arrive
+  (partial without a new best, blocked) counts, and three in a row give up
+  with an unreachable warn (last status and reason). A far hop that fell back
+  to the XZ point is told as a :hop-fallback info event. Hands over {:arrived true}, or {:arrived false :reason
   :unreachable} when it gave up (ctx/result!), and emits it as a :result info
   event.")
 
@@ -31,17 +33,23 @@
                                     :text (str "gave up walking to " pos)})
   (finish! c {:arrived false :reason :unreachable}))
 
+(defn note-hop! [c pos r]
+  (when (= "xz" (.-hop r))
+    (ctx/emit! c :hop-fallback :info {:target pos :text "far hop: no surface reachable from underground, walking to the XZ point"})))
+
 (defn ^:async round [c]
-  (let [{:keys [pos range]} (:args c)]
-    (if (<= (u/dist (u/self-pos c) pos) range)
+  (let [{:keys [pos range]} (:args c)
+        d (u/dist (u/self-pos c) pos)]
+    (if (<= d range)
       (arrived! c)
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
-        (case (.-status r)
-          "arrived" (arrived! c)
-          "partial" (do (ctx/update-mem! c assoc :blocked 0)
-                        :continue)
-          (let [tries (inc (:blocked (ctx/mem c) 0))]
-            (ctx/update-mem! c assoc :blocked tries)
+      (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))
+            best (:best (ctx/mem c) d)]
+        (note-hop! c pos r)
+        (if (= "arrived" (.-status r))
+          (arrived! c)
+          (let [progress? (and (number? (.-distance r)) (< (.-distance r) (dec best)))
+                tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
+            (ctx/update-mem! c assoc :blocked tries :best (if progress? (.-distance r) best))
             (if (< tries max-blocked)
               :continue
               (give-up! c pos tries r))))))))

@@ -1,5 +1,7 @@
 // The mineflayer layer of the engine: a small set of time-bounded operations, each a cut point. The contract is in
 // engine/README.md (Primitives). Ideas copied from src/body/actions/*.mjs; nothing here imports from src/.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
@@ -11,20 +13,46 @@ import { say, createLimiter, cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { interactWith, mobFields } from './interact.mjs'
+import { missingPatches } from './deps-check.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
 
-// GoalNearXZ takes any y, which walked a far-target hop down into caves: the end must also be open to the sky.
-// `getBot` is read at each check, a reconnect replaces the bot.
+// GoalNearXZ takes any y, which walked a far-target hop down into caves: the end must also be open to the sky, read from
+// blocks (the sky light mineflayer reads is wrong on this version). A canopy of leaves still counts as open.
+// `getBot` is read at each check, a reconnect replaces the bot. `roof` caches, per column, the highest sky-blocking y.
 class GoalSurfaceHop extends goals.GoalNearXZ {
   constructor (x, z, range, getBot) {
     super(x, z, range)
     this.getBot = getBot
+    this.roofs = new Map()
+  }
+
+  // highest y of a block that shuts out the sky, -Infinity when none, Infinity when an unloaded cell is met first
+  roof (x, z) {
+    const key = `${x},${z}`
+    if (this.roofs.has(key)) return this.roofs.get(key)
+    const bot = this.getBot()
+    const minY = bot.game?.minY ?? -64
+    const top = minY + (bot.game?.height ?? 384) - 1
+    let found = -Infinity
+    for (let y = top; y >= minY; y--) {
+      const block = bot.blockAt(new Vec3(x, y, z))
+      if (!block) { found = Infinity; break }
+      if (block.boundingBox !== 'block' || block.name.endsWith('leaves')) continue
+      found = y
+      break
+    }
+    this.roofs.set(key, found)
+    return found
+  }
+
+  open (node) {
+    return node.y > this.roof(Math.floor(node.x), Math.floor(node.z))
   }
 
   isEnd (node) {
-    return super.isEnd(node) && this.getBot().blockAt(node)?.skyLight >= OPEN_SKY
+    return super.isEnd(node) && this.open(node)
   }
 }
 
@@ -62,11 +90,14 @@ const TELEPORT_BLOCKS = 16 // a forced move farther than this is a teleport; sma
 // stone pad stuck 25 s at 0.3, 3 of 3 took 0.7-1 s with no setbacks at 0.31 (same on a leaf-litter hillside where
 // every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out at 0.31.
 const BODY_HALF_WIDTH = 0.31
-const OPEN_SKY = 12 // sky light at or above this counts as open to the sky (under a tree canopy still does)
 const HOP_RANGE = 4 // a capped hop ends within this many blocks (XZ) of its point on the line to the target
 const PLAN_REASONS = { NoPath: 'noPath', Timeout: 'planTimeout' } // goto's rejection names that say why it gave up
 const PROGRESS_BLOCKS = 1 // a walk must get this far (3D) from its anchor...
 const STALL_S = 8 // ...within this long, or it ends stalled (the pathfinder's own stuck reset plus one step-up fit in it)
+// A wedged body stands perfectly still, a bobbing or climbing one does not; 4 s leaves room for the pathfinder's 3.5 s stuck reset.
+const STILL_BLOCKS = 0.1
+const STILL_S = 4
+const CLIMBABLE = /^(ladder|vine|scaffolding|weeping_vines(_plant)?|twisting_vines(_plant)?|cave_vines(_plant)?)$/
 const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 const STEP_RISE = 1.0
@@ -312,7 +343,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let path = null
     let onStuck = () => {}
     let emptyNoPath = false // goto resolves, not rejects, on a noPath update with an empty path
+    let started = false // time only counts from the first path_update of the current goto: planning may take seconds
+    let still = { pos: walking.entity.position.clone(), at: Date.now() }
     const onUpdate = result => {
+      if (!started) { started = true; anchor = { pos: walking.entity.position.clone(), at: Date.now() }; still = { ...anchor } }
       if (result?.status === 'success' || result?.status === 'partial') path = result.path
       emptyNoPath = result?.status === 'noPath' && !result.path?.length
     }
@@ -320,9 +354,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let anchor = { pos: walking.entity.position.clone(), at: Date.now() }
     let onStall = () => {}
     const poll = setInterval(() => {
+      if (!started) return
       const pos = walking.entity.position
-      if (dist(pos, anchor.pos) >= PROGRESS_BLOCKS) anchor = { pos: pos.clone(), at: Date.now() }
-      else if (stall && Date.now() - anchor.at >= STALL_S * 1000 * timeScale) onStall()
+      const now = Date.now()
+      if (dist(pos, anchor.pos) >= PROGRESS_BLOCKS) anchor = { pos: pos.clone(), at: now }
+      else if (stall && now - anchor.at >= STALL_S * 1000 * timeScale) return onStall()
+      if (dist(pos, still.pos) > STILL_BLOCKS) still = { pos: pos.clone(), at: now }
+      else if (stall && now - still.at >= STILL_S * 1000 * timeScale && !walking.entity.isInWater && !CLIMBABLE.test(walking.blockAt(vec(cell(pos)))?.name ?? '')) onStall()
     }, Math.max(1, POLL_MS * timeScale))
     ctx.onAbort(() => clearInterval(poll)) // a timed-out or cut call never reaches the finally
     walking.on('path_update', onUpdate)
@@ -335,6 +373,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         })
         const stalled = new Promise(resolve => { onStall = () => resolve({ reached: false, reason: 'stalled' }) })
         emptyNoPath = false
+        started = false
         const gone = walking.pathfinder.goto(goal).then(
           () => emptyNoPath ? { reached: false, reason: 'noPath' } : { reached: true },
           err => ({ reached: false, ...(PLAN_REASONS[err?.name] && { reason: PLAN_REASONS[err.name] }) })
@@ -471,21 +510,30 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const start = here()
     const before = dist(start, target)
     const capped = before > maxDistance
+    const hx = Math.round(start.x + (target.x - start.x) * maxDistance / before)
+    const hz = Math.round(start.z + (target.z - start.z) * maxDistance / before)
     const goal = capped
-      ? new GoalSurfaceHop(Math.round(start.x + (target.x - start.x) * maxDistance / before), Math.round(start.z + (target.z - start.z) * maxDistance / before), HOP_RANGE, () => bot)
+      ? new GoalSurfaceHop(hx, hz, HOP_RANGE, () => bot)
       : new goals.GoalNear(target.x, target.y, target.z, range)
     // `reached` is only what the pathfinder promised: goto resolves on a noPath update with an empty path, so the
     // goal itself is checked against where the body stands.
     const satisfied = () => !capped && goal.isEnd(vec(here()).floored())
+    let hop = null
     const outcome = (reached) => {
       const distance = dist(here(), target)
-      const base = { pos: here(), distance }
+      const base = { pos: here(), distance, ...(hop && { hop }) }
       if (reached.reached && satisfied()) return { status: 'arrived', ...base }
       const { reason } = reached
       if (distance < before - 1) return { status: 'partial', ...(reason && { reason }), ...base }
       return { status: 'blocked', ...(reason && { reason }), ...base }
     }
-    return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => outcome(await walk(ctx, goal)))
+    return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => {
+      const first = await walk(ctx, goal)
+      // a hop that starts underground may have no surface to end on: head for the XZ point instead
+      if (!capped || first.reason !== 'noPath' || goal.open(vec(here()).floored())) return outcome(first)
+      hop = 'xz'
+      return outcome(await walk(ctx, new goals.GoalNearXZ(hx, hz, 2)))
+    })
   }
 
   const oxygenNow = () => bot.oxygenLevel ?? 20
@@ -1125,6 +1173,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }
 
+const REPO_ROOT = join(import.meta.dirname, '..', '..')
+const readRepoFile = rel => { try { return readFileSync(join(REPO_ROOT, rel), 'utf8') } catch { return null } }
+
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
 // `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
@@ -1132,5 +1183,7 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   const view = viewOpts ? createView(viewOpts) : null
   const bot = await connect(opts)
   const pending = await waitForWorld(bot, { timeoutMs: worldTimeoutMs }) ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
+  const titles = missingPatches(rel => readRepoFile(rel))
+  if (titles.length) pending.push({ kind: 'dependency-patches-missing', titles, text: 'run node tools/patch-deps.mjs (an npm install undid them)' })
   return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, settleMs, pending })
 }
