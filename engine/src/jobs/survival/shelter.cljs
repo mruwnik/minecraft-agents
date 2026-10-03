@@ -5,12 +5,15 @@
 (def doc
   "Survive the night. Check: night, awake and no solid block within
   :roof-height blocks above the body (the night-unsafe condition), or a built
-  :shelter entry at the body's place whose roof is still over it. A round
+  :shelter entry at the body's place whose roof is still over it, or, by day,
+  any built entry there (roofed or not) so it is opened. A round
   tries, in order, and the first that does not decline decides:
   1. jobs.survival.sleep, with a known bed within :bed-radius;
   2. jobs.survival.log-out, when there is no usable bed and another player
      sleeps, so that player can skip the night;
   3. jobs.survival.dig-in, which roofs the body in.
+  At night beside a built entry that has no roof over the body (a failed
+  dig-in) the round tries sleep, log-out and dig-in again rather than waiting.
   A sleep that ends without sleeping (the bed was gone, or unreachable) falls
   through to the next choice in the same round and is recorded as
   :sleep-failed, so later rounds of this shelter do not call sleep again (and
@@ -34,11 +37,17 @@
    :offline-ms {:doc "how long log-out stays away" :default 300000}
    :player-radius {:doc "log-out looks for sleeping players this far away" :default 128}})
 
+(defn waiting?
+  "A built shelter is here and there is nothing better to do than wait for day
+  in it: its roof is over the body, or it is day (time to open it)."
+  [c]
+  (let [p (:primitives c)]
+    (boolean (and (sh/active-shelter c)
+                  (or (sh/day? p) (sh/roofed? p (:roof-height (:args c))))))))
+
 (defn check [c]
-  (let [p (:primitives c)
-        roof-height (:roof-height (:args c))]
-    (boolean (or (sh/unsafe-night? p roof-height)
-                 (and (sh/active-shelter c) (sh/roofed? p roof-height))))))
+  (boolean (or (sh/unsafe-night? (:primitives c) (:roof-height (:args c)))
+               (waiting? c))))
 
 (defn overdue? [c]
   (let [days (sh/days-awake c)]
@@ -119,6 +128,6 @@
   (let [p (:primitives c)]
     (cond
       (sh/sleeping? p) :done
-      (sh/active-shelter c) (await (wait-round c (sh/active-shelter c)))
+      (waiting? c) (await (wait-round c (sh/active-shelter c)))
       (not (check c)) :done
       :else (await (choose-round c)))))

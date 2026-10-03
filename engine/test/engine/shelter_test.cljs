@@ -464,3 +464,28 @@
           (await (tick-n eng 4))
           (is (= [{:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))))
           (is (= :reopened (:state (last (entries eng :shelter))))))))))
+
+(defn write-unroofed-shelter! [eng]
+  (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy))
+
+(deftest shelter-retries-dig-in-at-night-beside-an-unroofed-shelter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks floor :inventory [{:name "dirt" :count 16}]})]
+          (write-unroofed-shelter! eng)
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (tick-n eng 4))
+          (is (seq (calls p "place")) "dig-in was tried again, not a bare decline"))))))
+
+(deftest shelter-reopens-an-unroofed-shelter-at-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time noon :blocks floor})]
+          (write-unroofed-shelter! eng)
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (run-until-empty eng 4))
+          (is (= :reopened (:state (last (entries eng :shelter)))))
+          (is (= [] (calls p "place")))
+          (is (= [] (:list (core/state eng)))))))))
