@@ -1118,13 +1118,12 @@ const zone = { name: 'z', x1: 1, z1: 2, x2: 3, z2: 4 }
 const human = { name: 'Steve', x: 7, y: 64, z: 8 }
 
 const fitCases = [
-  ['bodies scope with a body up fits bodies and humans only', { bodies: [upBody], places: [hut], zones: [zone], humans: [human] }, 'bodies', { points: [{ x: 5, z: 6 }, { x: 7, z: 8 }], pad: 96 }],
-  ['bodies scope with none up falls back to places and zones', { bodies: [downBody], places: [hut], zones: [zone], humans: [] }, 'bodies', { points: [{ x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }], pad: 24 }],
-  ['all scope fits everything', { bodies: [upBody], places: [hut], zones: [zone], humans: [] }, 'all', { points: [{ x: 5, z: 6 }, { x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }], pad: 24 }],
-  ['an empty world has no points', { bodies: [], places: [], zones: [], humans: [] }, 'bodies', { points: [], pad: 24 }]
+  ['fits bodies, places, zones and humans together', { bodies: [upBody], places: [hut], zones: [zone], humans: [human] }, [{ x: 5, z: 6 }, { x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }, { x: 7, z: 8 }]],
+  ['with none up it still fits places and zones', { bodies: [downBody], places: [hut], zones: [zone], humans: [] }, [{ x: 10, z: 20 }, { x: 1, z: 2 }, { x: 3, z: 4 }]],
+  ['an empty world has no points', { bodies: [], places: [], zones: [], humans: [] }, []]
 ]
-for (const [name, world, scope, expected] of fitCases) {
-  test(`fitPoints: ${name}`, () => assert.deepEqual(fitPoints(world, scope), expected))
+for (const [name, world, points] of fitCases) {
+  test(`fitPoints: ${name}`, () => assert.deepEqual(fitPoints(world), { points, pad: 24 }))
 }
 
 const emptyCases = [

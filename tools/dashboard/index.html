@@ -170,8 +170,7 @@
   <span class="muted" id="counts">—</span>
   <span class="spacer"></span>
   <span class="muted" id="status">connecting…</span>
-  <button id="fitbodies">fit bodies</button>
-  <button id="fitall">fit everything</button>
+  <button id="fit">fit everything</button>
 </header>
 <main>
   <div id="mapwrap">
@@ -277,7 +276,6 @@ const showWorldList = list => {
 }
 
 let snap = { bodies: [], worlds: [], agents: [] }
-let scope = 'bodies'     // what the fit is around: the bodies (and the humans), or every place and zone as well
 let selected = null
 
 // One map per world: a world is its own server, so its coordinates mean nothing on another world's map.
@@ -311,10 +309,8 @@ const makeMap = name => {
     draw()
   }
 
-  // The far corners of this world are 2000 blocks apart, and fitting all of them squeezes the huts into one blob:
-  // the default fit is around the bodies themselves, with 96 blocks of ground round them.
   const refit = () => {
-    const { points, pad } = fitPoints(world, scope)
+    const { points, pad } = fitPoints(world)
     view = fitView(worldBounds(points, pad), size.w - 80, size.h - 80)
     if (!view) return
     view.originX -= 40 / view.scale
@@ -549,9 +545,7 @@ const showWorlds = worlds => {
   resize()
 }
 
-const fitTo = what => () => { scope = what; maps.forEach(m => m.fit()) }
-el('fitbodies').addEventListener('click', fitTo('bodies'))
-el('fitall').addEventListener('click', fitTo('all'))
+el('fit').addEventListener('click', () => maps.forEach(m => m.fit()))
 
 // ---------------------------------------------------------------- the side panel
 const tag = (name, cls, text) => {
