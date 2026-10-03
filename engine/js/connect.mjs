@@ -5,8 +5,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
+import { SafeMovements } from './movements.mjs'
 
-const { pathfinder, Movements } = pf
+const { pathfinder } = pf
 
 // same defaults as src/config.mjs: the newest protocol mineflayer speaks, offline auth
 export const DEFAULTS = { version: '26.1', auth: 'offline' }
@@ -29,8 +30,9 @@ export function readAgentConfig ({ stateDir, agent }) {
   return cfg
 }
 
-// Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build: a primitive
-// that walks must not quietly break blocks. Rejects when the server refuses, drops the connection or stays silent.
+// Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
+// steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
+// lava. Rejects when the server refuses, drops the connection or stays silent.
 export function connectBot ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version }, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     const bot = mineflayer.createBot({ host, port, username, auth, version })
@@ -55,11 +57,7 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
     bot.on('end', onEnd)
     bot.once('spawn', () => {
       settle()
-      const movements = new Movements(bot)
-      movements.canDig = false
-      movements.allow1by1towers = false
-      movements.scafoldingBlocks = [] // sic: the pathfinder's own spelling
-      bot.pathfinder.setMovements(movements)
+      bot.pathfinder.setMovements(new SafeMovements(bot))
       resolve(bot)
     })
   })
