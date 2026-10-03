@@ -4,6 +4,7 @@
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { cleanMessage, PLAYER_NAME } from './chat.mjs'
+import { fakeInteract } from './fake-interact.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
@@ -66,6 +67,8 @@ function initialState (spec) {
   return {
     self: { ...clone(defaultSelf), ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
     time: spec.time ?? 1000,
+    raining: spec.raining ?? false,
+    thundering: spec.thundering ?? false,
     blocks: new Map(Object.entries(spec.blocks ?? {})),
     unloaded: new Set(spec.unloaded ?? []), // "x,y,z" cells in an unloaded chunk: blockAt returns null there
     ages: new Map(Object.entries(spec.ages ?? {})), // "x,y,z" -> crop age, for blocks that have one
@@ -368,6 +371,7 @@ export function createFake (spec = {}) {
   const pending = new Set() // { token, reject }
   const overrides = new Map()
   const acts = defaultActs(s, event => primitives.world.emit(event))
+  acts.interact = fakeInteract(s)
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
   let away = null // promise of the body being back, while offline
@@ -452,6 +456,8 @@ export function createFake (spec = {}) {
         dimension: s.self.dimension,
         timeOfDay: s.time,
         isDay: isDayAt(s.time),
+        raining: s.raining,
+        thundering: s.thundering,
         held: s.self.held,
         inventory: withSlots(s.inventory)
       }
@@ -508,6 +514,7 @@ export function createFake (spec = {}) {
       override (name, fn) { overrides.set(name, fn) },
       emit (event) { for (const l of listeners) l(event) },
       setTime (t) { s.time = t },
+      setRaining (on, thunder = false) { s.raining = on; s.thundering = thunder },
       settle (on) { s.settling = on },
       // Respawns where the body stands: emits respawned like the real body and opens a settling window if the spec settles.
       respawn () {

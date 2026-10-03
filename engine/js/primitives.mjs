@@ -10,6 +10,7 @@ import { craftItem } from './craft.mjs'
 import { say, createLimiter, cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
+import { interactWith, mobFields } from './interact.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -58,6 +59,8 @@ const LOOK_TICK_MS = 100 // a look waits for the next physics tick (the rotation
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
+const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
+const THUNDER_LEVEL = 0.9
 
 const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -356,6 +359,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       dimension: bot.game?.dimension,
       timeOfDay,
       isDay: timeOfDay < 12542 || timeOfDay > 23460,
+      raining: (bot.rainState ?? 0) > RAIN_LEVEL,
+      thundering: (bot.rainState ?? 0) > RAIN_LEVEL && (bot.thunderState ?? 0) > THUNDER_LEVEL,
       held: bot.heldItem?.name ?? null,
       inventory: inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
     }
@@ -385,6 +390,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         kind: k,
         pos: xyz(e.position),
         distance,
+        ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
         ...(k === 'hostile' && { visible: canSee(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
@@ -813,6 +819,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  const interact = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isNum(a.id), 'interact needs an entity id')
+    need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
+    return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
   const sleep = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'sleep needs pos {x, y, z}')
@@ -1066,7 +1079,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, sleep, look, swim, useOn })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, interact, sleep, look, swim, useOn })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

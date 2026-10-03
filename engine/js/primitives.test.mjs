@@ -35,6 +35,7 @@ const acting = [
   { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
+  { name: 'interact', args: { id: 8, item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
   { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'write', timeout: 'timeout', over: { entities: {} } },
   { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' },
   { name: 'useOn', args: { pos: at(2, 64, 0) }, hang: 'activateBlock', cleanup: null, timeout: 'timeout' },
@@ -207,9 +208,35 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'settling', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
+})
+
+for (const [rainState, thunderState, isRaining, raining, thundering] of [
+  [0, 0, false, false, false],
+  [0.15, 0, false, false, false],
+  [0.5, 0, false, true, false],
+  [1, 1, false, true, true],
+  [0.1, 1, false, false, false],
+  [0, 0, true, false, false],
+]) {
+  test(`self reports the weather for rain ${rainState} thunder ${thunderState} isRaining ${isRaining}`, () => {
+    const { bot, p } = rig(world)
+    Object.assign(bot, { rainState, thunderState, isRaining })
+    assert.deepEqual([p.self().raining, p.self().thundering], [raining, thundering])
+  })
+}
+
+test('entities carry baby and uuid for a mob', () => {
+  const calf = { id: 9, name: 'cow', type: 'passive', uuid: 'u-9', position: at(2, 64, 0), height: 1.4, metadata: { 8: true } }
+  const bot = stubBot({ ...world, entities: { ...world.entities, 9: calf } })
+  bot.registry.entitiesByName = { cow: { metadataKeys: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'baby'] } }
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const cow = p.entities({}).find(e => e.id === 9)
+  assert.equal(cow.baby, true)
+  assert.equal(cow.uuid, 'u-9')
+  assert.equal('baby' in p.entities({}).find(e => e.id === 8), false)
 })
 
 test('entities filters by kind and sorts by distance', () => {

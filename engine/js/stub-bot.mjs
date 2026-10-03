@@ -77,7 +77,8 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     sleep: act('sleep', () => { bot.isSleeping = true }),
     wake: act('wake'), // records only: the real bot.wake() sends a wrong id on this protocol
     // the raw client: leave_bed (by name) is what gets the body out of bed
-    _client: { write: (name, data) => { calls.push({ name: 'write', args: [name, data] }); if (name === 'entity_action' && data.actionId === 'leave_bed') bot.isSleeping = false } },
+    _client: Object.assign(new EventEmitter(), { write: (name, data) => { calls.push({ name: 'write', args: [name, data] }); if (name === 'entity_action' && data.actionId === 'leave_bed') bot.isSleeping = false } }),
+    useOn: act('useOn'),
     lookAt: act('lookAt', point => {
       const delta = point.minus(bot.entity.position.offset(0, bot.entity.height, 0))
       Object.assign(bot.entity, { yaw: Math.atan2(-delta.x, -delta.z), pitch: Math.atan2(delta.y, Math.hypot(delta.x, delta.z)) })
