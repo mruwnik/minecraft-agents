@@ -1,6 +1,7 @@
 (ns dashboard.ui.chat
   (:require [reagent.core :as r]
             [re-frame.core :as rf]
+            [dashboard.ui.chatsend :as cs]
             [dashboard.ui.logic :as logic]))
 
 (defn message-row [i {:keys [t from to message]}]
@@ -23,6 +24,16 @@
            [:div#chatempty "no messages"]
            (into [:<>] (map-indexed message-row messages)))])})))
 
+(defn composer []
+  (let [{:keys [draft status] :as state} @(rf/subscribe [:chat-send])]
+    [:div#composer {:class (name status)}
+     [:input#whisper {:type "text" :placeholder "say something..." :spell-check false :max-length 256
+                      :value draft :read-only (= :pending status)
+                      :on-change #(rf/dispatch [:chat-draft (.. % -target -value)])
+                      :on-key-down #(when (and (= "Enter" (.-key %)) (not (.-isComposing (.-nativeEvent %))))
+                                      (rf/dispatch [:chat-send]))}]
+     [:div.caption (cs/caption state)]]))
+
 (defn chat-panel []
   (let [open? @(rf/subscribe [:chat-open?])]
     (if-not open?
@@ -44,4 +55,4 @@
                            :on-change #(rf/dispatch [:hide-whispers (.. % -target -checked)])}]
            " hide whispers"]]
          [chat-log visible]
-         [:input#whisper {:type "text" :disabled true :placeholder "sending arrives in a later stage"}]]))))
+         [composer]]))))

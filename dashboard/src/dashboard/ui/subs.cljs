@@ -9,7 +9,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats?]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats? :chat-send]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -28,7 +28,7 @@
  :<- [:current-world]
  (fn [[worlds current] _]
    (let [names (mapv :name worlds)]
-     (if (or (empty? names) (some #{current} names)) names (cons current names)))))
+     (if (or (empty? names) (nil? current) (some #{current} names)) names (cons current names)))))
 
 (rf/reg-sub
  :split-bodies

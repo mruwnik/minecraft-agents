@@ -10,6 +10,7 @@
             [dashboard.engine-edn :as engine-edn]
             [dashboard.engine-events :as ee]
             [dashboard.items :as items]
+            [dashboard.jobs-source :as jobs-source]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
             [dashboard.routes :as routes]
@@ -374,7 +375,7 @@
           (.end res (.readFileSync fs file))))))
 
 (def route-list
-  "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/plans, /api/plan/<name>, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
+  "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, POST /api/chat/send, /api/jobs, /api/plans, /api/plan/<name>, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
 
 (defn read-body [req limit on-done]
   (let [chunks (atom []) size (atom 0)]
@@ -382,6 +383,52 @@
                       (swap! size + (.-length chunk))
                       (when (<= @size limit) (swap! chunks conj chunk))))
     (.on req "end" #(on-done (when (<= @size limit) (.toString (js/Buffer.concat (to-array @chunks)) "utf8"))))))
+
+;; ---------------------------------------------------------------- chat send (POST /api/chat/send)
+;; js/chatroute.mjs validates the body and builds the tellraw command; the runner is RCON, or, with DASHBOARD_CHAT_DRY=1,
+;; one that only logs the command.
+(def chat-module (or (.-DASHBOARD_CHAT_MODULE js/process.env) (.join path dashboard-dir "js" "chatroute.mjs")))
+(def chat-dry? (= "1" (.-DASHBOARD_CHAT_DRY js/process.env)))
+(def max-chat-body-bytes 2048)
+
+(defonce chat-route (delay (import-esm (.-href (.pathToFileURL url chat-module)))))
+
+(defn send-chat! [req res]
+  (if-not (= "POST" (.-method req))
+    (send-json! res 405 {:error "POST {text, target?} to send a chat line"})
+    (read-body req max-chat-body-bytes
+               (fn [text]
+                 (-> @chat-route
+                     (.then (fn [m]
+                              (.chatSendResponse m text (if chat-dry? #js {:run (.dryRunner m)} #js {}))))
+                     (.then (fn [r] (send-json-js! res (.-status r) (.-json r))))
+                     (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))})))))))))
+
+;; ---------------------------------------------------------------- jobs (GET /api/jobs)
+;; The job namespaces themselves, engine/src/jobs/**/*.cljs, parsed per file and cached until the file's mtime changes.
+(def jobs-dir (.join path repo-root "engine" "src" "jobs"))
+(def job-cache (atom {}))
+
+(defn job-files
+  "Relative paths (from the repo root) of every job source file, sorted."
+  []
+  (vec (for [dir (dir-names jobs-dir)
+             file (try (sort (.readdirSync fs (.join path jobs-dir dir))) (catch :default _ []))
+             :when (re-find #"\.clj[sc]$" file)]
+         (str "engine/src/jobs/" dir "/" file))))
+
+(defn read-job [file]
+  (let [full (.join path repo-root file)
+        mtime (.-mtimeMs (.statSync fs full))
+        cached (get @job-cache file)]
+    (if (= mtime (:mtime cached))
+      (:job cached)
+      (let [job (jobs-source/parse-job file (read-text full))]
+        (swap! job-cache assoc file {:mtime mtime :job job})
+        job))))
+
+(defn read-jobs [now]
+  (jobs-source/attach-usage (mapv read-job (job-files)) (jobs-source/usage (bodies now))))
 
 (defn preview! [req res]
   (if-not (= "POST" (.-method req))
@@ -444,6 +491,8 @@
         :thumb (send-thumb! res blueprint-name)
         :item-icon (send-item-icon! res blueprint-name)
         :events (send-events! res blueprint-name query)
+        :chat-send (send-chat! req res)
+        :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
         :worlds (send-json! res 200 {:worlds (read-world-list)})
         :villagers-api (send-json-js! res 200 (legacy/villagers repo-root root))

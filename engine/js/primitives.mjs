@@ -6,6 +6,8 @@ import { connectBot } from './connect.mjs'
 import { createView } from './view.mjs'
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
+import { craftItem } from './craft.mjs'
+import { say } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 
@@ -744,6 +746,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  const craft = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.item === 'string' && a.item !== '', 'craft needs item, an item name')
+    need(a.count === undefined || a.count === null || (Number.isInteger(a.count) && a.count > 0), 'craft count must be a positive integer')
+    need(!a.table || (isNum(a.table.x) && isNum(a.table.y) && isNum(a.table.z)), 'craft table must have numeric x, y, z')
+    return act(token, { boundS: Math.min(60, 4 + 6 * (a.count ?? 1)) }, ctx => craftItem(bot, ctx, a, { timeScale }))
+  }
+
+  const chat = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.message === 'string' && a.message.trim() !== '', 'chat needs message, a non-empty string')
+    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && a.to !== ''), 'chat to must be a non-empty player name')
+    return act(token, { boundS: 3 }, ctx => say(bot, ctx, a, { timeScale }))
+  }
+
   const bestFood = () => inventory()
     .filter(i => bot.registry.foodsByName?.[i.name])
     .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0]
@@ -1048,7 +1065,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim, useOn })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, sleep, look, swim, useOn })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

@@ -11,6 +11,8 @@
 (def label-font "11px ui-monospace, Menlo, monospace")
 (def body-font "bold 12px ui-monospace, Menlo, monospace")
 (def zone-label-scale 3)
+(def edge-inset 16)
+(def edge-pick-radius 14)
 
 (def human-color "#f08ad0")
 (def zone-color "#5b8fd6")
@@ -20,10 +22,27 @@
       (mm/min-size 8)
       (assoc :kind :plan :name (:name plan) :color (pm/completion-color now-summary) :percent (:percent now-summary))))
 
+(defn edge-arrows
+  "An arrow on the viewport edge for every body that is up and off screen, named with its distance from the view's centre."
+  [{:keys [view canvas now]} bodies]
+  (let [{:keys [w h]} canvas
+        cx (+ (:origin-x view) (/ w 2 (:scale view)))
+        cz (+ (:origin-z view) (/ h 2 (:scale view)))]
+    (vec (for [b bodies
+               :when (:up b)
+               :let [pos (mm/body-pos b)
+                     marker (when pos (mm/edge-marker {:w w :h h :inset edge-inset} (mv/project view (:x pos) (:z pos))))]
+               :when marker]
+           {:kind :edge :name (:name b) :px (:x marker) :py (:y marker) :angle (:angle marker)
+            :color (mm/status-color (trouble/status b (or now 0)))
+            :wx (:x pos) :wz (:z pos)
+            :dist (mm/distance-text (js/Math.hypot (- (:x pos) cx) (- (:z pos) cz)))}))))
+
 (defn layout
   "Everything drawable with pixel positions, bodies first (so their labels win space)."
-  [{:keys [view bodies places zones humans selected plans now]}]
+  [{:keys [view bodies places zones humans selected plans now canvas] :as model}]
   {:scale (:scale view)
+   :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
    :plans (for [p plans] (plan-rect view p (:summary p)))
    :bodies (for [b bodies :let [pos (mm/body-pos b)] :when pos]
@@ -38,7 +57,8 @@
                     :selected? (= selected {:kind :place :name (:name p)})))})
 
 (defn pick [lay x y]
-  (or (logic/pick-nearest (:bodies lay) x y pick-radius)
+  (or (logic/pick-nearest (:edges lay) x y edge-pick-radius)
+      (logic/pick-nearest (:bodies lay) x y pick-radius)
       (logic/pick-nearest (:places lay) x y pick-radius)
       (mm/pick-plan (:plans lay) x y)))
 
@@ -68,6 +88,30 @@
   (.closePath ctx)
   (set! (.-fillStyle ctx) color)
   (.fill ctx))
+
+(defn arrow! [ctx {:keys [px py angle color]}]
+  (.save ctx)
+  (.translate ctx px py)
+  (.rotate ctx angle)
+  (.beginPath ctx)
+  (.moveTo ctx 9 0) (.lineTo ctx -6 -7) (.lineTo ctx -3 0) (.lineTo ctx -6 7)
+  (.closePath ctx)
+  (set! (.-fillStyle ctx) color)
+  (set! (.-strokeStyle ctx) "#0b0d11")
+  (set! (.-lineWidth ctx) 2)
+  (.stroke ctx)
+  (.fill ctx)
+  (.restore ctx))
+
+(defn edge-label
+  "The arrow's text sits inward of it: left of the arrow on the right half of the canvas, right of it on the left."
+  [ctx {:keys [px py name dist color] :as edge} canvas-w]
+  (let [text (str name " " dist)]
+    (set! (.-font ctx) body-font)
+    (let [width (.-width (.measureText ctx text))
+          right? (> px (/ canvas-w 2))]
+      (assoc edge :name text :label-color color :label-font body-font
+             :px (if right? (- px 14 width) (+ px 14)) :py (- py 6) :w width :h 12))))
 
 (defn label-box [ctx {:keys [px py name] :as item} color font]
   (set! (.-font ctx) font)
@@ -103,9 +147,10 @@
 
 (defn plan-label [{:keys [name percent]}] (str name " " percent "%"))
 
-(defn labels [ctx lay]
+(defn labels [ctx lay canvas-w]
   (let [scale (:scale lay)]
     (concat
+     (for [e (:edges lay)] (edge-label ctx e canvas-w))
      (for [b (:bodies lay) :when (:up b)] (label-box ctx b (:color b) body-font))
      (for [p (:plans lay)] (label-box ctx (assoc p :name (plan-label p)) (:color p) label-font))
      (for [h (:humans lay)] (label-box ctx h human-color label-font))
@@ -134,7 +179,8 @@
         (doseq [h (:humans lay)] (dot! ctx h human-color 4))
         (doseq [b (sort-by :up (:bodies lay))] (body-dot! ctx b))
         (doseq [x (concat (:bodies lay) (:places lay)) :when (:selected? x)] (ring! ctx x 10))
-        (draw-labels! ctx (labels ctx lay))))))
+        (doseq [e (:edges lay)] (arrow! ctx e))
+        (draw-labels! ctx (labels ctx lay w))))))
 
 (defn canvas-pos [e node]
   (let [rect (.getBoundingClientRect node)]
@@ -145,7 +191,8 @@
    ["offline" (mm/status-color :offline)] ["plan: done" pm/green] ["half" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
 
 (defn legend []
-  (into [:div#maplegend]
+  (into [:div#maplegend
+         [:div.maphint "drag to pan · wheel to zoom · click a body for its view, a plan for its page, an arrow to go to its body"]]
         (for [[label color] legend-items]
           ^{:key label} [:span [:i {:style {:background color}}] label])))
 
@@ -190,6 +237,5 @@
                                   [x y] (canvas-pos e @canvas)]
                               (reset! drag nil)
                               (when (< (:moved d 0) 4)
-                                (rf/dispatch [:map-click (some-> (pick (layout @model) x y) (select-keys [:kind :name]))]))))}]
-         [legend]
-         [:div#hint "drag to pan · wheel to zoom · click a body for its view, a plan for its page"]])})))
+                                (rf/dispatch [:map-click (some-> (pick (layout @model) x y) (select-keys [:kind :name :wx :wz]))]))))}]
+         [legend]])})))

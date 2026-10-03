@@ -49,3 +49,20 @@
   "Block rectangle of a plan as a zone-like box; bounds are inclusive, so the far edge is one block further."
   [{:keys [bounds]}]
   {:x1 (:x1 bounds) :z1 (:z1 bounds) :x2 (inc (:x2 bounds)) :z2 (inc (:z2 bounds))})
+
+(defn edge-marker
+  "Where an arrow for an off-screen point sits: on the viewport's edge (inset pixels in), on the line from the centre to
+  the point, and the angle it points at. nil when the point is on screen."
+  [{:keys [w h inset]} {:keys [px py]}]
+  (when (or (< px 0) (> px w) (< py 0) (> py h))
+    (let [cx (/ w 2) cy (/ h 2)
+          dx (- px cx) dy (- py cy)
+          limit (fn [half d] (if (zero? d) js/Infinity (/ half (js/Math.abs d))))
+          t (min (limit (- cx inset) dx) (limit (- cy inset) dy))]
+      {:x (+ cx (* dx t)) :y (+ cy (* dy t)) :angle (js/Math.atan2 dy dx)})))
+
+(defn distance-text [blocks]
+  (cond
+    (not (number? blocks)) ""
+    (< blocks 1000) (str (js/Math.round blocks))
+    :else (let [k (/ (js/Math.round (/ blocks 100)) 10)] (str k "k"))))

@@ -14,9 +14,31 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 `/api/worlds`, `/api/state?world=`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers`,
 `/api/plans?world=` (plans with a completion summary, cached 10 s), `/api/plan/<name>?world=` (full comparison with layers and bill),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
-Pages `/`, `/villagers`, `/villages`, `/blueprints` serve `public/index.html`; static files come from `public/`
-and `out/public/js/` (at `/js/`). `?world=` is validated against the `state/worlds/*/world.json` listing
-(unknown -> 400 `{error, worlds}`; absent -> first world).
+
+- `/api/thumb/<body>.png`: the body's latest view as a PNG (rendered by `js/thumbs.mjs` from `pose.json`; `x-pose-mtime`
+  header; 404 when the body has no view). `/api/thumbs/stats`: the thumbnailer's counters.
+- `/api/events/<body>?limit=`: the tail of the body's `events.jsonl`, filtered to what the popup lists (default 300, at most 2000).
+- `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
+- `/api/jobs`: `{at, jobs: [{id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`, one per file of
+  `engine/src/jobs/**/*.cljs`. The files are read at request time (cached per file by mtime) with `cljs.tools.reader`,
+  leniently like `engine/src/engine/registry.clj`: `id` is `jobs.<dir>.<name>`, `doc` the `(def doc ...)` string, `args`
+  the `(def args ...)` map printed as EDN (one entry per line), `backoff` whether the namespace defines `backoff`.
+  `running` and `reflex` are the bodies whose job list or reflex register mentions the job. A file that does not read
+  has `error` instead.
+- POST `/api/chat/send`, body `{text, target?}` (JSON, at most 2 KB; `target` is `@a` by default, or a player name):
+  sends `tellraw <target> {"text":"<Dan> <text>"}` over RCON, so engine bodies hear it as a chat event. The sender is
+  always `Dan`. Replies `{ok, command}`, 400 `{error}` for bad input, 413 over the limit, 502 `{error}` when RCON fails.
+  `DASHBOARD_CHAT_DRY=1` makes the server log the command and not send it. Logic in `js/chatroute.mjs`, RCON in `js/chatsend.mjs`.
+- The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
+  `/view`, `/agents`, `/pose/<body>`, `/hud/<body>`, `/drive/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
+  `/blocks/`, `/textures/`.
+
+Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view and takeover), `/map` (places, zones,
+plans and live bodies; the default view fits places and plans, "home" returns to it, "fit all" and "fit bodies" refit; a body
+off screen gets an arrow on the edge, click it to pan there), `/plans` (completion against the dumped chunks), `/villages`,
+`/villagers`, `/blueprints`, `/jobs` (every job by category, with filter) serve `public/index.html`; static files come from
+`public/` and `out/public/js/` (at `/js/`). The chat panel on the right of every page has a composer: Enter sends as above.
+`?world=` is validated against the `state/worlds/*/world.json` listing (unknown -> 400 `{error, worlds}`; absent -> first world).
 
 ## Differs from the old dashboard
 

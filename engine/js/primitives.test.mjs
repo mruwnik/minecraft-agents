@@ -1828,3 +1828,37 @@ test('drive on a sleeping body writes leave_bed', () => {
   p.drive('t1', { controls: { forward: true } })
   assert.equal(leaveBeds(bot).length, 1)
 })
+
+test('craft and chat with bad args reject with bad-args', async () => {
+  const { p } = rig()
+  const bad = [['craft', {}], ['craft', { item: '' }], ['craft', { item: 'stick', count: 0 }], ['craft', { item: 'stick', count: 1.5 }], ['craft', { item: 'stick', table: { x: 1 } }],
+    ['chat', {}], ['chat', { message: '   ' }], ['chat', { message: 'hi', to: '' }]]
+  for (const [name, args] of bad) await assert.rejects(p[name]('t1', args), err => err.code === 'bad-args', name)
+})
+
+test('craft and chat with a stale token reject with cut', async () => {
+  const { p } = rig()
+  await assert.rejects(p.craft('old', { item: 'stick' }), cutError)
+  await assert.rejects(p.chat('old', { message: 'hi' }), cutError)
+})
+
+test('craft through the wrapper crafts and chat through the wrapper sends', async () => {
+  const items = [{ name: 'oak_log', count: 1, type: 7, slot: 36 }]
+  const { bot, p } = rig({ items })
+  const reg = { 7: { id: 7, name: 'oak_log' }, 3: { id: 3, name: 'oak_planks', stackSize: 64 } }
+  const r = { requiresTable: false, result: { id: 3, count: 4 }, delta: [{ id: 7, count: -1 }, { id: 3, count: 4 }] }
+  Object.assign(bot, {
+    registry: { items: reg, itemsByName: { oak_planks: reg[3] } },
+    recipesAll: () => [r],
+    recipesFor: () => [r],
+    craft: async () => { items[0].count = 0; items.push({ name: 'oak_planks', count: 4, type: 3, slot: 37 }) },
+    chat: () => {},
+    players: {}
+  })
+  bot.inventory.emptySlotCount = () => 10
+  assert.deepEqual(await p.craft('t1', { item: 'oak_planks' }), { status: 'crafted', item: 'oak_planks', made: 4, used: { oak_log: 1 } })
+  const sent = []
+  bot.chat = m => sent.push(m)
+  assert.deepEqual(await p.chat('t1', { message: ' hello ' }), { status: 'sent', parts: 1 })
+  assert.deepEqual(sent, ['hello'])
+})

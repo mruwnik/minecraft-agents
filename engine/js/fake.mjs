@@ -50,6 +50,17 @@ const withEntityDefaults = (e) => ({
   ...e
 })
 
+const RECIPES = {
+  bread: { count: 1, needs: { wheat: 3 }, table: true },
+  oak_planks: { count: 4, needs: { oak_log: 1 } },
+  stick: { count: 4, needs: { oak_planks: 2 } },
+  crafting_table: { count: 1, needs: { oak_planks: 4 } },
+  torch: { count: 4, needs: { coal: 1, stick: 1 } },
+  wooden_pickaxe: { count: 1, needs: { oak_planks: 3, stick: 2 }, table: true },
+  stone_pickaxe: { count: 1, needs: { cobblestone: 3, stick: 2 }, table: true }
+}
+const CRAFT_REACH = 4.5
+
 function initialState (spec) {
   return {
     self: { ...clone(defaultSelf), ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
@@ -62,6 +73,8 @@ function initialState (spec) {
     inventory: clone(spec.inventory ?? []),
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
     drops: { ...(spec.drops ?? {}) },
+    chat: [], // {message, to} lines the body said
+    recipes: { ...RECIPES, ...(spec.recipes ?? {}) },
     unreachable: new Set(spec.unreachable ?? []),
     noPath: new Set(spec.noPath ?? []), // moveTo targets the pathfinder resolves on with no path
     swimFails: spec.swimFails ?? false,
@@ -216,6 +229,34 @@ function defaultActs (s, emit) {
       for (let left = n; left > 0;) left -= takeItem(s.inventory, item, left)
       spawnItem({ ...s.self.pos, x: s.self.pos.x + 3 }, item, n)
       return { status: 'tossed', count: n }
+    },
+
+    async craft (token, { item, count = 1, table }) {
+      const recipe = s.recipes[item]
+      if (!recipe) return { status: 'cannot', reason: 'no-recipe' }
+      const carried = (name) => s.inventory.filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
+      const reachable = (pos) => blockName(pos) === 'crafting_table' && dist(s.self.pos, pos) <= CRAFT_REACH
+      if (recipe.table && table && blockName(table) !== 'crafting_table') return { status: 'unreachable', reason: 'not-a-table' }
+      if (recipe.table && table && !reachable(table)) return { status: 'unreachable', reason: 'too-far' }
+      const tableNear = [...s.blocks.keys()].some(k => reachable(parseKey(k)))
+      if (recipe.table && !table && !tableNear) return { status: 'unreachable', reason: 'no-table' }
+      const shortOf = () => Object.fromEntries(Object.entries(recipe.needs).map(([n, c]) => [n, c - carried(n)]).filter(([, n]) => n > 0))
+      if (Object.keys(shortOf()).length === 0 && s.inventory.length >= 36 && !carried(item)) return { status: 'full', made: 0, used: {} }
+      const used = {}
+      let made = 0
+      for (let batches = Math.ceil(count / recipe.count); batches > 0 && Object.keys(shortOf()).length === 0; batches--) {
+        for (const [n, c] of Object.entries(recipe.needs)) { takeItem(s.inventory, n, c); used[n] = (used[n] ?? 0) + c }
+        addItem(s.inventory, item, recipe.count)
+        made += recipe.count
+      }
+      if (made >= count) return { status: 'crafted', item, made, used }
+      return made > 0 ? { status: 'partial', item, made, used, reason: 'no-item', short: shortOf() } : { status: 'no-item', short: shortOf() }
+    },
+
+    async chat (token, { message, to }) {
+      if (to && !s.entities.some(e => e.kind === 'player' && (e.username === to || e.name === to))) return { status: 'gone', to }
+      s.chat.push({ message, to })
+      return to ? { status: 'sent', parts: 1, to } : { status: 'sent', parts: 1 }
     },
 
     async inspectContainer (token, { pos }) {

@@ -1,5 +1,5 @@
 (ns dashboard.mapview-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [deftest is are testing]]
             [dashboard.mapview :as m]))
 
 (def claude-pos {:x 60.5 :y 64 :z -151.6})
@@ -92,3 +92,14 @@
 (deftest world-bounds-default-pad-grows-with-span
   (is (= {:min-x -16 :max-x 26 :min-z -16 :max-z 26} (m/world-bounds [{:x 0 :z 0} {:x 10 :z 10}])))
   (is (= {:min-x -40 :max-x 1040 :min-z -40 :max-z 40} (m/world-bounds [{:x 0 :z 0} {:x 1000 :z 0}]))))
+
+(deftest trimmed-points
+  (let [cluster (vec (for [i (range 18)] {:x i :z i}))
+        far [{:x 5000 :z 5000} {:x -4000 :z -4000}]]
+    (are [points trim expected] (= expected (count (m/trimmed-points points trim)))
+      [] 0.1 0
+      [{:x 1 :z 1} {:x 9000 :z 9000}] 0.1 2
+      cluster 0.1 16
+      (into cluster far) 0.1 16
+      (into cluster far) 0 20)
+    (is (every? #(< (:x %) 100) (m/trimmed-points (into cluster far) 0.1)))))

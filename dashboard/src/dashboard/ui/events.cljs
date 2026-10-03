@@ -1,6 +1,7 @@
 (ns dashboard.ui.events
   (:require [re-frame.core :as rf]
             [dashboard.ui.api]
+            [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.logic :as logic]))
 
@@ -75,7 +76,8 @@
          (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])]}))
 
 (rf/reg-event-db :canvas-size (fn [db [_ w h]] (assoc db :canvas {:w w :h h})))
-(rf/reg-event-db :fit (fn [db _] (assoc db :user-view nil)))
+(rf/reg-event-db :fit-home (fn [db _] (assoc db :user-view nil)))
+(rf/reg-event-db :fit (fn [db _] (assoc db :user-view (db/all-view db))))
 (rf/reg-event-db :fit-bodies (fn [db _] (assoc db :user-view (db/bodies-view db))))
 
 (rf/reg-event-db
@@ -98,16 +100,42 @@
 
 (rf/reg-event-db :select (fn [db [_ selection]] (assoc db :selected selection)))
 
-;; a body opens its popup, a plan its page, anything else is just selected
+;; a body opens its popup, a plan its page, an edge arrow pans to its body, anything else is just selected
 (rf/reg-event-fx
  :map-click
- (fn [_ [_ {:keys [kind name] :as selection}]]
+ (fn [_ [_ {:keys [kind name wx wz] :as selection}]]
    (case kind
+     :edge {:dispatch [:center-on wx wz]}
      :body {:fx [[:dispatch [:select selection]] [:dispatch [:open-detail name]]]}
      :plan {:dispatch [:plans/open name]}
      {:dispatch [:select selection]})))
 (rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
+;; sending a chat line as the owner: POST /api/chat/send; the line shows in the log once the bodies record it
+(def ack-ms 3000)
+
+(rf/reg-event-db :chat-draft (fn [db [_ text]] (update db :chat-send cs/edited text)))
+
+(rf/reg-event-fx
+ :chat-send
+ (fn [{:keys [db]} _]
+   (let [state (:chat-send db)]
+     (when (cs/sendable? state)
+       {:db (assoc db :chat-send (cs/begin state))
+        :post-json {:url "/api/chat/send" :body (clj->js (cs/request-body state))
+                    :on-ok [:chat-send-ok] :on-err [:chat-send-err] :on-unsupported [:chat-send-err "unsupported"]}}))))
+
+(rf/reg-event-fx
+ :chat-send-ok
+ (fn [{:keys [db]} _]
+   (let [id (inc (get-in db [:chat-send :ack-id]))]
+     {:db (update db :chat-send cs/succeeded id)
+      :dispatch-later [{:ms ack-ms :dispatch [:chat-ack-clear id]}]
+      :fx [[:dispatch [:poll-chat]]]})))
+
+(rf/reg-event-db :chat-send-err (fn [db [_ message]] (update db :chat-send cs/failed message)))
+(rf/reg-event-db :chat-ack-clear (fn [db [_ id]] (update db :chat-send cs/clear-ack id)))
+
 (rf/reg-event-db :hide-whispers (fn [db [_ on?]] (assoc db :hide-whispers? on?)))
 
 ;; The one handler for every action engine bodies do not support: log it, show it, call nothing.

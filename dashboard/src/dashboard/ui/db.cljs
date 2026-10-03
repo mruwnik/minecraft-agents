@@ -1,5 +1,6 @@
 (ns dashboard.ui.db
   (:require [dashboard.mapview :as mv]
+            [dashboard.ui.chatsend :as cs]
             [dashboard.ui.mapmodel :as mm]
             [dashboard.ui.logic :as logic]))
 
@@ -15,6 +16,7 @@
    :chat-open? true
    :chat-filter ""
    :hide-whispers? false
+   :chat-send cs/initial
    :detail-body (logic/body-from-search search)
    :detail-events []
    :detail-chip :all
@@ -41,14 +43,30 @@
           (mv/world-bounds 48)
           (mv/fit-view w h)))))
 
-(defn auto-view [db]
-  (let [{:keys [w h]} (:canvas db)
-        world (world-of db)]
-    (when (and w h (pos? w) (pos? h))
-      (-> (mv/map-points (all-bodies db) (:places world) (:zones world) (:humans world) (plan-boxes db))
-          mv/world-bounds
-          (mv/fit-view w h)))))
+(defn fit-points [points {:keys [w h]}]
+  (when (and w h (pos? w) (pos? h) (seq points))
+    (-> points mv/world-bounds (mv/fit-view w h))))
 
-;; The user's pan/zoom wins until "fit everything" clears it.
+(defn all-view
+  "A view fitted to everything: bodies, places, zones, humans and plans."
+  [db]
+  (let [world (world-of db)]
+    (fit-points (mv/map-points (all-bodies db) (:places world) (:zones world) (:humans world) (plan-boxes db))
+                (:canvas db))))
+
+(def home-trim 0.1)
+
+(defn home-view
+  "A view fitted to the places and plans, the home cluster: a probe standing thousands of blocks away would squash it,
+  and so would the few places far from the rest (the outer tenth is left out), but every plan is kept. Falls back to
+  everything when the world has neither."
+  [db]
+  (let [world (world-of db)
+        places (mv/trimmed-points (mv/map-points [] (:places world) [] [] []) home-trim)
+        plans (mv/map-points [] [] [] [] (plan-boxes db))]
+    (or (fit-points (into places plans) (:canvas db))
+        (all-view db))))
+
+;; The user's pan/zoom wins until a fit button clears or replaces it.
 (defn effective-view [db]
-  (or (:user-view db) (auto-view db)))
+  (or (:user-view db) (home-view db)))

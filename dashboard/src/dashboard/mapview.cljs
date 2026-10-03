@@ -41,6 +41,20 @@
        (empty? (:places world))
        (empty? (:zones world))))
 
+(defn trimmed-points
+  "The points without the outliers: those outside the trim..(1-trim) quantile of x or of z are dropped, so a few places
+  far from a cluster do not stretch a view fitted to it. Fewer than 10 points are kept whole."
+  [points trim]
+  (if (< (count points) 10)
+    points
+    (let [n (count points)
+          lo (js/Math.floor (* n trim))
+          hi (- n lo 1)
+          range-of (fn [k] (let [sorted (vec (sort (map k points)))] [(nth sorted lo) (nth sorted hi)]))
+          [x1 x2] (range-of :x)
+          [z1 z2] (range-of :z)]
+      (filterv #(and (<= x1 (:x %) x2) (<= z1 (:z %) z2)) points))))
+
 (defn world-bounds
   "Bounds of the points, padded by pad blocks (default: 16, or 4% of the longer side when that is more)."
   ([points]

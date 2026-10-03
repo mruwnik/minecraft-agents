@@ -10,7 +10,7 @@
 (defn list-item [selected detail]
   (let [{:keys [name title kind footprint layers blocks status builds]} (bp/blueprint-row detail)]
     ^{:key name}
-    [:div.bp {:class (when (= name selected) "sel") :on-click #(rf/dispatch [:blueprints/select name])}
+    [:div.bp-item {:class (when (= name selected) "sel") :on-click #(rf/dispatch [:blueprints/select name])}
      [:div.head [:span.name name] [:span.title title]]
      [:div.meta
       (when (seq kind) [:span.kind kind])
@@ -178,8 +178,8 @@
         (into [:div#meta] (for [[k v] (bp/meta-facts detail)] ^{:key k} [:span (str k " ") [:b v]]))
         [materials-block detail]
         [builds-line (:builds detail)]
-        ^{:key (str (:name detail) ":" (:hash detail))} [preview-block detail]
-        ^{:key (str (:name detail) ":" (:hash detail))} [layers-block bp-data]
+        ^{:key (str "preview:" (:name detail) ":" (:hash detail))} [preview-block detail]
+        ^{:key (str "layers:" (:name detail) ":" (:hash detail))} [layers-block bp-data]
         [bill-block detail]])
      [lint-block detail]]))
 
@@ -194,7 +194,7 @@
       (let [{:keys [library selected clock failed] :as state} @(rf/subscribe [:blueprints])
             detail (current-detail state)
             n (count (:blueprints library))]
-        [:main.bp
+        [:main.bp-page
          [sidebar state]
          [:div#detail
           [:div.muted.bpstatus

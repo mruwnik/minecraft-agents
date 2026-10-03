@@ -35,14 +35,15 @@
 (defn topbar [page]
   (let [counts @(rf/subscribe [:status-counts])]
     [:header#topbar
-     [:h1 "agent bodies"]
+     [:h1 "Minecraft agents"]
      [world-select]
      (into [:div.counts] (map #(count-pill counts %)) count-pills)
      [:span.spacer]
      [:span.dim.mono @(rf/subscribe [:clock-text])]
      [:span.dim @(rf/subscribe [:status])]
      (when (= page :map)
-       [:<> [:button {:on-click #(rf/dispatch [:fit])} "fit all"]
+       [:<> [:button {:on-click #(rf/dispatch [:fit-home])} "home"]
+        [:button {:on-click #(rf/dispatch [:fit])} "fit all"]
         [:button {:on-click #(rf/dispatch [:fit-bodies])} "fit bodies"]])]))
 
 (defn map-page []

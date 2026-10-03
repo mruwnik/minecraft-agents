@@ -59,3 +59,24 @@
 (deftest plan-rect
   (is (= {:x1 10 :z1 -70 :x2 21 :z2 -60}
          (mm/plan-box {:bounds {:x1 10 :z1 -70 :x2 20 :z2 -61}}))))
+
+(deftest edge-markers
+  (are [item expected] (= expected (mm/edge-marker {:w 200 :h 100 :inset 10} item))
+    {:px 100 :py 50} nil
+    {:px 0 :py 0} nil
+    {:px 200 :py 100} nil
+    {:px 100 :py -1} {:x 100 :y 10 :angle (- (/ js/Math.PI 2))}
+    {:px 300 :py 50} {:x 190 :y 50 :angle 0}
+    {:px -100 :py 50} {:x 10 :y 50 :angle js/Math.PI}
+    {:px 100 :py 400} {:x 100 :y 90 :angle (/ js/Math.PI 2)}
+    {:px 400 :py 250} {:x 160 :y 90 :angle (js/Math.atan2 200 300)}))
+
+(deftest compact-distance
+  (are [blocks expected] (= expected (mm/distance-text blocks))
+    0 "0"
+    12 "12"
+    999 "999"
+    1000 "1k"
+    2349 "2.3k"
+    12500 "12.5k"
+    nil ""))
