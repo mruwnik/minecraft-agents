@@ -40,9 +40,10 @@ export function readPose (agentName, stateDir = DEFAULT_STATE_DIR) {
   return pose
 }
 
-export function renderView ({ agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {} }) {
+export function renderView ({ agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {}, noPng = false }) {
   const started = performance.now()
   const pose = readPose(agentName, stateDir)
+  const poseDone = performance.now()
   const { columns, blocks } = forVersion(pose.mcVersion)
   const camera = { ...cameraFromPose(pose), ...override }
   const chunkDir = path.join(stateDir, 'worlds', pose.world, 'chunks')
@@ -57,8 +58,15 @@ export function renderView ({ agentName, width = 320, height = 180, fov = 70, ma
     across: Math.min(radius * 16, Math.ceil(maxDist) + 1),
     up: UP
   })
-  const gridMs = performance.now() - started
+  const gridDone = performance.now()
+  const gridMs = gridDone - started
   const out = render({ grid, info: blocks.info, texture: blocks.texture, eye: camera.eye, entities: entitiesFromPose(pose), timeOfDay: pose.timeOfDay, width, height, maxDist, yaw: camera.yaw, pitch: camera.pitch, fov })
-  const png = encodePng(width, height, out.rgba)
-  return { png, ms: performance.now() - started, gridMs, columns: loaded, pose, seen: out.seen, textured: blocks.textured }
+  const rayDone = performance.now()
+  const png = noPng ? null : encodePng(width, height, out.rgba)
+  const done = performance.now()
+  const timings = { pose: poseDone - started, grid: gridDone - poseDone, raycast: rayDone - gridDone, png: done - rayDone, total: done - started }
+  return { png, ms: done - started, gridMs, timings, columns: loaded, pose, seen: out.seen, textured: blocks.textured }
 }
+
+// columns held and reloaded so far, over every game version seen
+export const columnStats = () => [...perVersion.values()].map(v => v.columns.stats()).reduce((a, b) => ({ loaded: a.loaded + b.loaded, reloads: a.reloads + b.reloads }), { loaded: 0, reloads: 0 })

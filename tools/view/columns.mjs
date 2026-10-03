@@ -36,6 +36,8 @@ export function loadColumn (file, Chunk) {
 // columns by path, kept while the file's mtime is the same; a missing file is null
 export const columnCache = Chunk => {
   const entries = new Map()
+  const everLoaded = new Set()
+  let loads = 0
   const get = file => {
     const mtime = (() => {
       try { return fs.statSync(file).mtimeMs } catch { return null }
@@ -47,8 +49,10 @@ export const columnCache = Chunk => {
     const held = entries.get(file)
     if (held?.mtime === mtime) return held.column
     const column = loadColumn(file, Chunk)
+    loads++
+    everLoaded.add(file)
     entries.set(file, { mtime, column })
     return column
   }
-  return { get, size: () => entries.size }
+  return { get, size: () => entries.size, stats: () => ({ loaded: entries.size, reloads: loads - everLoaded.size }) }
 }

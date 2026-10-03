@@ -80,3 +80,34 @@ test('an offline pose that has a position still renders', () => {
   const r = renderView({ agentName: 'Bob', width: 8, height: 8, stateDir: stateWith({ status: 'offline' }) })
   assert.equal(r.pose.status, 'offline')
 })
+
+test('runBench renders back to back and summarises per-phase timings', async () => {
+  const { runBench } = await import('../tools/view/bench.mjs')
+  const stateDir = stateWith({})
+  const s = runBench({ agentName: 'Bob', seconds: 5, maxFrames: 3, width: 32, height: 18, dist: 64, stateDir })
+  assert.equal(s.frames, 3)
+  assert.ok(s.fps > 0)
+  assert.deepEqual([s.width, s.height, s.dist], [32, 18, 64])
+  assert.ok(s.columnsLoaded >= 1)
+  assert.equal(s.columnReloads, 0)
+  assert.equal(s.poseChanges, 0)
+  for (const phase of ['pose', 'grid', 'raycast', 'png', 'total']) assert.deepEqual(Object.keys(s.ms[phase]), ['mean', 'p50', 'p95'])
+  assert.ok(s.ms.png.mean > 0)
+})
+
+test('runBench with noPng spends no time encoding', async () => {
+  const { runBench } = await import('../tools/view/bench.mjs')
+  const s = runBench({ agentName: 'Bob', seconds: 5, maxFrames: 2, width: 16, height: 9, stateDir: stateWith({}), noPng: true })
+  assert.equal(s.ms.png.mean, 0)
+})
+
+test('runBench counts frames whose pose t changed', async () => {
+  const { runBench } = await import('../tools/view/bench.mjs')
+  const stateDir = stateWith({})
+  const file = path.join(stateDir, 'agents/Bob/view/pose.json')
+  const s = runBench({
+    agentName: 'Bob', seconds: 5, maxFrames: 3, width: 16, height: 9, stateDir,
+    onFrame: i => fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), t: 100 + i }))
+  })
+  assert.equal(s.poseChanges, 2)
+})
