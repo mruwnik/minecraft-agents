@@ -151,7 +151,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
+        (let [{:keys [eng p clock]} (await (first-round '(jobs.survival.retreat {:clear-radius 8}) {:entities [(zombie 5 0)]}))]
           (is (= {:x -6 :z 0} (last-move p)) "a step of 6 directly away")
           (swap! clock + 1000)
           (await (core/tick! eng))
@@ -273,3 +273,71 @@
             (swap! clock + 1000))
           (is (= 3 (walks-to p {:x 6 :z 0})) "the unreachable zombie is not walked at again")
           (is (zero? (count (calls p "attack")))))))))
+
+;; ------------------------------------------------------- ranged mobs count further out
+
+(defn skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :pos {:x x :y 64 :z z}})
+
+(deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
+  (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
+  (is (not (holds? {:entities [(zombie 13 0)]} {:radius 8 :ranged-radius 16})) "a zombie at 13 is beyond 8")
+  (is (not (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 10})) "beyond the ranged radius")
+  (is (= 16 (:ranged-radius (:args triggers/hostile-near))) "16 by default"))
+
+(deftest combat-hostiles-takes-a-ranged-radius
+  (let [p (tu/fake {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
+        ids (fn [hs] (mapv #(.-id %) hs))]
+    (is (= [3] (ids (combat/hostiles p 8))))
+    (is (= [3 2] (ids (combat/hostiles p 8 {:ranged-radius 16}))))))
+
+(deftest respond-walks-up-to-a-skeleton-at-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round respond {:inventory sword :entities [(skeleton 7 13 0)]}))]
+          (is (pos? (walks-to p {:x 13 :z 0})) "armed and healthy: it closes in on the skeleton"))))))
+
+;; ------------------------------------------------------- retreat keeps going and minds walls
+
+(deftest retreat-keeps-walking-while-the-hostile-is-within-the-clear-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
+          (set! (.. p -world -state -entities) #js [(clj->js (zombie 6 0))])
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 2 (count (calls p "moveTo"))) "12 blocks behind is out of radius 8 but within 24: walk on")
+          (is (< (:x (last-move p)) -6)))))))
+
+(defn wall-cells
+  "Stone at feet and head height on the given [x z] cells."
+  [cells]
+  (into {} (for [[x z] cells y [64 65]] [(str x "," y "," z) "stone"])))
+
+(deftest retreat-turns-away-from-a-wall-behind-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities [(zombie 5 0)]
+                                      :blocks (wall-cells (for [z (range -2 3)] [-3 z]))})]
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (let [m (last-move p)]
+            (is (>= (js/Math.abs (:z m)) 3) "not straight back into the wall")
+            (is (<= (:x m) 0) "and not towards the zombie")))))))
+
+(def box
+  "A 3x3 pen around the origin, open only on the +x side."
+  (wall-cells (concat (for [z (range -2 3)] [-2 z]) (for [x (range -2 2)] [x -2]) (for [x (range -2 2)] [x 2]))))
+
+(deftest a-cornered-retreat-fights-when-armed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks box :entities [(zombie 2 0)]}))]
+          (is (= 1 (count (calls p "attack"))) "nowhere to go: it hits back"))
+        (let [{:keys [eng p]} (await (first-round retreat {:blocks box :entities [(zombie 2 0)]}))]
+          (is (zero? (count (calls p "attack"))) "unarmed: no fight")
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))) "and it gives up after three tries"))))))

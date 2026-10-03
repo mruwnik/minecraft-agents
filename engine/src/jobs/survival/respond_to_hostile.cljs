@@ -11,6 +11,7 @@
 
 (def args
   {:radius {:doc "hostiles within this many blocks count" :default 8}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
    :fight-health {:doc "least health to start a fight" :default 12}
    :min-health {:doc "a fight already chosen is kept down to this health" :default 8}
    :max-fight {:doc "most hostiles to fight at once" :default 2}
@@ -18,8 +19,14 @@
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
+(defn near
+  "The hostiles that count: melee ones within :radius, ranged ones within :ranged-radius."
+  [c]
+  (let [{:keys [radius ranged-radius]} (:args c)]
+    (combat/hostiles (:primitives c) radius {:ranged-radius ranged-radius})))
+
 (defn check [c]
-  (boolean (seq (combat/hostiles (:primitives c) (:radius (:args c))))))
+  (boolean (seq (near c))))
 
 (defn decide
   "Pure: :fight or :flee from health, whether a weapon is carried, whether a
@@ -33,10 +40,10 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
-(defn ^:async run-child [c decision {:keys [radius min-health weapons]}]
+(defn ^:async run-child [c decision {:keys [radius ranged-radius min-health weapons]}]
   (let [child-args (case decision
-                     :fight {:range radius :min-health min-health :weapons weapons}
-                     :flee {:radius radius})]
+                     :fight {:range radius :ranged-range ranged-radius :min-health min-health :weapons weapons}
+                     :flee {:radius radius :ranged-radius ranged-radius})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn log-encounter! [c threat decision]
@@ -65,7 +72,7 @@
         result))))
 
 (defn ^:async round [c]
-  (let [near (combat/hostiles (:primitives c) (:radius (:args c)))]
-    (if (and (empty? near) (= :fight (:decision (ctx/mem c))))
+  (let [hs (near c)]
+    (if (and (empty? hs) (= :fight (:decision (ctx/mem c))))
       :done
-      (await (respond c near)))))
+      (await (respond c hs)))))

@@ -4,21 +4,43 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Walk a short step away from the nearest hostile within :radius each round,
-  leaning towards the latest :bed or :home when that is not through the
-  hostile, and avoiding :hazard positions. Done when no hostile has been
-  within :radius for :cooldown-ms.")
+  "Walk a short step away from the nearest hostile each round, leaning
+  towards the latest :bed or :home when that is not through the hostile,
+  avoiding :hazard positions and turning towards open ground when a wall is
+  behind. A flight starts for a hostile within :radius (ranged ones within
+  :ranged-radius) and keeps going while one is within :clear-radius, so a
+  chasing mob does not catch up between steps. Cornered (no open direction,
+  or the walk is blocked) it fights back with the best weapon whatever its
+  health; unarmed it gives up after three tries. Done when no hostile has
+  been within :clear-radius for :cooldown-ms.")
 
 (def args
-  {:radius {:doc "hostiles within this many blocks count" :default 8}
+  {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :default 16}
+   :clear-radius {:doc "the flight goes on while a hostile is within this many blocks" :default 24}
    :step {:doc "blocks per walk" :default 6}
-   :cooldown-ms {:doc "done once no hostile was in radius for this long" :default 5000}})
+   :cooldown-ms {:doc "done once no hostile was in the clear radius for this long" :default 5000}
+   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}})
 
 (def hazard-clearance 2.5)
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
-  [0 30 -30 60 -60 90 -90])
+  [0 30 -30 60 -60 90 -90 120 -120])
+
+(def min-open
+  "Fewest clear cells a direction needs to be worth walking."
+  2)
+
+(def passable-names
+  #{"air" "cave_air" "void_air" "short_grass" "tall_grass" "grass" "fern" "large_fern" "dead_bush" "snow"
+    "water" "dandelion" "poppy" "torch" "sweet_berry_bush" "vine"})
+
+(defn passable?
+  "Whether a block name lets the body walk through; an unloaded cell (nil) counts as open."
+  [block-name]
+  (or (nil? block-name) (contains? passable-names block-name)
+      (some #(.endsWith block-name %) ["_sapling" "_flower" "_carpet" "_tulip" "_orchid" "_button" "_pressure_plate"])))
 
 (defn unit
   "[ux uz] for the vector (dx dz), or nil when it is zero."
@@ -58,15 +80,29 @@
   (let [mid {:x (/ (+ (:x from) (:x target)) 2) :y (:y from) :z (/ (+ (:z from) (:z target)) 2)}]
     (boolean (some #(or (< (u/dist % target) hazard-clearance) (< (u/dist % mid) hazard-clearance)) hazards))))
 
+(defn open-cells
+  "How many cells along [ux uz] from from, up to n, are free at feet and head
+  height before the first obstacle, per block-at (a cell -> block name or nil)."
+  [block-at from dir n]
+  (let [free? (fn [k] (let [{:keys [x z]} (point-along from dir k)
+                            y (js/Math.floor (:y from))]
+                        (and (passable? (block-at {:x x :y y :z z}))
+                             (passable? (block-at {:x x :y (inc y) :z z})))))]
+    (count (take-while free? (range 1 (inc n))))))
+
 (defn choose-target
-  "The first walk target, turning away from the preferred direction as needed,
-  that avoids every hazard; nil when none does."
-  [from threat home hazards step]
-  (let [dir (direction from threat home)]
-    (->> turns
-         (map #(point-along from (rotate dir %) step))
-         (remove #(near-hazard? hazards from %))
-         first)))
+  "The walk target: the first direction, turning away from the preferred one
+  as needed, that avoids every hazard and is open for a full step; else the
+  most open one if it has at least min-open cells. nil when cornered."
+  [block-at from threat home hazards step]
+  (let [dir (direction from threat home)
+        options (->> turns
+                     (map #(rotate dir %))
+                     (map (fn [d] {:open (open-cells block-at from d step) :dir d}))
+                     (remove #(near-hazard? hazards from (point-along from (:dir %) step))))
+        pick (or (first (filter #(>= (:open %) step) options))
+                 (last (sort-by :open (filter #(>= (:open %) min-open) options))))]
+    (when pick (point-along from (:dir pick) (:open pick)))))
 
 (defn home-pos
   "The position of the latest :bed or :home entry, or nil."
@@ -80,22 +116,39 @@
 
 (defn check [_c] true)
 
+(defn block-at-fn [p]
+  (fn [pos] (u/block-name p pos)))
+
+(defn ^:async cornered!
+  "Nowhere to go: fight back with the best weapon whatever the health, else
+  count a failure."
+  [c why]
+  (let [{:keys [radius ranged-radius weapons]} (:args c)]
+    (if (combat/best-weapon (:primitives c) weapons)
+      (do (await (ctx/call-child c :cornered 'jobs.survival.fight-back
+                                 {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}))
+          :continue)
+      (u/fail! c :retreat_blocked why))))
+
 (defn ^:async round [c]
-  (let [{:keys [radius step cooldown-ms]} (:args c)
+  (let [{:keys [radius ranged-radius clear-radius step cooldown-ms]} (:args c)
+        p (:primitives c)
         now (ctx/now c)
-        last-seen (:last-seen (ctx/mem c))
-        threat (first (combat/hostiles (:primitives c) radius))]
+        fleeing? (some? (:last-seen (ctx/mem c)))
+        threat (first (combat/hostiles p (if fleeing? (max clear-radius radius) radius)
+                                       {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)}))]
     (cond
-      (and (nil? threat) (some? last-seen) (>= (- now last-seen) cooldown-ms)) :done
-      (and (nil? threat) (some? last-seen)) :continue
+      (and (nil? threat) fleeing? (>= (- now (:last-seen (ctx/mem c))) cooldown-ms)) :done
+      (and (nil? threat) fleeing?) :continue
       (nil? threat) (do (ctx/update-mem! c assoc :last-seen now) :continue)
       :else
-      (let [target (choose-target (u/self-pos c) (u/pos-of (.-pos threat)) (home-pos c)
+      (let [from (u/self-pos c)
+            target (choose-target (block-at-fn p) from (u/pos-of (.-pos threat)) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
         (ctx/update-mem! c assoc :last-seen now)
         (if (nil? target)
-          (u/fail! c :retreat_blocked "no way away from the hostile avoids a hazard")
+          (await (cornered! c "no open way away from the hostile"))
           (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 1})))]
             (if (= "blocked" (.-status r))
-              (u/fail! c :retreat_blocked "the way away from the hostile is blocked")
+              (await (cornered! c "the way away from the hostile is blocked"))
               :continue)))))))

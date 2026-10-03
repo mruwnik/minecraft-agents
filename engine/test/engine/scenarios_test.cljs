@@ -91,7 +91,7 @@
                                                 :inventory [{:name "bread" :count 4}]})
               state (.. p -world -state)
               self (.-self state)]
-          (is (= [:suffocating :burning :health-low :hostile-near :hungry :night-unsafe :stuck :died
+          (is (= [:suffocating :burning :hostile-near :health-low :hungry :night-unsafe :stuck :died
                   :inventory-nearly-full]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))

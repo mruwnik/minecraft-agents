@@ -202,3 +202,12 @@
 
 (deftest health-low-runs-recover-by-default
   (is (= '(jobs.survival.recover) (:job triggers/health-low))))
+
+(deftest it-idles-with-a-wait-not-empty-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 5}})]
+          (core/submit! eng '(jobs.survival.recover) {})
+          (await (core/tick! eng))
+          (is (= [2000] (mapv #(.. % -args -ms) (calls p "wait")))))))))

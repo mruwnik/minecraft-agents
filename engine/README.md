@@ -716,7 +716,7 @@ after three the job emits a warn and ends.
 | `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
 | `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
-| `jobs.survival.retreat` | `{:radius 8 :step 6 :cooldown-ms 5000}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
+| `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 24 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
 | `jobs.survival.sleep` | `{:bed-radius}` | night and a `:bed` within `:bed-radius` | child `:go` | reads `:bed`; writes `:slept`, retracts a missing `:bed` |
 | `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10}` | drowning (swims up, or walks sideways to a column with air) or enclosed (the suffocating condition) | `:noted` | writes `:breathe` (cap 20, 1 h) |
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
@@ -752,9 +752,13 @@ after three the job emits a warn and ends.
   `chest_unusable`.
 - `:retreat` walks `:step` blocks away from the nearest hostile per round,
   leaning towards the latest `:bed` or `:home` when that is not through the
-  hostile, and turning up to 90 degrees to keep clear of `:hazard` cells. Done
-  once no hostile has been within `:radius` for `:cooldown-ms`. No way out
-  counts as a failed round (`retreat_blocked`).
+  hostile, and turning up to 120 degrees to keep clear of `:hazard` cells and
+  of walls (feet and head cells along the way must be passable). A hostile
+  within `:radius` (ranged ones within `:ranged-radius`) starts the flight; it
+  goes on while one is within `:clear-radius`, and is done once none has been
+  for `:cooldown-ms`. Cornered (no open direction, or the walk is blocked) it
+  runs `fight-back` with `:min-health 0` when a weapon is carried; unarmed,
+  no way out counts as a failed round (`retreat_blocked`).
 - `:sleep` walks within 2 of the known bed (go-to as a child) and calls
   `sleep`. `sleeping` and `not-night` are done; a go-to that hands over
   `{:arrived false}`, a taken bed or a nearby monster is a failed round
@@ -764,8 +768,9 @@ after three the job emits a warn and ends.
   give the full rules; in short: `:breathe` swims up to air or digs the head
   cell free, one move per round; `:extinguish` pours a carried water bucket at
   its feet, else walks into water or to the safest dry cell nearby;
-  `:recover` flees, walks to a bed or home, eats and waits for health to reach
-  `:healed`; `:respond-to-hostile` fights (`fight-back`) when healthy, armed,
+  `:recover` flees, walks to a bed or home, eats and waits (a 2 s `wait` per
+  round) for health to reach `:healed`, giving up below 18 food with nothing
+  to eat; `:respond-to-hostile` fights (`fight-back`) when healthy, armed,
   not facing a creeper and outnumbered by at most `:max-fight`, else retreats;
   `:get-food` climbs a ladder of eat, known source, hunt or harvest, then
   gives up with a `food.none` warn; `:shelter` tries sleep, then log-out,
@@ -783,8 +788,8 @@ Listed in the order a survival register puts them (most urgent first, as
 |---|---|---|---|
 | `:suffocating` | in water with oxygen below `:min-oxygen` (default 12) and the head not in air, or the head cell holds a suffocating block | `(jobs.survival.breathe)` | retry |
 | `:burning` | on fire or in lava | `(jobs.survival.extinguish)` | retry |
+| `:hostile-near` | a hostile mob within `:radius` (default 8), or a ranged one (skeleton, stray, bogged, pillager, witch) within `:ranged-radius` (default 16), that the body can see (`:visible-only false` counts hidden ones too); set the job's own `:radius` and `:ranged-radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 30 s |
-| `:hostile-near` | a hostile mob within `:radius` (default 8) that the body can see (`:visible-only false` counts hidden ones too); set the job's own `:radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |

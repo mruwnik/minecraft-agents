@@ -13,6 +13,7 @@
 
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}
+   :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :default 16}
    :min-health {:doc "decline below this health" :default 8}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
    :attack-gap-ms {:doc "least time between swings" :default 600}})
@@ -24,10 +25,16 @@
   [c e]
   (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures))
 
-(defn targets
-  "The hostiles within :range not given up on, nearest first."
+(defn in-range
+  "The hostiles within :range (ranged ones within :ranged-range), nearest first."
   [c]
-  (remove #(given-up? c %) (combat/hostiles (:primitives c) (:range (:args c)))))
+  (let [{:keys [range ranged-range]} (:args c)]
+    (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})))
+
+(defn targets
+  "The hostiles in range not given up on, nearest first."
+  [c]
+  (remove #(given-up? c %) (in-range c)))
 
 (defn check [c]
   (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
@@ -61,17 +68,17 @@
     r))
 
 (defn ^:async round [c]
-  (let [{:keys [range weapons attack-gap-ms]} (:args c)
+  (let [{:keys [weapons attack-gap-ms]} (:args c)
         p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
     (cond
-      (nil? target) (if (empty? (combat/hostiles p range)) :done :declined)
+      (nil? target) (if (empty? (in-range c)) :done :declined)
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) :continue
       :else
       (do (await (equip-best! c (combat/best-weapon p weapons)))
           (await (swing! c target))
           (cond
-            (empty? (combat/hostiles p range)) :done
+            (empty? (in-range c)) :done
             (empty? (targets c)) :declined
             :else :continue)))))

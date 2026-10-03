@@ -3,6 +3,7 @@
   engine.expr); :args are the trigger's own. See README.md, Triggers and the
   register."
   (:require [engine.memory :as mem]
+            [engine.jobs.combat :as combat]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
             [engine.triggers.hungry :as hungry]
@@ -24,21 +25,25 @@
 
 (def hostile-radius 8)
 
+(def ranged-radius 16)
+
 (def hostile-near
   "Holds when a hostile mob the body can see is within :radius (args, default
-  8). Sight is a block raycast from the eye to the mob (the `visible` field of
-  sensing), so a hostile behind a wall is silent; :visible-only false counts
-  every hostile again. Players and passive mobs are other entity kinds and
-  never count. The job's own :radius (default 8) is set in the entry's :job
-  spec."
+  8), or a ranged one (skeleton, stray, bogged, pillager, witch; see
+  engine.jobs.combat/ranged-mobs) within :ranged-radius (default 16, about a
+  skeleton's range). Sight is a block raycast from the eye to the mob (the
+  `visible` field of sensing), so a hostile behind a wall is silent;
+  :visible-only false counts every hostile again. Players and passive mobs are
+  other entity kinds and never count. The job's own :radius and
+  :ranged-radius are set in the entry's :job spec."
   {:name :hostile-near
    :when (fn [world _memory args]
-           (let [radius (:radius args hostile-radius)
-                 seen? (:visible-only args true)]
+           (let [seen? (:visible-only args true)]
              (boolean (some #(or (not seen?) (.-visible %))
-                            (array-seq (.entities world #js {:radius radius :kind "hostile" :max 32}))))))
+                            (combat/hostiles world (:radius args hostile-radius)
+                                             {:ranged-radius (:ranged-radius args ranged-radius)})))))
    :job '(jobs.survival.respond-to-hostile)
-   :args {:radius hostile-radius}
+   :args {:radius hostile-radius :ranged-radius ranged-radius}
    :persistence :cooldown
    :cooldown-s 5})
 
@@ -82,6 +87,6 @@
   "Every trigger by name, listed in the order a survival scenario registers
   them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
-        [suffocating/suffocating burning/burning health-low hostile-near hungry/hungry
+        [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
          night-unsafe/trigger night-and-bed-known stuck/stuck died/died
          inventory-nearly-full every-interval]))

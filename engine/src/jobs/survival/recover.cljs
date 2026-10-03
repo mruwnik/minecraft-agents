@@ -12,7 +12,7 @@
   last five minutes exists, so a long-healed body is left alone. Each round: a
   hostile within :sight blocks is fled (jobs.survival.retreat); else walk to
   the latest :bed, else :home, else stay; at the safe point eat if hungry and
-  carrying food, then do nothing so health regenerates. Done once health reaches :healed.
+  carrying food, then wait idle-ms (2 s) per round so health regenerates. Done once health reaches :healed.
   Health only regenerates at 18 food or more, so below that with nothing to
   eat it gives up (a warn of kind cannot_heal) instead of holding the body.
   One :hurt entry is written per spell.")
@@ -27,6 +27,10 @@
 (def hurt-policy {:cap 20 :ttl (* 60 60 1000)})
 
 (def safe-distance 3)
+
+(def idle-ms
+  "How long a round waits while health regenerates."
+  2000)
 
 (def regen-food
   "Natural regeneration needs at least this much food."
@@ -99,4 +103,5 @@
                     (and (< (.-food (.self (:primitives c))) regen-food) (not (has-food? c)))
                     (do (ctx/emit! c :cannot_heal :warn {:text "too hungry to regenerate and nothing to eat"})
                         :done)
-                    :else :continue))))))))
+                    :else (do (await (ctx/act c :wait #js {:ms idle-ms}))
+                              :continue)))))))))

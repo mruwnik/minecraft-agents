@@ -8,18 +8,27 @@
   "Item name substrings that count as weapons; _axe does not match pickaxes."
   ["_sword" "_axe"])
 
+(def ranged-mobs
+  "Hostiles that shoot or throw from a distance, so count from further away."
+  #{"skeleton" "stray" "bogged" "pillager" "witch"})
+
+(defn ranged? [e] (contains? ranged-mobs (.-name e)))
+
 (defn hostiles
   "The hostile mobs within radius of the body, nearest first, as JS entities.
-  opts {:sight mode}: :only keeps the ones the body can see (the `visible`
+  opts: {:sight mode} :only keeps the ones the body can see (the `visible`
   field of sensing), :prefer lists the visible ones first, each group nearest
-  first; without opts sight is ignored."
+  first; without it sight is ignored. {:ranged-radius r} counts ranged mobs
+  (ranged-mobs) out to r instead of radius."
   ([p radius] (hostiles p radius {}))
-  ([p radius {:keys [sight]}]
-   (let [all (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16}))]
+  ([p radius {:keys [sight ranged-radius]}]
+   (let [rr (or ranged-radius radius)
+         all (->> (array-seq (.entities p #js {:radius (max radius rr) :kind "hostile" :max 16}))
+                  (filter #(<= (.-distance %) (if (ranged? %) rr radius))))]
      (case sight
        :only (filterv #(.-visible %) all)
        :prefer (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)
-       all))))
+       (vec all)))))
 
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
