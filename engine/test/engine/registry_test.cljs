@@ -10,7 +10,7 @@
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.survival.recover-drops jobs.maintenance.unstick jobs.storage.make-room
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.storage.deposit jobs.storage.withdraw jobs.items.craft jobs.items.give jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box
-     jobs.combat.hunt jobs.gather.get-seeds
+     jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify})
 
