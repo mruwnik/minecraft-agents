@@ -21,7 +21,9 @@ export const VIEWS = {
   A: { eye: { x: -9, y: FRONT_EYE_Y, z: 16.5 }, pitch: FRONT_PITCH },
   B: { eye: { x: 0.5, y: FRONT_EYE_Y, z: 16.5 }, pitch: FRONT_PITCH },
   C: { eye: { x: 10.5, y: FRONT_EYE_Y, z: 16.5 }, pitch: FRONT_PITCH },
-  D: { eye: { x: -2.5, y: 68, z: 11 }, pitch: -0.68 }
+  D: { eye: { x: -2.5, y: 68, z: 11 }, pitch: -0.68 },
+  E: { eye: { x: -6.5, y: 68, z: 11 }, pitch: -0.68 },
+  F: { eye: { x: -1.5, y: 68, z: 11 }, pitch: -0.68 }
 }
 
 // cell (x, z) of each piece, and its block state
@@ -29,6 +31,8 @@ export const PIECES = {
   chest: { x: -13, z: ROW_Z, name: 'chest', props: { facing: 'south', type: 'single', waterlogged: false } },
   doubleRight: { x: -10, z: ROW_Z, name: 'chest', props: { facing: 'south', type: 'right', waterlogged: false } },
   doubleLeft: { x: -9, z: ROW_Z, name: 'chest', props: { facing: 'south', type: 'left', waterlogged: false } },
+  table: { x: -7, z: ROW_Z, name: 'enchanting_table', props: {} },
+  lectern: { x: -2, z: ROW_Z, name: 'lectern', props: { facing: 'south', has_book: true, powered: false } },
   sign: { x: -5, z: ROW_Z, name: 'oak_sign', props: { rotation: 0, waterlogged: false } },
   bedHead: { x: -3, z: ROW_Z - 1, name: 'blue_bed', props: { facing: 'north', part: 'head', occupied: false } },
   bedFoot: { x: -3, z: ROW_Z, name: 'blue_bed', props: { facing: 'north', part: 'foot', occupied: false } },
@@ -95,7 +99,9 @@ export const ENTITY_REGIONS = [
   { view: 'C', type: 'bell', name: 'bell: background under the rim (rim bottom at 4)', expect: 'lime', face: zPlane(P.bell, 12, [5, 11], [2.2, 3.6]) },
   { view: 'C', type: 'bell', name: 'bell: the rim is 8 wide', expect: 'lime', face: zPlane(P.bell, 12, [2.5, 3.6], [4.4, 5.6]) },
   { view: 'C', type: 'bell', name: 'bell: the body hangs clear of the posts', expect: 'lime', face: zPlane(P.bell, 12, [2.5, 3.8], [7.2, 12]) },
-  { view: 'C', type: 'bell', name: 'bell: the body is 6 wide', expect: 'lime', face: zPlane(P.bell, 12, [3.9, 4.7], [7.2, 12]) }
+  { view: 'C', type: 'bell', name: 'bell: the body is 6 wide', expect: 'lime', face: zPlane(P.bell, 12, [3.9, 4.7], [7.2, 12]) },
+  { view: 'E', type: 'enchanting table', name: 'enchanting table: the book above the table shows cream pages, not the table top', expect: 'cream', face: yPlane(P.table, 14.25, [3, 6], [5, 11]) },
+  { view: 'F', type: 'lectern', name: 'lectern: the book pages show cream over the slanted top (tuned on the render), not the lectern wood', expect: 'cream', face: yPlane(P.lectern, 14, [10, 13], [10.6, 11.8]) }
 ]
 
 export const writeEntityWorld = (stateDir, view = 'B') => writeWorld({

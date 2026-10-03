@@ -28,7 +28,7 @@ const DEFAULT_SEVERITY = {
 }
 export const severityOf = reason => DEFAULT_SEVERITY[reason] ?? 'approximate'
 
-// Blocks whose model has geometry but whose book or items the game adds with a block-entity renderer
+// Blocks whose model has geometry but whose items the game adds with a block-entity renderer (the lectern's and the enchanting table's books are drawn: block-entity-models.mjs)
 // Blocks the game colours with a registered colour provider: constant tints by name (minecraft-data's tints.json) and the colormap
 // groups in tools/view/tints.mjs, which says where its list is FROM MEMORY. A `tintindex` in a model only says a face asks for a tint.
 const FROM_DATA = new Set([...tints.constant.data.flatMap(entry => entry.keys), 'redstone_wire'])
@@ -36,7 +36,7 @@ const TINTED_BLOCKS = new Set([...FROM_DATA, ...COLORMAP_BLOCKS])
 // bubble_column is water in the game; moving_piston is never drawn as a block
 const WATER_LIKE = new Set(['bubble_column'])
 const NEVER_DRAWN = new Set(['moving_piston'])
-const PARTLY_ENTITY = new Set(['lectern', 'enchanting_table', 'campfire', 'soul_campfire'])
+const PARTLY_ENTITY = new Set(['campfire', 'soul_campfire'])
 
 const CROSS_PARENTS = new Set(['block/cross', 'block/tinted_cross', 'block/flower_pot_cross'])
 const FULL_FROM = [0, 0, 0]
@@ -236,7 +236,7 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
   // states the view draws from its own entity models (block-entity-models.mjs) are no longer reported here
   const undrawn = entityOnly ? ids.filter(id => !materialAt(id).entity) : ids
   if ((entityOnly && undrawn.length) || PARTLY_ENTITY.has(block.name)) {
-    const detail = entityOnly ? `the model has no elements, the game draws it with a block-entity renderer: ${describe(resolved[0])}` : 'the model has geometry, but its book or items are drawn by a block-entity renderer'
+    const detail = entityOnly ? `the model has no elements, the game draws it with a block-entity renderer: ${describe(resolved[0])}` : 'the model has geometry, but its items are drawn by a block-entity renderer'
     records.push(record('block-entity', undrawn, detail, { model: resolved[0]?.id, severity: entityOnly ? undefined : 'approximate' }, resolved))
   }
   if (entityOnly) return records

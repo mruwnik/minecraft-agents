@@ -292,6 +292,7 @@ const modelChecks = async outDir => {
 // ---- block-entity models ----
 
 const isBackdrop = ([r, g, b]) => g > r + 25 && g > b + 25
+const isCream = ([r, g, b]) => r > 180 && g > 170 && b > 120 && b < g - 15 // the book's pages (244,233,191 and darker shades); wood and the table top are not
 const isReddish = ([r, g, b]) => r > g + 40 && r > b + 40
 const LIME_MIN = 0.85 // a background rectangle is at least this lime
 const SOLID_LIME_MAX = 0.05 // a rectangle on the object has at most this much lime
@@ -304,6 +305,7 @@ const entityVerdicts = {
   lime: s => ({ ok: s.fraction(isBackdrop) >= LIME_MIN, text: `lime ${s.fraction(isBackdrop).toFixed(2)} vs >= ${LIME_MIN}` }),
   solid: s => ({ ok: s.fraction(isBackdrop) <= SOLID_LIME_MAX, text: `lime ${s.fraction(isBackdrop).toFixed(2)} vs <= ${SOLID_LIME_MAX}` }),
   red: s => ({ ok: s.fraction(isReddish) >= 0.85, text: `reddish ${s.fraction(isReddish).toFixed(2)} vs >= 0.85 (mean ${fmt(s.mean)})` }),
+  cream: s => ({ ok: s.fraction(isCream) >= 0.5, text: `cream ${s.fraction(isCream).toFixed(2)} vs >= 0.5 (mean ${fmt(s.mean)})` }),
   seam: (s, against) => ({ ok: Math.abs(lum(s) - lum(against)) >= SEAM_MIN, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)}, step >= ${SEAM_MIN}` }),
   dark: s => ({ ok: s.fraction(([r, g, b]) => (r + g + b) / 3 < 90) >= DARK_MIN && s.std > 25, text: `dark ${s.fraction(([r, g, b]) => (r + g + b) / 3 < 90).toFixed(3)} vs >= ${DARK_MIN}, std ${s.std.toFixed(1)} vs > 25` }),
   same: (s, against) => ({ ok: Math.abs(lum(s) - lum(against)) < SAME_MAX, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)}, step < ${SAME_MAX}` }),

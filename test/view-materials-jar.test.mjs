@@ -124,6 +124,18 @@ test('block entities drawn from entity models are models marked entity; their la
   assert.equal(materialOf(legacy, 'chest', { facing: 'north', type: 'single', waterlogged: false }).kind, 'box')
 })
 
+test('a lectern with a book and the enchanting table add their book to the jar model; a lectern without one is the plain model', { skip }, () => {
+  const plain = materialOf(build, 'lectern', { facing: 'north', has_book: false, powered: false })
+  const booked = materialOf(build, 'lectern', { facing: 'north', has_book: true, powered: false })
+  const table = materialOf(build, 'enchanting_table')
+  assert.equal(plain.entity, undefined)
+  assert.equal(booked.entity, true)
+  assert.ok(booked.elemCount > plain.elemCount)
+  assert.equal(table.entity, true)
+  assert.equal(table.outside, undefined)
+  assert.equal(booked.outside, undefined)
+})
+
 test('entity layers stay within the budget and no sheet region is named twice', { skip }, () => {
   const names = build.table.textures.names.filter(n => n.startsWith('entity/'))
   assert.equal(new Set(names).size, names.length)

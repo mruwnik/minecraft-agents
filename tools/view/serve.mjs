@@ -85,8 +85,12 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const stored = held ? null : await readJson(file)
     const payload = held ?? stored ?? await scanner.latest(world)
     if (!payload) return notFound(res)
-    send(res, 200, JSON.stringify(withBiomeIssues(world, payload)), { 'Content-Type': TYPES['.json'] })
+    const doc = await readJson(path.join(stateDir, 'worlds', world, 'biomes.json'))
+    send(res, 200, JSON.stringify(withBiomeIssues(world, biomeFallbackReason(doc) ? payload : withoutTintApproximate(payload))), { 'Content-Type': TYPES['.json'] })
   }
+
+  // With the world's biome colours drawn (a usable biomes.json), "drawn with one fixed plains colour" is stale for every block.
+  const withoutTintApproximate = payload => ({ ...payload, records: payload.records.filter(r => r.reason !== 'tint-approximate') })
 
   // Biome problems found while serving /biomes, once per world and name; merged into the /block-issues payload.
   const biomeIssues = new Map()
@@ -109,6 +113,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   // server with extra biomes shifts every id above them), so a world without a usable biomes.json gets {fallback: true, colors: null}
   // and the page draws the fixed group colours. Cached per world and file mtime.
   const MAX_BIOMES = 255
+  const biomeFallbackReason = doc => !doc?.biomes ? 'no biomes.json for this world' : doc.biomes.length > MAX_BIOMES ? `biomes.json lists ${doc.biomes.length} biomes, more than the ${MAX_BIOMES} ids the view holds` : null
   const biomeCache = new Map()
   const sendBiomes = async (res, world) => {
     const worldDir = path.join(stateDir, 'worlds', world)
@@ -116,7 +121,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const file = path.join(worldDir, 'biomes.json')
     const stat = await statOrNull(file)
     const doc = stat ? await readJson(file) : null
-    const reasonOf = !doc?.biomes ? 'no biomes.json for this world' : doc.biomes.length > MAX_BIOMES ? `biomes.json lists ${doc.biomes.length} biomes, more than the ${MAX_BIOMES} ids the view holds` : null
+    const reasonOf = biomeFallbackReason(doc)
     const answer = body => send(res, 200, JSON.stringify(body), { 'Content-Type': 'application/json' })
     if (reasonOf) {
       noteBiomeIssue(world, 'biome-registry', `${reasonOf}: biome tints are drawn as the fixed plains colours`)

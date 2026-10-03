@@ -251,6 +251,58 @@ test('the bell adds its body, centred, to the jar model', () => {
   assert.ok(size(lip)[0] > size(body)[0])
 })
 
+// ---- books: the lectern's (has_book) and the enchanting table's, added to the jar models ----
+
+const BOOK_SHEET = 'entity/enchantment/enchanting_table_book'
+const bookOf = (name, props) => get(name, props)
+const COVER_REGIONS = ['0,0,6,10', '6,0,6,10', '16,0,6,10', '22,0,6,10']
+
+test('a lectern without a book and other lecterns state-free get nothing; with a book, an open book', () => {
+  assert.equal(get('lectern', { facing: 'north', has_book: false }), null)
+  assert.ok(get('lectern', { facing: 'north', has_book: true }).length >= 4)
+})
+
+test('the enchanting table gets an open book floating above its 12 high base', () => {
+  const elements = bookOf('enchanting_table', {})
+  assert.ok(elements.length >= 4)
+  for (const e of elements) {
+    assert.ok(e.from[1] >= 12.5, `${e.from}`)
+    assert.equal(e.rotation, null)
+  }
+  assert.ok(faceTextures(elements).every(t => t.startsWith(`${BOOK_SHEET}#`)))
+})
+
+for (const [name, props] of [['enchanting_table', {}], ['lectern', { facing: 'north', has_book: true }]]) {
+  test(`${name}: the book's cover faces show the cover regions of the sheet, its pages the page regions`, () => {
+    const regions = new Set(faceTextures(bookOf(name, props)).map(t => regionOf(t).join()))
+    assert.ok(COVER_REGIONS.some(r => regions.has(r)), [...regions].join(' '))
+    const pageRegions = [...regions].filter(r => r.split(',')[1] >= 10)
+    assert.ok(pageRegions.length > 0, 'a page region (the sheet rows from 10 down)')
+    assert.ok([...regions].every(r => r.split(',').map(Number)[0] + r.split(',').map(Number)[2] <= 64))
+  })
+}
+
+test('the lectern book rests on the jar top: its underside centre, tilted, lands on the top surface centre (y 16 tilted about 8,8)', () => {
+  const tilt = (y, z, [, oy, oz], angle) => {
+    const [c, s] = [Math.cos(angle * Math.PI / 180), Math.sin(angle * Math.PI / 180)]
+    return [(y - oy) * c - (z - oz) * s + oy, (y - oy) * s + (z - oz) * c + oz]
+  }
+  const cover = bookOf('lectern', { facing: 'north', has_book: true })[0]
+  const [y, z] = tilt(cover.from[1], (cover.from[2] + cover.to[2]) / 2, cover.rotation.origin, cover.rotation.angle)
+  const [topY, topZ] = tilt(16, 9.5, [8, 8, 8], -22.5)
+  assert.ok(Math.abs(y - topY) < 1e-3 && Math.abs(z - topZ) < 1e-3, `${y},${z} vs ${topY},${topZ}`)
+})
+
+for (const facing of FACINGS) {
+  test(`lectern book facing ${facing} lies on the top's 22.5 degree slope, inside the voxel`, () => {
+    const elements = bookOf('lectern', { facing, has_book: true })
+    for (const e of elements) {
+      assert.equal(e.rotation.angle ** 2, 22.5 ** 2)
+      assert.ok(e.from.every((v, i) => v >= 0 && e.to[i] <= 16), `${e.from} ${e.to}`)
+    }
+  })
+}
+
 test('the same state gives the same elements', () => {
   assert.deepEqual(get('chest', { facing: 'east', type: 'single', waterlogged: true }), get('chest', { facing: 'east', type: 'single', waterlogged: false }))
 })
@@ -301,6 +353,14 @@ test('bell: the body top and rim top are lit metal', { skip }, () => {
   const [lip, body] = get('bell', { attachment: 'floor', facing: 'north' }).sort((a, b) => a.from[1] - b.from[1])
   assert.ok(lumOf(body.faces.up.texture) > 100)
   assert.ok(lumOf(lip.faces.up.texture) > 60)
+})
+test('book: the covers are brown leather and the pages cream, never the sheet\'s black', { skip }, () => {
+  const book = get('enchanting_table', {})
+  const [left, right] = book.slice(0, 2)
+  const brown = ([r, g, b]) => r > g && g > b && r > 100 && r < 270 && b < 80
+  const cream = ([r, g, b]) => r > 180 && g > 170 && b > 120
+  for (const cover of [left, right]) for (const dir of ['up', 'down']) assert.ok(pixelsOf(cover.faces[dir].texture).filter(brown).length >= 30, `${dir} ${cover.faces[dir].texture}`)
+  for (const pages of book.slice(3)) assert.ok(pixelsOf(pages.faces.up.texture).filter(cream).length >= 36, pages.faces.up.texture)
 })
 test('pot: the neck band and the side tile have colour, not a transparent or black region', { skip }, () => {
   const [body, neck] = get('decorated_pot', { facing: 'north' }).sort((a, b) => a.from[1] - b.from[1])

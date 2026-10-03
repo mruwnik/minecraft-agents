@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import zlib from 'node:zlib'
 import { createViewServer } from '../tools/view/serve.mjs'
 import { makeChunkClass } from '../tools/view/columns.mjs'
+import { findClientJar } from '../tools/view/block-scan.mjs'
 
 const realTextures = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-'))
@@ -284,11 +285,11 @@ const sand = Chunk.registry.blocksByName.suspicious_sand.defaultState
 const gravel = Chunk.registry.blocksByName.suspicious_gravel.defaultState
 
 // the column file format v1 around a column holding `blocks`: [[x, y, z, stateId]...] (local x and z)
-const columnFile = ({ cx, cz, body, blocks }) => {
-  const column = new Chunk({ minY: -64, worldHeight: 384 })
+const columnFile = ({ cx, cz, body, blocks, version = MC_VERSION }) => {
+  const column = new (makeChunkClass(version))({ minY: -64, worldHeight: 384 })
   blocks.forEach(([x, y, z, id]) => column.setBlockStateId({ x, y, z }, id))
   const sections = column.dump()
-  const header = Buffer.from(JSON.stringify({ v: 1, x: cx, z: cz, t: 1, body, mcVersion: MC_VERSION, minY: -64, worldHeight: 384, parts: [{ name: 'sections', len: sections.length }] }))
+  const header = Buffer.from(JSON.stringify({ v: 1, x: cx, z: cz, t: 1, body, mcVersion: version, minY: -64, worldHeight: 384, parts: [{ name: 'sections', len: sections.length }] }))
   const length = Buffer.alloc(4)
   length.writeUInt32LE(header.length)
   return zlib.deflateSync(Buffer.concat([length, header, sections]))
@@ -395,6 +396,38 @@ test('an unknown biome name is listed, gets plains colours, and shows in the blo
   assert.ok(names.includes('biome-registry'))
   assert.equal(names.filter(n => n === 'biome-registry').length, 1)
 })
+
+// per-block tint-approximate records need model data, so these use a server with the real client jar (skipped without one)
+const tintWorld = (world, biomes) => {
+  const dir = path.join(stateDir, 'worlds', world)
+  fs.mkdirSync(path.join(dir, 'chunks'), { recursive: true })
+  const grass = makeChunkClass('26.1').registry.blocksByName.short_grass.defaultState
+  fs.writeFileSync(path.join(dir, 'chunks', '0.0.bin'), columnFile({ cx: 0, cz: 0, body: 'Ann', blocks: [[1, 70, 1, grass]], version: '26.1' }))
+  if (biomes) fs.writeFileSync(path.join(dir, 'biomes.json'), JSON.stringify(biomes))
+}
+const blockTints = body => body.records.filter(r => r.reason === 'tint-approximate' && !/^biome/.test(r.name))
+const usable = { v: 1, mcVersion: '26.1', biomes: [{ id: 0, name: 'plains' }] }
+const tooMany = { v: 1, mcVersion: '26.1', biomes: Array.from({ length: 256 }, (_, id) => ({ id, name: 'plains' })) }
+const jarPath = findClientJar()
+
+for (const [label, world, biomes, expected] of [
+  ['usable biomes.json: no per-block tint-approximate records', 'tint-ok', usable, false],
+  ['no biomes.json: per-block tint-approximate records stay', 'tint-none', null, true],
+  ['too many biomes: per-block tint-approximate records stay', 'tint-big', tooMany, true]
+]) {
+  test(`/block-issues, ${label}`, { skip: !jarPath }, async () => {
+    tintWorld(world, biomes)
+    const jarServer = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 50, blockJar: jarPath, blockSweepMs: 100, blockWriteMs: 100 })
+    await new Promise(resolve => jarServer.listen(0, '127.0.0.1', resolve))
+    try {
+      const body = await (await fetch(`http://127.0.0.1:${jarServer.address().port}/block-issues/${world}`)).json()
+      assert.equal(blockTints(body).length > 0, expected)
+    } finally {
+      jarServer.closeAllConnections()
+      await new Promise(resolve => jarServer.close(resolve))
+    }
+  })
+}
 
 for (const p of ['/biomes/nope.json', '/biomes/..%2Fw1.json', '/biomes/a.b.json']) {
   test(`GET ${p} is 404`, async () => assert.equal((await get(p)).status, 404))

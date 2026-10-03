@@ -15,7 +15,7 @@ import { DYE_COLORS } from './tints.mjs'
 
 export { DYE_COLORS }
 export const ENTITY_PREFIX = 'entity/'
-export const ADDS_TO_MODEL = new Set(['bell']) // the jar model already draws these blocks' frame: the entity part is added to it
+export const ADDS_TO_MODEL = new Set(['bell', 'lectern', 'enchanting_table']) // the jar model already draws these blocks' frame: the entity part is added to it
 
 const WOODS = new Set(['acacia', 'bamboo', 'birch', 'cherry', 'crimson', 'dark_oak', 'jungle', 'mangrove', 'oak', 'pale_oak', 'spruce', 'warped'])
 const FACING_Y = { north: 0, east: 90, south: 180, west: 270 }
@@ -243,6 +243,52 @@ const bellElements = () => {
   ], {})
 }
 
+// ---------------------------------------------------------------- books (the lectern's and the enchanting table's)
+
+// The vanilla book model on enchanting_table_book.png (64x32), open, spine along z: two 6x10 covers either side of a 2 wide seam, and
+// 5x8x1 pages on them. In the game the table's book floats and flips and the lectern's lies open on its slope; both are static here.
+// Covers and pages come from the sheet's regions: left cover (0,0) outside / (6,0) inside, right cover (16,0) / (22,0), seam (12,0),
+// left pages (0,10), right pages (12,10).
+const BOOK_SHEET = 'enchantment/enchanting_table_book'
+const bookTexture = region => texture(BOOK_SHEET, region)
+
+const bookParts = (y0, zc) => {
+  const cover = ([x0, x1], outside, inside) => part([x0, y0, zc - 5], [x1, y0 + 0.25, zc + 5], { up: bookTexture(inside), down: bookTexture(outside), ...on(SIDES, bookTexture(outside)) })
+  const pages = ([x0, x1], u) => {
+    const box = net({ u, v: 10, w: 5, h: 8, d: 1 })
+    return part([x0, y0 + 0.25, zc - 4], [x1, y0 + 1.25, zc + 4], { up: texture(BOOK_SHEET, box.north), down: texture(BOOK_SHEET, box.south), north: texture(BOOK_SHEET, box.up), south: texture(BOOK_SHEET, box.up), east: texture(BOOK_SHEET, box.east), west: texture(BOOK_SHEET, box.west) })
+  }
+  const seam = bookTexture([12, 0, 2, 10])
+  return [
+    cover([1, 7], [0, 0, 6, 10], [6, 0, 6, 10]),
+    cover([9, 15], [16, 0, 6, 10], [22, 0, 6, 10]),
+    part([7, y0, zc - 5], [9, y0 + 0.5, zc + 5], { up: seam, down: seam, ...on(SIDES, seam) }),
+    pages([2, 7], 0),
+    pages([9, 14], 12)
+  ]
+}
+
+const enchantingTableBook = () => posed(bookParts(13, 8), {})
+
+// The lectern's top is the jar element 12..16 high, tilted -22.5 degrees about x around (8, 8, 8). The book lies on its top surface (y 16
+// before the tilt) but a baked element must stay inside the voxel, so it is stored 1.5 lower and tilted about the origin that puts it at
+// the same place: R(p - O') + O' = R(p + d - O) + O  =>  O' = O + (I - R)^-1 R d  (in the y-z plane).
+const LECTERN_TILT = -22.5
+const LECTERN_LIFT = 1.5
+const liftedTiltOrigin = (angle, lift) => {
+  const [c, s] = [Math.cos(angle * Math.PI / 180), Math.sin(angle * Math.PI / 180)]
+  const a = 1 - c // I - R = [[a, s], [-s, a]], inverse [[a, -s], [s, a]] / (a^2 + s^2)
+  const det = a * a + s * s
+  const [ry, rz] = [c * lift, s * lift] // R d, with d = (lift, 0)
+  return [8 + (a * ry - s * rz) / det, 8 + (s * ry + a * rz) / det]
+}
+
+const lecternBook = props => {
+  const [oy, oz] = liftedTiltOrigin(LECTERN_TILT, LECTERN_LIFT)
+  const tilt = { rotation: { origin: [8, oy, oz], axis: 'x', angle: LECTERN_TILT, rescale: false } }
+  return yawed(bookParts(16 - LECTERN_LIFT, 9.5).map(e => ({ ...e, ...tilt })), FACING_Y[props.facing ?? 'north'])
+}
+
 // ---------------------------------------------------------------- the dispatch
 
 const SIGN = /^(.+?)_(wall_hanging_sign|wall_sign|hanging_sign|sign)$/
@@ -255,6 +301,8 @@ const build = (name, props) => {
   if (name in CHEST_SHEETS || name.replace(/^waxed_/, '') in CHEST_SHEETS) return chestElements(name, props)
   if (name === 'decorated_pot') return potElements()
   if (name === 'bell') return bellElements()
+  if (name === 'enchanting_table') return enchantingTableBook()
+  if (name === 'lectern') return props.has_book === true ? lecternBook(props) : null
   const sign = SIGN.exec(name)
   if (sign && WOODS.has(sign[1])) return signElements(sign[1], sign[2], props)
   const banner = BANNER.exec(name)
@@ -268,7 +316,7 @@ const build = (name, props) => {
   return null
 }
 
-const POSE_PROPS = ['facing', 'type', 'part', 'rotation', 'attached']
+const POSE_PROPS = ['facing', 'type', 'part', 'rotation', 'attached', 'has_book']
 const cache = new Map()
 
 // The baked elements of this block state, or null when it is not one of the block entities drawn here. Equal for states that differ

@@ -302,10 +302,10 @@ test('a block whose models have no elements is a block-entity, not a shape misma
   assert.equal(records[0].model, 'block/chest')
 })
 
-test('blocks with geometry whose book or items an entity renderer adds are a milder block-entity', () => {
-  const lectern = modelsWith({ lectern: { variants: { '': { model: 'minecraft:block/lectern' } } } }, { 'block/lectern': { elements: [FULL_ELEMENT, { from: [4, 0, 4], to: [12, 16, 12], faces: {} }] } })
+test('blocks with geometry whose items an entity renderer adds are a milder block-entity', () => {
+  const campfire = modelsWith({ campfire: { variants: { '': { model: 'minecraft:block/campfire' } } } }, { 'block/campfire': { elements: [FULL_ELEMENT, { from: [4, 0, 4], to: [12, 16, 12], faces: {} }] } })
   const box = { ...CUBE_MATERIAL, kind: 'box', box: [0, 0, 0, 16, 14, 16] }
-  const records = classify({ defs: [['lectern']], material: box, models: lectern })
+  const records = classify({ defs: [['campfire']], material: box, models: campfire })
   assert.deepEqual(records.filter(r => r.reason === 'block-entity').map(r => r.severity), ['approximate'])
 })
 
@@ -370,7 +370,8 @@ test('the real 26.1 table classifies vanilla blocks sensibly', { skip: !haveReal
   assert.ok(!flagged('redstone_wire').has('model-over-cap') && !flagged('pink_petals').has('model-over-cap'))
   assert.ok(flagged('pink_petals').has('element-outside-voxel'))
   // drawn from the entity models: no longer block-entity; a block entity with no model yet still is
-  for (const name of ['chest', 'ender_chest', 'red_bed', 'oak_sign', 'oak_hanging_sign', 'white_banner', 'skeleton_skull', 'dragon_wall_head', 'shulker_box', 'decorated_pot', 'bell']) assert.ok(!flagged(name).has('block-entity'), name)
+  for (const name of ['chest', 'ender_chest', 'red_bed', 'oak_sign', 'oak_hanging_sign', 'white_banner', 'skeleton_skull', 'dragon_wall_head', 'shulker_box', 'decorated_pot', 'bell', 'lectern', 'enchanting_table']) assert.ok(!flagged(name).has('block-entity'), name)
+  assert.ok(flagged('campfire').has('block-entity'))
   assert.ok(flagged('conduit').has('block-entity'))
 })
 
