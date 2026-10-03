@@ -7,7 +7,9 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [engine.triggers.stuck :as stuck]
+            [jobs.maintenance.unstick :as unstick]))
 
 (def t0 1000000)
 
@@ -211,3 +213,57 @@
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (filter #(= :unstick.failed (:kind %)) @seen))))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) :stuck)))))))))
+
+;; ---------------------------------------------------------------- quiet period
+
+(deftest stuck-trigger-is-quiet-after-a-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {})]
+          (mem/write! (:store eng) :stuck {:pos at5} {:cap 10 :ttl 3600000})
+          (reset! clock (+ t0 1000))
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (reset! clock (+ t0 60000))
+          (is (false? (stuck-now? eng)) "fresh bad moves, but the give-up was a minute ago")
+          (reset! clock (+ t0 300001))
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (is (true? (stuck-now? eng)) "quiet period over")
+          (is (false? (stuck-now? eng {:quiet-ms 600000})) ":quiet-ms is an argument"))))))
+
+(deftest unstick-has-a-quiet-ms-arg
+  (is (= (:quiet-ms stuck/defaults) (get-in unstick/args [:quiet-ms :default])))
+  (is (= 300000 (:quiet-ms stuck/defaults))))
+
+(defn call-names [p] (mapv #(.-name %) (.-calls (.-world p))))
+
+(defn dig-setup [inventory]
+  (setup {:self {:pos at5} :blocks (merge pit {"5,66,0" "stone"}) :inventory inventory}))
+
+(defn ^:async run-to-dig! [eng p]
+  (block-moveTo! p)
+  (seed-moved! eng (repeat 4 (bad-move)))
+  (core/submit! eng '(jobs.maintenance.unstick) {})
+  (await (core/tick! eng))
+  (await (core/tick! eng)))
+
+(deftest unstick-equips-the-best-pickaxe-before-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (dig-setup [{:name "stone_pickaxe" :count 1} {:name "iron_pickaxe" :count 1}
+                                          {:name "wooden_pickaxe" :count 1}])]
+          (await (run-to-dig! eng p))
+          (is (= [{:item "iron_pickaxe" :dest "hand"}] (call-args p "equip")))
+          (is (= 3 (count (calls p "dig"))))
+          (let [names (call-names p)]
+            (is (< (.indexOf names "equip") (.indexOf names "dig")) "equip precedes the digs")))))))
+
+(deftest unstick-digs-as-before-with-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (dig-setup [{:name "cobblestone" :count 3}])]
+          (await (run-to-dig! eng p))
+          (is (= [] (calls p "equip")))
+          (is (= 3 (count (calls p "dig")))))))))

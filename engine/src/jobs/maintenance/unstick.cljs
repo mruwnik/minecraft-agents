@@ -25,12 +25,14 @@
   too: the good one that ends the spell becomes the newest of the last :n, so
   the trigger is false at once and cannot re-fire until :n new bad moves
   happen. On failure the :stuck entry makes the trigger ignore every move
-  before it, so the failed attempts do not re-fire it either.")
+  before it, and stay quiet for :quiet-ms (5 min), so neither the failed
+  attempts nor a body still blocked under the resumed job re-fire it.")
 
 (def args
   {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}
    :min-move {:doc "blocks a move must cover to count as progress" :default (:min-move stuck/defaults)}
    :window-ms {:doc "the bad moves must all fall within this many ms" :default (:window-ms stuck/defaults)}
+   :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
    :max-attempts {:doc "attempts before giving up with unstick.failed" :default 4}})
 
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
@@ -42,6 +44,8 @@
 (def liquid-names #{"water" "lava"})
 
 (def falling-names #{"sand" "red_sand" "gravel"})
+
+(def pickaxes ["netherite_pickaxe" "diamond_pickaxe" "iron_pickaxe" "stone_pickaxe" "golden_pickaxe" "wooden_pickaxe"])
 
 (def pillar-items ["cobblestone" "dirt" "stone" "cobbled_deepslate" "netherrack" "andesite" "diorite" "granite"])
 
@@ -129,10 +133,16 @@
   [c pos]
   (await (ctx/act c :dig (clj->js {:pos pos}))))
 
+(defn best-pickaxe [c]
+  (let [have (set (map :name (u/inventory (:primitives c))))]
+    (first (filter have pickaxes))))
+
 (defn ^:async dig-ahead!
   "Attempt 2: dig the solid blocks in front at feet and head height, and the
   block above the head when it is solid and the head cell is open (a gap one
-  block too low to jump out of). Sand and gravel overhead are left alone."
+  block too low to jump out of). Sand and gravel overhead are left alone. The
+  best pickaxe carried is equipped first, as a pillar block in hand digs far
+  too slowly."
   [c]
   (let [here (cell (u/self-pos c))
         front (some->> (forward c here) (shift here))
@@ -141,6 +151,8 @@
                         (when (and (solid? c above) (open? c (up here 1))
                                    (not (gravity-or-liquid? (block-name c above))))
                           [above]))]
+    (when-let [pick (and (seq targets) (best-pickaxe c))]
+      (await (ctx/act c :equip (clj->js {:item pick :dest "hand"}))))
     (loop [ts targets]
       (when-let [t (first ts)]
         (await (dig! c t))
