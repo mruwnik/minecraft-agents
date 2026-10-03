@@ -167,7 +167,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
 | `look(token, a)` | `{pos}` or `{yaw, pitch}` | `ok` | 1 s | none needed |
 | `wait(token, a)` | `{ms}`, clamped to 0..10000 | `ok` | `ms` (scaled by `timeScale`) | none needed; a cut rejects at once |
-| `swim(token, a)` | `{ms = 3000}`, at most 10000 | `surfaced` (head out of water), `timeout` | `ms`, at most 10 s | jump released |
+| `swim(token, a)` | `{ms = 3000, toward?}`, at most 10000; `toward` is `{x, y, z}` | `surfaced` (head out of water), `landed` (with `toward`), `timeout` | `ms`, at most 10 s | jump and forward released |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
 Extra fields on the result:
@@ -227,7 +227,9 @@ arriving meanwhile share it), emits `online` and runs on the new bot. If every t
 reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
 resolves `disconnected` at once. A stale token still rejects with `cut` first.
 
-`swim` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
+With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or are within 1 block of the target, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. The fake lands the body on the target when it is within 6 blocks and standable, else times out.
+
+`swim` without `toward` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
 pathfinder has no swim-up move and `moveTo` cannot surface a submerged body. It releases jump on every exit:
 surfaced, the bound, a cut, an error. A body whose head is already out returns `surfaced` at once without pressing
 anything. Bad `ms` (not a number, zero or negative) rejects with `bad-args`.

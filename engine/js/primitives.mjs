@@ -285,19 +285,43 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // Holds jump until the head is out of the water. The pathfinder has no swim-up move, so a submerged body cannot
   // surface with moveTo. Jump is released on every exit: surfaced, timeout, cut, error.
+  // Standing: the feet cell holds no water and the cell under it is a full block.
+  const standing = () => {
+    const feet = cell(here())
+    return bot.blockAt(vec(feet))?.name !== 'water' && bot.blockAt(vec({ ...feet, y: feet.y - 1 }))?.boundingBox === 'block'
+  }
+
   const swim = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
+    need(a.toward === undefined || a.toward === null || isPos(a.toward), 'swim toward needs {x, y, z}')
     const ms = Math.min(a.ms ?? SWIM_DEFAULT_MS, SWIM_MAX_MS)
+    const toward = a.toward ?? null
     const before = oxygenNow()
     const result = status => ({ status, oxygen: { before, after: oxygenNow() } })
     return act(token, { boundS: ms / 1000, onTimeout: () => result('timeout') }, async ctx => {
-      let pressed = false
-      const release = () => { if (pressed) { pressed = false; bot.setControlState('jump', false) } }
+      const pressed = new Set()
+      const press = control => { if (!pressed.has(control)) { pressed.add(control); bot.setControlState(control, true) } }
+      const release = () => { for (const control of [...pressed]) { pressed.delete(control); bot.setControlState(control, false) } }
       ctx.onAbort(release)
       try {
+        if (toward) {
+          // climb out toward the target: the pathfinder has no move from floating feet onto a rim just above
+          const there = center(cell(toward))
+          const arrived = () => standing() || dist(here(), there) <= 1
+          if (arrived()) return result('landed')
+          await bot.lookAt(vec(there), true)
+          ctx.alive()
+          while (!arrived()) {
+            press('jump')
+            press('forward')
+            await sleepMs(POLL_MS * timeScale)
+            ctx.alive()
+          }
+          return result('landed')
+        }
         while (headUnderwater()) {
-          if (!pressed) { pressed = true; bot.setControlState('jump', true) }
+          press('jump')
           await sleepMs(POLL_MS * timeScale)
           ctx.alive()
         }

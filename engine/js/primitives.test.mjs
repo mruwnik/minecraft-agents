@@ -851,3 +851,49 @@ for (const event of ['death', 'respawn']) {
     assert.ok(names(bot).includes('clearControlStates'))
   })
 }
+
+// swim toward a target: climb out onto a rim the pathfinder cannot reach
+
+const rim = at(3, 65, 0)
+const pool = () => ({ '0,63,0': 'stone', '0,64,0': 'water', '0,65,0': 'water' })
+
+test('swim toward: looks at the target, holds jump and forward until the feet stand on solid ground, then releases both', async () => {
+  const blocks = pool()
+  const { bot, p } = rig({ blocks })
+  setTimeout(() => { delete blocks['0,64,0'] }, 5)
+  const result = await p.swim('t1', { ms: 3000, toward: rim })
+  assert.equal(result.status, 'landed')
+  assert.deepEqual(names(bot).filter(n => n === 'lookAt'), ['lookAt'])
+  assert.deepEqual(controls(bot), [['jump', true], ['forward', true], ['jump', false], ['forward', false]])
+})
+
+test('swim toward: within a block of the target counts as landed', async () => {
+  const { bot, p } = rig({ blocks: pool() })
+  setTimeout(() => { bot.entity.position = new Vec3(3.2, 65, 0.3) }, 5)
+  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'landed')
+})
+
+test('swim toward: already standing on solid ground lands at once without pressing anything', async () => {
+  const { bot, p } = rig({ blocks: { '0,63,0': 'stone' } })
+  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'landed')
+  assert.deepEqual(controls(bot), [])
+})
+
+test('swim toward: stuck in the water it times out and releases both controls', async () => {
+  const { bot, p } = rig({ blocks: pool() })
+  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'timeout')
+  assert.deepEqual(controls(bot).slice(-2), [['jump', false], ['forward', false]])
+})
+
+test('swim toward: a cut releases both controls', async () => {
+  const { bot, p } = rig({ blocks: pool() })
+  const call = p.swim('t1', { ms: 3000, toward: rim })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  p.setOwner('t2')
+  await assert.rejects(call, cutError)
+  assert.deepEqual(controls(bot).slice(-2), [['jump', false], ['forward', false]])
+})
+
+test('swim toward with a bad target rejects with bad-args', async () => {
+  await assert.rejects(rig(world).p.swim('t1', { toward: { x: 1 } }), err => err.code === 'bad-args')
+})

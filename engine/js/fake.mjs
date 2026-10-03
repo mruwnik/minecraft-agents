@@ -223,13 +223,20 @@ function defaultActs (s) {
     },
 
     // Rises to the top water cell above the body and refills oxygen; swimFails makes it time out unmoved.
-    async swim () {
+    async swim (token, { toward } = {}) {
       const before = s.self.oxygen
       const head = () => blockName({ ...s.self.pos, y: s.self.pos.y + 1 })
       if (s.swimFails) return { status: 'timeout', oxygen: { before, after: before } }
       while (head() === 'water') s.self.pos = { ...s.self.pos, y: s.self.pos.y + 1 }
       s.self.oxygen = 20
-      return { status: 'surfaced', oxygen: { before, after: 20 } }
+      if (!toward) return { status: 'surfaced', oxygen: { before, after: 20 } }
+      // toward: lands on the target when it is within 6 blocks and standable (free cell over a solid, dry block)
+      const under = blockName({ ...toward, y: toward.y - 1 })
+      const standable = blockName(toward) === 'air' && under !== 'air' && under !== 'water' && under !== 'lava'
+      if (!standable || dist(s.self.pos, toward) > 6) return { status: 'timeout', oxygen: { before, after: 20 } }
+      s.self.pos = { ...toward }
+      settle()
+      return { status: 'landed', oxygen: { before, after: 20 } }
     },
 
     async look () {

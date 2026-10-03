@@ -385,3 +385,18 @@ for (const name of ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', '
     assert.equal(p.blockAt(at(2, 64, 0)).name, 'water')
   })
 }
+
+test('swim toward moves the body onto a standable target within 6 blocks and lands', async () => {
+  const p = owned({ ...sea, blocks: { ...sea.blocks, '3,64,0': 'stone' } })
+  const r = await p.swim('t1', { ms: 3000, toward: at(3, 65, 0) })
+  assert.equal(r.status, 'landed')
+  assert.deepEqual(p.self().pos, at(3, 65, 0))
+})
+
+test('swim toward a target that is far, in water or not given leaves the body to surface only', async () => {
+  const far = owned({ ...sea, blocks: { ...sea.blocks, '9,64,0': 'stone' } })
+  assert.equal((await far.swim('t1', { ms: 3000, toward: at(9, 65, 0) })).status, 'timeout')
+  assert.deepEqual(far.self().pos, at(0, 63, 0))
+  const wet = owned({ ...sea, blocks: { ...sea.blocks, '3,64,0': 'water' } })
+  assert.equal((await wet.swim('t1', { ms: 3000, toward: at(3, 64, 0) })).status, 'timeout')
+})
