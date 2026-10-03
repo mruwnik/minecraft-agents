@@ -24,8 +24,9 @@
   (waiting in 1 s steps) and every target seen was killed or given up on,
   :lost when some was neither, :gave-up when every target present has been
   given up on, :timeout after :timeout-s from the first round (warn
-  attack.timeout), or :absent when no target is present at the first round.
-  :absent :done (the default) lets the job start and end at once with :absent
+  attack.timeout), or :absent when no target is present, after a 2 s grace for the
+  world's entities to arrive.
+  :absent :done (the default) lets the job start and end with :absent
   - (jobs.combat.attack {:targets [123 \"zombie\"]}) is a one-shot order;
   :absent :wait makes the check decline until a target is present -
   (repeat (jobs.combat.attack {:targets \"zombie\" :absent :wait})) is a
@@ -46,9 +47,12 @@
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :default 4}
    :max-hits {:doc "hits without a kill before a target is given up on" :default 40}
    :walk-timeout-s {:doc "bound of one walk towards a target" :default 5}
-   :absent {:doc ":done ends the job at once, reason :absent, when no target is present at the first round; :wait makes the check decline until one is" :default :done}})
+   :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :default :done}})
 
 (def reach 3)
+(def absent-grace-ms
+  "How long a job that has seen nothing waits for the world's entities to arrive."
+  2000)
 
 (defn target-list
   "targets as a vector: nil is empty, a bare id or name is one target."
@@ -212,25 +216,26 @@
     (fail! c target))
   :continue)
 
-(defn ^:async run-round! [c]
+(defn ^:async wait! [c ms]
+  (await (ctx/act c :wait #js {:ms ms}))
+  :continue)
+
+(defn ^:async round [c]
   (let [now (ctx/now c)
         {:keys [timeout-s lost-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
-    (let [m (ctx/mem c)
+    (let [{:keys [started seen last-seen]} (ctx/mem c)
           targets (candidates c)]
       (cond
-        (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout)
+        (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
-        (empty? targets) (if (>= (- now (or (:last-seen m) (:started m))) (* 1000 lost-s))
+        (and (empty? targets) (empty? seen)) (if (>= (- now started) absent-grace-ms)
+                                               (finish! c :absent)
+                                               (await (wait! c 500)))
+        (empty? targets) (if (>= (- now (or last-seen started)) (* 1000 lost-s))
                            (finish! c (settled-reason c))
-                           (do (await (ctx/act c :wait #js {:ms 1000}))
-                               :continue))
+                           (await (wait! c 1000)))
         :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
                   (if (within-gap? c)
                     :continue
                     (await (engage! c (first targets)))))))))
-
-(defn ^:async round [c]
-  (if (and (nil? (:started (ctx/mem c))) (empty? (candidates c)))
-    (finish! c :absent)
-    (await (run-round! c))))

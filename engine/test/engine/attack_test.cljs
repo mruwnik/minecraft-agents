@@ -300,17 +300,34 @@
           (await (core/tick! eng))
           (is (= :lost (:reason (done-event s)))))))))
 
-(deftest an-absent-target-ends-the-job-at-once-by-default
+(deftest an-absent-target-ends-the-job-after-the-grace
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [targets [[123] ["skeleton"] ["Fake"]]]
           (let [{:keys [p] :as s} (await (h/first-round (spec {:targets targets})
                                                         {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]}))]
+            (await (run-ticks s 1 1000))
+            (await (run-ticks s 1 900))
+            (is (not (finished? s)) (str targets " still inside the 2 s grace"))
+            (await (run-ticks s 1 200))
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (= 1 (count (events-of s :attack.done))) (str targets))
-            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "look" "attack" "wait"]) (str targets))))))))
+            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "look" "attack"]) (str targets))
+            (is (pos? (count (h/calls p "wait"))) (str targets))))))))
+
+(deftest a-target-arriving-within-the-grace-is_attacked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (h/first-round (spec {:targets ["zombie"]}) {:inventory h/sword}))]
+          (.push (.-entities (.-state (.-world p)))
+                 #js {:id 7 :name "zombie" :kind "hostile" :health 20 :pos (tu/pos 2 64 0)})
+          (await (run-ticks s 1 1000))
+          (is (= [7] (attacked s)))
+          (is (not (finished? s)))
+          (is (nil? (done-event s))))))))
 
 (deftest absent-wait-declines-until-a-target-turns-up
   (async done

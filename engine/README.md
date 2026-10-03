@@ -829,7 +829,7 @@ after three the job emits a warn and ends.
   even respawned. Done with
   `:cleared` (nothing in `:radius` for `:lost-s`, waiting in 1 s steps, and every target ever seen was killed or
   given up on), `:lost` (the same, but one was neither, e.g. it left or vanished), `:gave-up`, `:timeout`, or
-  `:absent` (no target at the first round). `:absent :done` (default) starts the job anyway and ends it at once:
+  `:absent` (no target, after a 2 s grace for the world's entities to arrive). `:absent :done` (default) starts the job anyway and ends it:
   `(jobs.combat.attack {:targets [123 "zombie"]})` is a one-shot order. `:absent :wait` makes the check decline until
   a target is present: `(repeat (jobs.combat.attack {:targets "zombie" :absent :wait}))` is a standing guard.
   Creepers get no special handling: they are attacked only when listed, and the body does not back off. It does not
