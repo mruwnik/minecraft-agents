@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>View hub demo</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 8px; background: #111; color: #e8e8e8; font: 11px/1.35 monospace; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+  figure { margin: 0; }
+  canvas { display: block; width: 100%; background: #1a1a1d; }
+  figcaption { white-space: pre; padding-top: 2px; }
+  #summary { white-space: pre; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div id="summary">starting...</div>
+<div id="grid"></div>
+<script type="module">
+// One 2D canvas per agent from /agents (offline ones too), all drawn by one hub. ?w=&h= card size, ?fps=, ?radius=, ?n= most agents.
+import { createViewHub } from './hub.mjs'
+
+const params = new URLSearchParams(location.search)
+const number = (name, fallback) => Number(params.get(name)) > 0 ? Number(params.get(name)) : fallback
+const width = number('w', 320)
+const height = number('h', 180)
+const agents = (await fetch('/agents').then(r => r.json()).catch(() => [])).slice(0, number('n', 12))
+const hub = createViewHub({ maxScenes: Math.max(12, agents.length), fps: number('fps', 6) })
+const grid = document.getElementById('grid')
+
+const cards = agents.map(agent => {
+  const figure = document.createElement('figure')
+  const canvas = document.createElement('canvas')
+  const caption = document.createElement('figcaption')
+  figure.append(canvas, caption)
+  grid.append(figure)
+  const scene = hub.addScene({ agent: agent.name, radius: number('radius', 2) })
+  scene.attach(canvas, { width, height })
+  return { agent, scene, caption }
+})
+
+const refresh = () => {
+  for (const { agent, scene, caption } of cards) {
+    const s = scene.stats()
+    caption.textContent = `${agent.name} ${s.status}  fps ${s.fps}  cols ${s.loaded}/${s.wanted}${s.gpuMs === undefined ? '' : `  gpu ${s.gpuMs} ms`}`
+  }
+  const all = hub.stats()
+  document.getElementById('summary').textContent = `${all.renderer}\nframe cost p50 ${all.frameCostMs.p50?.toFixed(2)} ms  p95 ${all.frameCostMs.p95?.toFixed(2)} ms  gpu memory ${(all.memory.total / 1048576).toFixed(0)} MB`
+}
+setInterval(refresh, 500)
+
+const settled = () => cards.every(({ scene }) => scene.ready())
+window.__hub = { hub, scenes: cards.map(c => c.scene), agents, size: [width, height], stats: () => hub.stats(), probeGpu: o => hub.probeGpu({ width, height, ...o }), ready: false }
+const waitReady = setInterval(() => { if (settled()) { window.__hub.ready = true; clearInterval(waitReady) } }, 250)
+</script>
+</body>
+</html>
