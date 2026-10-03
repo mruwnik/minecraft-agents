@@ -117,18 +117,46 @@ const firstFrame = ({ width, rgba }) => {
 
 const hexColor = hex => [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16))
 
-// `name`: the texture tinted as the renderer's grass/leaf/water list says (tintOf). `name@rrggbb`: tinted by exactly that colour.
-const layerOf = (textureDir, layerName) => {
-  const [name, hex] = layerName.split('@')
-  const rgba = firstFrame(decodeTexture(fs.readFileSync(path.join(textureDir, `${name}.png`)))).slice()
-  const tint = hex ? hexColor(hex) : tintOf(name)
-  if (!tint) return mipChain(rgba)
+const tinted = (rgba, tint) => {
+  if (!tint) return rgba
   for (let i = 0; i < rgba.length; i += 4) for (let c = 0; c < 3; c++) rgba[i + c] = Math.round(rgba[i + c] * tint[c] / 255)
-  return mipChain(rgba)
+  return rgba
 }
 
-export function textureSet (textureDir, names) {
-  const layers = names.map(name => layerOf(textureDir, name))
+// A region (x, y, w, h in sheet pixels) of a decoded sheet resampled, nearest, to one 16x16 layer
+export const cropRegion = ({ width, height, rgba }, [x, y, w, h]) => {
+  const out = new Uint8Array(SIZE * SIZE * 4)
+  for (let j = 0; j < SIZE; j++) {
+    for (let i = 0; i < SIZE; i++) {
+      const sx = Math.min(width - 1, x + Math.floor((i + 0.5) * w / SIZE))
+      const sy = Math.min(height - 1, y + Math.floor((j + 0.5) * h / SIZE))
+      out.set(rgba.subarray((sy * width + sx) * 4, (sy * width + sx) * 4 + 4), (j * SIZE + i) * 4)
+    }
+  }
+  return out
+}
+
+// `entity/<sheet>#x,y,w,h[@rrggbb]`: a region of an entity sheet in the jar (materials.mjs hands the sheet reader over), see block-entity-models.mjs
+export const parseEntityLayer = layerName => {
+  const [, sheet, region, hex] = /^(entity\/[^#]+)#([\d,]+)(?:@(\w+))?$/.exec(layerName)
+  return { sheet, region: region.split(',').map(Number), hex }
+}
+export const isEntityLayer = layerName => layerName.startsWith('entity/')
+
+// `name`: the texture tinted as the renderer's grass/leaf/water list says (tintOf). `name@rrggbb`: tinted by exactly that colour.
+const layerOf = (textureDir, layerName, sheet) => {
+  if (isEntityLayer(layerName)) {
+    const { sheet: sheetName, region, hex } = parseEntityLayer(layerName)
+    return mipChain(tinted(cropRegion(sheet(sheetName), region), hex ? hexColor(hex) : null))
+  }
+  const [name, hex] = layerName.split('@')
+  const rgba = firstFrame(decodeTexture(fs.readFileSync(path.join(textureDir, `${name}.png`)))).slice()
+  return mipChain(tinted(rgba, hex ? hexColor(hex) : tintOf(name)))
+}
+
+// `sheet(name)` reads an entity sheet (decoded) by its `entity/...` path
+export function textureSet (textureDir, names, { sheet } = {}) {
+  const layers = names.map(name => layerOf(textureDir, name, sheet))
   const parts = Array.from({ length: LEVELS }, (_, level) => layers.map(chain => chain[level])).flat()
   const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   parts.reduce((at, p) => { bytes.set(p, at); return at + p.length }, 0)

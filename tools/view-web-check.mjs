@@ -1,9 +1,11 @@
 // Headless pixel regression check of the browser view against a synthetic world (tools/view/fixture.mjs).
-//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--models] [--web dir]
+//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--models] [--entities] [--web dir]
 // --web: serve the page from this directory instead of tools/view/web (e.g. a copy with the shader changed, to prove a check can fail)
 // --ghost: the no-ghost check (tools/view/ghost-fixture.mjs): jump between two places that share window slots and compare with fresh loads.
 // --models: the jar-modelled blocks (tools/view/model-fixture.mjs). Each check must pass with the client jar and FAIL on the old renderer (the
 //   same page served with no jar: `counter` lines); a cubes-only world must render the same either way (the fast path is untouched).
+// --entities: the block-entity models (tools/view/entity-fixture.mjs): per type, regions that land in the wrong colour if a part is a sixteenth or two
+//   off; each type must pass with the jar and FAIL on the old renderer (a `counter` line per type).
 // Prints PASS|FAIL per check, saves screenshots to --out, exits 1 if a check fails.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -19,10 +21,11 @@ import { faceRegion } from './view/project.mjs'
 import { regionStats, luminance } from './view/stats.mjs'
 import { PLACES, AGENT as GHOST_AGENT, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
 import { decodePng, encodePng } from '../src/vision/renderer.mjs'
+import { ENTITY_REGIONS, VIEWS as ENTITY_VIEWS, WIDTH as ENTITY_WIDTH, HEIGHT as ENTITY_HEIGHT, FOV as ENTITY_FOV, AGENT as ENTITY_AGENT, writeEntityWorld } from './view/entity-fixture.mjs'
 import { MODELS, CUBES, EYE as MODEL_EYE, AGENT as MODEL_AGENT, writeModelWorld } from './view/model-fixture.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false }, models: { type: 'boolean', default: false }, web: { type: 'string' } } })
+const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false }, models: { type: 'boolean', default: false }, entities: { type: 'boolean', default: false }, web: { type: 'string' } } })
 
 const WIDTH = 640
 const HEIGHT = 360
@@ -286,6 +289,82 @@ const modelChecks = async outDir => {
   return failures
 }
 
+// ---- block-entity models ----
+
+const isBackdrop = ([r, g, b]) => g > r + 25 && g > b + 25
+const isReddish = ([r, g, b]) => r > g + 40 && r > b + 40
+const LIME_MIN = 0.85 // a background rectangle is at least this lime
+const SOLID_LIME_MAX = 0.05 // a rectangle on the object has at most this much lime
+const SEAM_MIN = 12 // luminance steps between two bands that a seam makes
+const LIGHTER_MIN = 30
+const SAME_MAX = 8
+const DARK_MIN = 0.04
+
+const entityVerdicts = {
+  lime: s => ({ ok: s.fraction(isBackdrop) >= LIME_MIN, text: `lime ${s.fraction(isBackdrop).toFixed(2)} vs >= ${LIME_MIN}` }),
+  solid: s => ({ ok: s.fraction(isBackdrop) <= SOLID_LIME_MAX, text: `lime ${s.fraction(isBackdrop).toFixed(2)} vs <= ${SOLID_LIME_MAX}` }),
+  red: s => ({ ok: s.fraction(isReddish) >= 0.85, text: `reddish ${s.fraction(isReddish).toFixed(2)} vs >= 0.85 (mean ${fmt(s.mean)})` }),
+  seam: (s, against) => ({ ok: Math.abs(lum(s) - lum(against)) >= SEAM_MIN, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)}, step >= ${SEAM_MIN}` }),
+  dark: s => ({ ok: s.fraction(([r, g, b]) => (r + g + b) / 3 < 90) >= DARK_MIN && s.std > 25, text: `dark ${s.fraction(([r, g, b]) => (r + g + b) / 3 < 90).toFixed(3)} vs >= ${DARK_MIN}, std ${s.std.toFixed(1)} vs > 25` }),
+  same: (s, against) => ({ ok: Math.abs(lum(s) - lum(against)) < SAME_MAX, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)}, step < ${SAME_MAX}` }),
+  lighter: (s, against) => ({ ok: lum(s) >= lum(against) + LIGHTER_MIN, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)} + ${LIGHTER_MIN}` })
+}
+
+const entityQuery = `agent=${ENTITY_AGENT}&radius=1&w=${ENTITY_WIDTH}&h=${ENTITY_HEIGHT}&fov=${ENTITY_FOV}&dist=64&interp=0`
+
+const shootEntities = async ({ outDir, blockJar, name, view }) => {
+  const stateDir = path.join(outDir, 'state-entities')
+  fs.rmSync(stateDir, { recursive: true, force: true })
+  writeEntityWorld(stateDir, view)
+  const { server, port } = await startServer(stateDir, blockJar)
+  try {
+    return await withPage({ url: `http://127.0.0.1:${port}/?${entityQuery}`, width: ENTITY_WIDTH, height: ENTITY_HEIGHT }, async page => {
+      await page.waitUntil('window.__view?.ready === true', 'window.__view.ready')
+      await page.evaluate(HIDE_CHROME)
+      await page.sleep(SETTLE_MS)
+      const png = await page.screenshot()
+      fs.writeFileSync(path.join(outDir, `${name}.png`), png)
+      return decodePng(png)
+    })
+  } finally {
+    server.close()
+    server.closeAllConnections?.()
+  }
+}
+
+// every region measured in the image of its own view
+const entityOutcomes = images => {
+  return ENTITY_REGIONS.map(region => {
+    const { eye, pitch } = ENTITY_VIEWS[region.view]
+    const basis = cameraBasis({ yaw: 0, pitch, fov: ENTITY_FOV })
+    const stats = face => regionStats(images[region.view], faceRegion(basis, eye, face, ENTITY_WIDTH, ENTITY_HEIGHT, 0.02))
+    return { region, ...entityVerdicts[region.expect](stats(region.face), region.against ? stats(region.against) : undefined) }
+  })
+}
+
+const shootAllViews = async (outDir, blockJar, label) => {
+  const images = {}
+  for (const view of Object.keys(ENTITY_VIEWS)) images[view] = await shootEntities({ outDir, blockJar, name: `entities-${label}-${view}`, view })
+  return images
+}
+
+const entityChecks = async outDir => {
+  let failures = 0
+  const jar = entityOutcomes(await shootAllViews(outDir, undefined, 'jar'))
+  const legacy = entityOutcomes(await shootAllViews(outDir, null, 'legacy'))
+  for (const [i, { region, ok, text }] of jar.entries()) {
+    if (!ok) failures++
+    console.log(`${ok ? 'PASS' : 'FAIL'} entities/${region.name}: ${text}${legacy[i].ok ? '' : ' (also fails on the old renderer)'}`)
+  }
+  for (const type of [...new Set(ENTITY_REGIONS.map(r => r.type))]) {
+    const failing = legacy.filter(o => o.region.type === type && !o.ok).length
+    const counter = failing > 0
+    if (!counter) failures++
+    console.log(`${counter ? 'PASS' : 'FAIL'} entities/counter: ${type} fails on the old renderer in ${failing} of ${legacy.filter(o => o.region.type === type).length} regions`)
+  }
+  return failures
+}
+
 const main = async () => {
   const outDir = values.out ? path.resolve(values.out) : fs.mkdtempSync(path.join(os.tmpdir(), 'view-check-'))
   fs.mkdirSync(outDir, { recursive: true })
@@ -310,6 +389,7 @@ const main = async () => {
     }
     if (values.ghost) failures += await ghostCheck(outDir)
     if (values.models) failures += await modelChecks(outDir)
+    if (values.entities) failures += await entityChecks(outDir)
   } finally {
     server.close()
     server.closeAllConnections?.()

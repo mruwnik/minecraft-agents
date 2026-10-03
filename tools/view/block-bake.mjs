@@ -137,7 +137,7 @@ const bakeElement = (element, textures, turns, uvlock) => {
   }
 }
 
-const bakeApply = (apply, models) => {
+export const bakeApply = (apply, models) => {
   const { elements, textures } = resolveModel(models, apply.model)
   return elements.map(element => bakeElement(element, textures, turnsOf(apply), apply.uvlock ?? false))
 }

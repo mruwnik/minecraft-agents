@@ -58,3 +58,11 @@ export const tintRef = (name, props, tintindex) => {
   const group = groupOf.get(name)
   return group ? { group, index: 0 } : null
 }
+
+// The sixteen dye colours (vanilla DyeColor texture-diffuse colours, FROM MEMORY), as hex strings: banner cloth is baked into its own
+// layer with the colour (a layer name `...@rrggbb`). They are not tint constants: the shader's constant table holds 32 colours and
+// the 23 above leave no room for 16 more.
+export const DYE_COLORS = {
+  white: 'f9fffe', orange: 'f9801d', magenta: 'c74ebd', light_blue: '3ab3da', yellow: 'fed83d', lime: '80c71f', pink: 'f38baa', gray: '474f52',
+  light_gray: '9d9d97', cyan: '169c9c', purple: '8932b8', blue: '3c44aa', brown: '835432', green: '5e7c16', red: 'b02e26', black: '1d1d21'
+}

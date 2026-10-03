@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { decodePng } from '../src/vision/renderer.mjs'
-import { mipChain, textureSet, decodeTexture } from '../tools/view/textures.mjs'
+import { mipChain, textureSet, decodeTexture, cropRegion } from '../tools/view/textures.mjs'
 
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const SIZES = [16, 8, 4, 2, 1]
@@ -114,4 +114,27 @@ test('a grey texture with a tRNS colour key is transparent where the key says (l
 test('textures without a colour key decode as decodePng does', () => {
   const buf = fs.readFileSync(path.join(textureDir, 'stone.png'))
   assert.deepEqual(decodeTexture(buf).rgba, decodePng(buf).rgba)
+})
+
+// ---- entity sheet regions ----
+
+const sheet64 = { width: 64, height: 64, rgba: (() => { const a = new Uint8Array(64 * 64 * 4); for (let i = 0; i < 4096; i++) a.set([i % 64, Math.floor(i / 64), (i * 7) % 256, 255], i * 4); return a })() }
+const pixel = (rgba, i, j) => [...rgba.subarray((j * 16 + i) * 4, (j * 16 + i) * 4 + 4)]
+
+for (const [region, cases] of [
+  [[10, 20, 16, 16], [[0, 0, [10, 20]], [15, 15, [25, 35]], [3, 7, [13, 27]]]],
+  [[8, 8, 8, 8], [[0, 0, [8, 8]], [1, 1, [8, 8]], [2, 0, [9, 8]], [15, 15, [15, 15]]]],
+  [[4, 6, 2, 4], [[0, 0, [4, 6]], [8, 0, [5, 6]], [0, 4, [4, 7]], [15, 15, [5, 9]]]]
+]) {
+  test(`cropRegion ${region} resamples nearest into 16x16`, () => {
+    const out = cropRegion(sheet64, region)
+    assert.equal(out.length, 16 * 16 * 4)
+    for (const [i, j, [x, y]] of cases) assert.deepEqual(pixel(out, i, j).slice(0, 2), [x, y])
+  })
+}
+
+test('an entity layer name crops the sheet and applies its tint', () => {
+  const set = textureSet(textureDir, ['entity/test/sheet#8,8,8,8@808080'], { sheet: () => sheet64 })
+  assert.equal(set.layers, 1)
+  assert.deepEqual([...set.bytes.subarray(0, 2)], [4, 4])
 })

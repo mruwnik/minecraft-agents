@@ -4,11 +4,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
-import { textureSet, decodeTexture, SIZE, LEVELS } from './textures.mjs'
+import { textureSet, decodeTexture, SIZE, LEVELS, isEntityLayer } from './textures.mjs'
 import { decodePng, textureCandidates, tintOf, colorOf } from '../../src/vision/renderer.mjs'
-import { findClientJar, zipEntries, entryContent } from './jar-read.mjs'
+import { findClientJar, zipEntries, entryContent, openJar } from './jar-read.mjs'
 import { loadModels } from './block-models.mjs'
 import { bakeAll, classify } from './block-bake.mjs'
+import { blockEntityElements, ADDS_TO_MODEL } from './block-entity-models.mjs'
 import { tintRef, tintTable, dryFoliageColor, APPROXIMATE_GROUPS, TINT_GROUPS } from './tints.mjs'
 import { packElementTable, FACE_DIRS, TABLE_WIDTH } from './element-table.mjs'
 
@@ -156,6 +157,14 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
   }
 
   const jar = jarPath ? readJar(jarPath, registry) : null
+  // entity sheets (block-entity-models.mjs) are read from the jar, decoded once
+  const jarFiles = jarPath ? openJar(jarPath) : null
+  const sheets = new Map()
+  const sheetPath = name => `assets/minecraft/textures/${name}.png`
+  const sheet = name => {
+    if (!sheets.has(name)) sheets.set(name, jarFiles.has(sheetPath(name)) ? decodeTexture(jarFiles.read(sheetPath(name))) : null)
+    return sheets.get(name)
+  }
   // blocks with a state that has geometry: their empty states are drawn as nothing; a block with none is a block entity
   const hasGeometry = new Set(jar ? [...jar.baked].filter(([, b]) => b.elements.length > 0).map(([id]) => Block.fromStateId(id, 0).name) : [])
   const lists = []
@@ -163,14 +172,18 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
   const stats = { overCapStates: 0 }
   // textures are untinted layers (the shader multiplies by the face's tint group); a texture the renderer's name list would tint gets an explicit white
   const faceLayer = (block, props, face) => {
+    if (face.texture && isEntityLayer(face.texture)) return { layer: sheet(face.texture.split('#')[0]) ? layerFor(face.texture) : -1, tint: 'none', tintIndex: 0, texture: face.texture, entity: true }
     if (!face.texture || !image(face.texture)) return { layer: -1, tint: 'none', tintIndex: 0, texture: face.texture }
     const ref = tintRef(block.name, props, face.tintindex)
     return { layer: layerFor(tintOf(face.texture) ? `${face.texture}@ffffff` : face.texture), tint: ref?.group ?? 'none', tintIndex: ref?.index ?? 0, texture: face.texture }
   }
   // null: the blockstate selects nothing for this state (a wall with no post and no sides), and the game draws nothing
-  const bakedMaterial = (block, props, baked, base) => {
-    if (baked.elements.length === 0 && /multipart \[\]$|no matching variant$/.test(baked.source)) return null
+  const bakedMaterial = (block, props, jarBaked, base) => {
+    if (jarBaked.elements.length === 0 && /multipart \[\]$|no matching variant$/.test(jarBaked.source)) return null
     if (WATER_LIKE.has(block.name)) return base
+    // a block entity the game draws in code: its hand-written elements stand in for (or, the bell, join) the jar model
+    const entity = jarBaked.elements.length === 0 || ADDS_TO_MODEL.has(block.name) ? blockEntityElements(block.name, props) : null
+    const baked = entity ? { ...jarBaked, elements: [...jarBaked.elements, ...entity] } : jarBaked
     if (classify(baked) === 'empty') return hasGeometry.has(block.name) ? null : base
     const resolved = baked.elements.map(element => Object.fromEntries(FACE_DIRS.filter(dir => element.faces[dir]).map(dir => [dir, faceLayer(block, props, element.faces[dir])])))
     const used = resolved.flatMap(faces => Object.values(faces))
@@ -179,9 +192,9 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
     const outside = baked.elements.some(e => e.from.some(v => v < 0) || e.to.some(v => v > 16))
     const notes = { ...(groups.length ? { tint: groups } : {}), ...(missing.length ? { noTexture: missing } : {}), ...(outside ? { outside: true } : {}) }
     const { top, side, bottom } = base
-    const common = { name: block.name, emit: base.emit, ...notes }
+    const common = { name: block.name, emit: base.emit, ...(entity ? { entity: true } : {}), ...notes }
     const colors = { top, side, bottom }
-    const flags = kind => flagsOf(block, props, kind, used.some(f => f.layer >= 0 && hasCutout(image(f.texture))), base.emit) & ~(AXIS_X | AXIS_Z)
+    const flags = kind => flagsOf(block, props, kind, used.some(f => f.layer >= 0 && !f.entity && hasCutout(image(f.texture))), base.emit) & ~(AXIS_X | AXIS_Z)
     if (baked.elements.length > ELEMENT_CAP) {
       stats.overCapStates++
       return { ...common, ...colors, kind: 'box', tex: base.tex, box: unionBox(baked.elements), flags: base.flags | OVER_CAP }
@@ -239,7 +252,7 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
     ...(jar ? { tints: jar.tints } : {}),
     ...(packed ? { elements: { width: TABLE_WIDTH, rows: packed.rows, listTexels: packed.listTexels, count: packed.elementCount, ids: packed.idCount, overCapStates: stats.overCapStates } } : {})
   }
-  return { table, textures: textureSet(textureDir, layerNames), elements: packed?.data ?? null }
+  return { table, textures: textureSet(textureDir, layerNames, { sheet }), elements: packed?.data ?? null }
 }
 
 export const materialTable = (version, textureDir, options) => textureBytes(version, textureDir, options).table

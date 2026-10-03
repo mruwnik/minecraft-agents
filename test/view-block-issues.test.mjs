@@ -369,7 +369,9 @@ test('the real 26.1 table classifies vanilla blocks sensibly', { skip: !haveReal
   assert.ok(flagged('leaf_litter').has('tint-approximate'))
   assert.ok(!flagged('redstone_wire').has('model-over-cap') && !flagged('pink_petals').has('model-over-cap'))
   assert.ok(flagged('pink_petals').has('element-outside-voxel'))
-  assert.ok(flagged('chest').has('block-entity'))
+  // drawn from the entity models: no longer block-entity; a block entity with no model yet still is
+  for (const name of ['chest', 'ender_chest', 'red_bed', 'oak_sign', 'oak_hanging_sign', 'white_banner', 'skeleton_skull', 'dragon_wall_head', 'shulker_box', 'decorated_pot', 'bell']) assert.ok(!flagged(name).has('block-entity'), name)
+  assert.ok(flagged('conduit').has('block-entity'))
 })
 
 test('every block in the from-memory colormap list exists in the 26.1 registry', () => {

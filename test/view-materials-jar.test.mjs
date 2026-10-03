@@ -74,7 +74,7 @@ test('tinted faces are untinted layers plus a tint group; the group colours trav
   assert.equal(grass.kind, 'model')
   assert.deepEqual(grass.tint, ['grass'])
   const names = build.table.textures.names
-  assert.ok(names.includes('grass_block_top@ffffff') && !names.some(n => /@(?!ffffff)/.test(n)))
+  assert.ok(names.includes('grass_block_top@ffffff') && !names.some(n => !n.startsWith('entity/') && /@(?!ffffff)/.test(n)))
   const elements = unpackList({ data: build.elements, listTexels: build.table.elements.listTexels }, [grass.elemOffset, grass.elemCount])
   assert.deepEqual(elements.map(e => [e.faces.up?.tint, e.faces.north?.tint]), [['grass', 'none'], [undefined, 'grass']])
   assert.deepEqual(build.table.tints.groups.grass, [124, 189, 107])
@@ -105,10 +105,29 @@ test('states with elements outside their voxel are noted', { skip }, () => {
   assert.equal(materialOf(build, 'stone').outside, undefined)
 })
 
-test('block entities keep the old material, exactly', { skip }, () => {
-  const [a, b] = [materialOf(build, 'chest', { facing: 'north', type: 'single', waterlogged: false }), materialOf(legacy, 'chest', { facing: 'north', type: 'single', waterlogged: false })]
+test('a block entity without an entity model keeps the old material, exactly', { skip }, () => {
+  const [a, b] = [materialOf(build, 'conduit', { waterlogged: false }), materialOf(legacy, 'conduit', { waterlogged: false })]
+  assert.equal(a.entity, undefined)
   const named = (built, m) => ({ ...m, tex: m.tex.map(l => layerName(built, l)) }) // layer numbers differ between builds, names do not
   assert.deepEqual(named(build, a), named(legacy, b))
+})
+
+test('block entities drawn from entity models are models marked entity; their layers are sheet regions', { skip }, () => {
+  const chest = materialOf(build, 'chest', { facing: 'north', type: 'single', waterlogged: false })
+  assert.equal(chest.kind, 'model')
+  assert.equal(chest.entity, true)
+  assert.equal(chest.elemCount, 3)
+  assert.ok(build.table.textures.names.includes('entity/chest/normal#28,0,14,14'))
+  const bell = materialOf(build, 'bell', { attachment: 'floor', facing: 'north', powered: false })
+  assert.equal(bell.entity, true)
+  assert.ok(bell.elemCount > 2)
+  assert.equal(materialOf(legacy, 'chest', { facing: 'north', type: 'single', waterlogged: false }).kind, 'box')
+})
+
+test('entity layers stay within the budget and no sheet region is named twice', { skip }, () => {
+  const names = build.table.textures.names.filter(n => n.startsWith('entity/'))
+  assert.equal(new Set(names).size, names.length)
+  assert.ok(names.length <= 400, `${names.length} entity layers`)
 })
 
 test('the element table is whole rows and every list fits in it', { skip }, () => {

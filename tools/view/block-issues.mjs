@@ -233,9 +233,11 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
 
   const describe = model => model ? `model ${model.id} (${model.chain.join(' > ')}), ${model.elements.length} element${model.elements.length === 1 ? '' : 's'}` : 'no model'
 
-  if (entityOnly || PARTLY_ENTITY.has(block.name)) {
+  // states the view draws from its own entity models (block-entity-models.mjs) are no longer reported here
+  const undrawn = entityOnly ? ids.filter(id => !materialAt(id).entity) : ids
+  if ((entityOnly && undrawn.length) || PARTLY_ENTITY.has(block.name)) {
     const detail = entityOnly ? `the model has no elements, the game draws it with a block-entity renderer: ${describe(resolved[0])}` : 'the model has geometry, but its book or items are drawn by a block-entity renderer'
-    records.push(record('block-entity', ids, detail, { model: resolved[0]?.id, severity: entityOnly ? undefined : 'approximate' }, resolved))
+    records.push(record('block-entity', undrawn, detail, { model: resolved[0]?.id, severity: entityOnly ? undefined : 'approximate' }, resolved))
   }
   if (entityOnly) return records
 
