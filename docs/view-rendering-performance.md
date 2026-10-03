@@ -124,8 +124,27 @@ turnaround every 4.6 s and from the 50 ms poll, which merges two 20 Hz writes in
 (`tools/view-pose-record.mjs`, then replay) shows the same pattern: still frames drop from 973 to 15, and shown latency
 goes from 40 to 159 ms.
 
-Most of what is left of the latency and jitter is the server's 50 ms mtime poll. Replacing it with `fs.watch` on the
-view directory, keeping a slow poll as a fallback, is the next step.
+#### Push: `fs.watch` instead of the 50 ms poll
+
+The server now pushes pose and hud changes from `fs.watch` on the agent's view directory. It watches the directory
+because the body replaces `pose.json` by rename. A 250 ms poll stays on as a fallback, and the watcher closes on
+disconnect. `--push poll --poll-ms N` restores polling.
+
+Measured on the synthetic 20 Hz replay at 1280x720, 30 s per run:
+
+| Mode | interp | file→frame p50/p95 | shown latency p50/p95 | delay | underruns | server CPU |
+| --- | --- | --- | --- | --- | --- | --- |
+| watch (default) | on | 8 / 9 ms | 91 / 92 ms | 80 ms | 0 | 7.7 % |
+| watch (default) | off | 7 / 8 ms | 7 / 8 ms | – | – | 3.3 % |
+| poll 16 ms | on | 22 / 25 ms | 105 / 108 ms | 85 ms | 0 | 9.2 % |
+| poll 16 ms | off | 20 / 21 ms | 20 / 21 ms | – | – | 4.0 % |
+| poll 50 ms (old) | on | 35 / 52 ms | 102 / 118 ms | 90 ms | 0 | 7.7 % |
+| poll 50 ms (old) | off | 34 / 51 ms | 34 / 51 ms | – | – | 3.6 % |
+
+Server CPU covers the whole run, including the page's initial column load. With `watch`, the file→frame latency is
+about one frame, and interpolation adds only its delay (about 80 ms at 20 Hz). Between runs the interp=1 speed cv
+varied from 0.06 to 0.17 and did not follow the push mode. Each run covers only about six turnarounds, so the cv
+depends on where they fall.
 
 Column decoding on the main thread takes p50 9–12 ms and up to 34–62 ms per column. A burst of new columns can drop
 one or two frames (one 33 ms frame was seen during a load); the decoding should move to a Worker.

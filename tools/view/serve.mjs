@@ -43,7 +43,7 @@ const sendFile = async (res, file, contentType) => {
   }
 }
 
-export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250 }) {
+export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250 }) {
   const agentFile = (name, file) => path.join(stateDir, 'agents', name, 'view', file)
   const builds = new Map()
   // one build per version serves both the table and the texture bytes
@@ -102,7 +102,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
 
     const watchFile = (file, event, wrap, onValue) => {
       let last = null
-      return async () => {
+      let running = Promise.resolve() // checks run one at a time, so a watch event and a poll never send the same mtime twice
+      const check = async () => {
         const stat = await statOrNull(agentFile(name, file))
         if (!stat || stat.mtimeMs === last) return
         const value = await readJson(agentFile(name, file))
@@ -111,6 +112,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
         onValue?.(value)
         emit(event, wrap(stat.mtimeMs, value))
       }
+      return () => (running = running.then(check))
     }
     const checkPose = watchFile('pose.json', 'pose', (mtime, value) => ({ mtime, sentAt: Date.now(), pose: value }), value => { pose = value })
     const checkHud = watchFile('hud.json', 'hud', (mtime, value) => ({ mtime, hud: value }))
@@ -125,13 +127,37 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       tick()
     }
     const timers = new Set()
-    loop(pollMs, async () => { await checkPose(); await checkHud() })
+    // 'watch' reacts to the directory (pose.json is replaced by rename, so the file itself cannot be watched), with a
+    // slow poll as the fallback; 'poll' only polls
+    let watcher = null
+    const startWatch = () => {
+      if (watcher || closed || push !== 'watch') return
+      try {
+        watcher = fs.watch(path.dirname(agentFile(name, 'pose.json')), (_event, file) => {
+          if (file === 'hud.json') return checkHud()
+          if (file === 'pose.json') return checkPose()
+        })
+      } catch {
+        return // no directory yet: the fallback poll tries again
+      }
+      watcher.on('error', () => {
+        watcher?.close()
+        watcher = null
+      })
+    }
+    startWatch()
+    loop(push === 'watch' ? watchFallbackMs : pollMs, async () => {
+      startWatch()
+      await checkPose()
+      await checkHud()
+    })
     loop(columnPollMs, async () => pose.eye && watchColumns(pose.eye, radius))
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
     req.on('close', () => {
       closed = true
       clearInterval(ping)
       timers.forEach(clearTimeout)
+      watcher?.close()
     })
   }
 

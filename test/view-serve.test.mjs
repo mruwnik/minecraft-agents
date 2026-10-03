@@ -189,3 +189,68 @@ test('GET /textures/<version>.bin serves the packed texture layers', async () =>
   const expected = [0, 1, 2, 3, 4].reduce((sum, level) => sum + table.textures.names.length * (16 >> level) ** 2 * 4, 0)
   assert.equal(bytes.length, expected)
 })
+
+// ---- push: 'watch' ----
+
+const watchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-watch-'))
+const watchView = path.join(watchRoot, 'agents', 'Wat', 'view')
+const atomicWrite = (file, value) => {
+  const tmp = `${file}.tmp.${process.pid}`
+  fs.writeFileSync(tmp, JSON.stringify(value))
+  fs.renameSync(tmp, file)
+}
+const startWatchServer = async () => {
+  fs.mkdirSync(watchView, { recursive: true })
+  atomicWrite(path.join(watchView, 'pose.json'), { ...pose, t: 1 })
+  atomicWrite(path.join(watchView, 'hud.json'), hud)
+  const watched = createViewServer({ stateDir: watchRoot, textureDir: realTextures, webDir, push: 'watch', pollMs: 10000, watchFallbackMs: 10000, columnPollMs: 10000 })
+  await new Promise(resolve => watched.listen(0, '127.0.0.1', resolve))
+  return { watched, url: `http://127.0.0.1:${watched.address().port}` }
+}
+const fsEvents = () => process.getActiveResourcesInfo().filter(r => r === 'FSEventWrap').length
+
+const watchCases = [
+  { name: 'pose', file: 'pose.json', event: 'pose', value: { ...pose, t: 2 }, read: e => e.data.pose.t, expected: 2 },
+  { name: 'hud', file: 'hud.json', event: 'hud', value: { ...hud, health: 11 }, read: e => e.data.hud.health, expected: 11 }
+]
+for (const { name, file, event, value, read, expected } of watchCases) {
+  test(`watch: a rewritten ${name} (tmp + rename) is delivered within 30 ms with the fallback poll off`, async () => {
+    const { watched, url } = await startWatchServer()
+    const response = await fetch(`${url}/pose/Wat?radius=1`)
+    const received = collect(response, { ms: 2000, done: es => es.filter(e => e.event === event).length >= 2 })
+    await sleep(100)
+    const wrote = Date.now()
+    atomicWrite(path.join(watchView, file), value)
+    const events = (await received).filter(e => e.event === event)
+    const latency = Date.now() - wrote
+    watched.closeAllConnections()
+    watched.close()
+    assert.equal(read(events[1]), expected)
+    assert.ok(latency < 30, `delivered after ${latency} ms`)
+  })
+}
+
+test('watch: no events while the files are unchanged', async () => {
+  const { watched, url } = await startWatchServer()
+  const response = await fetch(`${url}/pose/Wat?radius=1`)
+  const events = await collect(response, { ms: 400 })
+  watched.closeAllConnections()
+  watched.close()
+  assert.deepEqual(events.map(e => e.event).sort(), ['hud', 'pose'])
+})
+
+test('watch: the watcher is closed when the client disconnects', async () => {
+  const { watched, url } = await startWatchServer()
+  await sleep(100)
+  const before = fsEvents()
+  const response = await fetch(`${url}/pose/Wat?radius=1`)
+  await sleep(100)
+  const during = fsEvents()
+  await response.body.cancel()
+  await sleep(100)
+  const after = fsEvents()
+  await new Promise(resolve => watched.close(resolve))
+  assert.deepEqual([during - before, after - before], [1, 0])
+})
+
+after(() => fs.rmSync(watchRoot, { recursive: true, force: true }))

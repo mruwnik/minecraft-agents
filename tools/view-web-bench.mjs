@@ -178,7 +178,7 @@ const main = async () => {
     if (values.trace) await cdp.evaluate('__view.camTrace.length = 0; __view.latencies.length = 0; __view.shownLatencies.length = 0; true')
     const first = await cdp.evaluate('({frames: __view.frames, t: performance.now()})')
     await sleep(Number(values.trace ?? values.seconds) * 1000)
-    const last = await cdp.evaluate('({shown: __view.shownLatencies, underruns: __view.underruns, decode: __view.decodeMs, trace: __view.camTrace, frames: __view.frames, t: performance.now(), fps: __view.fps, latencies: __view.latencies, loaded: __view.loaded, wanted: __view.wanted, renderer: __view.renderer, size: [document.getElementById("view").width, document.getElementById("view").height]})')
+    const last = await cdp.evaluate('({shown: __view.shownLatencies, underruns: __view.underruns, delay: __view.delay, decode: __view.decodeMs, trace: __view.camTrace, frames: __view.frames, t: performance.now(), fps: __view.fps, latencies: __view.latencies, loaded: __view.loaded, wanted: __view.wanted, renderer: __view.renderer, size: [document.getElementById("view").width, document.getElementById("view").height]})')
     if (values.screenshot) {
       const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
       fs.writeFileSync(values.screenshot, Buffer.from(data, 'base64'))
@@ -195,7 +195,7 @@ const main = async () => {
       frames: last.frames,
       latency: { n: last.latencies.length, p50: percentile(last.latencies, 0.5), p95: percentile(last.latencies, 0.95) },
       ...(values.trace ? {
-        smooth: { ...smoothness(last.trace), underruns: last.underruns },
+        smooth: { ...smoothness(last.trace), underruns: last.underruns, delay: last.delay },
         shownLatency: { n: last.shown.length, p50: percentile(last.shown, 0.5), p95: percentile(last.shown, 0.95) },
         decodeMs: { n: last.decode.length, p50: percentile(last.decode, 0.5), max: last.decode.length ? Math.max(...last.decode) : null }
       } : {}),

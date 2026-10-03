@@ -319,6 +319,7 @@ const frame = (now, dt) => {
   const shown = (interpOn && interp.sample(Date.now())) || state.pose
   state.drawn = shown
   view.underruns = interp.underruns()
+  view.delay = interp.delay()
   const cam = state.free ?? { eye: shown.eye, yaw: shown.yaw, pitch: shown.pitch }
   if (!state.free) recordTrace(now, cam)
   const origin = { x: (state.ccx - radius) * 16, y: state.dims.minY, z: (state.ccz - radius) * 16 }
