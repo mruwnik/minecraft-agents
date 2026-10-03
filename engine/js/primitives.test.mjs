@@ -44,6 +44,31 @@ const acting = [
 const hanging = c => ({ ...world, ...c.over, hang: [c.hang] })
 const cutError = err => err.code === 'cut' && err.cut === true
 
+// Clock-free tests: node:test mock timers replace setTimeout/Date, so no amount of machine load can make a scaled wait
+// expire early. `flushIO` lets every pending microtask run; `driveClock` then advances the mock clock `stepMs` at a
+// time until `promise` settles (a call that never settles fails after `maxSteps` instead of hanging).
+const mockClock = t => t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+const flushIO = () => new Promise(resolve => setImmediate(resolve))
+// ticks 1 ms at a time until `reached()` holds (the call is parked on its hanging bot call)
+const driveUntil = async (t, reached, maxSteps = 20000) => {
+  for (let i = 0; i < maxSteps; i++) {
+    await flushIO()
+    if (reached()) return
+    t.mock.timers.tick(1)
+  }
+  throw new Error('condition never reached')
+}
+const driveClock = async (t, promise, stepMs = 1, maxSteps = 20000) => {
+  let done = false
+  const tracked = promise.then(v => { done = true; return v }, e => { done = true; throw e })
+  tracked.catch(() => {})
+  for (let i = 0; i < maxSteps && !done; i++) {
+    await flushIO()
+    if (!done) t.mock.timers.tick(stepMs)
+  }
+  return tracked
+}
+
 test('isOwner follows setOwner and null means nobody', () => {
   const { p } = rig(world)
   assert.equal(p.isOwner('t1'), true)
@@ -65,16 +90,19 @@ for (const c of acting) {
     await assert.rejects(p[c.name](null, c.args), cutError)
   })
 
-  test(`${c.name}: setOwner during the call rejects with cut and runs the cleanup`, async () => {
+  test(`${c.name}: setOwner during the call rejects with cut and runs the cleanup`, async t => {
+    mockClock(t)
     const { bot, p } = rig(hanging(c))
     const call = p[c.name]('t1', c.args)
-    await new Promise(r => setTimeout(r, 5))
+    call.catch(() => {})
+    await driveUntil(t, () => names(bot).includes(c.hang))
     assert.ok(names(bot).includes(c.hang), `reached ${c.hang}`)
     p.setOwner('t2')
     await assert.rejects(call, cutError)
     if (c.cleanup) assert.ok(names(bot).includes(c.cleanup), `called ${c.cleanup}`)
     const before = names(bot).length
-    await new Promise(r => setTimeout(r, 30))
+    t.mock.timers.tick(60000)
+    await flushIO()
     assert.equal(names(bot).length, before, 'nothing reaches the bot after the cut')
   })
 
@@ -119,7 +147,6 @@ const statuses = [
   ['eat', {}, {}, 'ate'],
   ['attack', { id: 99 }, {}, 'gone'],
   ['attack', { id: 8 }, { entities: { 8: { id: 8, name: 'zombie', type: 'hostile', position: at(9, 64, 0), height: 1.9 } } }, 'out-of-reach'],
-  ['attack', { id: 8 }, {}, 'hit'],
   ['sleep', { pos: at(9, 64, 9) }, {}, 'missing'],
   ['sleep', { pos: at(2, 64, 1) }, { timeOfDay: 1000 }, 'not-night'],
   ['sleep', { pos: at(2, 64, 1) }, { entities: { 8: { id: 8, name: 'zombie', type: 'hostile', position: at(2, 64, 0) } } }, 'monsters-near'],
@@ -139,6 +166,13 @@ for (const [name, args, over, status] of statuses) {
   })
 }
 
+test(`attack ${JSON.stringify({ id: 8 })} resolves hit`, async t => {
+  mockClock(t)
+  const { p } = rig({ ...world })
+  const result = await driveClock(t, p.attack('t1', { id: 8 }))
+  assert.equal(result.status, 'hit')
+})
+
 // attack's `hurt`: the server's entityHurt for the target after the swing (mineflayer never sets health on others)
 const ownWorld = () => ({ ...world, entities: { ...world.entities } }) // tests here delete entities
 const hurtCases = [
@@ -150,10 +184,11 @@ const hurtCases = [
   ['the target removed', bot => { delete bot.entities[8] }, { status: 'killed', hurt: true }]
 ]
 for (const [label, onSwing, expected] of hurtCases) {
-  test(`attack with ${label} reports hurt ${expected.hurt} and drops its listener`, async () => {
+  test(`attack with ${label} reports hurt ${expected.hurt} and drops its listener`, async t => {
+    mockClock(t)
     const { bot, p } = rig(ownWorld())
     bot.attack = async () => { onSwing(bot) }
-    const result = await p.attack('t1', { id: 8 })
+    const result = await driveClock(t, p.attack('t1', { id: 8 }))
     assert.equal(result.status, expected.status)
     assert.equal(result.hurt, expected.hurt)
     assert.equal(bot.listenerCount('entityHurt'), 0)
@@ -898,7 +933,8 @@ test('an error on the bot is reported as a body event and never thrown', async (
 
 test('after the connection ends an acting call reconnects first and then runs on the new bot', async () => {
   const bots = []
-  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 0.01 })
+  // timeScale 1: look's 1 s bound must not shrink to 10 ms, which a loaded machine can overrun; nothing here waits for it
+  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 1 })
   bots[0].emit('end', 'socket closed')
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
   assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online'])
@@ -1459,9 +1495,10 @@ const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }]
   return { bot, p, all, items }
 }
 
-test('jumpPlace raises the body one block per repetition: look down, jump, place under the feet, release, land', async () => {
+test('jumpPlace raises the body one block per repetition: look down, jump, place under the feet, release, land', async t => {
+  mockClock(t)
   const { bot, p, all, items } = pillarRig()
-  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 2 }), { status: 'done', placed: 2 })
+  assert.deepEqual(await driveClock(t, p.jumpPlace('t1', { item: 'dirt', count: 2 })), { status: 'done', placed: 2 })
   assert.equal(bot.entity.position.y, 66)
   assert.deepEqual([all['0,64,0'], all['0,65,0']], ['dirt', 'dirt'])
   assert.equal(items[0].count, 1)
