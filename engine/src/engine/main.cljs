@@ -7,6 +7,7 @@
             [engine.scenario :as scenario]
             [engine.takeover :as takeover]
             [engine.triggers :as triggers]
+            [engine.world :as world]
             ["fs" :as fs]
             ["path" :as path]
             ["module" :refer [createRequire]]))
@@ -105,8 +106,11 @@
             p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
                                              :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
                                                         :onEvent on-view-event}}))
+            world (world/open {:plans-dir (path/join state-dir "worlds" (:world cfg) "plans")
+                               :blueprint-dir (path/resolve root ".." "blueprints")
+                               :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
             eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (:engine-dir cfg)
-                              :body (:username cfg) :max-event-bytes events-max-bytes})
+                              :body (:username cfg) :max-event-bytes events-max-bytes :world world})
             _ (reset! eng-ref eng)]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
         (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]

@@ -1,7 +1,8 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
   (:require [engine.expr :as expr]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.world :as world]))
 
 ;; ------------------------------------------------------------------ job memory
 
@@ -112,3 +113,19 @@
   and after, debug events. A promise of the primitive's result."
   [ctx k args]
   ((:act ctx) k args))
+
+;; ------------------------------------------------------------------ world knowledge
+
+(defn plan
+  "The body's world's plan id, from memory (engine.world/answer): nil when there is no such plan,
+  {:id :broken text} when it was never readable, else {:id :plan :status :cells :errors}, with :error
+  when the file is bad now and this is its last good copy."
+  [ctx id]
+  (world/plan (:world (:engine ctx)) id))
+
+(defn warn-once!
+  "Emit warn event kind with fields the first time this job gives key in this body process; a check
+  may call it (it writes no memory)."
+  [ctx key kind fields]
+  (when (world/first-time! (:world (:engine ctx)) [(:id ctx) key])
+    (emit! ctx kind :warn fields)))

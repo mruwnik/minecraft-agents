@@ -1,0 +1,146 @@
+(ns engine.world-test
+  "engine.world: the pure bookkeeping without a disk, then the reader over a temp dir."
+  (:require [cljs.test :refer [deftest is are]]
+            ["fs" :as fs]
+            ["path" :as path]
+            [engine.test-util :as tu]
+            [engine.world :as world]))
+
+(def wheat {:id "field" :status :active :parts [{:id "rows" :box [[0 64 0] [1 64 0]] :want {:crop "wheat"}}]})
+(def hut-bp {:id "hut" :front :south :key {"S" "stone"} :layers [["S"]]})
+(def huts {:id "huts" :status :proposed :parts [{:id "h1" :blueprint "hut" :at [5 64 5]}]})
+
+;; ------------------------------------------------------------------ pure
+
+(deftest a-check-is-due-every-few-seconds
+  (are [checked-at now expected] (= expected (world/due? {:checked-at checked-at :every-ms 3000} now))
+    nil 0 true
+    1000 3999 false
+    1000 4000 true))
+
+(deftest only-new-and-changed-files-are-read-again
+  (is (= #{"b" "c"}
+         (set (world/stale-ids {"a" {:stamp [1 10]} "b" {:stamp [1 10]}}
+                               {"a" [1 10] "b" [2 10] "c" [5 3]})))))
+
+(deftest a-good-file-replaces-the-entry
+  (let [[entries warn] (world/absorb {"field" {:stamp [1 1] :value {:old true} :error "x"}} "field" [2 2] {:value wheat})]
+    (is (= {"field" {:stamp [2 2] :value wheat}} entries))
+    (is (nil? warn))))
+
+(deftest a-broken-edit-keeps-the-last-good-copy-and-warns-once
+  (let [[entries warn] (world/absorb {"field" {:stamp [1 1] :value wheat}} "field" [2 2] {:errors ["unreadable EDN: eof"]})]
+    (is (= wheat (get-in entries ["field" :value])))
+    (is (= "unreadable EDN: eof" (get-in entries ["field" :error])))
+    (is (= {:id "field" :error "unreadable EDN: eof" :kept true} warn))))
+
+(deftest a-file-never-readable-is-broken-not-absent
+  (let [[entries warn] (world/absorb {} "field" [1 1] {:errors ["a" "b"]})]
+    (is (= {"field" {:stamp [1 1] :error "a; b"}} entries))
+    (is (= {:id "field" :error "a; b" :kept false} warn))
+    (is (= {:id "field" :broken "a; b"} (world/answer {:plans entries} "field")))))
+
+(deftest a-deleted-file-is-forgotten
+  (is (= {"a" {:stamp [1 1]}} (world/drop-gone {"a" {:stamp [1 1]} "b" {:stamp [1 1]}} {"a" [1 1]}))))
+
+(deftest answer-gives-the-plan-its-status-and-cells
+  (let [state (world/expand-all {:plans {"field" {:value wheat} "huts" {:value huts :error "bad edit"}}
+                                 :blueprints {"hut" {:value hut-bp}}})]
+    (are [id expected] (= expected (dissoc (world/answer state id) :cells))
+      "field" {:id "field" :plan wheat :status :active :errors []}
+      "huts" {:id "huts" :plan huts :status :proposed :errors [] :error "bad edit"}
+      "none" nil)
+    (is (= [{:pos [0 64 0] :want {:crop "wheat"} :part "rows"} {:pos [1 64 0] :want {:crop "wheat"} :part "rows"}]
+           (:cells (world/answer state "field"))))
+    (is (= [[5 64 5]] (map :pos (:cells (world/answer state "huts")))))))
+
+(deftest a-world-from-data-answers-without-a-disk
+  (let [w (world/of-data {"field" wheat} {})]
+    (is (= :active (:status (world/plan w "field"))))
+    (is (nil? (world/plan w "other")))
+    (world/set-data! w {"field" (assoc wheat :status :retired)} {})
+    (is (= :retired (:status (world/plan w "field"))))))
+
+(deftest a-key-is-new-only-once
+  (let [w (world/of-data {} {})]
+    (is (= [true false true] [(world/first-time! w [:a]) (world/first-time! w [:a]) (world/first-time! w [:b])]))))
+
+;; ------------------------------------------------------------------ over a disk
+
+(defn write! [dir id text] (fs/writeFileSync (path/join dir (str id ".edn")) text))
+
+(defn reader
+  "A world over fresh plan and blueprint dirs with a clock atom; warns are collected in seen."
+  []
+  (let [plans (tu/tmp-dir)
+        bps (tu/tmp-dir)
+        clock (atom 0)
+        seen (atom [])
+        w (world/open {:plans-dir plans :blueprint-dir bps :now #(deref clock) :every-ms 3000
+                       :emit #(swap! seen conj %)})]
+    {:plans plans :bps bps :clock clock :seen seen :w w}))
+
+(defn touch-later!
+  "Rewrite a file with a modification time one minute on, so the stamp changes even within one millisecond."
+  [dir id text]
+  (let [file (path/join dir (str id ".edn"))]
+    (fs/writeFileSync file text)
+    (let [t (+ 60 (/ (.-mtimeMs (fs/statSync file)) 1000))] (fs/utimesSync file t t))))
+
+(deftest the-reader-sees-plans-and-blueprints-of-the-folder
+  (let [{:keys [plans bps w]} (reader)]
+    (write! plans "field" (pr-str wheat))
+    (write! plans "huts" (pr-str huts))
+    (write! bps "hut" (pr-str hut-bp))
+    (fs/writeFileSync (path/join plans "notes.txt") "not a plan")
+    (is (= :active (:status (world/plan w "field"))))
+    (is (= 1 (count (:cells (world/plan w "huts")))))
+    (is (nil? (world/plan w "notes")))))
+
+(deftest an-edit-is-seen-after-the-recheck-interval-only
+  (let [{:keys [plans clock w]} (reader)]
+    (write! plans "field" (pr-str wheat))
+    (is (= :active (:status (world/plan w "field"))))
+    (touch-later! plans "field" (pr-str (assoc wheat :status :retired)))
+    (swap! clock + 1000)
+    (is (= :active (:status (world/plan w "field"))))
+    (swap! clock + 3000)
+    (is (= :retired (:status (world/plan w "field"))))))
+
+(deftest a-broken-edit-keeps-the-last-good-copy-with-one-warn
+  (let [{:keys [plans clock seen w]} (reader)]
+    (write! plans "field" (pr-str wheat))
+    (world/plan w "field")
+    (touch-later! plans "field" "{:id ")
+    (dotimes [_ 3] (swap! clock + 5000) (world/plan w "field"))
+    (is (= wheat (:plan (world/plan w "field"))))
+    (is (re-find #"unreadable EDN" (:error (world/plan w "field"))))
+    (is (= 1 (count @seen)))
+    (is (= {:source :system :kind :world.plan-unreadable :level :warn :plan "field" :kept true}
+           (select-keys (first @seen) [:source :kind :level :plan :kept])))))
+
+(deftest a-plan-broken-from-the-start-is-reported-broken
+  (let [{:keys [plans seen w]} (reader)]
+    (write! plans "field" "{:id \"other\" :status :active :parts []}")
+    (is (re-find #"file name" (:broken (world/plan w "field"))))
+    (is (= [false] (map :kept @seen)))))
+
+(deftest a-deleted-plan-is-missing-and-a-missing-folder-has-no-plans
+  (let [{:keys [plans clock w]} (reader)]
+    (write! plans "field" (pr-str wheat))
+    (world/plan w "field")
+    (fs/unlinkSync (path/join plans "field.edn"))
+    (swap! clock + 3000)
+    (is (nil? (world/plan w "field"))))
+  (let [w (world/open {:plans-dir "/nonexistent/plans" :blueprint-dir "/nonexistent/bps" :now (constantly 0)
+                       :every-ms 3000 :emit identity})]
+    (is (nil? (world/plan w "field")))))
+
+(deftest a-changed-blueprint-changes-the-plans-cells
+  (let [{:keys [plans bps clock w]} (reader)]
+    (write! plans "huts" (pr-str huts))
+    (write! bps "hut" (pr-str hut-bp))
+    (is (= 1 (count (:cells (world/plan w "huts")))))
+    (touch-later! bps "hut" (pr-str (assoc hut-bp :layers [["SS"]])))
+    (swap! clock + 3000)
+    (is (= 2 (count (:cells (world/plan w "huts")))))))

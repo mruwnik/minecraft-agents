@@ -36,6 +36,7 @@
             [engine.expr :as expr]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [engine.world :as world]
             ["crypto" :as crypto]
             ["path" :as path]))
 
@@ -1080,8 +1081,9 @@
   :stall-rounds (default 20), :sweep-ms (default 60000) and :stats-ms (how
   often memory.save-stats is emitted, default 60000), :backoff (the engine-wide
   backoff config, a map or false, see engine.backoff) and :backoff-alert-ms
-  (least gap between two job.backoff warns, default 300000)."
-  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms
+  (least gap between two job.backoff warns, default 300000), :world (the world's plans, an engine.world;
+  an empty one when not given)."
+  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
     :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
@@ -1102,6 +1104,7 @@
                              :live-jobs #(set (keys (:instances @st)))})
         eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
+             :world (or world (world/of-data {} {}))
              :state st
              :running (atom nil)
              :tokens (atom 0)

@@ -1,0 +1,3 @@
+;; worldmem live: harvest with plan probe-harvest-retired, which should be declined.
+{:register []
+ :queue [(jobs.farm.harvest {:plan "probe-harvest-retired"})]}
