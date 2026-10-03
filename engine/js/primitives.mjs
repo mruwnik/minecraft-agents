@@ -23,6 +23,10 @@ const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
+const JUMP_PLACE_MAX = 8
+const JUMP_PLACE_BLOCK_S = 2
+const RISE_WAIT_MS = 800
+const LAND_WAIT_MS = 1000
 const SWIM_DEFAULT_MS = 3000
 const SWIM_MAX_MS = 10000
 const RECONNECT_TRIES = 3
@@ -413,6 +417,55 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           ctx.alive()
         }
         return result('surfaced')
+      } finally {
+        release()
+      }
+    })
+  }
+
+  // Pillars up: for each repetition the body looks straight down, jumps, and once its feet clear the cell it stood in
+  // places the item there against the block under that cell (the placed block lands under the falling body), releases
+  // jump and waits to stand one block higher. Stops at the first thing that goes wrong and reports what it achieved.
+  const jumpPlace = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.item === 'string', 'jumpPlace needs item')
+    need(a.count === undefined || a.count === null || (Number.isInteger(a.count) && a.count >= 1), 'jumpPlace needs count, an integer of at least 1')
+    const count = Math.min(a.count ?? 1, JUMP_PLACE_MAX)
+    let placed = 0
+    const outcome = reason => ({ status: placed === count ? 'done' : placed > 0 ? 'partial' : 'failed', placed, ...(reason && { reason }) })
+    return act(token, { boundS: JUMP_PLACE_BLOCK_S * count, onTimeout: () => outcome('timeout') }, async ctx => {
+      let pressed = false
+      const release = () => { if (pressed) { pressed = false; bot.setControlState('jump', false) } }
+      ctx.onAbort(release)
+      const pause = async ms => { await sleepMs(ms * timeScale); ctx.alive() }
+      const solidAt = c => bot.blockAt(vec(c))?.boundingBox === 'block'
+      try {
+        while (placed < count) {
+          const item = inventory().find(i => i.name === a.item)
+          if (!item) return outcome('no-item')
+          const start = cell(here())
+          const below = bot.blockAt(vec({ ...start, y: start.y - 1 }))
+          if (below?.boundingBox !== 'block') return outcome('no-support')
+          if (solidAt({ ...start, y: start.y + 2 })) return outcome('no-headroom')
+          await bot.equip(item, 'hand')
+          ctx.alive()
+          await bot.look(bot.entity.yaw ?? 0, -Math.PI / 2, true)
+          ctx.alive()
+          pressed = true
+          bot.setControlState('jump', true)
+          const riseDeadline = Date.now() + RISE_WAIT_MS * timeScale
+          while (bot.entity.position.y < start.y + 1.01 && Date.now() < riseDeadline) await pause(20)
+          if (bot.entity.position.y < start.y + 1.01) return outcome('not-raised')
+          const failure = await bot.placeBlock(below, new Vec3(0, 1, 0)).then(() => null, err => err)
+          ctx.alive()
+          release()
+          if (failure) return outcome(`place-failed: ${String(failure.message ?? failure).slice(0, 100)}`)
+          const landDeadline = Date.now() + LAND_WAIT_MS * timeScale
+          while (!bot.entity.onGround && Date.now() < landDeadline) await pause(20)
+          if (bot.entity.position.y < start.y + 0.9) return outcome('not-raised')
+          placed += 1
+        }
+        return outcome()
       } finally {
         release()
       }
@@ -813,7 +866,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, offline, onBodyEvent, close }
 }

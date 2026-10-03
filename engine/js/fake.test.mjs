@@ -400,3 +400,29 @@ test('swim toward a target that is far, in water or not given leaves the body to
   const wet = owned({ ...sea, blocks: { ...sea.blocks, '3,64,0': 'water' } })
   assert.equal((await wet.swim('t1', { ms: 3000, toward: at(3, 64, 0) })).status, 'timeout')
 })
+
+test('fake jumpPlace raises the body one block per placement and consumes the items', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 3 }], blocks: { '0,63,0': 'stone' } })
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 2 }), { status: 'done', placed: 2 })
+  assert.deepEqual(p.self().pos, at(0, 66, 0))
+  assert.equal(p.blockAt(at(0, 64, 0)).name, 'dirt')
+  assert.equal(p.blockAt(at(0, 65, 0)).name, 'dirt')
+  assert.equal(p.self().inventory.find(i => i.name === 'dirt').count, 1)
+})
+
+test('fake jumpPlace stops early with a reason: no item, no headroom, nothing solid below', async () => {
+  const none = owned({ blocks: { '0,63,0': 'stone' } })
+  assert.deepEqual(await none.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'no-item' })
+  const low = owned({ inventory: [{ name: 'dirt', count: 3 }], blocks: { '0,63,0': 'stone', '0,66,0': 'stone' } })
+  assert.deepEqual(await low.jumpPlace('t1', { item: 'dirt', count: 3 }), { status: 'failed', placed: 0, reason: 'no-headroom' })
+  const air = owned({ inventory: [{ name: 'dirt', count: 3 }] })
+  assert.deepEqual(await air.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'no-support' })
+  const short = owned({ inventory: [{ name: 'dirt', count: 1 }], blocks: { '0,63,0': 'stone' } })
+  assert.deepEqual(await short.jumpPlace('t1', { item: 'dirt', count: 3 }), { status: 'partial', placed: 1, reason: 'no-item' })
+})
+
+test('fake jumpPlace stops under a ceiling that appears as the body rises', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 5 }], blocks: { '0,63,0': 'stone', '0,67,0': 'stone' } })
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 5 }), { status: 'partial', placed: 1, reason: 'no-headroom' })
+  assert.deepEqual(p.self().pos, at(0, 65, 0))
+})

@@ -161,6 +161,26 @@ function defaultActs (s) {
       return { status: 'placed', block: item }
     },
 
+    // Raises the body one block per placement: needs the item, something solid under the feet and the two cells
+    // above the feet free (the cell the head moves into is the one two above the start).
+    async jumpPlace (token, { item, count = 1 }) {
+      const total = Math.min(count ?? 1, 8)
+      let placed = 0
+      const outcome = (reason) => ({ status: placed === total ? 'done' : placed > 0 ? 'partial' : 'failed', placed, ...(reason && { reason }) })
+      while (placed < total) {
+        const at = s.self.pos
+        const under = blockName({ ...at, y: at.y - 1 })
+        if (!s.inventory.some(i => i.name === item)) return outcome('no-item')
+        if (under === 'air' || under === 'water' || under === 'lava') return outcome('no-support')
+        if (blockName({ ...at, y: at.y + 2 }) !== 'air') return outcome('no-headroom')
+        takeItem(s.inventory, item, 1)
+        s.blocks.set(key(at), item)
+        s.self.pos = { ...at, y: at.y + 1 }
+        placed += 1
+      }
+      return outcome()
+    },
+
     async collect (token, { id }) {
       const e = entity(id)
       if (!e || e.kind !== 'item') return { status: 'gone', gained: [] }

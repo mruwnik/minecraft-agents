@@ -159,6 +159,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress; `reason: 'noPath'` when the pathfinder gave up with no path and the body is not there) | `timeoutS`, at most 60 | goal cleared, controls released |
 | `dig(token, a)` | `{pos}` | `dug`, `missing` (air), `unreachable` (more than 4.5 away), `cannot` (unbreakable) | 10 s | `stopDigging` |
 | `place(token, a)` | `{pos, item}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable` | 5 s | nothing placed after the cut |
+| `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
 | `collect(token, a)` | `{id, timeoutS = 10}` | `collected`, `gone`, `unreachable`, `timeout` | `timeoutS`, at most 20 | as `moveTo` |
 | `inspectContainer(token, a)` | `{pos}` | `ok`, `missing`, `unreachable` | 5 s | window closed |
 | `transfer(token, a)` | `{pos, direction, item, count}`; `direction` is `deposit` or `withdraw` | `ok` (`moved` may be less than `count`), `missing`, `unreachable`, `no-item`, `full` | 5 s | window closed |
@@ -228,6 +229,14 @@ arriving meanwhile share it), emits `online` and runs on the new bot. If every t
 reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
 resolves `disconnected` at once. A stale token still rejects with `cut` first.
 
+`jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it looks straight down, jumps, and once the feet clear
+the cell it stood in places `item` there against the block below that cell, releases jump and waits to stand one block
+higher. It checks before each jump that something solid is under the feet (`no-support`) and that the cell two above the
+feet is not solid (`no-headroom`), and stops at the first failure, reporting `placed`, the blocks it did raise. `not-raised`
+means the body never left the ground, or did not end a block higher. The result is `done` when all `count` were placed,
+`partial` when some were, `failed` when none. Cut-aware like `swim`: jump is released on every exit. Not yet verified live
+(unit tests on the stub bot and the fake only).
+
 With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or (dry) are within 1.5 blocks of the target's cell centre, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. While it swims toward a target the body's collision half-width is 0.31 instead of 0.3 (restored on every exit): verified live on 26.1, a body resting flush against the rim wall is snapped back by the server every tick (a forced move per tick) so the water-exit impulse never lands, while 0.31 climbs onto the rim in about a second. The fake lands the body on the target when it is within 6 blocks and standable, else times out.
 
 `swim` without `toward` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
@@ -291,7 +300,7 @@ p.world.setTime(13000)
 p.world.die()            // emits died (pos, inventory, experience), drops the inventory as items, zeroes experience
 ```
 
-Fake semantics: `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
+Fake semantics: `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
 inventory. `attack` takes 5 health per swing. `sleep` succeeds at night on a
@@ -870,6 +879,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `swim` | `setControlState('jump', true)` while `blockAt(eye cell)` is water, `false` on every exit |
 | `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
 | `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
+| `jumpPlace` | per block: needs the item, a full block under the feet and the cell two above the feet not solid; equips, looks straight down (`look(yaw, -pi/2)`), `setControlState('jump', true)`, polls every 20 ms until the feet are 1.01 above the start cell (clear of it), `placeBlock(block under the start cell, +y)` into the cell just left, releases jump, waits up to 1 s for `onGround` and checks the body now stands a block higher. Cleanup: jump released |
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
 | `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
 | `equip` | `bot.equip(item, dest)` |

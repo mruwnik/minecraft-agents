@@ -1112,3 +1112,106 @@ test('moveTo: a goto that teleports the body into a pit away from the goal and r
   assert.notEqual(result.status, 'arrived')
   assert.deepEqual(result.pos, at(20.5, 54, 0.5))
 })
+
+// ---- jumpPlace: pillar up by jumping and placing the block under the feet ----
+
+// A stub body that rises when jump goes on, lets placeBlock fill the cell it left, and lands one block higher when
+// jump goes off: the three things the real physics and server do. `rise` false leaves the body on the ground.
+const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }], rise = true, hang = [] } = {}) => {
+  const all = { '0,63,0': 'stone', ...blocks }
+  const { bot, p } = rig({ blocks: all, items, hang })
+  const startOf = () => Math.floor(bot.entity.position.y)
+  let start = null
+  const press = bot.setControlState
+  bot.setControlState = (control, on) => {
+    const result = press(control, on)
+    if (control !== 'jump') return result
+    if (on && rise) {
+      start = startOf()
+      bot.entity.onGround = false
+      setTimeout(() => { bot.entity.position = new Vec3(bot.entity.position.x, start + 1.1, bot.entity.position.z) }, 2)
+    }
+    if (!on && start !== null) {
+      setTimeout(() => { bot.entity.position = new Vec3(bot.entity.position.x, start + 1, bot.entity.position.z); bot.entity.onGround = true }, 2)
+    }
+    return result
+  }
+  const place = bot.placeBlock
+  bot.placeBlock = (ref, face) => {
+    all[`${ref.position.x + face.x},${ref.position.y + face.y},${ref.position.z + face.z}`] = items[0].name
+    items[0].count -= 1
+    if (items[0].count === 0) items.shift()
+    return place(ref, face)
+  }
+  return { bot, p, all, items }
+}
+
+test('jumpPlace raises the body one block per repetition: look down, jump, place under the feet, release, land', async () => {
+  const { bot, p, all, items } = pillarRig()
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 2 }), { status: 'done', placed: 2 })
+  assert.equal(bot.entity.position.y, 66)
+  assert.deepEqual([all['0,64,0'], all['0,65,0']], ['dirt', 'dirt'])
+  assert.equal(items[0].count, 1)
+  const placeCalls = bot.calls.filter(c => c.name === 'placeBlock').map(c => [c.args[0].position.y, c.args[1].y])
+  assert.deepEqual(placeCalls, [[63, 1], [64, 1]], 'against the block under the start cell, on its top face')
+  assert.deepEqual(bot.calls.filter(c => c.name === 'look').map(c => c.args[1]), [-Math.PI / 2, -Math.PI / 2])
+  assert.deepEqual(controls(bot), [['jump', true], ['jump', false], ['jump', true], ['jump', false]])
+})
+
+test('jumpPlace without the item fails at once, without pressing anything', async () => {
+  const { bot, p } = pillarRig({ items: [] })
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'no-item' })
+  assert.deepEqual(controls(bot), [])
+})
+
+test('jumpPlace runs out of items part way and reports partial', async () => {
+  const { p } = pillarRig({ items: [{ name: 'dirt', count: 2, slot: 36 }] })
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 4 }), { status: 'partial', placed: 2, reason: 'no-item' })
+})
+
+test('jumpPlace refuses a pit whose ceiling is within two blocks of the feet, and a start with nothing solid under it', async () => {
+  const low = pillarRig({ blocks: { '0,66,0': 'stone' } })
+  assert.deepEqual(await low.p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'no-headroom' })
+  assert.deepEqual(controls(low.bot), [])
+  const air = pillarRig({ blocks: { '0,63,0': undefined } })
+  assert.deepEqual(await air.p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'no-support' })
+})
+
+test('jumpPlace that never leaves the ground reports not-raised and releases jump', async () => {
+  const { bot, p, all } = pillarRig({ rise: false })
+  assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt' }), { status: 'failed', placed: 0, reason: 'not-raised' })
+  assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
+  assert.equal(all['0,64,0'], undefined)
+})
+
+test('jumpPlace reports place-failed when the server refuses the block, and releases jump', async () => {
+  const { bot, p } = pillarRig()
+  bot.placeBlock = () => Promise.reject(new Error('blockUpdate did not fire'))
+  const result = await p.jumpPlace('t1', { item: 'dirt' })
+  assert.deepEqual([result.status, result.placed, result.reason], ['failed', 0, 'place-failed: blockUpdate did not fire'])
+  assert.deepEqual(controls(bot).at(-1), ['jump', false])
+})
+
+test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async () => {
+  const { bot, p } = pillarRig({ hang: ['placeBlock'] })
+  const call = p.jumpPlace('t1', { item: 'dirt' })
+  await new Promise(resolve => setTimeout(resolve, 15))
+  p.setOwner('t2')
+  await assert.rejects(call, cutError)
+  assert.deepEqual(controls(bot).at(-1), ['jump', false])
+})
+
+test('jumpPlace caps count at 8 and rejects bad arguments', async () => {
+  const { p } = pillarRig({ items: [{ name: 'dirt', count: 20, slot: 36 }] })
+  const result = await p.jumpPlace('t1', { item: 'dirt', count: 100 })
+  assert.deepEqual([result.status, result.placed], ['done', 8])
+  for (const bad of [{}, { item: 5 }, { item: 'dirt', count: 0 }, { item: 'dirt', count: 1.5 }]) {
+    await assert.rejects(p.jumpPlace('t1', bad), err => err.code === 'bad-args')
+  }
+})
+
+test('jumpPlace with a stale token rejects with cut before touching the bot', async () => {
+  const { bot, p } = pillarRig()
+  await assert.rejects(p.jumpPlace('old', { item: 'dirt' }), cutError)
+  assert.deepEqual(controls(bot), [])
+})
