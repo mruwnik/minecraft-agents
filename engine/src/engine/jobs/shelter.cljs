@@ -50,8 +50,6 @@
 
 (defn night? [p] (not (.-isDay (.self p))))
 
-(defn day? [p] (boolean (.-isDay (.self p))))
-
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
 (defn unsafe-night?
@@ -65,21 +63,6 @@
   (let [pos (mem/place (ctx/view c) :bed)]
     (when (and pos (<= (u/dist (u/self-pos c) pos) radius))
       pos)))
-
-(defn built-shelter-here
-  "The data of the latest :shelter entry in memory view that is built (not
-  reopened) and whose position self-pos is within two blocks of, else nil."
-  [view self-pos]
-  (let [data (:data (mem/latest view :shelter))]
-    (when (and (= :built (:state data))
-               (<= (u/dist self-pos (:pos data)) 2))
-      data)))
-
-(defn active-shelter
-  "The data of the latest :shelter entry that is built (not reopened) and
-  whose position the body is still within two blocks of, else nil."
-  [c]
-  (built-shelter-here (ctx/view c) (u/self-pos c)))
 
 (defn days-awake
   "In-game days since the latest :slept entry, or nil when none is

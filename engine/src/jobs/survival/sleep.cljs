@@ -12,7 +12,12 @@
   place is retracted by writing a :bed entry {:gone true :was pos}, which has
   no :pos, so it no longer reads as a known place, and the job ends so the
   shelter chooser falls through. A taken bed, a monster nearby or an
-  unreachable bed is retried three times, then warns and ends.")
+  unreachable bed is retried three times, then warns and ends; an unreachable
+  bed is then also remembered in a :bed-unreachable entry {:pos bed} (cap 5,
+  kept ten minutes), and while an unexpired entry has the same pos as the
+  remembered bed the check declines, so the body does not walk at it again.
+  Memory: reads :bed and :bed-unreachable; writes :slept, :bed (a gone bed)
+  and :bed-unreachable.")
 
 (def args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
@@ -20,9 +25,24 @@
 
 (def slept-policy {:cap 10 :ttl (* 7 sh/ms-per-day)})
 
+(def unreachable-policy {:cap 5 :ttl 600000})
+
+(defn unreachable-bed?
+  "Whether an unexpired :bed-unreachable entry names bed."
+  [c bed]
+  (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable))))
+
 (defn check [c]
-  (and (sh/night? (:primitives c))
-       (some? (sh/bed c (:bed-radius (:args c))))))
+  (let [bed (sh/bed c (:bed-radius (:args c)))]
+    (and (sh/night? (:primitives c))
+         (some? bed)
+         (not (unreachable-bed? c bed)))))
+
+(defn give-up-unreachable! [c bed]
+  (let [r (u/fail! c :bed_unreachable "cannot reach the bed")]
+    (when (= :done r)
+      (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy))
+    r))
 
 (defn ^:async sleep-at! [c bed]
   (let [r (await (ctx/act c :sleep (clj->js {:pos bed})))]
@@ -42,5 +62,5 @@
       (let [walk (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2}))]
         (cond
           (= :continue walk) :continue
-          (not (:arrived (ctx/child-result c :go))) (u/fail! c :bed_unreachable "cannot reach the bed")
+          (not (:arrived (ctx/child-result c :go))) (give-up-unreachable! c bed)
           :else (await (sleep-at! c bed)))))))

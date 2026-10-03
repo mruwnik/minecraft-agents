@@ -7,18 +7,25 @@
   "Roof the body in for the night. Check: it is night and nothing solid is
   within :roof-height blocks above. With enough :blocks carried to fill every
   open cell, it walls a 1x1 shelter: the four sides at feet height, the four at
-  head height, a support cell beside the roof cell, then one above the head, at most :max-places placements per
-  round. With fewer it digs down two blocks, but only while the block under
-  each one is solid (never through a thin floor into water, lava or air) (collecting the blocks it digs)
-  and places one above, at the cell the body stood in, from a carried or dug
-  block; with none it just digs down two. Returns :continue until roofed.
+  head height, a support cell beside the roof cell, then one above the head, at
+  most :max-places placements per round. Walls mode converges: every round it
+  computes the open cells from the body's current feet cell, so a body that
+  was moved is walled in where it now stands. With fewer blocks it digs down
+  two, but only while the block under each one is solid (never through a thin
+  floor into water, lava or air) (collecting the blocks it digs) and places one
+  above, at the cell the body stood in, from a carried or dug block. If a dig
+  drops no placeable block and none is carried it stops at once (a
+  dig_in_failed warn, \"nothing to roof the pit with\") instead of leaving the
+  body in a roofless pit. Dig mode keeps its :roof and :target-y, but if the
+  body's x or z no longer matches that column it chooses again from the
+  current cell. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
-  :built} (cap 10, kept one in-game day); :roof is absent when nothing was
-  placed above. In walls mode the entry also has :door, the feet-height and
-  head-height cells of one side it placed itself, which shelter digs to walk
-  out at day (the body stands on the original ground, so the roof is no way
-  out); the pit has no :door. A body that cannot place or dig gives up after three failures
-  with a dig_in_failed warn.")
+  :built} (cap 10, kept one in-game day) with :pos the current feet cell;
+  :roof is the cell it actually placed above the body, absent when none was.
+  In walls mode the entry also has :door, the feet-height and head-height
+  cells of one side it placed itself; the pit has no :door. The entry is
+  history for now: nothing reads it. A body that cannot place or dig gives up
+  after three failures with a dig_in_failed warn. Memory: writes :shelter.")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -120,8 +127,12 @@
                                        :continue)
       :else (let [r (await (ctx/act c :dig (clj->js {:pos below})))]
               (if (= "dug" (.-status r))
-                (do (await (collect-drops! c blocks (.-drops r)))
-                    :continue)
+                (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
+                  (await (collect-drops! c blocks (.-drops r)))
+                  (if (or placeable (some? (pick c blocks)))
+                    :continue
+                    (do (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
+                        :done)))
                 (u/fail! c :dig_in_failed (str "cannot dig down: " (.-status r))))))))
 
 (defn ^:async roof-round
@@ -134,22 +145,27 @@
       :done
       (let [r (await (ctx/act c :place (clj->js {:pos roof :item item})))]
         (if (#{"placed" "occupied"} (.-status r))
-          :done
+          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
+              :done)
           (u/fail! c :dig_in_failed (str "cannot roof the pit: " (.-status r))))))))
 
 (defn choose-mode
-  "Record in job memory how this shelter is built, once: :walls when enough
-  blocks are carried to fill every open cell, else :dig with the starting cell
-  as the roof and the way out."
+  "Record in job memory how this shelter is built. Walls mode stores only
+  :mode :walls (the cells are recomputed from the feet every round). Dig mode
+  stores :roof, the starting cell, and :target-y. Chosen once, again only when
+  the body leaves a dig-mode column."
   [c]
-  (when-not (:mode (ctx/mem c))
-    (let [p (:primitives c)
-          start (sh/feet p)
-          needed (count (open-cells p start))
-          have (reduce + (map :count (carried c (:blocks (:args c)))))]
-      (if (>= have needed)
-        (ctx/update-mem! c assoc :mode :walls :roof (update start :y + 2))
-        (ctx/update-mem! c assoc :mode :dig :roof start :target-y (- (:y start) 2))))))
+  (let [p (:primitives c)
+        {:keys [mode roof]} (ctx/mem c)
+        {:keys [x z] :as start} (sh/feet p)
+        moved (and (= :dig mode) (not (and (= x (:x roof)) (= z (:z roof)))))]
+    (when moved (ctx/update-mem! c dissoc :mode :roof :target-y))
+    (when (or moved (not mode))
+      (let [needed (count (open-cells p start))
+            have (reduce + (map :count (carried c (:blocks (:args c)))))]
+        (if (>= have needed)
+          (ctx/update-mem! c assoc :mode :walls)
+          (ctx/update-mem! c assoc :mode :dig :roof start :target-y (- (:y start) 2)))))))
 
 (defn check [c]
   (and (sh/night? (:primitives c))
@@ -167,12 +183,13 @@
   (let [r (await (step c))]
     (when (= :done r)
       (let [p (:primitives c)
-            roof (:roof (ctx/mem c))
-            roofed (and roof (sh/solid-at? p roof))
-            door (when (= :walls (:mode (ctx/mem c)))
-                   (door (:placed (ctx/mem c) #{}) (sh/feet p)))]
-        (ctx/remember! c :shelter (cond-> {:pos (sh/feet p) :state :built}
-                                    roofed (assoc :roof roof)
+            feet (sh/feet p)
+            placed (:placed (ctx/mem c) #{})
+            roof (update feet :y + 2)
+            roof (if (= :walls (:mode (ctx/mem c))) roof (:roof (ctx/mem c)))
+            door (when (= :walls (:mode (ctx/mem c))) (door placed feet))]
+        (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
+                                    (contains? placed roof) (assoc :roof roof)
                                     door (assoc :door door))
                        shelter-policy)))
     r))

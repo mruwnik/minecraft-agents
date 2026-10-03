@@ -46,12 +46,24 @@
 
 (defn pos-of [p] (js->clj (.-pos (.self p)) :keywordize-keys true))
 
+(defn teleport! [p x y z] (set! (.-pos (.-self (.-state (.-world p)))) (tu/pos x y z)))
+
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 (def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone"})
 (def dirt-stack [{:name "dirt" :count 12}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
 (def awake {:id 6 :name "Sam" :kind "player" :pos {:x 10 :y 64 :z 0}})
+
+(defn declined-events [seen reflex]
+  (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
+
+(def always-shelter
+  {:name :always-shelter :job '(jobs.survival.shelter) :args {:roof-height 4}
+   :persistence :cooldown :cooldown-s 10 :when (constantly true)})
+
+(defn refuse-placing! [p]
+  (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-support"})))
 
 ;; ------------------------------------------------------------------ trigger
 
@@ -69,6 +81,12 @@
     {:time night :blocks {"0,66,0" "oak_leaves"}} {} true
     {:time night :blocks {"0,66,0" "stone"} :self {:pos {:x 1 :y 64 :z 0}}} {} true
     {:time night :self {:isSleeping true}} {} false))
+
+(deftest night-unsafe-ignores-a-built-shelter-by-day
+  (let [{:keys [eng]} (setup {})]
+    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl day-ms})
+    (is (not (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake {:time noon}) (mem/view (:store eng)) {})))
+        "night-only: a built shelter at day does not hold it")))
 
 (deftest night-unsafe-is-registered-and-fires-shelter
   (let [t (get triggers/all :night-unsafe)]
@@ -124,6 +142,37 @@
           (is (= [] (calls p "sleep")))
           (is (= 9 (count (calls p "moveTo"))) "each of the three tries walks go-to afresh, three blocked walks each")
           (is (= 1 (count (emitted seen :bed_unreachable)))))))))
+
+(def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})
+
+(deftest sleep-remembers-an-unreachable-bed-for-ten-minutes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup unreachable-world)]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 20))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)))
+          (is (= {:cap 5 :ttl 600000} (mem/policy (mem/view (:store eng)) :bed-unreachable)))
+          (let [walks (count (calls p "moveTo"))]
+            (core/submit! eng '(jobs.survival.sleep) {})
+            (is (nil? (core/tick! eng)) "declines while the entry is fresh")
+            (is (= walks (count (calls p "moveTo"))))
+            (swap! clock + 600001)
+            (await (tick-n eng 1))
+            (is (< walks (count (calls p "moveTo"))) "tries the bed again once the entry expired")))))))
+
+(deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks {"7,64,0" "red_bed"}})]
+          (mem/write! (:store eng) :bed-unreachable {:pos {:x 6 :y 64 :z 0}} {:cap 5 :ttl 600000})
+          (know-bed! eng {:x 7 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 6))
+          (is (= 1 (count (calls p "sleep")))))))))
 
 ;; ----------------------------------------------------------------- log-out
 
@@ -202,18 +251,45 @@
           (is (= 2 (count (calls p "dig"))))
           (is (= "cobblestone" (.-item (.-args (first (calls p "place"))))) "the carried block is used first"))))))
 
-(deftest dig-in-without-any-placeable-block-just-digs-down
+(deftest dig-in-stops-after-one-dig-when-nothing-can-roof-the-pit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :drops {"iron_ore" "raw_iron"}
-                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
+        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"}
+                                           :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
-          (is (= 2 (count (calls p "dig"))))
+          (is (= 1 (count (calls p "dig"))) "no second dig")
           (is (= [] (calls p "place")))
-          (is (= {:x 0 :y 62 :z 0} (pos-of p)))
-          (is (= [{:pos {:x 0 :y 62 :z 0} :state :built}] (entries eng :shelter)) "no roof to reopen"))))))
+          (is (= 1 (count (emitted seen :dig_in_failed))))
+          (is (re-find #"nothing to roof the pit with" (:text (first (emitted seen :dig_in_failed)))))
+          (is (= [] (:list (core/state eng))) "ended"))))))
+
+(deftest dig-in-walls-converge-on-the-current-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory [{:name "dirt" :count 30}] :blocks floor})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (core/tick! eng))
+          (teleport! p 5 64 0)
+          (await (run-until-empty eng 8))
+          (is (= "dirt" (.-name (.blockAt p (tu/pos 5 66 0)))) "roof over where the body now is")
+          (is (= {:x 5 :y 64 :z 0} (:pos (last (entries eng :shelter)))))
+          (is (= {:x 5 :y 66 :z 0} (:roof (last (entries eng :shelter))))))))))
+
+(deftest dig-in-dig-mode-rechooses-when-the-body-moved-off-its-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks (merge floor {"5,63,0" "stone" "5,62,0" "stone" "5,61,0" "stone"})})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (core/tick! eng))
+          (teleport! p 5 64 0)
+          (await (run-until-empty eng 10))
+          (is (= [{:x 5 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) "roof at the new column's start")
+          (is (= {:x 5 :y 62 :z 0} (pos-of p)))
+          (is (= {:x 5 :y 64 :z 0} (:roof (last (entries eng :shelter))))))))))
 
 (deftest dig-in-gives-up-on-an-unplaceable-block
   (async done
@@ -305,25 +381,39 @@
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= 1 (count (calls p "offline"))) "the same round went on to log out"))))))
 
-(deftest shelter-digs-in-then-waits-and-reopens-at-dawn
+(deftest shelter-digs-in-and-ends-once-roofed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})]
           (core/submit! eng '(jobs.survival.shelter) {})
-          (await (tick-n eng 12))
+          (is (<= (await (run-until-empty eng 12)) 6) "ends instead of waiting for day")
           (is (= 10 (count (calls p "place"))))
-          (is (= [] (calls p "dig")) "still walled in")
-          (is (= 1 (count (:list (core/state eng)))) "still waiting for day")
+          (is (= [] (calls p "dig")))
           (is (= [:built] (mapv :state (entries eng :shelter))))
-          (.setTime (.-world p) noon)
-          (await (run-until-empty eng 4))
-          (is (= [{:x 0 :y 66 :z 0} {:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}] (mapv arg-pos (calls p "dig")))
-              "opened the roof and both door cells")
-          (is (= "air" (.-name (.blockAt p (tu/pos 0 66 0)))))
-          (is (= {:x 2 :y 64 :z 0} (arg-pos (last (calls p "moveTo")))) "walked out through the door, not to the roof")
-          (is (= [:built :reopened] (mapv :state (entries eng :shelter))))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest shelter-ends-without-acting-when-already-roofed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"}})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (core/tick! eng))
+          (is (= [] (declined-events seen :always-shelter)) "done, not declined")
+          (is (zero? (count (.-calls (.-world p))))))))))
+
+(deftest shelter-ends-at-day-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time noon})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (core/tick! eng))
+          (is (= [] (declined-events seen :always-shelter)))
+          (is (zero? (count (.-calls (.-world p))))))))))
 
 (defn walks-to-bed [p]
   (count (filter #(= {:x 6 :y 64 :z 0} (arg-pos %)) (calls p "moveTo"))))
@@ -345,17 +435,6 @@
             (await (tick-n eng 12))
             (is (= walks (walks-to-bed p)) "no more walking at the unreachable bed")
             (is (= 10 (count (calls p "place"))) "dig-in finished the walls")))))))
-
-(deftest shelter-waits-without-new-actions-while-it-is-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.shelter) {})
-          (await (tick-n eng 8))
-          (let [n (count (.-calls (.-world p)))]
-            (await (tick-n eng 5))
-            (is (= n (count (.-calls (.-world p)))))))))))
 
 (deftest shelter-treats-a-long-awake-body-as-needing-a-bed
   (async done
@@ -390,58 +469,43 @@
           (await (tick-n eng 4))
           (is (= 1 (count (calls p "sleep")))))))))
 
-;; ------------------------------------------------- declining while it waits
+;; ------------------------------------------------- declining when stuck
 
 (def shelter-policy {:cap 10 :ttl day-ms})
 
-(defn write-shelter! [eng state]
-  (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state state} shelter-policy))
-
-(defn holds-with-memory? [eng world]
-  (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {})))
-
-(defn declined-events [seen reflex]
-  (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
-
-(def always-shelter
-  {:name :always-shelter :job '(jobs.survival.shelter) :args {:roof-height 4}
-   :persistence :cooldown :cooldown-s 10 :when (constantly true)})
-
-(deftest shelter-declines-at-night-while-roofed-in-a-built-shelter
+(deftest shelter-declines-when-dig-in-ends-without-a-roof
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"}})
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (write-shelter! eng :built)
+          (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
-          (await (core/tick! eng))
-          (is (= 1 (count (declined-events seen :always-shelter))) "nothing to do until day: declined, not held")
-          (is (nil? (core/running eng)))
-          (is (= [] (calls p "dig"))))))))
+          (await (tick-n eng 8))
+          (is (= 1 (count (declined-events seen :always-shelter))))
+          (is (nil? (core/running eng))))))))
 
-(deftest night-unsafe-holds-at-day-only-with-a-built-shelter-here
-  (let [{:keys [eng]} (setup {})
-        roofed {:blocks {"0,66,0" "stone"}}]
-    (is (not (holds-with-memory? eng {:time noon})) "no shelter")
-    (write-shelter! eng :built)
-    (is (holds-with-memory? eng {:time noon}) "built shelter at the body's place, day")
-    (is (not (holds-with-memory? eng {:time noon :self {:pos {:x 5 :y 64 :z 0}}})) "body is elsewhere")
-    (is (not (holds-with-memory? eng (assoc roofed :time night))) "night under a roof")
-    (write-shelter! eng :reopened)
-    (is (not (holds-with-memory? eng {:time noon})) "reopened")))
-
-(deftest a-shelter-reflex-at-night-is-dropped-and-a-lower-reflex-gets-the-body
+(deftest shelter-declines-when-the-pit-cannot-be-roofed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :self {:food 5}
-                                           :inventory [{:name "bread" :count 3}]})]
-          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
+        (let [{:keys [eng seen]} (setup {:time night :drops {"iron_ore" "raw_iron"}
+                                         :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
-          (is (seq (declined-events seen :night-unsafe))
-              "the shelter reflex was dropped with reflex.declined")
+          (is (= 1 (count (declined-events seen :always-shelter)))))))))
+
+(deftest a-declined-shelter-reflex-lets-a-lower-reflex-get-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :self {:food 5} :blocks floor
+                                           :inventory [{:name "dirt" :count 12} {:name "bread" :count 3}]})]
+          (refuse-placing! p)
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
+          (await (tick-n eng 8))
+          (is (seq (declined-events seen :night-unsafe)) "the shelter reflex was dropped with reflex.declined")
           (is (< 5 (.-food (.self p))) "hungry got the body and ate"))))))
 
 (deftest a-failed-unroofed-shelter-at-night-does-not-throw
@@ -452,40 +516,14 @@
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
           (core/register-reflex! eng {:trigger :night-unsafe})
           (await (tick-n eng 4))
-          (is (nil? (core/running eng))))))))
-
-(deftest night-unsafe-fires-at-dawn-and-shelter-opens-the-built-shelter
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time noon :blocks {"0,66,0" "stone"}})]
-          (write-shelter! eng :built)
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
-          (await (tick-n eng 4))
-          (is (= [{:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))))
-          (is (= :reopened (:state (last (entries eng :shelter))))))))))
-
-(defn write-unroofed-shelter! [eng]
-  (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy))
+          (is (not (nil? eng))))))))
 
 (deftest shelter-retries-dig-in-at-night-beside-an-unroofed-shelter
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks floor :inventory [{:name "dirt" :count 16}]})]
-          (write-unroofed-shelter! eng)
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (tick-n eng 4))
           (is (seq (calls p "place")) "dig-in was tried again, not a bare decline"))))))
-
-(deftest shelter-reopens-an-unroofed-shelter-at-day
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time noon :blocks floor})]
-          (write-unroofed-shelter! eng)
-          (core/submit! eng '(jobs.survival.shelter) {})
-          (await (run-until-empty eng 4))
-          (is (= :reopened (:state (last (entries eng :shelter)))))
-          (is (= [] (calls p "place")))
-          (is (= [] (:list (core/state eng)))))))))

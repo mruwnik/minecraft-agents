@@ -3,30 +3,32 @@
             [engine.jobs.shelter :as sh]))
 
 (def doc
-  "Survive the night. Check: night, awake and no solid block within
-  :roof-height blocks above the body (the night-unsafe condition), or a built
-  :shelter entry at the body's place whose roof is still over it, or, by day,
-  any built entry there (roofed or not) so it is opened. A round
-  tries, in order, and the first that does not decline decides:
+  "Survive the night by getting the body sheltered. Check: the night-unsafe
+  condition (night, awake, no solid block within :roof-height blocks above the
+  body). A round ends :done at once when the body is asleep, is roofed within
+  :roof-height, or it is not night. Otherwise it tries, in order, and the first
+  that does not decline decides:
   1. jobs.survival.sleep, with a known bed within :bed-radius;
   2. jobs.survival.log-out, when there is no usable bed and another player
      sleeps, so that player can skip the night;
   3. jobs.survival.dig-in, which roofs the body in.
-  At night beside a built entry that has no roof over the body (a failed
-  dig-in) the round tries sleep, log-out and dig-in again rather than waiting.
+  A child that is actually working (:continue) makes the round :continue.
+  dig-in ending :done with the body roofed is :done; every case where nothing
+  could be done (all children declined, or dig-in ended without a roof) is
+  :declined, so the reflex is dropped and the trigger re-fires after its
+  cooldown if the body is still unsafe. It does not wait for day or open the
+  shelter again; leaving a shelter at dawn is the stuck reflex's business.
   A sleep that ends without sleeping (the bed was gone, or unreachable) falls
   through to the next choice in the same round and is recorded as
   :sleep-failed, so later rounds of this shelter do not call sleep again (and
-  walk back toward the bed) while the other choices work. Once dug in it waits for day
-  (jobs.time.wait-for-day), then opens the roof and leaves: through the :door
-  of a walled shelter (digging both door cells and walking to the cell beyond
-  it), or by climbing out of a pit, and
-  writes the :shelter entry again with :state :reopened. A body whose latest
+  walk back toward the bed) while the other choices work. A body whose latest
   :slept entry is more than :max-days-awake in-game days (20 minutes each)
   old, which phantoms attack, looks for a bed within :urgent-bed-radius rather
   than :bed-radius and emits a needs_bed warn once so a job that can find or
   craft a bed can act. A body with no :slept entry has no known last sleep and
-  is never counted as overdue.")
+  is never counted as overdue. Memory: reads :slept (and, through the children,
+  :bed, :bed-unreachable and :log-out); dig-in writes :shelter, which nothing
+  here reads.")
 
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
@@ -37,17 +39,8 @@
    :offline-ms {:doc "how long log-out stays away" :default 300000}
    :player-radius {:doc "log-out looks for sleeping players this far away" :default 128}})
 
-(defn waiting?
-  "A built shelter is here and there is nothing better to do than wait for day
-  in it: its roof is over the body, or it is day (time to open it)."
-  [c]
-  (let [p (:primitives c)]
-    (boolean (and (sh/active-shelter c)
-                  (or (sh/day? p) (sh/roofed? p (:roof-height (:args c))))))))
-
 (defn check [c]
-  (boolean (or (sh/unsafe-night? (:primitives c) (:roof-height (:args c)))
-               (waiting? c))))
+  (sh/unsafe-night? (:primitives c) (:roof-height (:args c))))
 
 (defn overdue? [c]
   (let [days (sh/days-awake c)]
@@ -58,36 +51,6 @@
     (ctx/update-mem! c assoc :needs-bed-noted true)
     (ctx/emit! c :needs_bed :warn {:days (sh/days-awake c)
                                    :text "not slept for too long; phantoms will come, find or make a bed"})))
-
-(defn beyond
-  "The cell past the door of a walled shelter, at feet height."
-  [{:keys [pos door]}]
-  (let [[feet] door]
-    (-> feet
-        (update :x + (- (:x feet) (:x pos)))
-        (update :z + (- (:z feet) (:z pos))))))
-
-(defn ^:async dig-out!
-  "At day: open the roof, then leave through the door of a walled shelter (dig
-  both door cells, walk to the cell beyond) or climb out of the pit, and mark
-  the shelter reopened."
-  [c shelter]
-  (let [roof (:roof shelter)
-        [feet head] (:door shelter)]
-    (when roof
-      (await (ctx/act c :dig (clj->js {:pos roof}))))
-    (cond
-      feet (do (await (ctx/act c :dig (clj->js {:pos feet})))
-               (await (ctx/act c :dig (clj->js {:pos head})))
-               (await (ctx/act c :moveTo (clj->js {:pos (beyond shelter) :range 0.5}))))
-      roof (await (ctx/act c :moveTo (clj->js {:pos roof :range 1}))))
-    (ctx/remember! c :shelter (assoc shelter :state :reopened) {:cap 10 :ttl sh/ms-per-day})))
-
-(defn ^:async wait-round [c shelter]
-  (let [w (await (ctx/call-child c :wait 'jobs.time.wait-for-day {}))]
-    (if (= :done w)
-      (do (await (dig-out! c shelter)) :done)
-      :declined)))
 
 (defn child-args [c radius]
   (let [{:keys [offline-allowed offline-ms player-radius]} (:args c)]
@@ -118,16 +81,14 @@
             :else
             (let [d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in (:dig-in a)))]
               (cond
-                (= :declined d) :done
                 (= :continue d) :continue
-                :else (if-let [shelter (sh/active-shelter c)]
-                        (await (wait-round c shelter))
-                        :declined)))))))))
+                (and (= :done d) (sh/roofed? p (:roof-height (:args c)))) :done
+                :else :declined))))))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)]
-    (cond
-      (sh/sleeping? p) :done
-      (waiting? c) (await (wait-round c (sh/active-shelter c)))
-      (not (check c)) :done
-      :else (await (choose-round c)))))
+    (if (or (sh/sleeping? p)
+            (sh/roofed? p (:roof-height (:args c)))
+            (not (sh/night? p)))
+      :done
+      (await (choose-round c)))))
