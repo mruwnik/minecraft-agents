@@ -163,7 +163,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 
 | method | args | statuses | bound | on cut |
 |---|---|---|---|---|
-| `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress; `reason: 'noPath'` when the pathfinder gave up with no path and the body is not there) | `timeoutS`, at most 60 | goal cleared, controls released |
+| `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path or no progress); a non-arrived result may carry `reason`: `'noPath'` (the planner found no way), `'planTimeout'` (planning took too long), `'stalled'` (the body got less than 1 block from where it was for 8 s, so a walk stuck flush against a ledge ends in seconds instead of sitting out `timeoutS`), `'timeout'` (`timeoutS` ran out); a target farther than `maxDistance` is walked in hops, each ending within 4 blocks (XZ) of the point `maxDistance` along the line, on a cell open to the sky (sky light >= 12), so a far walk stays on the surface rather than following caves | `timeoutS`, at most 60 | goal cleared, controls released |
 | `dig(token, a)` | `{pos}` | `dug`, `missing` (air), `unreachable` (more than 4.5 away), `cannot` (unbreakable) | 10 s | `stopDigging` |
 | `place(token, a)` | `{pos, item}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable` | 5 s | nothing placed after the cut |
 | `jumpPlace(token, a)` | `{item, count = 1}`, count at most 8 | `done`, `partial` (some placed), `failed` (none); `placed` (blocks placed) and `reason`: `no-item`, `no-support`, `no-headroom`, `not-raised`, `place-failed: ...`, `timeout` | 2 s per block | jump released |
@@ -188,7 +188,7 @@ Acting while asleep first leaves the bed (`leave_bed` sent by name, since minefl
 
 Extra fields on the result:
 
-- `moveTo`: `pos` (where the body ended), `distance` (to the target), `reason` (`'noPath'`, only on `blocked`).
+- `moveTo`: `pos` (where the body ended), `distance` (to the target), `reason` (one of `'noPath'`, `'planTimeout'`, `'stalled'`, `'timeout'`, on `partial` or `blocked`).
 - `swim`: `oxygen` (`{before, after}`, the air level when the call started and ended).
 - `dig`: `block` (name dug), `drops` (`[{id, name, count, pos}]`, the item
   entities that appeared within 2 blocks during up to 1 s after the break).
@@ -238,6 +238,8 @@ its wait early with the body back (online event) before the call resolves `cut`.
 The pathfinder goal never outlives a walk: `moveTo` and `collect` clear it (and the control states) on every way out, and the
 body's `death` and `respawn` events clear it too, so the body does not walk back to an old goal after a respawn. A reconnected
 bot starts with no goal.
+
+The pathfinder's movements (`js/movements.mjs`) never dig or build. Powder snow, cobweb, sweet berry bush and wither rose in the body's cells, and magma, campfire and soul campfire underfoot, add a cost rather than a ban (30, 40, 20, 20 and 20, 40, 40: a detour of up to roughly that many blocks is preferred, crossing stays possible when it is the only way). Fire, soul fire and lava are avoided outright, a parkour jump never passes over lava or fire (no way round means `noPath`), and a drop into water is bound by the usual 4-block drop limit.
 
 An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
 bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the

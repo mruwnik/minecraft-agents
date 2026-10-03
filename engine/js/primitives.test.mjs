@@ -667,6 +667,36 @@ test('moveTo: a goto that resolves on noPath with the body unmoved is blocked, n
   assert.deepEqual(result.pos, at(0, 64, 0))
 })
 
+// goto.js rejects with an Error named after the planner's verdict when the best-effort path is not empty.
+const rejectNamed = (name, spec = {}) => {
+  const { bot, p } = rig({ ...world, ...spec })
+  bot.pathfinder.goto = () => Promise.reject(Object.assign(new Error(name), { name }))
+  return p
+}
+
+test('moveTo: a goto rejected with NoPath, the body unmoved, is blocked noPath', async () => {
+  const result = await rejectNamed('NoPath').moveTo('t1', { pos: at(30, 64, 0) })
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'noPath')
+})
+
+test('moveTo: a goto rejected with Timeout is blocked planTimeout', async () => {
+  const result = await rejectNamed('Timeout').moveTo('t1', { pos: at(30, 64, 0) })
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'planTimeout')
+})
+
+test('moveTo: a goto rejected with another error is blocked with no reason', async () => {
+  const result = await rejectNamed('Boom').moveTo('t1', { pos: at(30, 64, 0) })
+  assert.equal(result.status, 'blocked')
+  assert.equal('reason' in result, false)
+})
+
+test('collect: a goto rejected with NoPath is unreachable', async () => {
+  const result = await rejectNamed('NoPath').collect('t1', { id: 7 })
+  assert.equal(result.status, 'unreachable')
+})
+
 test('moveTo: a goto that resolves with the body moved but short of the goal is partial', async () => {
   const { bot, p } = rig(world)
   bot.pathfinder.goto = () => { bot.entity.position = new Vec3(10, 64, 0); return Promise.resolve() }
@@ -678,6 +708,56 @@ test('moveTo: a goto that resolves within range is arrived', async () => {
   const { bot, p } = rig(world)
   bot.pathfinder.goto = () => { bot.entity.position = new Vec3(29.5, 64, 0.5); return Promise.resolve() }
   assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0) })).status, 'arrived')
+})
+
+// moveTo: a capped hop stays on the surface (its goal needs open sky), and a walk with no progress ends early.
+const hopGoal = async sky => {
+  const { bot, p } = rig({ ...world, hang: ['goto'], skyLight: sky })
+  await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
+  return bot.calls.find(c => c.name === 'goto').args[0]
+}
+
+test('moveTo: the hop toward a far target is not ended by a node under a roof', async () => {
+  assert.equal((await hopGoal(0)).isEnd(new Vec3(64, 64, 0)), false)
+})
+
+test('moveTo: the hop toward a far target ends at a node in range under open sky', async () => {
+  assert.equal((await hopGoal(15)).isEnd(new Vec3(64, 64, 0)), true)
+})
+
+test('moveTo: the hop toward a far target is not ended by a node out of range', async () => {
+  assert.equal((await hopGoal(15)).isEnd(new Vec3(30, 64, 0)), false)
+})
+
+test('moveTo: the hop reads sky light from the bot at the time, and an unloaded block is not open sky', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'], skyLight: 15, unloaded: true })
+  await p.moveTo('t1', { pos: at(200, 64, 0), timeoutS: 1 })
+  assert.equal(bot.calls.find(c => c.name === 'goto').args[0].isEnd(new Vec3(64, 64, 0)), false)
+})
+
+test('moveTo: a walk whose body never moves ends stalled well before its timeout', async () => {
+  const { p } = rig({ ...world, hang: ['goto'] })
+  const started = Date.now()
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'stalled')
+  assert.ok(Date.now() - started < 60 * 1000 * SCALE / 2)
+})
+
+test('moveTo: a body that keeps moving is not cut by the stall rule and ends on the timeout', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  const mover = setInterval(() => { bot.entity.position = new Vec3(bot.entity.position.x + 0.1, 64, 0) }, 1).unref()
+  const result = await p.moveTo('t1', { pos: at(60, 64, 0), timeoutS: 20 })
+  clearInterval(mover)
+  assert.equal(result.reason, 'timeout')
+})
+
+test('moveTo: a body that moved three blocks and then stopped is partial, stalled', async () => {
+  const { bot, p } = rig({ ...world, hang: ['goto'] })
+  setTimeout(() => { bot.entity.position = new Vec3(3, 64, 0) }, 5)
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
+  assert.equal(result.status, 'partial')
+  assert.equal(result.reason, 'stalled')
 })
 
 // swim

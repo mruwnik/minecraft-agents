@@ -15,6 +15,19 @@ import { interactWith, mobFields } from './interact.mjs'
 const { Vec3 } = vec3
 const { goals } = pf
 
+// GoalNearXZ takes any y, which walked a far-target hop down into caves: the end must also be open to the sky.
+// `getBot` is read at each check, a reconnect replaces the bot.
+class GoalSurfaceHop extends goals.GoalNearXZ {
+  constructor (x, z, range, getBot) {
+    super(x, z, range)
+    this.getBot = getBot
+  }
+
+  isEnd (node) {
+    return super.isEnd(node) && this.getBot().blockAt(node)?.skyLight >= OPEN_SKY
+  }
+}
+
 export const REACH = 4.5
 export const ATTACK_REACH = 3.5
 const MONSTER_RANGE = 8
@@ -49,6 +62,11 @@ const TELEPORT_BLOCKS = 16 // a forced move farther than this is a teleport; sma
 // stone pad stuck 25 s at 0.3, 3 of 3 took 0.7-1 s with no setbacks at 0.31 (same on a leaf-litter hillside where
 // every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out at 0.31.
 const BODY_HALF_WIDTH = 0.31
+const OPEN_SKY = 12 // sky light at or above this counts as open to the sky (under a tree canopy still does)
+const HOP_RANGE = 4 // a capped hop ends within this many blocks (XZ) of its point on the line to the target
+const PLAN_REASONS = { NoPath: 'noPath', Timeout: 'planTimeout' } // goto's rejection names that say why it gave up
+const PROGRESS_BLOCKS = 1 // a walk must get this far (3D) from its anchor...
+const STALL_S = 8 // ...within this long, or it ends stalled (the pathfinder's own stuck reset plus one step-up fit in it)
 const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 const STEP_RISE = 1.0
@@ -202,7 +220,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
-  // a walk toward `goal`, abortable; resolves true when the pathfinder reached it, false when it gave up
+  // a walk toward `goal`, abortable; resolves {reached: true} when the pathfinder reached it, else {reached: false,
+  // reason}: 'noPath' (goto resolved on an empty noPath update, or was rejected NoPath), 'planTimeout' (rejected
+  // Timeout), 'stalled' when the body made no progress for STALL_S (unless `stall` is off); no reason for any other
+  // rejection
   // The goal is cleared on every way out (arrived, gave up, timed out, cut): a goal left set makes the pathfinder
   // walk the body back on its own, e.g. after a respawn.
   const stopWalking = target => { target.pathfinder?.setGoal(null); target.clearControlStates?.() }
@@ -285,13 +306,25 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     }
   }
   // A goto is rejected by our own setGoal(null) when a step-up starts; that is not a failure, the walk re-issues it.
-  const walk = async (ctx, goal) => {
+  const walk = async (ctx, goal, { stall = true } = {}) => {
     const walking = bot
     ctx.onAbort(() => stopWalking(walking))
     let path = null
     let onStuck = () => {}
-    const onUpdate = result => { if (result?.status === 'success' || result?.status === 'partial') path = result.path }
+    let emptyNoPath = false // goto resolves, not rejects, on a noPath update with an empty path
+    const onUpdate = result => {
+      if (result?.status === 'success' || result?.status === 'partial') path = result.path
+      emptyNoPath = result?.status === 'noPath' && !result.path?.length
+    }
     const onReset = reason => { if (reason === 'stuck') onStuck() }
+    let anchor = { pos: walking.entity.position.clone(), at: Date.now() }
+    let onStall = () => {}
+    const poll = setInterval(() => {
+      const pos = walking.entity.position
+      if (dist(pos, anchor.pos) >= PROGRESS_BLOCKS) anchor = { pos: pos.clone(), at: Date.now() }
+      else if (stall && Date.now() - anchor.at >= STALL_S * 1000 * timeScale) onStall()
+    }, Math.max(1, POLL_MS * timeScale))
+    ctx.onAbort(() => clearInterval(poll)) // a timed-out or cut call never reaches the finally
     walking.on('path_update', onUpdate)
     walking.on('path_reset', onReset)
     try {
@@ -300,13 +333,20 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         const stuck = new Promise(resolve => {
           onStuck = () => { const target = attempts < STEP_ATTEMPTS ? stepUpTarget(path, walking) : null; if (target) resolve(target) }
         })
-        const ended = await Promise.race([walking.pathfinder.goto(goal).then(() => true, () => false), stuck])
+        const stalled = new Promise(resolve => { onStall = () => resolve({ reached: false, reason: 'stalled' }) })
+        emptyNoPath = false
+        const gone = walking.pathfinder.goto(goal).then(
+          () => emptyNoPath ? { reached: false, reason: 'noPath' } : { reached: true },
+          err => ({ reached: false, ...(PLAN_REASONS[err?.name] && { reason: PLAN_REASONS[err.name] }) })
+        )
+        const ended = await Promise.race([gone, stuck, stalled])
         ctx.alive()
-        if (typeof ended === 'boolean') return ended
+        if ('reached' in ended) return ended
         await stepUp(ctx, walking, ended)
         ctx.alive()
       }
     } finally {
+      clearInterval(poll)
       walking.off('path_update', onUpdate)
       walking.off('path_reset', onReset)
       stopWalking(walking)
@@ -432,7 +472,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const before = dist(start, target)
     const capped = before > maxDistance
     const goal = capped
-      ? new goals.GoalNearXZ(Math.round(start.x + (target.x - start.x) * maxDistance / before), Math.round(start.z + (target.z - start.z) * maxDistance / before), 2)
+      ? new GoalSurfaceHop(Math.round(start.x + (target.x - start.x) * maxDistance / before), Math.round(start.z + (target.z - start.z) * maxDistance / before), HOP_RANGE, () => bot)
       : new goals.GoalNear(target.x, target.y, target.z, range)
     // `reached` is only what the pathfinder promised: goto resolves on a noPath update with an empty path, so the
     // goal itself is checked against where the body stands.
@@ -440,11 +480,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const outcome = (reached) => {
       const distance = dist(here(), target)
       const base = { pos: here(), distance }
-      if (reached && satisfied()) return { status: 'arrived', ...base }
-      if (distance < before - 1) return { status: 'partial', ...base }
-      return { status: 'blocked', ...(reached && !capped && { reason: 'noPath' }), ...base }
+      if (reached.reached && satisfied()) return { status: 'arrived', ...base }
+      const { reason } = reached
+      if (distance < before - 1) return { status: 'partial', ...(reason && { reason }), ...base }
+      return { status: 'blocked', ...(reason && { reason }), ...base }
     }
-    return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome(false) }, async ctx => outcome(await walk(ctx, goal)))
+    return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => outcome(await walk(ctx, goal)))
   }
 
   const oxygenNow = () => bot.oxygenLevel ?? 20
@@ -653,7 +694,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => ({ status: 'timeout', gained: gained(before, countsNow()) }) }, async ctx => {
       const target = bot.entities[id]
       if (!target || entityKind(target) !== 'item') return { status: 'gone' }
-      const reached = await walk(ctx, new goals.GoalNear(target.position.x, target.position.y, target.position.z, 1))
+      const { reached } = await walk(ctx, new goals.GoalNear(target.position.x, target.position.y, target.position.z, 1), { stall: false })
       if (!reached && bot.entities[id]) return { status: 'unreachable', gained: gained(before, countsNow()) }
       while (bot.entities[id]) {
         await sleepMs(POLL_MS * timeScale)
