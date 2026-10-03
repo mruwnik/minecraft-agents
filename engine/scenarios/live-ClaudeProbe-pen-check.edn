@@ -1,0 +1,15 @@
+;; jobs.animals.pen-check live: pens on a sky platform at 9440..9560, floor top y 151 (see the job's commit): A closed fence+closed gate, B open gate, C one fence missing, D cut corner, E stone 2 high, F1 stone 1 high, F2 bottom slabs, then the 50x50 pen, a bound of 10, boxes on B C F2, and a start in the air
+{:register []
+ :queue [(jobs.animals.pen-check {:at [9450 151 9452]})
+         (jobs.animals.pen-check {:at [9462 151 9452]})
+         (jobs.animals.pen-check {:at [9474 151 9452]})
+         (jobs.animals.pen-check {:at [9486 151 9452]})
+         (jobs.animals.pen-check {:at [9498 151 9452]})
+         (jobs.animals.pen-check {:at [9510 151 9452]})
+         (jobs.animals.pen-check {:at [9522 151 9452]})
+         (jobs.animals.pen-check {:at [9475 151 9505]})
+         (jobs.animals.pen-check {:at [9450 151 9452] :max-cells 10})
+         (jobs.animals.pen-check {:box {:min {:x 9460 :y 151 :z 9450} :max {:x 9464 :y 151 :z 9454}}})
+         (jobs.animals.pen-check {:box {:min {:x 9472 :y 151 :z 9450} :max {:x 9476 :y 151 :z 9454}}})
+         (jobs.animals.pen-check {:box {:min {:x 9520 :y 151 :z 9450} :max {:x 9524 :y 151 :z 9454}}})
+         (jobs.animals.pen-check {:at [9450 160 9452]})]}
