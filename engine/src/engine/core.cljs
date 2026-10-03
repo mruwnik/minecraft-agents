@@ -15,6 +15,9 @@
     :resume id              a cut listed job, next once the body is free
     :current id             the listed job whose round is in flight
     :pending-reflex id      a reflex job between its rounds; it keeps the body
+    :failed {id {:error text :t ms}}  listed jobs whose round threw; they keep
+                            their place and memory, the scheduler skips them
+                            until retry! or cancel!
     :next-id n
   The in-flight round itself ({:id :token :reflex :round}) is not persisted."
   (:require [engine.composite :as composite]
@@ -35,7 +38,7 @@
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
-   :cursor 0 :resume nil :current nil :pending-reflex nil :next-id 1})
+   :cursor 0 :resume nil :current nil :pending-reflex nil :failed {} :next-id 1})
 
 ;; ------------------------------------------------------------------ errors
 
@@ -93,7 +96,8 @@
   (let [idx (.indexOf (:list state) id)]
     (cond-> (-> state
                 (update :list #(filterv (fn [x] (not= id x)) %))
-                (update :instances dissoc id))
+                (update :instances dissoc id)
+                (update :failed dissoc id))
       (and (>= idx 0) (< idx (:cursor state))) (update :cursor dec)
       (= id (:resume state)) (assoc :resume nil)
       (= id (:pending-reflex state)) (assoc :pending-reflex nil)
@@ -107,6 +111,7 @@
         reflex-ids (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances s))
         current (:current s)]
     (-> s
+        (update :failed select-keys (:list s))
         (assoc :resume (if (some #{current} (:list s)) current (:resume s))
                :current nil
                :pending-reflex nil)
@@ -308,17 +313,19 @@
                               ((:check def) (check-ctx eng inst args)))))))
 
 (defn choose-listed
-  "The listed job to run next: a holder (or nothing, while its check declines),
+  "The listed job to run next, never a failed one: a holder (or nothing, while its check declines),
   else the cut job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
-        holder (some #(when (:hold? (instances %)) %) list)]
+        failed? (fn [id] (contains? (:failed (state eng)) id))
+        runnable? (fn [id] (and (not (failed? id)) (check-passes? eng id)))
+        holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
     (cond
-      holder (when (check-passes? eng holder) holder)
-      (and resume (some #{resume} list) (check-passes? eng resume)) resume
+      holder (when (runnable? holder) holder)
+      (and resume (some #{resume} list) (runnable? resume)) resume
       (zero? n) nil
-      :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (check-passes? eng id) id)))
+      :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (runnable? id) id)))
                   (range n)))))
 
 ;; ------------------------------------------------------------------ settling a round
@@ -339,10 +346,12 @@
                              :text "a primitive rejected with cut; the job stays listed"})))
 
       :error
-      (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
-          (mem/delete-job! (:store eng) id)
+      (do (swap! (:state eng) #(-> %
+                                   (assoc-in [:failed id] {:error (str error) :t (now eng)})
+                                   (assoc :cursor (inc idx) :current nil)))
           (emit! eng (merge fields {:source :job :kind :failed :level :warn
-                                    :error (str error) :text (str "dropped: " error)})))
+                                    :error (str error)
+                                    :text (str "failed, kept on the list until retry! or cancel!: " error)})))
 
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
@@ -538,6 +547,16 @@
   (mem/delete-job! (:store eng) id)
   (save-memory! eng)
   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by :agent}))
+
+(defn retry!
+  "Clear the failed mark of listed job id so the scheduler runs it again, memory
+  as it was. False when the job is not marked failed."
+  [eng id]
+  (if-not (contains? (:failed (state eng)) id)
+    false
+    (do (swap! (:state eng) update :failed dissoc id)
+        (emit! eng {:source :job :kind :retried :level :info :job id :chain [id] :by :agent})
+        true)))
 
 (defn do-now!
   "Cut a running listed job and put the job spec at the front, holding the body."

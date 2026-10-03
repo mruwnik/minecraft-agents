@@ -322,9 +322,13 @@ are untested.
   throws declines (with a `system.error` warn). The engine refuses a job
   without a `check` and a `round`.
 - **The round** returns `:done` (the job leaves the list and its memory is
-  deleted) or `:continue`. Anything else, or a throw, drops the job with a
-  `job.failed` warn. A cut is never a failure: the job stays listed with its
-  memory.
+  deleted) or `:continue`. Anything else, or a throw, is a failure: a
+  listed job stays on the list with its memory, marked failed (`:failed {id
+  {:error :t}}` in the engine state, persisted in `engine.edn`), with a
+  `job.failed` warn. The scheduler skips a failed job, even a holding one,
+  until `retry!` clears the mark; `cancel!` removes it as usual. A reflex job
+  that fails is dropped (one chance) with the same warn. A cut is never a
+  failure: the job stays listed with its memory.
 - Long waits are not loops: a job waiting for daylight returns `:continue`
   and declines in its check until the sun is up (`jobs.time.wait-for-day`).
 - **`args`** maps each arg key to `{:doc :default}`. The engine merges the
@@ -569,7 +573,9 @@ exists; none does yet, so today the flag does nothing.
    whose check passes. Whatever a round returns, the list moves on. If every
    check declines, nothing runs until the next tick.
 
-`submit!` and `cancel!` (agent) edit the list; `do-now!` (agent) cuts the
+`submit!` and `cancel!` (agent) edit the list; `retry!` (agent, `(core/retry!
+eng id)`, true when `id` was marked failed) clears a failed mark and emits
+`job.retried`; `do-now!` (agent) cuts the
 running listed job and submits at the front with `:hold? true`.
 
 The list, register and changes are written to `engine.edn` on every change;
@@ -610,7 +616,7 @@ JSON lines, one per event, on stdout and appended to
 
 Plus kind-specific fields. Kinds the engine emits: `job.queued`,
 `job.round_started`, `job.yielded` (a `:continue`), `job.cut`,
-`job.completed`, `job.failed`, `job.cancelled`, `job.stalled` (warn),
+`job.completed`, `job.failed`, `job.retried`, `job.cancelled`, `job.stalled` (warn),
 `job.memory_written` (debug, `memory` is the kind), `action.started` and
 `action.done` (debug), `reflex.fired`, `reflex.ended` (`how`: `cleared`,
 `completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,

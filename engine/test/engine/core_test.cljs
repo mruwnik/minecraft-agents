@@ -39,6 +39,10 @@
 (defn ^:async fail-round [_]
   (throw (js/Error. "nope")))
 
+(defn ^:async write-fail-round [c]
+  (ctx/update-mem! c assoc :x 1)
+  (throw (js/Error. "nope")))
+
 (defn ^:async bad-result-round [_]
   :not-ready)
 
@@ -95,6 +99,7 @@
    'parent-walk {:check always :round parent-walk-round}
    'eat {:check always :round eat-round}
    'fail {:check always :round fail-round}
+   'write-fail {:check always :round write-fail-round}
    'bad-result {:check always :round bad-result-round}
    'child child-job
    'recurse {:check always :round recurse-round}
@@ -117,6 +122,7 @@
           :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
    :every-interval triggers/every-interval
    :never {:name :never :job '(eat) :when (constantly false)}
+   :boom {:name :boom :job '(fail) :persistence :retry :when (constantly true)}
    :gated {:name :gated :job '(gated) :persistence :retry :when (constantly true)}
    :gated-child {:name :gated-child :job '(any-gated) :persistence :retry :when (constantly true)}})
 
@@ -130,6 +136,8 @@
          eng (core/create {:primitives p :jobs registry :triggers triggers :dir dir :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :clock clock :seen seen :dir dir})))
+
+(declare restore-with)
 
 (defn listed [eng] (:list (core/state eng)))
 (defn job-mem
@@ -215,7 +223,7 @@
         (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(bad-result) {})
           (await (core/tick! eng))
-          (is (= [] (listed eng)))
+          (is (= ["j1"] (listed eng)))
           (is (some #(= :failed (:kind %)) @seen)))))))
 
 (deftest a-holding-job-whose-check-declines-idles-the-body
@@ -265,15 +273,97 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j2" "j2" "j2"] (ran seen))))))))
 
-(deftest a-throwing-round-drops-the-job-with-a-warning
+(deftest a-throwing-listed-job-stays-listed-with-its-memory-marked-failed-and-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup)]
+          (core/submit! eng '(write-fail) {})
+          (core/submit! eng '(count) {})
+          (await (core/tick! eng))
+          (is (= ["j1" "j2"] (listed eng)) "still listed")
+          (is (= {:x 1} (job-mem eng "j1")) "memory intact")
+          (is (= {"j1" {:error "Error: nope" :t @clock}} (:failed (core/state eng))))
+          (is (= [:warn] (mapv :level (filter #(= :failed (:kind %)) @seen))))
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j1" "j2" "j2" "j2"] (ran seen)) "the scheduler skips j1"))))))
+
+(deftest a-round-returning-junk-marks-the-job-failed-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (core/submit! eng '(bad-result) {})
+          (await (core/tick! eng))
+          (is (= ["j1"] (listed eng)))
+          (is (contains? (:failed (core/state eng)) "j1")))))))
+
+(deftest a-failed-holding-job-does-not-hold-the-body
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(fail) {})
+          (core/submit! eng '(fail) {:hold? true})
+          (core/submit! eng '(count) {})
           (await (core/tick! eng))
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= ["j1" "j2" "j2"] (ran seen))))))))
+
+(deftest retry-clears-the-failed-mark-so-the-job-runs-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng '(write-fail) {})
+          (await (core/tick! eng))
+          (is (nil? (core/tick! eng)) "skipped while failed")
+          (is (true? (core/retry! eng "j1")))
+          (is (= {} (:failed (core/state eng))))
+          (is (= {:x 1} (job-mem eng "j1")))
+          (is (some #(= [:job :retried "j1"] [(:source %) (:kind %) (:job %)]) @seen))
+          (await (core/tick! eng))
+          (is (= ["j1" "j1"] (ran seen)))
+          (is (false? (core/retry! eng "nope"))))))))
+
+(deftest cancel-removes-a-failed-job-and-its-mark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (core/submit! eng '(write-fail) {})
+          (await (core/tick! eng))
+          (core/cancel! eng "j1")
           (is (= [] (listed eng)))
-          (is (= :warn (:level (first (filter #(= :failed (:kind %)) @seen))))))))))
+          (is (= {} (:failed (core/state eng))))
+          (is (= {} (job-mem eng "j1"))))))))
+
+(deftest a-throwing-reflex-job-is-dropped-with-the-same-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/register-reflex! eng {:trigger :boom})
+          (await (core/tick! eng))
+          (is (= {} (:instances (core/state eng))) "one chance")
+          (is (= {} (:failed (core/state eng))))
+          (is (= [[:warn :boom]] (mapv (juxt :level :reflex) (filter #(= :failed (:kind %)) @seen)))))))))
+
+(deftest a-restart-keeps-the-failed-mark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng dir]} (setup)]
+          (core/submit! eng '(write-fail) {})
+          (await (core/tick! eng))
+          (let [[again _] (restore-with dir registry triggers)]
+            (is (= ["j1"] (listed again)))
+            (is (= #{"j1"} (set (keys (:failed (core/state again))))))
+            (is (= "Error: nope" (get-in (core/state again) [:failed "j1" :error])))
+            (is (nil? (core/tick! again)) "still skipped")
+            (core/retry! again "j1")
+            (let [round (core/tick! again)]
+              (is (some? round) "retry runs it")
+              (await round))))))))
 
 (deftest a-child-lives-in-its-parents-memory-under-children
   (async done
