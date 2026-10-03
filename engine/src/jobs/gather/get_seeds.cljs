@@ -14,11 +14,13 @@
   :collect-radius; (4) :dry-digs digs in a row that brought no new item end
   :dry (warn get-seeds.gave-up); (5) the nearest :sources blocks within
   :radius not skipped, at most :per-round of them, are walked to (within 3)
-  and dug in order: an unreachable block is skipped, a partial walk ends the
-  batch, a dig that is neither dug nor missing skips the block (tall grass
+  and dug in order: a block whose walk is blocked or partial is skipped and
+  the batch goes on, a dig that is neither dug nor missing skips the block (tall grass
   takes its other half with it, so a missing one is fine); no block left ends
-  :none; two batches in a row that dug nothing end :barren (warn
-  get-seeds.gave-up). Hands over {:got n :reason r} (info get-seeds.done);
+  :none; two batches in a row where nothing was diggable (no block dug and none
+  skipped: all missing) end :barren (warn get-seeds.gave-up), while a batch of only
+  skipped blocks is not barren (the job ends :none once every source in radius
+  is skipped). Hands over {:got n :reason r} (info get-seeds.done);
   :got is how many more are carried than at the start, at least 0.")
 
 (def args
@@ -44,7 +46,7 @@
   (let [{:keys [radius sources]} (:args c)
         skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names (clj->js sources) :max 64}))
+    (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names (clj->js sources) :max (+ 64 (count skipped))}))
          (map #(u/pos-of (.-pos %)))
          (remove skipped)
          (sort-by #(u/dist here %))
@@ -75,12 +77,11 @@
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
 (defn ^:async dig-one!
-  "Walk to pos and dig it: :dug, :missing, :skipped or :stop (a partial walk)."
+  "Walk to pos and dig it: :dug, :missing or :skipped (a blocked or partial walk, or a dig that is neither dug nor missing)."
   [c pos]
   (let [walked (await (u/walk-near! c pos reach))]
     (cond
-      (= :blocked walked) (do (skip! c pos) :skipped)
-      (= :partial walked) :stop
+      (contains? #{:blocked :partial} walked) (do (skip! c pos) :skipped)
       :else (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
               (cond
                 (= "dug" status) (do (ctx/update-mem! c update :dry (fnil inc 0)) :dug)
@@ -88,15 +89,13 @@
                 :else (do (skip! c pos) :skipped))))))
 
 (defn ^:async dig-batch!
-  "Dig the positions in order, stopping at a partial walk; how many were dug."
+  "Dig the positions in order; {:dug n :skipped m} counts."
   [c targets]
-  (loop [todo targets dug 0]
+  (loop [todo targets counts {:dug 0 :skipped 0}]
     (if-let [pos (first todo)]
       (let [r (await (dig-one! c pos))]
-        (if (= :stop r)
-          dug
-          (recur (rest todo) (if (= :dug r) (inc dug) dug))))
-      dug)))
+        (recur (rest todo) (cond-> counts (contains? counts r) (update r inc))))
+      counts)))
 
 (defn ^:async take! [c]
   (let [{:keys [chest item]} (:args c)
@@ -123,8 +122,8 @@
     :continue))
 
 (defn ^:async dig-round! [c targets]
-  (let [dug (await (dig-batch! c targets))
-        barren (if (zero? dug) (inc (:barren (ctx/mem c) 0)) 0)]
+  (let [{:keys [dug skipped]} (await (dig-batch! c targets))
+        barren (if (zero? (+ dug skipped)) (inc (:barren (ctx/mem c) 0)) 0)]
     (ctx/update-mem! c assoc :barren barren :collecting true)
     (if (>= barren 2)
       (give-up! c :barren)

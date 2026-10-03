@@ -98,15 +98,17 @@
           (is (= 0 (:got (done-event s))))
           (is (finished? s)))))))
 
-(deftest unreachable-grass-is-skipped-and-the-job-ends-barren
+;; Changed from ending :barren: a batch whose targets were all skipped is not barren;
+;; the job ends :none once every source in radius is skipped.
+(deftest unreachable-grass-is-skipped-and-the-job-ends-none
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [cells (patch "short_grass" (range 6 12) [0])
               s (await (scenario {:per-round 3} {:blocks cells :drops seed-drops :unreachable (vec (keys cells))} 40))
               warns (events-of s :get-seeds.gave-up)]
-          (is (= :barren (:reason (done-event s))))
-          (is (= 1 (count warns)))
+          (is (= :none (:reason (done-event s))))
+          (is (zero? (count warns)))
           (is (<= (count (h/calls (:p s) "moveTo")) 6) "each cell is tried once")
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
@@ -174,3 +176,30 @@
             (await (core/tick! eng)))
           (is (= :count (:reason @out)))
           (is (>= (:got @out) 2)))))))
+
+(deftest a-partial-walk-skips-the-source-and-the-batch-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:blocks {"6,64,0" "short_grass" "9,64,0" "short_grass"} :drops seed-drops})]
+          (.override (.-world p) "moveTo"
+                     (fn [token args impl]
+                       (if (= 6 (.-x (.-pos args)))
+                         (js/Promise.resolve #js {:status "partial" :pos #js {:x 0 :y 64 :z 0} :distance 6})
+                         (impl token args))))
+          (core/submit! eng (spec {:count 1}) {})
+          (await (run-ticks s 40 700))
+          (is (= [9] (mapv #(.-x (.-pos (.-args %))) (h/calls p "dig"))) "only the reachable cell is dug")
+          (is (= :count (:reason (done-event s))))
+          (is (finished? s)))))))
+
+(deftest the-scan-sees-past-skipped-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (patch "short_grass" (range 5 16) (range 0 6))
+              far "15,64,5"
+              s (await (scenario {:count 1 :per-round 8}
+                                 {:blocks cells :drops seed-drops :unreachable (vec (remove #{far} (keys cells)))} 200))]
+          (is (= 1 (dig-count s)) "the one reachable cell, beyond 64 skipped ones, is dug")
+          (is (= :count (:reason (done-event s)))))))))
