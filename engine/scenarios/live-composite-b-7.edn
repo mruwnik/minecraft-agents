@@ -1,0 +1,3 @@
+;; kit live: no chest given and none remembered: the listed job must never run (composite-b).
+{:register []
+ :queue [(jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12})]}

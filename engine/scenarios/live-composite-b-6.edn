@@ -1,0 +1,4 @@
+;; kit live: a 5 s pause (items may be given meanwhile), then a hoe kit with food (composite-b).
+{:register []
+ :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+              (jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12 :chest {:x -5003 :y 101 :z -5000}}))]}
