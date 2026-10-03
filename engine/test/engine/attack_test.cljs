@@ -353,3 +353,16 @@
           (await (core/tick! eng))
           (is (= :lost (:reason (done-event s))))
           (is (= [7] (:killed (done-event s)))))))))
+
+(deftest a-given-up-target-that-leaves-ends-gave-up-not-cleared
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]}
+                                                           {:inventory h/sword
+                                                            :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 4))]
+          (aset (aget (.. p -world -state -entities) 0) "pos" (tu/pos 0 64 40))
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= :gave-up (:reason (done-event s))))
+          (is (= {7 :no-damage} (:given-up (done-event s)))))))))

@@ -827,8 +827,9 @@ after three the job emits a warn and ends.
   walks or out-of-reach swings, `:no-damage-hits` swings that did no damage, or `:max-hits` hits. A kill is booked
   only when `attack` reports `killed` (a target that merely vanishes is not); a killed target is not attacked again,
   even respawned. Done with
-  `:cleared` (nothing in `:radius` for `:lost-s`, waiting in 1 s steps, and every target ever seen was killed or
-  given up on), `:lost` (the same, but one was neither, e.g. it left or vanished), `:gave-up`, `:timeout`, or
+  `:cleared` (nothing in `:radius` for `:lost-s`, waiting in 1 s steps, and every target ever seen was killed),
+  `:gave-up` (the same, each killed or given up on, at least one given up on; also when every target present is
+  given up on), `:lost` (the same, but one was neither, e.g. it left or vanished), `:timeout`, or
   `:absent` (no target, after a 2 s grace for the world's entities to arrive). `:absent :done` (default) starts the job anyway and ends it:
   `(jobs.combat.attack {:targets [123 "zombie"]})` is a one-shot order. `:absent :wait` makes the check decline until
   a target is present: `(repeat (jobs.combat.attack {:targets "zombie" :absent :wait}))` is a standing guard.

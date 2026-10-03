@@ -21,9 +21,9 @@
   run, even after respawning. Done (info
   attack.done, and hands over {:reason :killed [ids] :given-up {id reason}})
   with :reason :cleared once no target has been within :radius for :lost-s
-  (waiting in 1 s steps) and every target seen was killed or given up on,
-  :lost when some was neither, :gave-up when every target present has been
-  given up on, :timeout after :timeout-s from the first round (warn
+  (waiting in 1 s steps) and every target seen was killed, :gave-up when each
+  was killed or given up on and one was given up on (also once every target
+  present has been given up on), :lost when some was neither, :timeout after :timeout-s from the first round (warn
   attack.timeout), or :absent when no target is present, after a 2 s grace for the
   world's entities to arrive.
   :absent :done (the default) lets the job start and end with :absent
@@ -192,11 +192,16 @@
 
 (defn settled-reason
   "How a run that saw nothing for :lost-s ends: :cleared when every target
-  ever seen was killed or given up on, else :lost."
+  ever seen was killed, :gave-up when each was killed or given up on and one
+  was given up on, else :lost."
   [c]
   (let [{:keys [seen killed given-up]} (ctx/mem c)
-        done? (into (set killed) (keys given-up))]
-    (if (every? done? seen) :cleared :lost)))
+        dead? (set killed)
+        settled? (into dead? (keys given-up))]
+    (cond
+      (every? dead? seen) :cleared
+      (every? settled? seen) :gave-up
+      :else :lost)))
 
 (defn within-gap?
   "Whether the last swing was less than the gap ago."
