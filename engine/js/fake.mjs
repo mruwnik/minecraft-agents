@@ -7,6 +7,7 @@ import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
+import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -401,6 +402,7 @@ export function createFake (spec = {}) {
   const acts = defaultActs(s, event => primitives.world.emit(event))
   acts.interact = fakeInteract(s)
   acts.unequip = fakeUnequip(s)
+  acts.furnace = fakeFurnace(s, spec)
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
   let away = null // promise of the body being back, while offline
@@ -544,6 +546,7 @@ export function createFake (spec = {}) {
       override (name, fn) { overrides.set(name, fn) },
       emit (event) { for (const l of listeners) l(event) },
       setTime (t) { s.time = t },
+      advance (ticks) { s.time = (s.time + ticks) % 24000; advanceFurnaces(s, ticks) },
       setRaining (on, thunder = false) { s.raining = on; s.thundering = thunder },
       settle (on) { s.settling = on },
       // Respawns where the body stands: emits respawned like the real body and opens a settling window if the spec settles.

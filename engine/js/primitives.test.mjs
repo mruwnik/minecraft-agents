@@ -19,7 +19,7 @@ const rig = (spec) => {
 // Each case: a world where the primitive reaches the bot call named by `hangs`, the args, the cleanup call a cut or
 // timeout must make (null when none is needed), and the status a timeout resolves with (null when it cannot time out).
 const world = {
-  blocks: { '2,64,0': 'oak_log', '3,64,0': 'chest', '2,64,1': 'red_bed', '0,63,5': 'stone' },
+  blocks: { '2,64,0': 'oak_log', '3,64,0': 'chest', '2,64,1': 'red_bed', '0,63,5': 'stone', '0,64,2': 'furnace' },
   items: [{ name: 'bread', count: 2, slot: 36 }, { name: 'cobblestone', count: 4, slot: 37 }],
   entities: { 7: { id: 7, name: 'item', type: 'object', position: at(5, 64, 0), getDroppedItem: () => ({ name: 'stick', count: 1 }) }, 8: { id: 8, name: 'zombie', type: 'hostile', position: at(1, 64, 0), height: 1.9, health: 20 } },
   containers: { '3,64,0': [{ name: 'cobblestone', count: 5, slot: 0 }] }
@@ -31,6 +31,7 @@ const acting = [
   { name: 'collect', args: { id: 7 }, hang: 'goto', cleanup: 'setGoal', timeout: 'timeout' },
   { name: 'inspectContainer', args: { pos: at(3, 64, 0) }, hang: 'openContainer', cleanup: null, timeout: 'timeout' },
   { name: 'transfer', args: { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }, hang: 'deposit', cleanup: 'closeWindow', timeout: 'timeout' },
+  { name: 'furnace', args: { pos: at(0, 64, 2), op: 'read' }, hang: 'openFurnace', cleanup: null, timeout: 'timeout' },
   { name: 'equip', args: { item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
   { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
@@ -233,7 +234,7 @@ test('attack drops its listener when the swing throws', async () => {
   assert.equal(bot.listenerCount('entityDead'), 0)
 })
 
-const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }]]
+const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }], ['furnace', {}], ['furnace', { pos: at(0, 64, 2), op: 'stir' }], ['furnace', { pos: at(0, 64, 2), op: 'load' }], ['furnace', { pos: at(0, 64, 2), op: 'load', input: { item: 'coal', count: 0 } }]]
 for (const [name, args] of badArgs) {
   test(`${name} with bad args rejects with bad-args`, async () => {
     const { p } = rig(world)
@@ -2227,4 +2228,12 @@ test('a cut during the reopen rejects with cut and closes the second window', as
   await assert.rejects(p.transfer('t1', withdraw12), cutError)
   assert.ok(names(bot).filter(n => n === 'closeWindow').length >= 2)
   assert.equal(openCount(bot), 2)
+})
+
+test('furnace reads a furnace within reach and reports a refusal as data when it is not', async () => {
+  const { p } = rig({ blocks: { '0,64,2': 'furnace', '0,64,3': 'furnace', '9,64,0': 'furnace', '1,64,0': 'dirt' } })
+  assert.deepEqual(await p.furnace('t1', { pos: at(0, 64, 2), op: 'read' }), { status: 'ok', kind: 'furnace', input: null, fuel: null, output: null, lit: false, burn: null, cook: null })
+  assert.deepEqual(await p.furnace('t1', { pos: at(9, 64, 0), op: 'read' }), { status: 'unreachable', reason: 'too-far', distance: 9.58 })
+  assert.deepEqual(await p.furnace('t1', { pos: at(1, 64, 0), op: 'read' }), { status: 'cannot', reason: 'not-a-furnace' })
+  assert.deepEqual(await p.furnace('t1', { pos: at(5, 64, 5), op: 'read' }), { status: 'missing' })
 })

@@ -14,6 +14,7 @@ import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { emptyHand } from './unequip.mjs'
+import { furnaceVisit } from './furnace.mjs'
 import { missingPatches } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 
@@ -896,6 +897,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: Math.min(60, 4 + 6 * (a.count ?? 1)) }, ctx => craftItem(bot, ctx, a, { timeScale }))
   }
 
+  const furnaceLoad = part => part === undefined || (typeof part?.item === 'string' && (part.count === undefined || (Number.isInteger(part.count) && part.count > 0)))
+  const furnace = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isPos(a.pos), 'furnace needs pos {x, y, z}')
+    need(['read', 'load', 'take'].includes(a.op), 'furnace op must be read, load or take')
+    need(a.op !== 'load' || ((a.input || a.fuel) && furnaceLoad(a.input) && furnaceLoad(a.fuel)), 'furnace load needs input and/or fuel as {item, count?}')
+    return act(token, { boundS: 5 }, ctx => furnaceVisit(bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), settle: win => settleWindow(ctx, win) }))
+  }
+
   const chat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
@@ -1222,7 +1232,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, chat, eat, attack, interact, unequip, sleep, look, swim, useOn })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, unequip, sleep, look, swim, useOn })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

@@ -97,6 +97,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     look: act('look', (yaw, pitch) => { Object.assign(bot.entity, { yaw, pitch }) }),
     closeWindow: act('closeWindow'),
     openContainer: act('openContainer', block => windowOf(key(block.position.x, block.position.y, block.position.z))),
+    openFurnace: act('openFurnace', () => Object.assign(new EventEmitter(), { slots: [], close: act('close'), putInput: act('putInput'), putFuel: act('putFuel'), takeOutput: act('takeOutput') })),
     quit: act('quit')
   })
   return bot
