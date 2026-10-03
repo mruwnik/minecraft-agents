@@ -1136,3 +1136,51 @@ const emptyCases = [
 for (const [name, world, expected] of emptyCases) {
   test(`isEmptyWorld: ${name}`, () => assert.equal(isEmptyWorld(world), expected))
 }
+
+// ---------------------------------------------------------------- inline script syntax
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+
+const htmlFiles = [
+  path.join(ROOT, 'tools/dashboard/index.html'),
+  path.join(ROOT, 'tools/dashboard/blueprints.html'),
+  path.join(ROOT, 'tools/dashboard/villages.html'),
+  path.join(ROOT, 'tools/dashboard/villagers.html')
+]
+
+test('dashboard inline module scripts pass node --check', async t => {
+  for (const htmlFile of htmlFiles) {
+    await t.test(`${path.basename(htmlFile)}`, () => {
+      const content = fs.readFileSync(htmlFile, 'utf-8')
+
+      // Extract inline <script type="module"> content
+      const scriptRegex = /<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/g
+      const scripts = []
+      let match
+      while ((match = scriptRegex.exec(content)) !== null) {
+        scripts.push(match[1])
+      }
+
+      if (scripts.length === 0) {
+        return // Skip if no module scripts found
+      }
+
+      // Create a temporary directory and write the script
+      const tmpDir = mkdtempSync(path.join(tmpdir(), 'dashboard-'))
+      const scriptFile = path.join(tmpDir, 'test-script.mjs')
+      const scriptContent = scripts.join('\n\n')
+
+      writeFileSync(scriptFile, scriptContent, 'utf-8')
+
+      // Run node --check on the script
+      const result = spawnSync('node', ['--check', scriptFile])
+
+      assert.equal(
+        result.status,
+        0,
+        `node --check failed:\nstdout: ${result.stdout?.toString()}\nstderr: ${result.stderr?.toString()}`
+      )
+    })
+  }
+})

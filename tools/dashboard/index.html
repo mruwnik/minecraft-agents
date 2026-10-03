@@ -575,7 +575,7 @@ const bodyCard = body => {
   return card
 }
 
-const ago = ms => ms < 60000 ? `${Math.round(ms / 1000)}s ago` : ms < 3600000 ? `${Math.round(ms / 60000)}m ago` : `${Math.round(ms / 3600000)}h ago`
+const ageText = ms => ms < 60000 ? `${Math.round(ms / 1000)}s ago` : ms < 3600000 ? `${Math.round(ms / 60000)}m ago` : `${Math.round(ms / 3600000)}h ago`
 
 // an engine body is read from its event file, never selected: a card whether it is up or down (that is how a stop shows)
 const engineCard = body => {
@@ -583,7 +583,7 @@ const engineCard = body => {
   const card = document.createElement('div')
   card.className = `body engine${body.up ? '' : ' off'}`
   const head = line('', '')
-  head.append(tag('span', 'name', body.name), ' ', tag('span', 'meta', e.ageMs === null ? 'down' : `${body.up ? 'up' : 'down'} · ${ago(e.ageMs)}`))
+  head.append(tag('span', 'name', body.name), ' ', tag('span', 'meta', e.ageMs === null ? 'down' : `${body.up ? 'up' : 'down'} · ${ageText(e.ageMs)}`))
   card.append(head, line('doing', `${e.job?.name ?? 'no job'}${e.reflex ? ` · reflex ${e.reflex}` : ''}`))
   card.append(line('meta', `${e.warn10m} warn · ${e.error10m} error (10 min)`))
   e.recent.forEach(r => card.append(line(`ev ${r.level}`, r.text)))
