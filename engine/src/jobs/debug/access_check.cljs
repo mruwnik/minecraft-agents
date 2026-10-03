@@ -9,7 +9,7 @@
   {:verdicts [{:cell [x y z] :block name-or-nil :dig verdict :place verdict} ...]}, also emitted as one
   :access-check.result event (counts of ok and refused digs and places). The cells come from :cells or from
   the box :from/:to (inclusive, at most 400 cells). :zones, :footprints and :ledger are the rules' inputs
-  and default to empty; pass :zones nil to see the no-zone-list refusal. Bad arguments end with
+  and default to empty; pass :zones nil to see the no-zone-list refusal. An ok dig verdict may carry :hazards. Bad arguments end with
   {:status :bad-args :reason text}.")
 
 (def args

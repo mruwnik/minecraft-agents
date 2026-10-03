@@ -1,3 +1,3 @@
-;; jobs.debug.access-check live: a stone block 9004..9010 x 99..101 x 9000..9002 with a water source at 9005 and a lava source at 9008 (y 100, z 9001); expected place ok on both fluids, :not-replaceable on stone, dig of the stone beside the lava :fluid-adjacent
+;; jobs.debug.access-check live: a stone block 9004..9010 x 99..101 x 9000..9002 with a water source at 9005 and a lava source at 9008 (y 100, z 9001), and stone at 9001 102 9001 under gravel at 9001 103 9001 (over the body's column); expected place ok on both fluids, :not-replaceable on stone, dig of the stone beside the lava ok with a :fluid-adjacent hazard, dig under the gravel ok with a :falling-block hazard
 {:register []
- :queue [(jobs.debug.access-check {:cells [[9005 100 9001] [9008 100 9001] [9010 100 9001] [9009 100 9001]]})]}
+ :queue [(jobs.debug.access-check {:cells [[9005 100 9001] [9008 100 9001] [9010 100 9001] [9009 100 9001] [9001 102 9001]]})]}

@@ -12,15 +12,21 @@
                  none. A zone is a keep-out box for every action it does not allow.
     :footprints  set of [x y z] cells that other plans claim (may be empty)
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
-  Output: {:ok true} or {:ok false :reason kw ...detail}.
+  Output: {:ok false :reason kw ...detail} for a refusal, else {:ok true}, and for a dig that has hazards
+  {:ok true :hazards [{:reason kw ...detail} ...]} (:hazards is absent when empty).
 
-  Checks run in this order and the first failure is the verdict, so the most specific reason wins and :no-zones,
-  the general one, only shows when nothing else is wrong (a caller that overrides it for an emergency can
-  rely on that):
-    dig:   :not-loaded, :footprint, :zone (+ :zone name), :fluid-adjacent (+ :fluid :at), :falling-block
-           (+ :block :at), :under-feet, :no-zones
-    place: :not-loaded, :footprint, :zone (+ :zone name), :own-body, :not-replaceable (+ :block), :no-zones
-  A cell holding air, water, lava or a bubble column is placeable; digging beside a fluid is what is refused."
+  The rules say what is impossible or not permitted and only report what is dangerous; the job decides which
+  danger it accepts (see accepts?).
+  Refused, impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block).
+  Refused, not permitted: :footprint, :zone (+ :zone name), :no-zones.
+  Hazards of a dig, all that apply, in this order: :fluid-adjacent (+ :fluid :at), :falling-block (+ :block :at),
+  :under-feet.
+  Refusals run in this order and the first is the verdict, so the most specific reason wins and :no-zones, the
+  general one, only shows when nothing else is wrong (a caller that overrides it for an emergency can rely on
+  that):
+    dig:   :not-loaded, :footprint, :zone, :no-zones, then the hazards
+    place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
+  A cell holding air, water, lava or a bubble column is placeable."
   (:require [clojure.string :as str]))
 
 (def air #{"air" "cave_air" "void_air"})
@@ -93,22 +99,36 @@
 (defn no-zones-check [{:keys [zones]}]
   #(when (nil? zones) (refuse :no-zones)))
 
-(defn may-dig?
-  "Verdict for digging the block at :cell. See the namespace docstring for the input and the order of checks. The cell
-  under the body's feet is refused unless the cell below it is a known solid floor (not magma) or the cell is in
-  the body's own ledger: stairs, not shafts."
-  [{:keys [block-at cell feet ledger] :as in}]
+(defn dig-hazards
+  "Every hazard of digging :cell, as maps {:reason kw ...detail}, in check order. Hazards are reported, never refused:
+  the job decides which it accepts. The cell under the body's feet is a hazard unless the cell below it is a known
+  solid floor (not magma) or the cell is in the body's own ledger: stairs, not shafts."
+  [{:keys [block-at cell feet ledger]}]
   (let [[fx fy fz] feet]
-    (verdict
-     (concat
-      (common-checks :dig in)
-      [#(when-let [[n at] (fluid-neighbour block-at cell)] (refuse :fluid-adjacent :fluid n :at at))
-       #(when-let [[n at] (falls-on-body? block-at cell feet)] (refuse :falling-block :block n :at at))
-       #(when (and (= cell [fx (dec fy) fz])
-                   (not (contains? ledger cell))
-                   (not (solid-floor? block-at (offset cell 0 -1 0))))
-          (refuse :under-feet))
-       (no-zones-check in)]))))
+    (filterv some?
+             [(when-let [[n at] (fluid-neighbour block-at cell)] {:reason :fluid-adjacent :fluid n :at at})
+              (when-let [[n at] (falls-on-body? block-at cell feet)] {:reason :falling-block :block n :at at})
+              (when (and (= cell [fx (dec fy) fz])
+                         (not (contains? ledger cell))
+                         (not (solid-floor? block-at (offset cell 0 -1 0))))
+                {:reason :under-feet})])))
+
+(defn may-dig?
+  "Verdict for digging the block at :cell. See the namespace docstring for the input and the output. Refusals are
+  :not-loaded, :footprint, :zone and :no-zones; hazards come back in :hazards on an {:ok true} verdict."
+  [in]
+  (let [refusal (verdict (concat (common-checks :dig in) [(no-zones-check in)]))]
+    (if-not (:ok refusal)
+      refusal
+      (let [hazards (dig-hazards in)]
+        (cond-> {:ok true}
+          (seq hazards) (assoc :hazards hazards))))))
+
+(defn accepts?
+  "True when verdict is ok and every hazard it reports has a reason in accepted (a set of reason keywords):
+  (accepts? v #{:fluid-adjacent}); (accepts? v #{}) accepts no hazard at all."
+  [verdict accepted]
+  (boolean (and (:ok verdict) (every? (comp accepted :reason) (:hazards verdict)))))
 
 (defn may-place?
   "Verdict for placing a block at :cell. See the namespace docstring."

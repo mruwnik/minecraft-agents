@@ -47,8 +47,9 @@
         (let [{:keys [out seen]} (await (settle {:cells [[5 64 5] [6 64 5] [7 64 5] [0 63 1] [90 64 90]]}))]
           (is (= {:dig {:ok true} :place {:ok false :reason :not-replaceable :block "stone"}}
                  (select-keys (verdict-of out [5 64 5]) [:dig :place])))
-          (is (= :fluid-adjacent (get-in (verdict-of out [7 64 5]) [:dig :reason])))
-          (is (= :under-feet (get-in (verdict-of out [0 63 1]) [:dig :reason])))
+          (is (= {:ok true :hazards [{:reason :fluid-adjacent :fluid "lava" :at [7 65 5]}]}
+                 (get (verdict-of out [7 64 5]) :dig)))
+          (is (= [{:reason :under-feet}] (get-in (verdict-of out [0 63 1]) [:dig :hazards])))
           (is (= :not-loaded (get-in (verdict-of out [90 64 90]) [:dig :reason])))
           (is (= :not-loaded (get-in (verdict-of out [90 64 90]) [:place :reason])))
           (is (= 1 (count (filter #(= :access-check.result (:kind %)) @seen)))))))))
