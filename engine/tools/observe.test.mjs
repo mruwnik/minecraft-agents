@@ -2,7 +2,38 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
-import { get, requestFor } from './observe.mjs'
+import { get, legacyEngineNotice, requestFor, unsupportedObserveRoute } from './observe.mjs'
+
+test('observe distinguishes an older engine missing the projection routes', () => {
+  assert.equal(unsupportedObserveRoute({
+    status: 404,
+    contentType: 'application/edn; charset=utf-8',
+    text: '{:ok false, :reason :not-found}'
+  }), true)
+  assert.equal(unsupportedObserveRoute({
+    status: 404,
+    contentType: 'application/edn',
+    text: '{:ok false, :reason :job-not-found}'
+  }), false)
+  assert.equal(unsupportedObserveRoute({
+    status: 404,
+    contentType: 'application/edn',
+    text: '{:extra {:reason :not-found}}'
+  }), false)
+  assert.equal(unsupportedObserveRoute({
+    status: 404,
+    contentType: 'text/plain',
+    text: 'not found'
+  }), false)
+})
+
+test('legacy observe guidance preserves a nondefault state root', () => {
+  const request = requestFor(['ProbeBody', '--state', '/tmp/custom state'])
+  const notice = legacyEngineNotice(request)
+  assert.match(notice, /:reason :observe-unavailable/)
+  assert.match(notice, /:action :restart-with-current-build/)
+  assert.match(notice, /:fallback \{:op :status :raw true :state "\/tmp\/custom state"\}/)
+})
 
 test('observe defaults to bounded status and targets the engine event socket', () => {
   const request = requestFor(['ProbeBody', '--state', '/tmp/state'])

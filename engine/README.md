@@ -850,6 +850,21 @@ deadline, caps responses at 256 KiB, and returns a structured EDN error for
 unavailable sockets, timeouts or oversized responses instead of waiting
 indefinitely.
 
+If `observe.mjs` returns `:observe-unavailable`, that body is running an
+older engine that has `/snapshot` but not the compact `/status`, `/job` and
+`/catalog` routes. Its error includes a raw-snapshot fallback and the selected
+state directory; pass the same `--state` value with `--raw` to read it. To
+enable the projection, stop that body normally and start it from
+the current engine build; from the repository's `engine/` directory:
+
+```sh
+npm run body -- --agent Bob
+```
+
+That script compiles `out/body.cjs` from the current ClojureScript source
+before starting the body. Do not start a second process for an agent that is
+already running.
+
 ## Manual takeover
 
 For rescuing a stuck body by hand. Movement only: no dig, place or use yet. The body listens on a unix socket,
