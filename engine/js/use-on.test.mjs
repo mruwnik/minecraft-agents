@@ -43,6 +43,19 @@ test('an item eaten while the properties change reports consumed', async () => {
   assert.deepEqual(r, { status: 'used', before: { name: 'composter', properties: { level: 1 } }, after: { name: 'composter', properties: { level: 2 } }, consumed: 1 })
 })
 
+test('an inventory update arriving shortly after the block update still reports consumed', async () => {
+  const items = [{ name: 'wheat', count: 3, slot: 36 }]
+  const props = { [key(1, 64, 0)]: { level: '1' } }
+  const { p } = rig({
+    blocks: { '1,64,0': 'composter' },
+    props,
+    items,
+    onUseBlock: () => { props[key(1, 64, 0)] = { level: '2' }; setTimeout(() => { items[0].count -= 1 }, 1) }
+  })
+  const r = await p.useOn('t1', { ...dirt, item: 'wheat' })
+  assert.deepEqual(r, { status: 'used', before: { name: 'composter', properties: { level: 1 } }, after: { name: 'composter', properties: { level: 2 } }, consumed: 1 })
+})
+
 test('an item consumed with the block unchanged is still used', async () => {
   const items = [{ name: 'bone_meal', count: 3, slot: 36 }]
   const { p } = rig({ items, onUseBlock: () => { items[0].count -= 1 } })

@@ -6,6 +6,7 @@ const { Vec3 } = vec3
 const REACH = 4.5
 const POLL_MS = 50
 const WAIT_MS = 1000
+const CONSUME_WAIT_MS = 300 // extra wait for the carried count to follow a block change (slot updates can lag)
 const FACES = { up: [0, 1, 0], down: [0, -1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] }
 const isAir = name => name === 'air' || name.endsWith('_air')
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
@@ -63,6 +64,13 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       const changed = () => !same(now(), before) || (item !== undefined && carried(item) !== countBefore)
       const deadline = Date.now() + WAIT_MS * timeScale
       while (!changed() && Date.now() < deadline) {
+        await sleepMs(POLL_MS * timeScale)
+        ctx.alive()
+      }
+      // The block update can arrive before the inventory slot update; give the count a moment to follow.
+      const countMoved = () => carried(item) !== countBefore
+      const consumeDeadline = Date.now() + CONSUME_WAIT_MS * timeScale
+      while (item !== undefined && !same(now(), before) && !countMoved() && Date.now() < consumeDeadline) {
         await sleepMs(POLL_MS * timeScale)
         ctx.alive()
       }
