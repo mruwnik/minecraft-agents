@@ -164,7 +164,11 @@
 
 ;; ------------------------------------------------------------------ ctx and rounds
 
-(declare submit! call-child)
+(declare submit! call-child self-pos)
+
+(def moved-policy
+  "Policy of the :moved entries act writes after each moveTo (read by the stuck trigger)."
+  {:cap 20 :ttl (* 10 60 1000)})
 
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
@@ -180,7 +184,12 @@
   (let [fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)}
         p (:primitives eng)
         _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
+        from (when (= :moveTo k) (self-pos p))
         r (await (.call (aget p (name k)) p token args))]
+    (when (= :moveTo k)
+      (mem/write! (:store eng) :moved {:from from :to (self-pos p) :status (.-status r)
+                                       :target (js->clj (.-pos args) :keywordize-keys true)}
+                  moved-policy))
     (save-memory! eng)
     (emit! eng (merge fields {:source :action :kind :done :status (.-status r)}))
     r))
