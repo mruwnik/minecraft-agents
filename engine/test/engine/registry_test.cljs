@@ -9,7 +9,7 @@
      jobs.survival.sleep jobs.survival.shelter jobs.survival.dig-in jobs.survival.log-out
      jobs.combat.attack jobs.survival.recover-drops jobs.maintenance.unstick jobs.storage.make-room
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
-     jobs.forestry.harvest-wood jobs.storage.deposit jobs.storage.withdraw jobs.items.craft jobs.farm.till jobs.farm.fertilize jobs.farm.compost
+     jobs.forestry.harvest-wood jobs.storage.deposit jobs.storage.withdraw jobs.items.craft jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around
      jobs.time.wait-for-day jobs.debug.notify})
 

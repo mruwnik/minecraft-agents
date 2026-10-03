@@ -1,0 +1,4 @@
+;; batch-block: clear-box live case: a 3x3x3 box at 4992..4994, y 100..102 (dirt with a stone layer, a chest, a bed,
+;; a water source, glass kept by :keep, bedrock that cannot be dug)
+{:register []
+ :queue [(jobs.build.clear-box {:from {:x 4992 :y 100 :z 4992} :to {:x 4994 :y 102 :z 4994} :keep ["glass"]})]}
