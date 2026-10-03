@@ -326,7 +326,16 @@ export function createFake (spec = {}) {
       },
       override (name, fn) { overrides.set(name, fn) },
       emit (event) { for (const l of listeners) l(event) },
-      setTime (t) { s.time = t }
+      setTime (t) { s.time = t },
+      // Dies where the body stands: emits died like the real body, then drops the
+      // inventory there as item entities and resets the experience.
+      die () {
+        const { level, points } = s.self.experience
+        primitives.world.emit({ kind: 'died', pos: { ...s.self.pos }, inventory: withSlots(s.inventory), experience: { level, points } })
+        for (const i of s.inventory) s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...s.self.pos }, item: { name: i.name, count: i.count } })
+        s.inventory = []
+        s.self.experience = { level: 0, points: 0, progress: 0 }
+      }
     }
   }
 

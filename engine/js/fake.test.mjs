@@ -174,6 +174,25 @@ test('body events reach listeners until unsubscribed', () => {
   assert.deepEqual(seen, ['hurt'])
 })
 
+test('die emits died with the position, inventory and experience, then drops the inventory there', () => {
+  const p = createFake({
+    self: { pos: { x: 3, y: 64, z: 1 }, experience: { level: 4, points: 60, progress: 0.5 } },
+    inventory: [{ name: 'bread', count: 2 }]
+  })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  p.world.die()
+  assert.deepEqual(seen, [{
+    kind: 'died',
+    pos: { x: 3, y: 64, z: 1 },
+    inventory: [{ name: 'bread', count: 2, slot: 0 }],
+    experience: { level: 4, points: 60 }
+  }])
+  assert.deepEqual(p.self().inventory, [])
+  assert.deepEqual(p.self().experience, { level: 0, points: 0, progress: 0 })
+  assert.deepEqual(p.entities({ kind: 'item' }).map(e => [e.item.name, e.item.count, e.pos]), [['bread', 2, { x: 3, y: 64, z: 1 }]])
+})
+
 test('self carries the survival fields with healthy defaults', () => {
   const s = createFake().self()
   assert.deepEqual([s.oxygen, s.onFire, s.inWater, s.inLava, s.isSleeping, s.foodSaturation, s.dimension], [20, false, false, false, false, 5, 'overworld'])

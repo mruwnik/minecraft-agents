@@ -443,7 +443,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
         lastHealth = target.health
       },
-      death: () => emit({ kind: 'died', pos: here(), inventory: inventoryNow() }),
+      // bot.experience still holds the pre-death values here; the server resets it in a later packet.
+      death: () => emit({
+        kind: 'died',
+        pos: here(),
+        inventory: inventoryNow(),
+        experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 }
+      }),
       respawn: () => { respawning = true },
       chat: (from, message) => emit({ kind: 'chat', from, message }),
       wake: () => emit({ kind: 'woke' }),
