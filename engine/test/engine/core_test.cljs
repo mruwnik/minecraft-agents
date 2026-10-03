@@ -933,6 +933,36 @@
       (is (= [] (listed again)))
       (is (some #(= [:failed :warn] [(:kind %) (:level %)]) @seen)))))
 
+(defn restore-with
+  "An engine restored from dir with the given jobs and triggers; [eng seen]."
+  [dir jobs triggers]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)]
+    [(core/create {:primitives (tu/fake {}) :jobs jobs :triggers triggers :dir dir :now #(deref clock)
+                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+     seen]))
+
+(deftest a-restored-register-entry-whose-trigger-is-gone-is-dropped-with-a-warn
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :hurt})
+    (core/register-reflex! eng {:trigger :never})
+    (core/mute! eng :never 600)
+    (let [[again seen] (restore-with dir registry (dissoc triggers :never))]
+      (is (= [:hurt] (mapv :id (:register (core/state again)))))
+      (is (not (contains? (:changes (core/state again)) :never)) "its changes go with it")
+      (is (some #(= [:system :warn] [(:source %) (:level %)]) @seen))
+      (is (nil? (core/tick! again)) "the tick no longer throws"))))
+
+(deftest a-restored-register-entry-whose-job-is-gone-is-dropped-with-a-warn
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :hurt})
+    (core/register-reflex! eng {:trigger :never :job '(count)})
+    (let [[again seen] (restore-with dir (dissoc registry 'count) triggers)]
+      (is (= [:hurt] (mapv :id (:register (core/state again)))))
+      (is (some #(= [:system :warn] [(:source %) (:level %)]) @seen)))))
+
 (deftest a-child-by-symbol-gets-the-registry-defaults
   (async done
     (tu/run-async done

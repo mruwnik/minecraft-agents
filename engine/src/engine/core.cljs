@@ -653,6 +653,27 @@
     (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
                 :error problem :text (str "dropped on restore: " problem)})))
 
+(defn unresolved-entry
+  "The message why register entry e no longer resolves (trigger or job spec), or nil."
+  [eng e]
+  (try (trigger-def eng (:trigger e))
+       (expr/parse (:jobs eng) (:job e))
+       nil
+       (catch :default err (ex-message err))))
+
+(defn drop-unresolved-entries!
+  "After a restore: drop register entries whose trigger or job no longer resolves, with a warn."
+  [eng]
+  (doseq [e (:register (state eng))
+          :let [problem (unresolved-entry eng e)]
+          :when problem]
+    (swap! (:state eng) (fn [s] (-> s
+                                    (update :register #(filterv (fn [x] (not= (:id e) (:id x))) %))
+                                    (update :changes dissoc (:id e))
+                                    (update :reflex-state dissoc (:id e)))))
+    (emit! eng {:source :system :kind :dropped :level :warn :reflex (:id e)
+                :error problem :text (str "reflex " (:id e) " dropped on restore: " problem)})))
+
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
   memory.edn when present, sweeps memory and appends a :restart entry.
@@ -685,6 +706,7 @@
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-unknown-jobs! eng)
+    (drop-unresolved-entries! eng)
     (mem/write! store :restart {})
     (save-memory! eng)
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info
