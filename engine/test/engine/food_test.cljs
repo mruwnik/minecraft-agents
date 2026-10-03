@@ -11,7 +11,7 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -241,7 +241,7 @@
           (await (run!))
           (is (= [] (:list (core/state eng))) "done, so the list resumes work")
           (is (= 1 (count (none))))
-          (is (= :warn (:level (first (none)))))
+          (is (nil? (:level (first (none)))))
           (is (re-find #"farm" (:text (first (none)))) "names the nearest known source")
           (is (= 1 (count (entries eng :hungry))))
           (swap! clock + 60000)
@@ -356,3 +356,88 @@
           (is (= [] (entries eng :food-source)))
           (is (= 1 (count (entries eng :hungry))))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+
+;; ---------------------------------------------------------------- bread rung
+
+(def table-near {"3,64,0" "crafting_table"})
+
+(defn carried [p name]
+  (transduce (comp (filter #(= name (.-name %))) (map #(.-count %))) + 0 (array-seq (.-inventory (.self p)))))
+
+(defn none-events [seen] (filterv #(= :food.none (:kind %)) @seen))
+
+(defn ^:async run-food!
+  "A new firing of get-food (hungry below 14, so food 12 is hungry), run until it ends."
+  [eng]
+  (core/submit! eng '(jobs.survival.get-food {:food 14}) {})
+  (await (run-until-empty eng 30)))
+
+(deftest get-food-bakes-carried-wheat-and-eats-the-bread
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 30}] :blocks table-near})]
+          (await (run-food! eng))
+          (is (= ["bread"] (call-args p "craft" "item")))
+          (is (= [2] (call-args p "craft" "count")))
+          (is (= 24 (carried p "wheat")))
+          (is (= 0 (carried p "bread")) "eaten by the next rounds")
+          (is (> (food p) 12)))))))
+
+(deftest get-food-eats-carried-food-before-baking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 30} {:name "apple" :count 1}]
+                                      :blocks table-near})]
+          (await (run-food! eng))
+          (is (= [] (calls p "craft")))
+          (is (= 30 (carried p "wheat")))
+          (is (= ["apple"] (call-args p "eat" "item"))))))))
+
+(deftest get-food-does-not-bake-fewer-than-three-wheat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 2}] :blocks table-near})]
+          (await (run-food! eng))
+          (is (= [] (calls p "craft"))))))))
+
+(deftest get-food-remembers-it-cannot-bake-and-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}]})]
+          (await (run-food! eng))
+          (is (= 1 (count (entries eng :no-bake))))
+          (is (= "no-table" (:reason (first (entries eng :no-bake)))))
+          (is (some #(= :food.no-bake (:kind %)) @seen))
+          (is (= 1 (count (none-events seen))) "went on down the ladder")
+          (is (re-find #"carrying 5 wheat but cannot bake \(no-table\)" (:text (first (none-events seen))))))))))
+
+(deftest get-food-does-not-retry-baking-until-the-memory-expires
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}]})]
+          (await (run-food! eng))
+          (let [n (count (calls p "craft"))]
+            (swap! clock + 60000)
+            (await (run-food! eng))
+            (is (= n (count (calls p "craft"))) "a second firing inside 10 minutes makes no craft call")
+            (swap! clock + 600000)
+            (await (run-food! eng))
+            (is (> (count (calls p "craft")) n) "after 10 minutes it tries again")))))))
+
+(deftest get-food-withdraws-wheat-from-a-chest-with-no-food-then-bakes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 12} :blocks {"22,64,0" "crafting_table"}
+                                      :containers {"20,64,0" [{:name "cobblestone" :count 30} {:name "wheat" :count 12}]}})]
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (await (run-food! eng))
+          (is (= ["wheat"] (call-args p "transfer" "item")))
+          (is (= [6] (call-args p "transfer" "count")))
+          (is (= [2] (call-args p "craft" "count")))
+          (is (> (food p) 12) "baked and eaten"))))))

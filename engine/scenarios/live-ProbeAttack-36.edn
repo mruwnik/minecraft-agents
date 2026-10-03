@@ -1,0 +1,3 @@
+;; batch-craft live: get-food's bread rung (the setup decides the case: wheat carried with or without a table, a wheat chest as known source, food carried as well)
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.survival.get-food)))]}

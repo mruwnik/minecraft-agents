@@ -7,11 +7,16 @@
 
 (def doc
   "Keep the body fed. Each round takes the first step of this ladder that
-  has something to do: (1) eat what is carried (the eat job); (2) use the
+  has something to do: (1) eat what is carried (the eat job); (1b) when none is carried but 3 or more wheat is, bake bread
+  (the craft job, enough loaves for the hunger, within 32 blocks of a table)
+  and eat it next round; a failed bake is remembered as :no-bake in body
+  memory for 10 minutes, so no firing of this job tries again meanwhile and
+  the ladder goes on; (2) use the
   latest :food-source body-memory entry {:pos :kind} within :source-radius:
   a :farm is walked to and its mature crops dug and collected (replanting
   is not this job's business), a :chest is walked to and its best food
-  withdrawn, :animals centres the hunt there; (3) hunt the nearest passive
+  withdrawn (with no edible food in it but 3 or more wheat, wheat is
+  withdrawn, in multiples of 3 and enough for the hunger, for step 1b), :animals centres the hunt there; (3) hunt the nearest passive
   food animal within :hunt-radius, or else dig mature crops or sweet berry
   bushes in it, and collect the drops; (4) nothing found: emit a food.none
   warn naming what was searched and the nearest known source, write a
@@ -19,8 +24,7 @@
   eats and still does step 3 (what is in sight), but does not walk to
   remembered sources it already knew when it gave up (one learned since is
   tried first), say food.none or write :hungry again; with nothing to do it
-  returns :declined. Wheat is skipped (not edible raw, no
-  crafting). A source found empty or unreachable is forgotten.
+  returns :declined. Wheat is not harvested. A source found empty or unreachable is forgotten.
   Hungry is food below :food (default 6), or below :food-when-hurt (default
   14) while health is below full; the same test as the hungry trigger.")
 
@@ -38,7 +42,7 @@
 
 (def ripe-age
   "The growth stage at which each crop block can be harvested. Wheat is left
-  out: it is not edible raw and there is no crafting yet."
+  out: it is not harvested here."
   {"carrots" 7 "potatoes" 7 "beetroots" 3})
 
 (def berry-bush {"sweet_berry_bush" 2})
@@ -50,6 +54,10 @@
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
 (def drop-radius 8)
+
+(def no-bake-policy {:cap 1 :ttl (* 10 60 1000)})
+
+(def no-bake-ms (* 10 60 1000))
 
 (def reach 3)
 
@@ -147,11 +155,37 @@
       (or (await (collect-drops! c (+ radius 2)))
           (await (dig-ripe! c ripe-age pos radius))))))
 
+(defn carried-count [c name]
+  (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+
+(defn loaves-wanted
+  "How many loaves fill the body to full."
+  [c]
+  (int (js/Math.ceil (/ (- 20 (.-food (.self (:primitives c)))) 5))))
+
 (defn best-in-chest [items]
   (->> items
        (filter #(eat/food-points (.-name %)))
        (sort-by #(- (eat/food-points (.-name %))))
        first))
+
+(defn wheat-to-take
+  "How much wheat to withdraw: the loaves wanted worth, no more than the chest
+  holds or :take allows, all in multiples of 3; 0 when under 3."
+  [c wheat]
+  (let [down3 #(* 3 (quot % 3))]
+    (min (* 3 (loaves-wanted c)) (down3 wheat) (down3 (:take (:args c))))))
+
+(defn chest-wheat [items]
+  (transduce (comp (filter #(= "wheat" (.-name %))) (map #(.-count %))) + 0 items))
+
+(defn ^:async withdraw!
+  "Withdraw n of item from the chest at pos: :continue, or the source buried."
+  [c pos item n]
+  (let [r (await (ctx/act c :transfer (clj->js {:pos pos :direction "withdraw" :item item :count n})))]
+    (if (= "ok" (.-status r))
+      :continue
+      (bury-source! c pos))))
 
 (defn ^:async chest!
   [c {:keys [pos]}]
@@ -160,14 +194,13 @@
       :continue :continue
       :far (bury-source! c pos)
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))
-            best (when (= "ok" (.-status seen)) (best-in-chest (array-seq (.-items seen))))]
-        (if-not best
-          (bury-source! c pos)
-          (let [r (await (ctx/act c :transfer (clj->js {:pos pos :direction "withdraw" :item (.-name best)
-                                                        :count (min (.-count best) (:take (:args c)))})))]
-            (if (= "ok" (.-status r))
-              :continue
-              (bury-source! c pos))))))))
+            items (when (= "ok" (.-status seen)) (array-seq (.-items seen)))
+            best (best-in-chest items)
+            wheat (wheat-to-take c (chest-wheat items))]
+        (cond
+          best (await (withdraw! c pos (.-name best) (min (.-count best) (:take (:args c)))))
+          (pos? wheat) (await (withdraw! c pos "wheat" wheat))
+          :else (bury-source! c pos))))))
 
 (defn nearest-animal [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))]
@@ -212,10 +245,20 @@
          (sort-by #(u/dist here (:pos %)))
          first)))
 
+(defn no-bake-reason
+  "The reason of the live :no-bake entry, or nil."
+  [c]
+  (when (pos? (ctx/count-in c :no-bake no-bake-ms))
+    (:reason (:data (ctx/latest c :no-bake)))))
+
 (defn none-text [c]
   (let [{:keys [hunt-radius]} (:args c)
-        near (nearest-known-source c)]
+        near (nearest-known-source c)
+        wheat (carried-count c "wheat")
+        reason (no-bake-reason c)]
     (str "no food: carried none, searched for animals and ripe crops within " hunt-radius " blocks"
+         (when (and (>= wheat 3) reason)
+           (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
          (if near
            (str "; nearest known source is a " (name (:kind near)) " at " (pr-str (:pos near))
                 ", " (js/Math.round (u/dist (u/self-pos c) (:pos near))) " blocks away")
@@ -229,6 +272,30 @@
 
 (defn gave-up-recently? [c]
   (pos? (ctx/count-in c :hungry (:ask-cooldown-ms (:args c)))))
+
+;; ------------------------------------------------------------------ bread
+
+(defn can-bake?
+  "No edible food carried, 3 or more wheat, and no live :no-bake entry."
+  [c]
+  (and (nil? (eat/carried-best c))
+       (>= (carried-count c "wheat") 3)
+       (zero? (ctx/count-in c :no-bake no-bake-ms))))
+
+(defn ^:async bake!
+  "Rung 1b: :continue while the craft goes on or made bread to eat, else nil
+  with :no-bake remembered."
+  [c]
+  (let [loaves (min (loaves-wanted c) (quot (carried-count c "wheat") 3))
+        r (await (ctx/call-child c :bake 'jobs.items.craft {:item "bread" :count loaves :radius 32}))
+        res (when (= :done r) (ctx/child-result c :bake))]
+    (cond
+      (= :continue r) :continue
+      (>= (:made res 0) 1) :continue
+      :else (let [reason (or (:reason res) "short")]
+              (ctx/remember! c :no-bake {:reason reason} no-bake-policy)
+              (ctx/emit! c :food.no-bake :info {:text (str "cannot bake bread: " reason)})
+              nil))))
 
 ;; ------------------------------------------------------------------ round
 
@@ -257,11 +324,18 @@
         (await (hunt! c))
         :declined)))
 
+(defn ^:async below-bake!
+  "What follows rung 1b: the cooldown or the search."
+  [c]
+  (if (gave-up-recently? c)
+    (await (decline-or-hunt! c))
+    (await (search! c))))
+
 (defn ^:async round [c]
   (let [eaten (await (ctx/call-child c :eat 'jobs.survival.eat {}))]
     (ctx/update-mem! c assoc :eating (= :continue eaten))
     (cond
       (= :continue eaten) :continue
       (not (hungry-now? c)) :done
-      (gave-up-recently? c) (await (decline-or-hunt! c))
-      :else (await (search! c)))))
+      :else (or (when (can-bake? c) (await (bake! c)))
+                (await (below-bake! c))))))
