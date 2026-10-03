@@ -95,7 +95,7 @@ function stepToward (from, to, max) {
   }
 }
 
-function defaultActs (s) {
+function defaultActs (s, emit) {
   const blockName = (pos) => s.blocks.get(key(pos)) ?? 'air'
   const near = (pos) => dist(s.self.pos, pos) <= REACH
   const entity = (id) => s.entities.find(e => e.id === id)
@@ -188,7 +188,18 @@ function defaultActs (s) {
       s.self.pos = { ...e.pos }
       s.entities.splice(s.entities.indexOf(e), 1)
       addItem(s.inventory, e.item.name, e.item.count)
+      emit({ kind: 'picked-up', item: e.item.name, count: e.item.count })
       return { status: 'collected', gained: [{ ...e.item }] }
+    },
+
+    // Throws the item three blocks along +x as one item entity (the real body throws where it looks).
+    async toss (token, { item, count }) {
+      const total = s.inventory.filter(i => i.name === item).reduce((sum, i) => sum + i.count, 0)
+      const n = Math.min(count ?? total, total)
+      if (n <= 0) return { status: 'no-item', count: 0 }
+      for (let left = n; left > 0;) left -= takeItem(s.inventory, item, left)
+      spawnItem({ ...s.self.pos, x: s.self.pos.x + 3 }, item, n)
+      return { status: 'tossed', count: n }
     },
 
     async inspectContainer (token, { pos }) {
@@ -283,7 +294,7 @@ export function createFake (spec = {}) {
   const holds = new Map() // name -> array of pending hold records
   const pending = new Set() // { token, reject }
   const overrides = new Map()
-  const acts = defaultActs(s)
+  const acts = defaultActs(s, event => primitives.world.emit(event))
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
   let away = null // promise of the body being back, while offline

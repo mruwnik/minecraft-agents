@@ -29,6 +29,7 @@ const acting = [
   { name: 'inspectContainer', args: { pos: at(3, 64, 0) }, hang: 'openContainer', cleanup: null, timeout: 'timeout' },
   { name: 'transfer', args: { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }, hang: 'deposit', cleanup: 'closeWindow', timeout: 'timeout' },
   { name: 'equip', args: { item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
+  { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
   { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'wake', timeout: 'timeout', over: { entities: {} } },
@@ -105,6 +106,9 @@ const statuses = [
   ['place', { pos: at(2, 65, 0), item: 'cobblestone' }, {}, 'placed'],
   ['equip', { item: 'sword' }, {}, 'no-item'],
   ['equip', { item: 'bread' }, {}, 'equipped'],
+  ['toss', { item: 'sword' }, {}, 'no-item'],
+  ['toss', { item: 'cobblestone', count: 0 }, {}, 'no-item'],
+  ['toss', { item: 'cobblestone' }, {}, 'tossed'],
   ['eat', {}, { items: [] }, 'no-food'],
   ['eat', {}, { food: 20 }, 'full'],
   ['eat', {}, {}, 'ate'],
@@ -130,7 +134,7 @@ for (const [name, args, over, status] of statuses) {
   })
 }
 
-const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}]]
+const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }]]
 for (const [name, args] of badArgs) {
   test(`${name} with bad args rejects with bad-args`, async () => {
     const { p } = rig(world)
@@ -686,6 +690,7 @@ const rejecting = [
   { name: 'dig', args: { pos: at(2, 64, 0) }, call: 'dig', message: 'Digging aborted' },
   { name: 'place', args: { pos: at(1, 64, 0), item: 'cobblestone' }, call: 'placeBlock', message: 'No block has been placed' },
   { name: 'equip', args: { item: 'bread' }, call: 'equip', message: 'cannot equip' },
+  { name: 'toss', args: { item: 'cobblestone' }, call: 'toss', message: 'cannot toss' },
   { name: 'eat', args: {}, call: 'consume', message: 'Consuming cancelled due to calling bot.consume() again' },
   { name: 'attack', args: { id: 8 }, call: 'attack', message: 'invalid entity' },
   { name: 'look', args: { pos: at(1, 64, 1) }, call: 'lookAt', message: 'look failed' },
@@ -1214,4 +1219,66 @@ test('jumpPlace with a stale token rejects with cut before touching the bot', as
   const { bot, p } = pillarRig()
   await assert.rejects(p.jumpPlace('old', { item: 'dirt' }), cutError)
   assert.deepEqual(controls(bot), [])
+})
+
+// ---- toss: throw carried items in the direction the body looks ----
+
+const tossCalls = bot => bot.calls.filter(c => c.name === 'toss').map(c => c.args)
+const twoStacks = { ...world, items: [{ name: 'cobblestone', count: 40, slot: 36 }, { name: 'cobblestone', count: 30, slot: 37 }, { name: 'bread', count: 2, slot: 38 }] }
+
+test('toss without count throws every carried stack of the item, across slots', async () => {
+  const { bot, p } = rig(twoStacks)
+  assert.deepEqual(await p.toss('t1', { item: 'cobblestone' }), { status: 'tossed', count: 70 })
+  assert.deepEqual(tossCalls(bot), [[2, null, 70]])
+})
+
+test('toss clamps count to what is carried and honours a smaller count', async () => {
+  const big = rig(twoStacks)
+  assert.deepEqual(await big.p.toss('t1', { item: 'cobblestone', count: 500 }), { status: 'tossed', count: 70 })
+  const small = rig(twoStacks)
+  assert.deepEqual(await small.p.toss('t1', { item: 'bread', count: 1 }), { status: 'tossed', count: 1 })
+  assert.deepEqual(tossCalls(small.bot), [[1, null, 1]])
+})
+
+test('toss of an item not carried never reaches the bot', async () => {
+  const { bot, p } = rig(world)
+  assert.deepEqual(await p.toss('t1', { item: 'diamond' }), { status: 'no-item', count: 0 })
+  assert.deepEqual(names(bot), [])
+})
+
+test('toss does not look anywhere itself', async () => {
+  const { bot, p } = rig(world)
+  await p.toss('t1', { item: 'bread' })
+  assert.deepEqual(names(bot).filter(n => n === 'lookAt' || n === 'look'), [])
+})
+
+// ---- the picked-up body event ----
+
+const pickup = (bot, collector, dropped) => bot.emit('playerCollect', collector, { getDroppedItem: () => dropped })
+
+test('picked-up: the body collecting an item entity is reported with the item name and count', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  pickup(bot, bot.entity, { name: 'stick', count: 3 })
+  assert.deepEqual(seen, [{ kind: 'picked-up', item: 'stick', count: 3 }])
+})
+
+test('picked-up: another collector, or an entity whose item cannot be read, is not reported', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  pickup(bot, { id: 5 }, { name: 'stick', count: 3 })
+  pickup(bot, bot.entity, null)
+  bot.emit('playerCollect', bot.entity, {})
+  assert.deepEqual(seen, [])
+})
+
+test('picked-up: unsubscribing and a replaced bot go quiet', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  const off = p.onBodyEvent(e => seen.push(e))
+  off()
+  pickup(bot, bot.entity, { name: 'stick', count: 3 })
+  assert.deepEqual(seen, [])
 })

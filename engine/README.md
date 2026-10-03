@@ -164,6 +164,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `inspectContainer(token, a)` | `{pos}` | `ok`, `missing`, `unreachable` | 5 s | window closed |
 | `transfer(token, a)` | `{pos, direction, item, count}`; `direction` is `deposit` or `withdraw` | `ok` (`moved` may be less than `count`), `missing`, `unreachable`, `no-item`, `full` | 5 s | window closed |
 | `equip(token, a)` | `{item, dest = 'hand'}`; `dest` is `hand`, `off-hand`, `head`, `torso`, `legs`, `feet` | `equipped`, `no-item` | 2 s | none needed |
+| `toss(token, a)` | `{item, count?}`; throws that many of the item (all carried stacks together; default and maximum: everything carried) in the direction the body looks, it does not look anywhere itself | `tossed` (`count` thrown), `no-item` (`count: 0`) | 2 s | none needed (nothing to undo) |
 | `eat(token, a)` | `{item?}`; without `item`, the best food carried | `ate`, `no-food`, `full` | 5 s | `deactivateItem` |
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
@@ -188,6 +189,7 @@ Extra fields on the result:
 - `collect`: `gained` (`[{name, count}]`).
 - `inspectContainer`: `items` (`[{name, count, slot}]`).
 - `transfer`: `moved` (count).
+- `toss`: `count` (thrown; 0 on `no-item`).
 - `eat`: `item`, `food` (after eating).
 - `attack`: `health` (target's, when known).
 - `offline`: `ms`, the wait actually used (clamped to 0..600000, rounded down).
@@ -256,14 +258,15 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
-(`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
+(`from`, `message`), `picked-up` (`item`, `count`: the body picked up an item entity), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
 it carried. An instant death (`/kill`, void, damage) has the server clear the slots before the event is read, so when the live inventory is empty `inventory` is the last snapshot of the living body (taken on each health event above 0 and about once a second of physics ticks); `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death
 ones. `respawned` is emitted at the first `spawned` after the library's respawn
 signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). `offline`
 and `online` are the two ends of the `offline` primitive; after `online` the `bot` underneath is a new one. The engine
-turns each into an entry of that kind in body memory (see Memory).
+turns each into an entry of that kind in body memory (see Memory). `picked-up` is emitted at level `debug` and its `:picked-up {:item :count}`
+entries are what make-room reads as "newer" (a stack picked up recently is tossed last).
 
 ### Lifecycle
 
@@ -303,7 +306,7 @@ p.world.die()            // emits died (pos, inventory, experience), drops the i
 Fake semantics: `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
-inventory. `attack` takes 5 health per swing. `sleep` succeeds at night on a
+inventory and emits one `picked-up` per gained item. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `attack` takes 5 health per swing. `sleep` succeeds at night on a
 cell whose block name ends in `_bed`, and sets the time to 0. `eat` raises
 `food` by 5 and consumes one item. A held call rejects with `cut` when the
 owner changes, exactly as the real layer must. Where the body stands decides
@@ -732,7 +735,7 @@ after three the job emits a warn and ends.
 | `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
 | `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 40 :eat-gap 12 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
-| `jobs.survival.sleep` | `{:bed-radius}` | night, a `:bed` within `:bed-radius`, and no unexpired `:bed-unreachable` at that pos | child `:go` | reads `:bed`, `:bed-unreachable`; writes `:slept`, retracts a missing `:bed`, writes `:bed-unreachable {:pos}` (cap 5, 10 min) when the bed stays unreachable after three tries |
+| `jobs.survival.sleep` | `{:bed-radius}` | night, a `:bed` within `:bed-radius`, and no unexpired `:bed-unreachable` at that pos | child `:go` | reads `:bed`, `:bed-unreachable`; writes `:slept`, retracts a missing `:bed` (not when its chunk is unloaded: retried, warns `bed_unloaded`), writes `:bed-unreachable {:pos}` (cap 5, 10 min) when the bed stays unreachable after three tries |
 | `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10 :shore-radius 6}` | drowning (swims up, or walks sideways to a column with air, then swims toward the nearest land within `:shore-radius`), enclosed (the suffocating condition: a sideways step first, else dig), or surfaced and still in water | `:noted`, `:surfaced`, `:side-tried`, `:failures` | writes `:breathe` (cap 20, 1 h) |
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava, without fire resistance; stands still (info `:extinguish_wait`, done) when on fire with no bucket use, no water in `:water-radius` and no hazard within 1.5 blocks; after pouring a carried water bucket it remembers `:poured` and, once the fire is out, scoops the water back with `bucket` (info `:scoop_failed` if not placed; gives up waiting after 8 rounds) | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
@@ -883,6 +886,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
 | `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
 | `equip` | `bot.equip(item, dest)` |
+| `toss` | sums the carried stacks of the item, `bot.toss(typeId, null, count)` with `count = min(count ?? total, total)`; nothing carried is `no-item` without touching the bot. Throws where the body looks |
 | `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
 | `attack` | one `bot.attack`, then about 100 ms to read the target's health; `killed` when the entity is gone or its health is 0 |
 | `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |
@@ -890,7 +894,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 
 Sensing reads `bot.entities`, `bot.findBlocks` and `bot.blockAt` directly and never waits. Body events come from the
 bot's `health` (a drop is `hurt`), `death`, `respawn` (remembered, then reported as `respawned` at the next `spawn`),
-`chat`, `wake`, `spawn`, `end` and `kicked` events. The listeners are bound per bot, and `offline` unbinds the old bot
+`chat`, `wake`, `spawn`, `end` and `kicked` events, and `playerCollect` (reported as `picked-up` only when the collector is the body's own entity). The listeners are bound per bot, and `offline` unbinds the old bot
 before it quits so its `end` does not report a `disconnected`.
 
 Known gaps:

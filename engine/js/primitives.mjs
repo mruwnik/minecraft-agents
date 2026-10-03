@@ -646,6 +646,22 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  // Throws carried items in the direction the body looks (it does not look anywhere itself); the stacks of the item
+  // are summed, so a count may span several slots.
+  const toss = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.item === 'string', 'toss needs item, an item name')
+    return act(token, { boundS: 2 }, async ctx => {
+      const total = inventory().filter(i => i.name === a.item).reduce((sum, i) => sum + i.count, 0)
+      const count = Math.min(a.count ?? total, total)
+      const type = bot.registry.itemsByName[a.item]?.id
+      if (count <= 0 || type === undefined) return { status: 'no-item', count: 0 }
+      await bot.toss(type, null, count)
+      ctx.alive()
+      return { status: 'tossed', count }
+    })
+  }
+
   const bestFood = () => inventory()
     .filter(i => bot.registry.foodsByName?.[i.name])
     .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0]
@@ -752,6 +768,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       respawn: () => { stopWalking(target); respawning = true },
       chat: (from, message) => emit({ kind: 'chat', from, message }),
       wake: () => emit({ kind: 'woke' }),
+      playerCollect: (collector, collected) => {
+        if (collector !== target.entity) return
+        const item = collected && droppedItem(target, collected)
+        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count })
+      },
       spawn: () => {
         emit({ kind: 'spawned' })
         if (!respawning) return
@@ -866,7 +887,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, offline, onBodyEvent, close }
 }

@@ -426,3 +426,28 @@ test('fake jumpPlace stops under a ceiling that appears as the body rises', asyn
   assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 5 }), { status: 'partial', placed: 1, reason: 'no-headroom' })
   assert.deepEqual(p.self().pos, at(0, 65, 0))
 })
+
+test('fake toss takes the items from every stack and drops one item entity three blocks along x', async () => {
+  const p = owned({ self: { pos: at(1, 64, 2) }, inventory: [{ name: 'dirt', count: 40 }, { name: 'bread', count: 2 }, { name: 'dirt', count: 30 }] })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt' }), { status: 'tossed', count: 70 })
+  assert.deepEqual(p.self().inventory.map(i => i.name), ['bread'])
+  const [drop] = p.entities({ kind: 'item' })
+  assert.deepEqual([drop.name, drop.item, drop.pos], ['item', { name: 'dirt', count: 70 }, at(4, 64, 2)])
+  assert.deepEqual(p.world.calls.map(c => [c.name, c.args]), [['toss', { item: 'dirt' }]])
+})
+
+test('fake toss honours a smaller count, clamps a larger one and reports no-item for nothing carried', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 5 }] })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt', count: 2 }), { status: 'tossed', count: 2 })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt', count: 9 }), { status: 'tossed', count: 3 })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt' }), { status: 'no-item', count: 0 })
+  assert.equal(p.entities({ kind: 'item' }).length, 2)
+})
+
+test('fake collect emits one picked-up event per gained item', async () => {
+  const p = owned({ entities: [{ id: 5, name: 'item', kind: 'item', pos: at(1, 64, 0), item: { name: 'oak_log', count: 3 } }] })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  await p.collect('t1', { id: 5 })
+  assert.deepEqual(seen, [{ kind: 'picked-up', item: 'oak_log', count: 3 }])
+})

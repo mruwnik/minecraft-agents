@@ -669,6 +669,12 @@
               "the failure became an error event")
           (is (<= 2 (count (filter #(= :round_started (:kind %)) @seen))) "the loop kept ticking"))))))
 
+(deftest picked-up-is-a-debug-event-and-an-entry-of-its-own
+  (let [{:keys [eng p seen]} (setup)]
+    (.emit (.-world p) #js {:kind "picked-up" :item "stick" :count 3})
+    (is (= [{:item "stick" :count 3}] (mapv :data (mem/entries (mem/view (:store eng)) :picked-up))))
+    (is (= [[:picked-up :debug]] (->> @seen (filter #(= :body (:source %))) (mapv (juxt :kind :level)))))))
+
 (deftest bot-errors-and-a-failed-reconnect-are-error-level-events
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "error" :reason "boom"})
