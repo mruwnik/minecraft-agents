@@ -215,3 +215,33 @@ test('too far: unreachable carries reason too-far and the distance', async () =>
   const r = await p.useOn('t', { pos: at(9, 64, 0), item: 'iron_hoe' })
   assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', 9.53])
 })
+
+const hive = (level) => ({ blocks: { '1,64,0': 'beehive' }, states: { '1,64,0': { honey_level: level } } })
+
+test('shears on a ripe hive empty it and drop honeycomb above it', async () => {
+  const p = owned({ ...hive(5), inventory: [{ name: 'shears', count: 1 }] })
+  const r = await p.useOn('t', { pos: P, item: 'shears' })
+  assert.deepEqual(r, { status: 'used', before: { name: 'beehive', properties: { honey_level: 5 } }, after: { name: 'beehive', properties: { honey_level: 0 } }, consumed: 0 })
+  assert.deepEqual(dropsOf(p), [['honeycomb', 3, at(1, 65, 0)]])
+})
+
+test('a glass bottle on a ripe bee nest is spent for a honey bottle in the pockets', async () => {
+  const p = owned({ blocks: { '1,64,0': 'bee_nest' }, states: { '1,64,0': { honey_level: 5 } }, inventory: [{ name: 'glass_bottle', count: 2 }] })
+  const r = await p.useOn('t', { pos: P, item: 'glass_bottle' })
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 1)
+  assert.equal(r.after.properties.honey_level, 0)
+  assert.deepEqual(p.self().inventory.map(i => [i.name, i.count]), [['glass_bottle', 1], ['honey_bottle', 1]])
+})
+
+for (const [label, spec, item] of [
+  ['an unripe hive', hive(4), 'shears'],
+  ['a hive with the wrong item', hive(5), 'stick']
+]) {
+  test(`${label} is unchanged`, async () => {
+    const p = owned({ ...spec, inventory: [{ name: item, count: 1 }] })
+    const r = await p.useOn('t', { pos: P, item })
+    assert.equal(r.status, 'unchanged')
+    assert.deepEqual(dropsOf(p), [])
+  })
+}

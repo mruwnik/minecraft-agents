@@ -11,6 +11,7 @@ const COMPOSTABLE = new Set([
   'oak_sapling', 'birch_sapling', 'spruce_sapling', 'bread', 'baked_potato', 'cookie', 'pumpkin', 'melon'
 ])
 
+const HIVES = new Set(['beehive', 'bee_nest'])
 const BED = /_bed$|^respawn_anchor$/
 // The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse window-opening blocks before the click.
 const CONTAINER = /chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$/
@@ -52,6 +53,18 @@ export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
     return result('used', consume())
   }
   if (item === 'bone_meal' && (here.endsWith('_sapling') || here === 'grass_block')) return result('used', consume())
+  if (HIVES.has(here) && (s.states.get(k)?.honey_level ?? 0) >= 5 && (item === 'shears' || item === 'glass_bottle')) {
+    s.states.set(k, { ...s.states.get(k), honey_level: 0 })
+    if (item === 'shears') spawnItem({ ...pos, y: pos.y + 1 }, 'honeycomb', 3)
+    if (item === 'glass_bottle') {
+      const consumed = consume()
+      const have = s.inventory.find(i => i.name === 'honey_bottle')
+      if (have) have.count += 1
+      else s.inventory.push({ name: 'honey_bottle', count: 1 })
+      return result('used', consumed)
+    }
+    return result('used')
+  }
   if (here === 'composter' && level === 8) {
     setLevel(0)
     spawnItem({ ...pos, y: pos.y + 1 }, 'bone_meal', 1)
