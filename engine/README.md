@@ -797,7 +797,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:hostile-near` | a hostile mob within `:radius` (default 8), or a ranged one (skeleton, stray, bogged, pillager, witch) within `:ranged-radius` (default 16), that the body can see (`:visible-only false` counts hidden ones too); set the job's own `:radius` and `:ranged-radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 30 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
-| `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
+| `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above; or day with a built `:shelter` within 2 blocks (so shelter returns at dawn to open it) | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 0 |

@@ -389,3 +389,78 @@
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
           (await (tick-n eng 4))
           (is (= 1 (count (calls p "sleep")))))))))
+
+;; ------------------------------------------------- declining while it waits
+
+(def shelter-policy {:cap 10 :ttl day-ms})
+
+(defn write-shelter! [eng state]
+  (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state state} shelter-policy))
+
+(defn holds-with-memory? [eng world]
+  (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {})))
+
+(defn declined-events [seen reflex]
+  (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
+
+(def always-shelter
+  {:name :always-shelter :job '(jobs.survival.shelter) :args {:roof-height 4}
+   :persistence :cooldown :cooldown-s 10 :when (constantly true)})
+
+(deftest shelter-declines-at-night-while-roofed-in-a-built-shelter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"}})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (write-shelter! eng :built)
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (core/tick! eng))
+          (is (= 1 (count (declined-events seen :always-shelter))) "nothing to do until day: declined, not held")
+          (is (nil? (core/running eng)))
+          (is (= [] (calls p "dig"))))))))
+
+(deftest night-unsafe-holds-at-day-only-with-a-built-shelter-here
+  (let [{:keys [eng]} (setup {})
+        roofed {:blocks {"0,66,0" "stone"}}]
+    (is (not (holds-with-memory? eng {:time noon})) "no shelter")
+    (write-shelter! eng :built)
+    (is (holds-with-memory? eng {:time noon}) "built shelter at the body's place, day")
+    (is (not (holds-with-memory? eng {:time noon :self {:pos {:x 5 :y 64 :z 0}}})) "body is elsewhere")
+    (is (not (holds-with-memory? eng (assoc roofed :time night))) "night under a roof")
+    (write-shelter! eng :reopened)
+    (is (not (holds-with-memory? eng {:time noon})) "reopened")))
+
+(deftest a-shelter-reflex-at-night-is-dropped-and-a-lower-reflex-gets-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :self {:food 5}
+                                           :inventory [{:name "bread" :count 3}]})]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
+          (await (tick-n eng 6))
+          (is (seq (declined-events seen :night-unsafe))
+              "the shelter reflex was dropped with reflex.declined")
+          (is (< 5 (.-food (.self p))) "hungry got the body and ate"))))))
+
+(deftest a-failed-unroofed-shelter-at-night-does-not-throw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:time night :blocks floor})]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
+          (core/register-reflex! eng {:trigger :night-unsafe})
+          (await (tick-n eng 4))
+          (is (nil? (core/running eng))))))))
+
+(deftest night-unsafe-fires-at-dawn-and-shelter-opens-the-built-shelter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time noon :blocks {"0,66,0" "stone"}})]
+          (write-shelter! eng :built)
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (await (tick-n eng 4))
+          (is (= [{:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))))
+          (is (= :reopened (:state (last (entries eng :shelter))))))))))

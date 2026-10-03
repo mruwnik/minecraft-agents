@@ -78,7 +78,7 @@
   (let [w (await (ctx/call-child c :wait 'jobs.time.wait-for-day {}))]
     (if (= :done w)
       (do (await (dig-out! c shelter)) :done)
-      :continue)))
+      :declined)))
 
 (defn child-args [c radius]
   (let [{:keys [offline-allowed offline-ms player-radius]} (:args c)]
@@ -113,7 +113,7 @@
                 (= :continue d) :continue
                 :else (if-let [shelter (sh/active-shelter c)]
                         (await (wait-round c shelter))
-                        :continue)))))))))
+                        :declined)))))))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)]
