@@ -30,7 +30,7 @@ const RECONNECT_RETRY_MS = 5000
 const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 const STEP_RISE = 1.0
-const CENTRE_TOLERANCE = 0.15
+const CENTRE_TOLERANCE = 0.1
 const CENTRE_S = 1
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
@@ -162,9 +162,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const stepUpTarget = (path, body) => {
     const next = path?.[0]
     if (!next) return null
+    // pathfinder nodes are cell centres (x.5), so they are floored before they are compared with the body's cell
     const from = cell(body.entity.position)
-    const adjacent = Math.abs(next.x - from.x) + Math.abs(next.z - from.z) === 1
-    return adjacent && next.y === from.y + 1 ? { x: next.x, y: next.y, z: next.z } : null
+    const to = cell(next)
+    const adjacent = Math.abs(to.x - from.x) + Math.abs(to.z - from.z) === 1
+    return adjacent && to.y === from.y + 1 ? to : null
   }
   const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.height ?? 1.62), c.z + 0.5), true)
   const waitUntil = async (ctx, done, boundS) => {
@@ -182,14 +184,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const startY = pos.y
     const toCentre = () => Math.hypot(centre.x + 0.5 - pos.x, centre.z + 0.5 - pos.z)
     const onTick = () => { if (pos.y >= startY + STEP_RISE) body.setControlState('forward', true) }
+    const onCentre = () => {
+      const off = toCentre() >= CENTRE_TOLERANCE
+      if (off) faceCentre(body, centre).catch(() => {})
+      body.setControlState('forward', off)
+    }
     stopWalking(body)
     try {
       if (toCentre() >= CENTRE_TOLERANCE) {
-        await faceCentre(body, centre)
-        ctx.alive()
-        body.setControlState('forward', true)
+        // sneaking is slow enough not to overshoot into the far wall; forward is held only while off-centre
+        body.setControlState('sneak', true)
+        body.on('physicsTick', onCentre)
         await waitUntil(ctx, () => toCentre() < CENTRE_TOLERANCE, CENTRE_S)
+        body.off('physicsTick', onCentre)
         body.setControlState('forward', false)
+        body.setControlState('sneak', false)
       }
       await faceCentre(body, target)
       ctx.alive()
@@ -198,6 +207,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const landed = () => { const now = cell(pos); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
       await waitUntil(ctx, landed, STEP_S)
     } finally {
+      body.off('physicsTick', onCentre)
       body.off('physicsTick', onTick)
       body.clearControlStates()
     }

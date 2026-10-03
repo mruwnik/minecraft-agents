@@ -1017,7 +1017,7 @@ test('swim toward is not landed while still in the water next to the target', as
 // once y >= start+1 (the ledge is at x >= 1); the ground is 63 in the hole and 64 on the ledge.
 const HOLE_SCALE = 0.05
 const START_Y = 63
-const holeRig = ({ pathNode = at(1, 64, 0), raises = true, startX = 0.5, resolveAfter = Infinity } = {}) => {
+const holeRig = ({ pathNode = at(1.5, 64, 0.5), raises = true, startX = 0.5, resolveAfter = Infinity } = {}) => {
   const bot = stubBot({ pos: [startX, START_Y, 0.5] })
   const pos = bot.entity.position
   const p = createPrimitivesFromBot(bot, { timeScale: HOLE_SCALE })
@@ -1031,18 +1031,19 @@ const holeRig = ({ pathNode = at(1, 64, 0), raises = true, startX = 0.5, resolve
     return gotos.length > resolveAfter ? Promise.resolve() : new Promise(() => {})
   }
   const record = bot.setControlState
-  bot.setControlState = (control, state) => { sequence.push(`${control}:${state}`); return record(control, state) }
+  const jumpAt = []
+  bot.setControlState = (control, state) => { sequence.push(`${control}:${state}`); if (control === 'jump' && state) jumpAt.push(pos.x); return record(control, state) }
   const simulate = setInterval(() => {
     const cs = bot.controlState
     const ground = pos.x >= 1 ? START_Y + 1 : START_Y
-    if (cs.forward && (pos.y >= START_Y + 1 || pos.x >= 1)) pos.x += 0.2
+    if (cs.forward && (pos.y >= START_Y + 1 || pos.x >= 1 || !cs.jump)) pos.x += cs.sneak ? 0.03 : 0.2
     if (raises && cs.jump && pos.x < 1 && pos.y < START_Y + 1.25) pos.y += 0.25
     else if (pos.y > ground) pos.y = Math.max(ground, pos.y - 0.25)
     if (pos.x >= 1) pos.y = Math.max(pos.y, ground)
     bot.entity.onGround = Number.isInteger(pos.y)
     bot.emit('physicsTick')
   }, 1).unref()
-  return { bot, p, gotos, sequence, stop: () => clearInterval(simulate) }
+  return { bot, p, gotos, sequence, jumpAt, stop: () => clearInterval(simulate) }
 }
 const jumpsHeld = seq => seq.filter(s => s === 'jump:true').length
 
@@ -1056,8 +1057,17 @@ test('moveTo: stalled in a 1-deep hole, the walk centres, jumps, then presses fo
   assert.deepEqual(bot.controlState, {})
 })
 
+test('moveTo: centring sneaks and stops within 0.1 of the cell centre, never flush against a wall, before the jump', async () => {
+  const { p, sequence, jumpAt, stop } = holeRig({ startX: 0.3, resolveAfter: 1 })
+  await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
+  stop()
+  assert.ok(Math.abs(jumpAt[0] - 0.5) < 0.1)
+  assert.ok(sequence.indexOf('sneak:true') < sequence.indexOf('jump:true'))
+  assert.ok(sequence.indexOf('sneak:false') < sequence.indexOf('jump:true'))
+})
+
 test('moveTo: a path whose first node is two blocks up gets no step-up and ends blocked at the bound', async () => {
-  const { p, sequence, stop } = holeRig({ pathNode: at(1, 65, 0) })
+  const { p, sequence, stop } = holeRig({ pathNode: at(1.5, 65, 0.5) })
   const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
   stop()
   assert.equal(result.status, 'blocked')
@@ -1065,7 +1075,7 @@ test('moveTo: a path whose first node is two blocks up gets no step-up and ends 
 })
 
 test('moveTo: a path whose first node is not adjacent gets no step-up', async () => {
-  const { p, sequence, stop } = holeRig({ pathNode: at(2, 64, 0) })
+  const { p, sequence, stop } = holeRig({ pathNode: at(2.5, 64, 0.5) })
   const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
   stop()
   assert.equal(result.status, 'blocked')
