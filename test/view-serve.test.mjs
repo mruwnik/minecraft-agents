@@ -347,3 +347,32 @@ test('GET /blocks?debug=1 marks a material with the worst severity of its block,
   assert.deepEqual(issueOf(debug, 'stone'), [undefined])
   assert.deepEqual((await (await get('/blocks/1.21.4.json?debug=2')).json()).materials, debug.materials)
 })
+
+const biomesFile = path.join(stateDir, 'worlds', 'w1', 'biomes.json')
+
+test('GET /biomes/<world>.json builds colours from the world biomes.json', async () => {
+  writeAt(biomesFile, JSON.stringify({ v: 1, mcVersion: '26.1', biomes: [{ id: 0, name: 'plains' }, { id: 1, name: 'swamp' }] }), 2000)
+  const body = await (await get('/biomes/w1.json')).json()
+  assert.deepEqual(body.names, ['plains', 'swamp'])
+  assert.equal(body.colors.length, 24)
+  assert.deepEqual(body.colors.slice(12, 15), [0x6A, 0x70, 0x39])
+  assert.equal(body.fallback, false)
+})
+
+test('GET /biomes/<world>.json rebuilds when biomes.json changes', async () => {
+  writeAt(biomesFile, JSON.stringify({ v: 1, mcVersion: '26.1', biomes: [{ id: 0, name: 'swamp' }] }), 3000)
+  const body = await (await get('/biomes/w1.json')).json()
+  assert.deepEqual(body.names, ['swamp'])
+})
+
+test('GET /biomes/<world>.json falls back to minecraft-data order without biomes.json', async () => {
+  fs.rmSync(biomesFile)
+  const body = await (await get('/biomes/w1.json?v=26.1')).json()
+  assert.equal(body.fallback, true)
+  assert.ok(body.names.includes('plains'))
+  assert.equal(body.colors.length, body.names.length * 12)
+})
+
+for (const p of ['/biomes/nope.json', '/biomes/..%2Fw1.json', '/biomes/a.b.json']) {
+  test(`GET ${p} is 404`, async () => assert.equal((await get(p)).status, 404))
+}

@@ -8,6 +8,8 @@ import { textureBytes } from './materials.mjs'
 import { columnFormat } from './web-format.mjs'
 import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES } from './block-issues.mjs'
+import minecraftData from 'minecraft-data'
+import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
@@ -84,6 +86,28 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const payload = held ?? stored ?? await scanner.latest(world)
     if (!payload) return notFound(res)
     send(res, 200, JSON.stringify(payload), { 'Content-Type': TYPES['.json'] })
+  }
+
+  // biome id -> colours for a world: its biomes.json (written by the body) or, without one, minecraft-data's order for ?v=; cached per world and file mtime
+  const biomeCache = new Map()
+  const sendBiomes = async (res, world, requested) => {
+    const worldDir = path.join(stateDir, 'worlds', world)
+    if (!(await statOrNull(worldDir))?.isDirectory()) return notFound(res)
+    const file = path.join(worldDir, 'biomes.json')
+    const stat = await statOrNull(file)
+    const doc = stat ? await readJson(file) : null
+    const fallback = !doc?.biomes
+    const version = fallback ? requested : doc.mcVersion
+    if (!version || !VERSION.test(version)) return notFound(res)
+    const key = `${world}\0${fallback ? `fallback:${version}` : stat.mtimeMs}`
+    if (!biomeCache.has(key)) {
+      const names = []
+      if (fallback) minecraftData(version).biomesArray.forEach(b => { names[b.id] = b.name })
+      else doc.biomes.forEach(b => { names[b.id] = b.name })
+      const table = biomeTable(version, Array.from(names, n => n ?? ''), { jar: jarPath })
+      biomeCache.set(key, JSON.stringify({ mcVersion: version, source: table.source, names: table.names, colors: Array.from(table.colors), unknown: table.unknown, fallback }))
+    }
+    send(res, 200, biomeCache.get(key), { 'Content-Type': 'application/json' })
   }
 
   const listAgents = async res => {
@@ -235,6 +259,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       const table = ['1', '2'].includes(url.searchParams.get('debug')) ? debugTableFor(tableVersion) : buildFor(tableVersion).table
       return send(res, 200, table, { 'Content-Type': 'application/json' })
     }
+    const biomeWorld = head === 'biomes' && rest.length === 1 ? /^([A-Za-z0-9_-]+)\.json$/.exec(rest[0])?.[1] : null
+    if (biomeWorld) return sendBiomes(res, biomeWorld, url.searchParams.get('v'))
     const textureVersion = versionOf('textures', 'bin')
     if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
     const elementVersion = versionOf('elements', 'bin')
