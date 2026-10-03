@@ -72,10 +72,11 @@ bool occludes (ivec3 c) {
   return int(texelFetch(uInfo, ivec2(0, int(m)), 0).w) == 0 && (texelFetch(uInfo, ivec2(1, int(m)), 0).r & (CUTOUT | TRANSLUCENT)) == 0u;
 }
 
-// smooth light and ambient occlusion on the face of the cell that looks along -stepSign on axis, interpolated at local
-vec3 faceLight (ivec3 cell, int axis, float stepSign, vec3 local) {
+// smooth light and ambient occlusion on the face of the cell that looks along -stepSign on axis, interpolated at local;
+// inside: the face is within the cell (the top of a slab), so it looks into the cell itself, not the neighbour
+vec3 faceLight (ivec3 cell, int axis, float stepSign, vec3 local, bool inside) {
   ivec3 f = cell;
-  f[axis] -= int(stepSign);
+  if (!inside) f[axis] -= int(stepSign);
   int b = (axis + 1) % 3;
   int c = (axis + 2) % 3;
   ivec3 eb = ivec3(0);
@@ -184,6 +185,7 @@ void main () {
   int hitAxis = 1;
   float hitSign = 1.0;
   vec3 hitLocal = vec3(0.5);
+  bool hitInside = false; // the hit face is inside its cell (a slab top): lit from the cell itself
   int hitMode = 1; // 0 smooth light and AO, 1 the cell's own light, 2 emissive
   vec3 acc = vec3(0.0);
   float trans = 1.0;
@@ -212,62 +214,70 @@ void main () {
       uvec4 i0 = texelFetch(uInfo, ivec2(0, int(m)), 0);
       uint flags = texelFetch(uInfo, ivec2(1, int(m)), 0).r;
       int kind = int(i0.w);
-      float stepSign = float(stp[axis]);
-      vec3 local = clamp(o + dd * t - vec3(cell), 0.0, 1.0);
-      vec3 fuv = faceUV(axis, stepSign, local);
-      int face = int(fuv.z + 0.5);
-      vec2 uv = fuv.xy;
-      vec4 c = texelFetch(uMats, ivec2(face, int(m)), 0);
-      if ((flags & 12u) != 0u) {
-        bool end = axis == ((flags & 4u) != 0u ? 0 : 2);
-        face = end ? 0 : 1;
-        uv = end ? uv : uv.yx;
-      }
-      uint layerCode = i0[face];
-      bool textured = layerCode != 0u;
-      float shade = faceShade(axis, stepSign);
-      if (kind == 2) {
-        vec3 lo = o - vec3(cell);
-        float sHit;
-        vec3 rgb;
-        if (textured && crossHit(lo, dd, t, i0.y, sHit, rgb)) {
-          hit = true;
-          tHit = sHit;
-          hitCol = rgb;
-          hitCell = cell;
-          hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
-          break;
+      // a box face is hit where the ray meets the box (t, axis of that face), a miss passes over / beside it
+      float ht = t;
+      int hAxis = axis;
+      bool miss = kind == 1 && !rayBoxLocal(o - vec3(cell), inv, vec3(texelFetch(uInfo, ivec2(2, int(m)), 0).xyz), vec3(texelFetch(uInfo, ivec2(3, int(m)), 0).xyz), t, min(min(tMax.x, tMax.y), tMax.z), axis, ht, hAxis);
+      if (!miss) {
+        float stepSign = float(stp[hAxis]);
+        vec3 local = clamp(o + dd * ht - vec3(cell), 0.0, 1.0);
+        vec3 fuv = faceUV(hAxis, stepSign, local);
+        int face = int(fuv.z + 0.5);
+        vec2 uv = fuv.xy;
+        vec4 c = texelFetch(uMats, ivec2(face, int(m)), 0);
+        if ((flags & 12u) != 0u) {
+          bool end = hAxis == ((flags & 4u) != 0u ? 0 : 2);
+          face = end ? 0 : 1;
+          uv = end ? uv : uv.yx;
         }
-        vec3 b1 = (vec3(0.25, 0.0, 0.25) - lo) * inv;
-        vec3 b2 = (vec3(0.75, 0.8, 0.75) - lo) * inv;
-        float bn = max(max(min(b1.x, b2.x), min(b1.y, b2.y)), min(b1.z, b2.z));
-        float bf = min(min(max(b1.x, b2.x), max(b1.y, b2.y)), max(b1.z, b2.z));
-        if (!textured && bn <= bf && bf >= t) {
-          hit = true;
-          tHit = max(bn, t);
-          hitCol = texelFetch(uMats, ivec2(1, int(m)), 0).rgb * 0.95;
-          hitCell = cell;
-          hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
-          break;
-        }
-      } else {
-        vec4 tex = textured ? texAt(layerCode, uv, lodAt(t, d[axis])) : c;
-        if (kind == 3 || (flags & 2u) != 0u) {
-          if (m != prevM) {
-            float alpha = kind == 3 || !textured ? c.a : (tex.a > 0.0 ? tex.a : 0.5);
-            acc += trans * alpha * tex.rgb * shade * ((flags & EMISSIVE) != 0u ? vec3(1.0) : cellColor(cell));
-            trans *= 1.0 - alpha;
+        uint layerCode = i0[face];
+        bool textured = layerCode != 0u;
+        float shade = faceShade(hAxis, stepSign);
+        if (kind == 2) {
+          vec3 lo = o - vec3(cell);
+          float sHit;
+          vec3 rgb;
+          if (textured && crossHit(lo, dd, t, i0.y, sHit, rgb)) {
+            hit = true;
+            tHit = sHit;
+            hitCol = rgb;
+            hitCell = cell;
+            hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
+            break;
           }
-        } else if (!(textured && (flags & 1u) != 0u && tex.a < 0.5)) {
-          hit = true;
-          tHit = t;
-          hitCol = tex.rgb * shade;
-          hitCell = cell;
-          hitAxis = axis;
-          hitSign = stepSign;
-          hitLocal = local;
-          hitMode = (flags & EMISSIVE) != 0u ? 2 : (kind <= 1 ? 0 : 1);
-          break;
+          vec3 b1 = (vec3(0.25, 0.0, 0.25) - lo) * inv;
+          vec3 b2 = (vec3(0.75, 0.8, 0.75) - lo) * inv;
+          float bn = max(max(min(b1.x, b2.x), min(b1.y, b2.y)), min(b1.z, b2.z));
+          float bf = min(min(max(b1.x, b2.x), max(b1.y, b2.y)), max(b1.z, b2.z));
+          if (!textured && bn <= bf && bf >= t) {
+            hit = true;
+            tHit = max(bn, t);
+            hitCol = texelFetch(uMats, ivec2(1, int(m)), 0).rgb * 0.95;
+            hitCell = cell;
+            hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
+            break;
+          }
+        } else {
+          vec4 tex = textured ? texAt(layerCode, uv, lodAt(ht, d[hAxis])) : c;
+          // water stays a full cube (in Minecraft a source's surface is at 14/16)
+          if (kind == 3 || (flags & 2u) != 0u) {
+            if (m != prevM) {
+              float alpha = kind == 3 || !textured ? c.a : (tex.a > 0.0 ? tex.a : 0.5);
+              acc += trans * alpha * tex.rgb * shade * ((flags & EMISSIVE) != 0u ? vec3(1.0) : cellColor(cell));
+              trans *= 1.0 - alpha;
+            }
+          } else if (!(textured && (flags & 1u) != 0u && tex.a < 0.5)) {
+            hit = true;
+            tHit = ht;
+            hitCol = tex.rgb * shade;
+            hitCell = cell;
+            hitAxis = hAxis;
+            hitSign = stepSign;
+            hitLocal = local;
+            hitInside = kind == 1 && local[hAxis] > 1e-3 && local[hAxis] < 1.0 - 1e-3;
+            hitMode = (flags & EMISSIVE) != 0u ? 2 : (kind <= 1 ? 0 : 1);
+            break;
+          }
         }
       }
     }
@@ -284,7 +294,7 @@ void main () {
     float fog = clamp((tHit / uDist - 0.6) / 0.4, 0.0, 1.0);
     vec3 lit = vec3(1.0);
     if (hitMode == 0) {
-      vec3 l = faceLight(hitCell, hitAxis, hitSign, hitLocal);
+      vec3 l = faceLight(hitCell, hitAxis, hitSign, hitLocal, hitInside);
       lit = l.z * lightColor(l.x, l.y, uDarken);
     } else if (hitMode == 1) {
       lit = cellColor(hitCell);

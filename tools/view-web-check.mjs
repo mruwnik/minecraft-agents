@@ -41,6 +41,10 @@ const textureAverage = name => {
 }
 const diamondExpected = textureAverage('diamond_ore').map(v => v * Z_FACE_SHADE)
 
+const isRed = ([r, g, b]) => r > 70 && g < 50 && b < 50 // the shaded, AO-darkened wool
+const isWhite = ([r, g, b]) => r > 100 && g > 100 && b > 100 && Math.abs(r - b) < 25
+const isGold = ([r, g, b]) => r > 110 && g > 90 && b < 80
+
 // A check: {name, region, test(stats, all), describe(stats, all)}; `all` = {stats: this run's regions, runs: {run name: regions}}
 const TEXTURES = [
   { name: 'diamond textured', region: 'diamond', test: s => s.std > 12, describe: s => `std ${s.std.toFixed(1)} vs > 12` },
@@ -56,7 +60,12 @@ const TEXTURES = [
     test: s => s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80) > 0.05 && s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80) < 0.8 && s.fraction(([r, g]) => g > r + 10) > 0.1,
     describe: s => `reddish ${s.fraction(([r, g, b]) => r > 120 && g < 80 && b < 80).toFixed(2)} vs 0.05..0.8, greenish ${s.fraction(([r, g]) => g > r + 10).toFixed(2)} vs > 0.1`
   },
-  { name: 'lit stone textured', region: 'lit', test: s => s.std > 4, describe: s => `std ${s.std.toFixed(1)} vs > 4` }
+  { name: 'lit stone textured', region: 'lit', test: s => s.std > 4, describe: s => `std ${s.std.toFixed(1)} vs > 4` },
+  // partial blocks are boxes of the right size: the rays above a bottom slab / a two-layer snow reach the block behind
+  { name: 'slab lower half is planks', region: 'slab lower', test: s => s.mean[0] > s.mean[2] + 30, describe: s => `r ${s.mean[0].toFixed(0)} vs b ${s.mean[2].toFixed(0)} + 30` },
+  { name: 'above the slab shows what is behind', region: 'slab upper', test: s => s.fraction(isRed) > 0.6, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` },
+  { name: 'snow lower quarter is white', region: 'snow lower', test: s => s.fraction(isWhite) > 0.6, describe: s => `white ${s.fraction(isWhite).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` },
+  { name: 'snow is low', region: 'snow upper', test: s => s.fraction(isGold) > 0.6, describe: s => `gold ${s.fraction(isGold).toFixed(2)} vs > 0.6 (mean ${fmt(s.mean)})` }
 ]
 
 // the lighting stage: only run with --lighting

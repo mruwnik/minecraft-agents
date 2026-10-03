@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { celestialAngle, skyDarken, brightness, lightColor, faceUV, faceShade, cornerLight, sceneTime, SHADING_GLSL } from '../tools/view/web/shading.mjs'
+import { celestialAngle, skyDarken, brightness, lightColor, faceUV, faceShade, cornerLight, rayBoxLocal, sceneTime, SHADING_GLSL } from '../tools/view/web/shading.mjs'
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`)
 
@@ -97,3 +97,27 @@ for (const [name, pose, query, want] of [
   ['rain clamps low', { rain: 0.4 }, 'rain=-2', { time: 6000, rain: 0 }],
   ['bad rain ignored', { rain: 0.4 }, 'rain=x', { time: 6000, rain: 0.4 }]
 ]) test(`sceneTime: ${name}`, () => assert.deepEqual(sceneTime(pose, params(query)), want))
+
+const SLAB = [0, 0, 0, 16, 8, 16]
+const SNOW2 = [0, 0, 0, 16, 4, 16]
+const POST = [6, 0, 6, 10, 16, 10]
+for (const [name, lo, d, box, t, tExit, entry, want] of [
+  ['side below the slab top', [0, 0.25, 0.5], [1, 0, 0], SLAB, 0, 1, 0, { t: 0, axis: 0 }],
+  ['side above the slab top', [0, 0.75, 0.5], [1, 0, 0], SLAB, 0, 1, 0, null],
+  ['straight down onto the top', [0.5, 1, 0.5], [0, -1, 0], SLAB, 0, 1, 1, { t: 0.5, axis: 1 }],
+  ['oblique down onto the top', [0, 1, 0.5], [1, -1, 0], SLAB, 0, 1, 1, { t: 0.5, axis: 1 }],
+  ['grazing over the top', [0, 1, 0.5], [1, -0.1, 0], SLAB, 0, 1, 0, null],
+  ['snow side, low', [0, 0.2, 0.5], [1, 0, 0], SNOW2, 0, 1, 0, { t: 0, axis: 0 }],
+  ['snow side, above', [0, 0.3, 0.5], [1, 0, 0], SNOW2, 0, 1, 0, null],
+  ['post is hit inside the cell', [0, 0.5, 0.5], [1, 0, 0], POST, 0, 1, 0, { t: 0.375, axis: 0 }],
+  ['post past the cell exit', [0, 0.5, 0.5], [1, 0, 0], POST, 0, 0.3, 0, null],
+  ['post missed beside', [0, 0.5, 0.2], [1, 0, 0], POST, 0, 1, 0, null],
+  ['entry inside the box keeps the entry face', [0.5, 1, 0.5], [0, -1, 0], [0, 0, 0, 16, 16, 16], 0, 1, 1, { t: 0, axis: 1 }]
+]) {
+  test(`rayBoxLocal ${name}`, () => {
+    const got = rayBoxLocal(lo, d, box, t, tExit, entry)
+    assert.deepEqual(got && { t: Math.round(got.t * 1e6) / 1e6, axis: got.axis }, want)
+  })
+}
+
+test('SHADING_GLSL has the rayBoxLocal twin', () => assert.match(SHADING_GLSL, /bool rayBoxLocal\(/))

@@ -8,7 +8,7 @@ import { decodeColumnFile, restoreColumn } from '../engine/js/view.mjs'
 import { cameraBasis } from '../tools/view/web/camera.mjs'
 import { decodeLight } from '../tools/view/web/decode.mjs'
 import { faceRegion } from '../tools/view/project.mjs'
-import { FIXTURE, blockNameAt, lightAt, writeFixture } from '../tools/view/fixture.mjs'
+import { FIXTURE, STATES, blockNameAt, lightAt, writeFixture } from '../tools/view/fixture.mjs'
 
 const Chunk = makeChunkClass('26.1')
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'view-fixture-test-'))
@@ -30,7 +30,7 @@ const lightCell = ({ header, light }, x, y, z) => {
 const blocks = [
   ['floor', 3, 64, 3, 'stone'], ['above floor', 3, 65, 3, 'air'], ['lit stripe', 2, 66, 4, 'stone'], ['dark stripe', 7, 68, 4, 'stone'],
   ['gap', 9, 66, 4, 'air'], ['leaves', 10, 67, 4, 'oak_leaves'], ['wool', 10, 67, 3, 'red_wool'], ['diamond', 13, 65, 4, 'diamond_ore'],
-  ['above wall', 2, 69, 4, 'air'], ['other chunk', -3, 64, 5, 'air'], ['below floor', 3, 63, 3, 'air']
+  ['above wall', 2, 69, 4, 'air'], ['slab', 4, 65, 8, 'oak_slab'], ['behind the slab', 4, 65, 7, 'red_wool'], ['snow', 11, 65, 8, 'snow'], ['behind the snow', 11, 65, 7, 'gold_block'], ['above the slab', 4, 66, 8, 'air'], ['other chunk', -3, 64, 5, 'air'], ['below floor', 3, 63, 3, 'air']
 ]
 
 test('blockNameAt describes the scene', () => {
@@ -44,9 +44,11 @@ const lights = [
   ['dark stripe row 2', 8, 68, 6, { sky: 0, block: 0 }],
   ['dark pocket ends at z=7', 6, 66, 7, { sky: 15, block: 0 }],
   ['torch patch', FIXTURE.torch.x[0], 65, 9, { sky: 0, block: 14 }],
-  ['next to torch patch', FIXTURE.torch.x[1] + 1, 65, 9, { sky: 15, block: 0 }],
+  ['next to torch patch', FIXTURE.torch.x[1] + 1, 65, 8, { sky: 15, block: 0 }],
   ['solid', 3, 64, 3, { sky: 0, block: 0 }],
   ['leaves let light through', 10, 67, 4, { sky: 15, block: 0 }],
+  ['slab cell is lit', 4, 65, 8, { sky: 15, block: 0 }],
+  ['snow cell is lit', 11, 65, 8, { sky: 15, block: 0 }],
   ['other chunk', -5, 70, -5, { sky: 15, block: 0 }]
 ]
 
@@ -77,8 +79,8 @@ test('the lowest and highest sections carry light data', () => {
 
 test('every cell of a whole row decodes to its intended light (vanilla nibble order)', () => {
   const loaded = load(0, 0)
-  const row = Array.from({ length: 16 }, (_, x) => lightCell(loaded, x, 65, 9))
-  assert.deepEqual(row, Array.from({ length: 16 }, (_, x) => lightAt(x, 65, 9)))
+  const row = Array.from({ length: 16 }, (_, x) => lightCell(loaded, x, 65, 8))
+  assert.deepEqual(row, Array.from({ length: 16 }, (_, x) => lightAt(x, 65, 8)))
   assert.ok(row.some(c => c.block === 14) && row.some(c => c.block === 0))
 })
 
@@ -99,4 +101,23 @@ test('every region is fully on screen at 640x360 fov 70', () => {
     assert.ok(r.x0 >= 0 && r.y0 >= 0 && r.x1 < 640 && r.y1 < 360, `${name} ${JSON.stringify(r)}`)
     assert.ok(r.x1 - r.x0 >= 20 && r.y1 - r.y0 >= 10, `${name} too small ${JSON.stringify(r)}`)
   }
+})
+
+test('the slab is a bottom slab and the snow has two layers', () => {
+  const loaded = load(0, 0)
+  assert.equal(loaded.column.getBlock({ x: 4, y: 65, z: 8 }).getProperties().type, 'bottom')
+  assert.equal(loaded.column.getBlock({ x: 11, y: 65, z: 8 }).getProperties().layers, '2')
+  assert.deepEqual(STATES, { oak_slab: { type: 'bottom' }, snow: { layers: 2 } })
+})
+
+const OLD_REGIONS = ['lit', 'dark', 'leaves', 'diamond', 'torch']
+const overlap = (a, b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
+
+test('the slab and snow regions do not overlap the original ones or each other', () => {
+  const basis = cameraBasis({ yaw: FIXTURE.yaw, pitch: FIXTURE.pitch, fov: 70 })
+  const rects = Object.fromEntries(FIXTURE.regions.map(({ name, face }) => [name, faceRegion(basis, FIXTURE.eye, face, 640, 360)]))
+  const added = FIXTURE.regions.map(r => r.name).filter(n => !OLD_REGIONS.includes(n))
+  assert.deepEqual(added, ['slab lower', 'slab upper', 'snow lower', 'snow upper'])
+  const pairs = added.flatMap((a, i) => [...OLD_REGIONS, ...added.slice(i + 1)].map(b => [a, b]))
+  for (const [a, b] of pairs) assert.ok(!overlap(rects[a], rects[b]), `${a} ${JSON.stringify(rects[a])} overlaps ${b} ${JSON.stringify(rects[b])}`)
 })

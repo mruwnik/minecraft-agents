@@ -74,6 +74,18 @@ export function cornerLight (center, side1, side2, corner) {
   return { sky: mean(0), block: mean(1), ao }
 }
 
+// the ray lo + d * s (lo local to the cell, 0..1) against a box in 1/16 units, for s in the cell [t, tExit] entered through
+// entryAxis: {t, axis} of the face hit (the entry face when the ray starts inside the box), or null
+export function rayBoxLocal (lo, d, box, t, tExit, entryAxis) {
+  const inv = d.map(v => 1 / (Math.abs(v) < 1e-7 ? 1e-7 : v))
+  const near = [0, 1, 2].map(i => Math.min((box[i] / 16 - lo[i]) * inv[i], (box[i + 3] / 16 - lo[i]) * inv[i]))
+  const far = [0, 1, 2].map(i => Math.max((box[i] / 16 - lo[i]) * inv[i], (box[i + 3] / 16 - lo[i]) * inv[i]))
+  const bn = Math.max(...near)
+  const bf = Math.min(...far)
+  if (bn > bf || bf < t || Math.max(bn, t) > tExit) return null
+  return bn <= t ? { t, axis: entryAxis } : { t: bn, axis: near.indexOf(bn) }
+}
+
 export const SHADING_GLSL = `
 float celestialAngle(float timeOfDay) {
   float d = fract(timeOfDay / 24000.0 - 0.25);
@@ -129,5 +141,21 @@ vec3 cornerLight(vec2 c, vec2 s1, vec2 s2, vec2 k, bvec3 opaque) {
   vec2 sum = c + (opaque.x ? c : s1) + (opaque.y ? c : s2) + (opaque.z ? c : k);
   float ao = (1.0 + (opaque.x ? 0.2 : 1.0) + (opaque.y ? 0.2 : 1.0) + (cornerOpaque ? 0.2 : 1.0)) / 4.0;
   return vec3(sum / 4.0, ao);
+}
+
+// the ray lo + dd * s against a box in 1/16 units (inv = 1 / dd) within the cell span [t, tExit] entered through entryAxis
+bool rayBoxLocal(vec3 lo, vec3 inv, vec3 bmin, vec3 bmax, float t, float tExit, int entryAxis, out float tHit, out int hitAxis) {
+  vec3 b1 = (bmin / 16.0 - lo) * inv;
+  vec3 b2 = (bmax / 16.0 - lo) * inv;
+  vec3 nr = min(b1, b2);
+  float bn = max(max(nr.x, nr.y), nr.z);
+  float bf = min(min(max(b1.x, b2.x), max(b1.y, b2.y)), max(b1.z, b2.z));
+  tHit = t;
+  hitAxis = entryAxis;
+  if (bn > bf || bf < t || max(bn, t) > tExit) return false;
+  if (bn <= t) return true;
+  tHit = bn;
+  hitAxis = nr.x >= nr.y && nr.x >= nr.z ? 0 : (nr.y >= nr.z ? 1 : 2);
+  return true;
 }
 `
