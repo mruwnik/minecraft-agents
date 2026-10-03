@@ -1,0 +1,13 @@
+;; shadow-cljs builds for the body engine. See README.md.
+{:source-paths ["src" "test"]
+ :dependencies []
+ :builds
+ {:body {:target :node-script
+         :main engine.main/main
+         :output-to "out/body.cjs"
+         :output-dir "out/body"}
+  :test {:target :node-test
+         :output-to "out/test.cjs"
+         :output-dir "out/test"
+         :ns-regexp "-test$"
+         :autorun false}}}
