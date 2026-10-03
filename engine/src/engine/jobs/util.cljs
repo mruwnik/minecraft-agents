@@ -22,6 +22,12 @@
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
+(defn within?
+  "True when the floored cells of a and b are within range, the measure moveTo's arrival uses."
+  [a b range]
+  (let [d (fn [k] (- (js/Math.floor (k a)) (js/Math.floor (k b))))]
+    (<= (+ (* (d :x) (d :x)) (* (d :y) (d :y)) (* (d :z) (d :z))) (* range range))))
+
 (defn inventory
   "The carried items as cljs maps {:name :count :slot}."
   [p]
@@ -41,7 +47,7 @@
   "Walk until within range of pos, skipping the walk when already there.
   Resolves to :there, :partial (closer, call again) or :blocked."
   [c pos range]
-  (if (<= (dist (self-pos c) pos) range)
+  (if (within? (self-pos c) pos range)
     :there
     (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
       (case (.-status r)
