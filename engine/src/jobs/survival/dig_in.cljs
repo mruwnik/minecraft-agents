@@ -14,7 +14,10 @@
   block; with none it just digs down two. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
   :built} (cap 10, kept one in-game day); :roof is absent when nothing was
-  placed above. A body that cannot place or dig gives up after three failures
+  placed above. In walls mode the entry also has :door, the feet-height and
+  head-height cells of one side it placed itself, which shelter digs to walk
+  out at day (the body stands on the original ground, so the roof is no way
+  out); the pit has no :door. A body that cannot place or dig gives up after three failures
   with a dig_in_failed warn.")
 
 (def building-blocks
@@ -51,6 +54,17 @@
            (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
                    [{:x (inc x) :y (+ y 2) :z z} {:x x :y (+ y 2) :z z}])))
 
+(defn door
+  "The door cells [feet head] of one side among the placed cells: the first side
+  with both cells placed, else the first side placed at feet height plus the
+  cell above it, else nil."
+  [placed {:keys [x y z]}]
+  (let [at (fn [[dx dz] dy] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+        feet-placed (filter #(contains? placed (at % 0)) sides)
+        both (first (filter #(contains? placed (at % 1)) feet-placed))
+        side (or both (first feet-placed))]
+    (when side [(at side 0) (at side 1)])))
+
 (defn ^:async place-all!
   "Place item-picked blocks at cells in order. Resolves to :ok, or the first
   status that is not placed or occupied (no-item when none is carried)."
@@ -63,7 +77,8 @@
         :else (let [r (await (ctx/act c :place (clj->js {:pos (first cells) :item item})))
                     status (.-status r)]
                 (if (#{"placed" "occupied"} status)
-                  (recur (rest cells))
+                  (do (when (= "placed" status) (ctx/update-mem! c update :placed (fnil conj #{}) (first cells)))
+                      (recur (rest cells)))
                   status))))))
 
 (defn ^:async walls-round [c]
@@ -153,8 +168,11 @@
     (when (= :done r)
       (let [p (:primitives c)
             roof (:roof (ctx/mem c))
-            roofed (and roof (sh/solid-at? p roof))]
+            roofed (and roof (sh/solid-at? p roof))
+            door (when (= :walls (:mode (ctx/mem c)))
+                   (door (:placed (ctx/mem c) #{}) (sh/feet p)))]
         (ctx/remember! c :shelter (cond-> {:pos (sh/feet p) :state :built}
-                                    roofed (assoc :roof roof))
+                                    roofed (assoc :roof roof)
+                                    door (assoc :door door))
                        shelter-policy)))
     r))

@@ -15,7 +15,9 @@
   through to the next choice in the same round and is recorded as
   :sleep-failed, so later rounds of this shelter do not call sleep again (and
   walk back toward the bed) while the other choices work. Once dug in it waits for day
-  (jobs.time.wait-for-day), then opens the roof (or climbs out of the pit) and
+  (jobs.time.wait-for-day), then opens the roof and leaves: through the :door
+  of a walled shelter (digging both door cells and walking to the cell beyond
+  it), or by climbing out of a pit, and
   writes the :shelter entry again with :state :reopened. A body whose latest
   :slept entry is more than :max-days-awake in-game days (20 minutes each)
   old, which phantoms attack, looks for a bed within :urgent-bed-radius rather
@@ -48,13 +50,28 @@
     (ctx/emit! c :needs_bed :warn {:days (sh/days-awake c)
                                    :text "not slept for too long; phantoms will come, find or make a bed"})))
 
+(defn beyond
+  "The cell past the door of a walled shelter, at feet height."
+  [{:keys [pos door]}]
+  (let [[feet] door]
+    (-> feet
+        (update :x + (- (:x feet) (:x pos)))
+        (update :z + (- (:z feet) (:z pos))))))
+
 (defn ^:async dig-out!
-  "At day: open the roof, climb out of the pit, and mark the shelter reopened."
+  "At day: open the roof, then leave through the door of a walled shelter (dig
+  both door cells, walk to the cell beyond) or climb out of the pit, and mark
+  the shelter reopened."
   [c shelter]
-  (let [roof (:roof shelter)]
+  (let [roof (:roof shelter)
+        [feet head] (:door shelter)]
     (when roof
-      (await (ctx/act c :dig (clj->js {:pos roof})))
-      (await (ctx/act c :moveTo (clj->js {:pos roof :range 1}))))
+      (await (ctx/act c :dig (clj->js {:pos roof}))))
+    (cond
+      feet (do (await (ctx/act c :dig (clj->js {:pos feet})))
+               (await (ctx/act c :dig (clj->js {:pos head})))
+               (await (ctx/act c :moveTo (clj->js {:pos (beyond shelter) :range 0.5}))))
+      roof (await (ctx/act c :moveTo (clj->js {:pos roof :range 1}))))
     (ctx/remember! c :shelter (assoc shelter :state :reopened) {:cap 10 :ttl sh/ms-per-day})))
 
 (defn ^:async wait-round [c shelter]

@@ -165,7 +165,9 @@
           (is (= [] (calls p "dig")))
           (is (= "dirt" (.-name (.blockAt p (tu/pos 0 66 0)))) "the roof")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 1 65 0)))) "a wall at head height")
-          (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}] (entries eng :shelter)))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built
+                   :door [{:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}]}]
+                 (entries eng :shelter)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :shelter))))))))
 
 (deftest dig-in-skips-sides-that-are-already-solid
@@ -242,7 +244,9 @@
           (await (run-until-empty eng 8))
           (is (= [{:x 1 :y 66 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (take-last 2 (calls p "place")))) "support, then roof")
           (is (= [] (emitted seen :dig_in_failed)))
-          (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}] (entries eng :shelter))))))))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built
+                   :door [{:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}]}]
+                 (entries eng :shelter))))))))
 
 (deftest dig-in-will-not-dig-through-a-thin-floor-into-water
   (async done
@@ -314,8 +318,10 @@
           (is (= [:built] (mapv :state (entries eng :shelter))))
           (.setTime (.-world p) noon)
           (await (run-until-empty eng 4))
-          (is (= [{:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))) "opened the roof")
+          (is (= [{:x 0 :y 66 :z 0} {:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}] (mapv arg-pos (calls p "dig")))
+              "opened the roof and both door cells")
           (is (= "air" (.-name (.blockAt p (tu/pos 0 66 0)))))
+          (is (= {:x 2 :y 64 :z 0} (arg-pos (last (calls p "moveTo")))) "walked out through the door, not to the roof")
           (is (= [:built :reopened] (mapv :state (entries eng :shelter))))
           (is (= [] (:list (core/state eng)))))))))
 
