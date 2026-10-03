@@ -1,5 +1,6 @@
 // Headless pixel regression check of the browser view against a synthetic world (tools/view/fixture.mjs).
-//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting]
+//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost]
+// --ghost: the no-ghost check (tools/view/ghost-fixture.mjs): jump between two places that share window slots and compare with fresh loads.
 // Prints PASS|FAIL per check, saves screenshots to --out, exits 1 if a check fails.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -12,10 +13,11 @@ import { withPage, freePort } from './view/headless.mjs'
 import { cameraBasis } from './view/web/camera.mjs'
 import { faceRegion } from './view/project.mjs'
 import { regionStats, luminance } from './view/stats.mjs'
-import { decodePng } from '../src/vision/renderer.mjs'
+import { PLACES, AGENT as GHOST_AGENT, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
+import { decodePng, encodePng } from '../src/vision/renderer.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false } } })
+const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false } } })
 
 const WIDTH = 640
 const HEIGHT = 360
@@ -114,6 +116,78 @@ const shoot = ({ port, run, outDir }) => withPage({ url: `http://127.0.0.1:${por
   return { image: decodePng(png), logs: page.logs }
 })
 
+// ---- no-ghost check ----
+
+const GHOST_MEAN_MAX = 0.5
+const GHOST_DIFF_LEVEL = 8
+const GHOST_FRACTION_MAX = 0.001
+const GHOST_QUERY = `agent=${GHOST_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0&time=6000`
+
+// the page has drawn the pose at `place` with every wanted column loaded
+const arrivedAt = place => `(() => { const t = window.__view?.camTrace.at(-1); return !!t && Math.abs(t.x - ${place.cx * 16 + 8}) < 1 && Math.abs(t.z - ${place.cz * 16 + 8}) < 1 && window.__view.ready === true })()`
+
+const snapshot = async (page, name, outDir) => {
+  await page.evaluate(HIDE_CHROME)
+  await page.sleep(SETTLE_MS)
+  const png = await page.screenshot()
+  fs.writeFileSync(path.join(outDir, `ghost-${name}.png`), png)
+  return decodePng(png)
+}
+
+const fresh = (port, stateDir, place, name, outDir) => {
+  writePose(stateDir, place)
+  return withPage({ url: `http://127.0.0.1:${port}/?${GHOST_QUERY}`, width: WIDTH, height: HEIGHT }, async page => {
+    await page.waitUntil(arrivedAt(place), `a fresh load at ${name}`)
+    return snapshot(page, name, outDir)
+  })
+}
+
+const compareImages = (a, b) => {
+  const pixels = a.width * a.height
+  let sum = 0
+  let over = 0
+  const diff = new Uint8Array(pixels * 4)
+  for (let i = 0; i < pixels; i++) {
+    const d = Math.max(...[0, 1, 2].map(c => Math.abs(a.rgba[i * 4 + c] - b.rgba[i * 4 + c])))
+    sum += d
+    over += d > GHOST_DIFF_LEVEL ? 1 : 0
+    diff.set([Math.min(255, d * 8), Math.min(255, d * 8), Math.min(255, d * 8), 255], i * 4)
+  }
+  return { mean: sum / pixels, fraction: over / pixels, diff }
+}
+
+const ghostCheck = async outDir => {
+  const stateDir = path.join(outDir, 'ghost-state')
+  fs.rmSync(stateDir, { recursive: true, force: true })
+  writeGhostWorld(stateDir, PLACES.A)
+  const { server, port } = await startServer(stateDir)
+  let failures = 0
+  try {
+    const jumps = await withPage({ url: `http://127.0.0.1:${port}/?${GHOST_QUERY}`, width: WIDTH, height: HEIGHT }, async page => {
+      await page.waitUntil(arrivedAt(PLACES.A), 'the first load at A')
+      writePose(stateDir, PLACES.B)
+      await page.waitUntil(arrivedAt(PLACES.B), 'the jump to B')
+      const b1 = await snapshot(page, 'B1', outDir)
+      writePose(stateDir, PLACES.A)
+      await page.waitUntil(arrivedAt(PLACES.A), 'the jump back to A')
+      return { B1: b1, A2: await snapshot(page, 'A2', outDir), logs: page.logs }
+    })
+    const references = { B1: await fresh(port, stateDir, PLACES.B, 'B0', outDir), A2: await fresh(port, stateDir, PLACES.A, 'A0', outDir) }
+    for (const [name, reference] of Object.entries(references)) {
+      const { mean, fraction, diff } = compareImages(jumps[name], reference)
+      fs.writeFileSync(path.join(outDir, `ghost-diff-${name}.png`), encodePng(WIDTH, HEIGHT, diff))
+      const ok = mean <= GHOST_MEAN_MAX && fraction < GHOST_FRACTION_MAX
+      if (!ok) failures++
+      console.log(`${ok ? 'PASS' : 'FAIL'} ghost/${name} equals a fresh load: mean abs diff ${mean.toFixed(3)} vs <= ${GHOST_MEAN_MAX}, ${(fraction * 100).toFixed(3)}% pixels over ${GHOST_DIFF_LEVEL} vs < ${GHOST_FRACTION_MAX * 100}%`)
+    }
+    for (const line of jumps.logs.slice(0, 5)) console.log(`  console (ghost): ${line}`)
+  } finally {
+    server.close()
+    server.closeAllConnections?.()
+  }
+  return failures
+}
+
 const main = async () => {
   const outDir = values.out ? path.resolve(values.out) : fs.mkdtempSync(path.join(os.tmpdir(), 'view-check-'))
   fs.mkdirSync(outDir, { recursive: true })
@@ -136,6 +210,7 @@ const main = async () => {
       }
       for (const line of logs.slice(0, 5)) console.log(`  console (${run.name}): ${line}`)
     }
+    if (values.ghost) failures += await ghostCheck(outDir)
   } finally {
     server.close()
     server.closeAllConnections?.()

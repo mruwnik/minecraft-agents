@@ -213,9 +213,16 @@ of about 9 ms included the awaited inflate's wall time, so it overstated the cos
 takes about 3 s of main-thread work off each teleport burst. That matters on a slower CPU, and the main-thread
 fallback is the same code.
 
-Column file change → drawn (60 s sprint replay, one touched column every second): p50 136 ms, p95 267 ms with the
-Worker, against 125 / 251 ms before. This latency comes from the server's 250 ms column poll, not from the decode. The
-next step there is the same `fs.watch` approach, on the chunks directory.
+Column file change → drawn (60 s sprint replay, one touched column every second): with only the 250 ms column poll it
+was p50 136 / p95 267 ms. The server now also watches the world's chunks directory with `fs.watch`, keeping the poll as
+the fallback, and the latency is p50 14 / p95 17 ms (n = 60, no dropped frames).
+
+A slot that is reused keeps its old voxels and light behind its flags. `node tools/view-web-check.mjs --ghost` checks
+that none of that stale data is ever drawn. It uses a fixture (`tools/view/ghost-fixture.mjs`) with two places A and B
+that share all 9 slots at radius 1, and B has 4 columns missing on disk. One page teleports A → B → A, and each view is
+compared pixel by pixel with a fresh page load at the same pose, including a view across the missing-column border.
+The result is identical: mean abs diff 0.000, 0 % of pixels over 8. With `clearSlot` made a no-op, the check fails:
+mean diff 10.3, 8.3 % of pixels.
 
 The fps table above was measured with the flat-colour shader; the cost of textures and lighting is in the next
 section.

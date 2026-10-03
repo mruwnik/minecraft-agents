@@ -72,23 +72,30 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   }
 
   // changed columns around the eye, as events; the first call only records the current mtimes
+  // the returned poll checks every column in the window; poll.file(name) checks one (a directory watch event), for columns the poll has seen
   const columnWatcher = (world, emit) => {
     const seen = new Map()
-    return async (eye, radius) => {
+    const check = async (cx, cz) => {
+      const key = `${cx}.${cz}`
+      const stat = await statOrNull(path.join(stateDir, 'worlds', world, 'chunks', `${key}.bin`))
+      const mtime = stat?.mtimeMs ?? null
+      const known = seen.has(key)
+      const before = seen.get(key)
+      seen.set(key, mtime)
+      if (known && mtime !== null && mtime !== before) emit('column', { cx, cz, mtime })
+    }
+    const poll = async (eye, radius) => {
       const ccx = Math.floor(eye.x / 16)
       const ccz = Math.floor(eye.z / 16)
       for (let cx = ccx - radius; cx <= ccx + radius; cx++) {
-        for (let cz = ccz - radius; cz <= ccz + radius; cz++) {
-          const key = `${cx}.${cz}`
-          const stat = await statOrNull(path.join(stateDir, 'worlds', world, 'chunks', `${key}.bin`))
-          const mtime = stat?.mtimeMs ?? null
-          const known = seen.has(key)
-          const before = seen.get(key)
-          seen.set(key, mtime)
-          if (known && mtime !== null && mtime !== before) emit('column', { cx, cz, mtime })
-        }
+        for (let cz = ccz - radius; cz <= ccz + radius; cz++) await check(cx, cz)
       }
     }
+    poll.file = async name => {
+      const match = COLUMN_FILE.exec(name ?? '')
+      if (match && seen.has(`${match[1]}.${match[2]}`)) await check(Number(match[1]), Number(match[2]))
+    }
+    return poll
   }
 
   const streamAgent = async (req, res, name, radius) => {
@@ -152,12 +159,23 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       await checkHud()
     })
     loop(columnPollMs, async () => pose.eye && watchColumns(pose.eye, radius))
+    // column files are replaced by rename too: react to the chunks directory, with the poll above as the fallback
+    let chunkWatcher = null
+    if (push === 'watch') {
+      try {
+        chunkWatcher = fs.watch(path.join(stateDir, 'worlds', first.world, 'chunks'), (_event, file) => watchColumns.file(file))
+        chunkWatcher.on('error', () => chunkWatcher?.close())
+      } catch {
+        chunkWatcher = null // no directory yet: the poll covers it
+      }
+    }
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
     req.on('close', () => {
       closed = true
       clearInterval(ping)
       timers.forEach(clearTimeout)
       watcher?.close()
+      chunkWatcher?.close()
     })
   }
 

@@ -254,3 +254,22 @@ test('watch: the watcher is closed when the client disconnects', async () => {
 })
 
 after(() => fs.rmSync(watchRoot, { recursive: true, force: true }))
+
+test('a column replaced by rename reaches the stream within 100 ms with the poll at 10 s', async () => {
+  const watched = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 10000 })
+  await new Promise(resolve => watched.listen(0, '127.0.0.1', resolve))
+  const response = await fetch(`http://127.0.0.1:${watched.address().port}/pose/Bob?radius=2`)
+  let wroteAt = 0
+  setTimeout(() => {
+    const tmp = path.join(chunkDir, '1.0.bin.tmp')
+    writeAt(tmp, columnBytes, 4000)
+    wroteAt = Date.now()
+    fs.renameSync(tmp, path.join(chunkDir, '1.0.bin'))
+  }, 300)
+  const events = await collect(response, { ms: 1500, done: es => es.some(e => e.event === 'column') })
+  const seenAt = Date.now()
+  watched.closeAllConnections()
+  watched.close()
+  assert.deepEqual(events.filter(e => e.event === 'column').map(e => e.data), [{ cx: 1, cz: 0, mtime: 4000 * 1000 }])
+  assert.ok(seenAt - wroteAt < 100, `took ${seenAt - wroteAt} ms`)
+})
