@@ -593,6 +593,28 @@
             (is (= "still stuck after 6 attempts: pillar: no block in inventory (x6); dig: cannot (x6)" (:text ev))))
           (is (= [] (filter #(zero? (:range %)) (call-args p "moveTo"))) "no step-back, no stair move"))))))
 
+(deftest stuck-reflex-in-a-bedrock-pit-ends-through-its-own-give-up-not-backoff
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom t0)
+              [seen sink] (tu/capture-sink)
+              p (tu/fake {:self dirt-self :blocks bedrock-pit})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (block-moveTo! p)
+          (core/register-reflex! eng {:trigger :stuck})
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (loop [i 0]
+            (when (< i 10)
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (some? (failed-event seen)) "gave up with unstick.failed")
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :stuck))) "the :stuck entry quiets the trigger")
+          (is (not-any? #(= :backoff (:kind %)) @seen) "no job.backoff")
+          (is (empty? (core/backoff-entries eng)) "no backoff counted"))))))
+
 (deftest unstick-stair-refuses-a-cell-under-gravel
   (async done
     (tu/run-async done

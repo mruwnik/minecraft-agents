@@ -61,6 +61,10 @@
    :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
    :max-attempts {:doc "attempts before giving up with unstick.failed" :default 6}})
 
+(def backoff
+  "Off: it bounds itself (gives up after :max-attempts with unstick.failed and a :stuck entry that quiets the trigger), and a backoff would end it before that give-up."
+  false)
+
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
 (def hop-blocks 3)
