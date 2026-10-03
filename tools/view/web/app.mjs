@@ -1,0 +1,379 @@
+// The browser view: follows an agent's pose over server-sent events, keeps a toroidal window of chunk columns in the
+// GPU, and draws it every frame (see gl.mjs). window.__view exposes numbers for automated measurement.
+import { cameraBasis, directionFor } from './camera.mjs'
+import { inflate, parseColumnFile, decodeSections } from './decode.mjs'
+import { createRenderer } from './gl.mjs'
+
+const MAX_IN_FLIGHT = 6
+const LATENCY_KEEP = 200
+const MOUSE_SENSITIVITY = 0.0022
+const FREE_SPEED = 12
+
+const params = new URLSearchParams(location.search)
+const numberParam = (name, fallback) => {
+  const value = Number(params.get(name))
+  return params.has(name) && Number.isFinite(value) && value > 0 ? value : fallback
+}
+const agentName = params.get('agent')
+const radius = Math.min(32, Math.round(numberParam('radius', 8)))
+const fov = numberParam('fov', 70)
+const maxDist = numberParam('dist', radius * 16)
+const fixedWidth = params.has('w') ? Math.round(numberParam('w', 0)) : null
+const fixedHeight = params.has('h') ? Math.round(numberParam('h', 0)) : null
+const N = 2 * radius + 1
+
+const canvas = document.getElementById('view')
+const overlay = document.getElementById('overlay')
+const picker = document.getElementById('agents')
+const freeButton = document.getElementById('free')
+
+const mod = (a, n) => ((a % n) + n) % n
+const percentile = (values, p) => {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
+}
+
+const view = window.__view = { fps: 0, frames: 0, latencies: [], loaded: 0, wanted: 0, ready: false, renderer: null }
+
+const state = {
+  pose: null,
+  poseMtime: null,
+  hud: null,
+  table: null, // {materialOf, materials, format}
+  dims: null, // {height, minY}
+  ccx: null,
+  ccz: null,
+  owners: new Map(), // slot "sx.sz" -> column key
+  columns: new Map(), // wanted column key -> {cx, cz, dist, status: 'pending'|'loaded'|'missing'}
+  needs: new Map(), // column key -> sequence of the request that would satisfy it
+  inFlight: new Set(),
+  seq: 0,
+  free: null, // {eye, yaw, pitch} while the free camera is on
+  pendingMtime: null,
+  frameTimes: [],
+  keys: new Set()
+}
+
+const gfx = createRenderer(canvas)
+view.renderer = gfx.renderer
+
+// ---- block table and columns ----
+
+const decodeBase64U16 = text => {
+  const binary = atob(text)
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0))
+  return new Uint16Array(bytes.buffer)
+}
+
+const loadTable = async version => {
+  const res = await fetch(`/blocks/${version}.json`)
+  if (!res.ok) throw new Error(`blocks table for ${version}: HTTP ${res.status}`)
+  const json = await res.json()
+  state.table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
+  gfx.setMaterials(json.materials)
+}
+
+// state ids of a decoded column to material indices in the texture's order (x fastest, then y, then z)
+const materialColumn = (ids, height, materialOf) => {
+  const mats = new Uint16Array(256 * height)
+  const flags = new Uint8Array(height >> 4)
+  for (let y = 0; y < height; y++) {
+    const section = y >> 4
+    const base = section * 4096 + ((y & 15) << 8)
+    for (let z = 0; z < 16; z++) {
+      for (let x = 0; x < 16; x++) {
+        const material = materialOf[ids[base + (z << 4 | x)]] ?? 0
+        if (material === 0) continue
+        mats[(z * height + y) * 16 + x] = material
+        flags[section] = 1
+      }
+    }
+  }
+  return { mats, flags }
+}
+
+const fetchColumn = async (world, cx, cz) => {
+  const res = await fetch(`/columns/${world}/${cx}.${cz}.bin`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`column ${cx}.${cz}: HTTP ${res.status}`)
+  const raw = await inflate(new Uint8Array(await res.arrayBuffer()))
+  const { header, sections } = parseColumnFile(raw)
+  const { ids } = decodeSections(sections, { ...state.table.format, numSections: header.worldHeight >> 4 })
+  return { header, ids }
+}
+
+const keyOf = (cx, cz) => `${cx}.${cz}`
+const slotKey = (cx, cz) => `${mod(cx, N)}.${mod(cz, N)}`
+
+const ensureDims = header => {
+  if (state.dims) return
+  state.dims = { height: header.worldHeight, minY: header.minY }
+  gfx.allocate(N, header.worldHeight)
+}
+
+const settle = (key, column, result) => {
+  if (state.owners.get(slotKey(column.cx, column.cz)) !== key) return // the slot changed hands while fetching
+  if (!result) {
+    column.status = 'missing'
+    return
+  }
+  ensureDims(result.header)
+  const { mats, flags } = materialColumn(result.ids, state.dims.height, state.table.materialOf)
+  gfx.uploadColumn(mod(column.cx, N), mod(column.cz, N), mats, flags)
+  column.status = 'loaded'
+}
+
+const startFetch = async key => {
+  const column = state.columns.get(key)
+  const seq = state.needs.get(key)
+  state.inFlight.add(key)
+  const result = await fetchColumn(state.pose.world, column.cx, column.cz).catch(error => {
+    console.error(`column ${key}:`, error)
+    return null
+  })
+  state.inFlight.delete(key)
+  if (state.needs.get(key) === seq) state.needs.delete(key)
+  if (state.columns.get(key) === column) settle(key, column, result)
+  pump()
+}
+
+const pump = () => {
+  while (state.inFlight.size < MAX_IN_FLIGHT && state.table) {
+    const next = [...state.needs.keys()]
+      .filter(key => !state.inFlight.has(key) && state.columns.has(key))
+      .sort((a, b) => state.columns.get(a).dist - state.columns.get(b).dist)[0]
+    if (!next) return
+    startFetch(next)
+  }
+}
+
+// the window follows the eye's chunk; a slot whose owner changes is zeroed at once and refilled when its fetch lands
+const retarget = (ccx, ccz) => {
+  state.ccx = ccx
+  state.ccz = ccz
+  const columns = new Map()
+  for (let cx = ccx - radius; cx <= ccx + radius; cx++) {
+    for (let cz = ccz - radius; cz <= ccz + radius; cz++) {
+      const key = keyOf(cx, cz)
+      const slot = slotKey(cx, cz)
+      const known = state.columns.get(key)
+      if (known && state.owners.get(slot) === key) {
+        columns.set(key, known)
+        continue
+      }
+      if (state.dims) gfx.clearSlot(mod(cx, N), mod(cz, N))
+      state.owners.set(slot, key)
+      columns.set(key, { cx, cz, dist: Math.hypot(cx - ccx, cz - ccz), status: 'pending' })
+      state.needs.set(key, ++state.seq)
+    }
+  }
+  for (const column of columns.values()) column.dist = Math.hypot(column.cx - ccx, column.cz - ccz)
+  for (const key of state.needs.keys()) if (!columns.has(key)) state.needs.delete(key)
+  state.columns = columns
+  pump()
+}
+
+const onColumnEvent = ({ cx, cz }) => {
+  const key = keyOf(cx, cz)
+  if (!state.columns.has(key)) return
+  state.needs.set(key, ++state.seq)
+  pump()
+}
+
+// ---- pose and hud ----
+
+const onPose = async ({ mtime, pose }) => {
+  state.pose = pose
+  state.poseMtime = mtime
+  state.pendingMtime = mtime
+  if (!pose.eye) return
+  if (!state.table) await loadTable(pose.mcVersion)
+  const ccx = Math.floor(pose.eye.x / 16)
+  const ccz = Math.floor(pose.eye.z / 16)
+  if (ccx !== state.ccx || ccz !== state.ccz) retarget(ccx, ccz)
+}
+
+const connect = name => {
+  const source = new EventSource(`/pose/${encodeURIComponent(name)}?radius=${radius}`)
+  const on = (event, handler) => source.addEventListener(event, e => handler(JSON.parse(e.data)))
+  on('pose', event => onPose(event).catch(error => console.error('pose:', error)))
+  on('hud', ({ hud }) => { state.hud = hud })
+  on('column', onColumnEvent)
+  source.onerror = () => console.warn('event stream interrupted; the browser will retry')
+}
+
+// ---- free camera ----
+
+const startFree = () => {
+  const eye = state.pose?.eye
+  if (!eye) return
+  state.free = { eye: { ...eye }, yaw: state.pose.yaw, pitch: state.pose.pitch }
+  canvas.requestPointerLock?.()
+}
+const stopFree = () => {
+  state.free = null
+  state.keys.clear()
+  if (document.pointerLockElement) document.exitPointerLock()
+}
+const toggleFree = () => (state.free ? stopFree() : startFree())
+
+addEventListener('keydown', e => {
+  if (e.code === 'KeyF' && !e.repeat) return toggleFree()
+  state.keys.add(e.code)
+})
+addEventListener('keyup', e => state.keys.delete(e.code))
+freeButton.addEventListener('click', toggleFree)
+addEventListener('mousemove', e => {
+  if (!state.free || document.pointerLockElement !== canvas) return
+  state.free.yaw -= e.movementX * MOUSE_SENSITIVITY
+  state.free.pitch = Math.max(-1.55, Math.min(1.55, state.free.pitch - e.movementY * MOUSE_SENSITIVITY))
+})
+document.addEventListener('pointerlockchange', () => {
+  if (state.free && document.pointerLockElement !== canvas) stopFree()
+})
+
+const moveFree = dt => {
+  const free = state.free
+  if (!free) return
+  const forward = directionFor(free.yaw, 0)
+  const right = directionFor(free.yaw - Math.PI / 2, 0)
+  const axis = (plus, minus) => (state.keys.has(plus) ? 1 : 0) - (state.keys.has(minus) ? 1 : 0)
+  const f = axis('KeyW', 'KeyS')
+  const r = axis('KeyD', 'KeyA')
+  const u = axis('Space', 'ShiftLeft')
+  free.eye.x += (forward.x * f + right.x * r) * FREE_SPEED * dt
+  free.eye.z += (forward.z * f + right.z * r) * FREE_SPEED * dt
+  free.eye.y += u * FREE_SPEED * dt
+}
+
+// ---- drawing ----
+
+const clamp01 = v => Math.min(1, Math.max(0, v))
+// brightness of the day as the Node renderer has it: 0.3 at midnight .. 1; timeOfDay 0 is sunrise, 6000 noon
+const daylight = time => 0.3 + 0.7 * clamp01(0.5 + 1.6 * Math.sin(((time ?? 6000) % 24000) / 24000 * 2 * Math.PI))
+
+const entityColor = e => {
+  if (e.type === 'player' || e.kind === 'player' || e.username) return [0.2, 0.4, 0.95]
+  if (e.type === 'hostile' || e.kind === 'Hostile mobs') return [0.88, 0.14, 0.14]
+  if (e.type === 'animal' || e.type === 'passive' || e.kind === 'Passive mobs' || e.kind === 'Animals') return [0.55, 0.38, 0.22]
+  if (e.type === 'item' || e.name === 'item' || e.kind === 'Drops') return [1, 0.88, 0.16]
+  return [0.5, 0.5, 0.5]
+}
+
+const entityBoxes = (entities, origin, eye) => (entities ?? [])
+  .map(e => ({ e, d: Math.hypot(e.pos.x - eye.x, e.pos.y - eye.y, e.pos.z - eye.z) }))
+  .sort((a, b) => a.d - b.d)
+  .slice(0, 64)
+  .map(({ e }) => {
+    const half = (e.width ?? 0.6) / 2
+    const x = e.pos.x - origin.x
+    const y = e.pos.y - origin.y
+    const z = e.pos.z - origin.z
+    return { min: [x - half, y, z - half], max: [x + half, y + (e.height ?? 1.8), z + half], color: entityColor(e) }
+  })
+
+const targetSize = () => {
+  const dpr = window.devicePixelRatio || 1
+  return [fixedWidth ?? Math.max(1, Math.round(canvas.clientWidth * dpr)), fixedHeight ?? Math.max(1, Math.round(canvas.clientHeight * dpr))]
+}
+
+const settled = () => {
+  if (!state.pose || !state.dims) return false
+  if (state.inFlight.size || state.needs.size) return false
+  return state.columns.size > 0
+}
+
+const frame = (now, dt) => {
+  const [w, h] = targetSize()
+  gfx.resize(w, h)
+  if (!state.pose?.eye || !state.dims || state.ccx === null) return gfx.clear(0.78, 0.87, 1)
+  const cam = state.free ?? { eye: state.pose.eye, yaw: state.pose.yaw, pitch: state.pose.pitch }
+  const origin = { x: (state.ccx - radius) * 16, y: state.dims.minY, z: (state.ccz - radius) * 16 }
+  gfx.draw({
+    eye: { x: cam.eye.x - origin.x, y: cam.eye.y - origin.y, z: cam.eye.z - origin.z },
+    basis: cameraBasis({ yaw: cam.yaw, pitch: cam.pitch, fov }),
+    dist: maxDist,
+    light: daylight(state.pose.timeOfDay),
+    slotOff: { x: mod(state.ccx - radius, N) * 16, z: mod(state.ccz - radius, N) * 16 },
+    entities: entityBoxes(state.pose.entities, origin, cam.eye)
+  })
+}
+
+const recordLatency = () => {
+  if (state.pendingMtime === null) return
+  gfx.finish()
+  const latency = Date.now() - state.pendingMtime
+  state.pendingMtime = null
+  if (latency > 60000) return // an old offline pose, not a live write
+  view.latencies.push(Math.round(latency))
+  if (view.latencies.length > LATENCY_KEEP) view.latencies.shift()
+}
+
+const updateStats = now => {
+  state.frameTimes.push(now)
+  while (state.frameTimes.length && now - state.frameTimes[0] > 1000) state.frameTimes.shift()
+  view.fps = state.frameTimes.length
+  view.frames++
+  const loaded = [...state.columns.values()].filter(c => c.status === 'loaded').length
+  view.loaded = loaded
+  view.wanted = state.columns.size
+  view.ready = settled()
+}
+
+let last = performance.now()
+const loop = now => {
+  const dt = Math.min(0.1, (now - last) / 1000)
+  last = now
+  moveFree(dt)
+  try {
+    frame(now, dt)
+    recordLatency()
+  } catch (error) {
+    console.error('frame failed:', error)
+  }
+  updateStats(now)
+  requestAnimationFrame(loop)
+}
+
+// ---- overlay ----
+
+const fmt = (v, digits = 0) => (typeof v === 'number' ? v.toFixed(digits) : '-')
+const renderOverlay = () => {
+  const pose = state.pose
+  const hud = state.hud
+  const lat = view.latencies
+  const lines = [
+    `${agentName ?? '(no agent)'}  ${pose?.status ?? '-'}${state.free ? '  [free camera]' : ''}`,
+    `fps ${view.fps}  ${canvas.width}x${canvas.height}  fov ${fov}  dist ${maxDist}`,
+    `pose age ${pose ? Date.now() - pose.t : '-'} ms  file->frame ${lat.length ? lat[lat.length - 1] : '-'} ms (p50 ${fmt(percentile(lat, 0.5))})`,
+    `columns ${view.loaded}/${view.wanted}  in flight ${state.inFlight.size}  queued ${state.needs.size}${view.ready ? '  ready' : ''}`,
+    hud ? `hp ${fmt(hud.health)}  food ${fmt(hud.food)}  xp ${hud.xp?.level ?? '-'}  held ${hud.held ? `${hud.held.name} x${hud.held.count}` : '-'}` : 'hud -',
+    view.renderer
+  ]
+  overlay.textContent = lines.join('\n')
+}
+
+const fillPicker = async () => {
+  const agents = await fetch('/agents').then(r => r.json()).catch(() => [])
+  picker.replaceChildren(...[{ name: '', world: '' }, ...agents].map(a => {
+    const option = document.createElement('option')
+    option.value = a.name
+    option.textContent = a.name ? `${a.name} (${a.status})` : '- agent -'
+    option.selected = a.name === (agentName ?? '')
+    return option
+  }))
+}
+picker.addEventListener('change', () => {
+  const next = new URLSearchParams(location.search)
+  next.set('agent', picker.value)
+  location.search = next.toString()
+})
+
+const main = () => {
+  fillPicker()
+  if (agentName) connect(agentName)
+  setInterval(renderOverlay, 250)
+  requestAnimationFrame(loop)
+}
+main()

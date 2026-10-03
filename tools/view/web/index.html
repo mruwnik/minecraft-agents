@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Body view</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: pixelated; }
+  #overlay { position: fixed; top: 6px; left: 6px; margin: 0; padding: 4px 6px; font: 11px/1.35 monospace; color: #e8e8e8;
+    background: rgba(0, 0, 0, 0.55); border-radius: 3px; white-space: pre; pointer-events: none; }
+  #bar { position: fixed; top: 6px; right: 6px; display: flex; gap: 6px; font: 12px monospace; }
+  #bar select, #bar button { font: inherit; background: #222; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 2px 6px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<pre id="overlay">starting...</pre>
+<div id="bar"><select id="agents"></select><button id="free" type="button">free camera (F)</button></div>
+<script type="module" src="/web/app.mjs"></script>
+</body>
+</html>
