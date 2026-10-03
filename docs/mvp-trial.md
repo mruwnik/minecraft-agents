@@ -57,3 +57,49 @@ Not fixed, too big for a small patch:
 The plumbing matches `docs/design.md`: connection, token ownership, primitives, event envelope, scenario loading, persistence and restore, precondition blocking and bounded failure counting all behaved as described against a real server. The scheduling story did not hold in the one case that came up: a job with nothing to do spun instead of yielding, and starved the list. Triggers and cuts remain untested live. Confidence that the design is sound as written: about 70%. Confidence that this MVP is correct in the live cut and reflex paths: about 35%, because they were never exercised.
 
 A better next trial would use a world position with a reachable tree, a known chest and bed, and a spawned hostile, and would add wake conditions to not-ready returns first.
+
+## Second run
+
+2026-10-03, branch `engine-mvp`, same agent (ClaudeProbe), world `claude`, server probed first (TCP connect up, no body running). Engine state under `state/agents/ClaudeProbe/engine/` was deleted before each run. Logs are in the scratchpad `trial2/` directory. Build before the run: 75 cljs tests (240 assertions), 121 node tests, all green.
+
+### Fixes made (commits 46a4ac7, b0369bb, 7f6583b, 2aea754, fd885cb, 2dc50f4)
+
+- **Spin, root cause.** `settle-listed!` booked a not-ready round with whatever wake the round returned, usually none, so the job stayed ready. With deposit blocked by its precondition, round-robin had only one ready job and picked it on every 250 ms tick. `step-child` also returned a bare status, so a composite lost a child's wake. Now a not-ready round with no wake gets a persisted not-before time (default 5 s, engine option `:min-recheck-ms`) that readiness checks, and `step-child` passes the child's wake up.
+- **Tree choice.** `fell-tree` records a tree as unreachable in job memory when the walk is blocked or a dig says unreachable, and picks the next candidate. It warns and finishes only when none is left. The replant debt is recorded only once the first log is dug.
+- **Dropped item.** `droppedItem` now handles every slot shape (prismarine item, network slot with or without `present`, missing count, unknown id gives name `unknown`). I could not read a live item entity this time, so the exact live shape is unconfirmed (about 55% that this covers the observed null).
+- **New:** job `look-around`, trigger `every-interval` (cooldown persistence, timestamp in body memory, so it survives restart), scenario `woodcutter-cuts.edn`. The trigger `:when` now receives the entry's args as a third argument. Later also a job `pace` and scenario `pace-cuts.edn`, see below.
+
+### What the body did
+
+Three runs.
+
+1. **woodcutter-cuts.edn, first run (about 100 s).** Look-around fired at once (seq 8). Harvest rounds now ran at 5 s spacing (seq 11, 14, 16) instead of four per second, and deposit was blocked once (seq 13, no chest known). After three dig failures `tree_blocked` (seq 17) and harvest completed (seq 18). The every-interval reflex fired again at 45 s intervals (seq 19, 22) but nothing was running to cut. That was the pre-fix `fell-tree`, which gave up on the first unreachable tree.
+2. **woodcutter-cuts.edn, after the dig-unreachable fix (about 100 s).** The body walked through all eight oak candidates in about 25 s, marking each unreachable, then warned `no reachable tree` (seq 27) and completed (seq 28). No spin, the round rate was sane. A read-only probe then showed the cause: the body stands in a closed cell (stone walls and an obsidian ceiling), the pathfinder is not allowed to dig, and `moveTo` is blocked toward every tree, so no tree in this world position is reachable by any logic. The harvest cannot run here at all.
+3. **pace-cuts.edn (about 200 s).** Because harvest cannot run in the cell, I added a harmless long job `pace` (walk between two points inside the cell, three laps per round) and a scenario that puts `every-interval 20` first. This is not the harvest cut the brief asked for, but it exercises the same engine path with a real long round.
+
+### Triggers fired
+
+In the pace run, `every-interval` fired 9 times at 20.1 s intervals (seq 6, 14, 19, 24, 29, 34, 39, 44, 49, then 59 and 83). `hostile-near` fired 5 times from about 179 s (seq 54, 64, 69, 74, 79), so a real hostile came within 8 blocks of the cell at dusk. Each retreat ended `completed_not_cleared`, and the 5 s cooldown re-fired it. `health-low` did not fire.
+
+### Cut and resume evidence
+
+- Fired seq 14 interrupting j1 round 3, cut seq 15 with `cause` 14, reflex round started seq 16, ended seq 17 (`cleared`), then j1 round 4 started seq 18. That is the resume.
+- The same sequence repeated: fire 19, cut 20, resume 23 and so on for fire 24 and 29 and 34 and 39 and 44 and 49.
+- The hostile-near cuts follow the same shape (fire 54, cut 55, retreat round 56, ended 57, j1 round 12 at seq 58).
+- Rounds 1 and 2 of pace finished (seq 10, 12 yielded). After the cut in round 3 each resumed round hung in `moveTo` until the next cut, because one pace point sits against the cell wall and the walk times out after 20 s. So the resumed round started every time but made little progress. This is a flaw of the trial job, not of the engine.
+- Round count over 202 s was 33 rounds in total, including reflex rounds.
+
+### Deposit
+
+Deposit was never runnable: it is blocked by its precondition because no chest is known (seq 13 in the woodcutter runs). It was not queued in the pace run. I did not verify the "deposit gets its turn" requirement live. Starvation is covered by the unit test (two ready jobs, one backing off).
+
+### Bugs remaining
+
+- **Shutdown drops the running job.** On SIGTERM the primitives are closed, the in-flight round throws the cut error, and `settle-listed!` treats `:cut` as a failure: warn `failed` (seq 87) and the job and its memory are deleted. A restart therefore loses the interrupted job. A cut that comes from closing the body should keep the job. Not fixed.
+- **Harvest is unprovable in this cell.** The test body is walled in. The scenario should be re-run from an open position.
+- **`droppedItem` live shape unconfirmed**, see above.
+- Mid-round `moveTo` with a wall-adjacent target burns its whole timeout. Not an engine bug.
+
+### Updated verdict
+
+The scheduling fix held live: a not-ready job is stepped at the re-check interval and the list moves on. Reflex cuts and resumes work against a real server for both a clock reflex and a world reflex (confidence about 80%). The design is sound as written (about 75%). The MVP is correct for the harvest path under live conditions: still unknown (about 40%), because no tree was ever reachable. The next trial needs an open spot with trees, a known chest and a restart in the middle, and the shutdown-drop bug should be fixed first.
