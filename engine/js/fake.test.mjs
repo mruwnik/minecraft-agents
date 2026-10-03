@@ -222,3 +222,18 @@ test('a cut during the fake wait still comes back online and resolves cut', asyn
   assert.deepEqual(await pending, { status: 'cut' })
   assert.equal(p.world.state.offline, false)
 })
+
+test('blocks and blockAt report a crop age that dig clears', async () => {
+  const p = owned({ blocks: { '1,64,0': 'wheat', '2,64,0': 'dirt' }, ages: { '1,64,0': 7 } })
+  assert.deepEqual(p.blocks({ names: ['wheat'] }).map(b => b.age), [7])
+  assert.equal(p.blockAt(at(1, 64, 0)).age, 7)
+  assert.equal('age' in p.blockAt(at(2, 64, 0)), false)
+  await p.dig('t1', { pos: at(1, 64, 0) })
+  assert.equal('age' in p.blockAt(at(1, 64, 0)), false)
+})
+
+test('a killed animal drops its listed items', async () => {
+  const p = owned({ entities: [{ id: 5, name: 'cow', kind: 'passive', pos: at(1, 64, 0), health: 5, drops: [{ name: 'beef', count: 2 }] }] })
+  assert.equal((await p.attack('t1', { id: 5 })).status, 'killed')
+  assert.deepEqual(p.entities({ kind: 'item' }).map(e => [e.item.name, e.item.count]), [['beef', 2]])
+})

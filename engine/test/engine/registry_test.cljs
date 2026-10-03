@@ -3,7 +3,7 @@
             [engine.registry :as registry]))
 
 (def migrated
-  '#{jobs.survival.eat jobs.survival.retreat jobs.survival.sleep
+  '#{jobs.survival.eat jobs.survival.get-food jobs.survival.retreat jobs.survival.sleep
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.storage.deposit
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around

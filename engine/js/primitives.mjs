@@ -187,18 +187,24 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       }))
   }
 
+  // {name, pos}, plus the crop `age` state when the block has one (wheat, carrots, sweet berries)
+  const blockInfo = block => {
+    const age = block.getProperties?.().age
+    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }) }
+  }
+
   const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64 } = {}) => {
     const wanted = names && new Set(names)
     const matching = block => Boolean(block) && (wanted ? wanted.has(block.name) : match ? match(block.name) : !isAir(block.name))
     const me = here()
     return bot.findBlocks({ matching, maxDistance: radius, count: max })
-      .map(p => ({ name: bot.blockAt(p).name, pos: xyz(p), distance: dist(me, p) }))
+      .map(p => ({ ...blockInfo(bot.blockAt(p)), distance: dist(me, p) }))
       .sort((a, b) => a.distance - b.distance)
   }
 
   const blockAt = pos => {
     const block = bot.blockAt(vec(pos))
-    return block ? { name: block.name, pos: xyz(block.position) } : null
+    return block ? blockInfo(block) : null
   }
 
   // ---- acting ----
