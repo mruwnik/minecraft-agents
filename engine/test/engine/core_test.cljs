@@ -21,6 +21,11 @@
     (ctx/commit! c {:walked (.-status r)})
     :done))
 
+(defn ^:async parent-walk-round [c]
+  (ctx/commit! c {:before true})
+  (await (ctx/act c :moveTo #js {:pos #js {:x 5 :y 64 :z 0}}))
+  :done)
+
 (defn ^:async eat-round [c]
   (await (ctx/act c :eat #js {}))
   :done)
@@ -62,6 +67,7 @@
 (def catalog
   {:jobs {:count {:name :count :round count-round}
           :walk {:name :walk :round walk-round}
+          :parent-walk {:name :parent-walk :round parent-walk-round}
           :eat {:name :eat :round eat-round}
           :fail {:name :fail :round fail-round}
           :night {:name :night :round night-round}
@@ -455,3 +461,40 @@
             (is (= ["j1" "j2" "j3"] (listed again)) "ids continue")
             (await (core/tick! again))
             (is (= ["j1"] (ran seen)))))))))
+
+;; ---------------------------------------------------------------- shutdown
+
+(deftest a-cut-the-engine-did-not-make-keeps-the-job-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup)]
+          (.override (.-world p) "moveTo"
+                     (fn [_ _ _] (js/Promise.reject (core/cut-error))))
+          (core/submit! eng :parent-walk {} {})
+          (await (core/tick! eng))
+          (is (= ["j1"] (listed eng)) "a cut is not a failure")
+          (is (= {:before true} (job-mem eng "j1")) "its memory survives")
+          (is (= "j1" (:resume (core/state eng))))
+          (is (not-any? #(= :failed (:kind %)) @seen))
+          (is (some #(= :cut (:kind %)) @seen)))))))
+
+(deftest shutdown-keeps-the-in-flight-job-for-the-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng p seen]} (setup {} dir)]
+          (core/submit! eng :parent-walk {} {})
+          (.hold (.-world p) "moveTo")
+          (let [walking (core/tick! eng)]
+            (core/shutdown! eng)
+            (await walking))
+          (is (= ["j1"] (listed eng)))
+          (is (not-any? #(= :failed (:kind %)) @seen))
+          (let [{again :eng seen2 :seen} (setup {} dir)]
+            (is (= ["j1"] (listed again)))
+            (is (= {:before true} (job-mem again "j1")))
+            (is (= "j1" (:resume (core/state again))))
+            (await (core/tick! again))
+            (is (= ["j1"] (ran seen2)) "the body resumes from the list")))))))

@@ -70,7 +70,7 @@
                               :body (:username cfg)})]
         (when (and plan (not restoring?)) (core/load-scenario! eng plan))
         (let [stop-ticks (core/start! eng {:tick-ms 250})]
-          {:engine eng :stop (fn [] (stop-ticks) (.close p))})))))
+          {:engine eng :stop (fn [] (stop-ticks) (core/shutdown! eng) (.close p))})))))
 
 (defn fail! [text]
   (.write js/process.stderr (str text "\n"))

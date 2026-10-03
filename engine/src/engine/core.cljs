@@ -281,7 +281,13 @@
           (mem/delete-job! (:store eng) id)
           (emit! eng {:source :job :kind :completed :level :info :job id :chain [id]}))
 
-      (:error :cut)
+      :cut
+      (do (swap! (:state eng) assoc :resume id :current nil)
+          (emit! eng (merge (job-fields eng id)
+                            {:source :job :kind :cut :level :info :by :primitives
+                             :text "a primitive rejected with cut; the job stays listed"})))
+
+      :error
       (do (swap! (:state eng) #(assoc (remove-listed % id) :cursor (max idx 0)))
           (mem/delete-job! (:store eng) id)
           (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
@@ -570,6 +576,15 @@
     (emit! eng {:source :system :kind (if saved :restored :started) :level :info
                 :list (:list (state eng)) :register (mapv :id (:register (state eng)))})
     eng))
+
+(defn shutdown!
+  "Release the body for a shutdown. The in-flight round is cut by token
+  rotation and its outcome is never booked, so its job stays on the list
+  (persisted as :current, resumed first after a restart) with its memory."
+  [eng]
+  (set-owner! eng nil)
+  (reset! (:running eng) nil)
+  (emit! eng {:source :system :kind :stopping :level :info :job (:current (state eng))}))
 
 (defn start!
   "Tick every tick-ms until the returned stop fn is called."
