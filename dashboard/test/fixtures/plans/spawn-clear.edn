@@ -1,0 +1,5 @@
+;; A keep-clear area near the world spawn (place world-spawn at 22 65 0): nothing should stand here.
+{:id "spawn-clear" :name "Spawn clearing" :owner "Claude" :kind :keep-clear :status :active
+ :region {:min [18 66 -4] :max [26 67 3]}
+ :elements
+ [{:id "clear" :kind :area :region {:min [18 66 -4] :max [26 67 3]} :content {:air true}}]}

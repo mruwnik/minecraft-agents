@@ -13,8 +13,10 @@
             [dashboard.guard :as guard]
             [dashboard.items :as items]
             [dashboard.jobs-registry :as jobs-registry]
+            [dashboard.blueprint :as blueprint]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
+            [dashboard.plan-api :as plan-api]
             [dashboard.rcon :as rcon]
             [dashboard.routes :as routes]
             [dashboard.view-info :as view-info]
@@ -456,23 +458,57 @@
 (defn blueprint-library []
   (legacy/library repo-root (all-places-js (read-worlds))))
 
-;; ---------------------------------------------------------------- plans (js/plans-service.mjs)
-(def plans-module (or (.-PLANS_MODULE js/process.env) (.join path dashboard-dir "js" "plans-service.mjs")))
+;; ---------------------------------------------------------------- plans (dashboard.plan-api)
+;; Plans are state/worlds/<world>/plans/<id>.edn. The block lookup over the dumped chunk columns is the JS glue
+;; js/worldblocks.mjs (the view's column decoders); everything else is ClojureScript.
+(def worldblocks-module (or (.-WORLDBLOCKS_MODULE js/process.env) (.join path dashboard-dir "js" "worldblocks.mjs")))
+(def plans-ttl-ms 10000)
+(def blueprint-ttl-ms 30000)
 
-(defn load-plans-service []
-  (-> (import-esm (.-href (.pathToFileURL url plans-module)))
-      (.then (fn [m] ((.-createPlansService m) #js {:stateDir (.join path root "state")})))))
+(defonce worldblocks-loaded (delay (import-esm (.-href (.pathToFileURL url worldblocks-module)))))
+(defonce blocks-by-world (atom {}))
+(defonce plan-summaries (atom {}))
+(defonce blueprint-index (atom nil))
 
-(defonce plans-service (delay (load-plans-service)))
+(defn blocks-for [module world-name]
+  (or (get @blocks-by-world world-name)
+      (let [blocks ((.-createWorldBlocks module) #js {:stateDir (.join path root "state") :world world-name})]
+        (swap! blocks-by-world assoc world-name blocks)
+        blocks)))
 
-(defn send-plans! [res world-name plan-name]
-  (-> @plans-service
-      (.then (fn [svc]
-               (if-not plan-name
-                 (send-json-js! res 200 (.list svc world-name))
-                 (if-let [plan (.get svc world-name plan-name)]
-                   (send-json-js! res 200 plan)
-                   (send-json! res 404 {:error (str "no plan called " plan-name " in " world-name)})))))
+(defn blueprint-cells
+  "Name -> the cells of the blueprint, from the library (re-read at most every 30 s)."
+  [name]
+  (let [{:keys [at value]} @blueprint-index]
+    (if (and at (< (- (js/Date.now) at) blueprint-ttl-ms))
+      (get value name)
+      (let [value (into {} (keep (fn [d] (when (.-bp d) [(.-name d) (blueprint/plan-cells (js->clj (.-bp d) :keywordize-keys true))])))
+                        (.-blueprints (blueprint-library)))]
+        (reset! blueprint-index {:at (js/Date.now) :value value})
+        (get value name)))))
+
+(defn plan-opts [module world-name]
+  (let [blocks (blocks-for module world-name)]
+    {:dir (.join path worlds-dir world-name "plans")
+     :blueprint-fn blueprint-cells
+     :block-at (fn [x y z] (.blockAt blocks x y z))}))
+
+(defn plan-list [module world-name]
+  (let [cached (get @plan-summaries world-name)]
+    (if (and cached (< (- (js/Date.now) (:at cached)) plans-ttl-ms))
+      (:value cached)
+      (let [value (assoc (plan-api/summaries (plan-opts module world-name)) :world world-name)]
+        (swap! plan-summaries assoc world-name {:at (js/Date.now) :value value})
+        value))))
+
+(defn send-plans! [res world-name plan-id]
+  (-> @worldblocks-loaded
+      (.then (fn [module]
+               (if-not plan-id
+                 (send-json! res 200 (plan-list module world-name))
+                 (if-let [found (plan-api/detail (plan-opts module world-name) plan-id)]
+                   (send-json! res 200 found)
+                   (send-json! res 404 {:error (str "no plan called " plan-id " in " world-name)})))))
       (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))
 
 (defn handle-world-scoped! [res kind world-name query plan-name]

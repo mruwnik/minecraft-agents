@@ -17,10 +17,20 @@
 (def human-color "#f08ad0")
 (def zone-color "#5b8fd6")
 
-(defn plan-rect [view plan now-summary]
+(defn plan-rect [view plan]
   (-> (mv/zone-rect view (mm/plan-box plan))
       (mm/min-size 8)
-      (assoc :kind :plan :name (:name plan) :color (pm/completion-color now-summary) :percent (:percent now-summary))))
+      (assoc :kind :plan :name (:id plan) :title (:name plan) :color (pm/completion-color (:counts plan))
+             :percent (:percent plan))))
+
+(defn element-rects
+  "The elements of a plan inside its outline, only when zoomed in; a click on one opens its plan."
+  [view plan]
+  (when (mm/show-plan-elements? (:scale view))
+    (for [{:keys [id bounds counts]} (:elements plan) :when bounds]
+      (assoc (mv/zone-rect view (mm/bounds-box bounds))
+             :kind :plan :name (:id plan) :title id :color (pm/completion-color counts)
+             :percent (:percent counts)))))
 
 (defn edge-arrows
   "An arrow on the viewport edge for every body that is up and off screen, named with its distance from the view's centre."
@@ -44,7 +54,8 @@
   {:scale (:scale view)
    :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
-   :plans (for [p plans] (plan-rect view p (:summary p)))
+   :plans (for [p plans] (plan-rect view p))
+   :plan-elements (vec (mapcat #(element-rects view %) plans))
    :bodies (for [b bodies :let [pos (mm/body-pos b)] :when pos]
              (let [status (trouble/status b (or now 0))]
                (assoc (mv/project view (:x pos) (:z pos)) :kind :body :name (:name b) :up (boolean (:up b))
@@ -60,7 +71,7 @@
   (or (logic/pick-nearest (:edges lay) x y edge-pick-radius)
       (logic/pick-nearest (:bodies lay) x y pick-radius)
       (logic/pick-nearest (:places lay) x y pick-radius)
-      (mm/pick-plan (:plans lay) x y)))
+      (mm/pick-plan (concat (:plan-elements lay) (:plans lay)) x y)))
 
 (defn dot! [ctx {:keys [px py]} color radius]
   (.beginPath ctx)
@@ -145,7 +156,16 @@
   (set! (.-lineWidth ctx) 1)
   (.strokeRect ctx px py w h))
 
-(defn plan-label [{:keys [name percent]}] (str name " " percent "%"))
+(defn draw-element! [ctx {:keys [px py w h color]}]
+  (set! (.-fillStyle ctx) color)
+  (set! (.-globalAlpha ctx) 0.30)
+  (.fillRect ctx px py w h)
+  (set! (.-globalAlpha ctx) 1)
+  (set! (.-strokeStyle ctx) color)
+  (set! (.-lineWidth ctx) 1)
+  (.strokeRect ctx px py w h))
+
+(defn plan-label [{:keys [title percent]}] (str title " " percent "%"))
 
 (defn labels [ctx lay canvas-w]
   (let [scale (:scale lay)]
@@ -153,6 +173,8 @@
      (for [e (:edges lay)] (edge-label ctx e canvas-w))
      (for [b (:bodies lay) :when (:up b)] (label-box ctx b (:color b) body-font))
      (for [p (:plans lay)] (label-box ctx (assoc p :name (plan-label p)) (:color p) label-font))
+     (for [e (:plan-elements lay) :when (> (:w e) 40)]
+       (assoc (label-box ctx (assoc e :name (:title e)) (:color e) label-font) :px (+ (:px e) 2) :py (+ (:py e) 2)))
      (for [h (:humans lay)] (label-box ctx h human-color label-font))
      (when (mm/show-place-labels? scale)
        (for [p (:places lay)] (label-box ctx p (:color p) label-font)))
@@ -175,6 +197,7 @@
       (let [lay (layout model)]
         (doseq [z (:zones lay)] (draw-zone! ctx z))
         (doseq [p (:plans lay)] (draw-plan! ctx p))
+        (doseq [e (:plan-elements lay)] (draw-element! ctx e))
         (doseq [p (:places lay)] (diamond! ctx p (:color p)))
         (doseq [h (:humans lay)] (dot! ctx h human-color 4))
         (doseq [b (sort-by :up (:bodies lay))] (body-dot! ctx b))
@@ -188,7 +211,7 @@
 
 (def legend-items
   [["body: working" (mm/status-color :working)] ["idle" (mm/status-color :idle)] ["trouble" (mm/status-color :trouble)]
-   ["offline" (mm/status-color :offline)] ["plan: done" pm/green] ["half" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
+   ["offline" (mm/status-color :offline)] ["plan: 90%+" pm/green] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
 
 (defn legend []
   (into [:div#maplegend

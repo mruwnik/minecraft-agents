@@ -379,3 +379,28 @@ canvas.plan-grid { cursor: default; border: 1px solid var(--line); image-renderi
 .bill { display: grid; grid-template-columns: max-content max-content; gap: 2px 12px; }
 .bill .n { text-align: right; color: var(--dim); font-family: var(--mono); }
 .stats.on { background: #243245; border-color: var(--accent); }
+/* plans v2 */
+.cbar .extra { background: #a371f7; }
+.pstatus { font-size: 11px; }
+.pstatus.active { color: var(--working); } .pstatus.proposed { color: var(--accent); }
+.pstatus.done { color: var(--dim); } .pstatus.abandoned { color: var(--offline); text-decoration: line-through; }
+.pill.pstatus.active { color: var(--working); border-color: rgba(63,185,80,.45); }
+.pill.pstatus.proposed { color: var(--accent); border-color: rgba(88,166,255,.45); }
+.plan-file-errors { margin-top: 14px; }
+.plan-file-errors ul { margin: 2px 0 6px 16px; padding: 0; }
+.plan-body { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: flex-start; }
+.plan-els { flex: 1 1 440px; min-width: 0; }
+.plan-layers { flex: 1 1 420px; min-width: 0; }
+.plan-layers .layers { margin-top: 8px; }
+.plan-elements { border-collapse: collapse; width: 100%; margin: 8px 0 10px; }
+.plan-elements th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 600; padding: 3px 8px; border-bottom: 1px solid var(--line); }
+.plan-elements td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.plan-elements .num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.plan-elements .barcell { width: 80px; }
+.plan-elements .barcell .cbar { margin: 0; height: 8px; }
+.el-row { cursor: pointer; }
+.el-row:hover { background: var(--panel2); }
+.el-row.sel { background: var(--panel2); box-shadow: inset 2px 0 0 var(--accent); }
+.plan-errors h3 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+.plan-errors .err { margin: 2px 0; }
+.plan-elements .chip { margin-left: 8px; padding: 0 8px; }

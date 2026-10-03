@@ -45,10 +45,19 @@
   [plans x y]
   (->> plans (filter #(in-rect? % x y)) (sort-by #(* (:w %) (:h %))) first))
 
-(defn plan-box
-  "Block rectangle of a plan as a zone-like box; bounds are inclusive, so the far edge is one block further."
-  [{:keys [bounds]}]
-  {:x1 (:x1 bounds) :z1 (:z1 bounds) :x2 (inc (:x2 bounds)) :z2 (inc (:z2 bounds))})
+(def element-scale
+  "Pixels per block from which the elements of a plan are drawn inside its outline."
+  3)
+
+(defn show-plan-elements? [scale] (>= scale element-scale))
+
+(defn bounds-box
+  "Block rectangle of {:min [x y z] :max [x y z]} as a zone-like box; the bounds are inclusive, so the far edge is one
+  block further."
+  [{[x1 _ z1] :min [x2 _ z2] :max}]
+  {:x1 x1 :z1 z1 :x2 (inc x2) :z2 (inc z2)})
+
+(defn plan-box [{:keys [region]}] (bounds-box region))
 
 (defn edge-marker
   "Where an arrow for an off-screen point sits: on the viewport's edge (inset pixels in), on the line from the centre to

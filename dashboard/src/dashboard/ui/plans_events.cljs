@@ -48,9 +48,9 @@
    (if (not= world (:world db))
      {}
      (let [items (pm/sort-plans (:plans data))
-           first-name (:name (first items))
+           first-name (:id (:plan (first (pm/plan-tree items))))
            pick? (and (get-in db [:plans :selected-wanted?]) (nil? (get-in db [:plans :selected])) first-name)]
-       (cond-> {:db (update db :plans assoc :items items :failed nil)}
+       (cond-> {:db (update db :plans assoc :items items :file-errors (:errors data) :failed nil)}
          pick? (assoc :dispatch [:plans/select first-name]))))))
 
 (rf/reg-event-db :plans/err (fn [db [_ world message]] (if (not= world (:world db)) db (assoc-in db [:plans :failed] message))))
@@ -72,11 +72,18 @@
 (rf/reg-event-fx
  :plans/select
  (fn [{:keys [db]} [_ name]]
-   {:db (update db :plans assoc :selected name :detail nil :detail-failed nil :layer nil)
+   {:db (update db :plans assoc :selected name :detail nil :detail-failed nil :layer nil :element nil)
     :replace-url (url-with-plan name)
     :fx [[:dispatch [:plans/fetch-detail name]]]}))
 
 (rf/reg-event-db :plans/layer (fn [db [_ y]] (assoc-in db [:plans :layer] y)))
+
+;; clicking the selected element again clears the selection; selecting one shows the layer where it starts
+(rf/reg-event-db
+ :plans/element
+ (fn [db [_ id y]]
+   (let [clear? (= id (get-in db [:plans :element]))]
+     (update db :plans assoc :element (when-not clear? id) :layer (if (or clear? (nil? y)) (get-in db [:plans :layer]) y)))))
 
 (rf/reg-event-fx
  :plans/open

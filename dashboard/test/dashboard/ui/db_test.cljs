@@ -28,5 +28,5 @@
   (is (= {:scale 2} (db/effective-view (assoc (model) :user-view {:scale 2})))))
 
 (deftest home-includes-plans
-  (let [m (assoc-in (model) [:plans :items] [{:bounds {:x1 400 :z1 0 :x2 600 :z2 10}}])]
+  (let [m (assoc-in (model) [:plans :items] [{:region {:min [400 60 0] :max [599 70 9]}}])]
     (is (> (visible-blocks (db/effective-view m) 1000) 600))))

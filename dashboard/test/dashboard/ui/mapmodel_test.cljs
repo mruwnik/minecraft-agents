@@ -57,8 +57,19 @@
     [] []))
 
 (deftest plan-rect
-  (is (= {:x1 10 :z1 -70 :x2 21 :z2 -60}
-         (mm/plan-box {:bounds {:x1 10 :z1 -70 :x2 20 :z2 -61}}))))
+  (are [region expected] (= expected (mm/plan-box {:region region}))
+    {:min [10 60 -70] :max [20 64 -61]} {:x1 10 :z1 -70 :x2 21 :z2 -60}
+    {:min [0 0 0] :max [0 0 0]} {:x1 0 :z1 0 :x2 1 :z2 1}))
+
+(deftest bounds-rect
+  (is (= {:x1 -3 :z1 4 :x2 0 :z2 5} (mm/bounds-box {:min [-3 70 4] :max [-1 71 4]}))))
+
+(deftest elements-show-when-zoomed-in
+  (are [scale expected] (= expected (mm/show-plan-elements? scale))
+    0.5 false
+    2.9 false
+    3 true
+    8 true))
 
 (deftest edge-markers
   (are [item expected] (= expected (mm/edge-marker {:w 200 :h 100 :inset 10} item))

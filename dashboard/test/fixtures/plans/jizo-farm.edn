@@ -1,0 +1,21 @@
+;; Jizo's farm, copied by hand from the places jizo-crop-field (origin -17 62 -97) and jizo-melon-patch (origin -1 62 -88).
+;; Crops sit one block above the origin's y (y 63); the farmland below is not judged.
+{:id "jizo-farm" :name "Jizo's farm" :owner "Jizo" :kind :farm :status :active
+ :note "Carrots, potatoes, melon and pumpkin stems in the field, three wheat plots with two covered water channels in the patch."
+ :region {:min [-17 62 -97] :max [14 63 -71]}
+ :elements
+ [{:id "potatoes" :kind :plot :region {:min [-11 63 -97] :max [-10 63 -96]} :content {:crop "potatoes"}}
+  {:id "melon-row-1" :kind :plot :region {:min [-17 63 -95] :max [-13 63 -95]} :content {:crop "melon_stem"}}
+  {:id "melon-row-2" :kind :plot :region {:min [-14 63 -94] :max [-12 63 -94]} :content {:crop "melon_stem"}}
+  {:id "pumpkin" :kind :plot :region {:min [-15 63 -94] :max [-15 63 -94]} :content {:crop "pumpkin_stem"}}
+  {:id "carrots-a" :kind :plot :region {:min [-14 63 -90] :max [-13 63 -90]} :content {:crop "carrots"}}
+  {:id "carrots-b" :kind :plot :region {:min [-15 63 -89] :max [-14 63 -89]} :content {:crop "carrots"}}
+  {:id "field-chest" :kind :feature :region {:min [-15 63 -91] :max [-15 63 -91]} :content {:block "chest"}}
+  {:id "field-table" :kind :feature :region {:min [-15 63 -90] :max [-15 63 -90]} :content {:block "crafting_table"}}
+  {:id "wheat-a" :kind :plot :region {:min [-1 63 -87] :max [14 63 -85]} :content {:crop "wheat"}}
+  {:id "wheat-a-edge" :kind :plot :region {:min [0 63 -88] :max [14 63 -88]} :content {:crop "wheat"}}
+  {:id "melon-chest" :kind :feature :region {:min [-1 63 -88] :max [-1 63 -88]} :content {:block "chest"}}
+  {:id "wheat-b" :kind :plot :region {:min [-1 63 -83] :max [14 63 -76]} :content {:crop "wheat"}}
+  {:id "wheat-c" :kind :plot :region {:min [-1 63 -74] :max [14 63 -71]} :content {:crop "wheat"}}
+  {:id "channel-1" :kind :feature :region {:min [-1 62 -84] :max [14 62 -84]} :content {:palette ["water" "oak_slab"]}}
+  {:id "channel-2" :kind :feature :region {:min [-1 62 -75] :max [14 62 -75]} :content {:palette ["water" "oak_slab"]}}]}
