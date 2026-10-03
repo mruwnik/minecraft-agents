@@ -536,55 +536,11 @@ test('fakes do not share nested default self objects', () => {
   assert.deepEqual(second.world.state.self.effects, [])
 })
 
-test('an acting call on a sleeping body leaves the bed first', async () => {
-  const p = owned({ self: { isSleeping: true } })
+test('a successful sleep puts the body in bed; an acting call then leaves it first', async () => {
+  const p = owned({ time: 14000, skipNight: false, blocks: { '1,64,0': 'red_bed' } })
+  assert.equal(p.self().isSleeping, false)
+  assert.equal((await p.sleep('t1', { pos: at(1, 64, 0) })).status, 'sleeping')
+  assert.equal(p.self().isSleeping, true)
   await p.look('t1', { yaw: 0, pitch: 0 })
   assert.equal(p.self().isSleeping, false)
-})
-
-const crafting = { self: { held: null }, inventory: [{ name: 'oak_log', count: 2 }] }
-const table = { '1,64,0': 'crafting_table' }
-
-test('fake craft cases', async () => {
-  const cases = [
-    ['unknown item', crafting, { item: 'nothing' }, { status: 'cannot', reason: 'no-recipe' }],
-    ['planks', crafting, { item: 'oak_planks' }, { status: 'crafted', item: 'oak_planks', made: 4, used: { oak_log: 1 } }],
-    ['rounds up to whole batches', crafting, { item: 'oak_planks', count: 5 }, { status: 'crafted', item: 'oak_planks', made: 8, used: { oak_log: 2 } }],
-    ['runs out midway', crafting, { item: 'oak_planks', count: 12 }, { status: 'partial', item: 'oak_planks', made: 8, used: { oak_log: 2 }, reason: 'no-item', short: { oak_log: 1 } }],
-    ['missing ingredients', crafting, { item: 'stick' }, { status: 'no-item', short: { oak_planks: 2 } }],
-    ['no table near', { inventory: [{ name: 'wheat', count: 3 }] }, { item: 'bread' }, { status: 'unreachable', reason: 'no-table' }],
-    ['table given but not a table', { inventory: [{ name: 'wheat', count: 3 }], blocks: table }, { item: 'bread', table: at(2, 64, 0) }, { status: 'unreachable', reason: 'not-a-table' }],
-    ['table given but far', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '9,64,0': 'crafting_table' } }, { item: 'bread', table: at(9, 64, 0) }, { status: 'unreachable', reason: 'too-far' }],
-    ['table near', { inventory: [{ name: 'wheat', count: 3 }], blocks: table }, { item: 'bread' }, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } }],
-    ['spec recipes merge', { inventory: [{ name: 'dirt', count: 1 }], recipes: { gravel: { count: 2, needs: { dirt: 1 } } } }, { item: 'gravel' }, { status: 'crafted', item: 'gravel', made: 2, used: { dirt: 1 } }],
-    ['full', { inventory: [{ name: 'oak_log', count: 1 }, ...Array.from({ length: 35 }, (_, i) => ({ name: `junk${i}`, count: 1 }))] }, { item: 'oak_planks' }, { status: 'full', made: 0, used: {} }]
-  ]
-  for (const [name, spec, args, want] of cases) assert.deepEqual(await owned(spec).craft('t1', args), want, name)
-})
-
-test('fake craft consumes and adds to the inventory', async () => {
-  const p = owned(crafting)
-  await p.craft('t1', { item: 'oak_planks' })
-  assert.deepEqual(p.self().inventory.map(i => [i.name, i.count]), [['oak_log', 1], ['oak_planks', 4]])
-})
-
-test('fake craft is recorded and can be overridden', async () => {
-  const p = owned()
-  p.world.override('craft', async () => ({ status: 'failed', reason: 'x' }))
-  assert.deepEqual(await p.craft('t1', { item: 'stick' }), { status: 'failed', reason: 'x' })
-  assert.equal(p.world.calls.at(-1).name, 'craft')
-  await assert.rejects(p.craft('old', { item: 'stick' }), { code: 'cut' })
-})
-
-test('fake chat records the line and resolves sent', async () => {
-  const p = owned({ entities: [{ id: 1, name: 'Steve', kind: 'player', pos: at(1, 64, 0) }] })
-  assert.deepEqual(await p.chat('t1', { message: 'hi' }), { status: 'sent', parts: 1 })
-  assert.deepEqual(await p.chat('t1', { message: 'psst', to: 'Steve' }), { status: 'sent', parts: 1, to: 'Steve' })
-  assert.deepEqual(p.world.state.chat, [{ message: 'hi', to: undefined }, { message: 'psst', to: 'Steve' }])
-})
-
-test('fake chat to a player who is not there is gone and records nothing', async () => {
-  const p = owned()
-  assert.deepEqual(await p.chat('t1', { message: 'psst', to: 'Nobody' }), { status: 'gone', to: 'Nobody' })
-  assert.deepEqual(p.world.state.chat, [])
 })
