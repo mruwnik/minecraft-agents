@@ -1,0 +1,10 @@
+;; The woodcutter scenario plus a look-around every 45 s, first in the register,
+;; so the reflex cuts the running job on a schedule.
+;; Cut and replant oak, then put the wood in a known chest. Needs a :chest
+;; place in common memory for the deposit to run, and a :bed place for sleep.
+{:register [{:trigger :every-interval :args {:seconds 45}}
+            {:trigger :hostile-near}
+            {:trigger :health-low}
+            {:trigger :night-and-bed-known}]
+ :queue [{:job :harvest-wood :args {:species "oak" :radius 16}}
+         {:job :deposit :args {}}]}

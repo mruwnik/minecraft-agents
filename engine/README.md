@@ -269,7 +269,7 @@ A trigger definition:
 
 ```clojure
 {:name        :health-low
- :when        (fn [world memory] bool)    ; memory is {:common :body}
+ :when        (fn [world memory args] bool) ; memory is {:common :body :now ms}; args are the entry's
  :job         :eat                        ; default job (a catalog name)
  :args        {}
  :persistence :cooldown                   ; :retry | :cooldown | :stop
@@ -400,7 +400,8 @@ memory as `:failures`; after three the job emits a warn and ends.
   `sleeping` and `not-night` are done; a taken bed or nearby monster retries
   three times; a missing bed warns `bed_missing` and ends.
 
-Triggers (`engine.triggers`):
+Triggers (`engine.triggers`; `:when` receives the register entry's `:args` as
+its third argument, and `:now`, the engine clock in ms, in its memory):
 
 | trigger | holds when | job | persistence |
 |---|---|---|---|
@@ -408,6 +409,15 @@ Triggers (`engine.triggers`):
 | `:hostile-near` | a hostile within 8 blocks; the radius is fixed in the trigger, the job's `:radius` arg is overridable | `:retreat` `{:radius 8}` | cooldown 5 s |
 | `:night-and-bed-known` | not day and a `[:places :bed]` is known | `:sleep` | cooldown 60 s |
 | `:inventory-nearly-full` | 30 or more carried stacks and a `[:places :chest]` is known | `:deposit` | cooldown 60 s |
+| `:every-interval` | no `[:body :every-interval-last]` record, or it is at least `:seconds` (args, default 60) old | `:look-around` | cooldown 0 |
+
+`:every-interval` is a wall-clock reflex: the `:look-around` job looks at a
+point three blocks ahead and commits the engine time as `:every-interval-last`
+to body memory (so it survives a restart), which makes the trigger stop
+holding. With no record it fires at once, so the first look comes at engine
+start. Register it with `{:trigger :every-interval :args {:seconds 45}}`;
+`scenarios/woodcutter-cuts.edn` is the woodcutter with it first in the
+register.
 
 `:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
 total; the real inventory has 36 main slots, so 30 is a threshold, not a

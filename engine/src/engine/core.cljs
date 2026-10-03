@@ -294,10 +294,14 @@
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :yielded :level :info :status status :wake wake}))))))
 
-(defn trigger-holds? [eng entry world memory]
-  (let [t (trigger-def eng (:trigger entry))]
+(defn trigger-holds?
+  "Whether entry's trigger holds: (:when world memory args), where memory is
+  {:common :body :now ms} and args are the entry's args."
+  [eng entry world memory]
+  (let [t (trigger-def eng (:trigger entry))
+        memory (assoc memory :now (now eng))]
     (boolean (call-guarded eng (str "trigger " (:trigger entry)) false
-                           #((:when t) world memory)))))
+                           #((:when t) world memory (:args entry))))))
 
 (defn end-reflex!
   "A reflex job ended on its own; classify and apply the entry's persistence."

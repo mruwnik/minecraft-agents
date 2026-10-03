@@ -7,15 +7,18 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]))
 
-(defn setup [world]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/capture-sink)
-        p (tu/fake world)
-        eng (core/create {:primitives p :catalog catalog/catalog :dir (tu/tmp-dir) :now #(deref clock) :min-recheck-ms 0
+(defn setup
+  ([world] (setup world (tu/tmp-dir)))
+  ([world dir]
+   (let [clock (atom 1000000)
+         [seen sink] (tu/capture-sink)
+         p (tu/fake world)
+         eng (core/create {:primitives p :catalog catalog/catalog :dir dir :now #(deref clock) :min-recheck-ms 0
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen :clock clock}))
+     {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async run-until-empty
   "Tick until the list is empty, at most n ticks; returns the ticks used."
@@ -338,6 +341,58 @@
     (is (= [] (scenario/problems catalog/catalog s)))
     (is (= [:hostile-near :health-low :night-and-bed-known] (mapv :trigger (:register s))))
     (is (= [:harvest-wood :deposit] (mapv :job (:queue s))))))
+
+;; ------------------------------------------------- look-around, every-interval
+
+(deftest look-around-looks-once-and-records-when
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})]
+          (core/submit! eng :look-around {} {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "look"))))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1000000 (:every-interval-last (mem/scope (:store eng) :body)))))))))
+
+(def interval-ms 45000)
+
+(defn holds-with [last now-ms]
+  ((:when triggers/every-interval)
+   nil
+   {:body (if last {:every-interval-last last} {}) :now now-ms}
+   {:seconds 45}))
+
+(deftest every-interval-holds-without-a-record-and-after-the-interval
+  (is (true? (holds-with nil 1000)) "no record: fire at once")
+  (is (false? (holds-with 1000 (+ 1000 interval-ms -1))))
+  (is (true? (holds-with 1000 (+ 1000 interval-ms))))
+  (is (true? (holds-with 1000 (+ 1000 (* 2 interval-ms))))))
+
+(deftest every-interval-survives-a-restart-through-body-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng p clock]} (setup {} dir)
+              spec "{:register [{:trigger :every-interval :args {:seconds 45}}]}"]
+          (core/load-scenario! eng (scenario/parse spec))
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "look"))))
+          (is (nil? (core/tick! eng)) "recorded: the trigger stopped holding, so no refire")
+          (let [{again :eng p2 :p clock2 :clock} (setup {} dir)]
+            (is (nil? (core/tick! again)) "the record was restored from disk")
+            (reset! clock2 (+ @clock interval-ms))
+            (await (core/tick! again))
+            (is (= 1 (count (calls p2 "look"))))))))))
+
+(deftest woodcutter-cuts-scenario-puts-every-interval-on-top
+  (let [s (scenario/parse (fs/readFileSync "scenarios/woodcutter-cuts.edn" "utf8"))
+        base (scenario/parse (fs/readFileSync "scenarios/woodcutter.edn" "utf8"))]
+    (is (= [] (scenario/problems catalog/catalog s)))
+    (is (= {:trigger :every-interval :args {:seconds 45}} (first (:register s))))
+    (is (= (:register base) (rest (:register s))))
+    (is (= (:queue base) (:queue s)))))
 
 (deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging
   (async done

@@ -4,7 +4,9 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.events :as events]
+            [engine.jobs.samples :as samples]
             [engine.test-util :as tu]
+            [engine.triggers :as triggers]
             ["fs" :as fs]
             ["path" :as path]))
 
@@ -66,17 +68,19 @@
           :child {:name :child :round child-round}
           :parent {:name :parent :round parent-round}
           :submitter {:name :submitter :round submit-round}
+          :look-around samples/look-around
           :idle {:name :idle :round idle-round}
           :waking-child {:name :waking-child :round waking-child-round}
           :waking-parent {:name :waking-parent :round waking-parent-round}
           :gated {:name :gated :round count-round
                   :precondition (fn [_ _ _] @flag)}}
    :triggers {:hurt {:name :hurt :job :eat :persistence :retry
-                     :when (fn [w _] (<= (.-health (.self w)) 8))}
+                     :when (fn [w _ _] (<= (.-health (.self w)) 8))}
               :hungry {:name :hungry :job :eat :persistence :cooldown :cooldown-s 30
-                       :when (fn [w _] (< (.-food (.self w)) 10))}
+                       :when (fn [w _ _] (< (.-food (.self w)) 10))}
               :near {:name :near :job :walk :args {:pos {:x 50 :y 64 :z 0}} :persistence :stop
-                     :when (fn [w _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
+                     :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
+              :every-interval triggers/every-interval
               :never {:name :never :job :eat :when (constantly false)}}})
 
 (defn setup
@@ -298,6 +302,27 @@
           (await (core/tick! eng))
           (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job runs before j2")
           (is (= ["j2"] (listed eng))))))))
+
+(deftest an-interval-reflex-cuts-a-listed-job-which-resumes-after-the-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p clock]} (setup {})
+              world (.-world p)]
+          (core/submit! eng :walk {:pos {:x 5 :y 64 :z 0}} {})
+          (core/submit! eng :count {} {})
+          (.hold world "moveTo")
+          (let [walking (core/tick! eng)]
+            (core/register-reflex! eng {:trigger :every-interval :args {:seconds 45}})
+            (let [reflex-round (core/tick! eng)]
+              (await walking)
+              (await reflex-round)))
+          (is (= [:fired :cut] (->> @seen (map :kind) (filter #{:fired :cut}))))
+          (is (= ["look"] (mapv #(.-name %) (filter #(= "look" (.-name %)) (.-calls world)))))
+          (await (core/tick! eng))
+          (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job resumes once the look is done")
+          (swap! clock + 45000)
+          (is (some? (core/tick! eng)) "the interval elapsed: it fires again"))))))
 
 (deftest a-higher-reflex-drops-a-lower-one-and-a-lower-one-waits
   (async done

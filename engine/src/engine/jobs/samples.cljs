@@ -51,3 +51,16 @@
     :done))
 
 (def eat {:name :eat :round eat-round})
+
+(def look-ahead 3)
+
+(defn ^:async look-around-round
+  "Face a point a few blocks ahead of the body, once, then record the time in
+  body memory as :every-interval-last, which the :every-interval trigger reads."
+  [c]
+  (let [{:keys [x y z]} (self-pos c)]
+    (await (ctx/act c :look (clj->js {:pos {:x (+ x look-ahead) :y (inc y) :z z}})))
+    (ctx/commit! c :body #(assoc % :every-interval-last ((:now (:engine c)))))
+    :done))
+
+(def look-around {:name :look-around :round look-around-round})
