@@ -23,6 +23,10 @@
    :collect-radius {:doc "collect drops within this many blocks of the death point" :default 6}})
 
 (def arrive-range 2)
+(def settle-ms
+  "After a respawn the client needs this long to re-receive nearby entities;
+  an estimate made sooner sees no hostiles."
+  2000)
 (def day-ms (* 24 60 60 1000))
 (def recovered-policy {:cap 10 :ttl day-ms})
 
@@ -30,11 +34,36 @@
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
 
+(defn decision-text [decision {:keys [value cost reason items]} margin]
+  (case decision
+    :skip (str "skip: value " value " <= cost " (if (= :infinite cost) "infinite" (.toFixed cost 1)) " (+ margin " margin ")")
+    :collected (str "collected " items " items")
+    :abandoned (str "abandoned: " (name (or reason :unknown)))))
+
 (defn finish!
-  "Write the :recovered entry and end the job."
+  "Write the :recovered entry, report the decision and end the job."
   [c decision fields]
-  (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
-  :done)
+  (let [pos (:pos (:data (died/unrecovered-death (ctx/view c))))]
+    (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
+    (ctx/emit! c :recover-drops.decided :info
+               (assoc (select-keys fields [:value :cost :reason :items])
+                      :decision decision :pos pos
+                      :text (decision-text decision fields (:margin (:args c)))))
+    :done))
+
+(defn settling?
+  "True while the latest :respawned entry, newer than the death, is younger than settle-ms."
+  [c entry]
+  (let [respawned (ctx/latest c :respawned)]
+    (boolean (and respawned
+                  (> (:t respawned) (:t entry))
+                  (< (- (ctx/now c) (:t respawned)) settle-ms)))))
+
+(defn key-to-death!
+  "Reset the job memory when it belongs to another death than entry."
+  [c entry]
+  (when (not= (:t entry) (:death-t (ctx/mem c)))
+    (ctx/update-mem! c (constantly {:death-t (:t entry)}))))
 
 (defn entity-positions [p radius kind max]
   (map (fn [e] (u/pos-of (.-pos e))) (array-seq (.entities p #js {:radius radius :kind kind :max max}))))
@@ -66,10 +95,12 @@
         entry (died/unrecovered-death (ctx/view c))
         elapsed (- (ctx/now c) (:t entry))
         threatened? (seq (entity-positions (:primitives c) danger-radius "hostile" 1))]
+    (when entry (key-to-death! c entry))
     (cond
       (nil? entry) :done
       (>= elapsed value/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :window-closed))
       threatened? :continue
+      (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue
       :else
       (let [decided (or (:decided (ctx/mem c))
                         (let [e (estimate c (:data entry) elapsed)]

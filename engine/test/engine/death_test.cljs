@@ -231,3 +231,82 @@
             (set! (.-entities st) (.filter (.-entities st) (fn [e] (not= "hostile" (.-kind e))))))
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
+
+;; ------------------------------------------- keyed to the death, settling, reporting
+
+(def second-death-pos {:x -30 :y 64 :z 0})
+(def second-drops [(drop-item 3 -30 "diamond_pickaxe") (drop-item 4 -31 "diamond_sword")])
+
+(defn decided-events [seen] (filter #(= :recover-drops.decided (:kind %)) @seen))
+
+(defn job-memory [eng] (core/job-memory eng "j1"))
+
+(deftest recover-drops-starts-afresh-for-a-second-death
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:entities (into drops second-drops)})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= [death-pos] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo"))))
+          (swap! clock + 10)
+          (die! eng {:pos second-death-pos :inventory diamonds})
+          (await (run-until-empty eng 15))
+          (is (= second-death-pos (last (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo")))))
+          (is (= :collected (:decision (recovered eng))))
+          (is (= 2 (:items (recovered eng))) "the second death got its own :collected, not a stale :abandoned"))))))
+
+(deftest recover-drops-waits-for-the-respawn-to-settle
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (swap! clock + 100)
+          (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}})
+          (swap! clock + 500)
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (nil? (:decided (job-memory eng))) "500 ms after the respawn: not yet")
+          (is (= [] (calls p "moveTo")))
+          (swap! clock + 2000)
+          (await (core/tick! eng))
+          (is (some? (:decided (job-memory eng))) "2500 ms after the respawn: decided")
+          (await (run-until-empty eng 10))
+          (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest recover-drops-reports-a-skip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {})]
+          (die! eng {:pos death-pos :inventory junk})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [:skip] (map :decision (decided-events seen))))
+          (is (seq (:text (first (decided-events seen))))))))))
+
+(deftest recover-drops-reports-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 10))
+          (is (= [:collected] (map :decision (decided-events seen))))
+          (is (seq (:text (first (decided-events seen))))))))))
+
+(deftest recover-drops-reports-abandoned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [:abandoned] (map :decision (decided-events seen))))
+          (is (seq (:text (first (decided-events seen))))))))))
