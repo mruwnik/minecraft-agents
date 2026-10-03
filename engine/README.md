@@ -185,15 +185,29 @@ Extra fields on the result:
 - `attack`: `health` (target's, when known).
 - `offline`: `ms`, the wait actually used (clamped to 0..600000, rounded down).
 
-`offline` quits the bot, emits the body event `offline`, waits `ms` (default 5 minutes, hard maximum 10 minutes),
-reconnects with the same connection params (up to 3 tries, 5 s apart), rebinds the library bot so every other
-primitive and every listener works on the new bot, emits `online`, and resolves `{status: 'ok', ms}`. It does not
-use the cut-on-token-change rule of the other primitives, because the body must never stay offline: a cut ends the
-wait early, the body reconnects, and the call resolves `{status: 'cut'}`. `close()` during the wait or the reconnect
-cancels it and resolves `{status: 'closed'}` (a bot the reconnect already produced is quit). If every reconnect try
-fails it emits `disconnected` and rejects with the last error. Only `createPrimitives`, which owns the connection
-params, supports it; `createPrimitivesFromBot` resolves `{status: 'unsupported'}` without touching the bot. A stale
-token rejects with `cut` on entry and bad `ms` (not a number, negative) with `bad-args`.
+Offline is body state. `offline` quits the bot, emits the body event `offline`, waits `ms` (default 5 minutes, hard
+maximum 10 minutes), reconnects with the same connection params (up to 3 tries, 5 s apart), rebinds the library bot so
+every other primitive and every listener works on the new bot, emits `online`, and resolves `{status: 'ok', ms}`. From
+the moment it quits until the fresh bot is adopted the body is offline, and `isOffline()` is true:
+
+- Sensing says so instead of returning stale values: `self()` returns `{status: 'offline'}`, `entities()` and `blocks()`
+  return `[]`, `blockAt()` returns `null`. `isOffline()` is the one way to tell an offline body from an empty world.
+- The engine pauses the register and the list: `tick` evaluates no trigger and starts no round, so a reflex cannot cut
+  the wait and act on the quit bot, and no trigger reads frozen sensing. The scheduler just waits for the reconnect.
+- A cut (a token change, `cancel`, a reflex that somehow fired) does not end the offline state. It ends the wait early,
+  the body reconnects first, and only then does the call resolve `{status: 'cut'}` and the engine resume ticking. An
+  acting primitive called by the new owner meanwhile waits for the reconnect, then acts on the new bot; a stale token
+  still rejects with `cut`. The body is never left offline.
+- `close()` during the wait or the reconnect cancels it and resolves `{status: 'closed'}` (a bot the reconnect already
+  produced is quit). The engine's shutdown does this, so a SIGTERM during a log-out quits at once instead of
+  reconnecting a body that is about to leave anyway.
+- If every reconnect try fails it emits `disconnected` and rejects with the last error; the body is then marked down,
+  and the next acting call tries the reconnect again.
+
+Only `createPrimitives`, which owns the connection params, supports it; `createPrimitivesFromBot` resolves
+`{status: 'unsupported'}` without touching the bot. A stale token rejects with `cut` on entry and bad `ms` (not a
+number, negative) with `bad-args`. The fake behaves the same: `isOffline()`, the offline sensing above, and a cut ends
+its wait early with the body back (online event) before the call resolves `cut`.
 
 An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
 bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the
@@ -239,8 +253,8 @@ turns each into an entry of that kind in body memory (see Memory).
 `createFake(spec)` in `js/fake.mjs` returns the primitives plus a `world`
 handle for tests. It has the same sensing fields as above (`spec.self` may set `oxygen`, `onFire`, `inWater`,
 `inLava`, `isSleeping`, `foodSaturation`, `experience`, `dimension`; player entities default to `sleeping: false` and
-`username` equal to `name`). Its `offline` flips `world.state.offline`, emits `offline` and `online`, and waits
-`ms * spec.offlineScale` (default 0.001, so 5 minutes is 0.3 s) before resolving the same results. The handle:
+`username` equal to `name`). Its `offline` flips `world.state.offline` (what `isOffline()` reads), emits `offline` and `online`, and waits
+`ms * spec.offlineScale` (default 0.001, so 5 minutes is 0.3 s) before resolving the same results; a cut ends the wait early. The handle:
 
 ```js
 const p = createFake({

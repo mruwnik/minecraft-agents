@@ -99,6 +99,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   let owner = null
   const inflight = new Set()
   const listeners = new Set()
+  // Offline is body state: set from the moment `offline` quits the bot until the fresh bot is adopted (or the
+  // reconnect gave up); resolves then. Sensing answers 'offline' meanwhile and acting calls wait for it.
+  let away = null
+  const isOffline = () => away !== null
 
   const isOwner = token => token !== null && token !== undefined && token === owner
   const setOwner = token => {
@@ -156,6 +160,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const feetIn = name => bot.blockAt(vec(cell(here())))?.name === name
 
   const self = () => {
+    if (isOffline()) return { status: 'offline' }
     const timeOfDay = bot.time.timeOfDay
     return {
       username: bot.username,
@@ -187,6 +192,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, blocksSight)
 
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
+    if (isOffline()) return []
     const me = here()
     return Object.values(bot.entities)
       .filter(e => e !== bot.entity && e.position)
@@ -214,6 +220,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64 } = {}) => {
+    if (isOffline()) return []
     const wanted = names && new Set(names)
     const matching = block => Boolean(block) && (wanted ? wanted.has(block.name) : match ? match(block.name) : !isAir(block.name))
     const me = here()
@@ -223,6 +230,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const blockAt = pos => {
+    if (isOffline()) return null
     const block = bot.blockAt(vec(pos))
     return block ? blockInfo(block) : null
   }
@@ -608,32 +616,46 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   // An acting primitive while the bot is down: reconnect first; resolves 'disconnected' when that fails. A stale
-  // token still rejects with cut before anything else.
+  // token still rejects with cut before anything else. While `offline` is bringing the body back (a cut ended its
+  // wait) the call waits for that reconnect instead of acting on the quit bot.
   const whenUp = fn => async (token, a) => {
+    if (!isOwner(token)) throw cutError()
+    if (away) await away
     if (!isOwner(token)) throw cutError()
     if (down && !await recover()) return { status: 'disconnected' }
     return fn(token, a)
   }
 
-  // Leaves the server for `ms`, then comes back with the same connection params. A cut ends the wait early (the body
-  // is never left offline) and the call resolves 'cut'; close() cancels the reconnect and resolves 'closed'.
+  // Leaves the server for `ms`, then comes back with the same connection params. The body is offline (isOffline,
+  // sensing says so) until the fresh bot is adopted. A cut ends the wait early but the body is still brought back
+  // first, then the call resolves 'cut'; close() cancels the reconnect and resolves 'closed'.
   const offline = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms >= 0), 'offline needs ms, a number of milliseconds of at least 0')
     if (!reconnect) return { status: 'unsupported' }
     const ms = Math.floor(Math.min(a.ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
     const call = { token, cut: () => call.wake?.(), wake: null }
+    let release
+    away = new Promise(resolve => { release = resolve })
     inflight.add(call)
     emit({ kind: 'offline', ms })
     unbind()
     bot.on('error', () => {}) // the quitting client may still complain; nothing listens for it any more
     bot.quit()
-    const full = await waitOrWake(ms * timeScale, call)
-    inflight.delete(call)
-    const fresh = await reconnectBot().catch(error => { emit({ kind: 'disconnected', reason: String(error.message) }); throw error })
-    if (!fresh) return { status: 'closed' }
-    adopt(fresh)
-    return full && isOwner(token) ? { status: 'ok', ms } : { status: 'cut' }
+    try {
+      const full = await waitOrWake(ms * timeScale, call)
+      inflight.delete(call)
+      const fresh = await reconnectBot().catch(error => { emit({ kind: 'disconnected', reason: String(error.message) }); throw error })
+      if (!fresh) return { status: 'closed' }
+      away = null
+      adopt(fresh)
+      return full && isOwner(token) ? { status: 'ok', ms } : { status: 'cut' }
+    } finally {
+      inflight.delete(call)
+      if (away) down = true // no bot came back: the next acting call tries the reconnect itself
+      away = null
+      release()
+    }
   }
 
   const close = async () => {
@@ -644,7 +666,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, offline, onBodyEvent, close }
+  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.

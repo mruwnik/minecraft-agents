@@ -543,9 +543,14 @@
     (emit! eng {:source :reflex :kind :reverted :level :info :reflex rid :property prop
                 :from (:value change) :to :default})))
 
-(defn tick!
-  "One scheduling pass. Synchronous; returns the promise of a round it
-  started (resolving once that round is settled), or nil."
+(defn offline?
+  "Whether the body is away from the server (the offline primitive). The register
+  and the list are paused meanwhile: sensing would only say offline."
+  [eng]
+  (true? (.isOffline (:primitives eng))))
+
+(defn tick-online!
+  "One scheduling pass for a body that is on the server."
   [eng]
   (expire-changes! eng)
   (when (>= (- (now eng) @(:last-stats eng)) (:stats-ms eng))
@@ -562,6 +567,14 @@
       (running eng) nil
       (:pending-reflex (state eng)) (start-round! eng (:pending-reflex (state eng)))
       :else (when-let [id (choose-listed eng)] (start-round! eng id)))))
+
+(defn tick!
+  "One scheduling pass. Synchronous; returns the promise of a round it
+  started (resolving once that round is settled), or nil. Does nothing while
+  the body is offline: no trigger is evaluated and no round starts."
+  [eng]
+  (when-not (offline? eng)
+    (tick-online! eng)))
 
 ;; ------------------------------------------------------------------ list edits (agents, and submit from rounds)
 

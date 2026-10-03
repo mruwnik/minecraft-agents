@@ -256,6 +256,8 @@ export function createFake (spec = {}) {
   const overrides = new Map()
   const acts = defaultActs(s)
   let owner = null
+  let sleeper = null // the offline call in its wait: { token, wake }
+  let away = null // promise of the body being back, while offline
 
   const checkOwner = (token) => { if (token !== owner) throw new CutError() }
 
@@ -276,6 +278,8 @@ export function createFake (spec = {}) {
   const wrap = (name) => async (token, args = {}) => {
     calls.push({ name, token, args: clone(args) })
     checkOwner(token)
+    if (away) await away
+    checkOwner(token)
     const forced = await waitHold(name, token)
     checkOwner(token)
     if (forced !== undefined) return forced
@@ -287,6 +291,7 @@ export function createFake (spec = {}) {
   const primitives = {
     setOwner (token) {
       owner = token
+      if (sleeper && sleeper.token !== token) sleeper.wake()
       for (const p of [...pending]) {
         if (p.token === token) continue
         pending.delete(p)
@@ -295,7 +300,10 @@ export function createFake (spec = {}) {
     },
     isOwner: (token) => token === owner,
 
+    isOffline: () => s.offline,
+
     self () {
+      if (s.offline) return { status: 'offline' }
       return {
         username: s.self.username,
         pos: { ...s.self.pos },
@@ -317,6 +325,7 @@ export function createFake (spec = {}) {
     },
 
     entities ({ radius = 16, kind, names, max = 32 } = {}) {
+      if (s.offline) return []
       return s.entities
         .map(e => ({ ...clone(e), distance: dist(s.self.pos, e.pos), ...(e.kind === 'hostile' && { visible: e.visible ?? canSee(e) }) }))
         .filter(e => e.distance <= radius && (!kind || e.kind === kind) && (!names || names.includes(e.name)))
@@ -325,6 +334,7 @@ export function createFake (spec = {}) {
     },
 
     blocks ({ radius = 16, names, match, max = 64 } = {}) {
+      if (s.offline) return []
       const ok = names ? (n) => names.includes(n) : match ?? (() => true)
       return [...s.blocks.entries()]
         .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k) }))
@@ -335,6 +345,7 @@ export function createFake (spec = {}) {
     },
 
     blockAt (pos) {
+      if (s.offline) return null
       if (s.unloaded.has(key(pos))) return null
       return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)) }
     },
@@ -376,14 +387,23 @@ export function createFake (spec = {}) {
     }
   }
 
-  // Leaves for a shortened wait, then comes back; a cut during the wait still comes back, then says so.
+  // Leaves for a shortened wait, then comes back. A cut ends the wait early; the body is still back (online
+  // event, isOffline false) before the call resolves 'cut'.
   acts.offline = async (token, { ms } = {}) => {
     const wanted = Math.floor(Math.min(ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
+    let release
+    away = new Promise(resolve => { release = resolve })
     s.offline = true
     primitives.world.emit({ kind: 'offline', ms: wanted })
-    await new Promise(resolve => setTimeout(resolve, wanted * s.offlineScale))
+    await new Promise(resolve => {
+      const timer = setTimeout(resolve, wanted * s.offlineScale)
+      sleeper = { token, wake: () => { clearTimeout(timer); resolve() } }
+    })
+    sleeper = null
     s.offline = false
+    away = null
     primitives.world.emit({ kind: 'online', pos: { ...s.self.pos } })
+    release()
     return token === owner ? { status: 'ok', ms: wanted } : { status: 'cut' }
   }
 
