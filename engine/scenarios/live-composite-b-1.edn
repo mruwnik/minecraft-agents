@@ -1,0 +1,3 @@
+;; withdraw live: take bread and hoes from a chest beside the pad (composite-b).
+{:register []
+ :queue [(jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12 "stone_hoe" 2}})]}

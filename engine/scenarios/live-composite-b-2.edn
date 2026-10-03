@@ -1,0 +1,3 @@
+;; withdraw live: no chest given and none remembered: the listed job must never run (composite-b).
+{:register []
+ :queue [(jobs.storage.withdraw {:items {"bread" 12}})]}
