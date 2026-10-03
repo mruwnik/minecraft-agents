@@ -11,7 +11,7 @@ const deflate = promisify(zlib.deflate)
 export const VIEW_VERSION = 1
 export const FLUSH_MS = 500
 export const MAX_COLUMNS_PER_FLUSH = 8
-export const POSE_MS = 100
+export const POSE_HZ = 10
 export const POSE_REFRESH_MS = 2000
 export const HUD_MS = 1000
 export const STATS_MS = 60000
@@ -177,14 +177,20 @@ export const hudKey = hud => JSON.stringify(hud, (k, v) => k === 't' ? undefined
 
 const noView = Object.freeze({
   attach: () => {}, detach: async () => {}, stop: () => {}, flushColumns: async () => {}, tickPose: async () => {}, tickHud: async () => {},
-  idle: async () => {}, pendingCount: () => 0, stats: () => ({ columns: 0, bytes: 0, ms: 0, poses: 0, huds: 0 })
+  idle: async () => {}, pendingCount: () => 0, stats: () => ({ columns: 0, bytes: 0, ms: 0, poses: 0, poseMs: 0, poseBytes: 0, huds: 0 })
 })
 
-const zeroStats = () => ({ columns: 0, bytes: 0, ms: 0, poses: 0, huds: 0 })
+// BODY_VIEW_POSE_HZ: pose writes per second at most; 0 = uncapped (every physics tick); default POSE_HZ
+export function poseHzFromEnv (env = process.env) {
+  const hz = Number(env.BODY_VIEW_POSE_HZ ?? POSE_HZ)
+  return Number.isFinite(hz) && hz >= 0 ? hz : POSE_HZ
+}
+
+const zeroStats = () => ({ columns: 0, bytes: 0, ms: 0, poses: 0, poseMs: 0, poseBytes: 0, huds: 0 })
 
 // One writer per body. `attach(bot)` hooks a bot (call again for each new bot after a reconnect), `detach()` writes the
 // offline pose. `onEvent(event)` receives view.stats and view.error. BODY_VIEW=0 turns it all off.
-export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0' }) {
+export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv() }) {
   if (!enabled) return noView
   let bot = null
   let unhook = () => {}
@@ -259,24 +265,31 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     return track(Promise.all(writes))
   }
 
-  const writePose = async pose => {
-    await writeAtomic(poseFile(stateDir, agent), JSON.stringify(pose)).catch(reportError)
+  const writePose = async json => {
+    await writeAtomic(poseFile(stateDir, agent), json).catch(reportError)
   }
 
+  // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
   const tickPose = () => {
     if (!bot) return Promise.resolve()
-    const t = now()
-    const pose = (() => {
-      try { return timed(() => poseSnapshot(bot, { world, now: t })) } catch (err) { reportError(err); return null }
+    const start = performance.now()
+    const json = (() => {
+      try {
+        const t = now()
+        const pose = poseSnapshot(bot, { world, now: t })
+        const key = poseKey(pose)
+        if (key === lastPoseKey && t - lastPoseAt < POSE_REFRESH_MS) return null
+        lastPoseKey = key
+        lastPoseAt = t
+        lastPose = pose
+        return JSON.stringify(pose)
+      } catch (err) { reportError(err); return null }
     })()
-    if (!pose) return Promise.resolve()
-    const key = poseKey(pose)
-    if (key === lastPoseKey && t - lastPoseAt < POSE_REFRESH_MS) return Promise.resolve()
-    lastPoseKey = key
-    lastPoseAt = t
-    lastPose = pose
+    stats.poseMs += performance.now() - start
+    if (!json) return Promise.resolve()
     stats.poses++
-    return track(writePose(pose))
+    stats.poseBytes += Buffer.byteLength(json)
+    return track(writePose(json))
   }
 
   const tickHud = () => {
@@ -293,10 +306,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   }
 
   const takeStats = () => {
-    const out = { ...stats, ms: Math.round(stats.ms * 1000) / 1000 }
+    const out = { ...stats, ms: Math.round(stats.ms * 1000) / 1000, poseMs: Math.round(stats.poseMs * 1000) / 1000 }
     stats = zeroStats()
     return out
   }
+
+  const onPhysics = () => { tickPose().catch(reportError) }
 
   const hook = target => {
     const onEnd = () => { if (bot === target) detach() }
@@ -304,7 +319,9 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     target.on('blockUpdate', onUpdate)
     target.on('end', onEnd)
     target.on('kicked', onEnd)
+    if (poseHz === 0) target.on('physicsTick', onPhysics)
     return () => {
+      target.removeListener('physicsTick', onPhysics)
       target.removeListener('chunkColumnLoad', onLoad)
       target.removeListener('blockUpdate', onUpdate)
       target.removeListener('end', onEnd)
@@ -321,7 +338,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     }
     timers = [
       every(FLUSH_MS, flushColumns),
-      every(POSE_MS, tickPose),
+      ...(poseHz > 0 ? [every(1000 / poseHz, tickPose)] : []),
       every(HUD_MS, tickHud),
       every(STATS_MS, () => onEvent({ source: 'body', kind: 'view.stats', level: 'info', ...takeStats() }))
     ]
@@ -343,7 +360,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     unhook()
     unhook = () => {}
     bot = null
-    return track(writePose(offlinePose({ world, now: now(), mcVersion, last: lastPose })))
+    return track(writePose(JSON.stringify(offlinePose({ world, now: now(), mcVersion, last: lastPose }))))
   }
 
   const stop = () => {

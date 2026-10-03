@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView
+  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv
 } from './view.mjs'
 
 const { Vec3 } = vec3
@@ -314,7 +314,7 @@ test('stats count columns, compressed bytes and main-thread ms, then reset', asy
   assert.equal(s.columns, 1)
   assert.equal(s.bytes, fs.statSync(path.join(worldChunks(dir), '0.0.bin')).size)
   assert.ok(s.ms > 0)
-  assert.deepEqual(view.stats(), { columns: 0, bytes: 0, ms: 0, poses: 0, huds: 0 })
+  assert.deepEqual(view.stats(), { columns: 0, bytes: 0, ms: 0, poses: 0, poseMs: 0, poseBytes: 0, huds: 0 })
 })
 
 test('disabled view creates no directories and ignores everything', async () => {
@@ -328,4 +328,54 @@ test('disabled view creates no directories and ignores everything', async () => 
   await view.detach()
   view.stop()
   assert.deepEqual(fs.readdirSync(dir), [])
+})
+
+const posesIn = async (poseHz, seconds, drive) => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'] })
+  try {
+    const bot = fakeBot()
+    const { view } = makeView(bot, { poseHz, now: () => Date.now() })
+    for (let i = 0; i < seconds * 100; i++) {
+      bot.entity.position.x += 1
+      drive(bot)
+      mock.timers.tick(10)
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    const { poses } = view.stats()
+    view.stop()
+    return poses
+  } finally {
+    mock.timers.reset()
+  }
+}
+
+test('pose rate is capped at the configured hz', async () => {
+  assert.ok(Math.abs(await posesIn(10, 2, () => {}) - 20) <= 1)
+  assert.ok(Math.abs(await posesIn(20, 2, () => {}) - 40) <= 1)
+})
+
+test('hz 0 writes on every physics tick with no interval', async () => {
+  let ticks = 0
+  const poses = await posesIn(0, 1, bot => { ticks++; bot.emit('physicsTick') })
+  assert.equal(poses, ticks)
+  assert.equal(ticks, 100)
+})
+
+test('BODY_VIEW_POSE_HZ is parsed, falling back to 10 on junk', () => {
+  assert.equal(poseHzFromEnv({}), 10)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '20' }), 20)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '0' }), 0)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: 'x' }), 10)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '-3' }), 10)
+})
+
+test('stats report pose ms and bytes apart from column ms', async () => {
+  const bot = fakeBot()
+  const { view, dir } = makeView(bot)
+  await view.tickPose()
+  const s = view.stats()
+  assert.equal(s.poses, 1)
+  assert.equal(s.poseBytes, fs.statSync(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')).size)
+  assert.ok(s.poseMs > 0)
+  assert.equal(s.ms, 0)
 })
