@@ -7,7 +7,7 @@ import { createView } from './view.mjs'
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { craftItem } from './craft.mjs'
-import { say } from './chat.mjs'
+import { say, createLimiter, cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 
@@ -754,11 +754,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: Math.min(60, 4 + 6 * (a.count ?? 1)) }, ctx => craftItem(bot, ctx, a, { timeScale }))
   }
 
+  const chatLimiter = createLimiter()
   const chat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(typeof a.message === 'string' && a.message.trim() !== '', 'chat needs message, a non-empty string')
-    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && a.to !== ''), 'chat to must be a non-empty player name')
-    return act(token, { boundS: 3 }, ctx => say(bot, ctx, a, { timeScale }))
+    need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
+    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && PLAYER_NAME.test(a.to)), 'chat to must be a player name (3-16 letters, digits or _)')
+    return act(token, { boundS: 3 + 1.2 * 5 }, ctx => say(bot, ctx, a, { timeScale, limiter: chatLimiter }))
   }
 
   const bestFood = () => inventory()
@@ -917,7 +918,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         lastPos = target.entity.position.clone()
         if (moved > TELEPORT_BLOCKS) settleFromNow()
       },
-      chat: (from, message) => emit({ kind: 'chat', from, message }),
+      chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
       wake: () => emit({ kind: 'woke' }),
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return

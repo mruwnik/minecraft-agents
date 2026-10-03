@@ -557,7 +557,9 @@ test('fake craft cases', async () => {
     ['missing ingredients', crafting, { item: 'stick' }, { status: 'no-item', short: { oak_planks: 2 } }],
     ['no table near', { inventory: [{ name: 'wheat', count: 3 }] }, { item: 'bread' }, { status: 'unreachable', reason: 'no-table' }],
     ['table given but not a table', { inventory: [{ name: 'wheat', count: 3 }], blocks: table }, { item: 'bread', table: at(2, 64, 0) }, { status: 'unreachable', reason: 'not-a-table' }],
-    ['table given but far', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '9,64,0': 'crafting_table' } }, { item: 'bread', table: at(9, 64, 0) }, { status: 'unreachable', reason: 'too-far' }],
+    ['table given but far', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '9,64,0': 'crafting_table' } }, { item: 'bread', table: at(9, 64, 0) }, { status: 'out-of-reach', reason: 'too-far', table: at(9, 64, 0) }],
+    ['table known but far', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '20,64,0': 'crafting_table' } }, { item: 'bread' }, { status: 'out-of-reach', reason: 'too-far', table: at(20, 64, 0) }],
+    ['table beyond 32', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '40,64,0': 'crafting_table' } }, { item: 'bread' }, { status: 'unreachable', reason: 'no-table' }],
     ['table near', { inventory: [{ name: 'wheat', count: 3 }], blocks: table }, { item: 'bread' }, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } }],
     ['spec recipes merge', { inventory: [{ name: 'dirt', count: 1 }], recipes: { gravel: { count: 2, needs: { dirt: 1 } } } }, { item: 'gravel' }, { status: 'crafted', item: 'gravel', made: 2, used: { dirt: 1 } }],
     ['full', { inventory: [{ name: 'oak_log', count: 1 }, ...Array.from({ length: 35 }, (_, i) => ({ name: `junk${i}`, count: 1 }))] }, { item: 'oak_planks' }, { status: 'full', made: 0, used: {} }]

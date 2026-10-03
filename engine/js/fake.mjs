@@ -238,8 +238,10 @@ function defaultActs (s, emit) {
       const carried = (name) => s.inventory.filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
       const reachable = (pos) => blockName(pos) === 'crafting_table' && dist(s.self.pos, pos) <= CRAFT_REACH
       if (recipe.table && table && blockName(table) !== 'crafting_table') return { status: 'unreachable', reason: 'not-a-table' }
-      if (recipe.table && table && !reachable(table)) return { status: 'unreachable', reason: 'too-far' }
+      if (recipe.table && table && !reachable(table)) return { status: 'out-of-reach', reason: 'too-far', table: { x: table.x, y: table.y, z: table.z } }
       const tableNear = [...s.blocks.keys()].some(k => reachable(parseKey(k)))
+      const farTable = [...s.blocks.keys()].map(parseKey).filter(pos => blockName(pos) === 'crafting_table' && dist(s.self.pos, pos) <= 32).sort((a, b) => dist(s.self.pos, a) - dist(s.self.pos, b))[0]
+      if (recipe.table && !table && !tableNear && farTable) return { status: 'out-of-reach', reason: 'too-far', table: { x: farTable.x, y: farTable.y, z: farTable.z } }
       if (recipe.table && !table && !tableNear) return { status: 'unreachable', reason: 'no-table' }
       const shortOf = () => Object.fromEntries(Object.entries(recipe.needs).map(([n, c]) => [n, c - carried(n)]).filter(([, n]) => n > 0))
       if (Object.keys(shortOf()).length === 0 && s.inventory.length >= 36 && !carried(item)) return { status: 'full', made: 0, used: {} }

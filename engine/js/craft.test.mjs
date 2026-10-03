@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import { EventEmitter } from 'node:events'
 import assert from 'node:assert/strict'
 import { stubBot } from './stub-bot.mjs'
-import { craftItem, craftShortfall } from './craft.mjs'
+import { craftItem, craftShortfall, craftAlternatives } from './craft.mjs'
 
 const REG = {
   1: { id: 1, name: 'wheat', stackSize: 64 },
@@ -136,7 +136,9 @@ test('craftItem: explicit table position', async () => {
 
 const tableCases = [
   ['table recipe with no table', { item: 'bread' }, {}, { status: 'unreachable', reason: 'no-table' }],
-  ['table too far', { item: 'bread', table: { x: 9, y: 64, z: 0 } }, { '9,64,0': 'crafting_table' }, { status: 'unreachable', reason: 'too-far' }],
+  ['table too far', { item: 'bread', table: { x: 9, y: 64, z: 0 } }, { '9,64,0': 'crafting_table' }, { status: 'out-of-reach', reason: 'too-far', table: { x: 9, y: 64, z: 0 } }],
+  ['table known but out of reach', { item: 'bread' }, { '20,64,0': 'crafting_table' }, { status: 'out-of-reach', reason: 'too-far', table: { x: 20, y: 64, z: 0 } }],
+  ['table beyond 32 is not known', { item: 'bread' }, { '40,64,0': 'crafting_table' }, { status: 'unreachable', reason: 'no-table' }],
   ['table arg is not a table', { item: 'bread', table }, { '2,64,0': 'stone' }, { status: 'unreachable', reason: 'not-a-table' }]
 ]
 for (const [name, a, blocks, expected] of tableCases) {
@@ -147,15 +149,15 @@ for (const [name, a, blocks, expected] of tableCases) {
 }
 
 const shortCases = [
-  ['missing ingredients', [['wheat', 1]], { item: 'bread' }, { wheat: 2 }],
-  ['closest recipe wins (oak planks held)', [['oak_planks', 1]], { item: 'stick' }, { oak_planks: 1 }],
-  ['closest recipe wins (cherry planks held)', [['cherry_planks', 1]], { item: 'stick' }, { cherry_planks: 1 }],
-  ['nothing held', [], { item: 'stick' }, { oak_planks: 2 }]
+  ['missing ingredients', [['wheat', 1]], { item: 'bread' }, { wheat: 2 }, undefined],
+  ['closest recipe wins (oak planks held)', [['oak_planks', 1]], { item: 'stick' }, { oak_planks: 1 }, { oak_planks: ['cherry_planks'] }],
+  ['closest recipe wins (cherry planks held)', [['cherry_planks', 1]], { item: 'stick' }, { cherry_planks: 1 }, { cherry_planks: ['oak_planks'] }],
+  ['nothing held', [], { item: 'stick' }, { oak_planks: 2 }, { oak_planks: ['cherry_planks'] }]
 ]
-for (const [name, held, a, short] of shortCases) {
+for (const [name, held, a, short, alternatives] of shortCases) {
   test(`craftItem: no-item, ${name}`, async () => {
     const { bot } = setup({ items: inv(...held), blocks: tableBlocks })
-    assert.deepEqual(await craftItem(bot, ctx, a, opts), { status: 'no-item', short })
+    assert.deepEqual(await craftItem(bot, ctx, a, opts), { status: 'no-item', short, ...(alternatives && { alternatives }) })
   })
 }
 
@@ -233,3 +235,76 @@ const shortfallCases = [
 for (const [name, recipes, have, expected] of shortfallCases) {
   test(`craftShortfall: ${name}`, () => assert.deepEqual(craftShortfall(recipes, have), expected))
 }
+
+test('craftItem: count is items wanted, rounded up to whole batches', async () => {
+  const { bot } = setup({ items: inv(['oak_log', 1]) })
+  const r = await craftItem(bot, ctx, { item: 'oak_planks', count: 1 }, opts)
+  assert.deepEqual(r, { status: 'crafted', item: 'oak_planks', made: 4, used: { oak_log: 1 } })
+})
+
+test('craftItem: never chains recipes', async () => {
+  const { bot } = setup({ items: inv(['oak_log', 1]) })
+  const r = await craftItem(bot, ctx, { item: 'stick' }, opts)
+  assert.deepEqual(r, { status: 'no-item', short: { oak_planks: 2 }, alternatives: { oak_planks: ['cherry_planks'] } })
+})
+
+const pickaxe = [{ deepslate: 3, stick: 2 }, { blackstone: 3, stick: 2 }, { cobblestone: 3, stick: 2 }]
+
+const preferenceCases = [
+  ['deepslate, blackstone, cobblestone order', pickaxe, { stick: 2 }, { cobblestone: 3 }],
+  ['held stick still prefers cobblestone', pickaxe, { stick: 2 }, { cobblestone: 3 }],
+  ['a closer recipe beats preference', pickaxe, { stick: 2, blackstone: 1 }, { blackstone: 2 }]
+]
+for (const [name, recipes, have, expected] of preferenceCases) {
+  test(`craftShortfall: ${name}`, () => assert.deepEqual(craftShortfall(recipes, have), expected))
+}
+
+test('craftAlternatives: the cousins of the missing name', () => {
+  assert.deepEqual(craftAlternatives(pickaxe, { stick: 2 }), { cobblestone: ['deepslate', 'blackstone'] })
+})
+
+test('craftAlternatives: none when the recipes agree', () => {
+  assert.deepEqual(craftAlternatives([{ a: 1 }], {}), {})
+})
+
+const clickStub = (items, bot) => {
+  let cursor = null
+  bot.clickWindow = async slot => {
+    const here = items.find(i => i.slot === slot)
+    if (!cursor) {
+      items.splice(items.indexOf(here), 1)
+      cursor = here
+    } else if (!here) {
+      items.push({ ...cursor, slot })
+      cursor = null
+    } else {
+      const moved = Math.min(cursor.count, 64 - here.count)
+      here.count += moved
+      cursor = cursor.count > moved ? { ...cursor, count: cursor.count - moved } : null
+    }
+    bot.inventory.selectedItem = cursor
+  }
+}
+
+test('craftItem: the result stacks are merged into one', async () => {
+  const { bot, items } = setup({ items: inv(['bread', 34], ['bread', 1], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
+  clickStub(items, bot)
+  const r = await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } })
+  assert.deepEqual(items.filter(i => i.name === 'bread').map(i => i.count), [37])
+})
+
+test('craftItem: a merge error still returns crafted', async () => {
+  const { bot } = setup({ items: inv(['bread', 34], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
+  bot.clickWindow = async () => { throw new Error('window gone') }
+  const r = await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } })
+})
+
+test('craftItem: no merge while another window is open', async () => {
+  const { bot, items } = setup({ items: inv(['bread', 34], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
+  clickStub(items, bot)
+  bot.currentWindow = { other: true }
+  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.equal(items.filter(i => i.name === 'bread').length, 2)
+})

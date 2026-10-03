@@ -12,10 +12,33 @@ const missingFor = (recipe, have) => Object.fromEntries(
   Object.entries(recipe).map(([name, n]) => [name, n - (have[name] ?? 0)]).filter(([, n]) => n > 0)
 )
 
-// the missing ingredients of whichever recipe is closest to being satisfied
-export const craftShortfall = (recipes, have) => recipes
-  .map(r => missingFor(r, have))
-  .reduce((best, m) => (best === null || total(m) < total(best) ? m : best), null) ?? {}
+// the common base items, earliest first: when recipes tie on what is missing, the one asking for these wins
+export const PREFERRED = ['cobblestone', 'oak_planks', 'oak_log', 'stick', 'iron_ingot', 'string', 'coal', 'wheat', 'diamond', 'gold_ingot', 'redstone', 'leather', 'sand', 'dirt']
+
+const rankOf = missing => Math.min(...Object.keys(missing).map(n => {
+  const i = PREFERRED.indexOf(n)
+  return i < 0 ? Infinity : i
+}))
+
+const closer = (a, b) => total(a.missing) < total(b.missing) || (total(a.missing) === total(b.missing) && rankOf(a.missing) < rankOf(b.missing))
+
+// the recipe closest to being satisfied, with what it is missing
+const closest = (recipes, have) => recipes
+  .map(recipe => ({ recipe, missing: missingFor(recipe, have) }))
+  .reduce((best, c) => (best === null || closer(c, best) ? c : best), null)
+
+export const craftShortfall = (recipes, have) => closest(recipes, have)?.missing ?? {}
+
+// for each missing name of the chosen recipe, the names the other recipes use instead of it
+export const craftAlternatives = (recipes, have) => {
+  const chosen = closest(recipes, have)
+  if (!chosen) return {}
+  const others = recipes.filter(r => r !== chosen.recipe)
+  const cousins = name => [...new Set(others
+    .filter(r => !(name in r))
+    .flatMap(r => Object.keys(r).filter(n => !(n in chosen.recipe))))]
+  return Object.fromEntries(Object.keys(chosen.missing).map(n => [n, cousins(n)]).filter(([, c]) => c.length > 0))
+}
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -37,19 +60,31 @@ const findTable = (bot, reach) => bot.findBlocks({ matching: isTable, maxDistanc
   .map(pos => bot.blockAt(pos))
   .find(b => isTable(b) && eyeDistance(bot, b) <= reach) ?? null
 
-// { table } (a block or null) or { error } (an unreachable result)
+const posOf = block => ({ x: block.position.x, y: block.position.y, z: block.position.z })
+
+// { table } (a block or null) or { error } (an unreachable or out-of-reach result)
 const resolveTable = (bot, a, reach) => {
   if (!a.table) return { table: findTable(bot, reach) }
   const block = bot.blockAt(new Vec3(a.table.x, a.table.y, a.table.z))
   if (!isTable(block)) return { error: { status: 'unreachable', reason: 'not-a-table' } }
-  if (eyeDistance(bot, block) > reach) return { error: { status: 'unreachable', reason: 'too-far' } }
+  if (eyeDistance(bot, block) > reach) return { error: { status: 'out-of-reach', reason: 'too-far', table: posOf(block) } }
   return { table: block }
 }
 
-const shortOf = (bot, id, table) => craftShortfall(
-  bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r)),
-  carriedCounts(bot)
-)
+// no table in reach: the nearest known one (out of reach), or none
+const missingTable = bot => {
+  const pos = bot.findBlocks({ matching: isTable, maxDistance: 32, count: 1 })[0]
+  return pos
+    ? { status: 'out-of-reach', reason: 'too-far', table: { x: pos.x, y: pos.y, z: pos.z } }
+    : { status: 'unreachable', reason: 'no-table' }
+}
+
+const shortOf = (bot, id, table) => {
+  const recipes = bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r))
+  const have = carriedCounts(bot)
+  const alternatives = craftAlternatives(recipes, have)
+  return { short: craftShortfall(recipes, have), ...(Object.keys(alternatives).length > 0 && { alternatives }) }
+}
 
 const hasRoom = (bot, item, perBatch) => {
   if (bot.inventory.emptySlotCount() > 0) return true
@@ -103,6 +138,50 @@ const usedSince = (bot, before, names) => Object.fromEntries(
   [...names].map(n => [n, Math.max(0, (before[n] ?? 0) - (carriedCounts(bot)[n] ?? 0))]).filter(([, n]) => n > 0)
 )
 
+const made0 = (bot, item, start) => (carriedCounts(bot)[item] ?? 0) - start
+
+const closedWindow = bot => !bot.currentWindow || bot.currentWindow === bot.inventory
+
+// a click that reports whether it worked: merging is cosmetic, so a failed click just stops it
+async function click (bot, slot) {
+  try {
+    await bot.clickWindow(slot, 0, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const partialStacks = (bot, item) => {
+  const stackSize = bot.registry.itemsByName[item].stackSize ?? 64
+  return bot.inventory.items().filter(i => i.name === item && i.count < stackSize).sort((a, b) => a.count - b.count)
+}
+
+// move the smallest non-full stack onto the largest; true when both clicks worked
+async function mergeOnce (bot, ctx, item) {
+  const stacks = partialStacks(bot, item)
+  if (stacks.length < 2) return false
+  const from = stacks[0].slot
+  const picked = await click(bot, from)
+  ctx.alive()
+  if (!picked) return false
+  const dropped = await click(bot, stacks.at(-1).slot)
+  ctx.alive()
+  if (!dropped || bot.inventory.selectedItem) {
+    await click(bot, from)
+    ctx.alive()
+  }
+  return dropped
+}
+
+// the server-sent result stacks do not join mineflayer's own, so a craft can leave 35+1+1+1: put them together.
+// At most 8 merges; returns how many happened.
+async function mergeStacks (bot, ctx, item) {
+  let merged = 0
+  while (merged < 8 && await mergeOnce(bot, ctx, item)) merged++
+  return merged
+}
+
 export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {}) {
   const item = a.item
   const count = a.count ?? 1
@@ -115,7 +194,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
   const found = resolveTable(bot, a, reach)
   if (found.error) return found.error
   const table = found.table
-  if (!table && bot.recipesAll(id, null, null).length === 0) return { status: 'unreachable', reason: 'no-table' }
+  if (!table && bot.recipesAll(id, null, null).length === 0) return missingTable(bot)
 
   ctx.onAbort(() => { if (bot.currentWindow) bot.closeWindow(bot.currentWindow) })
 
@@ -124,7 +203,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
   const names = new Set()
   const maxAttempts = Math.ceil(count / all[0].result.count) + 3
   let reason = null
-  let short = null
+  let shortage = null
   let full = false
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -134,7 +213,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
     if (!r) {
       await settle(bot, ctx, timeScale)
       if (bot.recipesFor(id, null, 1, table)[0]) continue
-      short = shortOf(bot, id, table)
+      shortage = shortOf(bot, id, table)
       break
     }
     if (!hasRoom(bot, item, r.result.count)) { full = true; break }
@@ -153,10 +232,11 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
   }
 
   await settle(bot, ctx, timeScale)
+  if (made0(bot, item, start) > 0 && closedWindow(bot) && await mergeStacks(bot, ctx, item) > 0) await settle(bot, ctx, timeScale)
   const made = (carriedCounts(bot)[item] ?? 0) - start
   const used = usedSince(bot, before, names)
   if (made >= count) return { status: 'crafted', item, made, used }
-  if (short) return made > 0 ? { status: 'partial', item, made, used, reason: 'no-item', short } : { status: 'no-item', short }
+  if (shortage) return made > 0 ? { status: 'partial', item, made, used, reason: 'no-item', ...shortage } : { status: 'no-item', ...shortage }
   if (full) return made > 0 ? { status: 'partial', item, made, used, reason: 'full' } : { status: 'full', made, used }
   const why = reason ?? 'server rejected the craft'
   return made > 0 ? { status: 'partial', item, made, used, reason: why } : { status: 'failed', item, made: 0, used, reason: why }
