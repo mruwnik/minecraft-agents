@@ -1,13 +1,16 @@
 ;; shadow-cljs builds for the body engine. See README.md.
+;; Both builds run from `compile` (never :advanced), so externs inference is off.
 {:source-paths ["src" "test"]
  :dependencies []
  :builds
  {:body {:target :node-script
          :main engine.main/main
          :output-to "out/body.cjs"
-         :output-dir "out/body"}
+         :output-dir "out/body"
+         :compiler-options {:infer-externs false}}
   :test {:target :node-test
          :output-to "out/test.cjs"
          :output-dir "out/test"
          :ns-regexp "-test$"
-         :autorun false}}}
+         :autorun false
+         :compiler-options {:infer-externs false}}}}
