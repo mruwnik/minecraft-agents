@@ -286,3 +286,76 @@ Either way, still to do:
 - Choose the agent from the dashboard's agent list.
 - Close the EventSource when the panel unmounts.
 - Make the radius and resolution settings per panel.
+
+## Blocks the view draws wrong
+
+The page draws every block state from one row of the material table (`tools/view/materials.mjs`): a kind (cube, box,
+cross, water, lava), a texture per face, a box. That table is a guess from collision shapes and texture names, not the game's
+visual model, so some blocks come out wrong. A durable list of them lives in `state/worlds/<world>/view-block-issues.json`,
+so the owner can fix them later. Nothing in it is fixed automatically.
+
+**How it is made.** `tools/view/block-issues.mjs` (pure) compares each block's material with its real model, read from the
+client jar (`tools/view/block-models.mjs`: `blockstates/<name>.json` and `models/block/*.json`, parents followed; the jar is
+`$MC_CLIENT_JAR`, else the newest release the launcher installed, as for `tools/textures.mjs`). One record per block name and
+reason: `{ name, reason, severity, drawnAs, drawnVariants?, detail, model?, parents?, ignored?, example: { stateId, props }, states, statesTotal, seen, firstSeen, positions? }`. `states` of `statesTotal` is how many states the record is true for; `drawnAs` is the first affected state's picture and `drawnVariants` counts them all when there are several; `model` and `parents` are the model id and its parent chain; `ignored` lists the ignored properties. Severity is `missing` (the block vanishes or is a hash colour), `wrong` (reads as a different thing) or `approximate` (right place and colour, simplified shape); each reason has a default and a record can be milder (upright planes drawn as a cross, an untinted overlay, a lectern's book). The route and the file sort by severity, then seen, then name. The reasons:
+
+| reason | meaning |
+| --- | --- |
+| `unknown-state` | state ids in a column that are past the table or in no block; the page draws them as air. One record per contiguous id range (name `state:<lo>-<hi>`) with up to 5 positions in `positions`. The dump stores ids (prismarine's section palette), not names |
+| `no-texture` | a face found no texture file, so it is a flat colour (hash of the name) |
+| `shape-mismatch` | drawn as cross, cube or box, but the model is something else (leaf litter, pink petals and wildflowers are flat multi-part models; torches, signs and levers are crosses) |
+| `shape-approximated` | a box (or cube) for a model with several elements (stairs, fences, panes, cauldrons, the grass block's overlay) |
+| `tint-missing` | model faces carry a `tintindex` but `tintOf` (src/vision/renderer.mjs) has no tint for the texture, so a grey colormap texture stays grey |
+| `state-ignored` | the blockstate depends on properties (facing, half, segment_amount, ...) that give every value the same material |
+| `block-entity` | the model has no elements (particle-only or `builtin/entity`): chests, beds, signs, banners, heads, shulker boxes, decorated pots, conduit, bell. Lectern, enchanting table and campfires have geometry and are listed by name, as `approximate` |
+| `no-model-data` | no blockstate in the jar (block newer than the jar), or no jar at all (one record named `*` says so; only `no-texture` is then reported) |
+
+`cross` means the model's parent chain reaches `block/cross`, `block/tinted_cross` or `block/flower_pot_cross`; `cube` means one
+unrotated 0..16 element; anything else is complex. Not handled: crop-style models (wheat, carrots: four planes) count as complex,
+so they are `shape-mismatch` although a cross is a fair picture; element rotation, `display`, models built in code
+(`builtin/entity`), and a property that matters only for some values. A property counts as honoured when two states differing
+only in it get different materials, so a property that changes the texture but not the table is a false `state-ignored`.
+
+**Seen in the world.** `tools/view/block-scan.mjs` counts, per column file, how many blocks of each flagged name occur and where
+the first one is (`firstSeen: { world, x, y, z, agent }`, the agent being the column header's `body`). It runs in a worker
+thread (`block-scan-worker.mjs`), started the first time a world is requested through the route or streamed through `/pose`;
+it scans every `chunks/*.bin` once, then rescans the columns whose mtime changed (a directory watch, with a 5 s mtime sweep as
+the fallback). Each column keeps its own contribution, so a rewritten column replaces its counts. State ids at or above the
+table's size count under `state:<id>`. Columns dumped with a different `mcVersion` from the world's first column are decoded
+with the first one's format, which is wrong; mixed-version worlds are not handled.
+
+**Files and routes.** The file is `{ version, mcVersion, jar, updatedAt, scan, records }`, `jar` being the jar's file name or
+null, written atomically (tmp + rename) at most every 5 s and only when the records changed. It is bounded by construction:
+one record per name and reason. `GET /block-issues/<world>` returns the same JSON, records sorted by seen (descending) then
+name; the first call for a world waits for the initial scan (unless the file is already there), and the world must have a
+`chunks/` directory.
+
+**`?debug=1` / `?debug=2`.** `http://host:port/?agent=<Name>&debug=1` asks for `/blocks/<version>.json?debug=1`, whose materials carry
+`issue` (the worst severity of their block: missing, wrong or approximate). The renderer draws materials whose issue is
+missing or wrong as a magenta/black checker (squares two texels wide); `debug=2` also draws the approximate ones. Without
+the parameter nothing changes.
+
+`tint-missing` fires only for blocks on a hard-coded list of the game's colour-provider registrations (`TINTED_BLOCKS` in
+block-issues.mjs), written from memory of BlockColors and possibly incomplete for 26.1: a `tintindex` in a model does not mean
+the game tints the block (cherry leaves, bamboo). `bubble_column` is reported as a wrong shape (the game draws water);
+`moving_piston` is never reported.
+
+**What this cannot detect**, and how one would find it:
+- *Cutout or alpha drawn black.* A texture whose transparent pixels render black or opaque shows no sign in the model data.
+  Render each block state alone in a fixture grid (`tools/view/fixture.mjs`) and compare against a reference screenshot of the
+  game, or flag textures with alpha between 0 and 255 whose material has no CUTOUT or TRANSLUCENT flag.
+- *Plausible but wrong colours.* Biome tints are one fixed colour each (temperate); the tint table has no colormaps, so a
+  block with a tint entry is never flagged although swamp, desert and ocean differ. Compare against screenshots in several
+  biomes, or read `tintindex` users in `models/block` and check each against the colormap it should use.
+- *Animated textures.* Water, lava, fire, portals, sea lanterns, magma and prismarine show their first frame. List every
+  texture with a `.png.mcmeta` beside it in the jar.
+- *Block entities the game draws with entity renderers.* Chests, signs, beds, banners, heads, shulker boxes, decorated pots,
+  bells, conduits: their blockstate model is `builtin/entity` or only a particle, so most are `no-texture`, `shape-mismatch` or a
+  plank stand-in. List blocks whose resolved model has no elements, or that have a block entity in the registry, and screenshot them.
+- *Emissive and glow differences.* Only the registry's `emitLight` and `lit` set the EMISSIVE flag; blocks that glow in game
+  without light emission (glow lichen's face, ochre froglight) are not compared. Diff the light levels against the game's.
+- *Blocks newer than the jar.* A jar older than the server's version has no blockstate for them (`no-model-data`), and a block
+  the jar knows but the registry does not never appears. Run the classifier with the jar of the server's version.
+- *Model rules the classifier does not handle* (above). To find them, list the blocks that have a blockstate and a model but
+  where the rules gave no verdict they could defend: models with `rotation` on an element, parents outside `block/*`, `display`
+  only models; or render every state in a fixture grid and diff against the game, which is the only complete check.

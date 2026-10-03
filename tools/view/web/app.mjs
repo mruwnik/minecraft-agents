@@ -29,6 +29,10 @@ const maxDist = numberParam('dist', radius * 16)
 const fixedWidth = params.has('w') ? Math.round(numberParam('w', 0)) : null
 const fixedHeight = params.has('h') ? Math.round(numberParam('h', 0)) : null
 const interpOn = params.get('interp') !== '0'
+// ?debug=1 checkers blocks the view draws missing or wrong, ?debug=2 also the approximate ones (tools/view/block-issues.mjs)
+const debugLevel = { 1: 1, 2: 2 }[params.get('debug')] ?? 0
+const debugOn = debugLevel > 0
+const ISSUE_LEVELS = ['missing', 'wrong', 'approximate']
 const interp = poseInterpolator()
 const N = 2 * radius + 1
 
@@ -71,6 +75,7 @@ const state = {
 }
 
 const gfx = createRenderer(canvas)
+gfx.setDebug(debugOn)
 const decoder = createDecoder({
   makeWorker: params.get('worker') === '0' ? null : undefined, // ?worker=0 decodes on the main thread
   priority: key => state.columns.get(key)?.dist ?? Infinity
@@ -86,13 +91,13 @@ const decodeBase64U16 = text => {
 }
 
 const loadTable = async version => {
-  const [res, texRes] = await Promise.all([fetch(`/blocks/${version}.json`), fetch(`/textures/${version}.bin`)])
+  const [res, texRes] = await Promise.all([fetch(`/blocks/${version}.json${debugOn ? `?debug=${debugLevel}` : ''}`), fetch(`/textures/${version}.bin`)])
   if (!res.ok) throw new Error(`blocks table for ${version}: HTTP ${res.status}`)
   if (!texRes.ok) throw new Error(`textures for ${version}: HTTP ${texRes.status}`)
   const [json, bytes] = await Promise.all([res.json(), texRes.arrayBuffer()])
   state.table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
   decoder.setTable({ format: json.format, materialOf: state.table.materialOf })
-  gfx.setMaterials(json.materials)
+  gfx.setMaterials(json.materials.map(m => ({ ...m, issue: ISSUE_LEVELS.indexOf(m.issue) >= 0 && ISSUE_LEVELS.indexOf(m.issue) <= debugLevel })))
   gfx.setTextures({ bytes: new Uint8Array(bytes), layers: json.textures.names.length, size: json.textures.size, levels: json.textures.levels })
 }
 

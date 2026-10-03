@@ -5,6 +5,7 @@ import { SHADING_GLSL } from './shading.mjs'
 export const MAX_ENTITIES = 64
 export const KINDS = { cube: 0, box: 1, cross: 2, water: 3, lava: 4 }
 const MATERIAL_COLUMNS = 4 // top, side, bottom, kind
+const ISSUE_FLAG = 64 // the table's `issue` as a material flag, read by debugColor in the shader
 const INFO_TEXELS = 4 // per material: layers+kind, flags+emit, box min, box max
 
 const VERTEX = `#version 300 es
@@ -36,6 +37,7 @@ uniform ivec3 uSize;
 uniform ivec2 uSlotOff;
 uniform float uDist;
 uniform float uDarken;
+uniform int uDebug;
 uniform int uEntCount;
 uniform vec3 uEntMin[${MAX_ENTITIES}];
 uniform vec3 uEntMax[${MAX_ENTITIES}];
@@ -47,6 +49,14 @@ ${SHADING_GLSL}
 const uint CUTOUT = 1u;
 const uint TRANSLUCENT = 2u;
 const uint EMISSIVE = 16u;
+const uint ISSUE = 64u;
+
+// ?debug=1: a material the view draws wrong (flag set from the table's issue field) is a magenta/black checker, two texels a square
+vec3 debugColor (vec3 col, uint flags, vec2 uv) {
+  if (uDebug == 0 || (flags & ISSUE) == 0u) return col;
+  vec2 q = floor(uv * 8.0);
+  return mod(q.x + q.y, 2.0) < 1.0 ? vec3(1.0, 0.0, 1.0) : vec3(0.0);
+}
 
 bool inWindow (ivec3 c) {
   return all(greaterThanEqual(c, ivec3(0))) && all(lessThan(c, uSize));
@@ -245,7 +255,8 @@ void main () {
           if (textured && crossHit(lo, dd, t, i0.y, sHit, rgb)) {
             hit = true;
             tHit = sHit;
-            hitCol = rgb;
+            vec3 crossAt = lo + dd * sHit;
+            hitCol = debugColor(rgb, flags, vec2(crossAt.x, 1.0 - crossAt.y));
             hitCell = cell;
             hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
             break;
@@ -274,7 +285,7 @@ void main () {
           } else if (!(textured && (flags & 1u) != 0u && tex.a < 0.5)) {
             hit = true;
             tHit = ht;
-            hitCol = tex.rgb * shade;
+            hitCol = debugColor(tex.rgb, flags, uv) * shade;
             hitCell = cell;
             hitAxis = hAxis;
             hitSign = stepSign;
@@ -370,7 +381,7 @@ export const materialInfo = materials => {
   const data = new Uint16Array(materials.length * INFO_TEXELS * 4)
   materials.forEach((m, row) => {
     const [x0, y0, z0, x1, y1, z1] = m.box ?? [0, 0, 0, 16, 16, 16]
-    data.set([...(m.tex ?? [-1, -1, -1]).map(l => l + 1), KINDS[m.kind] ?? 0, m.flags ?? 0, m.emit ?? 0, 0, 0, x0, y0, z0, 0, x1, y1, z1, 0], row * INFO_TEXELS * 4)
+    data.set([...(m.tex ?? [-1, -1, -1]).map(l => l + 1), KINDS[m.kind] ?? 0, (m.flags ?? 0) | (m.issue ? ISSUE_FLAG : 0), m.emit ?? 0, 0, 0, x0, y0, z0, 0, x1, y1, z1, 0], row * INFO_TEXELS * 4)
   })
   return data
 }
@@ -387,7 +398,7 @@ export function createRenderer (canvas) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -402,6 +413,7 @@ export function createRenderer (canvas) {
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR)
   let world = null
   let lodMax = 0
+  let debug = false
 
   const setMaterials = materials => {
     gl.activeTexture(gl.TEXTURE2)
@@ -487,6 +499,7 @@ export function createRenderer (canvas) {
     gl.uniform2i(uniform.uSlotOff, slotOff.x, slotOff.z)
     gl.uniform1f(uniform.uDist, dist)
     gl.uniform1f(uniform.uDarken, darken)
+    gl.uniform1i(uniform.uDebug, debug ? 1 : 0)
     gl.uniform1i(uniform.uEntCount, count)
     gl.uniform3fv(uniform.uEntMin, flat('min'))
     gl.uniform3fv(uniform.uEntMax, flat('max'))
@@ -499,5 +512,6 @@ export function createRenderer (canvas) {
     gl.clear(gl.COLOR_BUFFER_BIT)
   }
 
-  return { renderer, setMaterials, setTextures, allocate, uploadColumn, clearSlot, resize, draw, clear, finish: () => gl.finish(), isAllocated: () => world !== null }
+  const setDebug = on => { debug = on }
+  return { renderer, setDebug, setMaterials, setTextures, allocate, uploadColumn, clearSlot, resize, draw, clear, finish: () => gl.finish(), isAllocated: () => world !== null }
 }

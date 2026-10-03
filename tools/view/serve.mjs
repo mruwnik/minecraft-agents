@@ -7,6 +7,8 @@ import path from 'node:path'
 import { textureBytes } from './materials.mjs'
 import { columnFormat } from './web-format.mjs'
 import { createDriveProxy } from './drive-proxy.mjs'
+import { SEVERITIES } from './block-issues.mjs'
+import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
@@ -45,7 +47,9 @@ const sendFile = async (res, file, contentType) => {
   }
 }
 
-export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250 }) {
+export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250, blockJar, blockSweepMs = 5000, blockWriteMs = 5000 }) {
+  const jarPath = blockJar === undefined ? findClientJar() : blockJar
+  const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
   const driveProxy = createDriveProxy({ stateDir })
   const agentFile = (name, file) => path.join(stateDir, 'agents', name, 'view', file)
   const builds = new Map()
@@ -56,6 +60,30 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const build = { table: JSON.stringify({ ...table, format: columnFormat(version) }), textures: Buffer.from(textures.bytes) }
     builds.set(version, build)
     return build
+  }
+
+  // ?debug=1 or 2: the table with `issue` (the worst severity) on every material whose block the view draws wrong (tools/view/block-issues.mjs)
+  const debugTables = new Map()
+  const debugTableFor = version => {
+    if (debugTables.has(version)) return debugTables.get(version)
+    const table = JSON.parse(buildFor(version).table)
+    const { records } = classifyReal({ version, textureDir, jarPath, table })
+    const worst = new Map() // block name -> its worst severity
+    const rank = severity => SEVERITIES.indexOf(severity)
+    for (const { name, severity } of records) if (!worst.has(name) || rank(severity) < rank(worst.get(name))) worst.set(name, severity)
+    const text = JSON.stringify({ ...table, materials: table.materials.map(m => worst.has(m.name) ? { ...m, issue: worst.get(m.name) } : m) })
+    debugTables.set(version, text)
+    return text
+  }
+
+  const sendBlockIssues = async (res, world) => {
+    scanner.track(world)
+    const held = scanner.peek(world)
+    const file = path.join(stateDir, 'worlds', world, 'view-block-issues.json')
+    const stored = held ? null : await readJson(file)
+    const payload = held ?? stored ?? await scanner.latest(world)
+    if (!payload) return notFound(res)
+    send(res, 200, JSON.stringify(payload), { 'Content-Type': TYPES['.json'] })
   }
 
   const listAgents = async res => {
@@ -104,6 +132,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const streamAgent = async (req, res, name, radius) => {
     const first = await readJson(agentFile(name, 'pose.json'))
     if (!first) return notFound(res)
+    scanner.track(first.world)
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     let closed = false
     const emit = (event, data) => closed || res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
@@ -195,22 +224,28 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))
       return streamAgent(req, res, rest[0], radius)
     }
+    if (head === 'block-issues' && rest.length === 1 && NAME.test(rest[0])) return sendBlockIssues(res, rest[0])
     if (head === 'hud' && rest.length === 1 && NAME.test(rest[0])) return sendFile(res, agentFile(rest[0], 'hud.json'), TYPES['.json'])
     if (head === 'columns' && rest.length === 2 && NAME.test(rest[0]) && COLUMN_FILE.test(rest[1])) {
       return sendFile(res, path.join(stateDir, 'worlds', rest[0], 'chunks', rest[1]), 'application/octet-stream')
     }
     const versionOf = (dir, ext) => head === dir && rest.length === 1 ? new RegExp(`^([0-9.]+)\\.${ext}$`).exec(rest[0])?.[1] : null
     const tableVersion = versionOf('blocks', 'json')
-    if (tableVersion && VERSION.test(tableVersion)) return send(res, 200, buildFor(tableVersion).table, { 'Content-Type': 'application/json' })
+    if (tableVersion && VERSION.test(tableVersion)) {
+      const table = ['1', '2'].includes(url.searchParams.get('debug')) ? debugTableFor(tableVersion) : buildFor(tableVersion).table
+      return send(res, 200, table, { 'Content-Type': 'application/json' })
+    }
     const textureVersion = versionOf('textures', 'bin')
     if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
     notFound(res)
   }
 
-  return http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     route(req, res).catch(error => {
       if (res.headersSent) return res.end()
       send(res, 500, String(error.message), { 'Content-Type': 'text/plain' })
     })
   })
+  server.on('close', scanner.stop)
+  return server
 }

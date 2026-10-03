@@ -5,7 +5,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import zlib from 'node:zlib'
 import { createViewServer } from '../tools/view/serve.mjs'
+import { makeChunkClass } from '../tools/view/columns.mjs'
 
 const realTextures = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-'))
@@ -61,7 +63,7 @@ before(async () => {
   fs.writeFileSync(path.join(webDir, 'index.html'), '<h1>hi</h1>')
   fs.writeFileSync(path.join(webDir, 'x.mjs'), 'export const x = 1')
   fs.writeFileSync(path.join(webDir, 'secret.txt'), 'no')
-  server = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 50 })
+  server = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 50, blockJar: null, blockSweepMs: 100, blockWriteMs: 100 })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${server.address().port}`
 })
@@ -272,4 +274,76 @@ test('a column replaced by rename reaches the stream within 100 ms with the poll
   watched.close()
   assert.deepEqual(events.filter(e => e.event === 'column').map(e => e.data), [{ cx: 1, cz: 0, mtime: 4000 * 1000 }])
   assert.ok(seenAt - wroteAt < 100, `took ${seenAt - wroteAt} ms`)
+})
+
+// ---- /block-issues: the blocks the view draws wrong, counted in the world's column files ----
+
+const MC_VERSION = '1.21.4'
+const Chunk = makeChunkClass(MC_VERSION)
+const sand = Chunk.registry.blocksByName.suspicious_sand.defaultState
+const gravel = Chunk.registry.blocksByName.suspicious_gravel.defaultState
+
+// the column file format v1 around a column holding `blocks`: [[x, y, z, stateId]...] (local x and z)
+const columnFile = ({ cx, cz, body, blocks }) => {
+  const column = new Chunk({ minY: -64, worldHeight: 384 })
+  blocks.forEach(([x, y, z, id]) => column.setBlockStateId({ x, y, z }, id))
+  const sections = column.dump()
+  const header = Buffer.from(JSON.stringify({ v: 1, x: cx, z: cz, t: 1, body, mcVersion: MC_VERSION, minY: -64, worldHeight: 384, parts: [{ name: 'sections', len: sections.length }] }))
+  const length = Buffer.alloc(4)
+  length.writeUInt32LE(header.length)
+  return zlib.deflateSync(Buffer.concat([length, header, sections]))
+}
+
+const until = async (read, ms = 4000) => {
+  const deadline = Date.now() + ms
+  let value = await read()
+  while (!value && Date.now() < deadline) {
+    await sleep(50)
+    value = await read()
+  }
+  return value
+}
+const issuesOf = async world => (await get(`/block-issues/${world}`)).json()
+const recordOf = (body, name) => body.records.find(r => r.name === name && r.reason === 'no-texture')
+
+test('GET /block-issues counts flagged blocks per name, with the first position and the agent, sorted by seen', async () => {
+  const dir = path.join(stateDir, 'worlds', 'w2', 'chunks')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, '2.-1.bin'), columnFile({ cx: 2, cz: -1, body: 'Ann', blocks: [[1, 70, 2, sand], [5, 71, 2, sand], [5, 72, 2, sand], [6, 70, 6, gravel], [7, 70, 6, gravel]] }))
+  const body = await issuesOf('w2')
+  assert.equal(body.version, 1)
+  assert.equal(body.jar, null)
+  assert.equal(recordOf(body, 'suspicious_sand').seen, 3)
+  assert.deepEqual(recordOf(body, 'suspicious_sand').firstSeen, { world: 'w2', x: 33, y: 70, z: -14, agent: 'Ann' })
+  assert.equal(recordOf(body, 'suspicious_gravel').seen, 2)
+  const seen = body.records.map(r => r.seen)
+  assert.deepEqual(seen, [...seen].sort((a, b) => b - a))
+  assert.ok(await until(() => fs.existsSync(path.join(stateDir, 'worlds', 'w2', 'view-block-issues.json'))))
+  assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, 'worlds', 'w2', 'view-block-issues.json'), 'utf8')).records.find(r => r.name === 'suspicious_sand').seen, 3)
+})
+
+test('rewriting a column replaces its counts instead of adding to them', async () => {
+  const file = path.join(stateDir, 'worlds', 'w2', 'chunks', '2.-1.bin')
+  fs.writeFileSync(file, columnFile({ cx: 2, cz: -1, body: 'Ann', blocks: [[3, 80, 3, sand]] }))
+  fs.utimesSync(file, 5000, 5000)
+  const sandNow = await until(async () => (await issuesOf('w2')).records.find(r => r.name === 'suspicious_sand')?.seen === 1)
+  assert.ok(sandNow)
+  const body = await issuesOf('w2')
+  assert.equal(recordOf(body, 'suspicious_gravel').seen, 0)
+  assert.deepEqual(recordOf(body, 'suspicious_sand').firstSeen, { world: 'w2', x: 35, y: 80, z: -13, agent: 'Ann' })
+})
+
+test('GET /block-issues for a world without columns is 404', async () => {
+  assert.equal((await get('/block-issues/nothere')).status, 404)
+  assert.equal((await get('/block-issues/..%2Fw2')).status, 404)
+})
+
+test('GET /blocks?debug=1 marks a material with the worst severity of its block, and the plain table has no issue field', async () => {
+  const plain = await (await get('/blocks/1.21.4.json')).json()
+  const debug = await (await get('/blocks/1.21.4.json?debug=1')).json()
+  const issueOf = (table, name) => [...new Set(table.materials.filter(m => m.name === name).map(m => m.issue))]
+  assert.deepEqual(issueOf(plain, 'suspicious_sand'), [undefined])
+  assert.deepEqual(issueOf(debug, 'suspicious_sand'), ['missing'])
+  assert.deepEqual(issueOf(debug, 'stone'), [undefined])
+  assert.deepEqual((await (await get('/blocks/1.21.4.json?debug=2')).json()).materials, debug.materials)
 })
