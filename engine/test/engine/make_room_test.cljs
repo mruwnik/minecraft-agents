@@ -192,7 +192,8 @@
           (know-chest! eng {:x 50 :y 64 :z 0})
           (await (run-reflex eng {} {}))
           (is (= 0 (count (calls p "transfer"))))
-          (is (= 3 (count (calls p "toss"))) "35 stacks to 4 free slots: three tosses"))))))
+          (is (= 3 (count (calls p "toss"))) "35 stacks to 4 free slots: three tosses")
+          (is (= [0 0 0] (mapv #(arg-of "slot" %) (calls p "toss"))) "each toss names its slot (the fake closes the gap each time)"))))))
 
 (deftest a-full-chest-is-remembered-unusable-and-junk-is-tossed
   (async done
@@ -265,10 +266,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))})]
+        (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))})]
           (await (run-reflex eng {:keep-blocks 64} {}))
           (is (= 2 (count (calls p "toss"))) "at most two of the three stacks")
-          (is (= 64 (get (inv p) "cobblestone"))))))))
+          (is (= 64 (get (inv p) "cobblestone")))
+          (is (not (declined? seen)) "it acted, so ending short is :done")
+          (is (some #(and (= :make-room.done (:kind %)) (:short %)) @seen)))))))
 
 (deftest everything-worth-keeping-declines-with-no-toss
   (async done
@@ -294,6 +297,8 @@
           (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
           (is (= 1 (get (inv p) "diamond")))
           (is (= 36 (stack-count p)) "35 oak_log stacks and the diamond")
+          (is (not (declined? seen)) "a completed swap with nothing more to toss is :done")
+          (is (some #(and (= :make-room.done (:kind %)) (:short %)) @seen))
           (is (contains? (event-kinds seen) :make-room.swapped)))))))
 
 (deftest the-swap-throws-away-from-the-item

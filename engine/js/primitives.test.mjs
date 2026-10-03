@@ -1282,3 +1282,22 @@ test('picked-up: unsubscribing and a replaced bot go quiet', () => {
   pickup(bot, bot.entity, { name: 'stick', count: 3 })
   assert.deepEqual(seen, [])
 })
+
+test('toss with a slot throws exactly that stack whole, whatever the count says', async () => {
+  const { bot, p } = rig(twoStacks)
+  assert.deepEqual(await p.toss('t1', { item: 'cobblestone', slot: 37, count: 5 }), { status: 'tossed', count: 30 })
+  assert.deepEqual(bot.calls.filter(c => c.name === 'tossStack').map(c => c.args[0].slot), [37])
+  assert.deepEqual(tossCalls(bot), [])
+})
+
+test('toss with a slot that is empty or holds another item is no-item and never reaches the bot', async () => {
+  const { bot, p } = rig(twoStacks)
+  assert.deepEqual(await p.toss('t1', { item: 'cobblestone', slot: 38 }), { status: 'no-item', count: 0 })
+  assert.deepEqual(await p.toss('t1', { item: 'cobblestone', slot: 5 }), { status: 'no-item', count: 0 })
+  assert.deepEqual(names(bot), [])
+})
+
+test('toss with a non-numeric slot rejects with bad-args', async () => {
+  const { p } = rig(twoStacks)
+  await assert.rejects(p.toss('t1', { item: 'cobblestone', slot: 'x' }), err => err.code === 'bad-args')
+})

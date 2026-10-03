@@ -451,3 +451,12 @@ test('fake collect emits one picked-up event per gained item', async () => {
   await p.collect('t1', { id: 5 })
   assert.deepEqual(seen, [{ kind: 'picked-up', item: 'oak_log', count: 3 }])
 })
+
+test('fake toss with a slot throws that whole stack only; no-item for an empty slot or another item', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 40 }, { name: 'bread', count: 2 }, { name: 'dirt', count: 6 }] })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt', slot: 2 }), { status: 'tossed', count: 6 })
+  assert.deepEqual(p.self().inventory.map(i => [i.name, i.count]), [['dirt', 40], ['bread', 2]])
+  assert.deepEqual(p.entities({ kind: 'item' })[0].item, { name: 'dirt', count: 6 })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt', slot: 1 }), { status: 'no-item', count: 0 })
+  assert.deepEqual(await p.toss('t1', { item: 'dirt', slot: 9 }), { status: 'no-item', count: 0 })
+})

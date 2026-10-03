@@ -164,7 +164,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `inspectContainer(token, a)` | `{pos}` | `ok`, `missing`, `unreachable` | 5 s | window closed |
 | `transfer(token, a)` | `{pos, direction, item, count}`; `direction` is `deposit` or `withdraw` | `ok` (`moved` may be less than `count`), `missing`, `unreachable`, `no-item`, `full` | 5 s | window closed |
 | `equip(token, a)` | `{item, dest = 'hand'}`; `dest` is `hand`, `off-hand`, `head`, `torso`, `legs`, `feet` | `equipped`, `no-item` | 2 s | none needed |
-| `toss(token, a)` | `{item, count?}`; throws that many of the item (all carried stacks together; default and maximum: everything carried) in the direction the body looks, it does not look anywhere itself | `tossed` (`count` thrown), `no-item` (`count: 0`) | 2 s | none needed (nothing to undo) |
+| `toss(token, a)` | `{item, count?, slot?}`; with `slot` it throws exactly that slot's whole stack (`count` ignored; `no-item` when the slot is empty or holds another item), without it that many of the item (all carried stacks together; default and maximum: everything carried) in the direction the body looks, it does not look anywhere itself | `tossed` (`count` thrown), `no-item` (`count: 0`) | 2 s | none needed (nothing to undo) |
 | `eat(token, a)` | `{item?}`; without `item`, the best food carried | `ate`, `no-food`, `full` | 5 s | `deactivateItem` |
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
@@ -930,7 +930,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |
 | `inspectContainer`, `transfer` | `openContainer`, read or `deposit`/`withdraw` on the window, `closeWindow` in a finally and on abort. A thrown error mentioning full, room or space is `full` |
 | `equip` | `bot.equip(item, dest)` |
-| `toss` | sums the carried stacks of the item, `bot.toss(typeId, null, count)` with `count = min(count ?? total, total)`; nothing carried is `no-item` without touching the bot. Throws where the body looks |
+| `toss` | with `slot`: `bot.tossStack(bot.inventory.slots[slot])`. Otherwise sums the carried stacks of the item, `bot.toss(typeId, null, count)` with `count = min(count ?? total, total)`; nothing carried is `no-item` without touching the bot. Throws where the body looks |
 | `eat` | best food by `foodPoints` (or the named item), `equip` then `bot.consume()`. Cleanup `deactivateItem`. On timeout it reports `ate` if `food` rose |
 | `attack` | one `bot.attack`, then about 100 ms to read the target's health; `killed` when the entity is gone or its health is 0 |
 | `sleep` | bed name check, reach, night (`isDay` formula above), hostile within 8 blocks, then `bot.sleep`. Cleanup `wake` |

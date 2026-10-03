@@ -193,7 +193,14 @@ function defaultActs (s, emit) {
     },
 
     // Throws the item three blocks along +x as one item entity (the real body throws where it looks).
-    async toss (token, { item, count }) {
+    async toss (token, { item, count, slot }) {
+      if (typeof slot === 'number') { // exactly that slot's whole stack
+        const stack = s.inventory[slot]
+        if (!stack || stack.name !== item) return { status: 'no-item', count: 0 }
+        s.inventory.splice(slot, 1)
+        spawnItem({ ...s.self.pos, x: s.self.pos.x + 3 }, item, stack.count)
+        return { status: 'tossed', count: stack.count }
+      }
       const total = s.inventory.filter(i => i.name === item).reduce((sum, i) => sum + i.count, 0)
       const n = Math.min(count ?? total, total)
       if (n <= 0) return { status: 'no-item', count: 0 }

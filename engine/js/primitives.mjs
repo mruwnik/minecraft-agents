@@ -646,12 +646,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  // With `slot`, throws exactly that slot's whole stack (bot.toss would take from whichever slot it finds first).
   // Throws carried items in the direction the body looks (it does not look anywhere itself); the stacks of the item
   // are summed, so a count may span several slots.
   const toss = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.item === 'string', 'toss needs item, an item name')
+    need(a.slot === undefined || a.slot === null || isNum(a.slot), 'toss slot must be a number')
     return act(token, { boundS: 2 }, async ctx => {
+      if (isNum(a.slot)) {
+        const stack = bot.inventory.slots[a.slot]
+        if (!stack || stack.name !== a.item) return { status: 'no-item', count: 0 }
+        await bot.tossStack(stack)
+        ctx.alive()
+        return { status: 'tossed', count: stack.count }
+      }
       const total = inventory().filter(i => i.name === a.item).reduce((sum, i) => sum + i.count, 0)
       const count = Math.min(a.count ?? total, total)
       const type = bot.registry.itemsByName[a.item]?.id

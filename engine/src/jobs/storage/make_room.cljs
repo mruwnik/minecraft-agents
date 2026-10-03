@@ -180,7 +180,7 @@
         {:keys [x y z]} (u/self-pos c)
         [dx dz] dir
         _ (await (ctx/act c :look (clj->js {:pos {:x (+ x (* 3 dx)) :y (+ y 1.5) :z (+ z (* 3 dz))}})))
-        r (await (ctx/act c :toss (clj->js {:item (:name stack) :count (:count stack)})))]
+        r (await (ctx/act c :toss (clj->js {:item (:name stack) :count (:count stack) :slot (:slot stack)})))]
     (if (not= "tossed" (.-status r))
       (u/fail! c :make-room.toss-failed (str "toss " (:name stack) ": " (.-status r)))
       (do (ctx/update-mem! c assoc :tossed-at {:x x :y y :z z} :toss-dir dir :walked false :acted true)
@@ -278,6 +278,10 @@
       (seq order) (await (toss! c (first order) (direction (:primitives c) nil) {}))
 
       (pending-walk? c) (await (walk-away! c))
+
+      (:acted m)
+      (do (ctx/emit! c :make-room.done :info {:free free-now :short true :text (str "short of room: " free-now " free, nothing more may be tossed")})
+          :done)
 
       :else (do (ctx/emit! c :make-room.declined :info {:free free-now :reason "nothing-to-toss" :text "nothing it may toss"})
                 :declined))))
