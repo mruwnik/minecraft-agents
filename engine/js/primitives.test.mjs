@@ -937,3 +937,35 @@ test('the view attaches to every bot, detaches while offline and on close, then 
   await p.close()
   assert.deepEqual(calls, [['attach', first], ['detach'], ['attach', second], ['detach'], ['stop']])
 })
+
+// The server rejects a client body that rests flush against a wall (it snaps the body back every tick, so the
+// water-exit impulse never lands). Verified live: a half-width of 0.31 instead of 0.3 climbs out; 0.3 never does.
+
+test('swim toward widens the body slightly while it swims and restores the width on every exit', async () => {
+  const widths = []
+  const blocks = pool()
+  const { bot, p } = rig({ blocks })
+  const original = bot.setControlState
+  bot.setControlState = (...args) => { widths.push(bot.physics.playerHalfWidth); return original(...args) }
+  setTimeout(() => { delete blocks['0,64,0'] }, 5)
+  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'landed')
+  assert.ok(widths.length > 0 && widths.every(w => w === 0.31), `widths while pressing: ${widths}`)
+  assert.equal(bot.physics.playerHalfWidth, 0.3)
+})
+
+test('swim toward restores the width after a timeout and after a cut', async () => {
+  const timed = rig({ blocks: pool() })
+  await timed.p.swim('t1', { ms: 3000, toward: rim })
+  assert.equal(timed.bot.physics.playerHalfWidth, 0.3)
+  const cut = rig({ blocks: pool() })
+  const call = cut.p.swim('t1', { ms: 3000, toward: rim })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  cut.p.setOwner('t2')
+  await assert.rejects(call, cutError)
+  assert.equal(cut.bot.physics.playerHalfWidth, 0.3)
+})
+
+test('swim toward is not landed while still in the water next to the target', async () => {
+  const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': 'water' }, pos: [1.2, 64, 0] })
+  assert.equal((await p.swim('t1', { ms: 3000, toward: at(1, 64, 0) })).status, 'timeout')
+})

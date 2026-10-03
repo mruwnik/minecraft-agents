@@ -287,11 +287,14 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // Holds jump until the head is out of the water. The pathfinder has no swim-up move, so a submerged body cannot
   // surface with moveTo. Jump is released on every exit: surfaced, timeout, cut, error.
-  // Standing: the feet cell holds no water and the cell under it is a full block.
-  const standing = () => {
-    const feet = cell(here())
-    return bot.blockAt(vec(feet))?.name !== 'water' && bot.blockAt(vec({ ...feet, y: feet.y - 1 }))?.boundingBox === 'block'
-  }
+  // Dry: the feet cell holds no water. Standing: dry, and the cell under it is a full block.
+  const dry = () => bot.blockAt(vec(cell(here())))?.name !== 'water'
+  const standing = () => dry() && bot.blockAt(vec({ ...cell(here()), y: cell(here()).y - 1 }))?.boundingBox === 'block'
+
+  // Swimming toward a rim, the body is made 0.01 wider: the server rejects a client body that rests flush against a
+  // wall and snaps it back every tick, so the water-exit impulse of the physics never lands. Verified live against
+  // 26.1: half-width 0.3 stays pressed on the rim wall, 0.31 climbs out. Restored on every exit.
+  const SWIM_HALF_WIDTH = 0.31
 
   const swim = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
@@ -303,17 +306,23 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const result = status => ({ status, oxygen: { before, after: oxygenNow() } })
     return act(token, { boundS: ms / 1000, onTimeout: () => result('timeout') }, async ctx => {
       const pressed = new Set()
+      const physics = bot.physics
+      const width = physics?.playerHalfWidth
       const press = control => { if (!pressed.has(control)) { pressed.add(control); bot.setControlState(control, true) } }
-      const release = () => { for (const control of [...pressed]) { pressed.delete(control); bot.setControlState(control, false) } }
+      const release = () => {
+        for (const control of [...pressed]) { pressed.delete(control); bot.setControlState(control, false) }
+        if (physics && width !== undefined) physics.playerHalfWidth = width
+      }
       ctx.onAbort(release)
       try {
         if (toward) {
           // climb out toward the target: the pathfinder has no move from floating feet onto a rim just above
           const there = center(cell(toward))
-          const arrived = () => standing() || dist(here(), there) <= 1
+          const arrived = () => standing() || (dry() && dist(here(), there) <= 1.5)
           if (arrived()) return result('landed')
           await bot.lookAt(vec(there), true)
           ctx.alive()
+          if (physics && width !== undefined) physics.playerHalfWidth = SWIM_HALF_WIDTH
           while (!arrived()) {
             press('jump')
             press('forward')

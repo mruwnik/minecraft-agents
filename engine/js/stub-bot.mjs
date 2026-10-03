@@ -39,6 +39,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     heldItem: null,
     inventory: { items: () => items },
     registry: { effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, name: e.name }])), itemsByName: { bread: { id: 1 }, cobblestone: { id: 2 } }, foodsByName: { bread: { foodPoints: 5 }, apple: { foodPoints: 4 } } },
+    physics: { playerHalfWidth: 0.3 },
     calls,
     blockAt: v => { calls.push({ name: 'blockAt', args: [v] }); return blockAt(v) },
     findBlocks: ({ matching, maxDistance, count }) => {

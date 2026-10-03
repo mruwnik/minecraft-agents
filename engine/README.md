@@ -228,7 +228,7 @@ arriving meanwhile share it), emits `online` and runs on the new bot. If every t
 reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
 resolves `disconnected` at once. A stale token still rejects with `cut` first.
 
-With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or are within 1 block of the target, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. The fake lands the body on the target when it is within 6 blocks and standable, else times out.
+With `toward`, `swim` looks at the target and holds jump and forward until the feet stand on a dry cell over a full block, or (dry) are within 1.5 blocks of the target's cell centre, and resolves `landed`; it is for climbing out of water onto a rim one or two blocks up, which the pathfinder cannot path to. Both controls are released on every exit. While it swims toward a target the body's collision half-width is 0.31 instead of 0.3 (restored on every exit): verified live on 26.1, a body resting flush against the rim wall is snapped back by the server every tick (a forced move per tick) so the water-exit impulse never lands, while 0.31 climbs onto the rim in about a second. The fake lands the body on the target when it is within 6 blocks and standable, else times out.
 
 `swim` without `toward` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
 pathfinder has no swim-up move and `moveTo` cannot surface a submerged body. It releases jump on every exit:
