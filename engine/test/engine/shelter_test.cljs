@@ -110,11 +110,25 @@
 (deftest player-sleeping-nearby-does-not-hold-after-an-unsupported-log-out
   (is (false? (sleeping-nearby-after-unsupported? {:time night :entities [sleeper]}))))
 
+(defn sleeping-nearby-after-log-out-ago? [ago-s args]
+  (let [{:keys [eng clock]} (setup {})]
+    (mem/write! (:store eng) :log-out {:ms 20000 :status "returned"} {:cap 10 :ttl day-ms})
+    (swap! clock + (* 1000 ago-s))
+    (boolean ((:when (get triggers/all :player-sleeping-nearby))
+              (tu/fake {:time night :entities [sleeper]}) (mem/view (:store eng)) args))))
+
+(deftest player-sleeping-nearby-waits-out-the-gap-since-the-latest-log-out
+  (are [ago-s args held] (= held (sleeping-nearby-after-log-out-ago? ago-s args))
+    10 {} false
+    31 {} true
+    10 {:gap-s 5} true
+    31 {:gap-s 60} false))
+
 (deftest player-sleeping-nearby-is-registered-and-fires-log-out
   (let [t (get triggers/all :player-sleeping-nearby)]
     (is (= '(jobs.survival.log-out) (:job t)))
     (is (= [:cooldown 30] ((juxt :persistence :cooldown-s) t)))
-    (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true} (:args t)))))
+    (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true :gap-s 30} (:args t)))))
 
 (deftest a-roofed-body-still-logs-out-for-a-sleeper-from-the-register
   (async done

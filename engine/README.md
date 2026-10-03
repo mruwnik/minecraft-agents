@@ -585,7 +585,7 @@ down.
   | hostile-near | 5 | |
   | hungry | 90 | a body with no food does not retry every tick |
   | night-unsafe | 10 | keep trying through the night |
-  | player-sleeping-nearby | 30 | after a log-out returns, log out again if the sleeper still sleeps |
+  | player-sleeping-nearby | 30 | backed by the trigger's own `:gap-s` 30 since the latest `:log-out`; the cooldown alone does not hold after a return |
   | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
   | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
@@ -851,7 +851,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 10 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 90 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
-| `:player-sleeping-nearby` | night, another player within `:player-radius` (default 128) asleep, no `:bed` remembered within `:bed-radius` (default 48), `:offline-allowed` not false, the last `:log-out` not `unsupported`; being roofed does not matter | `(jobs.survival.log-out)` | cooldown 30 s |
+| `:player-sleeping-nearby` | night, another player within `:player-radius` (default 128) asleep, no `:bed` remembered within `:bed-radius` (default 48), `:offline-allowed` not false, the last `:log-out` not `unsupported`, the latest `:log-out` at least `:gap-s` (30) s old (the cooldown alone does not hold: right after a return the sleeper is not sensed yet); being roofed does not matter | `(jobs.survival.log-out)` | cooldown 30 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 30 s |
