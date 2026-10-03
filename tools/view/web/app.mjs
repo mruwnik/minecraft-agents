@@ -3,9 +3,12 @@
 import { cameraBasis, directionFor } from './camera.mjs'
 import { inflate, parseColumnFile, decodeSections } from './decode.mjs'
 import { createRenderer } from './gl.mjs'
+import { poseInterpolator } from './interp.mjs'
 
 const MAX_IN_FLIGHT = 6
 const LATENCY_KEEP = 200
+const TRACE_KEEP = 4000
+const DECODE_KEEP = 2000
 const MOUSE_SENSITIVITY = 0.0022
 const FREE_SPEED = 12
 
@@ -20,6 +23,8 @@ const fov = numberParam('fov', 70)
 const maxDist = numberParam('dist', radius * 16)
 const fixedWidth = params.has('w') ? Math.round(numberParam('w', 0)) : null
 const fixedHeight = params.has('h') ? Math.round(numberParam('h', 0)) : null
+const interpOn = params.get('interp') !== '0'
+const interp = poseInterpolator()
 const N = 2 * radius + 1
 
 const canvas = document.getElementById('view')
@@ -34,7 +39,7 @@ const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
 }
 
-const view = window.__view = { fps: 0, frames: 0, latencies: [], loaded: 0, wanted: 0, ready: false, renderer: null }
+const view = window.__view = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], loaded: 0, wanted: 0, ready: false, renderer: null }
 
 const state = {
   pose: null,
@@ -51,6 +56,8 @@ const state = {
   seq: 0,
   free: null, // {eye, yaw, pitch} while the free camera is on
   pendingMtime: null,
+  pendingShown: [], // {mtime, t} of poses not yet displayed
+  drawn: null, // the pose sampled for the current frame
   frameTimes: [],
   keys: new Set()
 }
@@ -99,9 +106,13 @@ const fetchColumn = async (world, cx, cz) => {
   const res = await fetch(`/columns/${world}/${cx}.${cz}.bin`)
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`column ${cx}.${cz}: HTTP ${res.status}`)
-  const raw = await inflate(new Uint8Array(await res.arrayBuffer()))
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  const started = performance.now()
+  const raw = await inflate(bytes)
   const { header, sections } = parseColumnFile(raw)
   const { ids } = decodeSections(sections, { ...state.table.format, numSections: header.worldHeight >> 4 })
+  view.decodeMs.push(Math.round((performance.now() - started) * 10) / 10)
+  if (view.decodeMs.length > DECODE_KEEP) view.decodeMs.shift()
   return { header, ids }
 }
 
@@ -189,6 +200,8 @@ const onPose = async ({ mtime, pose }) => {
   state.pose = pose
   state.poseMtime = mtime
   state.pendingMtime = mtime
+  interp.push(pose, Date.now())
+  if (pose.eye) state.pendingShown.push({ mtime, t: pose.t })
   if (!pose.eye) return
   if (!state.table) await loadTable(pose.mcVersion)
   const ccx = Math.floor(pose.eye.x / 16)
@@ -286,30 +299,50 @@ const settled = () => {
   return state.columns.size > 0
 }
 
+const recordTrace = (ts, cam) => {
+  view.camTrace.push({ ts, x: cam.eye.x, y: cam.eye.y, z: cam.eye.z, yaw: cam.yaw })
+  if (view.camTrace.length > TRACE_KEEP) view.camTrace.shift()
+}
+
 const frame = (now, dt) => {
   const [w, h] = targetSize()
   gfx.resize(w, h)
   if (!state.pose?.eye || !state.dims || state.ccx === null) return gfx.clear(0.78, 0.87, 1)
-  const cam = state.free ?? { eye: state.pose.eye, yaw: state.pose.yaw, pitch: state.pose.pitch }
+  const shown = (interpOn && interp.sample(Date.now())) || state.pose
+  state.drawn = shown
+  view.underruns = interp.underruns()
+  const cam = state.free ?? { eye: shown.eye, yaw: shown.yaw, pitch: shown.pitch }
+  if (!state.free) recordTrace(now, cam)
   const origin = { x: (state.ccx - radius) * 16, y: state.dims.minY, z: (state.ccz - radius) * 16 }
   gfx.draw({
     eye: { x: cam.eye.x - origin.x, y: cam.eye.y - origin.y, z: cam.eye.z - origin.z },
     basis: cameraBasis({ yaw: cam.yaw, pitch: cam.pitch, fov }),
     dist: maxDist,
-    light: daylight(state.pose.timeOfDay),
+    light: daylight(shown.timeOfDay ?? state.pose.timeOfDay),
     slotOff: { x: mod(state.ccx - radius, N) * 16, z: mod(state.ccz - radius, N) * 16 },
-    entities: entityBoxes(state.pose.entities, origin, cam.eye)
+    entities: entityBoxes(shown.entities ?? state.pose.entities, origin, cam.eye)
   })
 }
 
+const keep = (list, value) => {
+  list.push(Math.round(value))
+  if (list.length > LATENCY_KEEP) list.shift()
+}
+
+// a pose is displayed once the playback body time has reached its t (at once with interpolation off)
 const recordLatency = () => {
-  if (state.pendingMtime === null) return
+  if (state.pendingMtime === null && !state.pendingShown.length) return
   gfx.finish()
-  const latency = Date.now() - state.pendingMtime
-  state.pendingMtime = null
-  if (latency > 60000) return // an old offline pose, not a live write
-  view.latencies.push(Math.round(latency))
-  if (view.latencies.length > LATENCY_KEEP) view.latencies.shift()
+  const wall = Date.now()
+  if (state.pendingMtime !== null) {
+    const latency = wall - state.pendingMtime
+    state.pendingMtime = null
+    if (latency <= 60000) keep(view.latencies, latency) // older is an offline pose, not a live write
+  }
+  const playhead = interpOn ? interp.playhead(wall) : Infinity
+  const due = state.pendingShown.filter(p => p.t <= playhead)
+  state.pendingShown = state.pendingShown.filter(p => p.t > playhead)
+  for (const { mtime } of due) if (wall - mtime <= 60000) keep(view.shownLatencies, wall - mtime)
 }
 
 const updateStats = now => {
@@ -348,7 +381,7 @@ const renderOverlay = () => {
   const lines = [
     `${agentName ?? '(no agent)'}  ${pose?.status ?? '-'}${state.free ? '  [free camera]' : ''}`,
     `fps ${view.fps}  ${canvas.width}x${canvas.height}  fov ${fov}  dist ${maxDist}`,
-    `pose age ${pose ? Date.now() - pose.t : '-'} ms  file->frame ${lat.length ? lat[lat.length - 1] : '-'} ms (p50 ${fmt(percentile(lat, 0.5))})`,
+    `pose age ${pose ? Date.now() - pose.t : '-'} ms  ${interpOn ? `interp ${fmt(interp.delay())} ms` : 'interp off'}  file->frame ${lat.length ? lat[lat.length - 1] : '-'} ms (p50 ${fmt(percentile(lat, 0.5))})`,
     `columns ${view.loaded}/${view.wanted}  in flight ${state.inFlight.size}  queued ${state.needs.size}${view.ready ? '  ready' : ''}`,
     hud ? `hp ${fmt(hud.health)}  food ${fmt(hud.food)}  xp ${hud.xp?.level ?? '-'}  held ${hud.held ? `${hud.held.name} x${hud.held.count}` : '-'}` : 'hud -',
     view.renderer
