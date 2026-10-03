@@ -37,6 +37,7 @@ const acting = [
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
   { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'write', timeout: 'timeout', over: { entities: {} } },
   { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' },
+  { name: 'useOn', args: { pos: at(2, 64, 0) }, hang: 'activateBlock', cleanup: null, timeout: 'timeout' },
   { name: 'swim', args: { ms: 3000 }, hang: 'setControlState', cleanup: 'setControlState', timeout: 'timeout', over: { blocks: { ...world.blocks, '0,65,0': 'water' } } }
 ]
 const hanging = c => ({ ...world, ...c.over, hang: [c.hang] })

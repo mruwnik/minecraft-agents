@@ -7,6 +7,7 @@ import { createView } from './view.mjs'
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
+import { createUseOn, stateProperties } from './use-on.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -389,10 +390,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       }))
   }
 
-  // {name, pos}, plus the crop `age` state when the block has one (wheat, carrots, sweet berries)
+  // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any
   const blockInfo = block => {
-    const age = block.getProperties?.().age
-    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }) }
+    const properties = stateProperties(block)
+    const age = properties.age
+    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(Object.keys(properties).length > 0 && { properties }) }
   }
 
   const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64 } = {}) => {
@@ -1044,7 +1046,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim })
+  const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
+
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim, useOn })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

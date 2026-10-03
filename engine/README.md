@@ -106,8 +106,8 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 |---|---|---|
 | `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
-| `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
-| `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
+| `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, properties?, distance}]` sorted by distance |
+| `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
 
 `self()` fields:
 
@@ -137,6 +137,7 @@ hostile mobs; creepers additionally carry `creeper: true` (their `name` is `cree
 
 `blocks()` and `blockAt()` carry `age` (a number) when the block has an `age` state: the crop growth stage of wheat,
 carrots and potatoes (ripe at 7), beetroots (ripe at 3) and sweet berry bushes (berries from 2). Other blocks have no `age`.
+They also carry `properties`, every block state (`level`, `honey_level`, `lit`, `open`, `facing`, `half`, `age`, `moisture`, ...), left out when the block has none. mineflayer's `getProperties()` gives integer states as strings on 26.1 (`{level: "8"}`, verified live); they are turned into numbers, booleans and enum names pass as they are.
 
 Line of sight: every hostile entity carries `visible`, true when a block raycast from the body's eye to the middle of the
 entity crosses no sight-blocking block. A block blocks sight when its bounding box is a full cube, except glass, water,
@@ -173,6 +174,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `look(token, a)` | `{pos}` or `{yaw, pitch}`; resolves after the next physics tick (the rotation has been sent to the server), at most ~50 ms later, bounded by 100 ms; | `ok` | 1 s | none needed |
 | `wait(token, a)` | `{ms}`, clamped to 0..10000 | `ok` | `ms` (scaled by `timeScale`) | none needed; a cut rejects at once |
 | `swim(token, a)` | `{ms = 3000, toward?}`, at most 10000; `toward` is `{x, y, z}` | `surfaced` (head out of water), `landed` (with `toward`), `timeout` | `ms`, at most 10 s | jump and forward released |
+| `useOn(token, a)` | `{pos, item?, face = 'up'}`; `face` is `up`, `down`, `north`, `south`, `east`, `west`; without `item` it uses an empty hand (an empty hotbar slot, else the held stack moved to a free slot; never tossed) | `used` (the block's name or properties, or the carried count of `item`, changed within 1 s), `unchanged`, `missing` (air or not loaded), `no-item`, `no-room` (empty hand asked, inventory full), `unreachable` (more than 4.5 from the eye) | 5 s | none needed |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
 Acting while asleep first leaves the bed (`leave_bed` sent by name, since mineflayer's `wake()` sends a wrong id on this protocol), bounded at 1 s (scaled by `timeScale`); a cut during `sleep` leaves the bed too.
@@ -194,6 +196,7 @@ Extra fields on the result:
 - `inspectContainer`: `items` (`[{name, count, slot}]`).
 - `transfer`: `moved` (count).
 - `toss`: `count` (thrown; 0 on `no-item`).
+- `useOn`: `before` and `after` (`{name, properties}` of the cell), `consumed` (how many of `item` left the inventory; 0 for an empty hand). Not on `missing`. A full composter ejects its bone meal as an item entity; the caller collects it.
 - `eat`: `item`, `food` (after eating).
 - `attack`: `health` (target's, when known; never live, mineflayer does not track other entities' health), `hurt` (whether the server reported the target damaged after the swing).
 - `offline`: `ms`, the wait actually used (clamped to 0..600000, rounded down).
@@ -297,6 +300,7 @@ const p = createFake({
   noPath: ['8,64,8'],                           // moveTo targets blocked with reason 'noPath', body unmoved
   swimFails: false,                             // true: swim times out and moves nothing
   ages: { '5,64,0': 7 },                        // "x,y,z" -> crop age, reported as `age`
+  states: { '6,64,0': { level: 3 } },           // "x,y,z" -> block states, reported as `properties` (with `age`)
 })
 p.world.state            // the mutable world (self, time, blocks, entities, inventory, containers)
 p.world.calls            // [{ name, token, args }] for every acting call, in order
@@ -310,7 +314,7 @@ p.world.die()            // emits died (pos, inventory, experience), drops the i
 Fake semantics: `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
-inventory and emits one `picked-up` per gained item. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `attack` takes 5 health per swing and reports `hurt: true`; an entity with `invulnerable: true` takes none (`hit`, health unchanged, `hurt: false`). `sleep` succeeds at night on a
+inventory and emits one `picked-up` per gained item. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `attack` takes 5 health per swing and reports `hurt: true`; an entity with `invulnerable: true` takes none (`hit`, health unchanged, `hurt: false`). `useOn` (`js/fake-use-on.mjs`): a hoe tills dirt, grass_block or dirt_path into farmland (not from below, air above); bone meal adds 2 to a crop's age up to ripe (consumed; ripe is `unchanged`) and is consumed on a sapling or grass_block; a compostable item raises a composter's `level` by 1 every time (7 jumps to 8), and at 8 any hand empties it to 0 and drops a `bone_meal` item entity above it; anything else is `unchanged`. `sleep` succeeds at night on a
 cell whose block name ends in `_bed`, and sets the time to 0. `eat` raises
 `food` by 5 and consumes one item. A held call rejects with `cut` when the
 owner changes, exactly as the real layer must. Where the body stands decides

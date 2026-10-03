@@ -1,0 +1,56 @@
+// The fake's useOn: right-click a block with an item (or an empty hand), applying the few rules the jobs rely on.
+// Mirrors the result shape of use-on.mjs: { status, before, after, consumed }, `missing` carrying only the status.
+
+const key = ({ x, y, z }) => `${x},${y},${z}`
+const REACH = 4.5
+const MAX_AGE = { wheat: 7, carrots: 7, potatoes: 7, beetroots: 3 }
+const TILLABLE = new Set(['dirt', 'grass_block', 'dirt_path'])
+const COMPOSTABLE = new Set([
+  'wheat_seeds', 'beetroot_seeds', 'melon_seeds', 'pumpkin_seeds', 'wheat', 'carrot', 'potato', 'beetroot', 'apple',
+  'melon_slice', 'short_grass', 'tall_grass', 'oak_leaves', 'birch_leaves', 'spruce_leaves', 'kelp', 'sweet_berries',
+  'oak_sapling', 'birch_sapling', 'spruce_sapling', 'bread', 'baked_potato', 'cookie', 'pumpkin', 'melon'
+])
+
+export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
+  const k = key(pos)
+  const name = () => s.blocks.get(k) ?? 'air'
+  const snapshot = () => ({ name: name(), properties: { ...(s.states.get(k) ?? {}), ...(s.ages.has(k) && { age: s.ages.get(k) }) } })
+  const before = snapshot()
+  if (before.name === 'air') return { status: 'missing' }
+  const result = (status, consumed = 0) => ({ status, before, after: snapshot(), consumed })
+  if (item !== undefined && !s.inventory.some(i => i.name === item)) return result('no-item')
+  if (!near(pos)) return result('unreachable')
+  s.self.held = item ?? null
+
+  const consume = () => {
+    const stack = s.inventory.find(i => i.name === item)
+    stack.count -= 1
+    if (stack.count === 0) s.inventory.splice(s.inventory.indexOf(stack), 1)
+    return 1
+  }
+  const level = s.states.get(k)?.level ?? 0
+  const setLevel = (n) => s.states.set(k, { ...s.states.get(k), level: n })
+  const here = name()
+
+  if (item?.endsWith('_hoe') && TILLABLE.has(here) && face !== 'down' && !s.blocks.has(key({ ...pos, y: pos.y + 1 }))) {
+    s.blocks.set(k, 'farmland')
+    return result('used')
+  }
+  if (item === 'bone_meal' && MAX_AGE[here] !== undefined) {
+    if (s.ages.get(k) >= MAX_AGE[here]) return result('unchanged')
+    s.ages.set(k, Math.min(MAX_AGE[here], (s.ages.get(k) ?? 0) + 2))
+    return result('used', consume())
+  }
+  if (item === 'bone_meal' && (here.endsWith('_sapling') || here === 'grass_block')) return result('used', consume())
+  if (here === 'composter' && level === 8) {
+    setLevel(0)
+    spawnItem({ ...pos, y: pos.y + 1 }, 'bone_meal', 1)
+    return result('used')
+  }
+  if (here === 'composter' && level < 7 && COMPOSTABLE.has(item)) {
+    const consumed = consume()
+    setLevel(level + 1 === 7 ? 8 : level + 1)
+    return result('used', consumed)
+  }
+  return result('unchanged')
+}

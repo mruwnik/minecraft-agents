@@ -9,7 +9,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9 } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -42,7 +42,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     time: { timeOfDay },
     isSleeping: sleeping,
     heldItem: null,
-    inventory: { items: () => items, slots: Object.fromEntries(items.map(i => [i.slot, i])) },
+    inventory: { items: () => items, slots: Object.fromEntries(items.map(i => [i.slot, i])), firstEmptyInventorySlot: () => freeSlot },
     registry: { effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, name: e.name }])), itemsByName: { bread: { id: 1 }, cobblestone: { id: 2 } }, foodsByName: { bread: { foodPoints: 5 }, apple: { foodPoints: 4 } } },
     physics: { playerHalfWidth: 0.3 },
     calls,
@@ -71,6 +71,9 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     deactivateItem: act('deactivateItem'),
     activateItem: act('activateItem', () => onActivate(bot)),
     attack: act('attack'),
+    activateBlock: act('activateBlock', (block, face, cursor) => onUseBlock(bot, block, face, cursor)),
+    setQuickBarSlot: act('setQuickBarSlot'),
+    unequip: act('unequip'),
     sleep: act('sleep', () => { bot.isSleeping = true }),
     wake: act('wake'), // records only: the real bot.wake() sends a wrong id on this protocol
     // the raw client: leave_bed (by name) is what gets the body out of bed

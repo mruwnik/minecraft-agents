@@ -3,6 +3,7 @@
 
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
+import { fakeUseOn } from './fake-use-on.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -56,6 +57,7 @@ function initialState (spec) {
     blocks: new Map(Object.entries(spec.blocks ?? {})),
     unloaded: new Set(spec.unloaded ?? []), // "x,y,z" cells in an unloaded chunk: blockAt returns null there
     ages: new Map(Object.entries(spec.ages ?? {})), // "x,y,z" -> crop age, for blocks that have one
+    states: new Map(Object.entries(clone(spec.states ?? {}))), // "x,y,z" -> block state properties (composter level ...)
     entities: clone(spec.entities ?? []).map(withEntityDefaults),
     inventory: clone(spec.inventory ?? []),
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
@@ -141,6 +143,7 @@ function defaultActs (s, emit) {
       if (name === 'bedrock') return { status: 'cannot' }
       s.blocks.delete(key(pos))
       s.ages.delete(key(pos))
+      s.states.delete(key(pos))
       const dropName = s.drops[name] === undefined ? name : s.drops[name]
       const drops = dropName ? [spawnItem(pos, dropName, 1)] : []
       return { status: 'dug', block: name, drops: drops.map(e => ({ id: e.id, name: e.item.name, count: e.item.count, pos: { ...e.pos } })) }
@@ -284,6 +287,10 @@ function defaultActs (s, emit) {
       return { status: 'landed', oxygen: { before, after: 20 } }
     },
 
+    async useOn (token, args) {
+      return fakeUseOn(s, args, { spawnItem, near })
+    },
+
     async look () {
       return { status: 'ok' }
     },
@@ -297,6 +304,10 @@ function defaultActs (s, emit) {
 export function createFake (spec = {}) {
   const s = initialState(spec)
   const ageOf = (k) => (s.ages.has(k) ? { age: s.ages.get(k) } : {})
+  const propsOf = (k) => {
+    const properties = { ...(s.states.get(k) ?? {}), ...ageOf(k) }
+    return Object.keys(properties).length ? { properties } : {}
+  }
   const listeners = new Set()
   const calls = []
   // a cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not
@@ -411,7 +422,7 @@ export function createFake (spec = {}) {
       if (s.offline) return []
       const ok = names ? (n) => names.includes(n) : match ?? (() => true)
       return [...s.blocks.entries()]
-        .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k) }))
+        .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k), ...propsOf(k) }))
         .map(b => ({ ...b, distance: dist(s.self.pos, b.pos) }))
         .filter(b => b.distance <= radius && ok(b.name))
         .sort((a, b) => a.distance - b.distance)
@@ -421,7 +432,7 @@ export function createFake (spec = {}) {
     blockAt (pos) {
       if (s.offline) return null
       if (s.unloaded.has(key(pos))) return null
-      return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)) }
+      return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)), ...propsOf(key(pos)) }
     },
 
     onBodyEvent (listener) {
