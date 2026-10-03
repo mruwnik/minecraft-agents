@@ -35,7 +35,7 @@ const acting = [
   { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
-  { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'wake', timeout: 'timeout', over: { entities: {} } },
+  { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'write', timeout: 'timeout', over: { entities: {} } },
   { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' },
   { name: 'swim', args: { ms: 3000 }, hang: 'setControlState', cleanup: 'setControlState', timeout: 'timeout', over: { blocks: { ...world.blocks, '0,65,0': 'water' } } }
 ]
@@ -1782,4 +1782,48 @@ test('stopDriving clears the control states without a token', () => {
   p.drive('t1', { controls: { forward: true } })
   p.stopDriving()
   assert.deepEqual(bot.controlState, {})
+})
+
+// Sleeping bodies: mineflayer's wake() sends a wrong id here, so leave_bed is sent by name.
+const leaveBeds = bot => bot.calls.filter(c => c.name === 'write' && c.args[1].actionId === 'leave_bed')
+
+test('a cut during sleep writes leave_bed, not just wake', async () => {
+  const { bot, p } = rig({ blocks: world.blocks, timeOfDay: 15000, hang: ['sleep'] })
+  const call = p.sleep('t1', { pos: at(2, 64, 1) })
+  call.catch(() => {})
+  await sleep(20)
+  p.setOwner('t2')
+  await assert.rejects(call, /cut/)
+  assert.equal(leaveBeds(bot).length, 1)
+})
+
+test('moveTo on a sleeping body leaves the bed first, then succeeds', async () => {
+  const { bot, p } = rig({ sleeping: true })
+  const r = await p.moveTo('t1', { pos: at(1, 64, 0) })
+  assert.notEqual(r.status, 'disconnected')
+  assert.equal(leaveBeds(bot).length, 1)
+  assert.equal(bot.isSleeping, false)
+  assert.ok(acted(bot).indexOf('write') < acted(bot).indexOf('goto'))
+})
+
+test('dig on a sleeping body leaves the bed first, then digs', async () => {
+  const { bot, p } = rig({ sleeping: true, blocks: world.blocks })
+  await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.equal(leaveBeds(bot).length, 1)
+  assert.ok(acted(bot).indexOf('write') < acted(bot).indexOf('dig'))
+})
+
+test('a body that never wakes within the bound: the act proceeds and fails as the stub fails', async () => {
+  const { bot, p } = rig({ sleeping: true, blocks: world.blocks })
+  bot._client.write = (name, data) => { bot.calls.push({ name: 'write', args: [name, data] }) }
+  const r = await p.dig('t1', { pos: at(2, 64, 0) }).then(v => v, e => e)
+  assert.equal(leaveBeds(bot).length, 1)
+  assert.ok(acted(bot).includes('dig'))
+  assert.deepEqual(r, { status: 'failed', reason: 'asleep' })
+})
+
+test('drive on a sleeping body writes leave_bed', () => {
+  const { bot, p } = rig({ sleeping: true })
+  p.drive('t1', { controls: { forward: true } })
+  assert.equal(leaveBeds(bot).length, 1)
 })

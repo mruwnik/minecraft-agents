@@ -6,6 +6,7 @@ import { connectBot } from './connect.mjs'
 import { createView } from './view.mjs'
 import { lineClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
+import { leaveBed, ensureAwake } from './bed.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -803,7 +804,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const { timeOfDay } = bot.time
       if (timeOfDay < 12542 || timeOfDay > 23460) return { status: 'not-night' }
       if (hostilesNear().length > 0) return { status: 'monsters-near' }
-      ctx.onAbort(() => bot.wake())
+      ctx.onAbort(() => leaveBed(bot))
       ctx.alive()
       const failure = await bot.sleep(block).then(() => null, err => err)
       ctx.alive()
@@ -827,6 +828,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const driveNow = (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     if (isOffline()) return { status: 'offline' }
+    if (bot.isSleeping) leaveBed(bot)
     if (![...inflight].some(c => c.drive && c.token === token)) {
       const call = { drive: true, token, cut: () => { inflight.delete(call); bot.clearControlStates() } }
       inflight.add(call)
@@ -996,6 +998,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (away) await away
     if (!isOwner(token)) throw cutError()
     if (down && !await recover()) return { status: 'disconnected' }
+    if (bot.isSleeping && fn !== sleep) await ensureAwake(bot, { timeoutMs: 1000 * timeScale })
     return fn(token, a)
   }
 

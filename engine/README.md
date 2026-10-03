@@ -175,6 +175,8 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `swim(token, a)` | `{ms = 3000, toward?}`, at most 10000; `toward` is `{x, y, z}` | `surfaced` (head out of water), `landed` (with `toward`), `timeout` | `ms`, at most 10 s | jump and forward released |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
+Acting while asleep first leaves the bed (`leave_bed` sent by name, since mineflayer's `wake()` sends a wrong id on this protocol), bounded at 1 s (scaled by `timeScale`); a cut during `sleep` leaves the bed too.
+
 Extra fields on the result:
 
 - `moveTo`: `pos` (where the body ended), `distance` (to the target), `reason` (`'noPath'`, only on `blocked`).

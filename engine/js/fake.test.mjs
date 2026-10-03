@@ -535,3 +535,9 @@ test('fakes do not share nested default self objects', () => {
   assert.equal(second.world.state.self.experience.level, 0)
   assert.deepEqual(second.world.state.self.effects, [])
 })
+
+test('an acting call on a sleeping body leaves the bed first', async () => {
+  const p = owned({ self: { isSleeping: true } })
+  await p.look('t1', { yaw: 0, pitch: 0 })
+  assert.equal(p.self().isSleeping, false)
+})

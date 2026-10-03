@@ -9,12 +9,14 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, onActivate = () => {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
+  const asleepRejects = new Set(['goto', 'setGoal', 'setControlState', 'dig', 'placeBlock', '_placeBlockWithOptions', 'attack', 'activateItem', 'equip', 'toss', 'tossStack'])
   const act = (name, impl = () => undefined) => (...args) => {
     calls.push({ name, args })
+    if (bot.isSleeping && asleepRejects.has(name)) return Promise.reject(new Error('asleep'))
     if (name in reject) return Promise.reject(new Error(reject[name]))
     return hangs.has(name) ? never() : Promise.resolve(impl(...args))
   }
@@ -38,7 +40,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     health: 20,
     food,
     time: { timeOfDay },
-    isSleeping: false,
+    isSleeping: sleeping,
     heldItem: null,
     inventory: { items: () => items, slots: Object.fromEntries(items.map(i => [i.slot, i])) },
     registry: { effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, name: e.name }])), itemsByName: { bread: { id: 1 }, cobblestone: { id: 2 } }, foodsByName: { bread: { foodPoints: 5 }, apple: { foodPoints: 4 } } },
@@ -69,8 +71,10 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     deactivateItem: act('deactivateItem'),
     activateItem: act('activateItem', () => onActivate(bot)),
     attack: act('attack'),
-    sleep: act('sleep'),
-    wake: act('wake'),
+    sleep: act('sleep', () => { bot.isSleeping = true }),
+    wake: act('wake'), // records only: the real bot.wake() sends a wrong id on this protocol
+    // the raw client: leave_bed (by name) is what gets the body out of bed
+    _client: { write: (name, data) => { calls.push({ name: 'write', args: [name, data] }); if (name === 'entity_action' && data.actionId === 'leave_bed') bot.isSleeping = false } },
     lookAt: act('lookAt', point => {
       const delta = point.minus(bot.entity.position.offset(0, bot.entity.height, 0))
       Object.assign(bot.entity, { yaw: Math.atan2(-delta.x, -delta.z), pitch: Math.atan2(delta.y, Math.hypot(delta.x, delta.z)) })

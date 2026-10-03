@@ -337,6 +337,7 @@ export function createFake (spec = {}) {
     const forced = await waitHold(name, token)
     checkOwner(token)
     if (forced !== undefined) return forced
+    if (name !== 'sleep') s.self.isSleeping = false // acting leaves the bed first, as the real primitives do
     const impl = acts[name]
     const override = overrides.get(name)
     return override ? override(token, args, impl) : impl(token, args)
