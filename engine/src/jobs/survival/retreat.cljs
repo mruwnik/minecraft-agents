@@ -90,18 +90,31 @@
                              (passable? (block-at {:x x :y (inc y) :z z})))))]
     (count (take-while free? (range 1 (inc n))))))
 
+(defn worth?
+  "Whether walking open cells along dir from from is worth it against threat:
+  it must not end closer, and must either be a real walk (min-open + 1
+  cells) or gain at least 2 blocks of distance. A short side step in a dead
+  end is neither, so a body that only has those left is cornered."
+  [from threat dir open]
+  (let [now (u/dist from threat)
+        then (u/dist (point-along from dir open) threat)]
+    (and (>= open min-open)
+         (>= then now)
+         (or (> open min-open) (>= (- then now) 2)))))
+
 (defn choose-target
   "The walk target: the first direction, turning away from the preferred one
   as needed, that avoids every hazard and is open for a full step; else the
-  most open one if it has at least min-open cells. nil when cornered."
+  most open one that is still worth walking (see worth?). nil when cornered."
   [block-at from threat home hazards step]
   (let [dir (direction from threat home)
         options (->> turns
                      (map #(rotate dir %))
                      (map (fn [d] {:open (open-cells block-at from d step) :dir d}))
-                     (remove #(near-hazard? hazards from (point-along from (:dir %) step))))
+                     (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
+                     (filter #(worth? from threat (:dir %) (:open %))))
         pick (or (first (filter #(>= (:open %) step) options))
-                 (last (sort-by :open (filter #(>= (:open %) min-open) options))))]
+                 (last (sort-by :open options)))]
     (when pick (point-along from (:dir pick) (:open pick)))))
 
 (defn home-pos

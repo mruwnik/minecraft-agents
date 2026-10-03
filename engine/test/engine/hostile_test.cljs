@@ -341,3 +341,15 @@
           (is (zero? (count (calls p "attack"))) "unarmed: no fight")
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= [] (:list (core/state eng))) "and it gives up after three tries"))))))
+
+(def dead-end
+  "A corridor five wide, closed behind the body (z -2), open towards +z."
+  (wall-cells (concat (for [x (range -3 4)] [x -2]) (for [z (range -2 8)] [-3 z]) (for [z (range -2 8)] [3 z]))))
+
+(deftest a-retreat-with-only-side-steps-left-fights-instead-of-shuffling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks dead-end :entities [(zombie 0 3)]}))]
+          (is (zero? (count (calls p "moveTo"))) "a two-block side step gains nothing on the zombie")
+          (is (= 1 (count (calls p "attack")))))))))
