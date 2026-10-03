@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv
+  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter
 } from './view.mjs'
 
 const { Vec3 } = vec3
@@ -378,4 +378,42 @@ test('stats report pose ms and bytes apart from column ms', async () => {
   assert.equal(s.poseBytes, fs.statSync(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')).size)
   assert.ok(s.poseMs > 0)
   assert.equal(s.ms, 0)
+})
+
+test('overlapping atomic writes to one file do not collide on the temp name', async () => {
+  const file = path.join(tmp(), 'x.json')
+  await Promise.all(Array.from({ length: 30 }, (_, i) => writeAtomic(file, String(i))))
+  assert.deepEqual(fs.readdirSync(path.dirname(file)), ['x.json'])
+})
+
+test('a coalesced writer keeps one write in flight and the last data wins', async () => {
+  const file = path.join(tmp(), 'p.json')
+  const errors = []
+  const write = coalescedWriter(file, e => errors.push(e))
+  await Promise.all(Array.from({ length: 50 }, (_, i) => write(String(i))))
+  assert.equal(fs.readFileSync(file, 'utf8'), '49')
+  assert.deepEqual(errors, [])
+  assert.deepEqual(fs.readdirSync(path.dirname(file)), ['p.json'])
+})
+
+test('a coalesced writer reports errors and keeps going', async () => {
+  const dir = tmp()
+  fs.writeFileSync(path.join(dir, 'blocker'), '')
+  const errors = []
+  const write = coalescedWriter(path.join(dir, 'blocker', 'f.json'), e => errors.push(e))
+  await write('a')
+  await write('b')
+  assert.equal(errors.length, 2)
+})
+
+test('rapid pose ticks while a write is in flight never raise a view.error', async () => {
+  const bot = fakeBot()
+  const { view, events } = makeView(bot)
+  for (let i = 0; i < 40; i++) {
+    bot.entity.position.x += 1
+    view.tickPose()
+  }
+  await view.detach()
+  await view.idle()
+  assert.deepEqual(events, [])
 })

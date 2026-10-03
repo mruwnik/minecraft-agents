@@ -29,8 +29,9 @@ export const poseFile = (stateDir, agent) => path.join(stateDir, 'agents', agent
 export const hudFile = (stateDir, agent) => path.join(stateDir, 'agents', agent, 'view', 'hud.json')
 
 // write to <file>.tmp.<pid> then rename, so a reader never sees half a file
+let writeCounter = 0
 export async function writeAtomic (file, data) {
-  const tmp = `${file}.tmp.${process.pid}`
+  const tmp = `${file}.tmp.${process.pid}.${writeCounter++}`
   const write = () => fs.promises.writeFile(tmp, data)
   await write().catch(async err => {
     if (err.code !== 'ENOENT') throw err
@@ -38,6 +39,31 @@ export async function writeAtomic (file, data) {
     await write()
   })
   await fs.promises.rename(tmp, file)
+}
+
+// One write in flight per file. A write asked for meanwhile replaces any waiting one, so the last data always lands
+// and the intermediate ones are dropped. Resolves when data (or something newer) has been written; never rejects
+// (errors go to onError).
+export function coalescedWriter (file, onError = () => {}) {
+  let running = null
+  let waiting = null
+  const drain = async () => {
+    while (waiting) {
+      const { data, done } = waiting
+      waiting = null
+      await writeAtomic(file, data).catch(onError)
+      done()
+    }
+    running = null
+  }
+  return data => {
+    const done = new Promise(resolve => {
+      const superseded = waiting
+      waiting = { data, done: () => { resolve(); superseded?.done() } }
+    })
+    running ??= drain()
+    return done
+  }
 }
 
 // ---- chunk column encoding ----
@@ -265,9 +291,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     return track(Promise.all(writes))
   }
 
-  const writePose = async json => {
-    await writeAtomic(poseFile(stateDir, agent), json).catch(reportError)
-  }
+  const writePose = coalescedWriter(poseFile(stateDir, agent), err => reportError(err))
+  const writeHud = coalescedWriter(hudFile(stateDir, agent), err => reportError(err))
 
   // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
   const tickPose = () => {
@@ -302,7 +327,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (key === lastHudKey) return Promise.resolve()
     lastHudKey = key
     stats.huds++
-    return track(writeAtomic(hudFile(stateDir, agent), JSON.stringify(hud)).catch(reportError))
+    return track(writeHud(JSON.stringify(hud)))
   }
 
   const takeStats = () => {
