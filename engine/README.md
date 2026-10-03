@@ -866,7 +866,7 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 
 | primitive | what it does to the bot |
 |---|---|
-| `moveTo` | `pathfinder.goto(GoalNear)`. Beyond `maxDistance` it walks a `GoalNearXZ` point that far along the straight line, so the result is `partial`. Cleanup: `setGoal(null)`, `clearControlStates`. After the bound or a pathfinder failure: `partial` if at least 1 block closer, else `blocked`. A resolved `goto` counts as `arrived` only if `goal.isEnd` holds for the floored body position: goto.js (patched) also resolves on a `noPath` update with an empty path, which is `blocked` with `reason: 'noPath'`. Movements are built by `connect.mjs` with digging, towers and scaffolding off |
+| `moveTo` | `pathfinder.goto(GoalNear)`. Beyond `maxDistance` it walks a `GoalNearXZ` point that far along the straight line, so the result is `partial`. Cleanup: `setGoal(null)`, `clearControlStates`. After the bound or a pathfinder failure: `partial` if at least 1 block closer, else `blocked`. When the pathfinder reports `path_reset` `'stuck'` and its first path node is one block up and horizontally adjacent (a 1-deep hole: the body presses flush against the ledge and the server rejects every jump), the walk steps up at most twice: it centres in the cell, holds jump alone, presses forward once the feet are a block above the start, then re-issues the `goto`. A resolved `goto` counts as `arrived` only if `goal.isEnd` holds for the floored body position: goto.js (patched) also resolves on a `noPath` update with an empty path, which is `blocked` with `reason: 'noPath'`. Movements are built by `connect.mjs` with digging, towers and scaffolding off |
 | `swim` | `setControlState('jump', true)` while `blockAt(eye cell)` is water, `false` on every exit |
 | `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
 | `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
@@ -886,7 +886,7 @@ before it quits so its `end` does not report a `disconnected`.
 Known gaps:
 
 - No tool selection before `dig`; the bot digs with whatever is in hand.
-- `moveTo` has no no-progress detector: a stuck walk ends at the time bound as `blocked` or `partial`.
+- `moveTo` has no general no-progress detector (only the step-up out of a 1-deep hole): a stuck walk ends at the time bound as `blocked` or `partial`.
 - The `hurt` event has no `cause`. `isDay` ignores thunderstorms for `sleep`.
 - `eat` relies on `bot.consume()`; on a server that never sends the finish status it can only time out (the `food`
   rise check softens this). Not exercised against a real server.

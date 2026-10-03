@@ -1011,3 +1011,89 @@ test('swim toward is not landed while still in the water next to the target', as
   const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': 'water' }, pos: [1.2, 64, 0] })
   assert.equal((await p.swim('t1', { ms: 3000, toward: at(1, 64, 0) })).status, 'timeout')
 })
+
+// moveTo: a 1-deep hole. The pathfinder stalls against the ledge (path_reset 'stuck'); the body must centre, jump, then
+// press forward. The tiny simulation: jump raises y 0.25 per tick up to start+1.25; forward moves x 0.2 per tick but only
+// once y >= start+1 (the ledge is at x >= 1); the ground is 63 in the hole and 64 on the ledge.
+const HOLE_SCALE = 0.05
+const START_Y = 63
+const holeRig = ({ pathNode = at(1, 64, 0), raises = true, startX = 0.5, resolveAfter = Infinity } = {}) => {
+  const bot = stubBot({ pos: [startX, START_Y, 0.5] })
+  const pos = bot.entity.position
+  const p = createPrimitivesFromBot(bot, { timeScale: HOLE_SCALE })
+  p.setOwner('t1')
+  const gotos = []
+  const sequence = []
+  bot.pathfinder.goto = () => {
+    gotos.push(1)
+    bot.emit('path_update', { status: 'success', path: [pathNode] })
+    setTimeout(() => bot.emit('path_reset', 'stuck'), 0)
+    return gotos.length > resolveAfter ? Promise.resolve() : new Promise(() => {})
+  }
+  const record = bot.setControlState
+  bot.setControlState = (control, state) => { sequence.push(`${control}:${state}`); return record(control, state) }
+  const simulate = setInterval(() => {
+    const cs = bot.controlState
+    const ground = pos.x >= 1 ? START_Y + 1 : START_Y
+    if (cs.forward && (pos.y >= START_Y + 1 || pos.x >= 1)) pos.x += 0.2
+    if (raises && cs.jump && pos.x < 1 && pos.y < START_Y + 1.25) pos.y += 0.25
+    else if (pos.y > ground) pos.y = Math.max(ground, pos.y - 0.25)
+    if (pos.x >= 1) pos.y = Math.max(pos.y, ground)
+    bot.entity.onGround = Number.isInteger(pos.y)
+    bot.emit('physicsTick')
+  }, 1).unref()
+  return { bot, p, gotos, sequence, stop: () => clearInterval(simulate) }
+}
+const jumpsHeld = seq => seq.filter(s => s === 'jump:true').length
+
+test('moveTo: stalled in a 1-deep hole, the walk centres, jumps, then presses forward, and re-issues the goto to arrive', async () => {
+  const { bot, p, gotos, sequence, stop } = holeRig({ startX: 0.3, resolveAfter: 1 })
+  const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
+  stop()
+  assert.equal(result.status, 'arrived')
+  assert.ok(sequence.indexOf('jump:true') < sequence.indexOf('forward:true', sequence.indexOf('jump:true')))
+  assert.equal(gotos.length, 2)
+  assert.deepEqual(bot.controlState, {})
+})
+
+test('moveTo: a path whose first node is two blocks up gets no step-up and ends blocked at the bound', async () => {
+  const { p, sequence, stop } = holeRig({ pathNode: at(1, 65, 0) })
+  const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
+  stop()
+  assert.equal(result.status, 'blocked')
+  assert.equal(jumpsHeld(sequence), 0)
+})
+
+test('moveTo: a path whose first node is not adjacent gets no step-up', async () => {
+  const { p, sequence, stop } = holeRig({ pathNode: at(2, 64, 0) })
+  const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
+  stop()
+  assert.equal(result.status, 'blocked')
+  assert.equal(jumpsHeld(sequence), 0)
+})
+
+test('moveTo: a step-up that never raises the body is tried at most twice', async () => {
+  const { p, sequence, stop } = holeRig({ raises: false })
+  const result = await p.moveTo('t1', { pos: at(1, 64, 0), range: 0, timeoutS: 40 })
+  stop()
+  assert.equal(result.status, 'blocked')
+  assert.equal(jumpsHeld(sequence), 2)
+})
+
+test('moveTo: a cut during the step-up clears the control states and rejects with cut', async () => {
+  const { bot, p, stop } = holeRig({ raises: false })
+  const call = p.moveTo('t1', { pos: at(1, 64, 0), range: 0 })
+  await new Promise(resolve => bot.on('physicsTick', () => bot.controlState.jump && resolve()))
+  p.setOwner('t2')
+  await assert.rejects(call, err => err.code === 'cut')
+  stop()
+  assert.deepEqual(bot.controlState, {})
+})
+
+test('moveTo: a goto that teleports the body into a pit away from the goal and resolves is not arrived', async () => {
+  const { bot, p } = rig(world)
+  bot.pathfinder.goto = () => { bot.entity.position = new Vec3(20.5, 54, 0.5); return Promise.resolve() }
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0) })
+  assert.notEqual(result.status, 'arrived')
+  assert.deepEqual(result.pos, at(20.5, 54, 0.5))
+})

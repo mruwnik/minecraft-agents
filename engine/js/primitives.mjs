@@ -28,6 +28,12 @@ const SWIM_MAX_MS = 10000
 const RECONNECT_TRIES = 3
 const RECONNECT_RETRY_MS = 5000
 const POSE_SLEEPING = 2
+// Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
+const STEP_RISE = 1.0
+const CENTRE_TOLERANCE = 0.15
+const CENTRE_S = 1
+const STEP_S = 1.5
+const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
 
 const WAIT_MAX_MS = 10000
@@ -153,15 +159,74 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // The goal is cleared on every way out (arrived, gave up, timed out, cut): a goal left set makes the pathfinder
   // walk the body back on its own, e.g. after a respawn.
   const stopWalking = target => { target.pathfinder?.setGoal(null); target.clearControlStates?.() }
+  const stepUpTarget = (path, body) => {
+    const next = path?.[0]
+    if (!next) return null
+    const from = cell(body.entity.position)
+    const adjacent = Math.abs(next.x - from.x) + Math.abs(next.z - from.z) === 1
+    return adjacent && next.y === from.y + 1 ? { x: next.x, y: next.y, z: next.z } : null
+  }
+  const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.height ?? 1.62), c.z + 0.5), true)
+  const waitUntil = async (ctx, done, boundS) => {
+    const deadline = Date.now() + boundS * 1000 * timeScale
+    while (!done() && Date.now() < deadline) {
+      await sleepMs(POLL_MS * timeScale)
+      ctx.alive()
+    }
+  }
+  // Out of a 1-deep hole: the server rejects every jump while the body is flush against a wall, so centre in the cell
+  // first, then hold jump alone, and press forward only once the feet are a block above where they started.
+  const stepUp = async (ctx, body, target) => {
+    const pos = body.entity.position
+    const centre = cell(pos)
+    const startY = pos.y
+    const toCentre = () => Math.hypot(centre.x + 0.5 - pos.x, centre.z + 0.5 - pos.z)
+    const onTick = () => { if (pos.y >= startY + STEP_RISE) body.setControlState('forward', true) }
+    stopWalking(body)
+    try {
+      if (toCentre() >= CENTRE_TOLERANCE) {
+        await faceCentre(body, centre)
+        ctx.alive()
+        body.setControlState('forward', true)
+        await waitUntil(ctx, () => toCentre() < CENTRE_TOLERANCE, CENTRE_S)
+        body.setControlState('forward', false)
+      }
+      await faceCentre(body, target)
+      ctx.alive()
+      body.setControlState('jump', true)
+      body.on('physicsTick', onTick)
+      const landed = () => { const now = cell(pos); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
+      await waitUntil(ctx, landed, STEP_S)
+    } finally {
+      body.off('physicsTick', onTick)
+      body.clearControlStates()
+    }
+  }
+  // A goto is rejected by our own setGoal(null) when a step-up starts; that is not a failure, the walk re-issues it.
   const walk = async (ctx, goal) => {
     const walking = bot
     ctx.onAbort(() => stopWalking(walking))
+    let path = null
+    let onStuck = () => {}
+    const onUpdate = result => { if (result?.status === 'success' || result?.status === 'partial') path = result.path }
+    const onReset = reason => { if (reason === 'stuck') onStuck() }
+    walking.on('path_update', onUpdate)
+    walking.on('path_reset', onReset)
     try {
-      ctx.alive()
-      const reached = await walking.pathfinder.goto(goal).then(() => true, () => false)
-      ctx.alive()
-      return reached
+      for (let attempts = 0; ; attempts++) {
+        ctx.alive()
+        const stuck = new Promise(resolve => {
+          onStuck = () => { const target = attempts < STEP_ATTEMPTS ? stepUpTarget(path, walking) : null; if (target) resolve(target) }
+        })
+        const ended = await Promise.race([walking.pathfinder.goto(goal).then(() => true, () => false), stuck])
+        ctx.alive()
+        if (typeof ended === 'boolean') return ended
+        await stepUp(ctx, walking, ended)
+        ctx.alive()
+      }
     } finally {
+      walking.off('path_update', onUpdate)
+      walking.off('path_reset', onReset)
       stopWalking(walking)
     }
   }
