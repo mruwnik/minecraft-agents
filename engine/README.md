@@ -9,7 +9,10 @@ for the engine, jobs and triggers; JavaScript for the mineflayer layer
 shadow-cljs 3.5.4 (ClojureScript 1.12.145), because a JVM is present. Async
 code uses `^:async` functions with `await`; promesa is not used. `await` works
 inside `let`, `loop`/`recur`, `cond` and `try` in an `^:async` fn, but not
-inside a nested `fn`, which is a separate (non-async) function.
+inside a nested `fn`, which is a separate (non-async) function. An anonymous
+async fn needs a name: `(fn ^:async round [ctx] ...)` compiles,
+`^:async (fn [ctx] ...)` and `(fn ^:async [ctx] ...)` do not. Prefer
+`(defn ^:async foo-round [ctx] ...)`.
 
 ```
 cd engine
@@ -31,7 +34,11 @@ Layout:
 - `src/engine/` `core` (list, register, scheduler), `memory`, `events`,
   `ctx` (helpers job rounds call), `conditions` (data conditions for yields),
   `catalog` (every job and trigger by name), `scenario`, `main`.
-- `src/engine/jobs/` job definitions. `src/engine/triggers.cljs` triggers.
+- `src/engine/jobs/` job definitions; `engine.jobs.samples` holds three tiny
+  ones (`:go-to`, `:wait-for-day`, `:eat`) that prove the contract.
+  `src/engine/triggers.cljs` triggers (`:health-low`). Register new jobs and
+  triggers in `engine.catalog`.
+- `scenarios/sample.edn` a scenario using the samples.
 - `test/engine/` cljs tests. Test helpers live in `engine.test-util`.
 
 The cljs side loads JS modules at runtime with `js/require` (Node 24 can
@@ -184,7 +191,7 @@ A job definition is a map:
 ```clojure
 {:name         :go-to                         ; keyword, unique in the catalog
  :precondition (fn [world memory args] ...)   ; optional; true | :not-yet | false
- :round        (fn ^:async [ctx] ...)}        ; see results below
+ :round        go-to-round}                   ; a (defn ^:async go-to-round [ctx] ...); results below
 ```
 
 - `world` is the primitives object (sensing methods only, by convention).
@@ -205,6 +212,8 @@ Round results:
 | `{:status :continue :wake [:day]}` | a yield with a per-round precondition (a data condition, see `engine.conditions`); it overrides the definition's precondition until the job next runs |
 
 A round may also throw; the job is then dropped with a `job.failed` warn.
+A reflex job keeps the body between its rounds while it returns `:continue`;
+`:done`, `:not-ready` or a throw ends it.
 
 ### ctx
 
@@ -344,7 +353,8 @@ EDN, read with `cljs.reader`:
 It refuses to start, with a message, when `js/primitives.mjs` does not exist.
 If `state/agents/<name>/engine/engine.edn` exists the saved list and register
 are restored and the scenario is ignored; pass `--fresh` to discard saved
-engine state and start from the scenario. `--state-dir <dir>` overrides the
+engine state and start from the scenario. The scenario is validated against
+the catalog before connecting. `--state-dir <dir>` overrides the
 repo's `state/`.
 
 ## Not built (hooks only)
