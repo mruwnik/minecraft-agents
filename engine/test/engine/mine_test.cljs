@@ -72,7 +72,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "dirt" :count 4} {:blocks floor} 80))]
-          (is (= :count (:reason (done-event s))))
+          (is (= :spent-on-mend (:reason (done-event s))) "the dirt is the only filler, so the mend eats the count")
+          (is (= :count (:dig-reason (done-event s))))
           (is (pos? (:mended (done-event s))))
           (is (= 4 (:mended (done-event s))))
           (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))
@@ -241,7 +242,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 2}
-                                 {:blocks (cells "stone" [3 4] [64] [0]) :drops {"stone" "cobblestone"}} 30))]
+                                 {:blocks (cells "stone" [3 4] [64] [0]) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 30))]
           (is (>= (get (inv s) "cobblestone") 2))
           (is (nil? (get (inv s) "stone")))
           (is (= :count (:reason (done-event s)))))))))
@@ -348,7 +349,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 4}
-                                 {:blocks (merge floor (cells "stone" [4 5 6 7 8 9] [64] [0])) :drops {"stone" nil}} 60))
+                                 {:blocks (merge floor (cells "stone" [4 5 6 7 8 9] [64] [0])) :drops {"stone" nil} :inventory [{:name "iron_pickaxe" :count 1}]} 60))
               warns (events-of s :mine.gave-up)]
           (is (= 3 (dig-count s)))
           (is (= :no-drops (:reason (done-event s))))
@@ -376,7 +377,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 4 :dry-digs 2}
-                                 {:blocks (cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" nil}} 60))]
+                                 {:blocks (cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" nil} :inventory [{:name "iron_pickaxe" :count 1}]} 60))]
           (is (= 2 (dig-count s)))
           (is (= :no-drops (:reason (done-event s)))))))))
 
@@ -385,6 +386,115 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 6 :dry-digs 1}
-                                 {:blocks (cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"}} 80))]
+                                 {:blocks (cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80))]
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.gave-up))))))))
+
+;; ------------------------------------------------------------------ the mend must not eat the count
+
+(def pickaxe [{:name "iron_pickaxe" :count 1}])
+(def cobble {"stone" "cobblestone"})
+(def stone-floor
+  "A stone floor under the start (y 62, 63) on a dirt layer, so a body in a pit has support."
+  (merge (cells "dirt" (range -2 3) [61] (range -2 3)) (cells "stone" (range -2 3) [62 63] (range -2 3))))
+(def stone-hill (cells "stone" [5 6] [64 65] [0 1 2]))
+
+(defn ground-cell? [{:keys [x y z]}] (and (<= -2 x 2) (<= -2 z 2) (#{62 63} y)))
+(defn dug-ground [s] (filterv #(ground-cell? (js->clj (.-pos (.-args %)) :keywordize-keys true)) (calls s "dig")))
+
+(deftest exposed-ground-under-the-start-is-dug-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 6}
+                                 {:blocks (merge stone-floor stone-hill) :drops cobble :inventory pickaxe} 80))]
+          (is (= 6 (get (inv s) "cobblestone")))
+          (is (empty? (dug-ground s)) "the floor under the start is never dug")
+          (is (= :count (:reason (done-event s))))
+          (is (= 6 (:got (done-event s)))))))))
+
+(deftest the-mend-fills-with-other-filler-before-the-mined-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 2}
+                                 {:blocks stone-floor :drops cobble
+                                  :inventory (conj pickaxe {:name "dirt" :count 10})} 80))
+              items (mapv #(.-item (.-args %)) (concat (calls s "place") (calls s "jumpPlace")))]
+          (is (= :count (:reason (done-event s))))
+          (is (pos? (count items)) "the mend placed")
+          (is (every? #{"dirt"} items) "never the cobblestone")
+          (is (= 2 (get (inv s) "cobblestone"))))))))
+
+(deftest a-mend-that-spends-the-count-ends-spent-on-mend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 6}
+                                 {:blocks stone-floor :drops cobble :inventory pickaxe} 120))
+              done-ev (done-event s)]
+          (is (= :spent-on-mend (:reason done-ev)))
+          (is (= :count (:dig-reason done-ev)))
+          (is (= (:got done-ev) (get (inv s) "cobblestone" 0)) "got is what is left")
+          (is (every? #{"stone" "cobblestone"} (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))) "the floor is solid")
+          (is (finished? s)))))))
+
+(def stone-tunnel
+  "A dirt block east of the start with a stone tunnel through it: (2,63,0) is ground under the start, 3 and 4 lie beyond it and are buried until it is dug."
+  (merge (cells "dirt" (range 2 6) [62 63 64] [-1 0 1])
+         (cells "stone" [2 3 4] [63] [0])))
+
+(deftest a-mend-that-spends-the-count-resumes-when-more-is-exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 2} {:blocks stone-tunnel :drops cobble :inventory pickaxe} 200))]
+          (is (= :count (:reason (done-event s))))
+          (is (= 2 (:got (done-event s))))
+          (is (= 3 (dig-count s)) "the ground cell, then the two beyond it")
+          (is (= 1 (:resumes (done-event s))))
+          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (is (= "cobblestone" (block-at s 2 63 0)) "the ground cell is mended")
+          (is (finished? s)))))))
+
+;; ------------------------------------------------------------------ no tool, no dig
+
+(deftest stone-without-a-pickaxe-is-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (start {:world {:blocks (cells "stone" [3 4] [64] [0])}})
+              out (atom nil)
+              parent {:check (constantly true)
+                      :round (fn ^:async mining-parent [c]
+                               (let [r (await (ctx/call-child c :kid 'jobs.gather.mine {:block "stone" :count 2}))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
+          (core/submit! eng '(mining-parent) {})
+          (dotimes [_ 10]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= {:got 0 :reason :no-tool :tool "pickaxe"} @out)))))))
+
+(deftest no-tool-warns-and-never-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 10))
+              warns (events-of s :mine.no-tool)]
+          (is (zero? (dig-count s)))
+          (is (= [:warn] (mapv :level warns)))
+          (is (= ["pickaxe"] (mapv :tool warns)))
+          (is (= :no-tool (:reason (done-event s))))
+          (is (nil? (:ground (job-mem s))) "nothing was written")
+          (is (finished? s)))))))
+
+(deftest sand-without-a-shovel-is-still-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 2} {:blocks (cells "sand" [3 4] [64] [0])} 40))]
+          (is (empty? (events-of s :mine.no-tool)))
+          (is (= 2 (dig-count s)))
+          (is (= :count (:reason (done-event s)))))))))
