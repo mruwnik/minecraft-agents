@@ -527,3 +527,47 @@
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (tick-n eng 4))
           (is (seq (calls p "place")) "dig-in was tried again, not a bare decline"))))))
+
+(def futile-world
+  {:time night :drops {"iron_ore" "raw_iron"}
+   :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})
+
+(deftest a-futile-pit-is-not-dug-again-on-the-next-firing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup futile-world)
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (tick-n eng 6))
+          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :dig-in-futile)))
+          (swap! clock + 11000)
+          (await (tick-n eng 6))
+          (is (= 1 (count (calls p "dig"))) "the second firing does not dig")
+          (is (= 2 (count (declined-events seen :always-shelter)))))))))
+
+(deftest a-futile-pit-does-not-stop-a-body-that-carries-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc futile-world :inventory dirt-stack))]
+          (mem/write! (:store eng) :dig-in-futile {:pos {:x 0 :y 64 :z 0}} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (seq (calls p "place"))))))))
+
+(deftest needs-bed-is-warned-once-across-firings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (refuse-placing! p)
+          (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 7 day-ms)})
+          (swap! clock + (* 4 day-ms))
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (tick-n eng 6))
+          (swap! clock + 11000)
+          (await (tick-n eng 6))
+          (is (= 2 (count (declined-events seen :always-shelter))))
+          (is (= 1 (count (emitted seen :needs_bed)))))))))

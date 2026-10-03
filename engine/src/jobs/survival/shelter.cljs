@@ -24,9 +24,10 @@
   walk back toward the bed) while the other choices work. A body whose latest
   :slept entry is more than :max-days-awake in-game days (20 minutes each)
   old, which phantoms attack, looks for a bed within :urgent-bed-radius rather
-  than :bed-radius and emits a needs_bed warn once so a job that can find or
+  than :bed-radius and emits a needs_bed warn at most once an in-game day (a :needs-bed body-memory
+  entry, so a re-fired reflex does not repeat it) so a job that can find or
   craft a bed can act. A body with no :slept entry has no known last sleep and
-  is never counted as overdue. Memory: reads :slept (and, through the children,
+  is never counted as overdue. Memory: reads :slept, reads and writes :needs-bed (and, through the children,
   :bed, :bed-unreachable and :log-out); dig-in writes :shelter, which nothing
   here reads.")
 
@@ -46,9 +47,11 @@
   (let [days (sh/days-awake c)]
     (and (some? days) (>= days (:max-days-awake (:args c))))))
 
+(def needs-bed-policy {:cap 1 :ttl sh/ms-per-day})
+
 (defn note-needs-bed! [c]
-  (when-not (:needs-bed-noted (ctx/mem c))
-    (ctx/update-mem! c assoc :needs-bed-noted true)
+  (when (empty? (ctx/entries c :needs-bed))
+    (ctx/remember! c :needs-bed {} needs-bed-policy)
     (ctx/emit! c :needs_bed :warn {:days (sh/days-awake c)
                                    :text "not slept for too long; phantoms will come, find or make a bed"})))
 

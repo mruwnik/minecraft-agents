@@ -16,7 +16,11 @@
   above, at the cell the body stood in, from a carried or dug block. If a dig
   drops no placeable block and none is carried it stops at once (a
   dig_in_failed warn, \"nothing to roof the pit with\") instead of leaving the
-  body in a roofless pit. Dig mode keeps its :roof and :target-y, but if the
+  body in a roofless pit, and remembers the column's start cell as a
+  :dig-in-futile entry (cap 5, 10 minutes). Its check declines while it carries
+  no placeable block and such an entry lies within 8 blocks of the body, so a
+  re-fired reflex does not dig a deeper pit every time; with blocks carried it
+  is unaffected. Dig mode keeps its :roof and :target-y, but if the
   body's x or z no longer matches that column it chooses again from the
   current cell. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
@@ -25,7 +29,7 @@
   In walls mode the entry also has :door, the feet-height and head-height
   cells of one side it placed itself; the pit has no :door. The entry is
   history for now: nothing reads it. A body that cannot place or dig gives up
-  after three failures with a dig_in_failed warn. Memory: writes :shelter.")
+  after three failures with a dig_in_failed warn. Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -38,6 +42,10 @@
    :max-places {:doc "placements per round" :default 4}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
+
+(def futile-policy {:cap 5 :ttl 600000})
+
+(def futile-radius 8)
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -131,7 +139,8 @@
                   (await (collect-drops! c blocks (.-drops r)))
                   (if (or placeable (some? (pick c blocks)))
                     :continue
-                    (do (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
+                    (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c))} futile-policy)
+                        (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
                         :done)))
                 (u/fail! c :dig_in_failed (str "cannot dig down: " (.-status r))))))))
 
@@ -167,9 +176,17 @@
           (ctx/update-mem! c assoc :mode :walls)
           (ctx/update-mem! c assoc :mode :dig :roof start :target-y (- (:y start) 2)))))))
 
+(defn futile-nearby?
+  "Whether an unexpired :dig-in-futile entry lies within futile-radius of the body."
+  [c]
+  (let [here (u/self-pos c)]
+    (boolean (some #(<= (u/dist here (:pos (:data %))) futile-radius) (ctx/entries c :dig-in-futile)))))
+
 (defn check [c]
   (and (sh/night? (:primitives c))
-       (not (sh/roofed? (:primitives c) (:roof-height (:args c))))))
+       (not (sh/roofed? (:primitives c) (:roof-height (:args c))))
+       (or (seq (carried c (:blocks (:args c))))
+           (not (futile-nearby? c)))))
 
 (defn ^:async step [c]
   (choose-mode c)
