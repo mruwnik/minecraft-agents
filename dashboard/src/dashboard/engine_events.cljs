@@ -72,13 +72,16 @@
                          %))
       (update :warns #(if (#{"warn" "error"} (:level e)) (conj % {:t (:t e) :level (:level e)}) %))))
 
-;; events: oldest first. Returns a new state.
-(defn fold-engine [state events]
-  (let [next (reduce fold-one state events)
-        from (- (get-in next [:last :t] 0) warn-window-ms)]
+;; Warnings older than the window are dropped; a state that gained nothing is returned as it was.
+(defn trim-warns [state next]
+  (let [from (- (get-in next [:last :t] 0) warn-window-ms)]
     (if (identical? next state)
       state
       (update next :warns #(filterv (fn [w] (> (:t w) from)) %)))))
+
+;; events: oldest first. Returns a new state.
+(defn fold-engine [state events]
+  (trim-warns state (reduce fold-one state events)))
 
 (defn engine-view [state now]
   (if-not (:last state)
@@ -122,13 +125,43 @@
 (defn decode-bytes [bytes]
   (.decode (js/TextDecoder.) bytes))
 
+;; a read that starts mid-file begins inside a line that may be longer than one chunk: skip to its newline.
+;; state {:rest bytes of a line still being written, :skipping? still inside the torn head}
+(defn split-chunk [{:keys [rest skipping?]} chunk]
+  (let [i (if skipping? (.indexOf chunk newline-byte) 0)
+        starts-whole? (not (neg? i))
+        usable (cond (not skipping?) chunk starts-whole? (.subarray chunk (inc i)) :else (js/Uint8Array. 0))]
+    (assoc (complete-lines rest usable) :skipping? (not starts-whole?))))
+
 (defn parse-line [line]
   (let [parsed (try (js/JSON.parse line) (catch :default _ nil))]
     (when (and (some? parsed) (identical? "object" (goog/typeOf parsed)) (not (array? parsed)))
       [(js->clj parsed :keywordize-keys true)])))
 
-(defn parse-event-lines [text]
-  (into [] (mapcat parse-line) (remove empty? (.split text "\n"))))
+;; line-test: a cheap string test run before parsing; lines it rejects are never JSON-parsed
+(defn parse-event-lines
+  ([text] (parse-event-lines text any?))
+  ([text line-test]
+   (into [] (comp (remove empty?) (filter line-test) (mapcat parse-line)) (.split text "\n"))))
+
+;; What fold-one reads, and nothing else: inventories, args and path dumps are never converted.
+(def fold-fields ["t" "seq" "pos" "job" "chain" "source" "kind" "name" "reflex" "level" "text" "error"])
+
+(defn fold-event [o]
+  (reduce (fn [m k]
+            (let [v (aget o k)]
+              (if (undefined? v) m (assoc m (keyword k) (js->clj v :keywordize-keys true)))))
+          {}
+          fold-fields))
+
+(defn parse-fold-line [line]
+  (let [parsed (try (js/JSON.parse line) (catch :default _ nil))]
+    (when (and (some? parsed) (identical? "object" (goog/typeOf parsed)) (not (array? parsed)))
+      [(fold-event parsed)])))
+
+;; fold-engine over the lines of a text, one line at a time: no vector of events
+(defn fold-text [state text]
+  (trim-warns state (transduce (comp (remove empty?) (mapcat parse-fold-line)) (completing fold-one) state (.split text "\n"))))
 
 ;; ---------------------------------------------------------------- agents and bodies
 ;; entries: [{:name :text raw config.json}]. No apiPort is needed (the engine serves none).

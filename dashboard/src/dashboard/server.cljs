@@ -32,6 +32,7 @@
 
 (def first-read-bytes (* 4 1024 1024)) ; ~10 minutes of debug-heavy engine events
 (def chat-tail-bytes (* 4 1024 1024))
+(def read-chunk-bytes (* 256 1024)) ; a big first read is processed this much at a time
 (def chat-keep 2000)
 (def max-preview-bytes (* 2 1024 1024))
 
@@ -61,6 +62,19 @@
         (.readSync fs fd buf 0 (.-length buf) start)
         buf)
       (finally (.closeSync fs fd)))))
+
+;; Reads file[from, size) read-chunk-bytes at a time, calling (f acc text) with the whole lines of each chunk.
+;; skip-head? is true when from is mid-file (the first line is torn). Returns {:acc :rest}: rest is a line
+;; still being written. No more than one chunk of the range is in memory at once.
+(defn reduce-lines [file from size skip-head? rest f init]
+  (loop [pos from
+         split {:rest rest :skipping? skip-head?}
+         acc init]
+    (if (>= pos size)
+      {:acc acc :rest (:rest split)}
+      (let [end (min size (+ pos read-chunk-bytes))
+            next-split (ee/split-chunk split (read-range file pos end))]
+        (recur end next-split (f acc (ee/decode-bytes (:complete next-split))))))))
 
 ;; ---------------------------------------------------------------- worlds
 (defn world-names []
@@ -101,11 +115,8 @@
         previous (if fresh? {:state ee/empty-engine :rest (js/Uint8Array. 0)} cached)]
     (if (and (not fresh?) (= size (:offset cached)))
       cached
-      (let [chunk (read-range file from size)
-            {:keys [complete rest]} (ee/complete-lines (:rest previous) (if (and fresh? (pos? from)) (ee/drop-torn-head chunk) chunk))]
-        {:offset size
-         :state (ee/fold-engine (:state previous) (ee/parse-event-lines (ee/decode-bytes complete)))
-         :rest rest}))))
+      (let [{:keys [acc rest]} (reduce-lines file from size (and fresh? (pos? from)) (:rest previous) ee/fold-text (:state previous))]
+        {:offset size :state acc :rest rest}))))
 
 (defn read-engine [name]
   (let [entry (advance-engine (get @engines name) (events-file name))]
@@ -221,22 +232,21 @@
            :selected world-name)))
 
 ;; ---------------------------------------------------------------- chat
-(defn talk-lines-of [bytes]
-  (filterv chat/talk? (ee/parse-event-lines (ee/decode-bytes bytes))))
+(defn talk-lines-of [text]
+  (filterv chat/talk? (ee/parse-event-lines text chat/maybe-talk-line?)))
 
 ;; First sight of a file: its last chat-tail-bytes. After that only the bytes appended since (a line still being
 ;; written is carried to the next read); a file that shrank starts over. Position events flood the file, so a small
-;; tail would forget a chat line within minutes.
+;; tail would forget a chat line within minutes. Each chunk is reduced to its chat lines at once.
 (defn read-chat-tail [file cached]
   (let [size (.-size (.statSync fs file))
         fresh? (or (nil? cached) (< size (:size cached)))
         start (if fresh? (max 0 (- size chat-tail-bytes)) (:size cached))
-        raw (read-range file start size)
-        bytes (if (and fresh? (pos? start)) (ee/drop-torn-head raw) raw)
-        {:keys [complete rest]} (ee/complete-lines (if fresh? (js/Uint8Array. 0) (:rest cached)) bytes)]
-    {:size size
-     :rest rest
-     :lines (vec (take-last chat-keep (into (if fresh? [] (:lines cached)) (talk-lines-of complete))))}))
+        keep-last (fn [lines text] (vec (take-last chat-keep (into lines (talk-lines-of text)))))
+        {:keys [acc rest]} (reduce-lines file start size (and fresh? (pos? start))
+                                         (if fresh? (js/Uint8Array. 0) (:rest cached))
+                                         keep-last (if fresh? [] (:lines cached)))]
+    {:size size :rest rest :lines acc}))
 
 (defn chat-lines [name]
   (let [file (events-file name)

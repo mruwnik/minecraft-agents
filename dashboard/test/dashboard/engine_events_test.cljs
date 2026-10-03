@@ -253,3 +253,33 @@
   (let [events (mapv #(ev % (if (even? %) {:kind "yielded"} {:kind "completed"})) (range 1 11))]
     (is (= [7 9] (mapv :seq (ee/log-tail events 2))))
     (is (= [1 3 5 7 9] (mapv :seq (ee/log-tail events 99))))))
+
+(defn jsonl [events] (apply str (map #(str (js/JSON.stringify (clj->js %)) "\n") events)))
+
+(deftest fold-text-equals-fold-of-parsed-events
+  (let [noise {:inventory [{:name "dirt" :count 3}] :args {:to "x"}}
+        events [(ev 1 {:name "(repeat look)"})
+                (ev 2 (merge noise {:source "body" :kind "hurt" :level "debug"}))
+                (ev 3 {:kind "failed" :error "boom" :level "warn"})
+                (ev 4 {:source "reflex" :kind "fired" :reflex "stuck" :level "info" :pos nil})
+                (ev 5 {:source "job" :kind "backoff" :name "dig" :level "debug"})
+                (ev 6 {:source "job" :kind "failed" :error {:code 3} :level "error"})]
+        text (str (jsonl events) "garbage\n\n")]
+    (is (= (fold events) (ee/fold-text ee/empty-engine text)))
+    (is (= (fold events) (ee/fold-text (ee/fold-text ee/empty-engine (jsonl (take 2 events))) (jsonl (drop 2 events)))))))
+
+(deftest split-chunk-cases
+  (doseq [[title state chunk text rest-text skipping?]
+          [["whole lines" {} "a\nb\n" "a\nb\n" "" false]
+           ["torn head dropped" {:skipping? true} "rn\"}\nb\nc" "b\n" "c" false]
+           ["torn head spans chunks" {:skipping? true} "no newline" "" "" true]
+           ["carry joins" {:rest (enc "b")} "c\nd" "bc\n" "d" false]]]
+    (testing title
+      (let [r (ee/split-chunk (update state :rest #(or % (js/Uint8Array. 0))) (enc chunk))]
+        (is (= text (decode (:complete r))))
+        (is (= rest-text (decode (:rest r))))
+        (is (= skipping? (:skipping? r)))))))
+
+(deftest parse-event-lines-with-line-filter
+  (is (= [{:seq 2 :kind "chat"}]
+         (ee/parse-event-lines "{\"seq\":1,\"kind\":\"x\"}\n{\"seq\":2,\"kind\":\"chat\"}\n" #(.includes % "chat")))))

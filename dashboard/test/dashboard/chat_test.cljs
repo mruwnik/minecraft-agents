@@ -1,5 +1,5 @@
 (ns dashboard.chat-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [are deftest is testing]]
             [dashboard.chat :as chat]))
 
 (def t0 1790000000000)
@@ -85,3 +85,14 @@
   (is (= [] (chat/merge-chat [(heard "A" {:source "body" :kind "spawned" :from "Dan" :t t0}
                                      {:source "action" :kind "started" :name "moveTo" :args {} :t t0}
                                      {:source "action" :kind "done" :name "chat" :t t0})] 200))))
+
+(deftest maybe-talk-line-keeps-every-line-talk-accepts
+  (are [line expected] (= expected (boolean (chat/maybe-talk-line? line)))
+    "{\"source\":\"body\",\"kind\":\"chat\",\"from\":\"a\"}" true
+    "{\"source\":\"chat\",\"kind\":\"said\"}" true
+    "{\"source\": \"chat\", \"kind\": \"whisper\"}" true
+    "{\"type\":\"chat\",\"t\":\"2026-01-01\"}" true
+    "{\"type\":\"whisper\"}" true
+    "{\"source\":\"action\",\"kind\":\"started\",\"name\":\"chat\"}" true
+    "{\"source\":\"body\",\"kind\":\"position\",\"text\":\"chat\"}" false
+    "{\"source\":\"job\",\"kind\":\"round_started\"}" false))

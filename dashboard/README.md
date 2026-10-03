@@ -5,7 +5,7 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
     npm install
     npm test          # shadow-cljs compile test && node out/test.cjs
     npm run build     # compiles :server (out/server.cjs) and :ui (out/public/js)
-    npm start         # build, then PORT=3701 node out/server.cjs   (127.0.0.1 only)
+    npm start         # build, then PORT=3701 node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs   (127.0.0.1 only)
 
 `DASHBOARD_ROOT` overrides the repo root (default: two levels above `out/`).
 

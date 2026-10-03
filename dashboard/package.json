@@ -5,7 +5,7 @@
   "scripts": {
     "test": "shadow-cljs compile test && node out/test.cjs",
     "build": "shadow-cljs compile server ui",
-    "start": "shadow-cljs compile server ui && node out/server.cjs"
+    "start": "shadow-cljs compile server ui && node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs"
   },
   "devDependencies": {
     "shadow-cljs": "3.5.4"
