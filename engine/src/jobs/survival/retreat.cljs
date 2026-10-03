@@ -11,13 +11,16 @@
   :ranged-radius) and keeps going while one is within :clear-radius, so a
   chasing mob does not catch up between steps. Cornered (no open direction,
   or the walk is blocked) it fights back with the best weapon whatever its
-  health; unarmed it gives up after three tries. Done when no hostile has
-  been within :clear-radius for :cooldown-ms.")
+  health; unarmed it gives up after three tries. Once per flight, with at
+  least :eat-gap blocks to the nearest hostile and food carried, it eats
+  (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
+  no hostile has been within :clear-radius for :cooldown-ms.")
 
 (def args
   {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :default 16}
-   :clear-radius {:doc "the flight goes on while a hostile is within this many blocks" :default 24}
+   :clear-radius {:doc "the flight goes on while a hostile is within this many blocks (zombies track to 35)" :default 40}
+   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat once per flight" :default 12}
    :step {:doc "blocks per walk" :default 6}
    :cooldown-ms {:doc "done once no hostile was in the clear radius for this long" :default 5000}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}})
@@ -143,6 +146,14 @@
           :continue)
       (u/fail! c :retreat_blocked why))))
 
+(defn ^:async eat-on-the-run!
+  "Once per flight, with the nearest hostile at least :eat-gap away, eat."
+  [c threat]
+  (when (and (not (:ate (ctx/mem c)))
+             (>= (.-distance threat) (:eat-gap (:args c))))
+    (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20}))]
+      (when (not= :declined r) (ctx/update-mem! c assoc :ate true)))))
+
 (defn ^:async round [c]
   (let [{:keys [radius ranged-radius clear-radius step cooldown-ms]} (:args c)
         p (:primitives c)
@@ -155,7 +166,8 @@
       (and (nil? threat) fleeing?) :continue
       (nil? threat) (do (ctx/update-mem! c assoc :last-seen now) :continue)
       :else
-      (let [from (u/self-pos c)
+      (let [_ (await (eat-on-the-run! c threat))
+            from (u/self-pos c)
             target (choose-target (block-at-fn p) from (u/pos-of (.-pos threat)) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
         (ctx/update-mem! c assoc :last-seen now)

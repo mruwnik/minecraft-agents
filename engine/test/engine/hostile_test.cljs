@@ -373,3 +373,53 @@
                                               {:inventory sword :blocks wall :entities [(zombie 1 5 0) (zombie 2 0 6)]}))]
           (is (= [2] (mapv #(.-id (.-args %)) (calls p "attack")))
               "the nearer zombie is behind the wall; the visible one is fought"))))))
+
+;; ------------------------------------------------------- finishing a fight, eating on the run
+
+(deftest combat-estimates-what-is-left-of-a-mob
+  (is (= 8 (combat/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")
+  (is (= 3 (combat/remaining-health {:name "zombie" :hits 2 :damage 6 :health 3})) "a reported health wins")
+  (is (= 16 (combat/remaining-health {:name "spider" :hits 0 :damage 6})))
+  (is (= 20 (combat/remaining-health {:name "unknown_mob" :hits 0 :damage 6})) "unknown mobs count as 20")
+  (is (= 6 (combat/weapon-damage "iron_sword")))
+  (is (= 1 (combat/weapon-damage nil)) "a fist"))
+
+(deftest respond-finishes-a-nearly-dead-hostile-below-min-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(assoc (zombie 100 3 0) :health 10)]}))]
+          (is (= 1 (count (calls p "attack"))) "one hit of the fake's 5: the zombie is at 5")
+          (set! (.. p -world -state -self -health) 6)
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 2 (count (calls p "attack"))) "below min-health, but one more hit kills it: it swings")
+          (is (empty? (.. p -world -state -entities))))))))
+
+(deftest respond-still-flees-below-min-health-from-a-healthy-hostile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(assoc (zombie 100 3 0) :health 20)]}))]
+          (set! (.. p -world -state -self -health) 6)
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "attack"))) "15 left is not nearly dead"))))))
+
+(deftest retreat-eats-once-when-the-gap-is-wide
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round retreat {:self {:food 10} :inventory [{:name "bread" :count 3}]
+                                                                 :entities [(zombie 5 0)]}))]
+          (is (zero? (count (calls p "eat"))) "the zombie is 5 away: no time to eat")
+          (set! (.. p -world -state -entities) #js [(clj->js (zombie 8 0))])
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "eat"))) "14 blocks of gap: it eats")
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "eat"))) "once per flight"))))))
+
+(deftest retreat-flees-until-the-hostile-is-forty-away
+  (is (= 40 (get-in (registry/jobs 'jobs.survival.retreat) [:args :clear-radius :default]))))

@@ -721,7 +721,7 @@ after three the job emits a warn and ends.
 | `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
 | `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
-| `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 24 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
+| `jobs.survival.retreat` | `{:radius 8 :ranged-radius 16 :clear-radius 40 :eat-gap 12 :step 6 :cooldown-ms 5000 :weapons}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
 | `jobs.survival.sleep` | `{:bed-radius}` | night and a `:bed` within `:bed-radius` | child `:go` | reads `:bed`; writes `:slept`, retracts a missing `:bed` |
 | `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10 :shore-radius 6}` | drowning (swims up, or walks sideways to a column with air, then heads for the nearest land within `:shore-radius`), enclosed (the suffocating condition: a sideways step first, else dig), or surfaced and still in water | `:noted`, `:surfaced`, `:side-tried`, `:failures` | writes `:breathe` (cap 20, 1 h) |
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava, without fire resistance; stands still (info `:extinguish_wait`, done) when on fire with no bucket use, no water in `:water-radius` and no hazard within 1.5 blocks; after pouring a carried water bucket it remembers `:poured` and, once the fire is out, scoops the water back with `bucket` (info `:scoop_failed` if not placed; gives up waiting after 8 rounds) | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
@@ -764,6 +764,10 @@ after three the job emits a warn and ends.
   for `:cooldown-ms`. Cornered (no open direction, or the walk is blocked) it
   runs `fight-back` with `:min-health 0` when a weapon is carried; unarmed,
   no way out counts as a failed round (`retreat_blocked`).
+  Once per flight, with at least `:eat-gap` blocks to the hostile, it eats
+  (up to 20 food) so health regenerates on the run. `:respond-to-hostile`
+  keeps a fight going below `:min-health` while the target is nearly dead by
+  the hits `fight-back` landed (`combat/nearly-dead?`).
 - `:sleep` walks within 2 of the known bed (go-to as a child) and calls
   `sleep`. `sleeping` and `not-night` are done; a go-to that hands over
   `{:arrived false}`, a taken bed or a nearby monster is a failed round

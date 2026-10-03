@@ -73,7 +73,8 @@
           (core/submit! eng '(jobs.survival.recover) {})
           (await (core/tick! eng))
           (is (< (.-x (.-pos (.self p))) 0) "moved away from the zombie, not toward the bed")
-          (is (= [] (calls p "eat")) "fleeing does not eat")
+          (is (= ["bread"] (mapv #(.. % -args -item) (calls p "eat")))
+              "the zombie is 12 away, beyond retreat's eat gap: it eats once on the run")
           (is (= 1 (count (:list (core/state eng)))) "still recovering"))))))
 
 (deftest with-no-hostile-it-walks-to-the-bed

@@ -9,7 +9,8 @@
   :range; declines when health is below :min-health. A hostile the walk
   towards is blocked for three times is given up on (a warn of kind
   fight_unreachable) and no longer counts; with no other hostile in range the
-  job declines, so respond-to-hostile retreats instead.")
+  job declines, so respond-to-hostile retreats instead. Landed hits are kept
+  in :struck for the parent.")
 
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}
@@ -53,6 +54,16 @@
     (when (= n u/max-failures)
       (ctx/emit! c :fight_unreachable :warn {:text (str "cannot reach the " (.-name target) ", giving up on it")}))))
 
+(defn note-hit!
+  "Record a landed hit on target in :struck {id {:name :hits :health}}, so a
+  parent can tell how close the mob is to dying (see combat/nearly-dead?);
+  :health is the attack's reported health, when the layer knows it."
+  [c target result]
+  (let [h (.-health result)]
+    (ctx/update-mem! c update-in [:struck (.-id target)]
+                     (fn [m] (cond-> (-> (or m {}) (assoc :name (.-name target)) (update :hits (fnil inc 0)))
+                               (number? h) (assoc :health h))))))
+
 (defn ^:async swing!
   "Walk into reach if needed, then face and hit target once. Resolves to the
   walk's outcome: :there, :partial or :blocked."
@@ -65,7 +76,8 @@
     (when (= :there r)
       (ctx/update-mem! c assoc :last-attack (ctx/now c))
       (await (ctx/act c :look #js {:pos #js {:x (:x tpos) :y (+ 1 (:y tpos)) :z (:z tpos)}}))
-      (await (ctx/act c :attack #js {:id (.-id target)})))
+      (let [a (await (ctx/act c :attack #js {:id (.-id target)}))]
+        (when (= "hit" (.-status a)) (note-hit! c target a))))
     r))
 
 (defn ^:async round [c]
