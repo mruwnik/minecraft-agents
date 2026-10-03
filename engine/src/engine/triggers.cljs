@@ -4,7 +4,8 @@
   register."
   (:require [engine.memory :as mem]
             [engine.triggers.suffocating :as suffocating]
-            [engine.triggers.burning :as burning]))
+            [engine.triggers.burning :as burning]
+            [engine.triggers.hungry :as hungry]))
 
 (def default-health 7)
 
@@ -78,5 +79,4 @@
 (def all
   "Every trigger by name."
   (into {} (map (juxt :name identity))
-        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval
-         suffocating/suffocating burning/burning]))
+        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry]))

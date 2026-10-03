@@ -8,7 +8,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ blocks = {}, items = [], entities = {}, hang = [], pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {} } = {}) {
+export function stubBot ({ blocks = {}, items = [], entities = {}, hang = [], pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -19,7 +19,7 @@ export function stubBot ({ blocks = {}, items = [], entities = {}, hang = [], po
   const blockAt = v => {
     const name = blocks[key(v.x, v.y, v.z)]
     if (name === undefined) return { name: 'air', position: new Vec3(v.x, v.y, v.z), boundingBox: 'empty', diggable: false, getProperties: () => ({}) }
-    return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => ({}) }
+    return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
   }
   const windowOf = pos => ({
     containerItems: () => containers[pos] ?? [],

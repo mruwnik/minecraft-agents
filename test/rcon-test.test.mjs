@@ -88,11 +88,13 @@ for (const [argv, pattern] of refused) {
   })
 }
 
+const DEFAULTS = ['ClaudeProbe', 'ProbeWater', 'ProbeFight', 'ProbeNight', 'ProbeStuck']
+
 const envCases = [
-  [undefined, ['ClaudeProbe']],
-  ['', ['ClaudeProbe']],
-  ['Bob_1', ['ClaudeProbe', 'Bob_1']],
-  ['Bob_1, Carol', ['ClaudeProbe', 'Bob_1', 'Carol']]
+  [undefined, DEFAULTS],
+  ['', DEFAULTS],
+  ['Bob_1', [...DEFAULTS, 'Bob_1']],
+  ['Bob_1, Carol', [...DEFAULTS, 'Bob_1', 'Carol']]
 ]
 
 for (const [value, expected] of envCases) {
@@ -106,3 +108,34 @@ for (const bad of ['ab', 'has space', 'Bob;op', 'Bob,@a']) {
     assert.throws(() => targetsFromEnv({ RCON_TEST_TARGETS: bad }), /not a valid player name/)
   })
 }
+
+const rawAllowed = [
+  [['raw', 'whitelist', 'list'], ['whitelist list']],
+  [['raw', 'tp', 'Anyone', '~', '~', '~'], ['tp Anyone ~ ~ ~']],
+  [['raw', 'say  two  spaces'], ['say  two  spaces']]
+]
+
+for (const [argv, expected] of rawAllowed) {
+  test(`raw builds ${argv.slice(1).join(' ')}`, () => {
+    assert.deepEqual(buildCommand(argv, { targets: [T] }), expected)
+  })
+}
+
+const rawRefused = [
+  [['raw'], /usage/],
+  [['raw', ''], /empty/],
+  [['raw', 'say', 'a\nstop'], /newline/],
+  [['raw', 'say\r'], /newline/]
+]
+
+for (const [argv, pattern] of rawRefused) {
+  test(`raw refuses ${JSON.stringify(argv.slice(1))}`, () => {
+    assert.throws(() => buildCommand(argv, { targets: [T] }), pattern)
+  })
+}
+
+test('default targets include the probe bodies', () => {
+  const targets = targetsFromEnv({})
+  assert.deepEqual(['ProbeWater', 'ProbeFight', 'ProbeNight', 'ProbeStuck'].map(n => buildCommand(['tp', n, '1', '2', '3'], { targets })),
+    [['tp ProbeWater 1 2 3'], ['tp ProbeFight 1 2 3'], ['tp ProbeNight 1 2 3'], ['tp ProbeStuck 1 2 3']])
+})

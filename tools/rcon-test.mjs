@@ -1,12 +1,14 @@
-// Sets up live tests of a Minecraft bot against the local server: sends a small allow-list of RCON commands
-// (time, weather, tp, give, effects, damage, summon, setblock, fill, ...) aimed at allowed test players only.
+// Sets up live tests of a Minecraft bot against the local server. The typed subcommands (time, weather, tp, give,
+// effects, damage, summon, setblock, fill, ...) are convenience and typo safety: they validate arguments and aim at
+// allowed test players only. `raw <words...>` is the escape hatch: it sends the words joined by single spaces, exactly
+// as given, with no target or allow-list check (the owner has said arbitrary console commands are fine for now).
 //   node tools/rcon-test.mjs <subcommand> [args...]      e.g. node tools/rcon-test.mjs give ClaudeProbe bread 3
 // Needs enable-rcon=true in server.properties and the password in ~/.config/minecraft-claude/rcon-password (chmod 600).
 // This is a guard rail against accidents, not a security boundary: anything running as the same OS user could read
 // the password file and speak RCON itself.
 //
 // To extend: edit the constant lists below (ITEMS, EFFECTS, ENTITIES, BLOCKS) or add a case to `builders`.
-// Extra target players: set RCON_TEST_TARGETS=Name1,Name2 (each must be a valid player name); ClaudeProbe is always allowed.
+// Extra target players: set RCON_TEST_TARGETS=Name1,Name2 (each must be a valid player name); the default allow-list (ClaudeProbe and the Probe* bodies) is always allowed.
 // With broadcast-rcon-to-ops=true, ops see every command sent here in chat.
 //
 // buildCommand always returns an ARRAY of command strings (summon with a count sends several).
@@ -20,7 +22,7 @@ import { encodePacket, decodePacket } from './rcon.mjs'
 const AUTH = 3
 const COMMAND = 2
 
-const DEFAULT_TARGETS = ['ClaudeProbe']
+const DEFAULT_TARGETS = ['ClaudeProbe', 'ProbeWater', 'ProbeFight', 'ProbeNight', 'ProbeStuck']
 const ITEMS = ['bread', 'cooked_beef', 'apple', 'water_bucket', 'bucket', 'cobblestone', 'dirt', 'oak_planks', 'iron_sword',
   'diamond_sword', 'iron_axe', 'torch', 'oak_sapling', 'wheat_seeds', 'red_bed', 'shield', 'leather_helmet', 'iron_helmet']
 const EFFECTS = ['poison', 'wither', 'hunger', 'instant_damage', 'regeneration', 'saturation', 'fire_resistance',
@@ -91,6 +93,12 @@ function coords (values) {
 // each builder: [arity range, (args, targets) => string[]]; arity is checked before the builder runs
 const builders = {
   list: [[0, 0], '', () => ['list']],
+  raw: [[1, Infinity], '<words...>', args => {
+    const command = args.join(' ')
+    if (/[\r\n]/.test(command)) throw new Error('raw command must not contain a newline')
+    if (!command.trim()) throw new Error('raw command must not be empty')
+    return [command]
+  }],
   time: [[1, 1], '<day|night|midnight|noon|N>', ([v]) => {
     if (['day', 'night', 'midnight', 'noon'].includes(v)) return [`time set ${v}`]
     if (!/^\d+$/.test(v)) throw new Error(`time must be day, night, midnight, noon or a non-negative integer, got ${JSON.stringify(v)}`)

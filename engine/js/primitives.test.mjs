@@ -479,3 +479,10 @@ test('a reconnect that keeps failing rejects and reports the body disconnected',
   await assert.rejects(p.offline('t1', { ms: 1000 }), /refused/)
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'disconnected'])
 })
+
+test('blocks and blockAt carry the age state of a crop, and only then', () => {
+  const { p } = rig({ blocks: { '1,64,0': 'carrots', '2,64,0': 'dirt' }, props: { '1,64,0': { age: 7 } } })
+  assert.deepEqual(p.blocks({ names: ['carrots'] }).map(b => b.age), [7])
+  assert.equal(p.blockAt(at(1, 64, 0)).age, 7)
+  assert.equal('age' in p.blockAt(at(2, 64, 0)), false)
+})

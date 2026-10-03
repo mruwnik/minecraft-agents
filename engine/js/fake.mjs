@@ -7,7 +7,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 const clone = (v) => structuredClone(v)
 
 const REACH = 4.5
-const FOODS = ['cooked_beef', 'cooked_porkchop', 'bread', 'baked_potato', 'cooked_chicken', 'carrot', 'apple', 'sweet_berries']
+const FOODS = ['cooked_beef', 'cooked_porkchop', 'bread', 'baked_potato', 'cooked_chicken', 'carrot', 'apple', 'sweet_berries', 'beef', 'porkchop', 'mutton', 'chicken', 'rabbit']
 
 export const isDayAt = (t) => t < 12542 || t > 23460
 
@@ -46,6 +46,7 @@ function initialState (spec) {
     self: { ...defaultSelf, ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
     time: spec.time ?? 1000,
     blocks: new Map(Object.entries(spec.blocks ?? {})),
+    ages: new Map(Object.entries(spec.ages ?? {})), // "x,y,z" -> crop age, for blocks that have one
     entities: clone(spec.entities ?? []).map(withEntityDefaults),
     inventory: clone(spec.inventory ?? []),
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
@@ -122,6 +123,7 @@ function defaultActs (s) {
       if (!near(pos)) return { status: 'unreachable' }
       if (name === 'bedrock') return { status: 'cannot' }
       s.blocks.delete(key(pos))
+      s.ages.delete(key(pos))
       const dropName = s.drops[name] === undefined ? name : s.drops[name]
       const drops = dropName ? [spawnItem(pos, dropName, 1)] : []
       return { status: 'dug', block: name, drops: drops.map(e => ({ id: e.id, name: e.item.name, count: e.item.count, pos: { ...e.pos } })) }
@@ -190,6 +192,7 @@ function defaultActs (s) {
       e.health -= 5
       if (e.health > 0) return { status: 'hit', health: e.health }
       s.entities.splice(s.entities.indexOf(e), 1)
+      for (const d of e.drops ?? []) spawnItem(e.pos, d.name, d.count)
       return { status: 'killed', health: 0 }
     },
 
@@ -209,6 +212,7 @@ function defaultActs (s) {
 
 export function createFake (spec = {}) {
   const s = initialState(spec)
+  const ageOf = (k) => (s.ages.has(k) ? { age: s.ages.get(k) } : {})
   const listeners = new Set()
   const calls = []
   const holds = new Map() // name -> array of pending hold records
@@ -287,7 +291,7 @@ export function createFake (spec = {}) {
     blocks ({ radius = 16, names, match, max = 64 } = {}) {
       const ok = names ? (n) => names.includes(n) : match ?? (() => true)
       return [...s.blocks.entries()]
-        .map(([k, name]) => ({ name, pos: parseKey(k) }))
+        .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k) }))
         .map(b => ({ ...b, distance: dist(s.self.pos, b.pos) }))
         .filter(b => b.distance <= radius && ok(b.name))
         .sort((a, b) => a.distance - b.distance)
@@ -295,7 +299,7 @@ export function createFake (spec = {}) {
     },
 
     blockAt (pos) {
-      return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos } }
+      return { name: s.blocks.get(key(pos)) ?? 'air', pos: { ...pos }, ...ageOf(key(pos)) }
     },
 
     onBodyEvent (listener) {
