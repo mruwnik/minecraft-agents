@@ -190,6 +190,17 @@ test('dead-man releases untimed controls after releaseMs and warns once', async 
   assert.equal((await get()).json.manual.controls.forward, false)
 })
 
+test('dead-man default releases untimed controls after 1000 ms of silence, not at 999', async () => {
+  const { post, control, clock, names } = await taken()
+  await post({ op: 'set', who: 'claude', controls: { forward: true } })
+  clock.t += 999
+  control.tick()
+  assert.equal(names('stopDriving').length, 0)
+  clock.t += 1
+  control.tick()
+  assert.equal(names('stopDriving').length, 1)
+})
+
 test('dead-man does nothing when no untimed control is held', async () => {
   const { control, clock, names } = await taken()
   clock.t += 5000
@@ -208,12 +219,12 @@ test('dead-man does not fire for timed holds', async () => {
 test('ping resets the silence', async () => {
   const { post, control, clock, names } = await taken()
   await post({ op: 'set', who: 'claude', controls: { forward: true } })
-  clock.t += 1500
+  clock.t += 700
   assert.equal((await post({ op: 'ping', who: 'claude' })).json.ok, true)
-  clock.t += 1500
+  clock.t += 700
   control.tick()
   assert.equal(names('deadman').length, 0)
-  clock.t += 600
+  clock.t += 400
   control.tick()
   assert.equal(names('deadman').length, 1)
 })

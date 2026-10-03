@@ -750,13 +750,57 @@ Plus kind-specific fields. Kinds the engine emits: `job.queued`,
 `action.done` (debug), `reflex.fired` and `reflex.ended` (both with `text` "reflex → job"; ended carries `outcome`: `done`, `declined`, `cut`, `failed`, `dropped` or `backoff`, exactly one per fired job, including on shutdown and for jobs a crash left behind; `how`: `cleared`,
 `completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,
 `body.<kind>` for body events, `system.started`, `system.restored`,
-`system.stopping`.
+`system.stopping`, `system.takeover_started`, `system.takeover_ended`, `system.drive_deadman` (warn),
+`system.control_unavailable` (error).
 
 Save measurement (no optimisation, just numbers): every write of `memory.edn`
 or `engine.edn` emits `memory.saved` (debug) with `file` (`memory.edn` or
 `engine.edn`), `bytes` written and `ms` the write took. Once a minute
 (`:stats-ms`, checked in `tick!`) `memory.save-stats` (info) sums the window:
 `count`, `bytes`, `ms` (total) and `max-ms`, then the window restarts.
+
+## Manual takeover
+
+For rescuing a stuck body by hand. Movement only: no dig, place or use yet. The body listens on a unix socket,
+`state/agents/<name>/engine/control.sock` (mode 0600, HTTP + JSON), created at start and removed at shutdown. If it
+cannot listen (for example a path over 100 bytes) the body emits `system.control_unavailable` (error) and runs without it.
+
+Ops (`POST /drive`, body `{op, who, ...}`; `GET /drive` returns the state): `take` (`why`), `set`, `stop`, `ping`,
+`release` (`force` reclaims another driver's hold). A refusal is `{ok:false, reason}` with reason `offline`, `settling`,
+`held-by <who>`, `not-taken`, `not-driver` or `bad-args`. `set` fields:
+
+| field | what |
+|---|---|
+| `controls` | `{forward, back, left, right, jump, sneak, sprint}` booleans |
+| `look` | `{yaw, pitch}` absolute or `{dyaw, dpitch}` relative, in Minecraft F3 degrees: yaw 0 south (+z), 90 west, 180 north, 270 east; pitch -90 up to 90 down |
+| `ms` | 1..10000, hold the controls for that long, then release them |
+
+Engine semantics: `take` cuts the holder like a reflex does. A listed job resumes after release; a reflex job is dropped.
+While manual the scheduler is paused through the same gate as offline and settling: no trigger is evaluated, no `:stop`
+latch clears, and reflex ends are deferred. Nothing about it is written to `engine.edn`. A restart ends it, and so does
+going offline.
+
+Dead-man: untimed controls are released after 1 s without any op from the driver (warn `system.drive_deadman`). The
+takeover itself ends after `--drive-idle-s` (default 60) seconds of silence, reason `idle`. Timed holds end on their own.
+The timers run in the body, so a dead CLI, view server or browser tab cannot leave it walking.
+
+Events: `system.takeover_started` `{who why}`; `system.takeover_ended` `{who reason held-ms}` with reason `released`,
+`forced`, `idle`, `offline` or `shutdown`; `system.drive_deadman`.
+
+CLI (`--state <dir>` is the state directory holding `agents/`, default the repo's `state/`; `--who` defaults to `claude`):
+
+```
+node engine/tools/drive.mjs ProbeDrive take --who claude --why "stuck in a pit"
+node engine/tools/drive.mjs ProbeDrive look 270 0 --who claude        # face east
+node engine/tools/drive.mjs ProbeDrive hold forward,jump 2000 --who claude
+node engine/tools/drive.mjs ProbeDrive turn 90 --who claude
+node engine/tools/drive.mjs ProbeDrive jump --who claude
+node engine/tools/drive.mjs ProbeDrive stop --who claude
+node engine/tools/drive.mjs ProbeDrive state
+node engine/tools/drive.mjs ProbeDrive release --who claude           # --force reclaims another driver's hold
+```
+
+Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can drive too; see `docs/view-format.md`.
 
 ## Scenarios
 

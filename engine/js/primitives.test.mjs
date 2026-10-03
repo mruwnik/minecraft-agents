@@ -1735,6 +1735,16 @@ test('drive with the owner token sets control states and looks, and returns pos 
   assert.deepEqual(res.pos, p.self().pos)
 })
 
+test('drive returns yaw and pitch rounded to 2 decimals, a look of 0 0 exactly 0', () => {
+  const { p } = rig({})
+  const res = p.drive('t1', { look: { yaw: 0, pitch: 0 } })
+  assert.equal(res.yaw, 0)
+  assert.equal(res.pitch, 0)
+  const odd = p.drive('t1', { look: { yaw: 123.456789, pitch: -12.3456 } })
+  assert.equal(odd.yaw, 123.46)
+  assert.equal(odd.pitch, -12.35)
+})
+
 test('drive with a relative look adds to the current degrees', () => {
   const { p } = rig({})
   p.drive('t1', { look: { yaw: 350, pitch: 80 } })

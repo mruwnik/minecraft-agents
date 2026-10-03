@@ -97,3 +97,21 @@ written once: the last full pose (position, eye, yaw, pitch, entities as they we
 - `BODY_VIEW_POSE_HZ` (read once at start) sets the pose write rate. The default `0` is a write attempt on every physics tick (about 20 a second), only if the pose changed and at least every 2 s; a value above 0 switches to a timer at that rate.
 - `view.stats` (info, once a minute): `{columns, bytes, ms, poses, poseMs, poseBytes, huds}` since the last stats event. `poseMs` is main-thread time building, change-checking and stringifying poses, apart from `ms`; `poseBytes` is pose JSON bytes written. `ms` is main-thread
   time in `dump()` plus JSON building (`performance.now()`), `bytes` is compressed column bytes written.
+
+## Driving
+
+The page can take over a body and drive it by hand (movement only). The "take over (G)" button and the keys:
+
+- G takes over or releases. W/A/S/D forward/left/back/right, Space jump, Shift sneak, R sprint (not Ctrl: Ctrl+W closes the tab).
+- Arrow keys turn 15 degrees and tilt 10 degrees. Click the canvas for pointer-lock mouse look.
+- F (free camera) is ignored while driving.
+
+A red banner, shown to every viewer while anyone drives, names who. Losing focus, a hidden tab or losing pointer lock
+sends stop; closing the page sends release. The page pings every 500 ms (the body releases untimed controls after 1 s of
+silence). Requests are serialised, so a key-up never overtakes its key-down.
+
+Server route `GET|POST /drive/<name>` relays to the body's control socket (`engine/README.md`, Manual takeover); `who`
+defaults to `view`. It is the first write route of the view server. The server stays bound to 127.0.0.1 and answers 403 to
+a Host that is not 127.0.0.1, localhost or [::1], to an Origin that is not `http://<Host>`, and to a POST whose
+Content-Type is not `application/json` (this blocks cross-site form posts and DNS rebinding). It answers 503 `no-body`
+when the body is not running.

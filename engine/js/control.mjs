@@ -30,7 +30,7 @@ function validateSet (req) {
   return null
 }
 
-export function createControl ({ socketPath, body, releaseMs = 2000, idleMs = 60000, checkMs = 250, now = Date.now }) {
+export function createControl ({ socketPath, body, releaseMs = 1000, idleMs = 60000, checkMs = 250, now = Date.now }) {
   let lease = null
   let server = null
   let timer = null

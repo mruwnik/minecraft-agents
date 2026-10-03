@@ -840,7 +840,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const mf = mcToMineflayerLook({ yaw, pitch: Math.min(90, Math.max(-90, pitch)) })
       bot.look(mf.yaw, mf.pitch, true)
     }
-    return { pos: here(), ...mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 }) }
+    const out = mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 })
+    const round2 = x => Math.round(x * 100) / 100
+    const yaw = round2(out.yaw)
+    return { pos: here(), yaw: yaw >= 360 ? 0 : yaw, pitch: round2(out.pitch) + 0 }
   }
   const stopDriving = () => bot.clearControlStates()
 
