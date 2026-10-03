@@ -1,15 +1,17 @@
 (ns dashboard.plan-api
   "What /api/plans and /api/plan/<id> answer: the plans of a world compared with the dumped blocks. Plain data in and
-  out (the server supplies the plan directory, the blueprint directory and the block lookup (block-at x y z) -> block
-  name or nil; the dumped columns have names only, so a want that names state answers unknown)."
+  out (the server supplies the plan directory, the blueprint directory and the block lookup (block-at x y z) -> a JS
+  {name, state: {property value}} or nil where no column was dumped)."
   (:require [dashboard.plan :as plan]
             [dashboard.plan-compare :as cmp]
             [plan.shape :as shape]))
 
 (defn world-blocks
-  "The shape's block lookup over a by-name one: [x y z] -> {:name n}, nil where nothing was dumped."
+  "The shape's block lookup over the JS one: [x y z] -> {:name n :state {\"property\" value}}, nil where nothing was dumped."
   [block-at]
-  (fn [[x y z]] (when-let [n (block-at x y z)] {:name n})))
+  (fn [[x y z]]
+    (when-let [block (block-at x y z)]
+      {:name (.-name block) :state (js->clj (.-state block))})))
 
 (defn compare-one [p blueprints block-at]
   (let [expansion (shape/expand p blueprints)]

@@ -412,6 +412,7 @@ canvas.plan-grid { cursor: default; border: 1px solid var(--line); image-renderi
 .plan-file-errors ul { margin: 2px 0 6px 16px; padding: 0; }
 .plan-body { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: flex-start; }
 .plan-els { flex: 1 1 440px; min-width: 0; }
+.plan-spots h3, .plan-assign h3 { margin: 12px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
 .plan-layers { flex: 1 1 420px; min-width: 0; }
 .plan-layers .layers { margin-top: 8px; }
 .plan-elements { border-collapse: collapse; width: 100%; margin: 8px 0 10px; }

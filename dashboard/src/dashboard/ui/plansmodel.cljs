@@ -130,3 +130,24 @@
           {:id id :kind kind :bounds bounds :content content :counts counts :cells n :error error
            :ref ref :where (when at (str/join ", " at))})
         elements))
+
+(defn keyword-text [k] (if (keyword? k) (subs (str k) 1) (str k)))
+
+(defn spot-rows
+  "The spots of a plan (name -> [x y z]) as table rows sorted by name."
+  [spots]
+  (->> spots
+       (map (fn [[k [x y z]]] {:name (keyword-text k) :pos (str x ", " y ", " z)}))
+       (sort-by :name)
+       vec))
+
+(defn assign-rows
+  "The assignments of a plan as table rows: the spot or part, who takes it (a body, or a villager's profession and
+  trade), what for, and the answer."
+  [assign]
+  (mapv (fn [{:keys [spot body profession trade use answer]}]
+          {:spot spot
+           :who (or body (when profession (str (keyword-text profession) (when trade (str " (" trade ")")))) "")
+           :use (if use (keyword-text use) "")
+           :answer (when answer (keyword-text answer))})
+        assign))

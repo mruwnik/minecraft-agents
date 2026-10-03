@@ -8,8 +8,22 @@
 
 (defn opts [block-at] {:dir dir :blueprint-dir blueprint-dir :block-at block-at})
 
-(def wheat-everywhere (fn [_ _ _] "wheat"))
+(def wheat-everywhere (fn [_ _ _] #js {:name "wheat" :state #js {}}))
 (def nothing-dumped (fn [_ _ _] nil))
+(deftest the-world-lookup-keeps-the-block-state
+  (let [lookup (api/world-blocks (fn [x _ _] (when (zero? x) #js {:name "oak_door" :state #js {:facing "east" :half "lower"}})))]
+    (is (= {:name "oak_door" :state {"facing" "east" "half" "lower"}} (lookup [0 64 0])))
+    (is (nil? (lookup [1 64 0])))))
+
+(defn door-only [facing]
+  (fn [x y z] (when (= [x y z] [101 65 204]) #js {:name "oak_door" :state #js {:facing facing :half "lower"}})))
+
+(deftest a-door-is-judged-by-its-dumped-state
+  (are [facing counts] (= counts (select-keys (get-in (api/detail (opts (door-only facing)) "claude-village") [:counts])
+                                              [:match :wrong :unknown]))
+    "east" {:match 1 :wrong 0 :unknown 218}      ; the hut is turned 90, so its north door faces east
+    "north" {:match 0 :wrong 1 :unknown 218}))
+
 (defn by-id [items id] (first (filter #(= id (:id %)) items)))
 
 (deftest summaries-list-every-plan-with-totals

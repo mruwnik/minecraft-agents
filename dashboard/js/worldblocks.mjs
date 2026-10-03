@@ -6,7 +6,7 @@ import path from 'node:path'
 import { decodeColumnFile, columnCache, makeChunkClass } from '../../tools/view/columns.mjs'
 import { encodePng } from '../../src/vision/renderer.mjs'
 
-// -> {blockAt(x, y, z) -> block name | null (no column dumped), close()}
+// -> {blockAt(x, y, z) -> {name, state: {property: value}} | null (no column dumped), close()}
 export function createWorldBlocks ({ stateDir, world }) {
   const dir = path.join(stateDir, 'worlds', world, 'chunks')
   let columns = null
@@ -21,7 +21,10 @@ export function createWorldBlocks ({ stateDir, world }) {
     if (!fs.existsSync(file)) return null
     const column = columnsFor(file).get(file)
     if (!column) return null
-    try { return column.getBlock({ x: x & 15, y, z: z & 15 })?.name ?? null } catch { return null }
+    try {
+      const block = column.getBlock({ x: x & 15, y, z: z & 15 })
+      return block ? { name: block.name, state: block.getProperties() } : null
+    } catch { return null }
   }
   return { blockAt, close: () => { columns = null } }
 }

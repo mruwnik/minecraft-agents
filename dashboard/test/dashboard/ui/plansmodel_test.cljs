@@ -105,3 +105,19 @@
           {:id "m" :kind "plan" :bounds {:min [0 0 0] :max [1 1 1]} :content "plan melons" :counts nil :cells 0 :error "unknown plan" :ref "melons" :where nil}]
          (pm/element-rows {:elements [{:id "w" :kind "structure" :content "blueprint well" :counts {:total 3} :count 3 :at [1 2 3]}
                                       {:id "m" :kind "plan" :bounds {:min [0 0 0] :max [1 1 1]} :content "plan melons" :count 0 :error "unknown plan" :ref "melons"}]}))))
+
+(deftest spot-rows-are-sorted-by-name-with-the-position-as-text
+  (is (= [{:name "hut/bed" :pos "33, 64, 24"} {:name "hut/door" :pos "34, 64, 26"}]
+         (pm/spot-rows {:hut/door [34 64 26] :hut/bed [33 64 24]})))
+  (is (= [{:name "a" :pos "1, 2, 3"}] (pm/spot-rows {"a" [1 2 3]})))
+  (is (= [] (pm/spot-rows nil))))
+
+(deftest assignment-rows-say-who-uses-what
+  (are [assign expected] (= [expected] (pm/assign-rows [assign]))
+    {:spot "hut/bed" :body "Ann" :use :bed :answer :unknown}
+    {:spot "hut/bed" :who "Ann" :use "bed" :answer "unknown"}
+    {:spot "fletching" :profession :fletcher :trade "arrow" :answer :unknown}
+    {:spot "fletching" :who "fletcher (arrow)" :use "" :answer "unknown"}
+    {:spot "composter-1" :profession "farmer" :answer "match"}
+    {:spot "composter-1" :who "farmer" :use "" :answer "match"})
+  (is (= [] (pm/assign-rows nil))))

@@ -124,6 +124,28 @@
    [:thead [:tr [:th "element"] [:th "kind"] [:th "content"] [:th "completion"] [:th "%"] [:th "blocks"]]]
    (into [:tbody] (map #(element-row selected %)) (pm/element-rows detail))])
 
+(defn spots-table [spots]
+  (when (seq spots)
+    [:section.plan-spots
+     [:h3 "spots"]
+     [:table.plan-elements
+      [:thead [:tr [:th "spot"] [:th "position"]]]
+      (into [:tbody]
+            (for [{:keys [name pos]} (pm/spot-rows spots)]
+              ^{:key name} [:tr [:td.mono name] [:td.mono pos]]))]]))
+
+(defn assign-table [assign]
+  (when (seq assign)
+    [:section.plan-assign
+     [:h3 "assignments"]
+     [:table.plan-elements
+      [:thead [:tr [:th "spot or part"] [:th "who"] [:th "use"] [:th "answer"]]]
+      (into [:tbody]
+            (map-indexed
+             (fn [i {:keys [spot who use answer]}]
+               ^{:key i} [:tr [:td.mono spot] [:td who] [:td use] [:td [:span.pill answer]]])
+             (pm/assign-rows assign)))]]))
+
 (defn plan-errors [errors]
   (when (seq errors)
     (into [:section.plan-errors [:h3 "problems"]]
@@ -138,7 +160,7 @@
       detail-failed [:main.plan-detail [:div.err detail-failed]]
       (nil? detail) [:main.plan-detail [:div.dim.pempty "loading..."]]
       :else
-      (let [{:keys [name kind status owner note region counts layers grid errors]} detail
+      (let [{:keys [name kind status owner note region counts layers grid errors spots assign]} detail
             layer (first (filter #(= current (:y %)) layers))]
         [:main.plan-detail
          [:div.phead
@@ -152,7 +174,7 @@
           [:span.dim (str "(" (pm/region-size region) ")")]]
          [plan-errors errors]
          [:div.plan-body
-          [:div.plan-els [elements-table detail element]]
+          [:div.plan-els [elements-table detail element] [spots-table spots] [assign-table assign]]
           (when (seq layers)
             [:section.plan-layers
              [layer-selector layers current]
