@@ -206,7 +206,7 @@ for (const [name, args] of badArgs) {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'settling', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -1605,4 +1605,94 @@ test('close stops the watchdog', async () => {
   await p.close()
   await sleep(STALL_WAIT * 2)
   assert.equal(stalls(seen).length, 0)
+})
+
+// ---- settling ----
+
+const SETTLE = 60 // ms, timeScale 1
+const settleRig = (spec = {}) => {
+  const bot = stubBot({ ...world, ...spec })
+  const p = createPrimitivesFromBot(bot, { settleMs: SETTLE })
+  return { bot, p }
+}
+const settled = () => sleep(SETTLE + 40)
+
+test('a freshly bound body is settling until settleMs have passed', async () => {
+  const { p } = settleRig()
+  assert.equal(p.isSettling(), true)
+  await settled()
+  assert.equal(p.isSettling(), false)
+})
+
+test('self().settling mirrors isSettling', async () => {
+  const { p } = settleRig()
+  assert.equal(p.self().settling, true)
+  await settled()
+  assert.equal(p.self().settling, false)
+})
+
+test('settleMs scales with timeScale', async () => {
+  const p = createPrimitivesFromBot(stubBot(world), { timeScale: 0.001, settleMs: 100000 })
+  await sleep(150)
+  assert.equal(p.isSettling(), false)
+})
+
+test('a reconnect settles again, and offline itself is not settling', async () => {
+  const bots = []
+  const connect = async () => { const b = stubBot(world); bots.push(b); return b }
+  const p = await createPrimitives(WORLD_OPTS, { connect, timeScale: 0.0001, settleMs: 1e6 })
+  p.setOwner('t1')
+  await sleep(150)
+  assert.equal(p.isSettling(), false)
+  const pending = p.offline('t1', { ms: 1 })
+  assert.equal(p.isSettling(), false)
+  await pending
+  assert.equal(p.isSettling(), true)
+  await sleep(150)
+  assert.equal(p.isSettling(), false)
+})
+
+test('a respawn settles again once the spawn arrives', async () => {
+  const { bot, p } = settleRig()
+  await settled()
+  bot.emit('respawn')
+  assert.equal(p.isSettling(), false)
+  bot.emit('spawn')
+  assert.equal(p.isSettling(), true)
+  await settled()
+  assert.equal(p.isSettling(), false)
+})
+
+test('an unloaded column is settling, and its loading starts a fresh period', async () => {
+  const { bot, p } = settleRig({ unloaded: true })
+  await settled()
+  assert.equal(p.isSettling(), true)
+  bot.loadWorld()
+  assert.equal(p.isSettling(), true)
+  await settled()
+  assert.equal(p.isSettling(), false)
+  bot.unloadWorld()
+  assert.equal(p.isSettling(), true)
+  bot.loadWorld()
+  assert.equal(p.isSettling(), true)
+})
+
+for (const [label, to, settling] of [['a teleport', at(100, 64, 0), true], ['a server correction', at(1, 64, 0), false], ['exactly 16 blocks', at(16, 64, 0), false]]) {
+  test(`forcedMove: ${label} ${settling ? 'restarts' : 'does not restart'} settling`, async () => {
+    const { bot, p } = settleRig()
+    await settled()
+    bot.entity.position = new Vec3(to.x, to.y, to.z)
+    bot.emit('forcedMove')
+    assert.equal(p.isSettling(), settling)
+  })
+}
+
+test('forcedMove measures from the last position the body was known at', async () => {
+  const { bot, p } = settleRig()
+  await settled()
+  for (const x of [10, 20, 30]) {
+    bot.entity.position = new Vec3(x, 64, 0)
+    bot.emit('forcedMove')
+  }
+  assert.equal(p.isSettling(), false)
 })

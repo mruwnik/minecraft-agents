@@ -36,6 +36,8 @@ const WORLD_TIMEOUT_MS = 10000
 const WORLD_POLL_MS = 50
 const PHYSICS_STALL_MS = 2000 // no physicsTick this long over an unloaded column: the body hangs frozen
 const STALL_POLL_MS = 250
+const SETTLE_MS = 1000 // senses count as trustworthy this long after the column under the body is loaded
+const TELEPORT_BLOCKS = 16 // a forced move farther than this is a teleport; smaller ones are server corrections
 // Every bound body is 0.01 wider than mineflayer's 0.3: the server rejects every move of a body whose box touches a
 // block face exactly (pressed against a step, or the side of a block it walks past) and sets it back to the same
 // position about 20 times a second, indefinitely. Verified live against 26.1: 2 of 2 walks past one block on a flat
@@ -128,7 +130,7 @@ const gained = (before, after) => Object.entries(after)
 // Builds the primitives over an already spawned bot. `timeScale` multiplies every time bound (tests shrink it).
 // `reconnect` (internal; createPrimitives passes it) makes a fresh spawned bot with the same connection params and
 // enables `offline`; without it `offline` is unsupported.
-export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, pending = [] } = {}) {
+export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, pending = [] } = {}) {
   let bot = initialBot
   view?.attach(bot)
   let closed = false
@@ -139,6 +141,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // reconnect gave up); resolves then. Sensing answers 'offline' meanwhile and acting calls wait for it.
   let away = null
   const isOffline = () => away !== null
+  // Settling: connected but the senses are not trustworthy yet (entities arrive after the chunks, there is no signal
+  // for "all sent"). Starts at login, on every adopted reconnect, on respawn and on a teleport; ends settleMs after
+  // the column under the body is loaded. readyAt null means the column was not loaded when it was last looked at.
+  let readyAt = null
 
   const isOwner = token => token !== null && token !== undefined && token === owner
   const setOwner = token => {
@@ -309,6 +315,14 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // false while the column under the body is not loaded: mineflayer's physics then skips its tick and the body hangs.
   const columnLoaded = () => Boolean(bot.blockAt(bot.entity.position))
 
+  const settleFromNow = () => { readyAt = columnLoaded() ? Date.now() + settleMs * timeScale : null }
+  const isSettling = () => {
+    if (isOffline()) return false
+    if (!columnLoaded()) { readyAt = null; return true }
+    readyAt ??= Date.now() + settleMs * timeScale
+    return Date.now() < readyAt
+  }
+
   const self = () => {
     if (isOffline()) return { status: 'offline' }
     const timeOfDay = bot.time.timeOfDay
@@ -324,6 +338,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       inLava: bot.entity.isInLava ?? feetIn('lava'),
       onGround: Boolean(bot.entity.onGround),
       chunkLoaded: columnLoaded(),
+      settling: isSettling(),
       isSleeping: Boolean(bot.isSleeping),
       effects: effects(),
       experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
@@ -819,6 +834,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
     lastTick = Date.now()
     stalled = false
+    settleFromNow()
+    let lastPos = target.entity.position.clone()
     let lastHealth = target.health
     let respawning = false
     // The server clears the slots of an instant death (/kill, void, damage) before the death event is read, so the
@@ -828,7 +845,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let ticks = 0
     const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
     const handlers = {
-      physicsTick: () => { lastTick = Date.now(); stalled = false; if (++ticks % 20 === 0) remember() },
+      physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
       health: () => {
         remember()
         if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
@@ -842,6 +859,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 }
       }) },
       respawn: () => { stopWalking(target); respawning = true },
+      forcedMove: () => {
+        const moved = target.entity.position.distanceTo(lastPos)
+        lastPos = target.entity.position.clone()
+        if (moved > TELEPORT_BLOCKS) settleFromNow()
+      },
       chat: (from, message) => emit({ kind: 'chat', from, message }),
       wake: () => emit({ kind: 'woke' }),
       playerCollect: (collector, collected) => {
@@ -853,6 +875,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         emit({ kind: 'spawned' })
         if (!respawning) return
         respawning = false
+        settleFromNow()
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },
       end: reason => { down = true; emit({ kind: 'disconnected', reason: String(reason) }) },
@@ -988,15 +1011,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, offline, onBodyEvent, close }
+  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
 // `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
-export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS } = {}) {
+export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS } = {}) {
   const view = viewOpts ? createView(viewOpts) : null
   const bot = await connect(opts)
   const pending = await waitForWorld(bot, { timeoutMs: worldTimeoutMs }) ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
-  return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, pending })
+  return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, settleMs, pending })
 }

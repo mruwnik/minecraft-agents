@@ -65,6 +65,8 @@ function initialState (spec) {
     swimFails: spec.swimFails ?? false,
     nextEntityId: 1000,
     offline: false,
+    settles: spec.settles ?? false, // coming back (offline, respawn) opens a settling window until world.settle(false)
+    settling: false,
     offlineScale: spec.offlineScale ?? 0.001 // offline waits ms * this, so tests need not sit out minutes
   }
 }
@@ -350,6 +352,7 @@ export function createFake (spec = {}) {
     isOwner: (token) => token === owner,
 
     isOffline: () => s.offline,
+    isSettling: () => !s.offline && s.settling,
 
     self () {
       if (s.offline) return { status: 'offline' }
@@ -364,6 +367,7 @@ export function createFake (spec = {}) {
         inWater: s.self.inWater,
         inLava: s.self.inLava,
         onGround: s.self.onGround,
+        settling: s.settling,
         isSleeping: s.self.isSleeping,
         effects: s.self.effects.map(e => ({ ...e })),
         experience: { ...s.self.experience },
@@ -426,6 +430,12 @@ export function createFake (spec = {}) {
       override (name, fn) { overrides.set(name, fn) },
       emit (event) { for (const l of listeners) l(event) },
       setTime (t) { s.time = t },
+      settle (on) { s.settling = on },
+      // Respawns where the body stands: emits respawned like the real body and opens a settling window if the spec settles.
+      respawn () {
+        s.settling = s.settles
+        primitives.world.emit({ kind: 'respawned', pos: { ...s.self.pos }, dimension: s.self.dimension })
+      },
       // Dies where the body stands: emits died like the real body, then drops the
       // inventory there as item entities and resets the experience.
       die () {
@@ -452,6 +462,7 @@ export function createFake (spec = {}) {
     })
     sleeper = null
     s.offline = false
+    s.settling = s.settles
     away = null
     primitives.world.emit({ kind: 'online', pos: { ...s.self.pos } })
     release()

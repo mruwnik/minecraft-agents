@@ -104,7 +104,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
@@ -114,6 +114,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 - `health` 0..20 and `food` 0..20; `foodSaturation` is the hidden saturation (0..20).
 - `oxygen` 0..20 bubbles (`bot.oxygenLevel`; 20 until the server reports air).
 - `chunkLoaded`: false when the column under the body is not loaded (`bot.blockAt` of the body's position is null); mineflayer's physics then emits no tick and the body hangs frozen.
+- `settling`: true while the body is connected but its senses are not trustworthy yet (`isSettling()`): see Settling below.
 - `effects`: the active status effects, `[{name, amplifier, duration}]` (`[]` when none), from `bot.entity.effects`
   with the name looked up in `bot.registry.effects` and normalised to snake_case without namespace (the registry
   says `FireResistance`; `self()` says `fire_resistance`). The burning trigger ignores a body with `fire_resistance`.
@@ -201,7 +202,7 @@ every other primitive and every listener works on the new bot (after it spawned 
 the moment it quits until the fresh bot is adopted the body is offline, and `isOffline()` is true:
 
 - Sensing says so instead of returning stale values: `self()` returns `{status: 'offline'}`, `entities()` and `blocks()`
-  return `[]`, `blockAt()` returns `null`. `isOffline()` is the one way to tell an offline body from an empty world.
+  return `[]`, `blockAt()` returns `null`. `isOffline()` is the one way to tell an offline body from an empty world. `isSettling()` (sync) is the third state: connected, not yet trustworthy; offline is not settling.
 - The engine pauses the register and the list: `tick` evaluates no trigger and starts no round, so a reflex cannot cut
   the wait and act on the quit bot, and no trigger reads frozen sensing. The scheduler just waits for the reconnect.
 - A cut (a token change, `cancel`, a reflex that somehow fired) does not end the offline state. It ends the wait early,
@@ -575,6 +576,17 @@ down.
   false once. If the trigger no longer holds at the end, there is no wait. A
   register entry's own `:persistence` and `:cooldown-s` override the
   trigger's.
+- Settling: right after a login, a reconnect, a respawn or a teleport (a forced
+  move over 16 blocks) the body is connected but its senses are not trustworthy
+  (entities arrive after the chunks; there is no signal for "all sent"). It ends
+  `settleMs` (default 1 s, scaled by `timeScale`) after the column under the
+  body is loaded; an unloaded column always counts as settling. While settling
+  `tick!` evaluates no trigger, so nothing fires and no `:stop` latch clears
+  (rounds already running are untouched). A reflex job that ends meanwhile is
+  not judged: its end is kept and judged on the first ready tick, with the
+  cooldown counted from the job end; the `reflex.ended` event then carries
+  `:deferred-ms`. Without this a log-out, which ends with a reconnect before
+  the sleeper is sensed, looked cleared and fired again at once.
 
   The survival scenario sets, explicitly, `:persistence :cooldown` and:
 
@@ -586,7 +598,7 @@ down.
   | hostile-near | 5 | |
   | hungry | 90 | a body with no food does not retry every tick |
   | night-unsafe | 10 | keep trying through the night |
-  | player-sleeping-nearby | 30 | the trigger's own `:gap-s` 30 since the latest `:log-out` is what spaces log-outs: the cooldown is lost when the job ends with a reconnect (nothing sensed yet, so the trigger is cleared) |
+  | player-sleeping-nearby | 30 | the 30 s cooldown spaces log-outs (a log-out ends at the reconnect, while the body is settling, so it is judged on the first ready tick with the cooldown counted from the job end) |
   | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
   | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
@@ -870,7 +882,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 10 s |
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 90 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
-| `:player-sleeping-nearby` | night, another player within `:player-radius` (default 128) asleep, no `:bed` remembered within `:bed-radius` (default 48), `:offline-allowed` not false, the last `:log-out` not `unsupported`, the latest `:log-out` at least `:gap-s` (30) s old, held whatever the register cooldown does (right after a return the sleeper is not sensed yet, so the cooldown is not started); being roofed does not matter | `(jobs.survival.log-out)` | cooldown 30 s |
+| `:player-sleeping-nearby` | night, another player within `:player-radius` (default 128) asleep, no `:bed` remembered within `:bed-radius` (default 48), `:offline-allowed` not false, the last `:log-out` not `unsupported`; being roofed does not matter | `(jobs.survival.log-out)` | cooldown 30 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 30 s |

@@ -18,6 +18,8 @@
     :failed {id {:error text :t ms}}  listed jobs whose round threw; they keep
                             their place and memory, the scheduler skips them
                             until retry! or cancel!
+    :deferred-ends [{:reflex :job :outcome :ended-at ms :text}]  reflex jobs that ended while
+                            the body was settling or offline, judged on the first ready tick
     :next-id n
   The in-flight round itself ({:id :token :reflex :round}) is not persisted."
   (:require [engine.composite :as composite]
@@ -42,7 +44,7 @@
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
-   :cursor 0 :resume nil :current nil :pending-reflex nil :failed {} :next-id 1})
+   :deferred-ends [] :cursor 0 :resume nil :current nil :pending-reflex nil :failed {} :next-id 1})
 
 ;; ------------------------------------------------------------------ errors
 
@@ -407,22 +409,56 @@
                        :outcome outcome :text (str text ": " (name outcome))}
                       extra))))
 
-(defn end-reflex!
-  "A reflex job ended on its own with outcome; classify and apply the entry's persistence."
-  [eng {:keys [id reflex]} outcome]
+(defn offline?
+  "Whether the body is away from the server (the offline primitive). The register
+  and the list are paused meanwhile: sensing would only say offline."
+  [eng]
+  (true? (.isOffline (:primitives eng))))
+
+(defn settling?
+  "Whether the body is connected but its senses are not trustworthy yet (just
+  after a login, reconnect, respawn or teleport). Treated like offline: nothing
+  is evaluated, and reflex ends are not judged."
+  [eng]
+  (true? (.isSettling (:primitives eng))))
+
+(defn judge-end!
+  "Classify a reflex end now and apply the entry's persistence when its trigger
+  still holds, the cooldown counted from the end's :ended-at; emit its one
+  reflex.ended with extra fields."
+  [eng {:keys [reflex job outcome ended-at text]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
-        still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))
-        text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
-    (drop-instance! eng id)
+        still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
       (case (:persistence entry)
         :cooldown (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
-                         (+ (now eng) (* 1000 (:cooldown-s entry 0))))
+                         (+ ended-at (* 1000 (:cooldown-s entry 0))))
         :stop (swap! (:state eng) assoc-in [:reflex-state reflex :stopped?] true)
         nil))
-    (emit! eng {:source :reflex :kind :ended :level :info :reflex reflex :job id
-                :outcome outcome :text (str text ": " (name outcome))
-                :how (if still? :completed_not_cleared :cleared)})))
+    (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job job
+                       :outcome outcome :text (str text ": " (name outcome))
+                       :how (if still? :completed_not_cleared :cleared)}
+                      extra))))
+
+(defn end-reflex!
+  "A reflex job ended on its own with outcome; classify and apply the entry's
+  persistence. While the body is settling or offline the senses cannot say
+  whether the trigger still holds: the end is deferred to the first ready tick."
+  [eng {:keys [id reflex]} outcome]
+  (let [end {:reflex reflex :job id :outcome outcome :ended-at (now eng)
+             :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))}]
+    (drop-instance! eng id)
+    (if (or (settling? eng) (offline? eng))
+      (swap! (:state eng) update :deferred-ends conj end)
+      (judge-end! eng end {}))))
+
+(defn judge-deferred-ends!
+  "On a ready tick: judge the reflex ends deferred while settling, in order."
+  [eng]
+  (let [ends (:deferred-ends (state eng))]
+    (swap! (:state eng) assoc :deferred-ends [])
+    (doseq [end ends]
+      (judge-end! eng end {:deferred-ms (- (now eng) (:ended-at end))}))))
 
 (defn settle-reflex! [eng run {:keys [status error]}]
   (case status
@@ -543,12 +579,6 @@
     (emit! eng {:source :reflex :kind :reverted :level :info :reflex rid :property prop
                 :from (:value change) :to :default})))
 
-(defn offline?
-  "Whether the body is away from the server (the offline primitive). The register
-  and the list are paused meanwhile: sensing would only say offline."
-  [eng]
-  (true? (.isOffline (:primitives eng))))
-
 (defn tick-online!
   "One scheduling pass for a body that is on the server."
   [eng]
@@ -571,9 +601,11 @@
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
   started (resolving once that round is settled), or nil. Does nothing while
-  the body is offline: no trigger is evaluated and no round starts."
+  the body is offline or settling: no trigger is evaluated and no round starts.
+  The first ready tick judges the reflex ends deferred meanwhile."
   [eng]
-  (when-not (offline? eng)
+  (when-not (or (offline? eng) (settling? eng))
+    (judge-deferred-ends! eng)
     (tick-online! eng)))
 
 ;; ------------------------------------------------------------------ list edits (agents, and submit from rounds)

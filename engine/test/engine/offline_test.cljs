@@ -119,32 +119,3 @@
           (swap! clock + 31000)
           (await (core/tick! eng))
           (is (= 2 (count (kinds-of seen :fired))) "after the 30 s cooldown the sleeper is still asleep at night, so the reflex fires again"))))))
-
-(deftest a-log-out-that-ends-with-nothing-sensed-still-waits-out-the-gap
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
-              p (tu/fake {:time 14000 :entities [sleeper] :offlineScale 0.01})
-              world-state (.-state (.-world p))
-              eng (core/create {:primitives p :jobs registry/jobs :triggers real-triggers/all :dir (tu/tmp-dir)
-                                :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/register-reflex! eng {:trigger :player-sleeping-nearby})
-          (let [round (core/tick! eng)]
-            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
-            (is (true? (.isOffline p)) "the body is away")
-            (set! (.-entities world-state) #js [])
-            (await round))
-          (is (= [:cleared] (mapv :how (kinds-of seen :ended))) "nothing sensed when the job ended: cleared, so no cooldown")
-          (set! (.-entities world-state) #js [(clj->js (assoc sleeper :username "Alex"))])
-          (swap! clock + 200)
-          (await (core/tick! eng))
-          (is (= 1 (count (kinds-of seen :fired))) "the sleeper is sensed again but the log-out is too recent")
-          (swap! clock + 29700)
-          (await (core/tick! eng))
-          (is (= 1 (count (kinds-of seen :fired))) "just under 30 s since the log-out")
-          (swap! clock + 200)
-          (await (core/tick! eng))
-          (is (= 2 (count (kinds-of seen :fired))) "past the gap it fires again"))))))

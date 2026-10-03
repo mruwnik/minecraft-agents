@@ -470,3 +470,36 @@ test('fake toss with a slot throws that whole stack only; no-item for an empty s
   assert.deepEqual(await p.toss('t1', { item: 'dirt', slot: 1 }), { status: 'no-item', count: 0 })
   assert.deepEqual(await p.toss('t1', { item: 'dirt', slot: 9 }), { status: 'no-item', count: 0 })
 })
+
+test('the fake is never settling unless told', () => {
+  const p = createFake()
+  assert.deepEqual([p.isSettling(), p.self().settling], [false, false])
+})
+
+test('world.settle sets the settling flag that isSettling and self report', () => {
+  const p = createFake()
+  p.world.settle(true)
+  assert.deepEqual([p.isSettling(), p.self().settling], [true, true])
+  p.world.settle(false)
+  assert.deepEqual([p.isSettling(), p.self().settling], [false, false])
+})
+
+for (const [settles, expected] of [[true, true], [false, false]]) {
+  test(`with settles: ${settles} the body is settling after the offline return: ${expected}`, async () => {
+    const p = owned({ settles, offlineScale: 0.001 })
+    const pending = p.offline('t1', { ms: 20000 })
+    await tick()
+    assert.equal(p.isSettling(), false, 'offline is its own state')
+    await pending
+    assert.equal(p.isSettling(), expected)
+  })
+
+  test(`with settles: ${settles} world.respawn emits respawned and settling is ${expected}`, () => {
+    const p = createFake({ settles, self: { pos: at(3, 64, 4), dimension: 'overworld' } })
+    const seen = []
+    p.onBodyEvent(e => seen.push(e))
+    p.world.respawn()
+    assert.deepEqual(seen, [{ kind: 'respawned', pos: at(3, 64, 4), dimension: 'overworld' }])
+    assert.equal(p.isSettling(), expected)
+  })
+}

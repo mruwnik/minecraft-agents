@@ -119,19 +119,10 @@
     (boolean ((:when (get triggers/all :player-sleeping-nearby))
               (tu/fake {:time night :entities [sleeper]}) (mem/view (:store eng)) args)))))
 
-(deftest player-sleeping-nearby-waits-out-the-gap-since-the-latest-log-out
-  (are [ago-s args held] (= held (sleeping-nearby-after-log-out-ago? ago-s args))
-    10 {} false
-    31 {} true
-    10 {:gap-s 5} true
-    31 {:gap-s 60} false))
-
-(deftest a-failed-log-out-blocks-only-for-the-gap-but-unsupported-is-permanent
+(deftest a-failed-log-out-does-not-block-but-unsupported-is-permanent
   (are [status ago-s held] (= held (sleeping-nearby-after-log-out-ago? ago-s {} status))
-    "closed" 10 false
-    "closed" 31 true
-    "cut" 10 false
-    "cut" 31 true
+    "closed" 10 true
+    "cut" 10 true
     "unsupported" 31 false
     "unsupported" 1100 false))
 
@@ -139,7 +130,7 @@
   (let [t (get triggers/all :player-sleeping-nearby)]
     (is (= '(jobs.survival.log-out) (:job t)))
     (is (= [:cooldown 30] ((juxt :persistence :cooldown-s) t)))
-    (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true :gap-s 30} (:args t)))))
+    (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true} (:args t)))))
 
 (deftest a-roofed-body-still-logs-out-for-a-sleeper-from-the-register
   (async done
