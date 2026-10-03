@@ -395,7 +395,7 @@
           (is (= :continue (await (ctx/call-child c :y child-job {:rounds 2}))))
           (is (= {:n 1} (job-mem eng "j9" [:y]))))))))
 
-(deftest a-declining-child-memory-is-cleared
+(deftest a-declining-child-keeps-its-memory-so-debts-survive
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -407,7 +407,10 @@
           (is (= {:n 1} (job-mem eng "j9" [:x])) "a continuing child keeps its memory")
           (reset! flag false)
           (is (= :declined (await (ctx/call-child c :x gated-job {}))))
-          (is (= {} (mem/job-mem (mem/view (:store eng)) "j9" [:x])) "args and all"))))))
+          (is (= {:n 1} (job-mem eng "j9" [:x])) "a declined child keeps its memory")
+          (reset! flag true)
+          (is (= :continue (await (ctx/call-child c :x gated-job {}))))
+          (is (= {:n 2} (job-mem eng "j9" [:x])) "and resumes from it"))))))
 
 (deftest a-done-child-hands-its-result-to-the-parent-for-the-round
   (async done

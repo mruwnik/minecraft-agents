@@ -412,9 +412,11 @@ the parent's `[:children slot]` sub-map, created as `{:args args :children {}}`
 when missing. The engine runs the child's check against it (false resolves
 to `:declined`, no round run), else one child round with the parent's token,
 resolving to `:done` or `:continue`. The same slot resumes the same child
-while it returns `:continue`; when it returns `:done` or `:declined` its
-sub-map is cleared, so the next call in that slot starts fresh (counters such
-as go-to's `:blocked` do not leak into a later walk). A new slot is a fresh
+while it returns `:continue` or `:declined`; only when it returns `:done` is
+its sub-map cleared, so the next call in that slot starts fresh (counters such
+as go-to's `:blocked` do not leak into a later walk). A declined child keeps
+its memory, so debts it wrote (a replant owed, say) survive until a later call
+in that slot runs it again. A new slot is a fresh
 child. The combinators get this for free: `seq` and `any` children start
 fresh when called again, and `repeat` starts its child fresh each run.
 

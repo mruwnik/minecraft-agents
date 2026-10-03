@@ -253,8 +253,8 @@
 (defn ^:async call-child
   "One round of the child job def in slot under parent base; see README.md.
   The child's memory is the parent's [:children slot] sub-map, created with
-  the args when missing and cleared when the child is :done or :declined, so
-  only a :continue keeps it. Resolves to :declined when the child's check
+  the args when missing and cleared when the child is :done only; :continue
+  and :declined keep it, so a declined child's debts survive. Resolves to :declined when the child's check
   fails, else the child's :done or :continue. A :done child's result! data is
   readable with child-result for the rest of the parent's round. The child
   shares the parent's token, so a cut anywhere ends the whole chain's round."
@@ -269,7 +269,7 @@
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
     (let [c (child-ctx eng base slot args)]
       (if-not ((:check def) c)
-        (do (clear!) :declined)
+:declined
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (throw error))
