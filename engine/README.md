@@ -102,8 +102,8 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 |---|---|---|
 | `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, isSleeping, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
-| `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, distance}]` sorted by distance |
-| `blockAt(pos)` | `{x, y, z}` | `{name, pos}`, or `null` when the chunk is not loaded |
+| `blocks(opts)` | `{radius = 16, names?, match?, max = 64}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, distance}]` sorted by distance |
+| `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?}`, or `null` when the chunk is not loaded |
 
 `self()` fields:
 
@@ -125,6 +125,11 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 (the pose metadata field equals 2, found through the registry's `metadataKeys`, else index 6; the server sends it only
 when it changes). Hostile classification is `entity.type === 'hostile'` (the registry's type) or a `kind` naming
 hostile mobs; creepers additionally carry `creeper: true` (their `name` is `creeper` too).
+
+`blocks()` and `blockAt()` carry `age` (a number) when the block has an `age` state: the crop growth stage of wheat,
+carrots and potatoes (ripe at 7), beetroots (ripe at 3) and sweet berry bushes (berries from 2). Other blocks have no `age`.
+
+Sensing has no line of sight: `entities()` and `blocks()` see through walls, so a hostile behind a wall is "near".
 
 Remembered places (a known bed, a known chest) are not primitives. They are
 `:bed` and `:chest` entries in body memory; see `engine.memory/place` below.
@@ -180,10 +185,12 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 ```
 
 `listener` receives plain objects `{kind, ...}` for momentary events:
-`hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`), `respawned` (`pos`, `dimension`), `chat`
+`hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
 (`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
-it carried, before the server clears it. `respawned` is emitted at the first `spawned` after the library's respawn
+it carried, before the server clears it; `experience` is `{level, points}` at death. mineflayer emits `death` from
+the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death
+ones. `respawned` is emitted at the first `spawned` after the library's respawn
 signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). `offline`
 and `online` are the two ends of the `offline` primitive; after `online` the `bot` underneath is a new one. The engine
 turns each into an entry of that kind in body memory (see Memory).
@@ -210,6 +217,7 @@ const p = createFake({
   containers: { '1,64,1': [{ name: 'cobblestone', count: 10 }] },
   drops: { stone: 'cobblestone' },              // block -> dropped item; default: the block itself
   unreachable: ['9,64,9'],                      // moveTo / collect targets reported as blocked
+  ages: { '5,64,0': 7 },                        // "x,y,z" -> crop age, reported as `age`
 })
 p.world.state            // the mutable world (self, time, blocks, entities, inventory, containers)
 p.world.calls            // [{ name, token, args }] for every acting call, in order
@@ -217,6 +225,7 @@ p.world.hold('moveTo')   // the next moveTo call waits; returns release(result?)
 p.world.override('dig', async (token, args, defaultImpl) => ({ status: 'cannot' }))
 p.world.emit({ kind: 'hurt', health: 6 })   // delivered to onBodyEvent listeners
 p.world.setTime(13000)
+p.world.die()            // emits died (pos, inventory, experience), drops the inventory as items, zeroes experience
 ```
 
 Fake semantics: `moveTo` jumps to the target if within `maxDistance`, else
@@ -225,7 +234,12 @@ and adds an item entity at its cell. `collect` moves the item entity into the
 inventory. `attack` takes 5 health per swing. `sleep` succeeds at night on a
 cell whose block name ends in `_bed`, and sets the time to 0. `eat` raises
 `food` by 5 and consumes one item. A held call rejects with `cut` when the
-owner changes, exactly as the real layer must.
+owner changes, exactly as the real layer must. Where the body stands decides
+`inLava` and `inWater` after every `moveTo` and `place`, and water puts out
+fire. Placing a `water_bucket` pours water into the cell and leaves an empty
+`bucket`. An entity killed by `attack` spawns its `drops` (`[{name, count}]`)
+as items. A `creeper` entity carries `creeper: true` unless the spec says
+otherwise. `dig` clears a cell's crop age.
 
 ## Jobs
 
@@ -346,6 +360,8 @@ The single argument of a check and a round. Use the helpers in `engine.ctx`.
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive through the act wrapper |
 | `(await (ctx/call-child ctx slot job args))` | one round of a child job (below); `job` is a job symbol or a definition map |
 | `(ctx/check-child ctx slot job args)` | the child's check against its sub-map, for a parent's check |
+| `(ctx/result! ctx data)` | hand `data` to the parent; only the round that ends `:done` hands it over |
+| `(ctx/child-result ctx slot)` | the data the child in `slot` handed over in the round it finished, during that round of the parent; else nil |
 | `(ctx/submit! ctx spec opts)` | put a job spec at the end of the list as a peer; returns its id |
 | `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
 
@@ -355,7 +371,9 @@ called), saves memory, emits `action.started` (debug), calls the primitive,
 saves memory again and emits `action.done` (debug) with the status. There is
 no commit: a job updates its memory map and calls `act`, so a cut loses at
 most the work since the last save. Write a debt or an intent with
-`update-mem!` before the `act` it protects.
+`update-mem!` before the `act` it protects. After every `moveTo`, `act`
+writes a `:moved` body-memory entry `{:from :to :status :target}` (cap 20,
+ten minutes), which the stuck trigger reads.
 
 **call-child.** `(ctx/call-child ctx slot job args)` takes a slot keyword,
 a job (a job namespace symbol such as `'jobs.forestry.fell-tree`, whose
@@ -365,9 +383,22 @@ the parent's `[:children slot]` sub-map, created as `{:args args :children {}}`
 when missing. The engine runs the child's check against it (false resolves
 to `:declined`, no round run), else one child round with the parent's token,
 resolving to `:done` or `:continue`. The same slot resumes the same child
-(its memory is kept after `:done`, for the parent to read); a new slot is a
-fresh child. Children can call children, recursion included, with no depth
-cap. A cut anywhere ends the whole chain's round. Cancel and done take the
+while it returns `:continue`; when it returns `:done` or `:declined` its
+sub-map is cleared, so the next call in that slot starts fresh (counters such
+as go-to's `:blocked` do not leak into a later walk). A new slot is a fresh
+child. The combinators get this for free: `seq` and `any` children start
+fresh when called again, and `repeat` starts its child fresh each run.
+
+**Child results.** The outcome of a child is still only `:done`, `:continue`
+or `:declined`. To say more, a child calls `(ctx/result! ctx data)` in the
+round in which it finishes; the parent reads it with `(ctx/child-result ctx
+slot)` after the `call-child` that returned `:done`. A result from a round
+that returned `:continue` is discarded, and every result is gone when the
+parent's round ends; a check cannot hand one over. `jobs.movement.go-to`
+hands over `{:arrived true}` or `{:arrived false :reason :unreachable}`;
+`jobs.forestry.collect-drops` hands over `{:collected n}`.
+
+Children can call children, recursion included, with no depth cap. A cut anywhere ends the whole chain's round. Cancel and done take the
 subtree, since it lives inside the parent's memory. `submit!` is delegation:
 a peer on the list, not a child.
 
@@ -381,7 +412,10 @@ read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
   last. `:wt` is the body's `timeOfDay` when written. No provenance field.
 - **Kinds** are an open vocabulary keyed by what the observation is about:
   `:hurt`, `:died`, `:chat`, `:restart`, `:bed`, `:chest`, `:looked`,
-  `:forestry/replant`, `:job/j7`.
+  `:moved`, `:forestry/replant`, `:job/j7`. The survival jobs write `:breathe`,
+  `:extinguish`, `:hazard`, `:hostile`, `:fed`, `:hungry`, `:slept`,
+  `:shelter`, `:log-out`, `:stuck` and `:recovered`, and read `:home` and
+  `:food-source`, which nothing writes yet (an agent or a later job will).
 - **Policy** `{:cap n :ttl ms}` is passed with a write and stored beside the
   kind. A new kind written without one gets the default, cap 50 and ttl one
   hour; a later write without one keeps the kind's policy. Forever is the
@@ -435,8 +469,16 @@ down.
 - The cut listed job stays on the list and is the next to run (if its check
   passes) once no reflex holds the body. A cut reflex job is dropped; it
   fires again from the world if its condition still holds.
-- A reflex job has no check (a trigger always fires); it keeps the body while
-  its rounds return `:continue`. `:done` or a throw ends it. If the condition
+- A reflex job's check is never asked: the trigger is its check. The engine
+  starts its first round in the tick the trigger fires and gives it the next
+  round in every later tick, whatever the job's own `check` would say; it
+  keeps the body while its rounds return `:continue`. `:done` or a throw ends
+  it. So a job meant for a register entry must cope in its round with a world
+  in which its check would decline: most survival jobs return `:done` at the
+  top of the round when there is nothing to do. A combinator reflex whose
+  children all decline (say `(any (a) (b))`) returns `:continue` every round
+  and keeps the body until a higher reflex cuts it; register leaf jobs, or
+  combinators whose children cannot all decline. If the condition
   still holds, persistence decides: `:retry` fires again next tick,
   `:cooldown` waits `:cooldown-s`, `:stop` waits until the condition has been
   false once.
@@ -536,8 +578,13 @@ engine state and start from the scenario (memory is kept; job kinds of the
 discarded list are swept). The scenario is validated against the job
 registry and the triggers before connecting. `--state-dir <dir>` overrides the repo's `state/`.
 
-`test/engine/scenarios_test.cljs` runs `woodcutter.edn` and `pace-cuts.edn`
-end to end against the fake primitives.
+`test/engine/scenarios_test.cljs` runs `woodcutter.edn`, `pace-cuts.edn`
+and `survival.edn` end to end against the fake primitives. `survival.edn`
+registers every survival trigger in the order of the Triggers table and
+queues `(repeat (jobs.movement.look-around))`, so the body looks around
+between reflexes; its test drops the health, then places a zombie, then kills
+the body, and checks that recover, respond-to-hostile and recover-drops fire
+in turn and that the body goes back to looking around.
 
 ## Job library
 
@@ -549,18 +596,29 @@ after three the job emits a warn and ends.
 
 | job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count | none |
+| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count | none; hands over `{:arrived bool :reason?}` |
 | `jobs.time.wait-for-day` | none | it is day | none | none |
-| `jobs.survival.eat` | `{:item nil}` | always | none | none |
+| `jobs.survival.eat` | `{:item nil :until 18 :allow-bad false}` | food below `:until` and something edible carried | none | writes `:fed` (cap 20, 6 h) |
 | `jobs.movement.look-around` | none | always | none | writes `:looked` (cap 1, forever) |
 | `jobs.movement.pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
 | `jobs.forestry.fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
-| `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items | none |
+| `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items, `:collected` count | none; hands over `{:collected n}` |
 | `jobs.forestry.plant-sapling` | `{:at pos or nil :species nil}` | nothing to plant, or a matching sapling is carried and the spot holds no log | none | plants at the oldest `:forestry/replant` debt and forgets it |
 | `jobs.forestry.harvest-wood` | `{:species nil :radius 16 :filter nil}` | the current phase's child check | `:phase`, children in slots `:fell`, `:collect`, `:plant` | as its children |
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
-| `jobs.survival.retreat` | `{:radius 8 :step 8}` | always | `:moves` count | none |
-| `jobs.survival.sleep` | none | a `:bed` is known and it is night | none | reads `:bed` |
+| `jobs.survival.retreat` | `{:radius 8 :step 6 :cooldown-ms 5000}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
+| `jobs.survival.sleep` | `{:bed-radius}` | night and a `:bed` within `:bed-radius` | child `:go` | reads `:bed`; writes `:slept`, retracts a missing `:bed` |
+| `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10}` | drowning or enclosed (the suffocating condition) | `:noted` | writes `:breathe` (cap 20, 1 h) |
+| `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
+| `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
+| `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
+| `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
+| `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source`; writes `:hungry` when nothing is found |
+| `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3 :offline-allowed true :offline-ms 300000 :player-radius 128}` | the night-unsafe condition, or a built `:shelter` here whose roof is still over the body | `:needs-bed-noted`, children `:sleep`, `:log-out`, `:dig-in`, `:wait` | writes `:shelter` (built, reopened); reads `:slept` |
+| `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` and its targets | writes `:shelter` (cap 10, 1 day) |
+| `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 300000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping | none | writes `:log-out` (cap 10, 1 day) |
+| `jobs.survival.recover-drops` | `{:margin 0 :danger-radius 8 :collect-radius 6}` | a `:died` with no newer `:recovered` | `:decided`, `:phase`, children `:go`, `:collect` | reads `:died`; writes `:recovered` `{:decision :collected/:skip/:abandoned ...}` (cap 10, 1 day) |
+| `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; writes `:stuck` (cap 10, 1 h) when it gives up |
 
 - `:fell-tree` digs up to two logs per round of the chosen column, lowest
   first, and is done when the column has no logs. It walks with `moveTo`
@@ -582,20 +640,46 @@ after three the job emits a warn and ends.
   one stack per round. Saplings included: on a shared list with
   `:harvest-wood` it can take the sapling the replant needs. Warn kind
   `chest_unusable`.
-- `:retreat` walks `:step` blocks directly away from the nearest hostile per
-  round, at most five walks, then gives up with a `retreat_gave_up` warn.
-- `:sleep` walks within 2 of the known bed and calls `sleep`. `sleeping` and
-  `not-night` are done; a taken bed or nearby monster retries three times; a
-  missing bed warns `bed_missing` and ends.
+- `:retreat` walks `:step` blocks away from the nearest hostile per round,
+  leaning towards the latest `:bed` or `:home` when that is not through the
+  hostile, and turning up to 90 degrees to keep clear of `:hazard` cells. Done
+  once no hostile has been within `:radius` for `:cooldown-ms`. No way out
+  counts as a failed round (`retreat_blocked`).
+- `:sleep` walks within 2 of the known bed (go-to as a child) and calls
+  `sleep`. `sleeping` and `not-night` are done; a go-to that hands over
+  `{:arrived false}`, a taken bed or a nearby monster is a failed round
+  (`bed_unreachable`, `bed_unusable`); a missing bed warns `bed_missing`,
+  retracts the `:bed` and ends.
+- The survival jobs' docstrings (`(:doc (registry/jobs 'jobs.survival.x))`)
+  give the full rules; in short: `:breathe` swims up to air or digs the head
+  cell free, one move per round; `:extinguish` pours a carried water bucket at
+  its feet, else walks into water or to the safest dry cell nearby;
+  `:recover` flees, walks to a bed or home, eats and waits for health to reach
+  `:healed`; `:respond-to-hostile` fights (`fight-back`) when healthy, armed,
+  not facing a creeper and outnumbered by at most `:max-fight`, else retreats;
+  `:get-food` climbs a ladder of eat, known source, hunt or harvest, then
+  gives up with a `food.none` warn; `:shelter` tries sleep, then log-out,
+  then dig-in, and reopens the shelter at day; `:recover-drops` weighs the
+  drops' value (`engine.value`) against the trip and goes back for them or
+  skips; `:unstick` escalates from stepping back to digging to pillaring.
 
 Triggers (`engine.triggers`; `:when` receives the world, a memory view and
 the register entry's `:args`):
 
+Listed in the order a survival register puts them (most urgent first, as
+`scenarios/survival.edn` does); `engine.triggers/all` lists them the same way.
+
 | trigger | holds when | job | persistence |
 |---|---|---|---|
-| `:health-low` | health at most `:health` (default 8) | `(jobs.survival.eat)` | cooldown 30 s |
-| `:hostile-near` | a hostile within `:radius` (default 8); set the job's own `:radius` in `:job` | `(jobs.survival.retreat)` | cooldown 5 s |
-| `:night-and-bed-known` | not day and a `:bed` entry exists | `(jobs.survival.sleep)` | cooldown 60 s |
+| `:suffocating` | in water with oxygen below `:min-oxygen` (default 12) and the head not in air, or the head cell holds a suffocating block | `(jobs.survival.breathe)` | retry |
+| `:burning` | on fire or in lava | `(jobs.survival.extinguish)` | retry |
+| `:health-low` | health below `:health` (default 7) | `(jobs.survival.recover)` | cooldown 30 s |
+| `:hostile-near` | a hostile mob within `:radius` (default 8), walls included; set the job's own `:radius` in `:job` | `(jobs.survival.respond-to-hostile)` | cooldown 5 s |
+| `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
+| `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
+| `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
+| `:stuck` | the last `:n` (4) `:moved` entries, all within `:window-ms` (60 s) and none older than the latest `:stuck`, are bad moves (not arrived or partial, or under `:min-move` 1.5 blocks) | `(jobs.maintenance.unstick)` | cooldown 60 s |
+| `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 0 |
 | `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `(jobs.storage.deposit)` | cooldown 60 s |
 | `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |
 
@@ -608,6 +692,26 @@ register; `scenarios/pace-cuts.edn` puts it above a long `pace` job.
 `:inventory-nearly-full` counts stacks, since `self().inventory` has no slot
 total; the real inventory has 36 main slots, so 30 is a threshold, not a
 measurement.
+
+### Live-unverified assumptions
+
+The survival jobs pass against the fake only. What they assume about the real
+server and mineflayer, none of it checked live:
+
+- `extinguish` pours a water bucket with `place` at the body's own feet cell.
+- `unstick` pillars with `place` into the body's own cell (a jump is not
+  modelled).
+- `breathe`, `extinguish` and `unstick` use `moveTo` with range 0 to step
+  into a cell, water included.
+- `dig-in`'s roof placement may fail with no supporting neighbour
+  (`no-support`); it then counts a failed round, and three end the job with
+  `dig_in_failed`.
+- `onFire` and the sleeping pose are read from metadata indices found through
+  the registry's `metadataKeys` (see Sensing); the fallback indices are guesses.
+- Sensing has no line of sight, so hostiles behind walls count for
+  `:hostile-near` and `respond-to-hostile`.
+- Wheat is not food raw; `get-food` harvests it but cannot eat it (no
+  crafting yet).
 
 ## Not built (hooks only)
 
