@@ -131,6 +131,19 @@
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= 1 (count (emitted seen :bed_missing)))))))))
 
+(deftest sleep-keeps-a-bed-whose-chunk-is-not-loaded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time night :unloaded ["6,64,0"]})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 10))
+          (is (= [{:x 6 :y 64 :z 0}] (mapv :pos (entries eng :bed))) "the bed is still remembered")
+          (is (= {:x 6 :y 64 :z 0} (mem/place (mem/view (:store eng)) :bed)))
+          (is (= [] (emitted seen :bed_missing)))
+          (is (= 1 (count (emitted seen :bed_unloaded)))))))))
+
 (deftest sleep-gives-up-on-an-unreachable-bed-after-three-walks
   (async done
     (tu/run-async done

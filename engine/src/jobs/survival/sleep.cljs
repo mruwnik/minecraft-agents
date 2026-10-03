@@ -11,7 +11,8 @@
   days) is written when the sleep primitive succeeds. A bed that is not at its
   place is retracted by writing a :bed entry {:gone true :was pos}, which has
   no :pos, so it no longer reads as a known place, and the job ends so the
-  shelter chooser falls through. A taken bed, a monster nearby or an
+  shelter chooser falls through; when the bed's chunk is not loaded (the block
+  reads nil) it is not retracted but retried like the failures below. A taken bed, a monster nearby or an
   unreachable bed is retried three times, then warns and ends; an unreachable
   bed is then also remembered in a :bed-unreachable entry {:pos bed} (cap 5,
   kept ten minutes), and while an unexpired entry has the same pos as the
@@ -49,9 +50,11 @@
     (case (.-status r)
       "sleeping" (do (ctx/remember! c :slept {:pos bed} slept-policy) :done)
       "not-night" :done
-      "missing" (do (ctx/remember! c :bed {:gone true :was bed} mem/place-policy)
-                    (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the remembered place"})
-                    :done)
+      "missing" (if (nil? (u/block-name (:primitives c) bed))
+                  (u/fail! c :bed_unloaded "bed chunk not loaded yet")
+                  (do (ctx/remember! c :bed {:gone true :was bed} mem/place-policy)
+                      (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the remembered place"})
+                      :done))
       (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r))))))
 
 (defn ^:async round [c]
