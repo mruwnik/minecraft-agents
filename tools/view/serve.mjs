@@ -1,10 +1,12 @@
 // HTTP server for the browser view: static pages, the dumped column files, and a server-sent event stream that
-// pushes an agent's pose, hud and changed columns. Reads state/ only; the body writes it atomically.
+// pushes an agent's pose, hud and changed columns. Reads state/ (the body writes it atomically) and also proxies
+// driving commands to a body's control socket.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { textureBytes } from './materials.mjs'
 import { columnFormat } from './web-format.mjs'
+import { createDriveProxy } from './drive-proxy.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
@@ -44,6 +46,7 @@ const sendFile = async (res, file, contentType) => {
 }
 
 export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250 }) {
+  const driveProxy = createDriveProxy({ stateDir })
   const agentFile = (name, file) => path.join(stateDir, 'agents', name, 'view', file)
   const builds = new Map()
   // one build per version serves both the table and the texture bytes
@@ -181,9 +184,10 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
 
   const route = async (req, res) => {
     const url = new URL(req.url, 'http://localhost')
-    if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     const parts = url.pathname.split('/').slice(1)
     const [head, ...rest] = parts
+    if (head === 'drive' && rest.length === 1 && NAME.test(rest[0])) return driveProxy(req, res, rest[0])
+    if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     if (url.pathname === '/') return serveStatic(res, 'index.html')
     if (head === 'web' && rest.length === 1 && /^[A-Za-z0-9_.-]+$/.test(rest[0]) && !rest[0].startsWith('.')) return serveStatic(res, rest[0])
     if (url.pathname === '/agents') return listAgents(res)
