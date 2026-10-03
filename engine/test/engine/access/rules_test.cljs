@@ -97,7 +97,15 @@
     (world [5 64 5] "cave_air") [5 64 5] {} {:ok true}
     (world [5 64 5] "short_grass") [5 64 5] {} {:ok true}
     plain [5 64 5] {} {:ok false :reason :not-replaceable}
-    (world [5 64 5] "water") [5 64 5] {} {:ok false :reason :not-replaceable}
+    ;; fluids are placed into like air
+    (world [5 64 5] "water") [5 64 5] {} {:ok true}
+    (world [5 64 5] "lava") [5 64 5] {} {:ok true}
+    (world [5 64 5] "bubble_column") [5 64 5] {} {:ok true}
+    ;; a fluid cell is still refused for the earlier reasons
+    (world [5 64 5] "water") [5 64 5] {:zones [farm]} {:ok false :reason :zone}
+    (world [5 64 5] "lava") [5 64 5] {:footprints #{[5 64 5]}} {:ok false :reason :footprint}
+    (world [0 64 0] "water") [0 64 0] {} {:ok false :reason :own-body}
+    (world [5 64 5] "water") [5 64 5] {:zones nil} {:ok false :reason :no-zones}
     air-spot [9 9 9] {} {:ok false :reason :not-loaded}
     ;; the body's own feet and head cells
     air-spot [0 64 0] {} {:ok false :reason :own-body}
@@ -119,3 +127,12 @@
   (is (= {:ok false :reason :zone :zone "farm"} (place air-spot [5 64 5] :zones [farm])))
   (is (= {:ok false :reason :not-replaceable :block "stone"} (place plain [5 64 5])))
   (is (= {:ok true} (place air-spot [5 64 5]))))
+
+(deftest fluids-are-no-floor
+  (are [name expected] (= expected (rules/solid-floor? (world [0 62 0] name) [0 62 0]))
+    "stone" true
+    "water" false
+    "lava" false
+    "bubble_column" false
+    "air" false
+    "magma_block" false))

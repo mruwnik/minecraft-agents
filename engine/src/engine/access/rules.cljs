@@ -19,7 +19,8 @@
   rely on that):
     dig:   :not-loaded, :footprint, :zone (+ :zone name), :fluid-adjacent (+ :fluid :at), :falling-block
            (+ :block :at), :under-feet, :no-zones
-    place: :not-loaded, :footprint, :zone (+ :zone name), :own-body, :not-replaceable (+ :block), :no-zones"
+    place: :not-loaded, :footprint, :zone (+ :zone name), :own-body, :not-replaceable (+ :block), :no-zones
+  A cell holding air, water, lava or a bubble column is placeable; digging beside a fluid is what is refused."
   (:require [clojure.string :as str]))
 
 (def air #{"air" "cave_air" "void_air"})
@@ -27,8 +28,9 @@
 (def fluids #{"water" "lava" "bubble_column"})
 
 (def replaceable
-  "Names a placed block takes the place of. Fluids are not in it: placing into a fluid is refused."
-  (into air #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen"}))
+  "Names a placed block takes the place of: air, fluids (plugging a source, bridging water, sealing a leak) and the
+  plants and snow a placement overwrites."
+  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen"}))
 
 (def not-a-floor
   "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."
