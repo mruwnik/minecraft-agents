@@ -11,7 +11,7 @@ Disable everything with `BODY_VIEW=0` (no directories are created). Enabled by d
 | File | Shared by | Written |
 | --- | --- | --- |
 | `state/worlds/<world>/chunks/<cx>.<cz>.bin` | every body in the world | on chunk load and block update |
-| `state/agents/<name>/view/pose.json` | one agent | if changed, at most `BODY_VIEW_POSE_HZ` times a second (default 10), at least every 2 s |
+| `state/agents/<name>/view/pose.json` | one agent | a write attempt on every physics tick (about 20 a second), only if changed, at least every 2 s; `BODY_VIEW_POSE_HZ` > 0 switches to a timer at that rate |
 | `state/agents/<name>/view/hud.json` | one agent | on change, at most once per second |
 
 All writes are atomic: write `<file>.tmp.<pid>`, then `rename`. A reader never sees a partial file.
@@ -82,6 +82,6 @@ written once: the last full pose (position, eye, yaw, pitch, entities as they we
   yaw reads 0 for about 3.5 s, then flips to the body's last look direction, while the server reports -180 throughout.
   This is a mineflayer teleport-rotation issue on this server version (26.1), not a dump bug.
 - Errors never escape a bot event handler. A write error emits a `view.error` warn event at most once a minute.
-- `BODY_VIEW_POSE_HZ` (read once at start) caps pose writes per second. `0` is uncapped: a write attempt on every physics tick (about 20 a second), still only if the pose changed.
+- `BODY_VIEW_POSE_HZ` (read once at start) sets the pose write rate. The default `0` is a write attempt on every physics tick (about 20 a second), only if the pose changed and at least every 2 s; a value above 0 switches to a timer at that rate.
 - `view.stats` (info, once a minute): `{columns, bytes, ms, poses, poseMs, poseBytes, huds}` since the last stats event. `poseMs` is main-thread time building, change-checking and stringifying poses, apart from `ms`; `poseBytes` is pose JSON bytes written. `ms` is main-thread
   time in `dump()` plus JSON building (`performance.now()`), `bytes` is compressed column bytes written.

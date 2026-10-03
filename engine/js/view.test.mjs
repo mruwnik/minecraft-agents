@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS
+  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS
 } from './view.mjs'
 
 const { Vec3 } = vec3
@@ -361,12 +361,46 @@ test('hz 0 writes on every physics tick with no interval', async () => {
   assert.equal(ticks, 100)
 })
 
-test('BODY_VIEW_POSE_HZ is parsed, falling back to 10 on junk', () => {
-  assert.equal(poseHzFromEnv({}), 10)
+test('default mode writes one pose per changed physics tick, none for an unchanged one', async () => {
+  const bot = fakeBot()
+  const { view } = makeView(bot)
+  for (let i = 0; i < 5; i++) {
+    bot.entity.position.x += 1
+    bot.emit('physicsTick')
+    await view.idle()
+  }
+  bot.emit('physicsTick')
+  await view.idle()
+  const { poses } = view.stats()
+  view.stop()
+  assert.equal(poses, 5)
+})
+
+test('with no physics ticks the refresh timer rewrites an unchanged pose after POSE_REFRESH_MS', async () => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'] })
+  try {
+    const bot = fakeBot()
+    const { view } = makeView(bot, { now: () => Date.now() })
+    await view.tickPose()
+    await view.idle()
+    assert.equal(view.stats().poses, 1)
+    mock.timers.tick(POSE_REFRESH_MS)
+    await new Promise(resolve => setImmediate(resolve))
+    await view.idle()
+    const { poses } = view.stats()
+    view.stop()
+    assert.equal(poses, 1)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('BODY_VIEW_POSE_HZ is parsed, falling back to 0 (every physics tick) on junk', () => {
+  assert.equal(poseHzFromEnv({}), 0)
   assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '20' }), 20)
   assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '0' }), 0)
-  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: 'x' }), 10)
-  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '-3' }), 10)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: 'x' }), 0)
+  assert.equal(poseHzFromEnv({ BODY_VIEW_POSE_HZ: '-3' }), 0)
 })
 
 test('stats report pose ms and bytes apart from column ms', async () => {

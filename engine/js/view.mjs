@@ -11,7 +11,7 @@ const deflate = promisify(zlib.deflate)
 export const VIEW_VERSION = 1
 export const FLUSH_MS = 500
 export const MAX_COLUMNS_PER_FLUSH = 8
-export const POSE_HZ = 10
+export const POSE_HZ = 0
 export const POSE_REFRESH_MS = 2000
 export const HUD_MS = 1000
 export const STATS_MS = 60000
@@ -206,7 +206,7 @@ const noView = Object.freeze({
   idle: async () => {}, pendingCount: () => 0, stats: () => ({ columns: 0, bytes: 0, ms: 0, poses: 0, poseMs: 0, poseBytes: 0, huds: 0 })
 })
 
-// BODY_VIEW_POSE_HZ: pose writes per second at most; 0 = uncapped (every physics tick); default POSE_HZ
+// BODY_VIEW_POSE_HZ: pose writes per second at most; 0 = every physics tick (the default), with a POSE_REFRESH_MS timer for when none arrive
 export function poseHzFromEnv (env = process.env) {
   const hz = Number(env.BODY_VIEW_POSE_HZ ?? POSE_HZ)
   return Number.isFinite(hz) && hz >= 0 ? hz : POSE_HZ
@@ -369,7 +369,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     }
     timers = [
       every(FLUSH_MS, flushColumns),
-      ...(poseHz > 0 ? [every(1000 / poseHz, tickPose)] : []),
+      // tick mode: physicsTick stops while the column under the body is unloaded or physics is off, so the refresh needs its own timer
+      every(poseHz > 0 ? 1000 / poseHz : POSE_REFRESH_MS, tickPose),
       every(HUD_MS, tickHud),
       every(STATS_MS, emitStats)
     ]
