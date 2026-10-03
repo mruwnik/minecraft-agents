@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { courseSnapshot } from './courses.mjs'
-import { fixtureSnapshot } from './fixture.mjs'
+import { fixtureSnapshot, stateId } from './fixture.mjs'
 import { plan, MOVE, DEFAULT_COSTS } from './planner.mjs'
 import { defaultStateTable, WATER, PORTAL } from './blocks.mjs'
 
@@ -319,8 +319,9 @@ const bankWorld = bank => world([
   [10, 61, -2, 14, 63, 40, 'water'],
   [15, 64, -2, 20, 63 + bank, 40, 'stone']
 ])
-// [bank height above flush, found?]: the planner exits up to two cells over the top water cell, dearer for the second
-const banks = [[0, true], [1, true], [2, false]]
+// Live, 26.1: a floating body leaves the water onto land flush with the water's top face (5/5), not onto land one higher (0/5,
+// 0.42-0.63 short at the peak) or two (0/5). The bank here is `bank` above flush.
+const banks = [[0, true], [1, false], [2, false]]
 for (const [bank, reachable] of banks) {
   test(`a bank ${bank} above the flush stand height: ${reachable ? 'found' : 'not found'}`, () => {
     const r = run(bankWorld(bank), from2, near(18, 64 + bank, 2, 0), { goalFlood: 0, margin: 8 })
@@ -328,11 +329,50 @@ for (const [bank, reachable] of banks) {
   })
 }
 
+// a lake 3 deep walled in on every side by stone: the far bank is the only way on, `bank` above flush
+const closedLake = bank => fixtureSnapshot({ fill: [
+  [-2, 50, 0, 30, 63, 6, 'stone'],   [10, 61, 0, 14, 63, 6, 'water'], [15, 64, 0, 30, 63 + bank, 6, 'stone']
+] })
+const lakeBanks = [
+  ['flush banks', 0, 'found', null],
+  ['banks 1 above flush', 1, 'partial', 'exhausted'],
+  ['banks 2 above flush', 2, 'partial', 'exhausted']
+]
+for (const [what, bank, status, reason] of lakeBanks) {
+  test(`a lake with ${what}: ${status}${reason ? ' ' + reason : ''}`, () => {
+    const r = run(closedLake(bank), { x: 5, y: 64, z: 3 }, near(20, 64 + bank, 3, 0), { goalFlood: 0 })
+    assert.deepEqual([r.status, r.reason], [status, reason])
+  })
+}
+
+// 1 deep, a floor under it: the body is standing, not floating, so the walk and jump rules apply (jump up to 1.25)
+const wade = rise => world([
+  [8, 64, -2, 12, 64, 40, 'water'],
+  [13, 64, -2, 20, 63 + rise, 40, 'stone']
+])
+const wadeCases = [
+  ['a block the same height as the water surface (+1 over the floor)', 1, MOVE.JUMP],
+  ['no block: level ground beyond', 0, MOVE.WALK]
+]
+for (const [what, rise, move] of wadeCases) {
+  test(`wading in water 1 deep onto ${what}: found, the step out is a ${move === MOVE.JUMP ? 'JUMP' : 'WALK'}`, () => {
+    const r = run(wade(rise), from2, near(14, 64 + rise, 2, 0), { goalFlood: 0, margin: 8 })
+    assert.equal(r.status, 'found')
+    const out = r.path.steps.findIndex((s, k) => k > 0 && !s.swim && r.path.steps[k - 1].swim)
+    assert.equal(r.path.steps[out].move, move)
+  })
+}
+
+test('wading in water 1 deep: a block two over the floor is not climbed out onto', () => {
+  const r = run(wade(2), from2, near(14, 66, 2, 0), { goalFlood: 0, margin: 8 })
+  assert.notEqual(r.status, 'found')
+})
+
 // ---- courses: water ----
 
 const found = [
   'bubble-up', 'magma-down', 'water20-up', 'water20-down', 'water2-up', 'waterfall-up', 'waterfall-down',
-  'dropshaft-1deep', 'dropshaft-2deep', 'drop8-open', 'drop3-water', 'lake20', 'lake20-flush'
+  'dropshaft-1deep', 'dropshaft-2deep', 'drop8-open', 'drop3-water', 'lake20-flush'
 ]
 for (const name of found) {
   test(`course ${name}: found`, () => {
@@ -367,10 +407,19 @@ test('course waterfall-up: swims up the falling water, current included', () => 
 })
 
 // shallow and channel courses the planner now crosses without a land route
-const crosses = ['farm-channels', 'lilypads', 'coral', 'dripleaf', 'lake20-wade', 'stream3', 'swamp', 'frozen-river', 'dropshaft-1deep-in', 'drop8-water', 'lake20-high']
+const crosses = ['farm-channels', 'lilypads', 'coral', 'dripleaf', 'lake20-wade', 'stream3', 'swamp', 'frozen-river', 'dropshaft-1deep-in', 'drop8-water']
 for (const name of crosses) {
   test(`course ${name}: found`, () => {
     assert.equal(verdict(planCourse(name)), 'found')
+  })
+}
+
+// every bank of these lakes is more than flush with the water's top face (lake20: 2 up, lake20-high: 2 up, a 3 high trench wall in
+// river-current): the body cannot climb out, so there is no way across
+const sealed = ['lake20', 'lake20-high', 'river-current']
+for (const name of sealed) {
+  test(`course ${name}: no way across, ${name === 'river-current' ? 'the trench walls are 3 high' : 'the banks are too high to climb out onto'}`, () => {
+    assert.notEqual(planCourse(name).status, 'found')
   })
 }
 
@@ -411,4 +460,68 @@ test('an underwater tunnel under a stone ceiling between two pools is still foun
   const r = run(snapshot, { x: 12, y: 63, z: 6 }, near(24, 63, 6, 0))
   assert.equal(r.status, 'found')
   assert.ok(r.path.steps.some(s => s.x === 18 && s.y <= 63))
+})
+
+// ---- magma: where a route may end, and the columns beside a lift ----
+
+const onMagma = (snapshot, s) => {
+  const id = snapshot.stateAt(s.x, s.y, s.z)
+  return table.bubble[id] === 2 || snapshot.stateAt(s.x, s.y - 1, s.z) === stateId('magma_block')
+}
+
+// the body died idling on magma: a route never ends on a magma block or in a magma bubble column
+const magmaEnds = [
+  // [what, world, goal, status]: the nearest node that is not on magma satisfies the goal, or the route is partial
+  ['a goal range 1 around a magma block with stone beside it', world([[9, 63, 2, 10, 63, 2, 'magma_block']]), near(10, 64, 2, 1), 'found'],
+  ['a goal on a magma block', world([[10, 63, 2, 10, 63, 2, 'magma_block']]), near(10, 64, 2, 0), 'partial'],
+  ['a goal in a magma bubble column', column(20, bubbleDown), near(11, 74, 1, 0), 'partial']
+]
+for (const [what, snapshot, goal, status] of magmaEnds) {
+  test(`${what}: ${status}, the last step is not on magma`, () => {
+    const r = run(snapshot, from2, goal, { goalFlood: 0 })
+    assert.equal(r.status, status)
+    assert.ok(!onMagma(snapshot, r.path.steps.at(-1)))
+  })
+}
+
+// a one-wide corridor (stone walls at z 1 and 3) past a magma bubble column cell that opens off it at (10, 64, 3)
+const beside = world([
+  [-2, 64, 1, 40, 66, 1, 'stone'], [-2, 64, 3, 40, 66, 3, 'stone'],
+  [10, 63, 3, 10, 63, 3, 'magma_block'], [10, 64, 3, 10, 66, 3, 'bubble_column', { drag: true }]
+])
+const besideCases = [
+  ['by default: 1 risk', {}, 1],
+  ['costs.besideMagmaColumn 0', { besideMagmaColumn: 0 }, 0],
+  ['costs.besideMagmaColumn 3', { besideMagmaColumn: 3 }, 3]
+]
+for (const [what, costs, risk] of besideCases) {
+  test(`walking past a magma bubble column at the same level, ${what}`, () => {
+    const r = run(beside, from2, near(18, 64, 2, 0), { goalFlood: 0, costs })
+    assert.equal(r.status, 'found')
+    assert.equal(r.path.cost.risk, risk)
+  })
+}
+
+// a lift (soul sand) at x 9 and a magma pool x 11..15, side by side in a one-wide stone wall y 64..70 (stand 71 on top; walls 10 higher either side keep the ground out and leave the platform one cell wide); platform cell
+// (10, 71, 3) between them. The lift's top is left sideways onto that platform; the pool is the only way on to x 17.
+const pools = (extra = []) => world([
+  [8, 64, 3, 18, 70, 3, 'stone'], [8, 64, 2, 18, 80, 2, 'stone'], [8, 64, 4, 18, 80, 4, 'stone'],
+  [9, 63, 3, 9, 63, 3, 'soul_sand'], [9, 64, 3, 9, 70, 3, 'bubble_column', { drag: false }],
+  [11, 63, 3, 15, 63, 3, 'magma_block'], [11, 64, 3, 15, 70, 3, 'bubble_column', { drag: true }],
+  ...extra
+])
+const inLift = { x: 9, y: 64, z: 3, px: 9.5, pz: 3.5 }
+test('after leaving the lift sideways the path does not drop into the magma pool beside the platform', () => {
+  const snapshot = pools()
+  const r = run(snapshot, inLift, near(17, 71, 3, 0), { goalFlood: 0 })
+  assert.notEqual(r.status, 'found')
+  assert.ok((r.path?.steps ?? []).every(s => table.bubble[snapshot.stateAt(s.x, s.y, s.z)] !== 2))
+})
+
+test('the step after the exit may enter the magma column when the path goes down it', () => {
+  // an opening at the pool's bottom east end: the goal is out of it at the floor
+  const down = pools([[16, 64, 3, 17, 65, 3, 'air']])
+  const r = run(down, inLift, near(17, 64, 3, 0), { goalFlood: 0 })
+  assert.equal(r.status, 'found')
+  assert.match(r.path.summary, /magma column down/)
 })

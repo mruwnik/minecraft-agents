@@ -11,12 +11,12 @@ const planCourse = (name, options) => {
 }
 const verdict = r => `${r.status}${r.reason ? `/${r.reason}` : ''}`
 const moveSet = r => new Set(r.path.steps.map(s => s.move))
-const near = (x, y, z) => ({ kind: 'near', x, y, z, range: 1 })
+const near = (x, y, z, range = 1) => ({ kind: 'near', x, y, z, range })
 
 const found = [
   'ladder-up', 'ladder-down', 'vine-up', 'vine-down', 'ladder6', 'vines6',
   'lad-shaft20-up', 'lad-shaft20-down', 'lad-wall20-up', 'lad-wall20-down',
-  'lad-raised1', 'lad-trap-open', 'lad-trap-closed', 'twisting-up', 'scaffold-up', 'scaffold-down', 'weeping'
+  'lad-raised1', 'lad-trap-closed', 'twisting-up', 'scaffold-up', 'scaffold-down', 'weeping'
 ]
 for (const name of found) {
   test(`course ${name}: found`, () => {
@@ -55,10 +55,17 @@ test('the closed wooden trapdoor over the ladder is one OPEN, recorded with its 
   assert.equal(path.cost.opens, 1)
 })
 
-test('an open trapdoor over a ladder of its facing costs no OPEN', () => {
-  const { path } = planCourse('lad-trap-open')
+// Live, 26.1: ladder facing west, an OPEN trapdoor above it facing east (mismatched): the body climbs and steps off, 5/5.
+// The same with the trapdoor facing west (matching, which vanilla makes climbable): stuck at feet y 74.12, 0/5.
+// (The matching case is measured once, 2026-10-03, and may be a test-geometry artifact.)
+test('an open trapdoor over a ladder, facing differently: climbed without an OPEN', () => {
+  const { path } = run(trapOver({ open: true, facing: 'east' }), from5, near(13, 73, 5))
   assert.equal(path.cost.opens, 0)
   assert.ok(path.cost.climbed >= 5)
+})
+
+test('course lad-trap-open (open trapdoor facing the ladder\'s way): not found', () => {
+  assert.notEqual(planCourse('lad-trap-open').status, 'found')
 })
 
 // [course, blocks climbed]: ladder cells 161..166 are 5 climbs and the step up; the 20 high shafts are 19 or 20
@@ -157,15 +164,16 @@ test('a ladder up a wall 10 high with the exit at the top: found, climbing 9 or 
   assert.match(r.path.summary, /ladder up (9|10)/)
 })
 
-// a one-wide shaft with a ladder up to a trapdoor ceiling; the cap beside it is the goal's floor
-const trapShaft = trap => world([
+// a one-wide shaft with a ladder (facing west) up to a trapdoor ceiling; the cap beside it is the goal's floor
+const trapShaft = (trap, props = { open: false, facing: 'east' }) => world([
   [8, 64, 4, 10, 72, 6, 'stone'],
   [9, 64, 5, 9, 72, 5, 'air'],
   [8, 64, 5, 8, 65, 5, 'air'],
   [11, 72, 4, 15, 72, 6, 'stone'],
   [9, 64, 5, 9, 71, 5, 'ladder', { facing: 'west' }],
-  [9, 72, 5, 9, 72, 5, trap, { half: 'top', open: false, facing: 'east' }]
+  [9, 72, 5, 9, 72, 5, trap, { half: 'top', ...props }]
 ])
+const trapOver = props => trapShaft('oak_trapdoor', props)
 // [trapdoor, statuses it may end in]: iron ones cannot be opened by hand
 const trapCases = [['oak_trapdoor', ['found']], ['copper_trapdoor', ['found']], ['iron_trapdoor', ['partial', 'none']]]
 for (const [trap, statuses] of trapCases) {
@@ -174,6 +182,48 @@ for (const [trap, statuses] of trapCases) {
     assert.ok(statuses.includes(r.status), r.status)
   })
 }
+
+// [what, trapdoor state, status]: the opened state keeps the facing, so a closed trapdoor facing like the ladder stays shut for the climb
+const trapFacings = [
+  ['open, facing east (differs from the ladder)', { open: true, facing: 'east' }, 'found', 0],
+  ['open, facing south (differs)', { open: true, facing: 'south' }, 'found', 0],
+  ['open, facing west (matches the ladder)', { open: true, facing: 'west' }, 'partial', 0],
+  ['closed, facing east (differs)', { open: false, facing: 'east' }, 'found', 1],
+  ['closed, facing north (differs)', { open: false, facing: 'north' }, 'found', 1],
+  ['closed, facing west (matches the ladder)', { open: false, facing: 'west' }, 'partial', 0]
+]
+for (const [what, props, status, opens] of trapFacings) {
+  test(`a trapdoor over a ladder facing west, ${what}: ${status}`, () => {
+    const r = run(trapOver(props), from5, near(13, 73, 5), { goalFlood: 0 })
+    assert.equal(r.status, status)
+    assert.equal(r.path.steps.filter(st => st.move === MOVE.OPEN).length, opens)
+  })
+}
+
+// ---- scaffolding, measured live 3/3 each: up a 6 high tower holding jump, down it sneaking, and through a block at ground level ----
+
+const tower6 = world([[9, 64, 5, 9, 69, 5, 'scaffolding', { bottom: false, waterlogged: false, stability_distance: 0 }]])
+const scaffoldCases = [
+  ['climbing a 6 high tower', { x: 5, y: 64, z: 5 }, near(9, 70, 5, 0), {}, /scaffolding up/],
+  // (no drops: a fall of up to 3 off the tower is free, so by default the body would step off early)
+  ['descending it', { x: 9, y: 70, z: 5, px: 9.5, pz: 5.5 }, near(5, 64, 5, 0), { maxDrop: 0 }, /scaffolding down/]
+]
+for (const [what, from, goal, options, summary] of scaffoldCases) {
+  test(`scaffolding: ${what}: found`, () => {
+    const r = run(tower6, from, goal, { goalFlood: 0, ...options })
+    assert.equal(r.status, 'found')
+    assert.match(r.path.summary, summary)
+    assert.ok(r.path.cost.climbed >= 5)
+  })
+}
+
+test('scaffolding: a wall of scaffolding blocks across the way is walked through at ground level', () => {
+  const wall = world([[8, 64, -2, 8, 66, 40, 'scaffolding', { bottom: false, waterlogged: false, stability_distance: 0 }]])
+  const r = run(wall, from5, near(14, 64, 5, 0), { goalFlood: 0 })
+  assert.equal(r.status, 'found')
+  assert.ok(r.path.steps.some(st => st.x === 8 && st.y === 64))
+  assert.equal(r.path.cost.climbed, 0)
+})
 
 // a vine shaft cut into a platform: weeping vines from the top (y 69) to y 65, floor under them at y 64
 const vineShaft = world([
@@ -195,3 +245,29 @@ test('the same vines going up from the floor: found', () => {
   assert.equal(r.status, 'found')
   assert.match(r.path.summary, /vines up/)
 })
+
+// ---- leaving a ladder part way up: in front of it (away from the wall) and to either side, but never through its back ----
+
+// a ladder 12 high up the west face of a stone wall (ladder cells x 9, y 64..75, facing west: its strip is on the east side of
+// the cell); one standing block on the ladder's front or side at height h is the only floor there
+const SIDES = { front: [8, 5], north: [9, 4], south: [9, 6] }
+const tower = ([ix, iz], h) => world([
+  [10, 64, 0, 14, 80, 10, 'stone'],
+  [9, 64, 5, 9, 75, 5, 'ladder', { facing: 'west' }],
+  [ix, 63 + h, iz, ix, 63 + h, iz, 'stone']
+])
+const exitCases = Object.keys(SIDES).flatMap(side => [4, 8].flatMap(h => [['up', side, h], ['down', side, h]]))
+for (const [way, side, h] of exitCases) {
+  test(`a ladder shaft 12 high: ${way} the ladder, stepping off at height ${h} onto the floor on its ${side}`, () => {
+    const [ix, iz] = SIDES[side]
+    const island = { x: ix, y: 64 + h, z: iz }
+    const query = way === 'up'
+      ? [{ x: 2, y: 64, z: 5 }, { kind: 'near', ...island, range: 0 }]
+      : [{ ...island, px: ix + 0.5, pz: iz + 0.5 }, near(2, 64, 5, 0)]
+    // (no drops: a fall of up to 3 off the ladder is free, so by default the body would step off early instead of climbing)
+    const r = plan(tower(SIDES[side], h), { from: query[0], goal: query[1] }, { goalFlood: 0, maxDrop: 0 })
+    assert.equal(r.status, 'found')
+    assert.ok(r.path.cost.climbed >= h - 1, `climbed ${r.path.cost.climbed}`)
+    assert.match(r.path.summary, way === 'up' ? /ladder up/ : /ladder down/)
+  })
+}

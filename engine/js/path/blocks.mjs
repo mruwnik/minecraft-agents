@@ -26,6 +26,11 @@ const CLIMB_NAMES = /^(ladder|vine|scaffolding|(weeping|twisting)_vines(_plant)?
 // iron doors and trapdoors do not open by hand; copper ones do, so they count
 const OPENABLE_NAMES = /^(?!iron_)\w+_(door|fence_gate|trapdoor)$/
 const TRAPDOOR = /_trapdoor$/
+const DOOR = /_door$/
+const GATE = /_fence_gate$/
+const IRON_OPENABLE = /^iron_(door|trapdoor)$/
+const BUTTON = /(^|_)button$/
+const PLATE = /_pressure_plate$/
 const NARROW_NAMES = /^bamboo$|_pane$|_bars$|(^|_)fence$|_wall$|(^|_)chain$|^end_rod$|lightning_rod$/
 const AVOID_NAMES = new Set(['lava', 'fire', 'soul_fire', 'powder_snow', 'cobweb'])
 const TOUCH_NAMES = new Set(['sweet_berry_bush', 'wither_rose', 'cactus'])
@@ -45,10 +50,23 @@ export const CLIMB_NONE = 0
 export const CLIMB_INSIDE = 1
 export const CLIMB_TRAP_OPEN = 2
 export const CLIMB_TRAP_SHUT = 3
+// `openable` per state: 1 a closed door, gate or trapdoor a hand opens (wood, copper), 2 one only redstone opens (iron), 0 anything
+// else (an open one is plain geometry); `openState` is the same block with open=true; `openKind` says which of the three it is.
+// `activator`: what a body can use to open an iron door.
+export const OPEN_HAND = 1
+export const OPEN_REDSTONE = 2
+export const KIND_DOOR = 1
+export const KIND_GATE = 2
+export const KIND_TRAPDOOR = 3
+export const ACT_BUTTON = 1
+export const ACT_LEVER = 2
+export const ACT_PLATE = 3
 export const LADDER = 1
 export const VINES = 2
 export const SCAFFOLDING = 3
 const FACING = { east: 1, west: 2, south: 3, north: 4 }
+// a wall button on a block's east face has facing=east and sits on the block to its west
+const ATTACH_OPPOSITE = { east: 2, west: 1, south: 4, north: 3 }
 
 const climbOf = (name, props) => {
   if (CLIMB_NAMES.test(name)) return CLIMB_INSIDE
@@ -114,7 +132,14 @@ export function buildStateTable (registry) {
   const floor = new Uint8Array(size) // height a body can stand on, 1/16 of the cell: the top, but none for a ladder
   const flowing = new Uint8Array(size) // water that is not a source: it pushes the body
   const bubble = new Uint8Array(size) // bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
+  const magma = new Uint8Array(size) // a magma block: a body must not end its route on it
   const dripleaf = new Uint8Array(size) // a big dripleaf leaf with collision: a floor that tilts under a body
+  const openable = new Uint8Array(size)
+  const openState = new Uint32Array(size)
+  const openKind = new Uint8Array(size)
+  const doorHalf = new Uint8Array(size) // 1 lower half of a door, 2 upper half
+  const activator = new Uint8Array(size)
+  const attach = new Uint8Array(size) // where a button's or lever's supporting block lies from it: 1 +x, 2 -x, 3 +z, 4 -z, 5 +y, 6 -y
   const floats = []
   for (const block of registry.blocksArray) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) {
@@ -134,11 +159,23 @@ export function buildStateTable (registry) {
       partial[id] = shapes.length > 0 && leavesGaps(shapes) ? 1 : 0
       climb[id] = climbOf(block.name, props)
       climbName[id] = climbNameOf(block.name)
-      facing[id] = climbName[id] === LADDER || TRAPDOOR.test(block.name) ? FACING[props.facing] ?? 0 : 0
+      facing[id] = climbName[id] === LADDER || TRAPDOOR.test(block.name) || DOOR.test(block.name) || GATE.test(block.name) ? FACING[props.facing] ?? 0 : 0
+      if (OPENABLE_NAMES.test(block.name) || IRON_OPENABLE.test(block.name)) {
+        openKind[id] = TRAPDOOR.test(block.name) ? KIND_TRAPDOOR : GATE.test(block.name) ? KIND_GATE : KIND_DOOR
+        doorHalf[id] = openKind[id] !== KIND_DOOR ? 0 : props.half === 'upper' ? 2 : 1
+        if (props.open === false) {
+          openable[id] = IRON_OPENABLE.test(block.name) ? OPEN_REDSTONE : OPEN_HAND
+          openState[id] = Block.fromProperties(block.name, { ...props, open: true }, 0).stateId
+        }
+      }
+      activator[id] = BUTTON.test(block.name) ? ACT_BUTTON : block.name === 'lever' ? ACT_LEVER : PLATE.test(block.name) ? ACT_PLATE : 0
+      if (activator[id] === ACT_BUTTON || activator[id] === ACT_LEVER) attach[id] = props.face === 'floor' ? 6 : props.face === 'ceiling' ? 5 : ATTACH_OPPOSITE[props.facing] ?? 0
       floor[id] = block.name === 'scaffolding' ? WHOLE : climbName[id] === 0 ? top[id] : 0
-      special[id] = partial[id] | (climb[id] === CLIMB_NONE ? 0 : 1)
       flowing[id] = block.name === 'water' && Number(props.level) !== 0 ? 1 : 0
       bubble[id] = block.name === 'bubble_column' ? (props.drag === true ? 2 : 1) : 0
+      magma[id] = block.name === 'magma_block' ? 1 : 0
+      // (a magma bubble column is special too: the cells beside it cost risk, which a search only looks for where one is near)
+      special[id] = partial[id] | (climb[id] === CLIMB_NONE ? 0 : 1) | (bubble[id] === 2 ? 1 : 0) | (openable[id] > 0 ? 1 : 0)
       if (block.name === 'big_dripleaf' && top[id] > 0) {
         // the leaf's box is 11..15/16 (or lower tilted): a body stands on its top, so for the planner it is a low block like a carpet
         dripleaf[id] = 1
@@ -147,7 +184,7 @@ export function buildStateTable (registry) {
       if (STAIRS.test(block.name) && props.half === 'bottom' && props.shape === 'straight') stairUp[id] = STAIR_UP[props.facing] ?? 0
     }
   }
-  return { top, base, kind, hazard, stairUp, climb, climbName, facing, floor, special, flowing, bubble, dripleaf, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
+  return { top, base, kind, hazard, stairUp, climb, climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, magma, dripleaf, boxStart, boxCount, boxes: Float32Array.from(floats), offsetMax, partial }
 }
 
 let shared

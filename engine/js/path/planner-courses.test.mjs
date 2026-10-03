@@ -85,10 +85,12 @@ test('the same one-wide gap with the pod removed is passable', () => {
   assert.equal(r.status, 'found')
 })
 
-test('trap-ceil-bottom: 1.0 of clearance under a bottom trapdoor ceiling, no way through', () => {
+// a bottom trapdoor ceiling leaves 1.0 of clearance: the body cannot walk under it, but a hand opens each one in its way
+test('trap-ceil-bottom: 1.0 of clearance under a bottom trapdoor ceiling, found by opening the trapdoors in the way', () => {
   const r = planCourse('trap-ceil-bottom')
-  assert.notEqual(r.status, 'found')
-  assert.ok(!(r.path?.steps ?? []).some(s => s.x >= 2875))
+  assert.equal(r.status, 'found')
+  assert.match(r.path.summary, /opens \d+ trapdoors/)
+  assert.ok(r.path.cost.opens >= 10)
 })
 
 test('the walk through the gap costs a plain walk plus 0.1 s per tight cell entered', () => {

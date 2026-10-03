@@ -1,0 +1,3 @@
+;; live path probe: idle body, driven by hand
+{:register []
+ :queue []}

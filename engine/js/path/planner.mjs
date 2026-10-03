@@ -16,12 +16,18 @@
 // refused (the feet leave the ladder), down through one is a short fall caught below. Every cost the policy might want to
 // change is in DEFAULT_COSTS, overridable by options.costs.
 //
+// Doors, gates, trapdoors (see expandAt): where a move needs a closed hand-openable one (wood, copper) open, it is found in a second
+// pass over the expansion with those blocks open, costs.open each, and the step says what it opens (step.opens). An iron door only
+// when a button or lever lies within reach on the body's side, or a plate in the cell in front: costs.openRedstone.
+//
 // Water (vanilla 26.1, as modelled here): a feet cell holding water, a bubble column or a no-collision waterlogged block (kelp,
 // seagrass) is a SWIM node, h = 0, no floor needed; its head cell (feet + 1) must be water or open air. Moves: SWIM sideways
-// (cardinal; a diagonal costs sqrt 2 and follows the walking side rule), SWIM_UP and SWIM_DOWN a cell, EXIT onto a bank. A bank
-// stand cell up to the top water cell + 1 is flush with the surface (costs.exit); one more (costs.exitRise = 2, costs.exitHigh)
-// is a climb out the body can make in vanilla by a jump in the water against the wall: about 55% sure, it is what the live lake
-// course needs. Water that is not a source (level != 0, a waterfall included) adds costs.current per block entered; a bubble
+// (cardinal; a diagonal costs sqrt 2 and follows the walking side rule), SWIM_UP and SWIM_DOWN a cell, EXIT onto a bank. A floating
+// body gets out only onto land whose stand height is at most the top water cell + 1 + 1/16 (flush with the surface, costs.exit):
+// measured live, land one higher is out of reach (0/5). A body standing on a floor in water 1 deep is not floating: it walks and
+// jumps out by the ordinary rules. A route never ends on a magma block or in a magma bubble column, a standing node beside a magma
+// column costs costs.besideMagmaColumn risk, and the step after leaving a bubble column sideways is not into a magma column unless
+// the goal is below it. Water that is not a source (level != 0, a waterfall included) adds costs.current per block entered; a bubble
 // column lifts (drag=false, soul sand: up at costs.bubbleUp, down refused) or drags (drag=true, magma: down at
 // costs.bubbleDown, up refused). A body breathes 15 s: seconds with the head in water (not in a bubble column) accumulate
 // along the path in `airs` (the current's extra is a penalty, not time, so it does not count), a head out of water or in a
@@ -47,19 +53,20 @@
 // the nodes, and a backward flood from the goal, run only once the search has spent floodAfter expansions, reports a goal nothing can reach
 // (it declines to when it meets water: a drop into water starts further up than the flood looks).
 import { UNLOADED } from './snapshot.mjs'
-import { defaultStateTable, OPEN, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING } from './blocks.mjs'
+import { defaultStateTable, OPEN, OPENABLE, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING, OPEN_REDSTONE, KIND_DOOR, KIND_GATE, ACT_BUTTON, ACT_LEVER, ACT_PLATE } from './blocks.mjs'
 import { boxesNear, freeMask, labelRegions, GRID } from './space.mjs'
 
 export const MOVE = { START: 0, WALK: 1, DIAGONAL: 2, JUMP: 3, DROP: 4, GAP: 5, CORNER: 6, CLIMB_UP: 7, CLIMB_DOWN: 8, JUMP_CLIMB: 9, OPEN: 10, SWIM: 11, SWIM_UP: 12, SWIM_DOWN: 13, EXIT: 14 }
 
 // seconds for the moves climbing adds: per block climbed up and down, a jump from the floor into a ladder one block up, and
-// opening a trapdoor by hand; water, in seconds: swimming a block sideways, up, down, getting out onto a bank flush with the
-// surface and onto one a block higher (up to exitRise cells over the top water cell), the extra for a block of flowing water,
+// opening a door, gate or trapdoor by hand (openRedstone: an iron door by a button or lever; openPlate: by a plate, which the body
+// steps on anyway) and besideMagmaColumn, the risk of standing beside a magma bubble column; water, in seconds: swimming a block
+// sideways, up, down, getting out onto a bank flush with the surface, the extra for a block of flowing water,
 // a block in a bubble column up (soul sand) and down (magma), the breath (supply and the margin kept under it), the highest
 // drop into water and, for a big dripleaf leaf, the extra seconds and the hp of risk
 export const DEFAULT_COSTS = {
-  climbUp: 0.43, climbDown: 0.33, jumpClimb: 0.5, open: 1.0,
-  swimH: 0.5, swimUp: 0.3, swimDown: 0.35, exit: 0.6, exitHigh: 1.0, exitRise: 2, current: 0.3, bubbleUp: 0.08, bubbleDown: 0.12,
+  climbUp: 0.43, climbDown: 0.33, jumpClimb: 0.5, open: 1.0, openRedstone: 1.5, openPlate: 0, besideMagmaColumn: 1,
+  swimH: 0.5, swimUp: 0.3, swimDown: 0.35, exit: 0.6, current: 0.3, bubbleUp: 0.08, bubbleDown: 0.12,
   airSupply: 15, airLimit: 12, maxWaterDrop: 64, dripleaf: 0.2, dripleafRisk: 0.5
 }
 
@@ -78,6 +85,7 @@ const CORNER_S = 0.15 // a diagonal slid along a blocked corner: slower than a s
 const SLOW_EXTRA = 0.75 // walking time grows by this much of itself per slow end of a move: both ends soul sand is x2.5
 const LAVA_ADJACENT = 0.5 // hp of risk for a step with lava beside the feet
 const FREE_FALL = 3
+const EXIT_SLACK = 1 // 1/16: a floating body exits onto land up to this over the water's top face
 const SQRT2 = Math.SQRT2
 const OCTILE_SLACK = 1.0824 // octile length of a vector of length r is at most this times r: keeps the range term admissible
 const SPAN = 4096 // nodes further than 2048 blocks from the start in x or z are not searched
@@ -111,9 +119,16 @@ export function createSearch (snapshot, query, options = {}) {
     goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48
   } = options
   const costs = { ...DEFAULT_COSTS, ...options.costs }
-  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, dripleaf } = table
-  const { stateAt, minY } = snapshot
-  const rawAt = stateAt
+  const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, magma, dripleaf, openable, openState, openKind, doorHalf, activator, attach } = table
+  const { minY } = snapshot
+  const rawAt = snapshot.stateAt
+  // What the body sees: in the opening pass of an expansion (see expandAt) a closed door, gate or trapdoor reads as open, so the
+  // move is judged with the block as it will be once opened; rawAt is the block as it stands.
+  let openMode = false
+  const stateAt = (x, y, z) => {
+    const id = rawAt(x, y, z)
+    return openMode && openable[id] > 0 ? openState[id] : id
+  }
   const { from, goal } = query
   const goalRange = goal.range ?? 0
   const slack = OCTILE_SLACK * goalRange
@@ -125,7 +140,9 @@ export function createSearch (snapshot, query, options = {}) {
     if (cl === CLIMB_INSIDE) return true
     const below = rawAt(x, y - 1, z)
     if (below === UNLOADED || climbName[below] !== LADDER) return false
-    return cl === CLIMB_TRAP_SHUT || facing[id] === facing[below]
+    // measured live (26.1, once, 2026-10-03: may be a test-geometry artifact): over a ladder, a trapdoor is passable for the
+    // climb only when its facing differs from the ladder's; one facing the same way stopped the body, open or not
+    return facing[id] !== facing[below]
   }
   const climbHere = (x, y, z) => {
     const id = rawAt(x, y, z)
@@ -136,12 +153,12 @@ export function createSearch (snapshot, query, options = {}) {
   // a closed wooden trapdoor above a ladder: entering the cell costs an OPEN
   const shutAt = (x, y, z) => {
     const id = rawAt(x, y, z)
-    return id !== UNLOADED && climb[id] === CLIMB_TRAP_SHUT && climbName[rawAt(x, y - 1, z)] === LADDER
+    return id !== UNLOADED && climb[id] === CLIMB_TRAP_SHUT && climbCell(climb[id], id, x, y, z)
   }
   // what the free-space masks read: a closed wooden trapdoor over a ladder is one the climb opens, so there it reads as air
   const view = { stateAt: (x, y, z) => {
     const id = stateAt(x, y, z)
-    return climb[id] === CLIMB_TRAP_SHUT && climbName[stateAt(x, y - 1, z)] === LADDER ? 0 : id
+    return climb[id] === CLIMB_TRAP_SHUT && climbCell(CLIMB_TRAP_SHUT, id, x, y, z) ? 0 : id
   } }
   let allowShut = false // standH refuses a shut trapdoor's cell unless the caller pays for opening it
 
@@ -203,7 +220,7 @@ export function createSearch (snapshot, query, options = {}) {
 
   // stand height at a feet cell, or -1
   const standH = (x, y, z) => {
-    const raw = rawAt(x, y, z)
+    const raw = stateAt(x, y, z)
     if (raw === UNLOADED) return -1
     const cl = climb[raw]
     if (cl !== 0 && climbCell(cl, raw, x, y, z)) {
@@ -230,7 +247,8 @@ export function createSearch (snapshot, query, options = {}) {
       const tb = floor[below]
       const hz = hazard[below]
       // a lower top is that cell's own stand height, not ground for this one
-      if (tb < WHOLE || kind[below] === NARROW || hz === HAZARD_AVOID || hz === DAMAGE_TOUCH) return -1
+      // (an open door, gate or trapdoor is a panel at the cell's edge: nothing to stand on)
+      if (tb < WHOLE || kind[below] === NARROW || hz === HAZARD_AVOID || hz === DAMAGE_TOUCH || kind[below] === OPENABLE && openable[below] === 0) return -1
       h = tb - WHOLE
       support = below
     }
@@ -265,13 +283,25 @@ export function createSearch (snapshot, query, options = {}) {
   let enterSlow = 0
   let enterExtra = 0 // seconds a big dripleaf leaf adds
 
+  // A body standing level with a magma bubble column (or at the surface cell beside it, when it stands on the bank above) can slip
+  // into it: 1 of 3 live exits from a soul-sand column did. Costs risk. `quiet` says no section near the cell holds such a column.
+  const besideMagma = (x, y, z) => {
+    if (quiet) return 0
+    for (let c = 0; c < 4; c++) {
+      const x2 = x + CARDINAL[c][0]
+      const z2 = z + CARDINAL[c][1]
+      if (bubble[stateAt(x2, y, z2)] === 2 || bubble[stateAt(x2, y - 1, z2)] === 2) return costs.besideMagmaColumn
+    }
+    return 0
+  }
+
   // standH plus what arriving there costs; -1 when not standable
   const landing = (x, y, z) => {
     const h = standH(x, y, z)
     if (h < 0) return -1
     const hz = hazard[support]
     const leaf = dripleaf[support] === 1
-    enterRisk = touch + (hz === DAMAGE_STAND ? 1 : 0) + (lavaNear(x, y, z) ? LAVA_ADJACENT : 0) + (leaf ? costs.dripleafRisk : 0)
+    enterRisk = touch + (hz === DAMAGE_STAND ? 1 : 0) + (lavaNear(x, y, z) ? LAVA_ADJACENT : 0) + (leaf ? costs.dripleafRisk : 0) + besideMagma(x, y, z)
     enterSlow = hz === SLOW ? 1 : 0
     enterExtra = leaf ? costs.dripleaf : 0
     return h
@@ -323,6 +353,7 @@ export function createSearch (snapshot, query, options = {}) {
   let airs = new Float64Array(cap) // seconds of air used since the last breath
   let peaks = new Float64Array(cap) // the most air used at any point of the path to the node
   let wsecs = new Float64Array(cap) // seconds of the path spent swimming
+  let opens = new Int32Array(cap) // 1 + index in openLists of what the move to the node opened, 0 for nothing
   let gs = new Float64Array(cap)
   let fs = new Float64Array(cap)
   let heapPos = new Int32Array(cap) // index in heap, -2 once expanded
@@ -340,8 +371,8 @@ export function createSearch (snapshot, query, options = {}) {
 
   const grow = () => {
     cap = Math.min(maxNodes, cap * 2)
-    ;[keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, gs, fs, heapPos, heap] =
-      [keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, gs, fs, heapPos, heap].map(a => grown(a, cap))
+    ;[keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, opens, gs, fs, heapPos, heap] =
+      [keys, xs, ys, zs, hs, moves, slow, corners, shapes, parent, secs, risks, airs, peaks, wsecs, opens, gs, fs, heapPos, heap].map(a => grown(a, cap))
     slots = nextPow2(cap * 2)
     hashTable = new Int32Array(slots).fill(-1)
     // newest first: a rival record of a node (same key) sits ahead of the one it rivals in the probe, so lookups find it
@@ -394,6 +425,8 @@ export function createSearch (snapshot, query, options = {}) {
   let moveAir = 0
   let movePeak = 0
   let moveWater = 0
+  let moveOpen = 0 // 1 + index in openLists of what the move being made opens (see expandAt), 0 for nothing
+  const openLists = []
 
   // relax the edge to a node: insert it, or lower its cost if this way is cheaper
   // a tight cell's node also has its region, the region's point and the crossing the move came in by: `shape`
@@ -449,6 +482,7 @@ export function createSearch (snapshot, query, options = {}) {
     airs[node] = moveAir
     peaks[node] = Math.max(peaks[parentNode], movePeak)
     wsecs[node] = wsecs[parentNode] + moveWater
+    opens[node] = moveOpen
     gs[node] = g
     fs[node] = g + weight * heuristic(x, z)
     if (heapPos[node] === -1) {
@@ -470,7 +504,7 @@ export function createSearch (snapshot, query, options = {}) {
   const cellKeys = new Float64Array(TABLE)
   const cellFlags = new Uint8Array(TABLE)
   const columnPartial = (x, y, z) => {
-    const key = keyOf(x, y, z) + 1
+    const key = (keyOf(x, y, z) + 1) * (openMode ? -1 : 1) // (the opening pass sees other blocks: its own cache entries)
     const slot = hashOf(x, y, z, 0) & (TABLE - 1)
     if (columnKeys[slot] === key) return columnFlags[slot]
     let flag = 0
@@ -495,7 +529,7 @@ export function createSearch (snapshot, query, options = {}) {
   }
   const isTight = (x, y, z) => {
     if (sectionsClear(x, y, z, 1, 1, 2)) return false
-    const key = keyOf(x, y, z) + 1
+    const key = (keyOf(x, y, z) + 1) * (openMode ? -1 : 1)
     const slot = hashOf(x, y, z, 0) & (TABLE - 1)
     if (cellKeys[slot] === key) return cellFlags[slot] === 1
     let flag = 0
@@ -513,7 +547,7 @@ export function createSearch (snapshot, query, options = {}) {
   const tightSeen = new Set()
   const stats = { masks: 0, tightMasks: 0, tightCells: 0, regions: 0, maskMs: 0, flooded: 0 }
   const shapeOf = (x, y, z, lo16) => {
-    const key = keyOf(x, y, z) * 128 + (lo16 - y * 16 + 32)
+    const key = (keyOf(x, y, z) * 128 + (lo16 - y * 16 + 32)) * (openMode ? -1 : 1)
     let shape = maskCache.get(key)
     if (shape !== undefined) return shape
     const t = performance.now()
@@ -732,10 +766,33 @@ export function createSearch (snapshot, query, options = {}) {
     moveAir = movePeak = moveWater = 0
   }
 
+  // the water cell is 1 deep over a floor, with air over it: the body stands on the floor, it is not floating
+  const standsInWater = (x, y, z) => {
+    if (bubble[stateAt(x, y, z)] !== 0) return false
+    const head = stateAt(x, y + 1, z)
+    const below = stateAt(x, y - 1, z)
+    if (head === UNLOADED || below === UNLOADED || kind[head] === WATER) return false
+    const hz = hazard[below]
+    return floor[below] >= WHOLE && kind[below] !== NARROW && hz !== HAZARD_AVOID && hz !== DAMAGE_TOUCH
+  }
+
+  // out of 1-deep water by the walking rules: a step of up to STEP is a walk, up to JUMP_UP a jump (the head cell is open)
+  const wadeOut = (i, x, y, z, region, c, x2, z2, tightSrc) => {
+    const h0 = y * 16
+    const h1 = neighbour(x2, z2, y, h0)
+    if (h1 < 0) return
+    const delta = ty * 16 + h1 - h0
+    const walks = delta <= STEP
+    if (!walks && (delta > JUMP_UP || !clear(x, z, (y + 1) * 16, ty * 16 + h1 + BODY))) return
+    const sec = (walks ? WALK_S : WALK_S + JUMP_S) + enterExtra
+    const move = walks ? MOVE.WALK : MOVE.JUMP
+    if (tightSrc || tightAt(x2, ty, z2)) tightMove(i, x, y, z, 0, region, c, x2, ty, z2, h1, move, sec, enterRisk, enterSlow)
+    else edge(x2, ty, z2, h1, move, i, sec, enterRisk, enterSlow)
+  }
+
   // a node floating in water: up, down, sideways and onto the bank; sideways moves and exits may cross tight cells (masks), a
   // diagonal never does
   const expandSwim = (x, y, z, i, region) => {
-    quiet = sectionsClear(x, y, z, 2, 2, 3)
     const tightSrc = tightAt(x, y, z)
     const srcB = bubble[stateAt(x, y, z)]
     const srcSub = submerged(x, y, z)
@@ -758,10 +815,15 @@ export function createSearch (snapshot, query, options = {}) {
     }
 
     // out of the water onto a bank: at the same level, or up to exitRise cells over the top water cell of this column
+    // Live (26.1): a floating body gets out onto land whose stand height is at most the water's top face + 1/16 (flush, or a
+    // 15/16 top), never onto land one higher (0/5, peak 0.42-0.63 short). A body standing on a floor in water 1 deep is not
+    // floating: it walks and jumps out by the ordinary rules.
     const topWater = isWater(x, y + 1, z)
     const nearSurface = !topWater || !isWater(x, y + 2, z)
     const yt = topWater ? y + 1 : y
-    const lastTy = nearSurface ? Math.max(y, yt + costs.exitRise) : y
+    const lastTy = nearSurface ? Math.max(y, yt + 1) : y
+    const maxStand = (yt + 1) * 16 + EXIT_SLACK
+    const wading = standsInWater(x, y, z)
     for (let c = 0; c < 4; c++) {
       const x2 = x + CARDINAL[c][0]
       const z2 = z + CARDINAL[c][1]
@@ -774,10 +836,14 @@ export function createSearch (snapshot, query, options = {}) {
           : edge(x2, y, z2, 0, MOVE.SWIM, i, dsec, risk, 0))
         continue
       }
+      if (wading) {
+        wadeOut(i, x, y, z, region, c, x2, z2, tightSrc)
+        continue
+      }
       for (let ty = y; ty <= lastTy; ty++) {
         const h1 = landing(x2, ty, z2)
-        if (h1 < 0) continue
-        const base = (ty === y ? costs.swimH : ty - yt >= 2 ? costs.exitHigh : costs.exit) + enterExtra
+        if (h1 < 0 || ty * 16 + h1 > maxStand) continue
+        const base = (ty === y ? costs.swimH : costs.exit) + enterExtra
         const risk = enterRisk
         const slowTo = enterSlow
         const tight = tightSrc || tightAt(x2, ty, z2)
@@ -828,15 +894,19 @@ export function createSearch (snapshot, query, options = {}) {
 
   const expand = i => expandAt(xs[i], ys[i], zs[i], hs[i], slow[i], i, shapes[i] & 15)
 
+  // The step after leaving a soul-sand column sideways must not be into a magma column cell, unless the path is going down it
+  // (the goal well below the cell): the body slips in. Set per expansion, for the sideways entries from land.
+  let afterExit = false
+  const magmaTrap = (x, y, z) => afterExit && bubble[rawAt(x, y, z)] === 2 && !(goal.y < y - 1)
+
   let quiet = false
   const tightAt = (x, y, z) => !quiet && isTight(x, y, z)
 
   // region -1: every region of a tight cell (the goal flood does not know which one it comes from)
-  const expandAt = (x, y, z, h, slowFrom, i, region = -1) => {
+  const expandMoves = (x, y, z, h, slowFrom, i, region) => {
     if (kind[rawAt(x, y, z)] === WATER) return expandSwim(x, y, z, i, region)
+    afterExit = i >= 0 && moves[i] === MOVE.EXIT
     const h0 = y * 16 + h
-    // when no section near the cell holds a partial block, no cell this expansion looks at is tight
-    quiet = sectionsClear(x, y, z, 2, 2, 3)
     const tightSrc = tightAt(x, y, z)
     // (the same quiet test as for tight cells: no climbable within reach of the cell either)
     const climbing = !quiet && climbHere(x, y, z)
@@ -869,6 +939,7 @@ export function createSearch (snapshot, query, options = {}) {
       }
       // water ahead at our level: walk in and swim
       if (swimAt(x2, y, z2) >= 0) {
+        if (magmaTrap(x2, y, z2)) continue
         const risk = swimRisk(x2, y, z2)
         const tight = tightSrc || tightAt(x2, y, z2)
         swimEdge(i, true, x2, y, z2, costs.swimH, flowing[rawAt(x2, y, z2)] === 1 ? costs.current : 0, false, dsec => tight
@@ -879,7 +950,7 @@ export function createSearch (snapshot, query, options = {}) {
       // no ground ahead at our level: the body must at least fit in the column to leave the edge
       if (!clear(x2, z2, h0, h0 + BODY)) continue
       expandDrop(i, x, y, z, h, region, c, x2, z2, h0, slowFrom, tightSrc)
-      if (!tightSrc) expandGap(i, x, y, z, c, h0) // no gap jumps out of a tight cell
+      if (!tightSrc && !openMode) expandGap(i, x, y, z, c, h0) // no gap jumps out of a tight cell, none over a door (in the opening pass)
     }
 
     if (tightSrc) return
@@ -911,6 +982,132 @@ export function createSearch (snapshot, query, options = {}) {
     }
   }
 
+  // ---- doors, gates and trapdoors ----
+
+  // Every expansion near a closed door, gate or trapdoor runs twice: once with the world as it stands, then in the opening pass
+  // with those blocks open. An edge only the second pass finds is a move that needs something opened: it costs costs.open per
+  // block opened by hand (costs.openRedstone for an iron door's button or lever, costs.openPlate for a plate, which the body
+  // steps on anyway) and records step.opens. A body that stands in a door's cell has already opened it: the edges out of
+  // there come from the second pass too, for nothing. There is no timing model: a door closes again about 1 s after a plate
+  // is left (stone plate), 1 s after a stone button was pressed (1.5 s for wood); the executor deals with that.
+  const nearOpenable = (x, y, z) => {
+    for (let cz = z - 1; cz <= z + 1; cz++) {
+      for (let cx = x - 1; cx <= x + 1; cx++) {
+        for (let cy = y - 1; cy <= y + 2; cy++) if (openable[rawAt(cx, cy, cz)] > 0) return true
+      }
+    }
+    return false
+  }
+
+  // the closed openable blocks in the body column of a node at (x, y, z) standing h/16 up, a door by its lower half: [{ x, y, z, id }]
+  const closedIn = (x, y, z, h) => {
+    const out = []
+    const last = (y * 16 + h + BODY - 1) >> 4
+    for (let k = y; k <= last; k++) {
+      const id = rawAt(x, k, z)
+      if (!(openable[id] > 0)) continue
+      const by = doorHalf[id] === 2 ? k - 1 : k
+      if (!out.some(b => b.y === by)) out.push({ x, y: by, z, id: doorHalf[id] === 2 ? rawAt(x, by, z) : id })
+    }
+    return out
+  }
+
+  // an activator for an iron door at `door`, for a body in the cell (sx, sy, sz) in front of it: a plate in that cell, or a button
+  // or lever on the body's side of the door within 4 blocks, on a block next to the door's frame. null when there is none.
+  const activators = new Map()
+  const activatorFor = (door, sx, sy, sz, side) => {
+    const key = `${door.x},${door.y},${door.z}|${sx},${sy},${sz}|${side}`
+    const hit = activators.get(key)
+    if (hit !== undefined) return hit
+    const found = findActivator(door, sx, sy, sz, side)
+    activators.set(key, found)
+    return found
+  }
+  const ATTACH = [null, [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0, -1, 0]]
+  const findActivator = (door, sx, sy, sz, side) => {
+    if (activator[rawAt(sx, sy, sz)] === ACT_PLATE && Math.abs(door.x - sx) + Math.abs(door.z - sz) === 1) return { via: 'plate', at: { x: sx, y: sy, z: sz } }
+    const alongX = facing[door.id] <= 2
+    let best = null
+    let bestD = Infinity
+    for (let dz = -4; dz <= 4; dz++) {
+      for (let dy = -2; dy <= 4; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const d = dx * dx + dy * dy + dz * dz
+          if (d > 16 || d >= bestD) continue
+          const x = sx + dx
+          const y = sy + dy
+          const z = sz + dz
+          const id = rawAt(x, y, z)
+          const act = activator[id]
+          if (act !== ACT_BUTTON && act !== ACT_LEVER) continue
+          if (Math.sign(alongX ? x - door.x : z - door.z) !== side) continue
+          const [ax, ay, az] = ATTACH[attach[id]] ?? [0, 0, 0]
+          if (Math.max(Math.abs(x + ax - door.x), Math.abs(y + ay - door.y), Math.abs(z + az - door.z)) > 2) continue
+          best = { via: act === ACT_BUTTON ? 'button' : 'lever', at: { x, y, z } }
+          bestD = d
+        }
+      }
+    }
+    return best
+  }
+
+  // what a move from the cell (sx, sy, sz) into a node column holding the closed blocks `blocks` opens: { list, seconds }, or null
+  // when an iron door among them has nothing to open it
+  const opening = (sx, sy, sz, dx, dz, blocks) => {
+    const list = []
+    let seconds = 0
+    for (const b of blocks) {
+      const iron = openable[b.id] === OPEN_REDSTONE
+      // the body's side of the door: where it is, or, standing in the door's cell, where it came from (opposite its way on)
+      const alongX = facing[b.id] <= 2
+      const side = Math.sign(alongX ? sx - b.x : sz - b.z) || -Math.sign(alongX ? dx - b.x : dz - b.z)
+      const found = iron || activator[rawAt(sx, sy, sz)] === ACT_PLATE ? activatorFor(b, sx, sy, sz, side) : null
+      const act = iron || found?.via === 'plate' ? found : null // a wooden door is opened by hand unless a plate does it
+      if (iron && act === null) return null
+      if (act === null) {
+        list.push({ x: b.x, y: b.y, z: b.z })
+        seconds += costs.open
+        continue
+      }
+      list.push({ x: b.x, y: b.y, z: b.z, via: act.via, at: act.at })
+      seconds += act.via === 'plate' ? costs.openPlate : costs.openRedstone
+    }
+    return { list, seconds }
+  }
+
+  const expandAt = (x, y, z, h, slowFrom, i, region = -1) => {
+    // when no section near the cell holds a partial block or a climbable, no cell this expansion looks at is tight
+    quiet = sectionsClear(x, y, z, 2, 2, 3)
+    if (quiet || !nearOpenable(x, y, z)) return expandMoves(x, y, z, h, slowFrom, i, region)
+    const sink = edge
+    const seen = new Set()
+    edge = (x2, y2, z2, h2, move, parent, dsec, drisk, slowTo, corner = 0, shape = 0) => {
+      seen.add(keyOf(x2, y2, z2, shape & 15))
+      sink(x2, y2, z2, h2, move, parent, dsec, drisk, slowTo, corner, shape)
+    }
+    expandMoves(x, y, z, h, slowFrom, i, region)
+    // what the move into the node here opened is open still; a body standing in a gate's cell without having opened it is not
+    const arrival = i >= 0 && opens[i] > 0 ? openLists[opens[i] - 1] : []
+    const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z
+    const here = closedIn(x, y, z, h)
+    const through = here.some(b => arrival.some(o => same(o, b)))
+    edge = (x2, y2, z2, h2, move, parent, dsec, drisk, slowTo, corner = 0, shape = 0) => {
+      if (seen.has(keyOf(x2, y2, z2, shape & 15))) return
+      const involved = [...here, ...closedIn(x2, y2, z2, h2).filter(b => !here.some(o => same(o, b)))]
+      const blocks = involved.filter(b => !arrival.some(o => same(o, b)))
+      if (blocks.length === 0 && !through) return // only the open world allows it, and nothing was opened: not a move
+      const opened = opening(x, y, z, x2, z2, blocks)
+      if (opened === null) return
+      moveOpen = opened.list.length > 0 ? openLists.push(opened.list) : 0
+      sink(x2, y2, z2, h2, move, parent, dsec + opened.seconds, drisk, slowTo, corner, shape)
+      moveOpen = 0
+    }
+    openMode = true
+    expandMoves(x, y, z, h, slowFrom, i, region)
+    openMode = false
+    edge = sink
+  }
+
   // ---- climbing ----
 
   let gapSeen = false // a ladder was refused because the feet would leave it at a gap
@@ -937,7 +1134,9 @@ export function createSearch (snapshot, query, options = {}) {
       return
     }
     const sec = costs.climbUp + (entersShut ? costs.open : 0)
+    if (entersShut) moveOpen = openLists.push([{ x, y: y + 1, z }])
     verticalMove(i, x, y, z, h, region, y + 1, h2, entersShut ? MOVE.OPEN : MOVE.CLIMB_UP, sec, enterRisk, enterSlow)
+    moveOpen = 0
   }
 
   // a climbable or standable cell one block down; else, through free cells, a short fall onto the first climbable or floor
@@ -945,7 +1144,9 @@ export function createSearch (snapshot, query, options = {}) {
     const h2 = enterCell(x, y - 1, z)
     if (h2 >= 0) {
       const sec = costs.climbDown + (entersShut ? costs.open : 0)
+      if (entersShut) moveOpen = openLists.push([{ x, y: y - 1, z }])
       verticalMove(i, x, y, z, h, region, y - 1, h2, entersShut ? MOVE.OPEN : MOVE.CLIMB_DOWN, sec, enterRisk, enterSlow)
+      moveOpen = 0
       return
     }
     const free = stateAt(x, y - 1, z)
@@ -982,7 +1183,7 @@ export function createSearch (snapshot, query, options = {}) {
     for (let y2 = y - 1; y2 >= y - costs.maxWaterDrop - 1; y2--) {
       const id = stateAt(x2, y2, z2)
       if (id === UNLOADED || kind[id] === LAVA || avoids(id, x2, y2, z2)) return
-      if (kind[id] === WATER) return dropIntoWater(i, x, y, z, h, region, c, x2, y2, z2, h0, slowFrom, tightSrc)
+      if (kind[id] === WATER) return magmaTrap(x2, y2, z2) ? undefined : dropIntoWater(i, x, y, z, h, region, c, x2, y2, z2, h0, slowFrom, tightSrc)
       const h1 = landing(x2, y2, z2)
       if (h1 < 0) {
         if (top[id] > 0) return
@@ -1188,6 +1389,8 @@ export function createSearch (snapshot, query, options = {}) {
   // the goal flood costs ~30 ms, so easy queries must never see it: it runs once, after floodAfter forward expansions
   let floodPending = near && goalFlood > 0
 
+  const endsOnMagma = (x, y, z, h) => bubble[rawAt(x, y, z)] === 2 || h === 0 && magma[stateAt(x, y - 1, z)] === 1
+
   const step = maxExpansions => {
     if (!started) begin()
     for (let n = 0; n < maxExpansions && !finished; n++) {
@@ -1201,13 +1404,16 @@ export function createSearch (snapshot, query, options = {}) {
       if (heapN === 0) { finish(boxed ? 'box' : 'exhausted'); break }
       const i = pop()
       expanded++
-      if (reached(xs[i], ys[i], zs[i])) {
+      // the body died idling on magma: a route never ends on a magma block or in a magma column, so such a node is passed
+      // through (it is searched on from) but is neither the goal nor the best partial end
+      const deadly = endsOnMagma(xs[i], ys[i], zs[i], hs[i])
+      if (!deadly && reached(xs[i], ys[i], zs[i])) {
         goalNode = i
         finish(null)
         break
       }
       const d = distanceTo(xs[i], zs[i])
-      if (d < bestDistance) { bestDistance = d; best = i }
+      if (!deadly && d < bestDistance) { bestDistance = d; best = i }
       expand(i)
       if (overBudget) finish('budget')
     }
@@ -1226,7 +1432,7 @@ export function createSearch (snapshot, query, options = {}) {
         px: xs[i] + (tight ? (shape >> 5 & 31) / 16 : 0.5), pz: zs[i] + (tight ? (shape >> 10 & 31) / 16 : 0.5)
       }
       if (isWater(xs[i], ys[i], zs[i])) step.swim = true
-      if (moves[i] === MOVE.OPEN) step.opens = [{ x: xs[i], y: ys[i], z: zs[i] }]
+      if (opens[i] > 0) step.opens = openLists[opens[i] - 1]
       if (shape >> 15 & 1) { step.cx = xs[i] + (shape >> 16 & 31) / 16; step.cz = zs[i] + (shape >> 21 & 31) / 16 }
       out.push(step)
     }
@@ -1264,6 +1470,17 @@ export function createSearch (snapshot, query, options = {}) {
   const isSwim = move => move === MOVE.SWIM || move === MOVE.SWIM_UP || move === MOVE.SWIM_DOWN || move === MOVE.EXIT
   const intoWater = ({ s }) => s.move === MOVE.DROP && isWater(s.x, s.y, s.z)
 
+  // "opens 2 doors", "opens 1 gate", "presses 1 button", "steps on 1 plate": what the path opens, by what opens it
+  const OPENED = [[KIND_DOOR, 'door'], [KIND_GATE, 'gate'], [3, 'trapdoor']]
+  const VIA = { button: ['presses', 'button'], lever: ['pulls', 'lever'], plate: ['steps on', 'plate'] }
+  const openRuns = steps => {
+    const all = steps.flatMap(s => s.opens ?? [])
+    const phrase = (verb, noun, n) => n > 0 && `${verb} ${n} ${noun}${n > 1 ? 's' : ''}`
+    const byHand = ([kindCode, noun]) => phrase('opens', noun, all.filter(o => o.via === undefined && openKind[rawAt(o.x, o.y, o.z)] === kindCode).length)
+    const byVia = ([via, [verb, noun]]) => phrase(verb, noun, all.filter(o => o.via === via).length)
+    return [...OPENED.map(byHand), ...Object.entries(VIA).map(byVia)].filter(Boolean)
+  }
+
   const summarize = (steps, node) => {
     const legs = steps.slice(1).map((s, k) => ({ s, p: steps[k] }))
     const blocks = Math.round(legs.reduce((sum, { s, p }) => sum + Math.hypot(s.x - p.x, s.z - p.z), 0))
@@ -1278,13 +1495,12 @@ export function createSearch (snapshot, query, options = {}) {
     const slides = steps.filter(s => s.corner).length
     const gapUps = legs.filter(({ s, p }) => s.move === MOVE.GAP && s.y * 16 + s.h > p.y * 16 + p.h).length
     const lava = steps.some(s => lavaNear(s.x, s.y, s.z))
-    const opens = steps.filter(s => s.move === MOVE.OPEN).length
     return [
       `${blocks} blocks`,
       swum > 0 && `swims ${swum}`,
       ...swimRuns(legs),
       ...climbRuns(legs),
-      opens > 0 && `opens ${opens} trapdoor${opens > 1 ? 's' : ''}`,
+      ...openRuns(steps),
       ups > 0 && (ups === 1 ? '1 step up' : `${ups} steps up`),
       falls.length === 1 && `1 drop of ${falls[0]}`,
       falls.length > 1 && `${falls.length} drops, deepest ${Math.max(...falls)}`,
@@ -1305,9 +1521,9 @@ export function createSearch (snapshot, query, options = {}) {
     const splashes = steps.slice(1).map((s, k) => s.move === MOVE.DROP && s.swim ? dropOf(s, k) : 0)
     const jumps = steps.filter(s => s.move === MOVE.JUMP || s.move === MOVE.GAP || s.move === MOVE.JUMP_CLIMB).length
     const climbed = steps.filter(s => CLIMBS.has(s.move)).length
-    const opens = steps.filter(s => s.move === MOVE.OPEN).length
+    const openedCount = steps.reduce((n, s) => n + (s.opens?.length ?? 0), 0)
     const cost = {
-      seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, climbed, opens, unknown: 0,
+      seconds: secs[node], risk: risks[node], maxDrop: Math.max(0, ...drops), jumps, climbed, opens: openedCount, unknown: 0,
       waterSeconds: wsecs[node], airMin: costs.airSupply - peaks[node], waterDrop: Math.max(0, ...splashes)
     }
     return { steps, cost, summary: summarize(steps, node) }
