@@ -600,8 +600,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const bindEvents = target => {
     let lastHealth = target.health
     let respawning = false
+    // The server clears the slots of an instant death (/kill, void, damage) before the death event is read, so the
+    // died record is built from the last snapshot of a living body: taken on every health event above zero and about
+    // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
+    let snapshot = inventoryNow()
+    let ticks = 0
+    const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
     const handlers = {
+      physicsTick: () => { if (++ticks % 20 === 0) remember() },
       health: () => {
+        remember()
         if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
         lastHealth = target.health
       },
@@ -609,7 +617,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       death: () => { stopWalking(target); emit({
         kind: 'died',
         pos: here(),
-        inventory: inventoryNow(),
+        inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 }
       }) },
       respawn: () => { stopWalking(target); respawning = true },

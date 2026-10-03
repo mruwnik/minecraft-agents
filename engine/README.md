@@ -249,7 +249,7 @@ primitives.onBodyEvent(listener)   // returns an unsubscribe function
 `hurt` (`health`, `food`, `cause?`), `died` (`pos`, `inventory`, `experience`), `respawned` (`pos`, `dimension`), `chat`
 (`from`, `message`), `woke`, `spawned`, `disconnected` (`reason`), `error` (`reason`), `reconnect-failed` (`reason`), `offline` (`ms`), `online` (`pos`). `died` is
 emitted at the moment health reaches 0: `pos` is where the body died and `inventory` (`[{name, count, slot}]`) what
-it carried, before the server clears it; `experience` is `{level, points}` at death. mineflayer emits `death` from
+it carried. An instant death (`/kill`, void, damage) has the server clear the slots before the event is read, so when the live inventory is empty `inventory` is the last snapshot of the living body (taken on each health event above 0 and about once a second of physics ticks); `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death
 ones. `respawned` is emitted at the first `spawned` after the library's respawn
 signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). `offline`

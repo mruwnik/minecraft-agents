@@ -340,6 +340,48 @@ test('the died event carries the death position, the inventory and the experienc
   }])
 })
 
+const emptiedAtDeath = (snapshotOn) => {
+  const items = []
+  const { bot, p } = rig({ ...world, items })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  items.push({ name: 'bread', count: 2, slot: 36 }, { name: 'iron_sword', count: 1, slot: 37 }) // picked up after the connect
+  bot.health = 20
+  for (let i = 0; i < 20; i++) bot.emit(snapshotOn)
+  items.length = 0 // the server clears the slots before the death event is read
+  bot.health = 0
+  bot.emit('death')
+  return seen.find(e => e.kind === 'died')
+}
+
+for (const event of ['health', 'physicsTick']) {
+  test(`the died event keeps the inventory of the last ${event} snapshot when the slots are already empty`, () => {
+    assert.deepEqual(emptiedAtDeath(event).inventory, [{ name: 'bread', count: 2, slot: 36 }, { name: 'iron_sword', count: 1, slot: 37 }])
+  })
+}
+
+test('a health event at zero health does not overwrite the snapshot with the emptied inventory', () => {
+  const items = []
+  const { bot, p } = rig({ ...world, items })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  items.push({ name: 'bread', count: 2, slot: 36 })
+  bot.emit('health')
+  items.length = 0
+  bot.health = 0
+  bot.emit('health')
+  bot.emit('death')
+  assert.deepEqual(seen.find(e => e.kind === 'died').inventory, [{ name: 'bread', count: 2, slot: 36 }])
+})
+
+test('a death with the live inventory intact uses it, not the snapshot', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('death')
+  assert.equal(seen[0].inventory.length, 2)
+})
+
 test('the died event reports zero experience when the bot has none yet', () => {
   const { bot, p } = rig(world)
   const seen = []
