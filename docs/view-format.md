@@ -130,6 +130,8 @@ The page can take over a body and drive it by hand (movement only). The "take ov
 - Arrow keys turn 15 degrees and tilt 10 degrees. Click the canvas for pointer-lock mouse look.
 - F (free camera) is ignored while driving.
 
+While this page holds the body the view also has a red border (`#drive-border`, shown only under `body.driving`). The moment it no longer holds the body, for any reason (own release, lease timed out, forced release, body offline, engine restarted, failed request), every marker of control is cleared, keys and mouse stop, and pointer lock is exited; the poll also runs when a hidden tab returns.
+
 A red banner, shown to every viewer while anyone drives, names who. Leave rule: losing pointer lock while driving
 (after having had it, so a single Esc) sends stop, then releases; a hidden tab or window blur sends stop and keeps the
 takeover; pagehide/beforeunload sends stop (fetch keepalive) but not release, so the body's 15 s idle timeout gives the

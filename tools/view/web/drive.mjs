@@ -1,6 +1,6 @@
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout } from './drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, isStale, shouldDrop } from './drive-keys.mjs'
 
 const REQUEST_TIMEOUT_MS = 1500
 const POLL_MS = 1000
@@ -8,7 +8,6 @@ const PING_MS = 500
 const LOOK_FLUSH_MS = 50
 const ERROR_MS = 3000
 const SENT_KEEP = 200
-const LOST = ['not-taken', 'not-driver']
 
 const params = new URLSearchParams(location.search)
 const agent = params.get('agent')
@@ -26,6 +25,7 @@ const start = () => {
   bar.appendChild(button)
 
   let driving = false
+  let takeGen = 0 // bumped on every successful take; replies to requests started earlier are stale
   let manual = null
   let lastReply = null
   let errorText = null
@@ -39,6 +39,7 @@ const start = () => {
     banner.textContent = text ?? ''
     banner.hidden = text === null
     const other = manual && manual.who !== ME
+    document.body.classList.toggle('driving', driving)
     button.textContent = driving ? 'release (G)' : 'take over (G)'
     button.disabled = Boolean(other)
     button.title = other ? `driven by ${manual.who}` : ''
@@ -58,7 +59,15 @@ const start = () => {
     if (document.pointerLockElement === canvas) document.exitPointerLock()
   }
 
+  // any reply (or a failed request) that shows this page no longer holds the body clears every marker of control
+  const checkHold = (reply, startedGen) => {
+    if (!shouldDrop({ driving, reply, me: ME, startedGen, currentGen: takeGen })) return
+    dropDriving()
+    render()
+  }
+
   const post = async (msg, init = {}) => {
+    const startedGen = takeGen
     sent.push({ t: performance.now(), op: msg.op })
     if (sent.length > SENT_KEEP) sent.shift()
     const reply = await timedFetch('/drive/' + agent, {
@@ -67,28 +76,35 @@ const start = () => {
       body: JSON.stringify(msg),
       ...init
     }).then(r => r.json(), () => null)
+    if (isStale({ startedGen, currentGen: takeGen })) return reply
+    if (reply) {
+      lastReply = reply
+      if (reply.manual !== undefined) manual = reply.manual
+    }
+    checkHold(reply, startedGen)
     if (!reply) return null
-    lastReply = reply
-    if (reply.manual !== undefined) manual = reply.manual
-    if (driving && LOST.includes(reply.reason)) dropDriving()
     render()
     return reply
   }
   const send = (msg) => enqueue(() => post(msg))
 
   const poll = async () => {
+    const startedGen = takeGen
     const reply = await fetch('/drive/' + agent).then(r => r.json(), () => null)
-    if (!reply) return
-    lastReply = reply
-    manual = reply.manual ?? null
-    if (driving && manual?.who !== ME) dropDriving()
-    render()
+    if (isStale({ startedGen, currentGen: takeGen })) return
+    if (reply) {
+      lastReply = reply
+      manual = reply.manual ?? null
+    }
+    checkHold(reply, startedGen)
+    if (reply) render()
   }
 
   const take = async () => {
     const reply = await send({ op: 'take', who: ME, why: 'driven from the view page' })
     if (!reply) return showError('no running body ' + agent)
     if (!reply.ok) return showError('cannot take over: ' + reply.reason)
+    takeGen += 1
     driving = true
     render()
   }
@@ -150,6 +166,7 @@ const start = () => {
   addEventListener('blur', () => onLeave('blur'))
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') onLeave('hidden')
+    else poll()
   })
   let hadLock = false
   document.addEventListener('pointerlockchange', () => {

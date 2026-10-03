@@ -51,3 +51,12 @@ export const withTimeout = (fetchFn, ms) => async (url, init = {}) => {
     clearTimeout(timer)
   }
 }
+
+// whether this page still holds the body, from the latest GET/POST /drive reply (null: the request failed or 503 no-body)
+export const holdsBody = ({ driving, reply, me }) =>
+  Boolean(driving && reply && !reply.offline && reply.reason !== 'not-taken' && reply.reason !== 'not-driver' && reply.manual?.who === me)
+
+// a reply to a request that started before the latest take says nothing about the current takeover
+export const isStale = ({ startedGen, currentGen }) => startedGen < currentGen
+export const shouldDrop = ({ driving, reply, me, startedGen, currentGen }) =>
+  driving && !isStale({ startedGen, currentGen }) && !holdsBody({ driving, reply, me })

@@ -1,7 +1,7 @@
 // Pure key mapping for driving a body from the view page.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout } from '../tools/view/web/drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, holdsBody, isStale, shouldDrop } from '../tools/view/web/drive-keys.mjs'
 
 const controlCases = [
   ['KeyW', 'forward'], ['KeyS', 'back'], ['KeyA', 'left'], ['KeyD', 'right'], ['Space', 'jump'],
@@ -144,3 +144,31 @@ test('a timed-out request does not hold the serial queue', async () => {
   assert.equal(await first, 'timeout')
   assert.equal(await second, 'stop')
 })
+
+const holdsCases = [
+  ['holds the body', { driving: true, reply: { ok: true, manual: { who: 'me' } }, me: 'me' }, true],
+  ['own release', { driving: false, reply: { ok: true, manual: null }, me: 'me' }, false],
+  ['heartbeat lost: manual null after the lease timed out', { driving: true, reply: { manual: null }, me: 'me' }, false],
+  ['forced by another: manual.who other', { driving: true, reply: { manual: { who: 'bob' } }, me: 'me' }, false],
+  ['offline', { driving: true, reply: { manual: { who: 'me' }, offline: true }, me: 'me' }, false],
+  ['engine restarted: null reply (failed request / 503 no-body)', { driving: true, reply: null, me: 'me' }, false],
+  ['engine restarted: not-taken', { driving: true, reply: { ok: false, reason: 'not-taken' }, me: 'me' }, false],
+  ['not-driver', { driving: true, reply: { ok: false, reason: 'not-driver', manual: { who: 'me' } }, me: 'me' }, false]
+]
+for (const [name, args, expected] of holdsCases) {
+  test(`holdsBody: ${name}`, () => assert.equal(holdsBody(args), expected))
+}
+
+const staleCases = [[0, 0, false], [1, 1, false], [0, 1, true], [2, 5, true]]
+for (const [startedGen, currentGen, expected] of staleCases) {
+  test(`isStale started ${startedGen} current ${currentGen}`, () => assert.equal(isStale({ startedGen, currentGen }), expected))
+}
+
+test('a poll reply started before the take does not drop it', () =>
+  assert.equal(shouldDrop({ driving: true, reply: { manual: null }, me: 'me', startedGen: 0, currentGen: 1 }), false))
+test('a current reply showing manual null drops the takeover', () =>
+  assert.equal(shouldDrop({ driving: true, reply: { manual: null }, me: 'me', startedGen: 1, currentGen: 1 }), true))
+test('a current failed request drops the takeover', () =>
+  assert.equal(shouldDrop({ driving: true, reply: null, me: 'me', startedGen: 1, currentGen: 1 }), true))
+test('not driving never drops', () =>
+  assert.equal(shouldDrop({ driving: false, reply: null, me: 'me', startedGen: 1, currentGen: 1 }), false))

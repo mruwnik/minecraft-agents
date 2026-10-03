@@ -15,10 +15,13 @@
     font: bold 12px monospace; border-radius: 3px; z-index: 5; pointer-events: none; }
   #drive-banner[hidden] { display: none; }
   #bar select, #bar button { font: inherit; background: #222; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 2px 6px; }
+  #drive-border { display: none; position: fixed; inset: 0; border: 6px solid #e53935; box-sizing: border-box; pointer-events: none; z-index: 50; }
+  body.driving #drive-border { display: block; }
 </style>
 </head>
 <body>
 <canvas id="view"></canvas>
+<div id="drive-border"></div>
 <pre id="overlay">starting...</pre>
 <div id="bar"><select id="agents"></select><button id="free" type="button">free camera (F)</button></div>
 <div id="drive-banner" hidden></div>
