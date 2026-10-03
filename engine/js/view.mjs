@@ -338,12 +338,17 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   const onPhysics = () => { tickPose().catch(reportError) }
 
+  // mineflayer applies update_light without emitting a bot event, so listen on the raw client
+  const onLight = safely(packet => markColumn(packet.chunkX, packet.chunkZ))
+
   const hook = target => {
+    const client = target._client
     const onEnd = () => { if (bot === target) detach() }
     target.on('chunkColumnLoad', onLoad)
     target.on('blockUpdate', onUpdate)
     target.on('end', onEnd)
     target.on('kicked', onEnd)
+    if (client) client.on('update_light', onLight)
     if (poseHz === 0) target.on('physicsTick', onPhysics)
     return () => {
       target.removeListener('physicsTick', onPhysics)
@@ -351,6 +356,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       target.removeListener('blockUpdate', onUpdate)
       target.removeListener('end', onEnd)
       target.removeListener('kicked', onEnd)
+      if (client) client.removeListener('update_light', onLight)
     }
   }
 

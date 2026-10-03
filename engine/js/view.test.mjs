@@ -132,6 +132,33 @@ test('block update marks only its own column dirty, including negative coordinat
   assert.deepEqual(fs.readdirSync(worldChunks(dir)), ['-1.-1.bin'])
 })
 
+test('update_light on the client marks only its own column dirty', async () => {
+  const bot = fakeBot({ columns: { '-1,2': makeColumn(), '0,0': makeColumn() } })
+  bot._client = new EventEmitter()
+  const { view, dir } = makeView(bot)
+  bot._client.emit('update_light', { chunkX: -1, chunkZ: 2 })
+  assert.equal(view.pendingCount(), 1)
+  await view.flushColumns()
+  assert.deepEqual(fs.readdirSync(worldChunks(dir)), ['-1.2.bin'])
+})
+
+test('detach removes the update_light listener', async () => {
+  const bot = fakeBot({ columns: { '0,0': makeColumn() } })
+  bot._client = new EventEmitter()
+  const { view } = makeView(bot)
+  assert.equal(bot._client.listenerCount('update_light'), 1)
+  await view.detach()
+  assert.equal(bot._client.listenerCount('update_light'), 0)
+  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0 })
+  assert.equal(view.pendingCount(), 0)
+})
+
+test('a bot without _client attaches and detaches without throwing', async () => {
+  const bot = fakeBot()
+  const { view } = makeView(bot)
+  await view.detach()
+})
+
 test('a column that is not loaded any more is skipped, not an error', async () => {
   const bot = fakeBot()
   const { view, events } = makeView(bot)

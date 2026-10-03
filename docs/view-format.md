@@ -78,6 +78,18 @@ written once: the last full pose (position, eye, yaw, pitch, entities as they we
 - Columns are never deleted on unload. The directory is a persistent mirror of every column any body has visited.
 - Known limitation: last writer wins. Two bodies that see different versions of a column (different times, or one has
   stale data) overwrite each other. The `t` and `body` header fields say who wrote it and when.
+- Light is what the server sent with the chunk, plus any `update_light` packet (the writer marks that column dirty).
+  Known limitation: this Paper 26.1 server sends no `update_light` after a block change (the vanilla client relights
+  locally; mineflayer does not). A probe that placed a torch with `setblock` saw only `block_change` packets for 16 s,
+  so the dumped light of that column and its neighbours stays as it was until the column is loaded again.
+- Hazard for anything that reads light: prismarine-chunk's `loadParsedLight` (prismarine-chunk 1.41.0, checked on
+  26.1) reads the vanilla 2048-byte nibble arrays as big-endian longs, so `column.getSkyLight/getBlockLight`, and
+  mineflayer's `block.light` / `block.skyLight`, return the value of another x in the same 16-cell row: the cell at
+  x is read from x' = 14 - 2*(x >> 1) + (x & 1). Evidence: a torch at 3520 71 -3521 read block 0 / sky 15 through
+  prismarine, while the dumped bytes read in vanilla order gave 14 at the torch, 15 inside a glowstone and 2-9 sky
+  inside a roofed room. `dumpLight` undoes the same swap, so the light part of the file is in vanilla order (cell i of
+  a section: byte i >> 1, low nibble when i is even), which `decodeLight` in `tools/view/web/decode.mjs` reads. Read
+  light from the file that way, not through a restored prismarine column.
 - Known limitation: the pose shows the client's belief, not the server's facing. After a console `tp ... 180 0` the pose
   yaw reads 0 for about 3.5 s, then flips to the body's last look direction, while the server reports -180 throughout.
   This is a mineflayer teleport-rotation issue on this server version (26.1), not a dump bug.
