@@ -2,6 +2,7 @@
   "The Bodies page: one card per engine body, trouble first, and the detail modal."
   (:require [re-frame.core :as rf]
             [dashboard.ui.livecards :as live]
+            [dashboard.ui.logic :as logic]
             [dashboard.ui.stills :as stills]
             [dashboard.ui.trouble :as trouble]))
 
@@ -38,6 +39,16 @@
      (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
      [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))
 
+(defn show-on-map
+  "Opens the map page centred on the body; disabled, with the reason on hover, while no position is known."
+  [name pos world]
+  [:span {:on-click #(.stopPropagation %) :on-key-down #(.stopPropagation %)}
+   [:button.showmap
+    {:disabled (nil? pos)
+     :title (if pos (str "show " name " on the map") "no known position yet")
+     :on-click #(set! (.-href js/location) (logic/map-show-url world name))}
+    "show on map"]])
+
 (defn body-card [{:keys [name status reason manual severity mine? health food job event event-age event-attention] :as card}]
   ^{:key name}
   [:div.bcard {:class [(clojure.core/name status) (when mine? "mine") (when reason (str "sev-" (clojure.core/name severity)))]
@@ -51,7 +62,8 @@
     [:div.line.event {:class (when (#{:notice :required} event-attention) (clojure.core/name event-attention)) :title event}
      (if event [:<> [:span.text event] [:span.age event-age]] [:span.dim "no events"])]
     (when manual [:div.reason.manual manual])
-    (when reason [:div.reason {:class (clojure.core/name severity)} reason])]])
+    (when reason [:div.reason {:class (clojure.core/name severity)} reason])
+    [show-on-map name (get @(rf/subscribe [:body-positions]) name) @(rf/subscribe [:current-world])]]])
 
 (defn page []
   (let [cards @(rf/subscribe [:cards])

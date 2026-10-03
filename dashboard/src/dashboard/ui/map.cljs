@@ -51,7 +51,7 @@
 
 (defn layout
   "Everything drawable with pixel positions, bodies first (so their labels win space)."
-  [{:keys [view bodies places zones humans selected plans now canvas] :as model}]
+  [{:keys [view bodies places zones humans villagers selected plans now canvas] :as model}]
   {:scale (:scale view)
    :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
@@ -63,16 +63,27 @@
                       :status status :color (mm/status-color status)
                       :selected? (= selected {:kind :body :name (:name b)}))))
    :humans (for [h humans] (assoc (mv/project view (:x h) (:z h)) :kind :human :name (:name h)))
+   :villagers (for [v villagers]
+                (assoc (mv/project view (:x v) (:z v)) :kind :villager :name (:id v) :old? (:old? v)
+                       :age-ms (:age-ms v) :tip (mm/villager-tip v)))
    :places (for [p places]
              (assoc (mv/project view (:x p) (:z p)) :kind :place :name (:name p) :place-kind (:kind p)
                     :color (mm/kind-color (:kind p))
                     :selected? (= selected {:kind :place :name (:name p)})))})
 
-(defn pick [lay x y]
+(defn pick
+  "What a click at x y hits. :labels are the name labels as last drawn (kept by draw!), so a body's name works like its dot."
+  [lay x y]
   (or (logic/pick-nearest (:edges lay) x y edge-pick-radius)
       (logic/pick-nearest (:bodies lay) x y pick-radius)
+      (mm/pick-label (:labels lay) x y)
       (logic/pick-nearest (:places lay) x y pick-radius)
       (mm/pick-plan (concat (:plan-elements lay) (:plans lay)) x y)))
+
+(defn villager-tip
+  "The text for a villager marker under x y, for the canvas's hover title."
+  [lay x y]
+  (:tip (logic/pick-nearest (:villagers lay) x y pick-radius)))
 
 (defn dot! [ctx {:keys [px py]} color radius]
   (.beginPath ctx)
@@ -100,6 +111,15 @@
   (.closePath ctx)
   (set! (.-fillStyle ctx) color)
   (.fill ctx))
+
+(defn villager-mark! [ctx {:keys [px py old?]}]
+  (.save ctx)
+  (set! (.-globalAlpha ctx) (if old? 0.45 1))
+  (set! (.-fillStyle ctx) "#0b0d11")
+  (.fillRect ctx (- px 5) (- py 5) 10 10)
+  (set! (.-fillStyle ctx) mm/villager-color)
+  (.fillRect ctx (- px 3.5) (- py 3.5) 7 7)
+  (.restore ctx))
 
 (defn arrow! [ctx {:keys [px py angle color]}]
   (.save ctx)
@@ -131,15 +151,19 @@
          :px (+ px 9) :py (- py 6) :w (.-width (.measureText ctx name)) :h 12
          :anchor-x px :anchor-y py))
 
-(defn draw-labels! [ctx boxes]
+(defn draw-labels!
+  "Draws the labels that fit and returns them."
+  [ctx boxes]
   (set! (.-textBaseline ctx) "top")
-  (doseq [{:keys [px py name label-color label-font]} (mv/fit-labels boxes)]
-    (set! (.-font ctx) label-font)
-    (set! (.-lineWidth ctx) 3)
-    (set! (.-strokeStyle ctx) "rgba(11,13,17,0.85)")
-    (.strokeText ctx name px py)
-    (set! (.-fillStyle ctx) label-color)
-    (.fillText ctx name px py)))
+  (let [kept (mv/fit-labels boxes)]
+    (doseq [{:keys [px py name label-color label-font]} kept]
+      (set! (.-font ctx) label-font)
+      (set! (.-lineWidth ctx) 3)
+      (set! (.-strokeStyle ctx) "rgba(11,13,17,0.85)")
+      (.strokeText ctx name px py)
+      (set! (.-fillStyle ctx) label-color)
+      (.fillText ctx name px py))
+    kept))
 
 (defn draw-plan! [ctx {:keys [px py w h color]}]
   (set! (.-fillStyle ctx) color)
@@ -177,6 +201,10 @@
      (for [e (:plan-elements lay) :when (> (:w e) 40)]
        (assoc (label-box ctx (assoc e :name (:title e)) (:color e) label-font) :px (+ (:px e) 2) :py (+ (:py e) 2)))
      (for [h (:humans lay)] (label-box ctx h human-color label-font))
+     (when (mm/show-villager-labels? scale)
+       (for [v (:villagers lay)]
+         (label-box ctx (assoc v :name (if (:old? v) (str "villager " (logic/time-ago-text (:age-ms v))) "villager"))
+                    mm/villager-color label-font)))
      (when (mm/show-place-labels? scale)
        (for [p (:places lay)] (label-box ctx p (:color p) label-font)))
      (for [b (:bodies lay) :when (not (:up b))] (label-box ctx b "#6e7681" label-font))
@@ -225,6 +253,7 @@
           (.rect path (* cx mm/tile-blocks) (* cz mm/tile-blocks) cell-size cell-size))
         (reset! coverage-path-cache {:key key :path path})
         path))))
+(defonce label-boxes (atom []))
 
 (defn queue-redraw! []
   (when-not @redraw-queued
@@ -308,10 +337,11 @@
         (doseq [e (:plan-elements lay)] (draw-element! ctx e))
         (doseq [p (:places lay)] (diamond! ctx p (:color p)))
         (doseq [h (:humans lay)] (dot! ctx h human-color 4))
+        (doseq [v (:villagers lay)] (villager-mark! ctx v))
         (doseq [b (sort-by :up (:bodies lay))] (body-dot! ctx b))
         (doseq [x (concat (:bodies lay) (:places lay)) :when (:selected? x)] (ring! ctx x 10))
         (doseq [e (:edges lay)] (arrow! ctx e))
-        (draw-labels! ctx (labels ctx lay w))))))
+        (reset! label-boxes (draw-labels! ctx (labels ctx lay w)))))))
 
 (defn canvas-pos [e node]
   (let [rect (.getBoundingClientRect node)]
@@ -319,11 +349,11 @@
 
 (def legend-items
   [["body: working" (mm/status-color :working)] ["idle" (mm/status-color :idle)] ["trouble" (mm/status-color :trouble)]
-   ["offline" (mm/status-color :offline)] ["plan: 90%+" pm/green] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
+   ["offline" (mm/status-color :offline)] ["villager (faded: old sighting)" mm/villager-color] ["plan: 90%+" pm/green] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
 
 (defn legend []
   (into [:div#maplegend
-         [:div.maphint "drag to pan · wheel to zoom · click a body for its view, a plan for its page, an arrow to go to its body"]]
+         [:div.maphint "drag to pan · wheel to zoom · click a body or its name for its view, a plan for its page, an arrow to go to its body"]]
         (for [[label color] legend-items]
           ^{:key label} [:span [:i {:style {:background color}}] label])))
 
@@ -368,15 +398,18 @@
                               (.setPointerCapture (.-target e) (.-pointerId e))
                               (reset! drag {:x (.-clientX e) :y (.-clientY e) :moved 0}))
            :on-pointer-move (fn [e]
-                              (when-let [d @drag]
+                              (if-let [d @drag]
                                 (let [dx (- (.-clientX e) (:x d)) dy (- (.-clientY e) (:y d))]
                                   (reset! drag {:x (.-clientX e) :y (.-clientY e)
                                                 :moved (+ (:moved d) (js/Math.abs dx) (js/Math.abs dy))})
-                                  (rf/dispatch [:pan dx dy]))))
+                                  (rf/dispatch [:pan dx dy]))
+                                (let [[x y] (canvas-pos e @canvas)]
+                                  (set! (.-title @canvas) (or (villager-tip (layout @model) x y) "")))))
            :on-pointer-up (fn [e]
                             (let [d @drag
                                   [x y] (canvas-pos e @canvas)]
                               (reset! drag nil)
                               (when (< (:moved d 0) 4)
-                                (rf/dispatch [:map-click (some-> (pick (layout @model) x y) (select-keys [:kind :name :wx :wz]))]))))}]
+                                (rf/dispatch [:map-click (some-> (pick (assoc (layout @model) :labels @label-boxes) x y)
+                                                                 (select-keys [:kind :name :wx :wz]))]))))}]
          [legend]])})))

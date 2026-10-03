@@ -120,3 +120,87 @@
 (deftest coverage-lists-the-dumped-columns-in-view
   (let [{:keys [items]} (mm/visible-terrain {:origin-x -16 :origin-z -16 :scale 0.01} {:w 1920 :h 1080} tile-index)]
     (is (= #{[0 0] [1 0] [0 1] [5 5] [-1 -1]} (set (map (juxt :cx :cz) items))))))
+
+;; ---------------------------------------------------------------- villagers
+(defn watcher [name up t villagers & {:keys [dimension] :or {dimension "overworld"}}]
+  {:name name :up up :view {:poseT t :dimension dimension :villagers villagers}})
+
+(def now 1000000)
+
+(deftest villager-sightings-are-live-only-from-a-body-that-is-up-and-fresh
+  (are [body expected] (= expected (map (juxt :id :old?) (mm/villager-sightings [body] now)))
+    (watcher "A" true (- now 2000) [{:id 1 :x 0 :z 0}]) [[1 false]]
+    (watcher "A" true (- now mm/villager-live-ms) [{:id 1 :x 0 :z 0}]) [[1 false]]
+    (watcher "A" true (- now mm/villager-live-ms 1) [{:id 1 :x 0 :z 0}]) [[1 true]]
+    (watcher "A" false (- now 2000) [{:id 1 :x 0 :z 0}]) [[1 true]]))
+
+(deftest villager-sightings-go-after-the-drop-time
+  (are [age expected] (= expected (count (mm/villager-sightings [(watcher "A" false (- now age) [{:id 1 :x 0 :z 0}])] now)))
+    (dec mm/villager-drop-ms) 1
+    mm/villager-drop-ms 1
+    (inc mm/villager-drop-ms) 0))
+
+(deftest villager-sightings-carry-position-time-and-who-saw
+  (is (= [{:id 1 :x 4 :y 5 :z 6 :seen-by "A" :t (- now 3000) :age-ms 3000 :old? false}]
+         (mm/villager-sightings [(watcher "A" true (- now 3000) [{:id 1 :x 4 :y 5 :z 6}])] now))))
+
+(deftest villager-sightings-keep-the-freshest-sighting-of-each-villager
+  (let [bodies [(watcher "Old" false (- now 600000) [{:id 1 :x 0 :z 0} {:id 2 :x 10 :z 10}])
+                (watcher "New" true (- now 1000) [{:id 1 :x 3 :z 3}])]]
+    (is (= [["New" 1 3 false] ["Old" 2 10 true]]
+           (map (juxt :seen-by :id :x :old?) (sort-by :id (mm/villager-sightings bodies now)))))))
+
+(deftest villager-sightings-ignore-other-dimensions-and-bodies-without-poses
+  (is (= [] (mm/villager-sightings [(watcher "A" true (- now 1000) [{:id 1 :x 0 :z 0}] :dimension "the_nether")
+                                    {:name "B" :up true}
+                                    {:name "C" :up true :view {:villagers [{:id 2 :x 0 :z 0}]}}]
+                                   now))))
+
+(deftest villager-tip-says-who-and-how-long-ago
+  (are [s expected] (= expected (mm/villager-tip s))
+    {:seen-by "A" :age-ms 3000 :old? false} "villager, seen by A 3s ago"
+    {:seen-by "A" :age-ms 300000 :old? true} "villager, seen by A 5m ago (old: nobody watching now)"))
+
+;; ---------------------------------------------------------------- name labels
+(deftest pick-label-finds-the-body-name-under-the-point
+  (let [boxes [{:kind :body :name "A" :px 10 :py 10 :w 30 :h 12}
+               {:kind :place :name "p" :px 100 :py 10 :w 30 :h 12}
+               {:kind :body :name "B" :px 10 :py 40 :w 30 :h 12}]]
+    (are [x y expected] (= expected (:name (mm/pick-label boxes x y)))
+      11 11 "A"
+      40 22 "A"
+      20 45 "B"
+      41 11 nil
+      110 15 nil
+      0 0 nil)))
+
+;; ---------------------------------------------------------------- players list
+(def status-of {"A" :working "B" :idle "C" :offline "A0" :offline})
+
+(deftest player-rows-list-every-body-then-the-humans
+  (let [bodies [{:name "C" :up false :state {:pos {:x 1 :y 2 :z 3}}}
+                {:name "A0" :up false}
+                {:name "B" :up true :state {:pos {:x 10.4 :y 64.6 :z -5.6}}}
+                {:name "A" :up true}]
+        humans [{:name "Zed" :x 5 :y 6 :z 7 :seenBy "B"}]
+        rows (mm/player-rows bodies humans #(status-of (:name %)))]
+    (is (= [["A" :body :working "no position"]
+            ["B" :body :idle "10, 65, -6"]
+            ["A0" :body :offline "no position"]
+            ["C" :body :offline "1, 2, 3"]
+            ["Zed" :human nil "5, 6, 7"]]
+           (map (juxt :name :kind :status :where) rows)))
+    (is (= [nil {:x 10.4 :z -5.6} nil {:x 1 :z 3} {:x 5 :z 7}] (map :pos rows)))))
+
+(deftest villager-labels-need-a-closer-zoom
+  (are [scale expected] (= expected (mm/show-villager-labels? scale))
+    0.5 false
+    1.49 false
+    1.5 true
+    8 true))
+
+(deftest player-click-selects-centres-and-opens-the-popup
+  (are [row expected] (= expected (mm/player-click-events row))
+    {:kind :body :name "A" :pos {:x 1 :z 2}} [[:select {:kind :body :name "A"}] [:center-on 1 2] [:open-detail "A"]]
+    {:kind :body :name "A" :pos nil} [[:select {:kind :body :name "A"}] [:open-detail "A"]]
+    {:kind :human :name "Zed" :pos {:x 5 :z 7}} [[:select {:kind :human :name "Zed"}] [:center-on 5 7]]))

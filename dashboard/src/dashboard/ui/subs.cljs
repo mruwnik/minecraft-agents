@@ -5,11 +5,12 @@
             [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.logic :as logic]
+            [dashboard.ui.mapmodel :as mm]
             [dashboard.ui.trouble :as trouble]))
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who]]
+(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -63,6 +64,25 @@
  (fn [[chat needle hide] _] (logic/filter-chat chat needle hide)))
 
 (rf/reg-sub
+ :villager-sightings
+ :<- [:bodies]
+ :<- [:now]
+ (fn [[bodies now] _] (mm/villager-sightings bodies (or now 0))))
+
+(rf/reg-sub
+ :player-rows
+ :<- [:bodies]
+ :<- [:humans]
+ :<- [:now]
+ (fn [[bodies humans now] _] (mm/player-rows bodies humans #(trouble/status % (or now 0)))))
+
+;; where each body is, by name, for the cards' "show on map"
+(rf/reg-sub
+ :body-positions
+ :<- [:bodies]
+ (fn [bodies _] (into {} (keep (fn [b] (when-let [p (mm/body-pos b)] [(:name b) p]))) bodies)))
+
+(rf/reg-sub
  :map-model
  :<- [:view]
  :<- [:canvas]
@@ -76,8 +96,9 @@
  :<- [:terrain?]
  :<- [:tiles]
  :<- [:current-world]
- (fn [[view canvas bodies places zones humans selected now plans terrain? tiles world] _]
-   {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :selected selected
+ :<- [:villager-sightings]
+ (fn [[view canvas bodies places zones humans selected now plans terrain? tiles world villagers] _]
+   {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :villagers villagers :selected selected
     :now now :plans plans
     :terrain? terrain? :tile-world (:world tiles)
     :tile-index (when (= (:requested tiles) world) (:index tiles))}))

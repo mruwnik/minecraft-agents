@@ -2,11 +2,11 @@
   "The shell: left rail, top bar with live counts, the page, and the chat panel on the right."
   (:require [re-frame.core :as rf]
             [dashboard.ui.bodies :as bodies]
-            [dashboard.ui.cards :as cards]
             [dashboard.ui.chat :as chat]
             [dashboard.ui.detail :as detail]
             [dashboard.ui.logic :as logic]
-            [dashboard.ui.map :as map-ui]))
+            [dashboard.ui.map :as map-ui]
+            [dashboard.ui.mappanels :as mappanels]))
 
 (def rail-items
   [[:bodies "/" "Bodies"] [:map "/map" "Map"] [:plans "/plans" "Plans"] [:villages "/villages" "Villages"]
@@ -51,7 +51,8 @@
 (defn map-page []
   [:main.map-page
    [:div#maps [map-ui/map-view]]
-   [:aside [cards/places-panel]]])
+   [mappanels/players-panel]
+   [mappanels/places-panel]])
 
 (defn shell [page content]
   [:div#shell

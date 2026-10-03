@@ -1,5 +1,6 @@
 (ns dashboard.ui.mapmodel
-  "Pure rules of the map: where a body is, colours, hit tests, label thresholds.")
+  "Pure rules of the map: where a body is, colours, hit tests, label thresholds."
+  (:require [dashboard.ui.logic :as logic]))
 
 (def place-color "#d9b25f")
 (def base-color "#e8c468")
@@ -14,6 +15,8 @@
   {"base" base-color "farm" farm-color "mine" mine-color "resource" resource-color
    "enemy" danger-color "danger" danger-color "view" view-color "build" build-color})
 
+(def villager-color "#c792ea")
+
 (def status-colors {:manual "#f85149" :working "#3fb950" :idle "#8b949e" :trouble "#d29922" :offline "#6e7681"})
 
 (def place-label-scale 0.5)
@@ -21,6 +24,9 @@
 (defn kind-color [kind] (get kind-colors kind place-color))
 (defn status-color [status] (get status-colors status (:idle status-colors)))
 (defn show-place-labels? [scale] (>= scale place-label-scale))
+
+(def villager-label-scale 1.5)
+(defn show-villager-labels? [scale] (>= scale villager-label-scale))
 
 (defn coords? [p] (and (number? (:x p)) (number? (:z p))))
 
@@ -117,3 +123,58 @@
        :items (vec (for [[[cx cz :as k] mtime] index
                          :when (and (<= cx1 cx cx2) (<= cz1 cz cz2))]
                      (tile-item view k mtime)))})))
+
+;; ---------------------------------------------------------------- villagers
+;; A villager is placed where a body's last pose saw it (the pose lists every entity within 48 blocks and is rewritten at
+;; least every 2 s while the body is up). The sighting is live while a body that is up wrote that pose a moment ago;
+;; otherwise it is old (drawn faded, with its age), and it goes once it is older than villager-drop-ms.
+(def villager-live-ms 10000)
+(def villager-drop-ms 1800000)
+
+(defn body-sightings [now {:keys [name up view]}]
+  (let [t (:poseT view)]
+    (when (and (number? t) (contains? #{nil "overworld"} (:dimension view)))
+      (let [age (max 0 (- now t))]
+        (for [{:keys [id x z] :as v} (:villagers view)
+              :when (and id (number? x) (number? z) (<= age villager-drop-ms))]
+          (assoc v :seen-by name :t t :age-ms age :old? (not (and up (<= age villager-live-ms)))))))))
+
+(defn villager-sightings
+  "One sighting per villager, the freshest, from the bodies' poses."
+  [bodies now]
+  (->> (mapcat #(body-sightings now %) bodies)
+       (sort-by :t >)
+       (reduce (fn [seen v] (if (contains? seen (:id v)) seen (assoc seen (:id v) v))) {})
+       vals
+       vec))
+
+(defn villager-tip [{:keys [seen-by age-ms old?]}]
+  (str "villager, seen by " seen-by " " (logic/time-ago-text age-ms) (when old? " (old: nobody watching now)")))
+
+;; ---------------------------------------------------------------- name labels
+(defn pick-label
+  "The body name label under the point, among label boxes ({:kind :px :py :w :h})."
+  [boxes x y]
+  (first (filter #(and (= :body (:kind %)) (in-rect? % x y)) boxes)))
+
+;; ---------------------------------------------------------------- players list
+(defn where-text [{:keys [x y z]}]
+  (if (every? number? [x y z]) (str (js/Math.round x) ", " (js/Math.round y) ", " (js/Math.round z)) "no position"))
+
+(defn player-rows
+  "A row for every body (status-of gives its status keyword; offline ones last, then by name), then for every human seen
+  on the server."
+  [bodies humans status-of]
+  (vec (concat
+        (for [b (sort-by (juxt #(= :offline (status-of %)) :name) bodies) :let [pos (body-pos b)]]
+          {:kind :body :name (:name b) :status (status-of b) :pos (some-> pos (select-keys [:x :z]))
+           :where (where-text pos)})
+        (for [h (sort-by :name humans)]
+          {:kind :human :name (:name h) :pos {:x (:x h) :z (:z h)} :where (where-text h) :seen-by (:seenBy h)}))))
+
+(defn player-click-events
+  "What clicking a row of the players list does: select it, centre the map on it, and for a body open its popup."
+  [{:keys [kind name pos]}]
+  (cond-> [[:select {:kind kind :name name}]]
+    pos (conj [:center-on (:x pos) (:z pos)])
+    (= :body kind) (conj [:open-detail name])))

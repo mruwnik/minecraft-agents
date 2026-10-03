@@ -4,7 +4,8 @@
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.drive :as drive]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.ui.mapmodel :as mm]))
 
 (def state-ms 2000)
 (def chat-ms 3000)
@@ -51,8 +52,9 @@
  (fn [db [_ world data]]
    (if (not= world (:world db))
      db
-     (cond-> (assoc db :state data :status "connected")
-       (:detail-body db) (assoc :attention-outstanding (db/body-outstanding data (:detail-body db)))))))
+     (db/apply-pending-show
+      (cond-> (assoc db :state data :status "connected")
+        (:detail-body db) (assoc :attention-outstanding (db/body-outstanding data (:detail-body db))))))))
 
 (rf/reg-event-db
  :state-err
@@ -77,7 +79,7 @@
     :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]] [:dispatch [:plans/world-changed]]
          (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])]}))
 
-(rf/reg-event-db :canvas-size (fn [db [_ w h]] (assoc db :canvas {:w w :h h})))
+(rf/reg-event-db :canvas-size (fn [db [_ w h]] (db/apply-pending-show (assoc db :canvas {:w w :h h}))))
 (rf/reg-event-db :fit-home (fn [db _] (assoc db :user-view nil)))
 (rf/reg-event-db :fit (fn [db _] (assoc db :user-view (db/all-view db))))
 (rf/reg-event-db :fit-bodies (fn [db _] (assoc db :user-view (db/bodies-view db))))
@@ -111,7 +113,12 @@
      :body {:fx [[:dispatch [:select selection]] [:dispatch [:open-detail name]]]}
      :plan {:dispatch [:plans/open name]}
      {:dispatch [:select selection]})))
+(rf/reg-event-fx
+ :player-click
+ (fn [_ [_ row]] {:fx (mapv (fn [event] [:dispatch event]) (mm/player-click-events row))}))
 (rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
+(rf/reg-event-db :toggle-places (fn [db _] (update db :places-open? not)))
+(rf/reg-event-db :toggle-players (fn [db _] (update db :players-open? not)))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
 ;; sending a chat line as the owner: POST /api/chat/send; the line shows in the log once the bodies record it
 (def ack-ms 3000)

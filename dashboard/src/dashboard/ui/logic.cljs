@@ -101,6 +101,15 @@
   (let [b (.get (js/URLSearchParams. search) "body")]
     (when-not (str/blank? b) b)))
 
+(defn show-from-search [search]
+  (let [b (.get (js/URLSearchParams. search) "show")]
+    (when-not (str/blank? b) b)))
+
+(defn map-show-url
+  "The map page of a world, centred on a body when it opens."
+  [world body]
+  (api-url "/map" world {:show body}))
+
 (defn with-body
   "pathname + search with ?body= set to body, or removed when body is nil; other parameters stay."
   [pathname search body]

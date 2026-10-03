@@ -111,3 +111,13 @@
 (deftest body-from-search-cases
   (doseq [[search expected] [["" nil] ["?body=" nil] ["?body=Bob" "Bob"] ["?world=x&body=Probe_1" "Probe_1"]]]
     (is (= expected (l/body-from-search search)))))
+
+(deftest show-from-search-cases
+  (doseq [[search expected] [["" nil] ["?show=" nil] ["?show=Bob" "Bob"] ["?world=x&show=Probe_1" "Probe_1"]]]
+    (is (= expected (l/show-from-search search)))))
+
+(deftest map-show-url-cases
+  (doseq [[world name expected] [["claude" "Bob" "/map?world=claude&show=Bob"]
+                                 [nil "Bob" "/map?show=Bob"]
+                                 ["a b" "Probe_1" "/map?world=a%20b&show=Probe_1"]]]
+    (is (= expected (l/map-show-url world name)))))

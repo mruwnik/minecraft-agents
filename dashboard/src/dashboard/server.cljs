@@ -269,7 +269,8 @@
 ;; pose.json carries every nearby entity and changes often: only the few fields we show are converted
 (defn pose-fields [o]
   (when o
-    {:status (.-status o) :dimension (.-dimension o) :pos (js->clj (.-pos o) :keywordize-keys true)}))
+    {:t (.-t o) :status (.-status o) :dimension (.-dimension o) :pos (js->clj (.-pos o) :keywordize-keys true)
+     :villagers (view-info/villagers (js->clj (.-entities o) :keywordize-keys true))}))
 
 (defn read-view-file [name file convert]
   (let [full (view-file name file)]

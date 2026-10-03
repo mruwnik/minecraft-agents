@@ -221,10 +221,16 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 #maps .pane, #maps canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 canvas { display: block; cursor: crosshair; }
 .map-page aside { width: 300px; flex: none; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
+.map-page aside.closed { width: 34px; display: flex; flex-direction: column; align-items: center; padding-top: 8px; overflow: hidden; }
+.sidebar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sidebar h2 { margin: 0; }
+.player .pill { margin-left: 2px; }
 section { padding: 10px 12px; }
 section h2 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
 #places { white-space: pre-wrap; }
 .notice { padding: 2px 12px; }
+.bcard .showmap { align-self: flex-start; margin: 4px 0 0; font-size: 11px; padding: 2px 8px; }
+.bcard .showmap[disabled] { opacity: .45; cursor: not-allowed; }
 .err { color: var(--danger); }
 .place { padding: 3px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
 .place:hover, .bp-item:hover { background: var(--panel2); }

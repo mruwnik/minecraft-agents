@@ -36,3 +36,42 @@
 (deftest home-includes-plans
   (let [m (assoc-in (model) [:plans :items] [{:region {:min [400 60 0] :max [599 70 9]}}])]
     (is (> (visible-blocks (db/effective-view m) 1000) 600))))
+
+;; ---------------------------------------------------------------- show on map
+(defn with-show [m name] (assoc m :show-body name))
+
+(deftest focus-body-centres-zooms-and-selects
+  (let [m (db/focus-body (model) "Near")
+        view (:user-view m)]
+    (is (= {:kind :body :name "Near"} (:selected m)))
+    (is (>= (:scale view) db/show-scale))
+    (is (= [20 20] [(+ (:origin-x view) (/ 1000 2 (:scale view))) (+ (:origin-z view) (/ 500 2 (:scale view)))]))))
+
+(deftest focus-body-keeps-a-closer-zoom
+  (let [m (db/focus-body (assoc (model) :user-view {:scale 8 :origin-x 0 :origin-z 0}) "Near")]
+    (is (= 8 (:scale (:user-view m))))))
+
+(deftest focus-body-without-a-position-or-canvas-changes-nothing
+  (let [no-pos (assoc-in (model) [:state :worlds 0 :bodies] [{:name "Lost" :up false}])]
+    (are [m name] (= m (db/focus-body m name))
+      no-pos "Lost"
+      (model) "Nobody"
+      (dissoc (model) :canvas) "Near")))
+
+(deftest pending-show-waits-for-state-and-canvas-then-clears
+  (let [waiting (with-show (dissoc (model) :canvas) "Near")
+        ready (db/apply-pending-show (assoc waiting :canvas {:w 1000 :h 500}))
+        no-state (db/apply-pending-show (with-show {:canvas {:w 1000 :h 500}} "Near"))]
+    (is (= waiting (db/apply-pending-show waiting)))
+    (is (= no-state (with-show {:canvas {:w 1000 :h 500}} "Near")))
+    (is (nil? (:show-body ready)))
+    (is (= {:kind :body :name "Near"} (:selected ready)))
+    (is (= (model) (db/apply-pending-show (model))))))
+
+(deftest initial-db-reads-show-from-the-address
+  (are [search expected] (= expected (:show-body (db/initial-db search "who")))
+    "" nil
+    "?show=Near" "Near"
+    "?world=claude&show=Probe_1" "Probe_1")
+  (is (= true (:places-open? (db/initial-db "" "who"))))
+  (is (= false (:players-open? (db/initial-db "" "who")))))

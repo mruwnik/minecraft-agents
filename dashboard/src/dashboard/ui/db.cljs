@@ -15,6 +15,9 @@
    :user-view nil
    :selected nil
    :chat-open? true
+   :places-open? true
+   :players-open? false
+   :show-body (logic/show-from-search search)
    :chat-filter ""
    :hide-whispers? false
    :chat-send cs/initial
@@ -77,3 +80,27 @@
 ;; The user's pan/zoom wins until a fit button clears or replaces it.
 (defn effective-view [db]
   (or (:user-view db) (home-view db)))
+
+(def show-scale
+  "Pixels per block a body shown from its card is zoomed to (a closer zoom is kept)."
+  2)
+
+(defn focus-body
+  "Centred and selected on the named body, zoomed in to at least show-scale; db unchanged when the body has no position or
+  there is no canvas or view yet."
+  [db name]
+  (let [{:keys [w h]} (:canvas db)
+        pos (some #(when (= name (:name %)) (mm/body-pos %)) (all-bodies db))
+        view (effective-view db)]
+    (if-not (and pos w h view)
+      db
+      (assoc db
+             :selected {:kind :body :name name}
+             :user-view (logic/center-view (update view :scale max show-scale) (:x pos) (:z pos) w h)))))
+
+(defn apply-pending-show
+  "Carries out the show request the page was opened with as soon as the body, its position and the canvas are known."
+  [db]
+  (let [name (:show-body db)
+        shown (when name (focus-body db name))]
+    (if (and shown (not= shown db)) (dissoc shown :show-body) db)))
