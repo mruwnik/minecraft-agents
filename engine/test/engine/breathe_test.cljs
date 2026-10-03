@@ -81,6 +81,29 @@
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
           (is (= [] (:list (core/state eng))) "done in the same round"))))))
 
+(defn call-names [p] (mapv #(.-name %) (array-seq (.. p -world -calls))))
+
+(deftest drowning-in-an-open-column-swims-and-does-not-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= {:x 0 :y 67 :z 0} (core/self-pos p)))
+          (is (= [] (:list (core/state eng))))
+          (is (= ["swim"] (call-names p))))))))
+
+(deftest drowning-with-a-failing-swim-gives-up-with-one-warning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4} :swimFails true :blocks water-column})]
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :no_air (:kind %)) @seen)))))))))
+
 (def side-args (assoc defaults :radius 1))
 
 (deftest drowning-round-swims-sideways-when-the-column-is-capped
@@ -94,7 +117,10 @@
               {:keys [eng p]} (setup world)]
           (core/submit! eng (list breathe side-args) {})
           (await (core/tick! eng))
-          (is (= {:x 1 :y 67 :z 0} (core/self-pos p)) "went up the adjacent column"))))))
+          (is (= {:x 1 :y 64 :z 0} (core/self-pos p)) "first round: sideways at feet height")
+          (await (core/tick! eng))
+          (is (= {:x 1 :y 67 :z 0} (core/self-pos p)) "second round: up the adjacent column")
+          (is (= [] (:list (core/state eng)))))))))
 
 (deftest drowning-with-no-air-in-reach-gives-up-after-bounded-rounds
   (async done
@@ -118,6 +144,18 @@
           (is (= "air" (.-name (.blockAt p (tu/pos 0 66 0)))) "block above dug")
           (is (= {:x 0 :y 65 :z 0} (core/self-pos p)) "stepped up into the shaft")
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest enclosed-with-a-dig-that-times-out-gives-up-without-moving
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"0,65,0" "obsidian"}})]
+          (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "timeout"}))
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :no_way_out (:kind %)) @seen))))
+          (is (not (some #{"moveTo"} (call-names p)))))))))
 
 (deftest enclosed-round-leaves-the-block-above-when-it-is-already-open
   (async done

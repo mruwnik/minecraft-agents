@@ -151,6 +151,21 @@
           (await (run-until-empty eng 3))
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest no-safe-cell-gives-up-after-three-rounds-with-one-warning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/capture-sink)
+              p (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone"}})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :extinguish_stuck (:kind %)) @seen)))))))))
+
 (deftest does-not-pour-water-into-lava
   (async done
     (tu/run-async done

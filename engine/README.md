@@ -656,7 +656,7 @@ after three the job emits a warn and ends.
 | `jobs.storage.deposit` | `{:chest pos or nil :items [names] or nil}` | a chest is known (args or `:chest`) | none | reads `:chest` |
 | `jobs.survival.retreat` | `{:radius 8 :step 6 :cooldown-ms 5000}` | always | `:last-seen` | reads `:bed`, `:home`, `:hazard` |
 | `jobs.survival.sleep` | `{:bed-radius}` | night and a `:bed` within `:bed-radius` | child `:go` | reads `:bed`; writes `:slept`, retracts a missing `:bed` |
-| `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10}` | drowning or enclosed (the suffocating condition) | `:noted` | writes `:breathe` (cap 20, 1 h) |
+| `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10}` | drowning (swims up, or walks sideways to a column with air) or enclosed (the suffocating condition) | `:noted` | writes `:breathe` (cap 20, 1 h) |
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
@@ -746,7 +746,7 @@ measurement.
 The survival jobs pass against the fake only. What they assume about the real
 server and mineflayer, none of it checked live:
 
-- `extinguish` pours a water bucket with `place` at the body's own feet cell.
+- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returns `occupied`; a bucket needs a use-item primitive.
 - Verified live: `unstick`'s pillar attempt cannot work. The server refuses
   `place` into the body's own cell ("the block is still air") because the body
   occupies it; without a jump primitive there is no way round that, and `place`

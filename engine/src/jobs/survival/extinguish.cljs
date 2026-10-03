@@ -12,8 +12,10 @@
   distance from those hazards (up to 4 blocks), a bonus for each block of
   height gained, and a small cost per block walked; when on fire with water
   within :water-radius, into the nearest water. Lava seen within :scan-radius
-  is written to memory as :hazard entries (cap 50, 6 hours) for retreat logic,
-  and each round writes an :extinguish entry with position and cause (cap 20,
+  is written to memory as :hazard entries (cap 50, 6 hours) for retreat logic.
+  If there is no safe cell, or the walk is blocked while still burning, that
+  is a failed round; after three the job warns :extinguish_stuck once and
+  gives up. Each round writes an :extinguish entry with position and cause (cap 20,
   1 hour). Done once the body is neither on fire nor in lava.")
 
 (def args
@@ -127,7 +129,9 @@
           :else
           (let [target (best-cell p pos step (map :pos scanned))]
             (if-not target
-              (do (ctx/emit! c :extinguish_stuck :warn {:text "no safe cell within reach"})
-                  :continue)
-              (do (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))
-                  (finish c)))))))))
+              (u/fail! c :extinguish_stuck "no safe cell within reach")
+              (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
+                (cond
+                  (clear? c) :done
+                  (= "blocked" (.-status r)) (u/fail! c :extinguish_stuck "the way to a safe cell is blocked")
+                  :else :continue)))))))))
