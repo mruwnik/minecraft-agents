@@ -109,31 +109,6 @@ for (const bad of ['ab', 'has space', 'Bob;op', 'Bob,@a']) {
   })
 }
 
-const rawAllowed = [
-  [['raw', 'whitelist', 'list'], ['whitelist list']],
-  [['raw', 'tp', 'Anyone', '~', '~', '~'], ['tp Anyone ~ ~ ~']],
-  [['raw', 'say  two  spaces'], ['say  two  spaces']]
-]
-
-for (const [argv, expected] of rawAllowed) {
-  test(`raw builds ${argv.slice(1).join(' ')}`, () => {
-    assert.deepEqual(buildCommand(argv, { targets: [T] }), expected)
-  })
-}
-
-const rawRefused = [
-  [['raw'], /usage/],
-  [['raw', ''], /empty/],
-  [['raw', 'say', 'a\nstop'], /newline/],
-  [['raw', 'say\r'], /newline/]
-]
-
-for (const [argv, pattern] of rawRefused) {
-  test(`raw refuses ${JSON.stringify(argv.slice(1))}`, () => {
-    assert.throws(() => buildCommand(argv, { targets: [T] }), pattern)
-  })
-}
-
 test('default targets include the probe bodies', () => {
   const targets = targetsFromEnv({})
   assert.deepEqual(['ProbeWater', 'ProbeFight', 'ProbeNight', 'ProbeStuck'].map(n => buildCommand(['tp', n, '1', '2', '3'], { targets })),

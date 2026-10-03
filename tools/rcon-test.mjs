@@ -1,7 +1,5 @@
-// Sets up live tests of a Minecraft bot against the local server. The typed subcommands (time, weather, tp, give,
-// effects, damage, summon, setblock, fill, ...) are convenience and typo safety: they validate arguments and aim at
-// allowed test players only. `raw <words...>` is the escape hatch: it sends the words joined by single spaces, exactly
-// as given, with no target or allow-list check (the owner has said arbitrary console commands are fine for now).
+// Sets up live tests of a Minecraft bot against the local server: sends a small allow-list of RCON commands
+// (time, weather, tp, give, effects, damage, summon, setblock, fill, ...) aimed at allowed test players only.
 //   node tools/rcon-test.mjs <subcommand> [args...]      e.g. node tools/rcon-test.mjs give ClaudeProbe bread 3
 // Needs enable-rcon=true in server.properties and the password in ~/.config/minecraft-claude/rcon-password (chmod 600).
 // This is a guard rail against accidents, not a security boundary: anything running as the same OS user could read
@@ -93,12 +91,6 @@ function coords (values) {
 // each builder: [arity range, (args, targets) => string[]]; arity is checked before the builder runs
 const builders = {
   list: [[0, 0], '', () => ['list']],
-  raw: [[1, Infinity], '<words...>', args => {
-    const command = args.join(' ')
-    if (/[\r\n]/.test(command)) throw new Error('raw command must not contain a newline')
-    if (!command.trim()) throw new Error('raw command must not be empty')
-    return [command]
-  }],
   time: [[1, 1], '<day|night|midnight|noon|N>', ([v]) => {
     if (['day', 'night', 'midnight', 'noon'].includes(v)) return [`time set ${v}`]
     if (!/^\d+$/.test(v)) throw new Error(`time must be day, night, midnight, noon or a non-negative integer, got ${JSON.stringify(v)}`)
