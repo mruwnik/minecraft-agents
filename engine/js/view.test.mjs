@@ -38,7 +38,7 @@ const entity = (id, x, z, extra = {}) => ({
   id, type: 'mob', name: 'zombie', kind: 'Hostile mobs', position: new Vec3(x, 64, z), yaw: 1, pitch: 0, height: 1.95, width: 0.6, ...extra
 })
 
-const fakeBot = ({ columns = {}, entities = {} } = {}) => {
+const fakeBot = ({ columns = {}, entities = {}, listing = false } = {}) => {
   const bot = new EventEmitter()
   const self = { position: new Vec3(10.123, 64, -3.5), velocity: new Vec3(0, 0, 0), yaw: 0.5, pitch: -0.1, onGround: true, height: 1.8 }
   Object.assign(bot, {
@@ -53,7 +53,10 @@ const fakeBot = ({ columns = {}, entities = {} } = {}) => {
     heldItem: { name: 'stone', count: 3, slot: 36 },
     inventory: { slots: [null, { name: 'stone', count: 3, slot: 1 }, null] },
     currentWindow: null,
-    world: { getColumn: (x, z) => columns[`${x},${z}`] ?? null }
+    world: {
+      getColumn: (x, z) => columns[`${x},${z}`] ?? null,
+      ...(listing && { getColumns: () => Object.entries(columns).map(([k, column]) => { const [chunkX, chunkZ] = k.split(','); return { chunkX, chunkZ, column } }) })
+    }
   })
   self.effects = { 5: { id: 5, amplifier: 1, duration: 100 } }
   bot.registry = { effects: { 5: { name: 'strength' } } }
@@ -70,6 +73,19 @@ const makeView = (bot, overrides = {}) => {
 
 const worldChunks = dir => path.join(dir, 'worlds', 'w', 'chunks')
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'))
+
+test('attach marks columns already loaded dirty, so the spawn column is written by the first flush', async () => {
+  const columns = { '0,0': makeColumn(), '-1,2': makeColumn() }
+  const { view, dir } = makeView(fakeBot({ columns, listing: true }))
+  assert.equal(view.pendingCount(), 2)
+  await view.flushColumns()
+  assert.equal(fs.readdirSync(worldChunks(dir)).length, 2)
+})
+
+test('attach to a world without a column listing still works', () => {
+  const { view } = makeView(fakeBot({ columns: { '0,0': makeColumn() } }))
+  assert.equal(view.pendingCount(), 0)
+})
 
 test('column file round-trips sections, light and header', () => {
   const column = makeColumn()

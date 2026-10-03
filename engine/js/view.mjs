@@ -744,6 +744,9 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     lastHudKey = null
     lastPose = null
     unhook = hook(target)
+    // columns that arrived before attach (the spawn column) never fire chunkColumnLoad for us
+    const loaded = target.world?.getColumns?.() ?? []
+    loaded.forEach(({ chunkX, chunkZ }) => markColumn(Number(chunkX), Number(chunkZ)))
     const tableStart = performance.now()
     try { tableFor(target) } catch (err) { reportError(err) }
     stats.relightTableMs += performance.now() - tableStart
