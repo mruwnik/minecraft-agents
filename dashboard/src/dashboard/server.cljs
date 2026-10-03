@@ -12,7 +12,7 @@
             [dashboard.engine-events :as ee]
             [dashboard.guard :as guard]
             [dashboard.items :as items]
-            [dashboard.jobs-source :as jobs-source]
+            [dashboard.jobs-registry :as jobs-registry]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
             [dashboard.rcon :as rcon]
@@ -437,30 +437,9 @@
              (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
 
 ;; ---------------------------------------------------------------- jobs (GET /api/jobs)
-;; The job namespaces themselves, engine/src/jobs/**/*.cljs, parsed per file and cached until the file's mtime changes.
-(def jobs-dir (.join path repo-root "engine" "src" "jobs"))
-(def job-cache (atom {}))
-
-(defn job-files
-  "Relative paths (from the repo root) of every job source file, sorted."
-  []
-  (vec (for [dir (dir-names jobs-dir)
-             file (try (sort (.readdirSync fs (.join path jobs-dir dir))) (catch :default _ []))
-             :when (re-find #"\.clj[sc]$" file)]
-         (str "engine/src/jobs/" dir "/" file))))
-
-(defn read-job [file]
-  (let [full (.join path repo-root file)
-        mtime (.-mtimeMs (.statSync fs full))
-        cached (get @job-cache file)]
-    (if (= mtime (:mtime cached))
-      (:job cached)
-      (let [job (jobs-source/parse-job file (read-text full))]
-        (swap! job-cache assoc file {:mtime mtime :job job})
-        job))))
-
+;; The job and trigger namespaces as compiled into this build (dashboard.jobs-registry), joined with usage.
 (defn read-jobs [now]
-  (jobs-source/attach-usage (mapv read-job (job-files)) (jobs-source/usage (bodies now))))
+  (jobs-registry/attach-usage jobs-registry/entries (jobs-registry/usage (bodies now))))
 
 (defn preview! [req res]
   (guarded-post!
@@ -546,11 +525,36 @@
         (.end res)
         (send-json! res 500 {:error (str (ex-message e))})))))
 
+(defn close-all!
+  "Ends the thumbnail worker and the view server's scan worker (those that were started); resolves when done."
+  []
+  (js/Promise.all
+   #js [(if (realized? thumbnailer)
+          (-> @thumbnailer (.then (fn [t] ((:close t)))) (.catch (fn [_])))
+          (js/Promise.resolve))
+        (if-let [m @view-mount]
+          (-> (js/Promise.resolve (.close m)) (.catch (fn [_])))
+          (js/Promise.resolve))]))
+
+(defn shutdown-on-signals!
+  "SIGTERM and SIGINT close the http server and the workers, then exit (after at most 3 s)."
+  [server]
+  (let [done (atom false)
+        stop (fn [_]
+               (when-not @done
+                 (reset! done true)
+                 (.unref (js/setTimeout #(.exit js/process 1) 3000))
+                 (.close server)
+                 (-> (close-all!) (.then #(.exit js/process 0)))))]
+    (.on js/process "SIGTERM" stop)
+    (.on js/process "SIGINT" stop)))
+
 (defn main []
   (when-not (chat-send/valid-sender? chat-sender)
     (js/console.error (str "DASHBOARD_CHAT_AS must match " chat-send/sender-re ", got " (pr-str chat-sender)))
     (.exit js/process 1))
   (let [server (.createServer http handler)]
+    (shutdown-on-signals! server)
     (-> (load-view-mount)
         (.then (fn [_]
                  (.listen server port "127.0.0.1"

@@ -82,6 +82,7 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .bname { font-weight: 600; font-size: 14px; color: #fff; text-shadow: 0 1px 2px #000; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overlay .pill { background: rgba(15,17,21,.75); }
 .offline-tag { position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: rgba(15,17,21,.8); color: var(--offline); border: 1px solid var(--line); font-family: var(--mono); }
+.age-tag { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 0 6px; border-radius: 8px; background: rgba(15,17,21,.75); color: var(--dim); font-family: var(--mono); }
 .binfo { padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .vitals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .vital { display: flex; align-items: center; gap: 5px; }

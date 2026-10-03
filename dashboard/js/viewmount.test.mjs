@@ -81,3 +81,9 @@ for (const [name, headers, status] of driveCases) {
     assert.equal(res.statusCode, status)
   })
 }
+
+test('close() resolves, also when the server never listened, and the mount can be closed twice', async () => {
+  const own = mountView({ repo, stateDir })
+  await own.close()
+  await own.close()
+})

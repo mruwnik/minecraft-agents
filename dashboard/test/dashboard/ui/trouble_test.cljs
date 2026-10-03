@@ -93,3 +93,23 @@
 
 (deftest card-without-pose-has-no-thumb
   (is (nil? (:thumb (t/card-model (assoc-in full-body [:view :poseMtimeMs] nil) now)))))
+
+(deftest thumb-age-mark-table
+  (doseq [[title up mtime expected]
+          [["fresh" true (- now 9000) nil]
+           ["exactly 10 s" true (- now 10000) nil]
+           ["just over 10 s" true (- now 10001) "10 s old"]
+           ["12 s" true (- now 12000) "12 s old"]
+           ["59 s" true (- now 59900) "59 s old"]
+           ["a minute" true (- now 60000) "1 min old"]
+           ["3 minutes" true (- now 200000) "3 min old"]
+           ["2 hours" true (- now 7200000) "120 min old"]
+           ["offline keeps its badge" false (- now 120000) nil]
+           ["no view" true nil nil]
+           ["clock ahead" true (+ now 5000) nil]]]
+    (testing title
+      (is (= expected (t/thumb-age-mark up mtime now))))))
+
+(deftest card-model-carries-the-mark
+  (is (= "12 s old" (:thumb-age (t/card-model {:name "A" :up true :engine {} :view {:poseMtimeMs (- now 12000)}} now))))
+  (is (nil? (:thumb-age (t/card-model {:name "A" :up false :engine {} :view {:poseMtimeMs (- now 12000)}} now)))))

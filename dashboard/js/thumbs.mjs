@@ -23,27 +23,41 @@ export class RenderError extends Error {
   }
 }
 
+// Heap caps of the worker thread (its column cache lives in it; see maxColumns).
+export const workerLimits = { maxOldGenerationSizeMb: 160, maxYoungGenerationSizeMb: 24 }
+
+// The worker's column cache (tools/view/columns.mjs) never evicts, so the worker reports how many columns it holds and
+// is replaced (a fresh, empty cache on the next render) once that passes the cap.
+export const maxColumns = 400
+export const shouldRecycle = (loaded, cap) => Number.isFinite(loaded) && loaded > cap
+
 // A renderer backed by one worker thread, started on first use; call close() to end it.
-export function workerRenderer ({ stateDir, width, height, maxDist }) {
+export function workerRenderer ({ stateDir, width, height, maxDist, columnCap = maxColumns }) {
   let worker = null
   let nextId = 0
   const pending = new Map()
   const start = () => {
-    worker = new Worker(workerFile)
-    worker.unref()
-    worker.on('message', ({ id, png, ms, error, errorName }) => {
+    const w = new Worker(workerFile, { resourceLimits: workerLimits })
+    worker = w
+    w.unref()
+    w.on('message', ({ id, png, ms, loaded, error, errorName }) => {
       const { resolve, reject } = pending.get(id)
       pending.delete(id)
+      if (shouldRecycle(loaded, columnCap) && worker === w && pending.size === 0) {
+        worker = null
+        w.terminate()
+      }
       if (error !== undefined) return reject(new RenderError(error, errorName))
       resolve({ png: Buffer.from(png.buffer, png.byteOffset, png.byteLength), ms })
     })
     const fail = err => {
+      if (worker !== w) return // a worker that was replaced or recycled
       pending.forEach(({ reject }) => reject(err))
       pending.clear()
       worker = null
     }
-    worker.on('error', fail)
-    worker.on('exit', () => fail(new Error('thumbnail worker exited')))
+    w.on('error', fail)
+    w.on('exit', () => fail(new Error('thumbnail worker exited')))
   }
   const render = name => new Promise((resolve, reject) => {
     if (!worker) start()

@@ -17,5 +17,10 @@ export function mountView ({ repo, stateDir }) {
     if (url.pathname === '/view' || url.pathname === '/view/') req.url = '/' + url.search
     server.emit('request', req, res)
   }
-  return { handles, handle }
+  // ends what the view server started (the block-issues scan worker); the server never listened, so this only emits 'close'
+  const close = () => new Promise(resolve => {
+    server.once('close', resolve)
+    server.close()
+  })
+  return { handles, handle, close }
 }

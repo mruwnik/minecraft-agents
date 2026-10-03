@@ -87,6 +87,15 @@
   (when-let [v (:poseMtimeMs view)]
     (str "/api/thumb/" name ".png?v=" v)))
 
+(def stale-thumb-ms 10000)
+
+(defn thumb-age-mark
+  "\"12 s old\" / \"3 min old\" for an online body whose view is older than 10 s, else nil (offline bodies keep their badge)."
+  [up mtime now]
+  (when (and up (number? mtime) (> (- now mtime) stale-thumb-ms))
+    (let [s (quot (- now mtime) 1000)]
+      (if (< s 60) (str s " s old") (str (quot s 60) " min old")))))
+
 (defn card-model
   "Everything a body card shows, as plain data."
   [{:keys [name up engine view] :as body} now]
@@ -99,6 +108,7 @@
      :reason (:text top)
      :severity (:severity top)
      :thumb (thumb-src name view)
+     :thumb-age (thumb-age-mark up (:poseMtimeMs view) now)
      :health (get-in view [:hud :health])
      :food (get-in view [:hud :food])
      :job (job-text (:job engine) edn-job)

@@ -19,12 +19,13 @@
       [:div.fill {:class (name kind) :style {:width (str (* 5 (or v 0)) "%")}}]]
      [:span.vnum (if v (js/Math.round v) "-")]]))
 
-(defn preview [{:keys [name thumb status offline]}]
+(defn preview [{:keys [name thumb thumb-age status offline]}]
   [:div.preview
    (if thumb
      [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
      [:div.noview "no view"])
    (when (= status :offline) [:span.offline-tag offline])
+   (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
    [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]])
 
 (defn body-card [{:keys [name status reason severity health food job event event-age event-level] :as card}]

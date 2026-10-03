@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { pickNext, createThumbnailer } from './thumbs.mjs'
+import { pickNext, createThumbnailer, shouldRecycle, workerLimits } from './thumbs.mjs'
 
 const base = { now: 100000, minIntervalMs: 2000, budgetLeftMs: 1000 }
 const body = (name, over = {}) => ({ name, interested: true, poseMtimeMs: 500, renderMtimeMs: 400, renderedAt: 90000, ...over })
@@ -184,4 +184,13 @@ test('concurrent gets for one body share a render and renders never overlap', as
   await Promise.all([th.get('A'), th.get('A'), th.get('B')])
   th.close()
   assert.equal(peak, 1)
+})
+
+test('shouldRecycle: only a worker holding more columns than the cap is replaced', () => {
+  const rows = [[0, false], [399, false], [400, false], [401, true], [undefined, false]]
+  for (const [loaded, expected] of rows) assert.equal(shouldRecycle(loaded, 400), expected, `loaded ${loaded}`)
+})
+
+test('workerLimits caps the old generation', () => {
+  assert.equal(workerLimits.maxOldGenerationSizeMb, 160)
 })
