@@ -91,3 +91,50 @@ block names out of the dumped columns with the view's decoders.
 - An invalid file (bad EDN, id not equal to the file name, a bad part, want or blueprint) is not listed; its problems, naming the part,
   are returned in `errors` of `/api/plans` and shown on the Plans page. A part placing a missing blueprint, or an assignment naming no
   part or spot, is an error of that plan's detail.
+
+## Terrain rendering benchmark
+
+`tools/terrain-web-bench.mjs` measures the dashboard map in an already-open Chromium tab. It samples equal idle, warm pan/zoom,
+and zoomed-out overview-pan phases, recording animation-frame intervals, long tasks, browser main-thread task/script time, canvas
+draw/resize counts and tile requests. It can save a screenshot for each phase. Use the same Chromium build, viewport, saved world,
+phase duration and warmed map data when comparing revisions; a cold `/api/tiles/<world>` scan is a separate startup cost.
+
+From the repository root, build and start the dashboard using saved local data (do not start a body to run this benchmark):
+
+```sh
+cd dashboard
+npm run build
+DASHBOARD_ROOT=/path/to/minecraft-agents PORT=3701 node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs
+```
+
+In another terminal, open the map in headless Chromium, then run the harness from the repository root:
+
+```sh
+profile=$(mktemp -d /tmp/terrain-chrome-XXXXXX)
+/usr/bin/chromium --headless=new --no-sandbox --disable-dev-shm-usage \
+  --remote-debugging-port=9223 --user-data-dir="$profile" --window-size=1440,1000 \
+  'http://127.0.0.1:3701/map?world=claude'
+node tools/terrain-web-bench.mjs --cdp http://127.0.0.1:9223/json \
+  --out /tmp/terrain-perf.json --screenshots /tmp/terrain-perf-shots
+```
+
+The default run takes about 50 seconds. The harness sends pointer and wheel input to the map only; it does not call body-control or
+chat routes. Its browser task/script counters are useful for same-machine comparisons, not GPU timings: headless Chromium may use
+software rendering, and the canvas call timers do not include all raster/compositor work. Compare screenshots as well as numbers
+to catch tile gaps or changes in terrain shading.
+
+### Measured result
+
+Two paired runs used the same saved world, headless browser, viewport and 8-second phases. Browser main-thread task/script deltas
+are milliseconds; ranges below cover the two runs:
+
+| Phase | Baseline task / script | Path2D task / script |
+|---|---:|---:|
+| Warm pan/zoom | 1351–1535 / 923–1010 | 1440–1504 / 1005–1083 |
+| Overview pan | 1464–1768 / 1188–1519 | 815–823 / 453–470 |
+
+Across the paired overview samples, task time fell by 44–54% and script time by 62–69%. Warm pan/zoom ranges overlap, so this
+change has no demonstrated pan speedup. Idle results are excluded because tile image completions differed between runs (2 versus
+26 redraw-triggering arrivals); frame p95 stayed around 16.7–16.8 ms, so these measurements do not establish an FPS gain. The
+overview optimization caches one `Path2D` of world-coordinate chunk coverage and fills it through the viewport transform,
+instead of rebuilding and filling a visible rectangle for every column on each redraw.
