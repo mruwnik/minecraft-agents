@@ -32,6 +32,10 @@
   before a job.stalled warn."
   20)
 
+(def default-stats-ms
+  "How often tick! emits the memory.save-stats summary."
+  60000)
+
 (def default-sweep-ms
   "How often tick! sweeps and saves memory."
   60000)
@@ -156,8 +160,31 @@
 (defn add-instance [state id node opts]
   (assoc-in state [:instances id] (merge {:id id :spec node :round 0} opts)))
 
+(def empty-save-stats {:count 0 :bytes 0 :ms 0 :max-ms 0})
+
+(defn record-save!
+  "Measure a state or memory save: emit a debug memory.saved event and add it
+  to the running summary that flush-save-stats! reports. saved is the
+  {:bytes :ms} fsutil/write-edn! returned for file."
+  [eng file {:keys [bytes ms]}]
+  (swap! (:save-stats eng) #(-> %
+                                (update :count inc)
+                                (update :bytes + bytes)
+                                (update :ms + ms)
+                                (update :max-ms max ms)))
+  (emit! eng {:source :memory :kind :saved :level :debug
+              :file (path/basename file) :bytes bytes :ms ms}))
+
+(defn flush-save-stats!
+  "Emit the info memory.save-stats summary of the saves since the last one and
+  start a new window."
+  [eng]
+  (let [stats @(:save-stats eng)]
+    (reset! (:save-stats eng) empty-save-stats)
+    (emit! eng (merge {:source :memory :kind :save-stats :level :info} stats))))
+
 (defn save-memory! [eng]
-  (mem/save! (:store eng)))
+  (record-save! eng (mem/file (:dir eng)) (mem/save! (:store eng))))
 
 (defn job-memory [eng id]
   (mem/job-mem (mem/view (:store eng)) id []))
@@ -506,6 +533,9 @@
   started (resolving once that round is settled), or nil."
   [eng]
   (expire-changes! eng)
+  (when (>= (- (now eng) @(:last-stats eng)) (:stats-ms eng))
+    (reset! (:last-stats eng) (now eng))
+    (flush-save-stats! eng))
   (when (>= (- (now eng) @(:last-sweep eng)) (:sweep-ms eng))
     (reset! (:last-sweep eng) (now eng))
     (save-memory! eng))
@@ -701,9 +731,11 @@
   memory.edn when present, sweeps memory and appends a :restart entry.
   Options: :primitives, :jobs (the registry, {sym {:check :round :doc
   :args}}), :triggers ({name trigger}), :dir :now :events :body,
-  :stall-rounds (default 20) and :sweep-ms (default 60000)."
-  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms]
-    :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms}}]
+  :stall-rounds (default 20), :sweep-ms (default 60000) and :stats-ms (how
+  often memory.save-stats is emitted, default 60000)."
+  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms]
+    :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
+         stats-ms default-stats-ms}}]
   (let [file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
@@ -722,9 +754,13 @@
              :stalls (atom {})
              :stall-rounds stall-rounds
              :sweep-ms sweep-ms
-             :last-sweep (atom (now))}]
-    (add-watch st ::persist (fn [_ _ old new] (when (not= old new) (fsu/write-edn! file new))))
-    (fsu/write-edn! file (state eng))
+             :last-sweep (atom (now))
+             :stats-ms stats-ms
+             :last-stats (atom (now))
+             :save-stats (atom empty-save-stats)}]
+    (add-watch st ::persist (fn [_ _ old new]
+                              (when (not= old new) (record-save! eng file (fsu/write-edn! file new)))))
+    (record-save! eng file (fsu/write-edn! file (state eng)))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-unknown-jobs! eng)

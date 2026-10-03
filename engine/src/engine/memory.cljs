@@ -172,7 +172,7 @@
   (swap! store update :data remove-entries kind #(pred (:data %))))
 
 (defn save!
-  "Sweep, then write memory.edn."
+  "Sweep, then write memory.edn. Returns {:bytes :ms} of the write."
   [store]
   (let [{:keys [dir now live-jobs]} @store
         s (swap! store update :data sweep (now) (when live-jobs (live-jobs)))]

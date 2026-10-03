@@ -625,6 +625,12 @@ Plus kind-specific fields. Kinds the engine emits: `job.queued`,
 `body.<kind>` for body events, `system.started`, `system.restored`,
 `system.stopping`.
 
+Save measurement (no optimisation, just numbers): every write of `memory.edn`
+or `engine.edn` emits `memory.saved` (debug) with `file` (`memory.edn` or
+`engine.edn`), `bytes` written and `ms` the write took. Once a minute
+(`:stats-ms`, checked in `tick!`) `memory.save-stats` (info) sums the window:
+`count`, `bytes`, `ms` (total) and `max-ms`, then the window restarts.
+
 ## Scenarios
 
 EDN, read with `cljs.reader`:

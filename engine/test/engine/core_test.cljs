@@ -1105,3 +1105,39 @@
           (.setOwner (:primitives eng) "tx")
           (await (ctx/call-child c :x 'defaults {:b 9}))
           (is (= {:a 1 :b 9} (:args (mem/job-mem (mem/view (:store eng)) "j9" [:x])))))))))
+
+;; ---------------------------------------------------------------- save measurement
+
+(defn saved-events [seen]
+  (filterv #(= [:memory :saved] [(:source %) (:kind %)]) @seen))
+
+(deftest every-memory-and-engine-state-save-emits-memory-saved-with-bytes-and-ms
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng '(count) {})
+          (await (core/tick! eng))
+          (let [saved (saved-events seen)]
+            (is (= #{"memory.edn" "engine.edn"} (set (map :file saved))))
+            (is (every? #(= :debug (:level %)) saved))
+            (is (every? #(pos? (:bytes %)) saved))
+            (is (every? #(and (number? (:ms %)) (>= (:ms %) 0)) saved))))))))
+
+(deftest a-save-stats-summary-is-emitted-once-a-minute
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup)
+              stats #(filterv (fn [e] (= [:memory :save-stats] [(:source e) (:kind e)])) @seen)]
+          (core/submit! eng '(count) {})
+          (await (core/tick! eng))
+          (is (empty? (stats)) "not before a minute is up")
+          (swap! clock + 60000)
+          (core/tick! eng)
+          (let [[e & more] (stats)]
+            (is (empty? more))
+            (is (= :info (:level e)))
+            (is (pos? (:count e)))
+            (is (pos? (:bytes e)))
+            (is (>= (:ms e) (:max-ms e) 0))))))))
