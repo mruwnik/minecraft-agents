@@ -234,3 +234,27 @@
           (is (= 1 (count (filter #(= :no_shore_near (:kind %)) @seen))))
           (is (not-any? #(= :warn (:level %)) @seen))
           (is (= ["swim"] (call-names p))))))))
+
+(deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"0,65,0" "obsidian" "1,63,0" "stone"}})]
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= {:x 1 :y 64 :z 0} (core/self-pos p)) "stepped to the free neighbour")
+          (is (= ["moveTo"] (call-names p)) "no dig")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest enclosed-with-a-failed-side-step-digs-the-next-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"0,65,0" "dirt" "1,63,0" "stone"}})]
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= ["moveTo"] (call-names p)) "first round only tries the step")
+          (is (= 1 (count (:list (core/state eng)))) "still listed, no failure counted")
+          (await (core/tick! eng))
+          (is (= ["moveTo" "dig" "moveTo"] (call-names p)) "second round digs"))))))

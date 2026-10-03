@@ -9,7 +9,11 @@
   primitive rises to the surface); else walk sideways at the feet's height to
   the nearest column within :radius that does, and swim from there next round.
   Enclosed (head cell
-  holds a suffocating block, see engine.triggers.suffocating): dig the head
+  holds a suffocating block, see engine.triggers.suffocating): first, once per
+  job, step to a horizontal neighbour at the same feet height whose feet and
+  head cells are passable and which has something to stand on (not air, water
+  or lava); if that does not clear the situation (:side-tried in job memory)
+  the next round digs: dig the head
   block, dig the block above it if solid, and step up; a dig that is not
   dug/missing (cannot, timeout, unreachable) is a failed round and nothing
   moves. One action per round;
@@ -135,6 +139,26 @@
       (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
                                                                 :range 0}))))))))
 
+(defn side-cell
+  "A horizontal neighbour of the feet cell where the body fits (feet and head
+  cells passable) and can stand (the cell below is neither air, water nor
+  lava); nil if none. Unloaded cells do not count."
+  [p self]
+  (let [fx (js/Math.floor (.. self -pos -x))
+        fy (js/Math.floor (.. self -pos -y))
+        fz (js/Math.floor (.. self -pos -z))
+        fits? (fn [cell]
+                (let [feet (u/block-name p cell)
+                      head (u/block-name p (update cell :y inc))
+                      below (u/block-name p (update cell :y dec))]
+                  (and feet head below
+                       (s/passable? feet) (s/passable? head)
+                       (not (s/air? below)) (not (contains? #{"water" "lava"} below)))))]
+    (->> [[1 0] [-1 0] [0 1] [0 -1]]
+         (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
+         (filter fits?)
+         first)))
+
 (defn ^:async dig-out!
   "Enclosed: dig the head block (and the one above if solid), step up. True
   when the dig worked; false when it did not (nothing moved)."
@@ -187,11 +211,18 @@
       (nil? why) :done
 
       :else
-      (do (note! c why)
+      (let [p (:primitives c)
+            side (when (and (= :enclosed why) (not (:side-tried (ctx/mem c))))
+                   (side-cell p (.self p)))]
+        (note! c why)
+        (if side
+          (do (ctx/update-mem! c assoc :side-tried true)
+              (await (ctx/act c :moveTo (clj->js {:pos side :range 0})))
+              (if (nil? (s/situation p min-oxygen)) (after-situation c) :continue))
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (swim-up! c) (dig-out! c)))]
             (cond
-              (nil? (s/situation (:primitives c) min-oxygen)) (after-situation c)
+              (nil? (s/situation p min-oxygen)) (after-situation c)
               (and drowning? ok) :continue
               drowning? (u/fail! c :no_air "drowning and no air within reach")
-              :else (u/fail! c :no_way_out "could not dig out of the block")))))))
+              :else (u/fail! c :no_way_out "could not dig out of the block"))))))))
