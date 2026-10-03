@@ -20,7 +20,7 @@
          [seen sink] (tu/capture-sink)
          p (tu/fake world)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir
-                           :now #(deref clock)
+                           :now #(deref clock) :backoff false
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
       {:eng eng :p p :seen seen :clock clock :dir dir})))
 
@@ -202,7 +202,7 @@
           (is (= [{:pos goal :range 1 :maxDistance 3} {:pos goal :range 1 :timeoutS 6}] (call-args p "moveTo"))
               "only the capped hop and the uncapped retry")
           (is (= ["j1"] (:list (core/state eng))))
-          (doseq [_ (range 5)] (await (core/tick! eng)))
+          (doseq [_ (range 6)] (await (core/tick! eng))) ; round 2 pillars out of the dug roof: a rise, not counted
           (is (not-any? #{"job.unstick.failed"} (tu/kinds seen)))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "gave up")
@@ -438,7 +438,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos at5} :blocks roofed-pit :inventory [{:name "dirt" :count 4}]})]
-          (await (run-attempts! eng p 7 false))
+          (await (run-attempts! eng p 8 false))
           (is (re-find #"no headroom" (:text (failed-event seen))))
           (is (= [] (:list (core/state eng))) "gave up after max-attempts, no livelock"))))))
 
@@ -643,3 +643,85 @@
 
 (deftest summarize-reasons-of-nothing-is-empty
   (is (= [] (unstick/summarize-reasons []))))
+
+;; ---------------------------------------------------------------- stair result and progress
+
+(defn arrive-without-moving!
+  "Make every moveTo of the fake report arrived and leave the body where it is."
+  [p]
+  (.override (.-world p) "moveTo"
+             (fn ^:async f [_ _ _] #js {:status "arrived" :pos (.-pos (.self p)) :distance 0})))
+
+(deftest unstick-stair-step-that-arrives-records-no-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks dirt-pit})]
+          (arrive-without-moving! p)
+          (await (run-attempts! eng p 7 :free))
+          (is (= ["pillar: no block in inventory (x6)"] (:reasons (failed-event seen)))
+              "no \"[object Object]\" and no stair reason when the moveTo arrived"))))))
+
+(deftest unstick-stair-step-that-is-blocked-records-the-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks dirt-pit})]
+          (await (run-attempts! eng p 7 false))
+          (is (= ["pillar: no block in inventory (x6)" "stair: moveTo blocked (x6)"] (:reasons (failed-event seen)))))))))
+
+(defn climb-box
+  "Solid dirt for x 0..24, y 52..90, z -3..3, minus the carved cells."
+  [carved]
+  (apply dissoc
+         (into {} (for [x (range 0 25) y (range 52 91) z (range -3 4)] [(str x "," y "," z) "dirt"]))
+         carved))
+
+(defn lifting-moveTo!
+  "Every stair moveTo (range 0) puts the body on its target. A hop (anything else) stays blocked until the
+  body's feet reach y top, then walks it 25 blocks away."
+  [p top]
+  (let [state (.-state (.-world p))]
+    (.override (.-world p) "moveTo"
+               (fn ^:async f [_ args _]
+                 (let [pos (.-pos args)
+                       y (.-y (.-pos (.self p)))
+                       lift? (zero? (.-range args))
+                       out? (>= y top)]
+                   (cond
+                     lift? (set! (.-pos (.-self state)) #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
+                     out? (set! (.-pos (.-self state)) #js {:x 30 :y y :z 0}))
+                   #js {:status (if (or lift? out?) "arrived" "blocked") :pos (.-pos (.self p)) :distance 5})))))
+
+(def climb-pit (climb-box (for [y (range 60 68)] (str "5," y ",0"))))
+
+(deftest unstick-climbs-an-eight-deep-pit-in-one-spell-since-rising-is-not-an-attempt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 5 :y 60 :z 0}} :blocks climb-pit})]
+          (lifting-moveTo! p 68)
+          (await (run-attempts! eng p 9 :free))
+          (is (= [] (:list (core/state eng))) "out of the pit, the spell is over")
+          (is (nil? (failed-event seen)) "no give-up although 8 stair steps exceed :max-attempts 6")
+          (is (= 8 (count (filter #(zero? (:range %)) (call-args p "moveTo")))) "one stair step per round"))))))
+
+(deftest unstick-bedrock-pit-gives-up-after-max-attempts-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks bedrock-pit})]
+          (await (run-attempts! eng p 7 false))
+          (is (= {:attempts 6 :rounds 6} (select-keys (failed-event seen) [:attempts :rounds])) "no rise, every round counts"))))))
+
+(deftest unstick-gives-up-at-the-round-cap-when-it-rises-every-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 5 :y 60 :z 0}} :blocks climb-pit})]
+          (lifting-moveTo! p 1000)
+          (await (run-attempts! eng p 15 :free))
+          (is (= [] (:list (core/state eng))) "gave up")
+          (let [ev (failed-event seen)]
+            (is (= {:attempts 0 :rounds 14} (select-keys ev [:attempts :rounds])))
+            (is (re-find #"^still stuck after 14 attempts: " (:text ev)))))))))

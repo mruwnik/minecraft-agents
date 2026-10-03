@@ -6,7 +6,12 @@
 
 (def doc
   "Get a body out of being stuck: a job keeps calling moveTo and the body gets
-  nowhere. Each round is one attempt, counted in job memory. First it waits
+  nowhere. Each round is one attempt, counted in job memory, except a round
+  after which the body's feet are higher than ever yet in this spell (:best-y,
+  from the start position): that is progress and is not counted, so climbing
+  an 8-deep pit one block per round does not use the attempts up. Only counted
+  attempts reach :max-attempts; a hard cap of :max-attempts + 8 (max-pillar)
+  rounds per spell bounds the rest. First it waits
   (the :wait primitive, 50 ms steps, up to 1 s) for the body to be on the
   ground, so the cells it picks are the landed ones; still airborne, it uses
   them anyway. Then: attempt 1 steps back one block the way it came, unless
@@ -22,7 +27,8 @@
   head (headroom to jump), and F1, F2, the feet and head cells one block up
   in front, which stand on the front block at feet height (left solid; if
   it is open, the next cardinal is tried, and none solid records a reason),
-  then moves to F1 with range 0. A cell is not dug when the one above it is
+  then moves to F1 with range 0 (no reason when that arrives or the feet rose,
+  else \"stair: moveTo <status>\"). A cell is not dug when the one above it is
   sand or gravel or any of its six neighbours is water or lava (the reason
   says which); any dig status but dug or missing ends the attempt with
   \"dig: <status>\" (bedrock gives cannot, a slow block timeout). The best
@@ -32,8 +38,8 @@
   the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If
   that did not move the body more than :min-move blocks from where it stood
   (status is ignored), it retries once uncapped (range 1, :timeoutS 6). If
-  either moved it that far the spell is over (:done); otherwise :continue. After :max-attempts attempts it emits the warn
-  event unstick.failed with the position, :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
+  either moved it that far the spell is over (:done); otherwise :continue. After :max-attempts counted attempts, or at the round cap, it emits the warn
+  event unstick.failed with the position, :attempts (counted), :rounds (used, also what the :text reports), :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
   ttl 1 hour) and ends so the list resumes.
 
   How it pairs with the stuck trigger (engine.triggers.stuck): both read only
@@ -215,6 +221,16 @@
           (str "dig: " st)))
       nil)))
 
+(defn feet-y [c] (:y (cell (u/self-pos c))))
+
+(defn ^:async climb!
+  "moveTo the stair step pos. nil when it arrived or the body's feet rose, else the reason."
+  [c pos]
+  (let [before (feet-y c)
+        status (.-status (await (go! c pos)))]
+    (when-not (or (= "arrived" status) (> (feet-y c) before))
+      (str "stair: moveTo " status))))
+
 (defn ^:async dig-step!
   "Dig toward the goal: a door through a one-block wall, else a stair step that
   lifts the body one block (then moves onto it). Returns nil when it did
@@ -235,7 +251,7 @@
             (await (ctx/act c :equip (clj->js {:item pick :dest "hand"}))))
           (let [bad (await (dig-cells! c cells))]
             (or bad
-                (when stair (await (go! c (:front stair)))))))))))
+                (when stair (await (climb! c (:front stair)))))))))))
 
 (defn walled-at?
   "True when at least three of the four sides are solid at the height of pos."
@@ -307,28 +323,30 @@
     (mapv #(if (> (counts %) 1) (str % " (x" (counts %) ")") %)
           (distinct reasons))))
 
-(defn give-up! [c attempts]
+(defn give-up! [c attempts rounds]
   (let [pos (u/self-pos c)
         reasons (summarize-reasons (:reasons (ctx/mem c)))]
-    (ctx/emit! c :unstick.failed :warn {:pos pos :attempts attempts :reasons reasons
-                                         :text (str "still stuck after " attempts " attempts: " (str/join "; " reasons))})
+    (ctx/emit! c :unstick.failed :warn {:pos pos :attempts attempts :rounds rounds :reasons reasons
+                                         :text (str "still stuck after " rounds " attempts: " (str/join "; " reasons))})
     (ctx/remember! c :stuck {:pos pos} stuck-policy)
     :done))
 
 ;; ------------------------------------------------------------------ job
 
 (defn check [c]
-  (or (pos? (:attempts (ctx/mem c) 0))
+  (or (pos? (:rounds (ctx/mem c) 0))
       (stuck/stuck? (ctx/view c) (:args c))))
 
 (defn ^:async round [c]
   (let [{:keys [min-move max-attempts]} (:args c)
-        tried (:attempts (ctx/mem c) 0)]
-    (if (>= tried max-attempts)
-      (give-up! c tried)
-      (let [attempt (inc tried)]
+        {:keys [attempts rounds] :or {attempts 0 rounds 0}} (ctx/mem c)]
+    (if (or (>= attempts max-attempts) (>= rounds (+ max-attempts max-pillar)))
+      (give-up! c attempts rounds)
+      (let [attempt (inc rounds)]
         (await (land! c))
-        (ctx/update-mem! c merge (when (= 1 attempt) (bearings c (cell (u/self-pos c)))) {:attempts attempt})
+        (ctx/update-mem! c merge
+                         (when (= 1 attempt) (merge (bearings c (cell (u/self-pos c))) {:best-y (feet-y c)}))
+                         {:rounds attempt})
         (let [here (cell (u/self-pos c))
               pillar? (pillar-possible? c)
               action (cond
@@ -341,7 +359,10 @@
                            :pillar (pillar! c)
                            :dig (dig-step! c)))]
           (ctx/update-mem! c update :reasons (fnil into []) (keep identity [skipped why])))
+        (let [y (feet-y c)
+              rose? (> y (:best-y (ctx/mem c)))]
+          (ctx/update-mem! c #(-> % (assoc :best-y (max y (:best-y %))) (update :attempts (fnil + 0) (if rose? 0 1)))))
         (if (await (hop! c min-move))
-          (do (ctx/update-mem! c dissoc :attempts :reasons)
+          (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons)
               :done)
           :continue)))))
