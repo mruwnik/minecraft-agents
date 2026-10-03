@@ -128,7 +128,22 @@
           (await (core/tick! (:eng hungry)))
           (is (= [] (calls (:p full) "eat")))
           (is (= [] (calls (:p hungry) "eat")))
-          (is (= 1 (count (:list (core/state (:eng hungry))))) "still waiting for regeneration"))))))
+          (is (= [] (:list (core/state (:eng hungry))))
+              "food 10 is below the 18 regeneration needs and nothing is carried to eat: it gives up"))))))
+
+(deftest it-gives-up-when-health-cannot-regenerate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:health 5 :food 17}})]
+          (core/submit! eng '(jobs.survival.recover) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "17 food does not regenerate health")
+          (is (= 1 (count (filter #(= :cannot_heal (:kind %)) @seen)))))
+        (let [{:keys [eng]} (setup {:self {:health 5 :food 18}})]
+          (core/submit! eng '(jobs.survival.recover) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (:list (core/state eng)))) "18 food regenerates: it waits"))))))
 
 (deftest it-waits-until-healed-then-is-done
   (async done

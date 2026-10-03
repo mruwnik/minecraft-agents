@@ -42,7 +42,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time 14000 :inventory [{:name "bread" :count 1}]})
+        (let [{:keys [eng p seen]} (setup {:time 14000 :inventory [{:name "bread" :count 2}]})
               world (.-world p)]
           (core/load-scenario! eng (scenario/parse scenario-text))
           (await (core/tick! eng))

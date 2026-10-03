@@ -13,6 +13,8 @@
   hostile within :sight blocks is fled (jobs.survival.retreat); else walk to
   the latest :bed, else :home, else stay; at the safe point eat if hungry and
   carrying food, then do nothing so health regenerates. Done once health reaches :healed.
+  Health only regenerates at 18 food or more, so below that with nothing to
+  eat it gives up (a warn of kind cannot_heal) instead of holding the body.
   One :hurt entry is written per spell.")
 
 (def args
@@ -25,6 +27,10 @@
 (def hurt-policy {:cap 20 :ttl (* 60 60 1000)})
 
 (def safe-distance 3)
+
+(def regen-food
+  "Natural regeneration needs at least this much food."
+  18)
 
 (def food-names
   #{"cooked_beef" "cooked_porkchop" "cooked_mutton" "cooked_chicken" "cooked_rabbit" "cooked_salmon" "cooked_cod"
@@ -88,4 +94,9 @@
               :continue
               (do (when (and (< (.-food (.self (:primitives c))) 20) (has-food? c))
                     (await (ctx/call-child c :eat 'jobs.survival.eat {})))
-                  (if (>= (health-of c) healed) :done :continue))))))))
+                  (cond
+                    (>= (health-of c) healed) :done
+                    (and (< (.-food (.self (:primitives c))) regen-food) (not (has-food? c)))
+                    (do (ctx/emit! c :cannot_heal :warn {:text "too hungry to regenerate and nothing to eat"})
+                        :done)
+                    :else :continue))))))))
