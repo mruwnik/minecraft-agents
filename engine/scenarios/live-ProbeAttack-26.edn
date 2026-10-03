@@ -1,0 +1,4 @@
+;; batch-craft live: bake while a look-around reflex cuts it every 6 s (between and during withdraw, craft and deposit)
+{:register [{:trigger :every-interval :args {:seconds 6} :job (jobs.movement.look-around {:every-ms 500})}]
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+                    (jobs.items.bake {:chest {:x -5003 :y 101 :z 5000} :keep 4})))]}

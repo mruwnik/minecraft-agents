@@ -86,10 +86,14 @@ const shortOf = (bot, id, table) => {
   return { short: craftShortfall(recipes, have), ...(Object.keys(alternatives).length > 0 && { alternatives }) }
 }
 
-const hasRoom = (bot, item, perBatch) => {
-  if (bot.inventory.emptySlotCount() > 0) return true
+// The result goes into an empty slot (mineflayer does not join it to a stack), then gets merged. At a table that means
+// two empty slots for a result with no stack of its own yet (one for the result, one the new stack keeps) and one when it
+// joins a stack: with less mineflayer tosses the leftover ingredients on the ground (seen live: 58 of 64 wheat on the floor)
+const hasRoom = (bot, item, perBatch, table) => {
+  const free = bot.inventory.emptySlotCount()
   const stackSize = bot.registry.itemsByName[item].stackSize ?? 64
-  return bot.inventory.items().some(i => i.name === item && i.count + perBatch <= stackSize)
+  const joins = bot.inventory.items().some(i => i.name === item && i.count + perBatch <= stackSize)
+  return free >= (table && !joins ? 2 : 1) || (!table && joins)
 }
 
 // poll until the carried count has risen to `target`; false when it never did
@@ -232,7 +236,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
       shortage = shortOf(bot, id, table)
       break
     }
-    if (!hasRoom(bot, item, r.result.count)) { full = true; break }
+    if (!hasRoom(bot, item, r.result.count, table)) { full = true; break }
     Object.keys(ingredientsOf(bot, r)).forEach(n => names.add(n))
     const now = carriedCounts(bot)[item] ?? 0
     try {
@@ -246,10 +250,16 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
     if (!landed) await resync(bot, ctx, timeScale)
     await settle(bot, ctx, timeScale)
     if (!table) await settleGrid(bot, timeScale)
+    // the result lands in a stack of its own: with little room merge as we go, or the leftover ingredients have nowhere to return to
+    if (bot.inventory.emptySlotCount() < 3 && closedWindow(bot) && partialStacks(bot, item).length > 1) await mergeStacks(bot, ctx, item)
   }
 
   await settle(bot, ctx, timeScale)
-  if (made0(bot, item, start) > 0 && closedWindow(bot) && await mergeStacks(bot, ctx, item) > 0) await settle(bot, ctx, timeScale)
+  if (made0(bot, item, start) > 0 && closedWindow(bot)) {
+    // merge clicks name slots by the local view: make it the server's first, or a click lands on another item's stack
+    await syncWindow(bot, timeScale)
+    if (await mergeStacks(bot, ctx, item) > 0) await settle(bot, ctx, timeScale)
+  }
   const made = (carriedCounts(bot)[item] ?? 0) - start
   const used = usedSince(bot, before, names)
   if (made >= count) return { status: 'crafted', item, made, used }

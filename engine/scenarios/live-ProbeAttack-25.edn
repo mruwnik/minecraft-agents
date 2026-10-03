@@ -1,0 +1,4 @@
+;; batch-craft live: bake the store chest's wheat at the table beside it, keep 4 loaves, put the rest back
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+                    (jobs.items.bake {:chest {:x -5003 :y 101 :z 5000} :keep 4})))]}

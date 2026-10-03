@@ -174,6 +174,18 @@ test('craftItem: full inventory but the stack has room', async () => {
   assert.equal(r.status, 'crafted')
 })
 
+test('craftItem: at a table one empty slot is not enough', async () => {
+  const { bot, state } = setup({ items: inv(['wheat', 9]), blocks: tableBlocks, slots: 1 })
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  assert.deepEqual([r.status, state.crafts], ['full', 0])
+})
+
+test('craftItem: at a table no empty slot is not enough even beside a stack with room', async () => {
+  const { bot, state } = setup({ items: inv(['bread', 5], ['wheat', 9]), blocks: tableBlocks, slots: 0 })
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  assert.deepEqual([r.status, state.crafts], ['full', 0])
+})
+
 test('craftItem: server no-op twice then success', async () => {
   const { bot, state } = setup({ items: inv(['oak_log', 1]), mode: 'noop-twice' })
   const r = await craftItem(bot, ctx, { item: 'oak_planks', count: 4 }, opts)
@@ -292,6 +304,36 @@ test('craftItem: the result stacks are merged into one', async () => {
   const r = await craftItem(bot, ctx, { item: 'bread' }, opts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } })
   assert.deepEqual(items.filter(i => i.name === 'bread').map(i => i.count), [37])
+})
+
+test('craftItem: the window is resynced between the last craft and the first merge click', async () => {
+  const { bot, items } = setup({ items: inv(['bread', 34], ['bread', 1], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
+  clickStub(items, bot)
+  const log = []
+  const craft = bot.craft
+  const click = bot.clickWindow
+  bot.craft = async (...a) => { log.push('craft'); return craft(...a) }
+  bot._syncWindow = async () => { log.push('sync') }
+  bot.clickWindow = async s => { log.push('click'); return click(s) }
+  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.deepEqual(log.slice(log.lastIndexOf('craft'), log.indexOf('click') + 1).slice(-2), ['sync', 'click'])
+})
+
+test('craftItem: with little room the result stacks are merged after every craft', async () => {
+  const { bot, items } = setup({ items: inv(['bread', 1], ['wheat', 9]), blocks: tableBlocks, slots: 1 })
+  clickStub(items, bot)
+  const stacksSeen = []
+  const craft = bot.craft
+  bot.craft = async (...a) => {
+    stacksSeen.push(items.filter(i => i.name === 'bread').length)
+    await craft(...a)
+    // the server puts the result in a stack of its own
+    const bread = items.find(i => i.name === 'bread')
+    bread.count--
+    items.push({ name: 'bread', count: 1, type: bread.type, slot: 60 + stacksSeen.length })
+  }
+  await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  assert.deepEqual(stacksSeen, [1, 1, 1])
 })
 
 test('craftItem: a merge error still returns crafted', async () => {
