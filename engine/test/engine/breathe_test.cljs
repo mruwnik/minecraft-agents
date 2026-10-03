@@ -79,7 +79,8 @@
           (core/submit! eng (list breathe defaults) {})
           (await (core/tick! eng))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
-          (is (= [] (:list (core/state eng))) "done in the same round"))))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "done once no shore is near"))))))
 
 (defn call-names [p] (mapv #(.-name %) (array-seq (.. p -world -calls))))
 
@@ -89,6 +90,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
           (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)))
           (is (= [] (:list (core/state eng))))
@@ -120,6 +122,7 @@
           (is (= {:x 1 :y 64 :z 0} (core/self-pos p)) "first round: sideways at feet height")
           (await (core/tick! eng))
           (is (= {:x 1 :y 67 :z 0} (core/self-pos p)) "second round: up the adjacent column")
+          (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest drowning-with-no-air-in-reach-gives-up-after-bounded-rounds
@@ -199,3 +202,35 @@
             (is (= :drowning (:why (:data entry))))
             (is (= {:x 0 :y 64 :z 0} (:pos (:data entry))) "where it started")
             (is (= {:cap 20 :ttl (* 60 60 1000)} (mem/policy view :breathe)))))))))
+
+(def pool
+  "Water at y 64 and 65 around the origin column; air above."
+  (into {} (for [y [64 65] x [-1 0 1] z [-1 0 1]] [(str x "," y "," z) "water"])))
+
+(deftest surfaced-in-a-pool-it-walks-onto-a-ledge-two-blocks-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4}
+                                      :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})]
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= {:x 0 :y 65 :z 0} (core/self-pos p)) "first round surfaces")
+          (is (= 1 (count (:list (core/state eng)))) "still listed: the body is in water")
+          (await (core/tick! eng))
+          (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) "second round stands on the ledge")
+          (is (not (.-inWater (.self p))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest surfaced-in-open-water-with-no-shore-declines-without-a-warning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (filter #(= :no_shore_near (:kind %)) @seen))))
+          (is (not-any? #(= :warn (:level %)) @seen))
+          (is (= ["swim"] (call-names p))))))))

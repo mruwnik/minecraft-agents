@@ -13,20 +13,37 @@
   block, dig the block above it if solid, and step up; a dig that is not
   dug/missing (cannot, timeout, unreachable) is a failed round and nothing
   moves. One action per round;
-  done as soon as the situation is gone: the head is clear, and in water
-  either oxygen is back at :min-oxygen or the head is in air. Gives up (:no_air or
-  :no_way_out warn) after three failed rounds; the suffocating trigger then fires it again.")
+  the situation is gone once the head is clear, and in water either oxygen is
+  back at :min-oxygen or the head is in air. After a swim that surfaced
+  (:surfaced in job memory) a body still in water heads for land instead of
+  bobbing: it moves to the nearest land cell within :shore-radius (feet y
+  within one block of the own; feet and head cells air, the cell below solid,
+  i.e. not air, water, lava, fire or magma); done when it stands out of the
+  water, a failed round (:no_shore warn after three) when the move does not
+  get it out, and a clean decline (info :no_shore_near, no warn) when no land
+  is in reach. Gives up (:no_air or :no_way_out warn) after three failed
+  rounds; the suffocating trigger then fires it again.")
 
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
                 :default s/default-min-oxygen}
    :radius {:doc "columns this far sideways are searched for air" :default 2}
-   :reach {:doc "blocks above the feet the search climbs" :default 10}})
+   :reach {:doc "blocks above the feet the search climbs" :default 10}
+   :shore-radius {:doc "after surfacing, land this many blocks sideways is walked to" :default 6}})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
+(defn surfaced-in-water?
+  "A swim surfaced earlier in this job and the body is still in water. A ctx
+  without job memory (no :view) has not surfaced."
+  [c]
+  (boolean (and (:view c)
+                (:surfaced (ctx/mem c))
+                (.-inWater (.self (:primitives c))))))
+
 (defn check [c]
-  (some? (s/situation (:primitives c) (:min-oxygen (:args c)))))
+  (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
+      (surfaced-in-water? c)))
 
 (defn columns
   "Column offsets within radius, the own column first, then by distance."
@@ -69,6 +86,32 @@
 
 (defn status [r] (.-status r))
 
+(def unsafe-below #{"water" "lava" "fire" "soul_fire" "magma_block"})
+
+(defn land-cell?
+  "A feet cell on land: feet and head air, and a solid block below (anything
+  but air, water, lava, fire or magma; an unloaded cell is not land)."
+  [p cell]
+  (let [feet (u/block-name p cell)
+        head (u/block-name p (update cell :y inc))
+        below (u/block-name p (update cell :y dec))]
+    (boolean (and feet head below
+                  (s/air? feet) (s/air? head)
+                  (not (s/air? below)) (not (contains? unsafe-below below))))))
+
+(defn nearest-land
+  "The nearest land cell within radius sideways of self-pos, feet y from one
+  below to one above; nil if none."
+  [p self-pos radius]
+  (let [fx (js/Math.floor (:x self-pos))
+        fy (js/Math.floor (:y self-pos))
+        fz (js/Math.floor (:z self-pos))]
+    (->> (for [[dx dz] (columns radius)
+               dy [0 -1 1]]
+           {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+         (filter #(land-cell? p %))
+         first)))
+
 (defn ^:async swim-up!
   "Drowning: swim up the own column when it reaches air, else walk (through
   water, at the feet's height) to the nearest column that does. True when the
@@ -84,7 +127,9 @@
     (cond
       (nil? target) nil
       (surface-in-column p fx fz fy reach)
-      (= "surfaced" (status (await (ctx/act c :swim #js {}))))
+      (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
+        (when surfaced? (ctx/update-mem! c assoc :surfaced true))
+        surfaced?)
 
       :else
       (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
@@ -104,6 +149,22 @@
             (await (ctx/act c :dig (clj->js {:pos above}))))
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
+(defn ^:async head-for-land!
+  "Surfaced and still in water: walk to the nearest land cell within
+  :shore-radius. :done when out of the water or when no land is in reach
+  (info :no_shore_near); a failed round otherwise."
+  [c]
+  (let [p (:primitives c)
+        radius (:shore-radius (:args c))
+        target (nearest-land p (u/self-pos c) radius)]
+    (if-not target
+      (do (ctx/emit! c :no_shore_near :info {:radius radius :text "no land within reach of the surfaced body"})
+          :done)
+      (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
+        (if (or (= "arrived" (status r)) (not (.-inWater (.self p))))
+          :done
+          (u/fail! c :no_shore "could not reach the nearest shore"))))))
+
 (defn note!
   "Write the :breathe entry once per job instance."
   [c why]
@@ -112,16 +173,25 @@
       (ctx/remember! c :breathe {:why why :pos (u/pos-of (.-pos self)) :oxygen (.-oxygen self)} breathe-policy)
       (ctx/update-mem! c assoc :noted true))))
 
+(defn after-situation
+  "The situation is gone: keep going while surfaced in water (next round heads
+  for land), else done."
+  [c]
+  (if (surfaced-in-water? c) :continue :done))
+
 (defn ^:async round [c]
   (let [min-oxygen (:min-oxygen (:args c))
         why (s/situation (:primitives c) min-oxygen)]
-    (if (nil? why)
-      :done
+    (cond
+      (and (nil? why) (surfaced-in-water? c)) (await (head-for-land! c))
+      (nil? why) :done
+
+      :else
       (do (note! c why)
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (swim-up! c) (dig-out! c)))]
             (cond
-              (nil? (s/situation (:primitives c) min-oxygen)) :done
+              (nil? (s/situation (:primitives c) min-oxygen)) (after-situation c)
               (and drowning? ok) :continue
               drowning? (u/fail! c :no_air "drowning and no air within reach")
               :else (u/fail! c :no_way_out "could not dig out of the block")))))))
