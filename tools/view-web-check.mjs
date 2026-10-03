@@ -1,7 +1,9 @@
 // Headless pixel regression check of the browser view against a synthetic world (tools/view/fixture.mjs).
-//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--web dir]
+//   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--models] [--web dir]
 // --web: serve the page from this directory instead of tools/view/web (e.g. a copy with the shader changed, to prove a check can fail)
 // --ghost: the no-ghost check (tools/view/ghost-fixture.mjs): jump between two places that share window slots and compare with fresh loads.
+// --models: the jar-modelled blocks (tools/view/model-fixture.mjs). Each check must pass with the client jar and FAIL on the old renderer (the
+//   same page served with no jar: `counter` lines); a cubes-only world must render the same either way (the fast path is untouched).
 // Prints PASS|FAIL per check, saves screenshots to --out, exits 1 if a check fails.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -16,9 +18,10 @@ import { faceRegion } from './view/project.mjs'
 import { regionStats, luminance } from './view/stats.mjs'
 import { PLACES, AGENT as GHOST_AGENT, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
 import { decodePng, encodePng } from '../src/vision/renderer.mjs'
+import { MODELS, CUBES, EYE as MODEL_EYE, AGENT as MODEL_AGENT, writeModelWorld } from './view/model-fixture.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false }, web: { type: 'string' } } })
+const { values } = parseArgs({ options: { out: { type: 'string' }, keep: { type: 'boolean', default: false }, lighting: { type: 'boolean', default: false }, ghost: { type: 'boolean', default: false }, models: { type: 'boolean', default: false }, web: { type: 'string' } } })
 
 const WIDTH = 640
 const HEIGHT = 360
@@ -100,8 +103,9 @@ const RUNS = [
   ...(values.lighting ? [{ name: 'night', query: `${BASE_QUERY}&time=18000`, checks: NIGHT }] : [])
 ]
 
-const startServer = async stateDir => {
-  const server = createViewServer({ stateDir, textureDir: path.join(repo, 'textures'), webDir: values.web ? path.resolve(values.web) : path.join(repo, 'tools', 'view', 'web') })
+// blockJar: undefined finds the client jar, null serves the old table (no models)
+const startServer = async (stateDir, blockJar) => {
+  const server = createViewServer({ stateDir, blockJar, textureDir: path.join(repo, 'textures'), webDir: values.web ? path.resolve(values.web) : path.join(repo, 'tools', 'view', 'web') })
   const port = await freePort()
   await new Promise(resolve => server.listen(port, '127.0.0.1', resolve))
   return { server, port }
@@ -193,6 +197,67 @@ const ghostCheck = async outDir => {
   return failures
 }
 
+// ---- jar-modelled blocks ----
+
+const isBrown = ([r, g, b]) => r > g + 8 && g > b + 8 && r > 70
+const isGreen = ([r, g, b]) => g > r + 12 && g > b + 12
+const isDark = ([r, g, b]) => (r + g + b) / 3 < 45
+const MODEL_CHECKS = [
+  { name: 'leaf litter: above it shows what is behind', region: 'litter above', test: s => s.fraction(isRed) > 0.6, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs > 0.6` },
+  { name: 'leaf litter: the ground quad is litter, tinted brown', region: 'litter top', test: s => s.fraction(isBrown) > 0.15, describe: s => `brown ${s.fraction(isBrown).toFixed(2)} vs > 0.15 (mean ${fmt(s.mean)})` },
+  { name: 'stair: the notch shows what is behind', region: 'stair notch', test: s => s.fraction(isRed) > 0.6, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs > 0.6` },
+  { name: 'fence: the gap between the rails shows what is behind', region: 'fence gap', test: s => s.fraction(isRed) > 0.6, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs > 0.6` },
+  { name: 'fence: the rail is wood', region: 'fence arm', test: s => s.fraction(isRed) < 0.3 && s.mean[1] > 80, describe: s => `red ${s.fraction(isRed).toFixed(2)} vs < 0.3, mean ${fmt(s.mean)}` },
+  { name: 'dispenser: the front is on the facing side', legacyDraws: true, region: 'dispenser front', test: s => s.fraction(isDark) > 0.04, describe: s => `dark ${s.fraction(isDark).toFixed(3)} vs > 0.04` },
+  { name: 'dispenser: the other side is plain', region: 'dispenser side', test: s => s.fraction(isDark) < 0.01, describe: s => `dark ${s.fraction(isDark).toFixed(3)} vs < 0.01` },
+  { name: 'grass block: the side overlay is tinted green', region: 'grass fringe', // the grey overlay times the plains colour is darker than the green already in the base texture, which the old renderer shows
+    test: s => s.fraction(isGreen) > 0.4 && s.mean[1] < 100, describe: s => `green ${s.fraction(isGreen).toFixed(2)} vs > 0.4, mean g ${s.mean[1].toFixed(0)} vs < 100 (mean ${fmt(s.mean)})` }
+]
+
+const modelQuery = `agent=${MODEL_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0`
+
+const shootWorld = async ({ outDir, which, blockJar, name }) => {
+  const stateDir = path.join(outDir, `state-${which}`)
+  fs.rmSync(stateDir, { recursive: true, force: true })
+  writeModelWorld(stateDir, which)
+  const { server, port } = await startServer(stateDir, blockJar)
+  try {
+    return await shoot({ port, run: { name, query: modelQuery }, outDir })
+  } finally {
+    server.close()
+    server.closeAllConnections?.()
+  }
+}
+
+const modelRegions = () => {
+  const basis = cameraBasis({ yaw: 0, pitch: 0, fov: FOV })
+  return Object.fromEntries(MODELS.regions.map(({ name, face }) => [name, faceRegion(basis, MODEL_EYE, face, WIDTH, HEIGHT)]))
+}
+
+const modelChecks = async outDir => {
+  let failures = 0
+  const regions = modelRegions()
+  const statsOf = image => Object.fromEntries(Object.entries(regions).map(([name, region]) => [name, regionStats(image, region)]))
+  const modelled = statsOf((await shootWorld({ outDir, which: 'models', blockJar: undefined, name: 'models-jar' })).image)
+  const legacy = statsOf((await shootWorld({ outDir, which: 'models', blockJar: null, name: 'models-legacy' })).image)
+  for (const check of MODEL_CHECKS) {
+    const ok = check.test(modelled[check.region])
+    const counter = check.legacyDraws || !check.test(legacy[check.region]) // a check marked legacyDraws holds for the old renderer too: its pair is the next one
+    if (!ok) failures++
+    if (!counter) failures++
+    console.log(`${ok ? 'PASS' : 'FAIL'} models/${check.name}: ${check.describe(modelled[check.region])}`)
+    if (!check.legacyDraws) console.log(`${counter ? 'PASS' : 'FAIL'} models/counter: ${check.name} fails on the old renderer: ${check.describe(legacy[check.region])}`)
+  }
+  const cubesJar = (await shootWorld({ outDir, which: 'cubes', blockJar: undefined, name: 'cubes-jar' })).image
+  const cubesLegacy = (await shootWorld({ outDir, which: 'cubes', blockJar: null, name: 'cubes-legacy' })).image
+  const { mean, fraction, diff } = compareImages(cubesJar, cubesLegacy)
+  fs.writeFileSync(path.join(outDir, 'cubes-diff.png'), encodePng(WIDTH, HEIGHT, diff))
+  const same = mean <= GHOST_MEAN_MAX && fraction < GHOST_FRACTION_MAX
+  if (!same) failures++
+  console.log(`${same ? 'PASS' : 'FAIL'} cubes/the fast path looks the same with and without the jar: mean abs diff ${mean.toFixed(3)} vs <= ${GHOST_MEAN_MAX}, ${(fraction * 100).toFixed(3)}% pixels over ${GHOST_DIFF_LEVEL} vs < ${GHOST_FRACTION_MAX * 100}%`)
+  return failures
+}
+
 const main = async () => {
   const outDir = values.out ? path.resolve(values.out) : fs.mkdtempSync(path.join(os.tmpdir(), 'view-check-'))
   fs.mkdirSync(outDir, { recursive: true })
@@ -216,6 +281,7 @@ const main = async () => {
       for (const line of logs.slice(0, 5)) console.log(`  console (${run.name}): ${line}`)
     }
     if (values.ghost) failures += await ghostCheck(outDir)
+    if (values.models) failures += await modelChecks(outDir)
   } finally {
     server.close()
     server.closeAllConnections?.()

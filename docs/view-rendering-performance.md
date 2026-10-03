@@ -359,3 +359,49 @@ the game tints the block (cherry leaves, bamboo). `bubble_column` is reported as
 - *Model rules the classifier does not handle* (above). To find them, list the blocks that have a blockstate and a model but
   where the rules gave no verdict they could defend: models with `rotation` on an element, parents outside `block/*`, `display`
   only models; or render every state in a fixture grid and diff against the game, which is the only complete check.
+
+## Block models from the game's own assets
+
+The view draws blocks from the client jar's blockstates and models. The jar is the newest release found in the
+launcher's versions dirs or in `~/.cache/minecraft-agents/client/`, and `$MC_CLIENT_JAR` takes precedence; here it
+is 26.1.2. The bake runs once per version on the server, in `tools/view/block-bake.mjs` and `materials.mjs`:
+- **States:** each state resolves its variant or multipart parts and its model parents, with the x/y rotation and
+  uvlock folded in.
+- **Cubes:** a state that is one full cube stays on the fast path, with six face layers. That puts the dispenser front
+  on the facing side and fixes furnaces, observers and the like.
+- **Other models:** every other state is kind `model`, with an offset into the element table
+  (`GET /elements/<ver>.bin`, RGBA32F, layout in `tools/view/element-table.mjs`; 8,519 distinct elements, 2.2 MB).
+  The shader loops over at most 24 elements per model voxel. It applies the element rotation with rescale, the vanilla
+  uv and face rotation, an alpha test at 0.5, and light from the neighbour cell for faces on the voxel boundary.
+- **Tints:** each face carries a tint group: grass, foliage, dry foliage, water, or a constant from minecraft-data
+  `tints.json`. The colour comes from one shader function, `tintFor()`, which uses fixed per-group colours for now.
+  Per-biome colours come next.
+- **No jar:** the legacy table is used unchanged.
+
+Effect on the log (world claude, 26.1 server, 26.1.2 jar):
+
+| | missing | wrong | approximate |
+| --- | --- | --- | --- |
+| before | 29 | 283 | 645 |
+| after | 0 | 150 (all `block-entity`) | 63 (18 `tint-approximate`, 41 `element-outside-voxel`, 4 partial block entities) |
+
+The `element-outside-voxel` blocks have parts outside their own cell, and those parts are clipped. The visible losses
+are fire flames above the block, sculk sensor tendrils, campfire smoke planes, the pink_petals/wildflowers stems
+reaching into the next cell, and the repeater/comparator/piston knobs.
+
+Checks: `node tools/view-web-check.mjs --models` covers leaf litter flat and tinted, a stair notch, fence gaps, a
+dispenser front, and the grass side overlay. Each check fails on the no-jar page. A world of only full cubes renders
+the same with and without the jar (mean abs diff 0.024, 0 % of pixels over 8). Logs lying along x or z are left out
+of that comparison on purpose: the old renderer mirrored them, and the jar draws them as vanilla does.
+
+Cost at 1920x1080, unthrottled, RTX 3070:
+
+| View | Before | After |
+| --- | --- | --- |
+| Grazing worst case (tall grass, bamboo, kelp, fence wall, low angle) | 0.80 ms | 1.11 ms |
+| Real leaf-litter view | 0.94 ms | 1.34 ms |
+
+Both views stay far above 60 fps.
+
+The software thumbnail renderer (`src/vision/renderer.mjs`, the Node PNG path, and dashboard thumbnails that use it)
+keeps the old look. Block models are browser-only, and that difference is expected, not a bug.

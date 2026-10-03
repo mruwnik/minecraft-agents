@@ -3,8 +3,12 @@
 // with what was seen in the world. Nothing is fixed here; the output is a durable list for whoever fixes them later.
 import tints from 'minecraft-data/minecraft-data/data/pc/26.1/tints.json' with { type: 'json' }
 import { tintOf } from '../../src/vision/renderer.mjs'
+import { COLORMAP_BLOCKS } from './tints.mjs'
+import { OVER_CAP, ELEMENT_CAP } from './materials.mjs'
 
-export const REASONS = ['unknown-state', 'no-texture', 'shape-mismatch', 'shape-approximated', 'tint-missing', 'state-ignored', 'no-model-data', 'block-entity']
+export { COLORMAP_BLOCKS }
+
+export const REASONS = ['unknown-state', 'no-texture', 'shape-mismatch', 'shape-approximated', 'tint-missing', 'state-ignored', 'no-model-data', 'block-entity', 'model-over-cap', 'tint-approximate', 'element-outside-voxel']
 
 // missing: the block vanishes or is a hash colour; wrong: it reads as a different thing; approximate: right place and colour,
 // simplified. Each reason has a default; a record may carry a milder one where the case is milder (see blockRecords).
@@ -17,24 +21,17 @@ const DEFAULT_SEVERITY = {
   'block-entity': 'wrong',
   'shape-approximated': 'approximate',
   'state-ignored': 'approximate',
-  'no-model-data': 'approximate' // nothing is known to be wrong, it is unchecked
+  'no-model-data': 'approximate', // nothing is known to be wrong, it is unchecked
+  'model-over-cap': 'approximate', // the state has more elements than the view draws: its bounding box stands in
+  'element-outside-voxel': 'approximate', // parts of the model lie outside its own voxel; the view draws only what is inside
+  'tint-approximate': 'approximate' // a biome colour drawn as one fixed plains colour
 }
 export const severityOf = reason => DEFAULT_SEVERITY[reason] ?? 'approximate'
 
 // Blocks whose model has geometry but whose book or items the game adds with a block-entity renderer
-// Blocks the game colours with a registered colour provider. A `tintindex` in a model only says a face asks for a tint; the game
-// tints just the blocks it registers (cherry leaves and bamboo have a tintindex and no tint). minecraft-data's tints.json has the
-// constant tints by block name (birch/spruce leaves, lily pad, the stems) and redstone by power; which blocks use the grass,
-// foliage, dry-foliage and water colormaps is not in it, so that part is FROM MEMORY of the game's BlockColors and may be
-// incomplete or stale for 26.1: check it against the game when fixing.
+// Blocks the game colours with a registered colour provider: constant tints by name (minecraft-data's tints.json) and the colormap
+// groups in tools/view/tints.mjs, which says where its list is FROM MEMORY. A `tintindex` in a model only says a face asks for a tint.
 const FROM_DATA = new Set([...tints.constant.data.flatMap(entry => entry.keys), 'redstone_wire'])
-export const COLORMAP_BLOCKS = [
-  'grass_block', 'short_grass', 'tall_grass', 'fern', 'large_fern', 'potted_fern', 'sugar_cane', 'bush', // grass colormap
-  'oak_leaves', 'jungle_leaves', 'acacia_leaves', 'dark_oak_leaves', 'mangrove_leaves', 'vine', // foliage colormap
-  'leaf_litter', // dry foliage
-  'water', 'bubble_column', 'water_cauldron', // water
-  'pink_petals', 'wildflowers' // stem overlay, grass
-]
 const TINTED_BLOCKS = new Set([...FROM_DATA, ...COLORMAP_BLOCKS])
 // bubble_column is water in the game; moving_piston is never drawn as a block
 const WATER_LIKE = new Set(['bubble_column'])
@@ -136,6 +133,10 @@ const range = block => Array.from({ length: block.maxStateId - block.minStateId 
 const describeBox = box => `box [${box.join(',')}]`
 const drawnAs = material => material.kind === 'box' ? describeBox(material.box) : material.kind
 const hasMissingFace = material => material.tex.some(layer => layer < 0)
+// what the view draws from the jar's own model: a six-face cube or an element model (a bounding box when over the element cap)
+const isOverCap = material => ((material.flags ?? 0) & OVER_CAP) !== 0
+const isModelled = material => material.kind === 'model' || material.tex6 !== undefined
+const fromJar = material => isModelled(material) || isOverCap(material)
 
 const sameBox = (element, box) => !element.rotation && same([...element.from, ...element.to].map(v => Math.round(v)), box)
 // a model the drawn box stands for exactly: one unrotated element with the same from/to
@@ -206,17 +207,25 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
   const record = (reason, affected, detail, extra, resolved) => makeRecord(block, reason, affected, materialAt, detail, { total, ...extra }, resolved)
   const records = []
   if (NEVER_DRAWN.has(block.name)) return records
-  if (WATER_LIKE.has(block.name)) return [record('shape-mismatch', ids, `drawn as ${drawnAs(materialAt(ids[0]))}; the game draws it as water`)]
+  if (WATER_LIKE.has(block.name)) return materialAt(ids[0]).kind === 'water' ? [] : [record('shape-mismatch', ids, `drawn as ${drawnAs(materialAt(ids[0]))}; the game draws it as water`)]
 
   const blockstate = models?.blockstates.get(block.name)
   const uses = blockstate ? blockstateUses(blockstate) : null
   const resolved = uses ? uses.models.map(id => ({ id, ...resolveModel(models.models, id) })) : []
 
-  const bare = ids.filter(id => hasMissingFace(materialAt(id)) && !['water', 'lava'].includes(materialAt(id).kind))
+  const isBare = material => {
+    if (material.kind === 'water' || material.kind === 'lava' || isOverCap(material)) return false
+    return isModelled(material) ? (material.noTexture?.length ?? 0) > 0 : hasMissingFace(material)
+  }
+  // no geometry at all (particle-only, builtin/entity): the game draws it with a block-entity renderer, which is the record that matters
+  const entityOnly = resolved.length > 0 && resolved.every(m => m.elements.length === 0)
+  const bare = entityOnly ? [] : ids.filter(id => isBare(materialAt(id)))
   if (bare.length) {
-    const faces = ['top', 'side', 'bottom'].filter((_, i) => materialAt(bare[0]).tex[i] < 0)
+    const first = materialAt(bare[0])
+    const faces = ['top', 'side', 'bottom'].filter((_, i) => first.tex[i] < 0)
     const named = [...new Set(resolved.flatMap(m => Object.values(m.textures)).map(t => textureOf({}, t)).filter(Boolean))]
-    const detail = named.length ? `texture lookup by name failed; the model uses ${named.join(', ')}` : `no texture found for the ${faces.join(', ')} face`
+    const detail = isModelled(first) ? `the model names a texture the texture folder lacks: ${first.noTexture.join(', ')}`
+      : named.length ? `texture lookup by name failed; the model uses ${named.join(', ')}` : `no texture found for the ${faces.join(', ')} face`
     records.push(record('no-texture', bare, detail))
   }
   if (!models || block.name === 'water' || block.name === 'lava') return records
@@ -224,15 +233,14 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
 
   const describe = model => model ? `model ${model.id} (${model.chain.join(' > ')}), ${model.elements.length} element${model.elements.length === 1 ? '' : 's'}` : 'no model'
 
-  // no geometry at all (particle-only, builtin/entity): the game draws it with a block-entity renderer
-  const entityOnly = resolved.length > 0 && resolved.every(m => m.elements.length === 0)
   if (entityOnly || PARTLY_ENTITY.has(block.name)) {
     const detail = entityOnly ? `the model has no elements, the game draws it with a block-entity renderer: ${describe(resolved[0])}` : 'the model has geometry, but its book or items are drawn by a block-entity renderer'
     records.push(record('block-entity', ids, detail, { model: resolved[0]?.id, severity: entityOnly ? undefined : 'approximate' }, resolved))
   }
   if (entityOnly) return records
 
-  const verdicts = ids.map(id => [id, shapeVerdict(resolved, materialAt(id))])
+  const unmodelled = ids.filter(id => !fromJar(materialAt(id)))
+  const verdicts = unmodelled.map(id => [id, shapeVerdict(resolved, materialAt(id))])
   for (const reason of ['shape-mismatch', 'shape-approximated']) {
     const hits = verdicts.filter(([, v]) => v?.reason === reason)
     if (!hits.length) continue
@@ -243,14 +251,21 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
     records.push(record(reason, affected, `drawn as ${drawnAs(materialAt(affected[0]))}; ${describe(offender)}`, { model: offender?.id, severity }, resolved))
   }
 
-  const tinted = !TINTED_BLOCKS.has(block.name) ? [] : [...new Set(resolved.flatMap(tintedTextures))].filter(texture => !tintOf(texture))
+  const tinted = !TINTED_BLOCKS.has(block.name) || !unmodelled.length ? [] : [...new Set(resolved.flatMap(tintedTextures))].filter(texture => !tintOf(texture))
   // an overlay left untinted (the grass block's side) leaves the base drawn right
-  if (tinted.length) records.push(record('tint-missing', ids, `faces ask for a biome tint, none for: ${tinted.join(', ')}`, { severity: tinted.every(t => t.includes('overlay')) ? 'approximate' : undefined }))
+  if (tinted.length) records.push(record('tint-missing', unmodelled, `faces ask for a biome tint, none for: ${tinted.join(', ')}`, { severity: tinted.every(t => t.includes('overlay')) ? 'approximate' : undefined }))
 
-  const honoured = honouredProperties(block, ids, materialOf)
+  const capped = ids.filter(id => isOverCap(materialAt(id)))
+  if (capped.length) records.push(record('model-over-cap', capped, `a state has more than ${ELEMENT_CAP} elements; drawn as the bounding box of them`))
+  const outside = ids.filter(id => materialAt(id).outside)
+  if (outside.length) records.push(record('element-outside-voxel', outside, 'some elements reach outside 0..16 of the block; the view draws only the part inside the voxel'))
+  const biome = ids.filter(id => materialAt(id).tint?.length)
+  if (biome.length) records.push(record('tint-approximate', biome, `faces use a biome colour (${[...new Set(biome.flatMap(id => materialAt(id).tint))].join(', ')}); drawn with one fixed plains colour`))
+
+  const honoured = honouredProperties(block, unmodelled, materialOf)
   const known = new Set(block.states.map(s => s.name))
-  const ignored = uses.properties.filter(p => known.has(p) && !honoured.has(p)).sort()
-  if (ignored.length) records.push(record('state-ignored', ids, `the blockstate depends on ${ignored.join(', ')}; the view draws every value the same`, { ignored }))
+  const ignored = unmodelled.length ? uses.properties.filter(p => known.has(p) && !honoured.has(p)).sort() : []
+  if (ignored.length) records.push(record('state-ignored', unmodelled, `the blockstate depends on ${ignored.join(', ')}; the view draws every value the same`, { ignored }))
   return records
 }
 

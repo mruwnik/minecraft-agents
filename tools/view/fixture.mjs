@@ -86,21 +86,25 @@ export const lightAt = (x, y, z) => {
   return { sky: 15, block: 0 }
 }
 
-const stateIds = (registry, names) => {
+// keys name a block, or a block with properties when `states` maps the key to { name, props }
+const stateIds = (registry, keys, states = {}) => {
   const Block = prismarineBlock(registry)
-  return Object.fromEntries(names.map(name => [name, STATES[name] ? Block.fromProperties(name, STATES[name], 0).stateId : registry.blocksByName[name].defaultState]))
+  return Object.fromEntries(keys.map(key => {
+    const { name, props } = states[key] ?? { name: key, props: STATES[key] }
+    return [key, props ? Block.fromProperties(name, props, 0).stateId : registry.blocksByName[name].defaultState]
+  }))
 }
 
 // the column's light dump written straight in vanilla nibble order (cell i of a section: byte i >> 1, low nibble when i is
 // even); prismarine's setSkyLight/setBlockLight scramble the order inside each 16-cell row. Light section l covers the
 // layer l - 1 above the lowest section, so l = 0 and the top one stay empty (sky mask bits 1..numSections).
-const lightDump = (cx, cz) => {
+const lightDump = (cx, cz, light) => {
   const sections = WORLD_HEIGHT >> 4
   const buffers = key => Array.from({ length: sections }, (_, s) => {
     const buffer = Buffer.alloc(LIGHT_SECTION_BYTES)
     for (let i = 0; i < 4096; i++) {
-      const light = lightAt(cx * 16 + (i & 15), MIN_Y + s * 16 + (i >> 8), cz * 16 + ((i >> 4) & 15))
-      buffer[i >> 1] |= light[key] << ((i & 1) * 4)
+      const at = light(cx * 16 + (i & 15), MIN_Y + s * 16 + (i >> 8), cz * 16 + ((i >> 4) & 15))
+      buffer[i >> 1] |= at[key] << ((i & 1) * 4)
     }
     return buffer
   })
@@ -108,20 +112,20 @@ const lightDump = (cx, cz) => {
   return { skyLight: buffers('sky'), blockLight: buffers('block'), skyLightMask: mask, blockLightMask: mask, emptySkyLightMask: [[0, 0]], emptyBlockLightMask: [[0, 0]] }
 }
 
-const buildColumn = (Chunk, ids, cx, cz) => {
+const buildColumn = (Chunk, ids, cx, cz, blockAt, light) => {
   const column = new Chunk({ minY: MIN_Y, worldHeight: WORLD_HEIGHT })
   for (let lx = 0; lx < 16; lx++) {
     for (let lz = 0; lz < 16; lz++) {
       for (let y = MIN_Y; y < MIN_Y + WORLD_HEIGHT; y++) {
         const x = cx * 16 + lx
         const z = cz * 16 + lz
-        const name = blockNameAt(x, y, z)
+        const name = blockAt(x, y, z)
         const at = { x: lx, y, z: lz }
         if (name !== 'air') column.setBlockStateId(at, ids[name])
       }
     }
   }
-  column.dumpLight = () => lightDump(cx, cz)
+  column.dumpLight = () => lightDump(cx, cz, light)
   return column
 }
 
@@ -130,21 +134,30 @@ const writeJson = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data))
 }
 
-export const poseFor = now => ({
-  v: 1, t: now, world: WORLD, status: 'online', dimension: 'overworld', mcVersion: MC_VERSION,
-  pos: { x: FIXTURE.eye.x, y: 65, z: FIXTURE.eye.z }, eye: FIXTURE.eye, yaw: FIXTURE.yaw, pitch: FIXTURE.pitch,
+export const poseFor = (now, { eye = FIXTURE.eye, yaw = FIXTURE.yaw, pitch = FIXTURE.pitch, world = WORLD } = {}) => ({
+  v: 1, t: now, world, status: 'online', dimension: 'overworld', mcVersion: MC_VERSION,
+  pos: { x: eye.x, y: 65, z: eye.z }, eye, yaw, pitch,
   velocity: { x: 0, y: 0, z: 0 }, onGround: true, entities: [], timeOfDay: 6000, rain: 0
 })
 
-export const writeFixture = stateDir => {
+// Writes a world of four columns (chunks CHUNKS) for one agent: blockAt(x, y, z) names a block (a key of `states`, or a block name),
+// light(x, y, z) is { sky, block }, camera is the pose ({ eye, yaw, pitch }).
+export const writeWorld = ({ stateDir, world = WORLD, agent = AGENT, blockAt, light, states = {}, camera = FIXTURE, keys }) => {
   const Chunk = makeChunkClass(MC_VERSION)
-  const ids = stateIds(Chunk.registry, ['stone', 'oak_leaves', 'red_wool', 'diamond_ore', 'oak_slab', 'snow', 'gold_block', 'glass', GLASS_BACK])
+  const ids = stateIds(Chunk.registry, keys, states)
   for (const [cx, cz] of CHUNKS) {
-    const file = columnFile(stateDir, WORLD, cx, cz)
+    const file = columnFile(stateDir, world, cx, cz)
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    const raw = encodeColumn({ column: buildColumn(Chunk, ids, cx, cz), x: cx, z: cz, t: Date.now(), body: AGENT, mcVersion: MC_VERSION })
+    const raw = encodeColumn({ column: buildColumn(Chunk, ids, cx, cz, blockAt, light), x: cx, z: cz, t: Date.now(), body: agent, mcVersion: MC_VERSION })
     fs.writeFileSync(file, zlib.deflateSync(raw, { level: 1 }))
   }
-  writeJson(poseFile(stateDir, AGENT), poseFor(Date.now()))
-  writeJson(hudFile(stateDir, AGENT), { v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null })
+  writeJson(poseFile(stateDir, agent), poseFor(Date.now(), { ...camera, world }))
+  writeJson(hudFile(stateDir, agent), { v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null })
 }
+
+export const writeFixture = stateDir => writeWorld({
+  stateDir,
+  blockAt: blockNameAt,
+  light: lightAt,
+  keys: ['stone', 'oak_leaves', 'red_wool', 'diamond_ore', 'oak_slab', 'snow', 'gold_block', 'glass', GLASS_BACK]
+})

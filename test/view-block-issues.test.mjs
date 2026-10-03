@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import prismarineRegistry from 'prismarine-registry'
-import { REASONS, SEVERITIES, COLORMAP_BLOCKS, classifyStatic, mergeSeen } from '../tools/view/block-issues.mjs'
+import { REASONS, SEVERITIES, COLORMAP_BLOCKS, classifyStatic, mergeSeen, severityOf } from '../tools/view/block-issues.mjs'
 
 const enumState = (name, values) => ({ name, type: 'enum', num_values: values.length, values })
 const boolState = name => ({ name, type: 'bool', num_values: 2 })
@@ -82,7 +82,41 @@ const STONE = modelsWith(
 const reasonsOf = records => records.map(r => r.reason).sort()
 
 test('REASONS is the fixed list', () => {
-  assert.deepEqual(REASONS, ['unknown-state', 'no-texture', 'shape-mismatch', 'shape-approximated', 'tint-missing', 'state-ignored', 'no-model-data', 'block-entity'])
+  assert.deepEqual(REASONS, ['unknown-state', 'no-texture', 'shape-mismatch', 'shape-approximated', 'tint-missing', 'state-ignored', 'no-model-data', 'block-entity', 'model-over-cap', 'tint-approximate', 'element-outside-voxel'])
+})
+
+// ---- what the view draws from the jar's own models ----
+
+const MODEL_MATERIAL = { name: 'x', kind: 'model', tex: [-1, -1, -1], box: [0, 0, 0, 16, 16, 16], flags: 0, elemOffset: 0, elemCount: 1 }
+const SIX_MATERIAL = { name: 'x', kind: 'cube', tex: [-1, -1, -1], tex6: [1, 1, 2, 2, 2, 2], box: [0, 0, 0, 16, 16, 16], flags: 128 }
+const OVER_CAP_MATERIAL = { name: 'x', kind: 'box', tex: [1, 1, 1], box: [0, 0, 0, 16, 16, 16], flags: 256 }
+const WATER_MATERIAL = { name: 'x', kind: 'water', tex: [1, 1, 1], box: [0, 0, 0, 16, 16, 16], flags: 0 }
+
+const drawnFromJar = [
+  ['an element model draws every property of leaf_litter right', 'leaf_litter', [FACING, SEGMENTS], MODEL_MATERIAL, LEAF_LITTER, []],
+  ['an element model with a biome tint is only tint-approximate', 'leaf_litter', [FACING, SEGMENTS], { ...MODEL_MATERIAL, tint: ['dry_foliage'] }, LEAF_LITTER, ['tint-approximate']],
+  ['a six-face cube is fine', 'stone', [], SIX_MATERIAL, STONE, []],
+  ['a state over the element cap is model-over-cap', 'leaf_litter', [FACING], OVER_CAP_MATERIAL, LEAF_LITTER, ['model-over-cap']],
+  ['a model with parts outside its voxel is element-outside-voxel', 'leaf_litter', [FACING], { ...MODEL_MATERIAL, outside: true }, LEAF_LITTER, ['element-outside-voxel']],
+  ['a face texture the folder lacks is no-texture', 'stone', [], { ...SIX_MATERIAL, noTexture: ['all'] }, STONE, ['no-texture']],
+  ['bubble_column drawn as water is fine', 'bubble_column', [], WATER_MATERIAL, STONE, []]
+]
+for (const [name, block, states, material, models, expected] of drawnFromJar) {
+  test(name, () => {
+    const records = classify({ defs: [[block, states]], material, models })
+    assert.deepEqual(reasonsOf(records), expected)
+  })
+}
+
+test('a model-over-cap record and a tint-approximate record are approximate', () => {
+  assert.equal(severityOf('model-over-cap'), 'approximate')
+  assert.equal(severityOf('tint-approximate'), 'approximate')
+  assert.equal(severityOf('element-outside-voxel'), 'approximate')
+})
+
+test('a block entity keeps its old material and is reported once, as a block-entity, not as no-texture', () => {
+  const models = modelsWith({ chest: { variants: { '': { model: 'minecraft:block/chest' } } } }, { 'block/chest': { textures: { particle: 'block/oak_planks' } } })
+  assert.deepEqual(reasonsOf(classify({ defs: [['chest', []]], material: BARE_MATERIAL, models })), ['block-entity'])
 })
 
 test('a leaf_litter-like block drawn as a cross is a shape mismatch, untinted and ignores its properties', () => {
@@ -326,11 +360,16 @@ test('the real 26.1 table classifies vanilla blocks sensibly', { skip: !haveReal
   const { records } = classifyReal({ version: '26.1', textureDir: path.join(root, 'textures'), jarPath })
   const flagged = name => new Set(records.filter(r => r.name === name).map(r => r.reason))
   assert.deepEqual([...flagged('poppy')], [])
-  assert.deepEqual([...flagged('short_grass')], [])
+  assert.deepEqual([...flagged('short_grass')], ['tint-approximate'])
   assert.deepEqual([...flagged('stone')], [])
-  for (const [name, reason] of [['leaf_litter', 'shape-mismatch'], ['leaf_litter', 'tint-missing'], ['pink_petals', 'shape-mismatch'], ['wildflowers', 'shape-mismatch'], ['oak_stairs', 'shape-approximated']]) {
-    assert.ok(flagged(name).has(reason), `${name} ${reason}`)
+  // drawn from the jar's own models: no shape, state or tint-missing records, only what is still approximate
+  for (const name of ['leaf_litter', 'pink_petals', 'wildflowers', 'oak_stairs', 'oak_fence', 'dispenser', 'bubble_column', 'oak_leaves']) {
+    assert.deepEqual([...flagged(name)].filter(r => ['shape-mismatch', 'shape-approximated', 'state-ignored', 'tint-missing', 'no-texture'].includes(r)), [], name)
   }
+  assert.ok(flagged('leaf_litter').has('tint-approximate'))
+  assert.ok(!flagged('redstone_wire').has('model-over-cap') && !flagged('pink_petals').has('model-over-cap'))
+  assert.ok(flagged('pink_petals').has('element-outside-voxel'))
+  assert.ok(flagged('chest').has('block-entity'))
 })
 
 test('every block in the from-memory colormap list exists in the 26.1 registry', () => {

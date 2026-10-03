@@ -91,6 +91,6 @@ export const withPage = async ({ url, width, height, timeoutMs = 90000 }, fn) =>
   } finally {
     cdp?.close()
     chromium.kill('SIGKILL')
-    fs.rmSync(profile, { recursive: true, force: true })
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) // the killed browser may still be writing
   }
 }

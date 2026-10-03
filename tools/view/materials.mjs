@@ -4,8 +4,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
-import { textureSet, SIZE, LEVELS } from './textures.mjs'
+import { textureSet, decodeTexture, SIZE, LEVELS } from './textures.mjs'
 import { decodePng, textureCandidates, tintOf, colorOf } from '../../src/vision/renderer.mjs'
+import { findClientJar, zipEntries, entryContent } from './jar-read.mjs'
+import { loadModels } from './block-models.mjs'
+import { bakeAll, classify } from './block-bake.mjs'
+import { tintRef, tintTable, dryFoliageColor, APPROXIMATE_GROUPS, TINT_GROUPS } from './tints.mjs'
+import { packElementTable, FACE_DIRS, TABLE_WIDTH } from './element-table.mjs'
 
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FACES = [['top', 'top'], ['side', 'side'], ['bottom', 'bottom']]
@@ -17,6 +22,14 @@ export const AXIS_X = 4
 export const AXIS_Z = 8
 export const EMISSIVE = 16
 export const CULL_SAME = 32 // no face between two blocks of this material
+export const SIX_FACES = 128 // a cube from the jar: tex6 / rot6 are its six faces (up, down, north, south, east, west); tex is unused
+export const OVER_CAP = 256 // a model state with more than ELEMENT_CAP elements, drawn as the bounding box of its elements
+
+// elements the shader loops over for one model voxel
+export const ELEMENT_CAP = 24
+const MAX_LAYER = 4094 // layer + 1 and a quarter-turn count share 16 bits in the info texture
+const WATER_LIKE = new Set(['water', 'lava', 'bubble_column'])
+const FULL_UV = [0, 0, 16, 16]
 
 // collision shapes are not the visual shape: these blocks are drawn differently from how they collide
 const FULL_CUBES = new Set(['powder_snow', 'soul_sand', 'mud', 'honey_block'])
@@ -36,6 +49,7 @@ const boxOf = (block, props) => {
 }
 
 const shapeOf = (block, props) => {
+  if (block.name === 'bubble_column') return { kind: 'water', box: FULL } // water in the game
   if (block.name === 'water' || block.name === 'lava') return { kind: block.name, box: FULL }
   const box = boxOf(block, props)
   if (!box) return { kind: 'cross', box: FULL }
@@ -82,15 +96,34 @@ const flagsOf = (block, props, kind, cutout, emitLight) => {
     (emitLight > 0 && props.lit !== false ? EMISSIVE : 0)
 }
 
-// one build gives the table and the texture bytes, so layer indices always agree
-export function textureBytes (version, textureDir) {
+const hex = rgb => rgb.map(v => v.toString(16).padStart(2, '0')).join('')
+const isCube = element => !element.rotation && element.from.every(v => v === 0) && element.to.every(v => v === 16) && FACE_DIRS.every(dir => element.faces[dir]?.uv.every((v, i) => v === FULL_UV[i]))
+const unionBox = elements => {
+  const lo = [0, 1, 2].map(i => Math.min(...elements.map(e => e.from[i])))
+  const hi = [0, 1, 2].map(i => Math.max(...elements.map(e => e.to[i])))
+  return [...lo, ...hi].map(v => Math.round(Math.min(16, Math.max(0, v))))
+}
+
+// the jar's blockstates and models baked per state id, and the dry foliage colour from its colormap
+const readJar = (jarPath, registry) => {
+  const models = loadModels(jarPath)
+  const buf = fs.readFileSync(jarPath)
+  const colormap = zipEntries(buf).find(e => e.name === 'assets/minecraft/textures/colormap/dry_foliage.png')
+  const dry = dryFoliageColor(colormap ? decodePng(entryContent(buf, colormap)) : null)
+  return { baked: bakeAll(registry, models).states, tints: tintTable({ dry }) }
+}
+
+// One build gives the table, the texture bytes and the element table, so layer indices always agree.
+// With a client jar (jarPath, default findClientJar()) a state the jar models is drawn from its blockstate and models: a plain cube
+// with six face layers, or kind `model` with a list of elements in the element table. With jarPath null every block is drawn as before.
+export function textureBytes (version, textureDir, { jarPath = findClientJar() } = {}) {
   const registry = prismarineRegistry(version)
   const Block = prismarineBlock(registry)
   const images = new Map()
   const image = name => {
     if (images.has(name)) return images.get(name)
     const file = path.join(textureDir, `${name}.png`)
-    const found = fs.existsSync(file) ? decodePng(fs.readFileSync(file)) : null
+    const found = fs.existsSync(file) ? decodeTexture(fs.readFileSync(file)) : null
     images.set(name, found)
     return found
   }
@@ -101,7 +134,7 @@ export function textureBytes (version, textureDir) {
     if (!layerIndex.has(name)) layerIndex.set(name, layerNames.push(name) - 1)
     return layerIndex.get(name)
   }
-  const faceTexture = (block, kind, face, props) => textureCandidates(block.name, kind === 'cross' ? 'cross' : face, props).find(n => image(n))
+  const faceTexture = (block, kind, face, props) => textureCandidates(block.name === 'bubble_column' ? 'water' : block.name, kind === 'cross' ? 'cross' : face, props).find(n => image(n))
   const faceColor = (block, kind, textureName) => {
     const fallback = () => [...(colorOf(block.name) ?? hashColor(block.name)), alphaFor(kind, 1)]
     if (!textureName) return fallback()
@@ -122,10 +155,61 @@ export function textureBytes (version, textureDir) {
     return { name: block.name, kind, tex: names.map(layerFor), box, flags, emit: emitLight, ...Object.fromEntries(colors) }
   }
 
+  const jar = jarPath ? readJar(jarPath, registry) : null
+  // blocks with a state that has geometry: their empty states are drawn as nothing; a block with none is a block entity
+  const hasGeometry = new Set(jar ? [...jar.baked].filter(([, b]) => b.elements.length > 0).map(([id]) => Block.fromStateId(id, 0).name) : [])
+  const lists = []
+  const listIndex = new Map()
+  const stats = { overCapStates: 0 }
+  // textures are untinted layers (the shader multiplies by the face's tint group); a texture the renderer's name list would tint gets an explicit white
+  const faceLayer = (block, props, face) => {
+    if (!face.texture || !image(face.texture)) return { layer: -1, tint: 'none', tintIndex: 0, texture: face.texture }
+    const ref = tintRef(block.name, props, face.tintindex)
+    return { layer: layerFor(tintOf(face.texture) ? `${face.texture}@ffffff` : face.texture), tint: ref?.group ?? 'none', tintIndex: ref?.index ?? 0, texture: face.texture }
+  }
+  // null: the blockstate selects nothing for this state (a wall with no post and no sides), and the game draws nothing
+  const bakedMaterial = (block, props, baked, base) => {
+    if (baked.elements.length === 0 && /multipart \[\]$|no matching variant$/.test(baked.source)) return null
+    if (WATER_LIKE.has(block.name)) return base
+    if (classify(baked) === 'empty') return hasGeometry.has(block.name) ? null : base
+    const resolved = baked.elements.map(element => Object.fromEntries(FACE_DIRS.filter(dir => element.faces[dir]).map(dir => [dir, faceLayer(block, props, element.faces[dir])])))
+    const used = resolved.flatMap(faces => Object.values(faces))
+    const groups = APPROXIMATE_GROUPS.filter(g => used.some(f => f.tint === g))
+    const missing = [...new Set(used.filter(f => f.layer < 0).map(f => f.texture ?? '?'))]
+    const outside = baked.elements.some(e => e.from.some(v => v < 0) || e.to.some(v => v > 16))
+    const notes = { ...(groups.length ? { tint: groups } : {}), ...(missing.length ? { noTexture: missing } : {}), ...(outside ? { outside: true } : {}) }
+    const { top, side, bottom } = base
+    const common = { name: block.name, emit: base.emit, ...notes }
+    const colors = { top, side, bottom }
+    const flags = kind => flagsOf(block, props, kind, used.some(f => f.layer >= 0 && hasCutout(image(f.texture))), base.emit) & ~(AXIS_X | AXIS_Z)
+    if (baked.elements.length > ELEMENT_CAP) {
+      stats.overCapStates++
+      return { ...common, ...colors, kind: 'box', tex: base.tex, box: unionBox(baked.elements), flags: base.flags | OVER_CAP }
+    }
+    if (classify(baked) === 'cube' && isCube(baked.elements[0]) && used.length === 6) {
+      const faces = FACE_DIRS.map(dir => baked.elements[0].faces[dir])
+      const turns = faces.map(f => f.rotation / 90)
+      const tint6 = FACE_DIRS.map(dir => TINT_GROUPS.indexOf(resolved[0][dir].tint) + 8 * resolved[0][dir].tintIndex)
+      return { ...common, ...colors, kind: 'cube', tex: [-1, -1, -1], tex6: FACE_DIRS.map((_, i) => resolved[0][FACE_DIRS[i]].layer), ...(turns.some(Boolean) ? { rot6: turns } : {}), ...(tint6.some(Boolean) ? { tint6 } : {}), box: FULL, flags: flags('cube') | SIX_FACES }
+    }
+    const tableElements = baked.elements.map((element, i) => ({
+      from: element.from,
+      to: element.to,
+      rotation: element.rotation,
+      shade: element.shade,
+      faces: Object.fromEntries(Object.entries(resolved[i]).filter(([, f]) => f.layer >= 0).map(([dir, f]) => [dir, { layer: f.layer, uv: element.faces[dir].uv, rotation: element.faces[dir].rotation, tint: f.tint, ...(f.tintIndex ? { tintIndex: f.tintIndex } : {}), cullface: element.faces[dir].cullface }]))
+    }))
+    const key = JSON.stringify(tableElements)
+    if (!listIndex.has(key)) listIndex.set(key, lists.push(tableElements) - 1)
+    return { ...common, kind: 'model', tex: [-1, -1, -1], box: unionBox(baked.elements), flags: flags('model'), list: listIndex.get(key) }
+  }
+
   const materials = [{ name: 'air', kind: 'cube', tex: [-1, -1, -1], box: FULL, flags: 0, emit: 0, top: [0, 0, 0, 0], side: [0, 0, 0, 0], bottom: [0, 0, 0, 0] }]
   const byKey = new Map()
-  const materialIndex = block => {
-    const material = describe(block)
+  const materialIndex = (block, id) => {
+    const baked = jar?.baked.get(id)
+    const material = baked ? bakedMaterial(block, block.getProperties(), baked, describe(block)) : describe(block)
+    if (material === null) return 0
     const key = JSON.stringify(material)
     if (byKey.has(key)) return byKey.get(key)
     materials.push(material)
@@ -137,16 +221,25 @@ export function textureBytes (version, textureDir) {
   const materialOf = new Uint16Array(stateCount)
   for (let id = 0; id < stateCount; id++) {
     const block = Block.fromStateId(id, 0)
-    materialOf[id] = AIR.has(block.name) ? 0 : materialIndex(block)
+    materialOf[id] = AIR.has(block.name) ? 0 : materialIndex(block, id)
   }
+  if (layerNames.length > MAX_LAYER) throw new Error(`${layerNames.length} texture layers: the info texture packs at most ${MAX_LAYER}`)
+  const packed = lists.length ? packElementTable(lists) : null
+  materials.forEach(material => {
+    if (material.list === undefined) return
+    ;[material.elemOffset, material.elemCount] = packed.ranges[material.list]
+    delete material.list
+  })
   const table = {
     version,
     stateCount,
     materialOf: Buffer.from(materialOf.buffer).toString('base64'),
     materials,
-    textures: { size: SIZE, levels: LEVELS, names: layerNames }
+    textures: { size: SIZE, levels: LEVELS, names: layerNames },
+    ...(jar ? { tints: jar.tints } : {}),
+    ...(packed ? { elements: { width: TABLE_WIDTH, rows: packed.rows, listTexels: packed.listTexels, count: packed.elementCount, ids: packed.idCount, overCapStates: stats.overCapStates } } : {})
   }
-  return { table, textures: textureSet(textureDir, layerNames) }
+  return { table, textures: textureSet(textureDir, layerNames), elements: packed?.data ?? null }
 }
 
-export const materialTable = (version, textureDir) => textureBytes(version, textureDir).table
+export const materialTable = (version, textureDir, options) => textureBytes(version, textureDir, options).table

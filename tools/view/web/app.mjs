@@ -91,10 +91,15 @@ const decodeBase64U16 = text => {
 }
 
 const loadTable = async version => {
-  const [res, texRes] = await Promise.all([fetch(`/blocks/${version}.json${debugOn ? `?debug=${debugLevel}` : ''}`), fetch(`/textures/${version}.bin`)])
+  const [res, texRes, elemRes] = await Promise.all([fetch(`/blocks/${version}.json${debugOn ? `?debug=${debugLevel}` : ''}`), fetch(`/textures/${version}.bin`), fetch(`/elements/${version}.bin`)])
   if (!res.ok) throw new Error(`blocks table for ${version}: HTTP ${res.status}`)
   if (!texRes.ok) throw new Error(`textures for ${version}: HTTP ${texRes.status}`)
   const [json, bytes] = await Promise.all([res.json(), texRes.arrayBuffer()])
+  if (json.tints) gfx.setTints(json.tints)
+  if (json.elements) {
+    if (!elemRes.ok) throw new Error(`elements for ${version}: HTTP ${elemRes.status}`)
+    gfx.setElements({ data: new Float32Array(await elemRes.arrayBuffer()), width: json.elements.width, rows: json.elements.rows, listTexels: json.elements.listTexels })
+  }
   state.table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
   decoder.setTable({ format: json.format, materialOf: state.table.materialOf })
   gfx.setMaterials(json.materials.map(m => ({ ...m, issue: ISSUE_LEVELS.indexOf(m.issue) >= 0 && ISSUE_LEVELS.indexOf(m.issue) <= debugLevel })))

@@ -3,10 +3,13 @@
 import { SHADING_GLSL } from './shading.mjs'
 
 export const MAX_ENTITIES = 64
-export const KINDS = { cube: 0, box: 1, cross: 2, water: 3, lava: 4 }
+export const KINDS = { cube: 0, box: 1, cross: 2, water: 3, lava: 4, model: 5 }
+export const ELEMENT_CAP = 24 // elements looped per model voxel; tools/view/materials.mjs caps a state at the same number
 const MATERIAL_COLUMNS = 4 // top, side, bottom, kind
 const ISSUE_FLAG = 64 // the table's `issue` as a material flag, read by debugColor in the shader
-const INFO_TEXELS = 4 // per material: layers+kind, flags+emit, box min, box max
+const INFO_TEXELS = 8 // per material: layers+kind, flags+emit, box min, box max, up/down/north/south, east/west/elemOffset/elemCount, tints up..south, tints east/west
+const TINT_GROUP_NAMES = ['none', 'grass', 'foliage', 'dry_foliage', 'water', 'constant'] // tools/view/tints.mjs TINT_GROUPS
+const ELEMENT_TEXELS = 15 // tools/view/element-table.mjs documents the element layout the shader reads
 
 const VERTEX = `#version 300 es
 void main () {
@@ -25,6 +28,10 @@ uniform usampler3D uCoarse;
 uniform usampler3D uLightTex;
 uniform sampler2D uMats;
 uniform usampler2D uInfo;
+uniform sampler2D uElems;
+uniform int uElemBase;
+uniform vec3 uTintGroups[6];
+uniform vec3 uTintConst[32];
 uniform sampler2DArray uTex;
 uniform float uLodMax;
 uniform vec2 uRes;
@@ -50,6 +57,8 @@ const uint CUTOUT = 1u;
 const uint TRANSLUCENT = 2u;
 const uint EMISSIVE = 16u;
 const uint ISSUE = 64u;
+const uint SIX_FACES = 128u;
+const int ELEMENT_CAP = ${ELEMENT_CAP};
 
 // ?debug=1: a material the view draws wrong (flag set from the table's issue field) is a magenta/black checker, two texels a square
 vec3 debugColor (vec3 col, uint flags, vec2 uv) {
@@ -157,6 +166,120 @@ bool crossHit (vec3 lo, vec3 dd, float t, uint layerCode, out float sHit, out ve
   return found;
 }
 
+// The colour a face with this tint group (0 none, 1 grass, 2 foliage, 3 dry foliage, 4 water, 5 constant + its table index) is
+// multiplied by. Stage 1: one fixed colour per group; a per-biome lookup at the cell replaces it here and nowhere else.
+vec3 tintFor (uint group, uint constIdx, ivec3 cell) {
+  if (group == 5u) return uTintConst[min(constIdx, 31u)];
+  return uTintGroups[min(group, 5u)];
+}
+
+// ---- model elements (kind 5): the element table of tools/view/element-table.mjs ----
+
+vec4 elemTexel (int lin) {
+  return texelFetch(uElems, ivec2(lin & 1023, lin >> 10), 0);
+}
+
+// right-handed rotation by a radians about axis 1 x, 2 y, 3 z
+vec3 rotAbout (vec3 v, int axis, float a) {
+  float c = cos(a);
+  float s = sin(a);
+  if (axis == 1) return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c);
+  if (axis == 2) return vec3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c);
+  return vec3(v.x * c - v.y * s, v.x * s + v.y * c, v.z);
+}
+
+// where the point (element frame) sits on the face f (0 up, 1 down, 2 north, 3 south, 4 east, 5 west), in vanilla's uv frame, 0..1 each
+vec2 faceFrac (int f, vec3 p, vec3 lo, vec3 hi) {
+  vec3 q = (p - lo) / max(hi - lo, vec3(1e-4));
+  if (f == 0) return vec2(q.x, q.z);
+  if (f == 1) return vec2(q.x, 1.0 - q.z);
+  if (f == 2) return vec2(1.0 - q.x, 1.0 - q.y);
+  if (f == 3) return vec2(q.x, 1.0 - q.y);
+  if (f == 4) return vec2(1.0 - q.z, 1.0 - q.y);
+  return vec2(q.z, 1.0 - q.y);
+}
+
+// the texture of a face turned r quarter turns clockwise
+vec2 rotFrac (vec2 f, int r) {
+  if (r == 1) return vec2(f.y, 1.0 - f.x);
+  if (r == 2) return vec2(1.0 - f.x, 1.0 - f.y);
+  if (r == 3) return vec2(1.0 - f.y, f.x);
+  return f;
+}
+
+float modelShade (vec3 n) {
+  float up = max(n.y, 0.0);
+  float down = max(-n.y, 0.0);
+  return up * up + down * down * 0.5 + n.z * n.z * 0.8 + n.x * n.x * 0.6;
+}
+
+// The nearest element face a ray meets inside one voxel: lo is the eye in the voxel's own 0..1 space, dd the ray, [t, tExit] the span
+// inside the voxel. Each element is tested in its own frame (rotated, rescaled), the entry face is textured, and a texel under alpha 0.5
+// lets the ray pass. Returns the ray distance, the colour, the face normal in block space and whether the element is rotated.
+bool modelHit (vec3 lo, vec3 dd, float t, float tExit, int offset, int count, vec3 dirW, ivec3 cell, out float sBest, out vec3 rgb, out vec3 nBest, out bool rotated, out bool shaded) {
+  bool found = false;
+  sBest = 1e30;
+  rgb = vec3(0.0);
+  nBest = vec3(0.0, 1.0, 0.0);
+  rotated = false;
+  shaded = true;
+  for (int k = 0; k < ELEMENT_CAP; k++) {
+    if (k >= count) break;
+    int li = offset + k;
+    int id = int(elemTexel(li >> 2)[li & 3] + 0.5);
+    int base = uElemBase + id * ${ELEMENT_TEXELS};
+    vec4 a = elemTexel(base);
+    vec4 b = elemTexel(base + 1);
+    int eflags = int(b.w + 0.5);
+    int axisR = eflags & 3;
+    vec3 p = lo * 16.0;
+    vec3 dv = dd * 16.0;
+    float ang = radians(a.w);
+    if (axisR != 0) {
+      vec3 origin = elemTexel(base + 2).xyz;
+      p -= origin;
+      if ((eflags & 4) != 0) {
+        vec3 sc = vec3(cos(ang));
+        sc[axisR - 1] = 1.0;
+        p *= sc;
+        dv *= sc;
+      }
+      p = rotAbout(p, axisR, -ang) + origin;
+      dv = rotAbout(dv, axisR, -ang);
+    }
+    vec3 dsafe = vec3(abs(dv.x) < 1e-7 ? 1e-7 : dv.x, abs(dv.y) < 1e-7 ? 1e-7 : dv.y, abs(dv.z) < 1e-7 ? 1e-7 : dv.z);
+    vec3 e1 = (a.xyz - p) / dsafe;
+    vec3 e2 = (b.xyz - p) / dsafe;
+    vec3 en = min(e1, e2);
+    vec3 ef = max(e1, e2);
+    float sIn = max(max(en.x, en.y), en.z);
+    float sOut = min(min(ef.x, ef.y), ef.z);
+    if (sIn > sOut || sIn < t - 1e-4 || sIn > tExit + 1e-4 || sIn > sBest + 1e-4) continue; // a later element wins a tie: an overlay over its base
+    int ax = en.x >= en.y && en.x >= en.z ? 0 : (en.y >= en.z ? 1 : 2);
+    bool positive = dsafe[ax] < 0.0; // entering through the max side: the face looks along +axis
+    int f = ax == 1 ? (positive ? 0 : 1) : (ax == 2 ? (positive ? 3 : 2) : (positive ? 4 : 5));
+    vec4 fa = elemTexel(base + 3 + 2 * f);
+    int layerCode = int(fa.x + 0.5);
+    if (layerCode == 0) continue;
+    vec4 fuv = elemTexel(base + 4 + 2 * f);
+    vec3 hp = p + dsafe * sIn;
+    vec2 fr = rotFrac(faceFrac(f, hp, a.xyz, b.xyz), int(fa.y + 0.5));
+    vec3 ne = vec3(0.0);
+    ne[ax] = positive ? 1.0 : -1.0;
+    vec3 nw = axisR != 0 ? rotAbout(ne, axisR, ang) : ne;
+    vec4 c = texAt(uint(layerCode), mix(fuv.xy, fuv.zw, fr) / 16.0, lodAt(sIn, dot(dirW, nw)));
+    if (c.a < 0.5) continue;
+    found = true;
+    sBest = sIn;
+    int tintCode = int(fa.z + 0.5);
+    rgb = c.rgb * tintFor(uint(tintCode & 7), uint(tintCode >> 3), cell);
+    nBest = nw;
+    rotated = axisR != 0;
+    shaded = (eflags & 8) == 0;
+  }
+  return found;
+}
+
 vec3 skyColor (vec3 d) {
   float up = clamp(d.y, 0.0, 1.0);
   vec3 day = mix(vec3(200.0, 222.0, 255.0), vec3(105.0, 160.0, 250.0), up) / 255.0;
@@ -232,7 +355,30 @@ void main () {
       // a box face is hit where the ray meets the box (t, axis of that face), a miss passes over / beside it
       float ht = t;
       int hAxis = axis;
-      bool miss = kind == 1 && !rayBoxLocal(o - vec3(cell), inv, vec3(texelFetch(uInfo, ivec2(2, int(m)), 0).xyz), vec3(texelFetch(uInfo, ivec2(3, int(m)), 0).xyz), t, min(min(tMax.x, tMax.y), tMax.z), axis, ht, hAxis);
+      if (kind == 5) {
+        uvec4 i5 = texelFetch(uInfo, ivec2(5, int(m)), 0);
+        float sM;
+        vec3 rgbM;
+        vec3 nM;
+        bool rotM;
+        bool shadedM;
+        if (modelHit(o - vec3(cell), dd, t, min(min(tMax.x, tMax.y), tMax.z), int(i5.z), int(i5.w), d, cell, sM, rgbM, nM, rotM, shadedM)) {
+          ivec3 lightCell = cell;
+          if (!rotM) {
+            int nax = abs(nM.x) > 0.5 ? 0 : (abs(nM.y) > 0.5 ? 1 : 2);
+            vec3 lp = o + dd * sM - vec3(cell);
+            if (nM[nax] > 0.0 && lp[nax] > 0.999) lightCell[nax] += 1;
+            else if (nM[nax] < 0.0 && lp[nax] < 0.001) lightCell[nax] -= 1;
+          }
+          hit = true;
+          tHit = sM;
+          hitCol = debugColor(rgbM, flags, vec2(0.5)) * (shadedM ? modelShade(nM) : 1.0);
+          hitCell = lightCell;
+          hitMode = (flags & EMISSIVE) != 0u ? 2 : 1;
+          break;
+        }
+      }
+      bool miss = kind == 5 || (kind == 1 && !rayBoxLocal(o - vec3(cell), inv, vec3(texelFetch(uInfo, ivec2(2, int(m)), 0).xyz), vec3(texelFetch(uInfo, ivec2(3, int(m)), 0).xyz), t, min(min(tMax.x, tMax.y), tMax.z), axis, ht, hAxis));
       if (!miss) {
         float stepSign = float(stp[hAxis]);
         vec3 local = clamp(o + dd * ht - vec3(cell), 0.0, 1.0);
@@ -240,12 +386,25 @@ void main () {
         int face = int(fuv.z + 0.5);
         vec2 uv = fuv.xy;
         vec4 c = texelFetch(uMats, ivec2(face, int(m)), 0);
-        if ((flags & 12u) != 0u) {
+        bool six = (flags & SIX_FACES) != 0u;
+        if (!six && (flags & 12u) != 0u) {
           bool end = hAxis == ((flags & 4u) != 0u ? 0 : 2);
           face = end ? 0 : 1;
           uv = end ? uv : uv.yx;
         }
         uint layerCode = i0[face];
+        uint sixTint = 0u;
+        if (six) {
+          int fi = hAxis == 1 ? (stepSign < 0.0 ? 0 : 1) : (hAxis == 2 ? (stepSign < 0.0 ? 3 : 2) : (stepSign < 0.0 ? 4 : 5));
+          uvec4 i4 = texelFetch(uInfo, ivec2(4, int(m)), 0);
+          uvec4 i5 = texelFetch(uInfo, ivec2(5, int(m)), 0);
+          uint code = fi < 4 ? i4[fi] : i5[fi - 4];
+          layerCode = code & 4095u;
+          uv = rotFrac(uv, int(code >> 12));
+          uvec4 i6 = texelFetch(uInfo, ivec2(6, int(m)), 0);
+          uvec4 i7 = texelFetch(uInfo, ivec2(7, int(m)), 0);
+          sixTint = fi < 4 ? i6[fi] : i7[fi - 4];
+        }
         bool textured = layerCode != 0u;
         float shade = faceShade(hAxis, stepSign);
         if (kind == 2) {
@@ -275,6 +434,7 @@ void main () {
           }
         } else {
           vec4 tex = textured ? texAt(layerCode, uv, lodAt(ht, d[hAxis])) : c;
+          if (six) tex.rgb *= tintFor(sixTint & 7u, sixTint >> 3, cell);
           // water stays a full cube (in Minecraft a source's surface is at 14/16)
           if (kind == 3 || (flags & 2u) != 0u) {
             if (m != prevM) {
@@ -376,12 +536,17 @@ export const materialPixels = materials => {
   return data
 }
 
-// RGBA16UI, INFO_TEXELS texels per material: (top+1, side+1, bottom+1, kind), (flags, emit), box min, box max (1/16 units)
+// RGBA16UI, INFO_TEXELS texels per material: (top+1, side+1, bottom+1, kind), (flags, emit), box min, box max (1/16 units),
+// (up, down, north, south), (east, west, elemOffset, elemCount), (tint up..south), (tint east, west). A tint is group + 8 * constant index. A six-face cube (flag 128) has tex6 layers; each face is
+// (layer + 1) | quarter turns << 12. A model has elemOffset / elemCount into the element table.
 export const materialInfo = materials => {
   const data = new Uint16Array(materials.length * INFO_TEXELS * 4)
+  const faceCode = (m, i) => (m.tex6 ? (m.tex6[i] + 1) | ((m.rot6?.[i] ?? 0) << 12) : 0)
+  const tints = m => [...(m.tint6 ?? [0, 0, 0, 0, 0, 0]), 0, 0]
   materials.forEach((m, row) => {
     const [x0, y0, z0, x1, y1, z1] = m.box ?? [0, 0, 0, 16, 16, 16]
-    data.set([...(m.tex ?? [-1, -1, -1]).map(l => l + 1), KINDS[m.kind] ?? 0, (m.flags ?? 0) | (m.issue ? ISSUE_FLAG : 0), m.emit ?? 0, 0, 0, x0, y0, z0, 0, x1, y1, z1, 0], row * INFO_TEXELS * 4)
+    const faces = [0, 1, 2, 3, 4, 5].map(i => faceCode(m, i))
+    data.set([...(m.tex ?? [-1, -1, -1]).map(l => l + 1), KINDS[m.kind] ?? 0, (m.flags ?? 0) | (m.issue ? ISSUE_FLAG : 0), m.emit ?? 0, 0, 0, x0, y0, z0, 0, x1, y1, z1, 0, ...faces.slice(0, 4), faces[4], faces[5], m.elemOffset ?? 0, m.elemCount ?? 0, ...tints(m).slice(0, 4), tints(m)[4], tints(m)[5], 0, 0], row * INFO_TEXELS * 4)
   })
   return data
 }
@@ -398,7 +563,7 @@ export function createRenderer (canvas) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -410,6 +575,10 @@ export function createRenderer (canvas) {
   const info = nearestTexture(gl, gl.TEXTURE_2D, 3)
   const tex = nearestTexture(gl, gl.TEXTURE_2D_ARRAY, 4)
   const lightTex = nearestTexture(gl, gl.TEXTURE_3D, 5)
+  const elems = nearestTexture(gl, gl.TEXTURE_2D, 6)
+  let elemBase = 0
+  let tintGroups = new Float32Array(6 * 3).fill(1)
+  let tintConst = new Float32Array(32 * 3).fill(1)
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR)
   let world = null
   let lodMax = 0
@@ -423,6 +592,22 @@ export function createRenderer (canvas) {
     gl.bindTexture(gl.TEXTURE_2D, info)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16UI, INFO_TEXELS, materials.length, 0, gl.RGBA_INTEGER, gl.UNSIGNED_SHORT, materialInfo(materials))
   }
+
+  // the element table: RGBA32F, width texels per row (tools/view/element-table.mjs); a table with no elements leaves one zero row
+  const setElements = ({ data, width, rows, listTexels }) => {
+    gl.activeTexture(gl.TEXTURE6)
+    gl.bindTexture(gl.TEXTURE_2D, elems)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, rows, 0, gl.RGBA, gl.FLOAT, data)
+    elemBase = listTexels
+  }
+  // the stage-1 tint colours: groups by TINT_GROUP_NAMES, constants by index (both 0..255 RGB)
+  const setTints = ({ groups, constants }) => {
+    tintGroups = Float32Array.from(TINT_GROUP_NAMES.flatMap(name => groups[name].map(v => v / 255)))
+    tintConst = new Float32Array(32 * 3).fill(1)
+    tintConst.set(constants.flat().map(v => v / 255))
+  }
+  gl.activeTexture(gl.TEXTURE6)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1024, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array(1024 * 4))
 
   // once per page: texStorage is immutable
   const setTextures = ({ bytes, layers, size, levels }) => {
@@ -487,6 +672,10 @@ export function createRenderer (canvas) {
     gl.uniform1i(uniform.uMats, 2)
     gl.uniform1i(uniform.uInfo, 3)
     gl.uniform1i(uniform.uTex, 4)
+    gl.uniform1i(uniform.uElems, 6)
+    gl.uniform1i(uniform.uElemBase, elemBase)
+    gl.uniform3fv(uniform.uTintGroups, tintGroups)
+    gl.uniform3fv(uniform.uTintConst, tintConst)
     gl.uniform1i(uniform.uLightTex, 5)
     gl.uniform1f(uniform.uLodMax, lodMax)
     gl.uniform2f(uniform.uRes, canvas.width, canvas.height)
@@ -513,5 +702,5 @@ export function createRenderer (canvas) {
   }
 
   const setDebug = on => { debug = on }
-  return { renderer, setDebug, setMaterials, setTextures, allocate, uploadColumn, clearSlot, resize, draw, clear, finish: () => gl.finish(), isAllocated: () => world !== null }
+  return { renderer, setDebug, setMaterials, setTextures, setElements, setTints, allocate, uploadColumn, clearSlot, resize, draw, clear, finish: () => gl.finish(), isAllocated: () => world !== null }
 }

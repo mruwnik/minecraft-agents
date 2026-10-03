@@ -56,8 +56,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   // one build per version serves both the table and the texture bytes
   const buildFor = version => {
     if (builds.has(version)) return builds.get(version)
-    const { table, textures } = textureBytes(version, textureDir)
-    const build = { table: JSON.stringify({ ...table, format: columnFormat(version) }), textures: Buffer.from(textures.bytes) }
+    const { table, textures, elements } = textureBytes(version, textureDir, { jarPath })
+    const build = { table: JSON.stringify({ ...table, format: columnFormat(version) }), textures: Buffer.from(textures.bytes), elements: elements ? Buffer.from(elements.buffer, elements.byteOffset, elements.byteLength) : Buffer.alloc(0) }
     builds.set(version, build)
     return build
   }
@@ -237,6 +237,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     }
     const textureVersion = versionOf('textures', 'bin')
     if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
+    const elementVersion = versionOf('elements', 'bin')
+    if (elementVersion && VERSION.test(elementVersion)) return send(res, 200, buildFor(elementVersion).elements, { 'Content-Type': 'application/octet-stream' })
     notFound(res)
   }
 

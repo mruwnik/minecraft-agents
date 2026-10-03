@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { decodePng } from '../src/vision/renderer.mjs'
-import { mipChain, textureSet } from '../tools/view/textures.mjs'
+import { mipChain, textureSet, decodeTexture } from '../tools/view/textures.mjs'
 
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const SIZES = [16, 8, 4, 2, 1]
@@ -78,6 +78,17 @@ test('tint is multiplied into level 0', () => {
   assert.ok(g > r && g > b)
 })
 
+const level4 = name => [...texel(textureSet(textureDir, [name]).bytes, 4, 0, 1, 0)]
+const raw = [...level4('grass_block_top@ffffff')]
+
+for (const [name, expected] of [
+  ['grass_block_top@ffffff', raw],
+  ['grass_block_top@7cbd6b', raw.map((v, i) => i === 3 ? v : Math.round(v * [124, 189, 107][i] / 255))],
+  ['grass_block_top@000000', [0, 0, 0, raw[3]]]
+]) {
+  test(`a layer name with @rrggbb takes exactly that tint: ${name}`, () => assert.deepEqual(level4(name), expected))
+}
+
 test('an animated texture uses its first frame only', () => {
   const strip = decodePng(fs.readFileSync(path.join(textureDir, 'water_still.png')))
   assert.ok(strip.height > 16)
@@ -90,4 +101,17 @@ test('a 32 wide texture is box-downsampled to 16x16', () => {
   const wide = fs.readdirSync(textureDir).filter(f => f.endsWith('.png')).find(f => decodePng(fs.readFileSync(path.join(textureDir, f))).width === 32)
   const set = textureSet(textureDir, [wide.replace(/\.png$/, '')])
   assert.equal(set.bytes.length, SIZES.reduce((s, n) => s + n * n * 4, 0))
+})
+
+test('a grey texture with a tRNS colour key is transparent where the key says (leaf_litter ships so)', () => {
+  const { rgba } = decodeTexture(fs.readFileSync(path.join(textureDir, 'leaf_litter.png')))
+  const alphas = Array.from({ length: rgba.length / 4 }, (_, i) => rgba[i * 4 + 3])
+  assert.ok(alphas.filter(a => a === 0).length > 100)
+  assert.ok(alphas.filter(a => a === 255).length > 50)
+  assert.ok(Array.from({ length: alphas.length }, (_, i) => i).every(i => alphas[i] === 0 || rgba[i * 4] > 0))
+})
+
+test('textures without a colour key decode as decodePng does', () => {
+  const buf = fs.readFileSync(path.join(textureDir, 'stone.png'))
+  assert.deepEqual(decodeTexture(buf).rgba, decodePng(buf).rgba)
 })

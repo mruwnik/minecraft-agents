@@ -8,7 +8,7 @@ import { decodeColumn } from '../tools/view/web/column-work.mjs'
 
 const fixtureDir = fileURLToPath(new URL('./fixtures/view-columns/', import.meta.url))
 const textureDir = fileURLToPath(new URL('../textures', import.meta.url))
-const table = materialTable('26.1', textureDir)
+const table = materialTable('26.1', textureDir, { jarPath: null })
 const materialOf = new Uint16Array(Uint8Array.from(Buffer.from(table.materialOf, 'base64')).buffer)
 
 // the main-thread path app.mjs had before the worker: inflate, parse, decodeSections, materialColumn, lightColumn

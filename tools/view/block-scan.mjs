@@ -16,7 +16,7 @@ export { findClientJar }
 
 // the static records for a version, and everything a scan needs to count them
 export function classifyReal ({ version, textureDir, jarPath, table = null }) {
-  const built = table ?? textureBytes(version, textureDir).table
+  const built = table ?? textureBytes(version, textureDir, { jarPath }).table
   const materialOf = new Uint16Array(Buffer.from(built.materialOf, 'base64').buffer.slice(0))
   const registry = prismarineRegistry(version)
   const models = jarPath ? loadModels(jarPath) : null

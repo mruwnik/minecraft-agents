@@ -11,7 +11,7 @@ const VERSION = '26.1'
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const registry = prismarineRegistry(VERSION)
 const Block = prismarineBlock(registry)
-const table = materialTable(VERSION, textureDir)
+const table = materialTable(VERSION, textureDir, { jarPath: null }) // the old drawing, no client jar
 const materialOf = new Uint16Array(new Uint8Array(Buffer.from(table.materialOf, 'base64')).buffer)
 
 const stateIds = name => {
@@ -63,8 +63,8 @@ test('water and lava', () => {
 
 
 test('a missing texture dir falls back to hashed colours, stably', () => {
-  const a = materialTable(VERSION, '/nonexistent')
-  const b = materialTable(VERSION, '/nonexistent')
+  const a = materialTable(VERSION, '/nonexistent', { jarPath: null })
+  const b = materialTable(VERSION, '/nonexistent', { jarPath: null })
   const stone = t => t.materials[new Uint16Array(new Uint8Array(Buffer.from(t.materialOf, 'base64')).buffer)[stateIds('stone')[0]]]
   assert.deepEqual(stone(a).top, stone(b).top)
   assert.equal(stone(a).top.length, 4)
@@ -172,7 +172,7 @@ test('materials are distinct per descriptor', () => {
 })
 
 test('textureBytes builds the table and bytes together', () => {
-  const built = textureBytes(VERSION, textureDir)
+  const built = textureBytes(VERSION, textureDir, { jarPath: null })
   assert.equal(built.textures.layers, built.table.textures.names.length)
   assert.equal(built.textures.bytes.length, [16, 8, 4, 2, 1].reduce((s, n) => s + built.textures.layers * n * n * 4, 0))
 })

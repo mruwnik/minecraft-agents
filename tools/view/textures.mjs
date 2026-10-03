@@ -6,6 +6,29 @@ import { decodePng, tintOf } from '../../src/vision/renderer.mjs'
 export const SIZE = 16
 export const LEVELS = 5
 
+// the chunks of a PNG by type (the first of each)
+const pngChunks = buf => {
+  const chunks = {}
+  for (let at = 8; at + 8 <= buf.length;) {
+    const length = buf.readUInt32BE(at)
+    chunks[buf.toString('latin1', at + 4, at + 8)] ??= buf.subarray(at + 8, at + 8 + length)
+    at += 12 + length
+  }
+  return chunks
+}
+
+// decodePng, plus the tRNS colour key it ignores on grey and RGB textures (leaf_litter is grey with a key: its gaps are transparent)
+export const decodeTexture = buf => {
+  const image = decodePng(buf)
+  const { IHDR, tRNS } = pngChunks(buf)
+  const colorType = IHDR[9]
+  if (!tRNS || (colorType !== 0 && colorType !== 2) || IHDR[8] !== 8) return image
+  const key = colorType === 0 ? [tRNS[1], tRNS[1], tRNS[1]] : [tRNS[1], tRNS[3], tRNS[5]]
+  const rgba = image.rgba.slice()
+  for (let i = 0; i < rgba.length; i += 4) if (key.every((v, c) => rgba[i + c] === v)) rgba[i + 3] = 0
+  return { ...image, rgba }
+}
+
 // alpha-weighted mean colour of the visible texels, or black for a texture with none
 const meanColor = rgba => {
   const sum = [0, 0, 0]
@@ -92,9 +115,13 @@ const firstFrame = ({ width, rgba }) => {
   return halve(rgba.subarray(0, width * width * 4), width, meanColor(rgba))
 }
 
-const layerOf = (textureDir, name) => {
-  const rgba = firstFrame(decodePng(fs.readFileSync(path.join(textureDir, `${name}.png`)))).slice()
-  const tint = tintOf(name)
+const hexColor = hex => [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16))
+
+// `name`: the texture tinted as the renderer's grass/leaf/water list says (tintOf). `name@rrggbb`: tinted by exactly that colour.
+const layerOf = (textureDir, layerName) => {
+  const [name, hex] = layerName.split('@')
+  const rgba = firstFrame(decodeTexture(fs.readFileSync(path.join(textureDir, `${name}.png`)))).slice()
+  const tint = hex ? hexColor(hex) : tintOf(name)
   if (!tint) return mipChain(rgba)
   for (let i = 0; i < rgba.length; i += 4) for (let c = 0; c < 3; c++) rgba[i + c] = Math.round(rgba[i + c] * tint[c] / 255)
   return mipChain(rgba)

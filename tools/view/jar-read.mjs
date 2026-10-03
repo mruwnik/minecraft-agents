@@ -14,6 +14,7 @@ const findEnd = buf => {
   throw new Error('no end-of-central-directory record: not a zip')
 }
 
+// zipEntries and entryContent take the jar's BYTES (a Buffer, e.g. fs.readFileSync(path)), not a path; openJar(path) is the path version.
 export function zipEntries (buf) {
   const eocd = findEnd(buf)
   const count = buf.readUInt16LE(eocd + 10)
@@ -39,10 +40,37 @@ export const entryContent = (buf, entry) => {
   return entry.method === 0 ? stored : zlib.inflateRawSync(stored)
 }
 
-// $MC_CLIENT_JAR when set, else the newest plain release the launcher installed; null when there is none
+const RELEASE = /^\d+(\.\d+)*$/
+// newest first, comparing the dotted numbers (26.1.2 is newer than 1.21.8)
+const versionOrder = (a, b) => {
+  const [x, y] = [a.split('.').map(Number), b.split('.').map(Number)]
+  return [...Array(Math.max(x.length, y.length)).keys()].map(i => (y[i] ?? 0) - (x[i] ?? 0)).find(d => d !== 0) ?? 0
+}
+
+// the jars the agents' own cache holds (~/.cache/minecraft-agents/client/<version>.jar) as { version, file }
+const cachedJars = home => {
+  const dir = path.join(home, '.cache/minecraft-agents/client')
+  if (!fs.existsSync(dir)) return []
+  return fs.readdirSync(dir).filter(n => n.endsWith('.jar')).map(n => ({ version: n.slice(0, -4), file: path.join(dir, n) }))
+}
+
+const launcherJars = (home, platform) => versionsDirs(home, platform).filter(fs.existsSync)
+  .flatMap(dir => clientVersions(fs.readdirSync(dir)).map(version => ({ version, file: path.join(dir, version, `${version}.jar`) })))
+
+// $MC_CLIENT_JAR when set, else the newest plain release across the launcher's versions dirs and the agents' cache; null when there is none
 export const findClientJar = ({ env = process.env, home = os.homedir(), platform = process.platform } = {}) => {
   if (env.MC_CLIENT_JAR) return fs.existsSync(env.MC_CLIENT_JAR) ? env.MC_CLIENT_JAR : null
-  return versionsDirs(home, platform).filter(fs.existsSync)
-    .flatMap(dir => clientVersions(fs.readdirSync(dir)).map(v => path.join(dir, v, `${v}.jar`)))
-    .find(fs.existsSync) ?? null
+  const found = [...launcherJars(home, platform), ...cachedJars(home)].filter(j => RELEASE.test(j.version) && fs.existsSync(j.file))
+  return found.sort((a, b) => versionOrder(a.version, b.version))[0]?.file ?? null
+}
+
+// A jar by path: { names, has(name), read(name) -> Buffer | null } over one read of the file
+export const openJar = jarPath => {
+  const buf = fs.readFileSync(jarPath)
+  const entries = new Map(zipEntries(buf).map(entry => [entry.name, entry]))
+  return {
+    names: [...entries.keys()],
+    has: name => entries.has(name),
+    read: name => entries.has(name) ? entryContent(buf, entries.get(name)) : null
+  }
 }
