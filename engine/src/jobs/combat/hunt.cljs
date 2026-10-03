@@ -5,7 +5,9 @@
 
 (def doc
   "Kill :count adult animals of the mob kind :mob within :radius, collecting
-  their drops, and never take the last :keep adults of the kind (they breed).
+  their drops, and never take the last :keep adults of the kind (they breed). :keep defaults
+  to nil: 2 for animals, 0 for hostile mobs (a kind any of whose entities in
+  range reports kind hostile); 0 turns the pair rule off, any number wins.
   Babies are never targets and never counted (an entity is an adult unless it
   reports baby true). The check passes while more than :keep adults of the
   kind are within :radius, and always once
@@ -16,13 +18,16 @@
   hunt.gave-up); (2) after a target the collect-drops child picks up :drops
   (nil: the kind's entry in the drops table, or every item within
   :collect-radius for a kind not in it); (3) :killed reaching :count ends
-  :count; (4) at most :keep adults of the kind still present ends :keep (skipped
+  :count; (4) at most :keep adults of the kind still present ends :keep (the pair rule,
+  resolved on the first round and remembered; skipped
   animals still count, they still breed); (5) no candidate (present, not
   skipped, nearest first) ends :none on the second round in a row that finds
   none, after a 1 s wait (look twice); (6) else the nearest candidate becomes
   the :target and is attacked in the same round. The target stays until it is
   killed or given up on, even when a nearer animal turns up. Hands over
-  {:killed n :reason r} (info hunt.done).")
+  {:killed n :reason r :spared s :remaining m} (info hunt.done): :spared is the
+  kills asked for and not made because of the pair rule (0 unless :keep ended
+  it, and 0 when the rule is off), :remaining the adults of the kind in range at the end.")
 
 (def raw-meats
   {"beef" "cooked_beef" "porkchop" "cooked_porkchop" "mutton" "cooked_mutton"
@@ -46,7 +51,7 @@
   {:mob {:doc "mob type name of the animals to hunt" :default "cow"}
    :count {:doc "animals to kill" :default 1}
    :radius {:doc "animals within this many blocks of the body count" :default 24}
-   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count)" :default 2}
+   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :default 8}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :default nil}
@@ -71,17 +76,35 @@
          (remove #(contains? skipped (.-id %)))
          (sort-by #(u/dist here (u/pos-of (.-pos %)))))))
 
+(defn hostile?
+  "Does any entity of the kind within :radius report kind hostile (babies included)?"
+  [c]
+  (let [{:keys [mob radius]} (:args c)]
+    (boolean (some #(= "hostile" (.-kind %))
+                   (array-seq (.entities (:primitives c) #js {:radius radius :names #js [mob] :max 64}))))))
+
+(defn keep-of
+  "Adults of the kind never taken: the :keep arg when a number, else the value
+  remembered in job memory, else 2 for animals and 0 for hostile mobs."
+  [c]
+  (or (:keep (:args c))
+      (:keep (ctx/mem c))
+      (if (hostile? c) 0 2)))
+
 (defn check [c]
   (boolean (or (:started (ctx/mem c))
-               (> (count (present c)) (:keep (:args c))))))
+               (> (count (present c)) (keep-of c)))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c reason]
-  (let [killed (:killed (ctx/mem c) 0)]
-    (ctx/emit! c :hunt.done :info {:killed killed :reason reason
-                                   :text (str "hunt done: " (name reason) ", killed " killed)})
-    (ctx/result! c {:killed killed :reason reason})
+  (let [killed (:killed (ctx/mem c) 0)
+        spared (if (and (= :keep reason) (pos? (keep-of c))) (max 0 (- (:count (:args c)) killed)) 0)
+        remaining (count (present c))
+        out {:killed killed :reason reason :spared spared :remaining remaining}]
+    (ctx/emit! c :hunt.done :info (assoc out :text (str "hunt done: " (name reason) ", killed " killed
+                                                        ", spared " spared " of the ask, " remaining " adults left")))
+    (ctx/result! c out)
     :done))
 
 (defn give-up!
@@ -139,8 +162,9 @@
 
 (defn ^:async round [c]
   (let [now (ctx/now c)
-        {:keys [keep] wanted :count} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
+        wanted (:count (:args c))
+        keep (keep-of c)]
+    (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
     (let [{:keys [target collecting killed]} (ctx/mem c)
           next-target (first (candidates c))]
       (cond

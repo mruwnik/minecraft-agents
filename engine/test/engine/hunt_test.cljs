@@ -168,7 +168,7 @@
           (dotimes [_ 60]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (= {:killed 2 :reason :count} @out)))))))
+          (is (= {:killed 2 :reason :count :spared 0 :remaining 0} @out)))))))
 
 (defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))
 
@@ -201,3 +201,71 @@
           (is (= :keep (:reason (done-event s))))
           (is (= 1 (:killed (done-event s))))
           (is (= #{2 3 4 5} (world-ids s)) "one adult died, two adults and both babies remain"))))))
+
+;; ------------------------------------------------------------------ the pair rule (default :keep)
+
+(deftest default-keep-spares-two-adult-animals
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 10} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 60))
+              d (done-event s)]
+          (is (= 2 (count (world-ids s))) "two cows are left")
+          (is (= 3 (:killed d)))
+          (is (= :keep (:reason d)))
+          (is (= 7 (:spared d)))
+          (is (= 2 (:remaining d)))
+          (is (finished? s)))))))
+
+(deftest default-keep-declines-with-two-adults-and-babies
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword
+                                        :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
+          (core/submit! eng (spec {}) {})
+          (is (nil? (core/tick! eng)))
+          (is (zero? (count (h/calls p "attack"))))
+          (is (= 5 (count (.-entities (.-state (.-world p)))))))))))
+
+(deftest default-keep-never-takes-a-baby
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1} {:inventory h/sword
+                                             :entities [(cow 1 3) (cow 2 4) (cow 3 5) (cow 4 6) (baby-cow 5 2) (baby-cow 6 2)]} 40))]
+          (is (= 1 (:killed (done-event s))))
+          (is (= :count (:reason (done-event s))))
+          (is (= 0 (:spared (done-event s))))
+          (is (every? (world-ids s) [5 6]) "both babies live"))))))
+
+(deftest explicit-zero-keep-switches-the-pair-rule-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 10 :keep 0} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 80))
+              d (done-event s)]
+          (is (empty? (world-ids s)))
+          (is (= 5 (:killed d)))
+          (is (= 0 (:spared d)))
+          (is (= 0 (:remaining d))))))))
+
+(defn zombie [id x] (animal id "zombie" x {:kind "hostile" :drops [{:name "rotten_flesh" :count 1}]}))
+
+(deftest default-keep-is-zero-for-a-hostile-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "zombie" :count 3} {:inventory h/sword :entities (mapv #(zombie % (+ 2 %)) [1 2 3])} 80))]
+          (is (empty? (world-ids s)) "all three zombies died")
+          (is (= 3 (:killed (done-event s))))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest the-check-passes-for-a-single-hostile-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zombie 1 3)]})]
+          (core/submit! eng (spec {:mob "zombie"}) {})
+          (await (core/tick! eng))
+          (is (pos? (count (h/calls p "attack")))))))))
