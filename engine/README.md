@@ -1136,3 +1136,22 @@ Known gaps:
 
 - `createPrimitives` accepts an optional `version` (default as in `src/config.mjs`).
 - Timeouts resolve with a status as the contract says, not by rejecting; only cuts and bad args reject.
+
+## Migrating old bots
+
+`npx shadow-cljs compile migrate`, then `node out/migrate.cjs [--dry-run] [--state-dir <dir>] Name...` (default state
+dir: the repo's `state/`; default names: every folder under `state/agents/` with no `engine/`). `--dry-run` prints one
+line per body and writes nothing. Write mode only touches bodies without `engine/`, creates `engine/memory.edn` and
+`view/pose.json`, never overwrites, moves or deletes, and refuses a body that looks connected (`engine/control.sock`, a
+live `body.pid`, or a listener on `127.0.0.1:<apiPort>`).
+
+Carried: the body's own `bed` and `chest` places (`by` equals its name) from the world's `places.json`, as memory kinds
+`:bed` and `:chest`; both are cap 1, so the last one in the file wins and the earlier ones are only reported as dropped.
+And an offline pose (`view/pose.json`) at the last position found in `events.jsonl` (`pos` or `position`), at that
+event's time. Not carried: jobs, journal, watches, other places, events, chat. A file that fails to parse is skipped
+and named; the rest converts.
+
+Every converted body gets an (empty, when it has no bed or chest) `engine/memory.edn`, so the dashboard shows it. The pose carries `dimension` when the event it comes from has one.
+
+Migrated entries have `:t` = the mtime of `places.json` and `:wt` 0. The place policy is `:ttl :forever`, so the first
+start's sweep keeps them (tested in `migrate_test.cljs`).

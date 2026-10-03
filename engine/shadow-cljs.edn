@@ -9,6 +9,11 @@
          :output-dir "out/body"
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}
+  :migrate {:target :node-script
+            :main engine.migrate-cli/main
+            :output-to "out/migrate.cjs"
+            :output-dir "out/migrate"
+            :compiler-options {:infer-externs false}}
   :test {:target :node-test
          :output-to "out/test.cjs"
          :output-dir "out/test"
