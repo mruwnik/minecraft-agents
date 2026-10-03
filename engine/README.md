@@ -800,6 +800,12 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /snapshot` | coherent engine state, outstanding requests, body metadata and cursor |
 | `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
 | `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
+| `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4) |
+| `GET /job?id=<id>&limit=<n>` | one listed or reflex job's bounded parsed spec, effective args, state and linked outstanding requests |
+| `GET /catalog?kind=jobs&prefix=jobs.farm.&limit=20&offset=0` | bounded page of exact job names (names only) |
+| `GET /catalog?kind=triggers&prefix=health&limit=20&offset=0` | bounded page of exact trigger names (names only) |
+| `GET /catalog?kind=job&name=jobs.<namespace>.<name>` | one job's description and argument defaults |
+| `GET /catalog?kind=trigger&name=<name>` | one trigger's default job, args, persistence and cooldown |
 
 For example, read a snapshot without taking control of the body:
 
@@ -812,6 +818,35 @@ from `/snapshot`, then read events after that snapshot's cursor. This is an
 observational stream, not an event-sourced database. State and memory snapshots
 remain authoritative. The ClojureScript dashboard uses this API and offers a
 read-only historical fallback for offline engines and old logs.
+
+For a compact terminal/agent read, `node engine/tools/observe.mjs <agent>`
+prints the status projection as EDN. It reads the same private event socket and
+does not contact or disturb Mineflayer. Use `job <id>` or `catalog job|trigger
+<name>` only when the summary needs detail; `--state <dir>` selects another
+state root and `--limit <n>` bounds the listed queue rows.
+
+```sh
+node engine/tools/observe.mjs Bob
+node engine/tools/observe.mjs Bob --raw
+node engine/tools/observe.mjs Bob job j17
+node engine/tools/observe.mjs Bob catalog jobs jobs.farm. --limit 10
+node engine/tools/observe.mjs Bob catalog job jobs.forestry.harvest-wood
+node engine/tools/observe.mjs Bob catalog trigger hostile-near
+```
+
+The default status contains body identity, generation and event cursor,
+scheduled/manual/offline/settling mode, position, health/food, current job,
+up to four queue rows, failed IDs and up to four outstanding required
+requests. Counts and `:more?` flags show when rows were bounded. `--raw` opts in
+to the full EDN snapshot, including complete scheduler state. The default omits
+raw memory and event history; inspect one job or request details through the
+existing snapshot/event routes when needed. Job detail bounds the parsed
+spec/args projection and linked requests. Catalog pages return names only with
+an offset for continuation; exact-name detail is separate, so discovery never
+sends the whole registry's documentation. Every CLI read has a 3-second total
+deadline, caps responses at 256 KiB, and returns a structured EDN error for
+unavailable sockets, timeouts or oversized responses instead of waiting
+indefinitely.
 
 ## Manual takeover
 

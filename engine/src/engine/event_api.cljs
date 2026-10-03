@@ -3,6 +3,7 @@
   The wire format is EDN so keyword event fields survive unchanged."
   (:require [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.expr :as expr]
             [engine.events :as events]
             ["fs" :as fs]
             ["http" :as http]
@@ -59,6 +60,169 @@
      :settling (core/settling? eng)
      :cursor (events/cursor (:events eng))}))
 
+(def status-job-limit 4)
+(def attention-limit 4)
+(def catalog-page-limit 20)
+(def max-catalog-page-limit 64)
+(def catalog-doc-limit 1200)
+
+(defn short-text [x n]
+  (when (string? x) (subs x 0 (min n (count x)))))
+
+(defn bounded-value
+  "A small EDN-safe projection for user-supplied job args/specs. Shared budget bounds total nodes."
+  [value depth budget]
+  (cond
+    (zero? @budget) :truncated
+    (> depth 4) :truncated
+    (or (nil? value) (string? value) (keyword? value) (symbol? value)
+        (number? value) (boolean? value))
+    (do (vswap! budget dec)
+        (if (string? value) (short-text value 160) value))
+    (map? value)
+    (do (vswap! budget dec)
+        (loop [entries (seq value) out {}]
+          (if (or (empty? entries) (zero? @budget))
+            (cond-> out (seq entries) (assoc :truncated true))
+            (let [[k v] (first entries)]
+              (recur (next entries)
+                     (assoc out
+                            (bounded-value k (inc depth) budget)
+                            (bounded-value v (inc depth) budget)))))))
+    (or (sequential? value) (set? value))
+    (do (vswap! budget dec)
+        (loop [items (seq value) out []]
+          (if (or (empty? items) (zero? @budget))
+            (cond-> out (seq items) (conj :truncated))
+            (recur (next items) (conj out (bounded-value (first items) (inc depth) budget))))))
+    :else (do (vswap! budget dec) (short-text (pr-str value) 160))))
+
+(defn instance-status [s id]
+  (cond
+    (contains? (:failed s) id) :failed
+    (= id (:current s)) :running
+    (= id (:resume s)) :resuming
+    (some #{id} (:list s)) :queued
+    (= id (:pending-reflex s)) :reflex
+    :else :unknown))
+
+(defn job-summary [s id]
+  (when-let [inst (get-in s [:instances id])]
+    {:id id
+     :name (short-text (expr/label (:spec inst)) 160)
+     :round (:round inst)
+     :status (instance-status s id)
+     :hold? (boolean (:hold? inst))
+     :reflex (:reflex inst)}))
+
+(defn attention-summary [[request-id request]]
+  (let [event (:event request)]
+    {:request-id request-id
+     :job-id (:job-id request)
+     :reason (:reason request)
+     :kind (:kind event)
+     :message (short-text (:message event) 240)
+     :updated-at (:updated-at request)}))
+
+(defn status [eng requested-limit]
+  (let [s (core/state eng)
+        p (:primitives eng)
+        self (.self p)
+        current (or (core/holder eng)
+                    (when-let [id (:resume s)] {:id id}))
+        current-id (:id current)
+        manual @(:manual eng)
+        limit (or requested-limit status-job-limit)
+        queue-count (count (:list s))
+        queue (mapv #(job-summary s %) (take limit (:list s)))
+        attention (->> (:attention s)
+                       (sort-by (fn [[id req]] [(- (or (:updated-at req) 0)) id]))
+                       (take attention-limit)
+                       (mapv attention-summary))]
+    {:body (.-username self)
+     :generation-id (:generation-id s)
+     :cursor (events/cursor (:events eng))
+     :mode (cond (core/manual? eng) :manual
+                 (core/offline? eng) :offline
+                 (core/settling? eng) :settling
+                 :else :scheduled)
+     :manual (when manual
+               (cond-> (select-keys manual [:who :why :since])
+                 (:who manual) (update :who #(short-text (str %) 80))
+                 (string? (:why manual)) (update :why #(short-text % 160))))
+     :position (core/self-pos p)
+     :health (when (number? (.-health self)) (.-health self))
+     :food (when (number? (.-food self)) (.-food self))
+     :current (when current
+                (when-let [summary (job-summary s current-id)]
+                  (assoc summary
+                         :status (cond (core/running eng) :running
+                                       (:reflex current) :reflex
+                                       (= current-id (:resume s)) :resuming
+                                       :else (instance-status s current-id))
+                         :reflex (:reflex current))))
+     :jobs {:total queue-count
+            :items (->> queue (remove nil?) vec)
+            :more? (> queue-count limit)}
+     :failed (let [failed (->> (:failed s)
+                               (sort-by key)
+                               (mapv (fn [[id failure]]
+                                       {:id id :error (short-text (:error failure) 240)})))]
+               {:total (count failed) :items (->> failed (take attention-limit) vec)
+                :more? (> (count failed) attention-limit)})
+     :outstanding {:total (count (:attention s)) :items attention
+                   :more? (> (count (:attention s)) attention-limit)}}))
+
+(defn job-detail [eng id limit]
+  (let [s (core/state eng)]
+    (when-let [inst (get-in s [:instances id])]
+      (let [[_ args] (core/job-of eng inst)
+            failure (get-in s [:failed id])
+            requests (->> (:attention s)
+                          (keep (fn [[request-id request]]
+                                  (when (= id (:job-id request)) (attention-summary [request-id request]))))
+                          (sort-by (juxt :updated-at :request-id))
+                          vec)]
+        (let [budget (volatile! 64)]
+        {:ok true :generation-id (:generation-id s) :id id :name (short-text (expr/label (:spec inst)) 160)
+         :spec (bounded-value (:spec inst) 0 budget)
+         :args (bounded-value args 0 budget) :bounded? true :round (:round inst) :hold? (boolean (:hold? inst))
+         :reflex (:reflex inst) :status (instance-status s id)
+         :current? (= id (:id (core/holder eng)))
+         :failure (when failure {:error (short-text (:error failure) 1000) :at (:t failure)})
+         :attention {:total (count requests) :items (->> requests (take limit) vec)
+                     :more? (> (count requests) limit)}})))))
+
+(defn catalog-entry [eng kind name]
+  (case kind
+    "job" (let [sym (symbol name)
+                entry (get (:jobs eng) sym)]
+            (when entry
+              {:ok true :kind :job :name sym
+               :doc (short-text (:doc entry) catalog-doc-limit)
+               :args (bounded-value (:args entry) 0 (volatile! 64))}))
+    "trigger" (let [id (keyword name)
+                    entry (get (:triggers eng) id)]
+                (when entry
+                  {:ok true :kind :trigger :name id
+                   :job (:job entry) :args (bounded-value (:args entry) 0 (volatile! 64))
+                   :persistence (:persistence entry) :cooldown-s (:cooldown-s entry)}))
+    nil))
+
+(defn catalog-list [eng kind prefix offset limit]
+  (let [name-of (fn [x] (if (keyword? x) (name x) (str x)))
+        names (case kind
+                "jobs" (sort-by name-of (keys (:jobs eng)))
+                "triggers" (sort-by name-of (keys (:triggers eng)))
+                nil)]
+    (when names
+      (let [matches (filter #(or (empty? prefix) (.startsWith (name-of %) prefix)) names)
+            total (count matches)
+            items (->> matches (drop offset) (take limit) (mapv name-of))
+            next-offset (when (< (+ offset (count items)) total) (+ offset (count items)))]
+        {:ok true :kind (keyword kind) :prefix prefix :offset offset
+         :items items :total total :next-offset next-offset}))))
+
 (defn prepare-socket! [socket-path]
   (js/Promise.
    (fn [resolve reject]
@@ -84,6 +248,55 @@
                       (cond
                         (and (= method "GET") (= pathname "/snapshot"))
                         (respond! res 200 (snapshot eng))
+
+                        (and (= method "GET") (= pathname "/status"))
+                        (let [limit (number-param (.-searchParams url) "limit" status-job-limit 32)]
+                          (if (and limit (pos? limit))
+                            (respond! res 200 (status eng limit))
+                            (bad! res 400 :bad-query)))
+
+                        (and (= method "GET") (= pathname "/job"))
+                        (let [params (.-searchParams url)
+                              id (.get params "id")
+                              limit (number-param params "limit" attention-limit 32)]
+                          (if (and id (re-matches #"j[0-9]+" id) limit (pos? limit))
+                            (if-let [detail (job-detail eng id limit)]
+                              (respond! res 200 detail)
+                              (bad! res 404 :job-not-found))
+                            (bad! res 400 :bad-query)))
+
+                        (and (= method "GET") (= pathname "/catalog"))
+                        (let [params (.-searchParams url)
+                              kind (.get params "kind")
+                              name (.get params "name")
+                              prefix (or (.get params "prefix") "")
+                              limit (number-param params "limit" catalog-page-limit max-catalog-page-limit)
+                              offset (number-param params "offset" 0 10000)
+                              exact? (contains? #{"job" "trigger"} kind)
+                              list? (contains? #{"jobs" "triggers"} kind)
+                              valid-name? (and (string? name)
+                                               (<= (count name) 120)
+                                               (case kind
+                                                 "job" (boolean (re-matches #"jobs(?:\.[a-z][a-z0-9-]*)+" name))
+                                                 "trigger" (boolean (re-matches #"[a-z][a-z0-9-]*" name))
+                                                 false))
+                              valid-prefix? (and (string? prefix)
+                                                 (<= (count prefix) 120)
+                                                 (case kind
+                                                   "jobs" (or (empty? prefix)
+                                                               (boolean (re-matches #"jobs(?:\.[a-z][a-z0-9-]*)*(?:\.)?" prefix)))
+                                                   "triggers" (or (empty? prefix)
+                                                                   (boolean (re-matches #"[a-z][a-z0-9-]*" prefix)))
+                                                   false))]
+                          (if (and (or (and exact? valid-name?)
+                                       (and list? valid-prefix? limit (pos? limit) offset))
+                                   (or (not exact?) (nil? (.get params "prefix"))))
+                            (if exact?
+                              (if-let [entry (catalog-entry eng kind name)]
+                                (respond! res 200 entry)
+                                (bad! res 404 :capability-not-found))
+                              (respond! res 200 (catalog-list eng kind prefix offset limit)))
+                            (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/events"))
                         (let [params (.-searchParams url)
