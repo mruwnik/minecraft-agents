@@ -1,7 +1,7 @@
 (ns dashboard.plan-compare
-  "Judges the cells a plan expands to (plan.shape/expand-plan) against the blocks actually in the world, and counts and
-  lays out the statuses (plan.shape/judge decides each one). Pure: the world comes in as (block-at x y z) -> block name,
-  or nil when no chunk column was dumped there."
+  "Judges the cells a plan expands to (plan.shape/expand) against the blocks in the world (plan.shape/plan-minus-world),
+  and counts and lays out the answers. Pure: the world comes in as (block-at [x y z]) -> {:name n} or nil when no chunk
+  column was dumped there."
   (:require [plan.shape :as shape]))
 
 (def zero-counts {:match 0 :missing 0 :wrong 0 :extra 0 :unknown 0 :total 0 :percent 0})
@@ -17,10 +17,6 @@
            (select-keys freq [:match :missing :wrong :extra :unknown])
            {:total total :percent (if (pos? total) (js/Math.round (* 100 (/ match total))) 0)})))
 
-(defn judge-cell [block-at {[x y z] :pos want :want :as cell}]
-  (let [actual (block-at x y z)]
-    (assoc cell :actual actual :status (shape/judge want actual))))
-
 (defn bounds
   "{:min [x y z] :max [x y z]} of cells, nil for none."
   [cells]
@@ -30,12 +26,12 @@
       {:min [(axis 0 min) (axis 1 min) (axis 2 min)]
        :max [(axis 0 max) (axis 1 max) (axis 2 max)]})))
 
-(defn grid-cell [{:keys [status want actual element]}]
-  {:s (name status) :e (shape/want-text want) :a actual :el element})
+(defn grid-cell [{:keys [status want found part]}]
+  {:s (name status) :e (shape/want-text want) :a found :el part})
 
 (defn layers
   "One top-down grid per y that holds cells: {:y y :rows [[cell-or-nil ...]]} over the x/z bounds of all the cells
-  ([:min-x :min-z :cols :rows] in the second value). A cell wanted twice shows the later element's."
+  ([:min-x :min-z :cols :rows] in the second value)."
   [judged]
   (let [{[x1 _ z1] :min [x2 _ z2] :max} (bounds judged)]
     (when x1
@@ -48,19 +44,32 @@
                               (vec (for [x (range x1 (inc x2))] (get at [x z])))))}))
          {:min-x x1 :min-z z1 :cols cols :rows rows}]))))
 
+(defn content-text
+  "A short summary of a part for people."
+  [{:keys [where want blueprint turn]}]
+  (if (= :blueprint where)
+    (str "blueprint " blueprint ", turn " turn)
+    (shape/want-text want)))
+
+(defn element
+  "A part as the Plans page lists it."
+  [{:keys [id where at turn error] n :count :as part}]
+  (cond-> {:id id :kind where :content (content-text part) :count n}
+    at (assoc :at at :rotation turn)
+    error (assoc :error error)))
+
 (defn compare-plan
-  "expansion = what dashboard.plan/expand returned. -> {:counts :elements :layers :grid :errors}: each element with its
-  own counts and bounds, the plan's counts over all its cells (children included), the per-layer grids."
-  [{:keys [cells elements errors]} block-at]
-  (let [judged (mapv #(judge-cell block-at %) cells)
-        by-element (group-by :element judged)
+  "expansion = what plan.shape/expand returned. -> {:counts :elements :layers :grid :errors}: each part (as an element)
+  with its own counts and bounds, the plan's counts over all its cells, the per-layer grids."
+  [{:keys [cells parts errors]} block-at]
+  (let [judged (mapv #(assoc % :status (:answer %)) (shape/plan-minus-world cells block-at))
+        by-part (group-by :part judged)
         [layer-grids grid] (layers judged)]
     {:counts (counts judged)
-     :elements (mapv (fn [{:keys [id] :as el}]
-                       (let [own (get by-element id [])]
-                         (-> (dissoc el :cells)
-                             (assoc :counts (counts own) :bounds (bounds own)))))
-                     elements)
+     :elements (mapv (fn [{:keys [id] :as part}]
+                       (let [own (get by-part id [])]
+                         (assoc (element part) :counts (counts own) :bounds (bounds own))))
+                     parts)
      :layers (or layer-grids [])
      :grid grid
-     :errors (or errors [])}))
+     :errors (mapv (fn [{:keys [part assign error]}] {:element (or part assign "plan") :error error}) errors)}))

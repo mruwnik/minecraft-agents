@@ -1,9 +1,15 @@
-;; A small village laid over the place dan-library: two blueprint buildings, a path, and Jizo's farm as a child plan.
-{:id "claude-village" :name "Claude village" :owner "Claude" :kind :village :status :proposed
- :note "Proposed: nothing here is built to the blueprints yet, so most of it reads as missing."
- :region {:min [40 64 -180] :max [90 70 -150]}
- :elements
- [{:id "hall" :kind :structure :at [64 65 -172] :rotation 0 :content {:blueprint "villager-house-10"}}
-  {:id "tower" :kind :structure :at [74 65 -160] :rotation 90 :content {:blueprint "watchtower"}}
-  {:id "main-path" :kind :path :region {:min [62 64 -165] :max [84 64 -165]} :content {:block "dirt_path"}}
-  {:id "farm" :kind :plan :ref "jizo-farm"}]}
+;; Two huts facing each other across a north-south path (the village example of docs/design.md). Heights are
+;; plausible, not surveyed.
+{:id "claude-village" :status :proposed
+ :note "Proposed: nothing here is built yet, so most of it reads as missing."
+ :parts
+ [{:id "jizo-hut"  :blueprint "hut" :at [101 64 202] :turn 90}
+  {:id "west-hut"  :blueprint "hut" :at [95 64 208]  :turn 270}
+  {:id "path"      :box [[100 64 200] [100 64 216]] :want "dirt_path"}
+  {:id "lectern-1" :cells [[102 65 214]] :want "lectern"}
+  {:id "compost-1" :cells [[98 65 202]]  :want "composter"}]
+ :assign
+ [{:spot "lectern-1"      :profession :librarian :trade "mending"}
+  {:spot "compost-1"      :profession :farmer}
+  {:spot "jizo-hut/bed"   :body "Jizo" :use :bed}
+  {:spot "jizo-hut/chest" :body "Jizo" :use :chest}]}

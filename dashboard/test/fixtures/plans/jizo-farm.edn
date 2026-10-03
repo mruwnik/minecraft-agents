@@ -1,21 +1,20 @@
 ;; Jizo's farm, copied by hand from the places jizo-crop-field (origin -17 62 -97) and jizo-melon-patch (origin -1 62 -88).
-;; Crops sit one block above the origin's y (y 63); the farmland below each crop is judged too (plan.shape).
-{:id "jizo-farm" :name "Jizo's farm" :owner "Jizo" :kind :farm :status :active
+;; Heights are plausible, not surveyed: crops stand at y 63 on farmland at y 62, the channels are at y 62.
+{:id "jizo-farm" :status :active
  :note "Carrots, potatoes, melon and pumpkin stems in the field, three wheat plots with two covered water channels in the patch."
- :region {:min [-17 62 -97] :max [14 63 -71]}
- :elements
- [{:id "potatoes" :kind :plot :region {:min [-11 63 -97] :max [-10 63 -96]} :content {:crop "potatoes"}}
-  {:id "melon-row-1" :kind :plot :region {:min [-17 63 -95] :max [-13 63 -95]} :content {:crop "melon_stem"}}
-  {:id "melon-row-2" :kind :plot :region {:min [-14 63 -94] :max [-12 63 -94]} :content {:crop "melon_stem"}}
-  {:id "pumpkin" :kind :plot :region {:min [-15 63 -94] :max [-15 63 -94]} :content {:crop "pumpkin_stem"}}
-  {:id "carrots-a" :kind :plot :region {:min [-14 63 -90] :max [-13 63 -90]} :content {:crop "carrots"}}
-  {:id "carrots-b" :kind :plot :region {:min [-15 63 -89] :max [-14 63 -89]} :content {:crop "carrots"}}
-  {:id "field-chest" :kind :feature :region {:min [-15 63 -91] :max [-15 63 -91]} :content {:block "chest"}}
-  {:id "field-table" :kind :feature :region {:min [-15 63 -90] :max [-15 63 -90]} :content {:block "crafting_table"}}
-  {:id "wheat-a" :kind :plot :region {:min [-1 63 -87] :max [14 63 -85]} :content {:crop "wheat"}}
-  {:id "wheat-a-edge" :kind :plot :region {:min [0 63 -88] :max [14 63 -88]} :content {:crop "wheat"}}
-  {:id "melon-chest" :kind :feature :region {:min [-1 63 -88] :max [-1 63 -88]} :content {:block "chest"}}
-  {:id "wheat-b" :kind :plot :region {:min [-1 63 -83] :max [14 63 -76]} :content {:crop "wheat"}}
-  {:id "wheat-c" :kind :plot :region {:min [-1 63 -74] :max [14 63 -71]} :content {:crop "wheat"}}
-  {:id "channel-1" :kind :feature :region {:min [-1 62 -84] :max [14 62 -84]} :content {:palette ["water" "oak_slab"]}}
-  {:id "channel-2" :kind :feature :region {:min [-1 62 -75] :max [14 62 -75]} :content {:palette ["water" "oak_slab"]}}]}
+ :parts
+ [{:id "potatoes"     :box [[-11 63 -97] [-10 63 -96]] :want {:crop "potatoes"}}
+  {:id "melon-row-1"  :box [[-17 63 -95] [-13 63 -95]] :want {:crop "melon_stem"}}
+  {:id "melon-row-2"  :box [[-14 63 -94] [-12 63 -94]] :want {:crop "melon_stem"}}
+  {:id "pumpkin"      :cells [[-15 63 -94]]           :want {:crop "pumpkin_stem"}}
+  {:id "carrots-a"    :box [[-14 63 -90] [-13 63 -90]] :want {:crop "carrots"}}
+  {:id "carrots-b"    :box [[-15 63 -89] [-14 63 -89]] :want {:crop "carrots"}}
+  {:id "field-chest"  :cells [[-15 63 -91]]           :want "chest"}
+  {:id "field-table"  :cells [[-15 63 -90]]           :want "crafting_table"}
+  {:id "wheat-a"      :box [[-1 63 -87] [14 63 -85]]   :want {:crop "wheat"}}
+  {:id "wheat-a-edge" :box [[0 63 -88] [14 63 -88]]    :want {:crop "wheat"}}
+  {:id "melon-chest"  :cells [[-1 63 -88]]            :want "chest"}
+  {:id "wheat-b"      :box [[-1 63 -83] [14 63 -76]]   :want {:crop "wheat"}}
+  {:id "wheat-c"      :box [[-1 63 -74] [14 63 -71]]   :want {:crop "wheat"}}
+  {:id "channel-1"    :box [[-1 62 -84] [14 62 -84]]   :want [:any "water" "oak_slab"]}
+  {:id "channel-2"    :box [[-1 62 -75] [14 62 -75]]   :want [:any "water" "oak_slab"]}]}

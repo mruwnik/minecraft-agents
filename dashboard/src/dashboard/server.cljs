@@ -14,7 +14,6 @@
             [dashboard.guard :as guard]
             [dashboard.items :as items]
             [dashboard.jobs-registry :as jobs-registry]
-            [dashboard.blueprint :as blueprint]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
             [dashboard.plan-api :as plan-api]
@@ -721,16 +720,16 @@
   (legacy/library repo-root (all-places-js (read-worlds))))
 
 ;; ---------------------------------------------------------------- plans (dashboard.plan-api)
-;; Plans are state/worlds/<world>/plans/<id>.edn. The block lookup over the dumped chunk columns is the JS glue
-;; js/worldblocks.mjs (the view's column decoders); everything else is ClojureScript.
+;; Plans are state/worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root (next to
+;; the legacy .blueprint.json library). The block lookup over the dumped chunk columns is the JS glue js/worldblocks.mjs
+;; (the view's column decoders); everything else is ClojureScript.
 (def worldblocks-module (or (.-WORLDBLOCKS_MODULE js/process.env) (.join path dashboard-dir "js" "worldblocks.mjs")))
+(def plan-blueprints-dir (.join path repo-root "blueprints"))
 (def plans-ttl-ms 10000)
-(def blueprint-ttl-ms 30000)
 
 (defonce worldblocks-loaded (delay (import-esm (.-href (.pathToFileURL url worldblocks-module)))))
 (defonce blocks-by-world (atom {}))
 (defonce plan-summaries (atom {}))
-(defonce blueprint-index (atom nil))
 
 (defn blocks-for [module world-name]
   (or (get @blocks-by-world world-name)
@@ -738,21 +737,10 @@
         (swap! blocks-by-world assoc world-name blocks)
         blocks)))
 
-(defn blueprint-cells
-  "Name -> the cells of the blueprint, from the library (re-read at most every 30 s)."
-  [name]
-  (let [{:keys [at value]} @blueprint-index]
-    (if (and at (< (- (js/Date.now) at) blueprint-ttl-ms))
-      (get value name)
-      (let [value (into {} (keep (fn [d] (when (.-bp d) [(.-name d) (blueprint/plan-cells (js->clj (.-bp d) :keywordize-keys true))])))
-                        (.-blueprints (blueprint-library)))]
-        (reset! blueprint-index {:at (js/Date.now) :value value})
-        (get value name)))))
-
 (defn plan-opts [module world-name]
   (let [blocks (blocks-for module world-name)]
     {:dir (.join path worlds-dir world-name "plans")
-     :blueprint-fn blueprint-cells
+     :blueprint-dir plan-blueprints-dir
      :block-at (fn [x y z] (.blockAt blocks x y z))}))
 
 (defn plan-list [module world-name]

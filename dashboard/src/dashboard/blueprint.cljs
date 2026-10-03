@@ -36,14 +36,6 @@
             :colour (bc/alt-colour alt) :air (bc/air? (:name alt))}))
     []))
 
-;; every cell of the blueprint for a plan to compare with the world: offset from the anchor (x east, z south, y the layer's
-;; y), the block names the cell accepts, and whether it must be air. _ cells are not part of it.
-(defn plan-cells [bp]
-  (vec (for [{:keys [y]} (:layers bp)
-             {:keys [dx dz token air]} (layer-cells bp y)]
-         {:dx dx :dy y :dz dz :air air
-          :names (vec (distinct (map :name (:alts (spec-for bp token)))))})))
-
 ;; what the page says under the cursor: the cell's offset from the anchor (x east, z south), then the block
 (defn hover-text [{:keys [dx y dz label token]}]
   (str "x+" dx " y" y " z+" dz " · " label " (" token ")"))

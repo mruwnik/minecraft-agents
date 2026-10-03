@@ -57,7 +57,10 @@
   [{[x1 _ z1] :min [x2 _ z2] :max}]
   {:x1 x1 :z1 z1 :x2 (inc x2) :z2 (inc z2)})
 
-(defn plan-box [{:keys [region]}] (bounds-box region))
+(defn plan-box
+  "The block rectangle of a plan, nil for a plan with no cells."
+  [{:keys [region]}]
+  (when region (bounds-box region)))
 
 (defn edge-marker
   "Where an arrow for an off-screen point sits: on the viewport's edge (inset pixels in), on the line from the centre to

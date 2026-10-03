@@ -1,0 +1,14 @@
+;; A 5 by 5 hut with its door in the south wall (the blueprint example of docs/design.md).
+{:id "hut" :front :south
+ :key {"S" "cobblestone" "P" "oak_planks" "G" "glass_pane" "." :clear
+       "L" {:block "oak_log" :axis :y}
+       "C" {:block "chest" :facing :south}
+       "B" {:block "white_bed" :facing :east :part :foot}
+       "H" {:block "white_bed" :facing :east :part :head}
+       "D" {:block "oak_door" :facing :north :half :lower}
+       "d" {:block "oak_door" :facing :north :half :upper}}
+ :layers [["SSSSS" "SSSSS" "SSSSS" "SSSSS" "SSSSS"]
+          ["LSSSL" "SBHCS" "S...S" "S...S" "LSDSL"]
+          ["LSSSL" "S...S" "G...G" "S...S" "LSdSL"]
+          ["PPPPP" "PPPPP" "PPPPP" "PPPPP" "PPPPP"]]
+ :spots {"bed" [1 1 1] "chest" [3 1 1]}}

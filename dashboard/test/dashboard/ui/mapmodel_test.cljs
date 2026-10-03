@@ -59,7 +59,8 @@
 (deftest plan-rect
   (are [region expected] (= expected (mm/plan-box {:region region}))
     {:min [10 60 -70] :max [20 64 -61]} {:x1 10 :z1 -70 :x2 21 :z2 -60}
-    {:min [0 0 0] :max [0 0 0]} {:x1 0 :z1 0 :x2 1 :z2 1}))
+    {:min [0 0 0] :max [0 0 0]} {:x1 0 :z1 0 :x2 1 :z2 1}
+    nil nil))                                           ; a plan with no cells (its blueprint is missing) has no region
 
 (deftest bounds-rect
   (is (= {:x1 -3 :z1 4 :x2 0 :z2 5} (mm/bounds-box {:min [-3 70 4] :max [-1 71 4]}))))

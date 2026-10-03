@@ -38,7 +38,7 @@
          (m/map-points [] [{:name "v" :x 10 :z 20 :village {:bounds {:x 10 :z 20 :width 4 :depth 7}}}] [] [] []))))
 
 (deftest map-points-include-plan-boxes
-  (is (= [{:x 1 :z 2} {:x 5 :z 9}] (m/map-points [] [] [] [] [{:x1 1 :z1 2 :x2 5 :z2 9}]))))
+  (is (= [{:x 1 :z 2} {:x 5 :z 9}] (m/map-points [] [] [] [] [{:x1 1 :z1 2 :x2 5 :z2 9} nil]))))
 
 (deftest world-bounds-cases
   (is (= {:min-x -5 :max-x 15 :min-z -9 :max-z 5} (m/world-bounds [{:x 0 :z 0} {:x 10 :z -4}] 5)))

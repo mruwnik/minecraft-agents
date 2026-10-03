@@ -210,11 +210,3 @@
 (deftest find-detail
   (is (= tiny-detail (b/find-detail [unparsed tiny-detail] "tiny-hut")))
   (is (nil? (b/find-detail [tiny-detail] "nope"))))
-
-(deftest plan-cells-keep-air-and-skip-underscores
-  (let [cells (b/plan-cells tiny-bp)]
-    (is (= 11 (count cells)))
-    (is (= [{:dx 0 :dy 0 :dz 0 :air false :names ["oak_log"]} {:dx 0 :dy 0 :dz 1 :air true :names ["air"]}
-            {:dx 1 :dy 0 :dz 1 :air false :names ["torch"]}]
-           (filter #(and (zero? (:dy %)) (#{[0 0] [0 1] [1 1]} [(:dx %) (:dz %)])) cells)))
-    (is (= {:dx 0 :dy -1 :dz 0 :air false :names ["@solid"]} (first cells)))))

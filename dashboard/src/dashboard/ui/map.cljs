@@ -55,7 +55,7 @@
   {:scale (:scale view)
    :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
-   :plans (for [p plans] (plan-rect view p))
+   :plans (for [p plans :when (:region p)] (plan-rect view p))
    :plan-elements (vec (mapcat #(element-rects view %) plans))
    :bodies (for [b bodies :let [pos (mm/body-pos b)] :when pos]
              (let [status (trouble/status b (or now 0))]

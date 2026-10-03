@@ -29,7 +29,7 @@
   (vec (concat
         (for [b bodies :when (and (:up b) (get-in b [:state :pos]))]
           {:x (get-in b [:state :pos :x]) :z (get-in b [:state :pos :z])})
-        (mapcat (fn [z] [{:x (:x1 z) :z (:z1 z)} {:x (:x2 z) :z (:z2 z)}]) plan-boxes)
+        (mapcat (fn [z] [{:x (:x1 z) :z (:z1 z)} {:x (:x2 z) :z (:z2 z)}]) (remove nil? plan-boxes))
         (mapcat (fn [p] (cons {:x (:x p) :z (:z p)}
                               (map (fn [r] {:x (+ (:x r) (:w r)) :z (+ (:z r) (:h r))}) (plan-rects [p]))))
                 places)

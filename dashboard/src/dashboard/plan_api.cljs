@@ -1,37 +1,51 @@
 (ns dashboard.plan-api
   "What /api/plans and /api/plan/<id> answer: the plans of a world compared with the dumped blocks. Plain data in and
-  out (the server supplies the directory, the blueprint lookup and the block lookup)."
+  out (the server supplies the plan directory, the blueprint directory and the block lookup (block-at x y z) -> block
+  name or nil; the dumped columns have names only, so a want that names state answers unknown)."
   (:require [dashboard.plan :as plan]
             [dashboard.plan-compare :as cmp]
             [plan.shape :as shape]))
 
-(defn compare-one [plans id blueprint-fn block-at]
-  (cmp/compare-plan (shape/expand-plan plans id blueprint-fn) block-at))
+(defn world-blocks
+  "The shape's block lookup over a by-name one: [x y z] -> {:name n}, nil where nothing was dumped."
+  [block-at]
+  (fn [[x y z]] (when-let [n (block-at x y z)] {:name n})))
+
+(defn compare-one [p blueprints block-at]
+  (let [expansion (shape/expand p blueprints)]
+    (assoc (cmp/compare-plan expansion (world-blocks block-at))
+           :region (cmp/bounds (:cells expansion))
+           :spots (:spots expansion))))
 
 (defn header [id p]
-  {:id id :name (or (:name p) id) :owner (:owner p) :kind (:kind p) :status (or (:status p) :proposed)
-   :region (:region p) :note (:note p) :children (shape/children p)})
+  {:id id :name id :status (:status p) :note (:note p) :children []})
 
-(defn list-item [plans blueprint-fn block-at [id p]]
-  (let [{:keys [counts elements]} (compare-one plans id blueprint-fn block-at)]
+(defn read-all [{:keys [dir blueprint-dir]}]
+  (assoc (plan/read-dir dir) :blueprints (:blueprints (plan/read-blueprints blueprint-dir))))
+
+(defn list-item [blueprints block-at [id p]]
+  (let [{:keys [counts elements region]} (compare-one p blueprints block-at)]
     (assoc (header id p)
+           :region region
            :counts counts
            :percent (:percent counts)
            :elements (mapv #(select-keys % [:id :kind :bounds :counts]) elements))))
 
 (defn summaries
-  "{:plans [...] :errors [{:file :errors}]}: every readable plan with its totals and the bounds of its elements."
-  [{:keys [dir blueprint-fn block-at]}]
-  (let [{:keys [plans errors]} (plan/read-dir dir)]
-    {:plans (mapv #(list-item plans blueprint-fn block-at %) (sort-by key plans))
+  "{:plans [...] :errors [{:file :errors}]}: every readable plan with its totals and the bounds of its parts."
+  [{:keys [block-at] :as opts}]
+  (let [{:keys [plans errors blueprints]} (read-all opts)]
+    {:plans (mapv #(list-item blueprints block-at %) (sort-by key plans))
      :errors errors}))
 
 (defn detail
-  "The full comparison of one plan (elements with content text, layers, grid, errors), nil for an unknown id."
-  [{:keys [dir blueprint-fn block-at]} id]
-  (let [{:keys [plans]} (plan/read-dir dir)]
+  "The full comparison of one plan (parts as elements with content text, layers, grid, spots, assignments, errors),
+  nil for an unknown id."
+  [{:keys [block-at] :as opts} id]
+  (let [{:keys [plans blueprints]} (read-all opts)]
     (when-let [p (get plans id)]
-      (let [result (compare-one plans id blueprint-fn block-at)]
-        (assoc (header id p)
-               :counts (:counts result) :percent (get-in result [:counts :percent])
-               :elements (:elements result) :layers (:layers result) :grid (:grid result) :errors (:errors result))))))
+      (let [result (compare-one p blueprints block-at)]
+        (merge (header id p)
+               (select-keys result [:region :counts :elements :layers :grid :errors :spots])
+               {:percent (get-in result [:counts :percent])
+                :assign (shape/assignment-answers p)})))))
