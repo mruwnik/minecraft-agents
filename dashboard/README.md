@@ -12,6 +12,7 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 ## Endpoints (JSON, `cache-control: no-store`)
 
 `/api/worlds`, `/api/state?world=`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers`,
+`/api/plans?world=` (plans with a completion summary, cached 10 s), `/api/plan/<name>?world=` (full comparison with layers and bill),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
 Pages `/`, `/villagers`, `/villages`, `/blueprints` serve `public/index.html`; static files come from `public/`
 and `out/public/js/` (at `/js/`). `?world=` is validated against the `state/worlds/*/world.json` listing
