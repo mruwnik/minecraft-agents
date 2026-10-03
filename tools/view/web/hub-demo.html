@@ -19,9 +19,14 @@
 <div id="grid"></div>
 <script type="module">
 // One 2D canvas per agent from /agents (offline ones too), all drawn by one hub. ?w=&h= card size, ?fps=, ?radius=, ?n= most agents.
-import { createViewHub } from './hub.mjs'
+// ?nogl=1 forces getContext('webgl2') to return null, to see the hub without WebGL2.
 
 const params = new URLSearchParams(location.search)
+if (params.has('nogl')) {
+  const real = HTMLCanvasElement.prototype.getContext
+  HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return type === 'webgl2' ? null : real.call(this, type, ...rest) }
+}
+const { createViewHub } = await import('./hub.mjs')
 const number = (name, fallback) => Number(params.get(name)) > 0 ? Number(params.get(name)) : fallback
 const width = number('w', 320)
 const height = number('h', 180)
@@ -45,13 +50,14 @@ const refresh = () => {
     const s = scene.stats()
     caption.textContent = `${agent.name} ${s.status}  fps ${s.fps}  cols ${s.loaded}/${s.wanted}${s.gpuMs === undefined ? '' : `  gpu ${s.gpuMs} ms`}`
   }
+  if (!hub.supported) return void (document.getElementById('summary').textContent = 'WebGL2 is not available: the hub draws nothing')
   const all = hub.stats()
   document.getElementById('summary').textContent = `${all.renderer}\nframe cost p50 ${all.frameCostMs.p50?.toFixed(2)} ms  p95 ${all.frameCostMs.p95?.toFixed(2)} ms  gpu memory ${(all.memory.total / 1048576).toFixed(0)} MB`
 }
 setInterval(refresh, 500)
 
 const settled = () => cards.every(({ scene }) => scene.ready())
-window.__hub = { hub, scenes: cards.map(c => c.scene), agents, size: [width, height], stats: () => hub.stats(), probeGpu: o => hub.probeGpu({ width, height, ...o }), ready: false }
+window.__hub = { supported: hub.supported, hub, scenes: cards.map(c => c.scene), agents, size: [width, height], stats: () => hub.stats(), probeGpu: o => hub.probeGpu({ width, height, ...o }), ready: false }
 const waitReady = setInterval(() => { if (settled()) { window.__hub.ready = true; clearInterval(waitReady) } }, 250)
 </script>
 </body>

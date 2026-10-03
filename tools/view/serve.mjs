@@ -17,6 +17,7 @@ const VERSION = /^[0-9.]+$/
 const COLUMN_FILE = /^(-?\d+)\.(-?\d+)\.bin$/
 const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8' }
 const PING_MS = 15000
+const MAX_STREAM_AGENTS = 32
 
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'Cache-Control': 'no-cache', ...headers })
@@ -153,13 +154,10 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     return poll
   }
 
-  const streamAgent = async (req, res, name, radius) => {
-    const first = await readJson(agentFile(name, 'pose.json'))
-    if (!first) return notFound(res)
-    scanner.track(first.world)
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+  // watches one agent's pose, hud and nearby columns (first: its pose already read); calls send(event, data) for every change; returns stop()
+  const watchAgent = (name, first, radius, send) => {
     let closed = false
-    const emit = (event, data) => closed || res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    const emit = (event, data) => closed || send(event, data)
     let pose = first
     const watchColumns = columnWatcher(first.world, emit)
 
@@ -225,13 +223,42 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
         chunkWatcher = null // no directory yet: the poll covers it
       }
     }
-    const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
-    req.on('close', () => {
+    return () => {
       closed = true
-      clearInterval(ping)
       timers.forEach(clearTimeout)
       watcher?.close()
       chunkWatcher?.close()
+    }
+  }
+
+  const sseHead = res => res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+  const sseWrite = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+
+  const streamAgent = async (req, res, name, radius) => {
+    const first = await readJson(agentFile(name, 'pose.json'))
+    if (!first) return notFound(res)
+    scanner.track(first.world)
+    sseHead(res)
+    const stop = watchAgent(name, first, radius, (event, data) => sseWrite(res, event, data))
+    const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
+    req.on('close', () => {
+      clearInterval(ping)
+      stop()
+    })
+  }
+
+  // one stream for several agents; every event's data carries `agent`. Agents without a pose file are left out.
+  const streamAgents = async (req, res, names, radius) => {
+    const firsts = await Promise.all(names.map(async name => [name, await readJson(agentFile(name, 'pose.json'))]))
+    sseHead(res)
+    const stops = firsts.filter(([, first]) => first).map(([name, first]) => {
+      scanner.track(first.world)
+      return watchAgent(name, first, radius, (event, data) => sseWrite(res, event, { agent: name, ...data }))
+    })
+    const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
+    req.on('close', () => {
+      clearInterval(ping)
+      stops.forEach(stop => stop())
     })
   }
 
@@ -247,6 +274,12 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     if (head === 'pose' && rest.length === 1 && NAME.test(rest[0])) {
       const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))
       return streamAgent(req, res, rest[0], radius)
+    }
+    if (url.pathname === '/poses') {
+      const names = (url.searchParams.get('agents') ?? '').split(',')
+      if (names.length > MAX_STREAM_AGENTS || !names.every(n => NAME.test(n))) return send(res, 400, `agents: 1 to ${MAX_STREAM_AGENTS} names of letters, digits, _ and -`, { 'Content-Type': 'text/plain' })
+      const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))
+      return streamAgents(req, res, names, radius)
     }
     if (head === 'block-issues' && rest.length === 1 && NAME.test(rest[0])) return sendBlockIssues(res, rest[0])
     if (head === 'hud' && rest.length === 1 && NAME.test(rest[0])) return sendFile(res, agentFile(rest[0], 'hud.json'), TYPES['.json'])

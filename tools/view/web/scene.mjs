@@ -88,9 +88,9 @@ const keep = (list, value) => {
 // options: agent, radius, fov, interp (boolean), renderer, decoder (createDecoder with priority: decodePriority), baseUrl (prefix of
 // /pose /columns /blocks ...), debugLevel (0..2, the table's issue marks), maxDist, urlParams (?time / ?rain overrides of shading.mjs),
 // finishForLatency (gl.finish before stamping latencies: the single-view page's measurement; leave off for many scenes),
-// closeWhenOffline (drop the event stream once the agent's pose is offline, reconnect() reopens it: a browser allows 6 HTTP/1.1
-// connections per origin, so many scenes cannot all hold a stream)
-export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = true, renderer, decoder, baseUrl = '', debugLevel = 0, maxDist = radius * 16, urlParams = new URLSearchParams(), finishForLatency = false, closeWhenOffline = false }) => {
+// ownStream (default true: the scene opens /pose/<agent> itself; false: whoever owns a shared /poses stream passes each event of
+// this agent to feed(event, data), as the hub does, because a browser allows only 6 HTTP/1.1 connections per origin)
+export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = true, renderer, decoder, baseUrl = '', debugLevel = 0, maxDist = radius * 16, urlParams = new URLSearchParams(), finishForLatency = false, ownStream = true }) => {
   const id = String(nextSceneId++)
   const N = 2 * radius + 1
   const interp = poseInterpolator()
@@ -157,7 +157,7 @@ export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = tr
       if (state.columns.get(key) !== column || state.owners.get(slotKey(column.cx, column.cz, N)) !== key) continue
       ensureDims(result.header)
       const uploadStarted = performance.now()
-      world.uploadColumn(mod(column.cx, N), mod(column.cz, N), result.mats, result.flags, result.light)
+      world.uploadColumn(mod(column.cx, N), mod(column.cz, N), result.mats, result.flags, result.light, result.biomes)
       const uploadMs = performance.now() - uploadStarted
       state.uploadCount++
       keepTiming(metrics.uploadMs, uploadMs)
@@ -241,9 +241,15 @@ export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = tr
     pump()
   }
 
+  // the world's biome colours, once per scene; without them the world keeps the fixed group colours
+  const loadBiomes = async worldName => {
+    const body = await fetch(`${baseUrl}/biomes/${worldName}.json`).then(r => r.ok ? r.json() : null).catch(() => null)
+    if (state.closed) return
+    if (!world.setBiomes(body)) console.warn(`biomes: no colour table for world ${worldName}${body?.reason ? ` (${body.reason})` : ''}: fixed tint colours`)
+  }
+
   const onPose = async ({ mtime, pose }) => {
     state.pose = pose
-    if (closeWhenOffline && pose.status === 'offline') closeStream()
     state.pendingMtime = mtime
     interp.push(pose, Date.now())
     if (pose.eye) state.pendingShown.push({ mtime, t: pose.t })
@@ -252,6 +258,7 @@ export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = tr
       const table = await tables.ensure(pose.mcVersion)
       if (state.closed || !table) return
       state.table = table
+      loadBiomes(pose.world)
     }
     const ccx = Math.floor(pose.eye.x / 16)
     const ccz = Math.floor(pose.eye.z / 16)
@@ -261,19 +268,18 @@ export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = tr
     keepTiming(metrics.retargetMs, performance.now() - started)
   }
 
-  const closeStream = () => {
-    state.source?.close()
-    state.source = null
+  // one decoded event of the agent's stream: 'pose', 'hud' or 'column'
+  const feed = (event, data) => {
+    if (state.closed) return
+    if (event === 'pose') return onPose(data).catch(error => console.error('pose:', error))
+    if (event === 'hud') return void (state.hud = data.hud)
+    if (event === 'column') onColumnEvent(data)
   }
 
   const connect = () => {
-    if (state.source || state.closed) return
     const source = new EventSource(`${baseUrl}/pose/${encodeURIComponent(agent)}?radius=${radius}`)
     state.source = source
-    const on = (event, handler) => source.addEventListener(event, e => handler(JSON.parse(e.data)))
-    on('pose', event => onPose(event).catch(error => console.error('pose:', error)))
-    on('hud', ({ hud }) => { state.hud = hud })
-    on('column', onColumnEvent)
+    for (const event of ['pose', 'hud', 'column']) source.addEventListener(event, e => feed(event, JSON.parse(e.data)))
     source.onerror = () => console.warn(`event stream of ${agent} interrupted; the browser will retry`)
   }
 
@@ -348,20 +354,19 @@ export const createScene = ({ agent, radius = 2, fov = 70, interp: interpOn = tr
   const close = () => {
     if (state.closed) return
     state.closed = true
-    closeStream()
+    state.source?.close()
     for (const key of state.decoding.keys()) decoder.cancel(decodeKey(id, key))
     live.delete(id)
     world.dispose()
   }
 
-  connect()
+  if (ownStream) connect()
   return {
     id, agent, radius, fov, world, metrics, interp, frame, drew, stats, close,
     pose: () => state.pose,
     hud: () => state.hud,
     counts: () => ({ inFlight: state.inFlight.size, decoding: state.decoding.size, uploads: state.uploads.size, needs: state.needs.size }),
     isReady: () => state.dims !== null && state.ccx !== null,
-    streaming: () => state.source !== null,
-    reconnect: connect
+    feed
   }
 }

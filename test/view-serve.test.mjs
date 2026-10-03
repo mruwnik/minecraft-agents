@@ -376,3 +376,55 @@ test('GET /biomes/<world>.json falls back to minecraft-data order without biomes
 for (const p of ['/biomes/nope.json', '/biomes/..%2Fw1.json', '/biomes/a.b.json']) {
   test(`GET ${p} is 404`, async () => assert.equal((await get(p)).status, 404))
 }
+
+const writeAgent = (name, value, hudValue) => {
+  const dir = path.join(stateDir, 'agents', name, 'view')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'pose.json'), JSON.stringify(value))
+  if (hudValue) fs.writeFileSync(path.join(dir, 'hud.json'), JSON.stringify(hudValue))
+}
+
+test('/poses sends every agent\'s pose and hud tagged with its name, one stream', async () => {
+  writeAgent('Two', { ...pose, t: 7 }, { v: 1, health: 11 })
+  const response = await get('/poses?agents=Bob,Two&radius=2')
+  assert.equal(response.headers.get('content-type'), 'text/event-stream')
+  const events = await collect(response, { ms: 1500, done: es => es.filter(e => e.event === 'pose').length >= 2 && es.some(e => e.event === 'hud' && e.data.agent === 'Two') })
+  const poses = events.filter(e => e.event === 'pose')
+  assert.deepEqual(poses.map(e => [e.data.agent, e.data.pose.t]).sort(), [['Bob', 5], ['Two', 7]])
+  assert.deepEqual(events.find(e => e.event === 'hud' && e.data.agent === 'Two').data.hud, { v: 1, health: 11 })
+})
+
+test('/poses sends a pose change and a column change with the agent', async () => {
+  writeAgent('Two', { ...pose, t: 7 })
+  const response = await get('/poses?agents=Two&radius=1')
+  setTimeout(() => {
+    writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000) // not watched: Bob is not in the stream
+    writeAt(path.join(stateDir, 'agents', 'Two', 'view', 'pose.json'), JSON.stringify({ ...pose, t: 8 }), 5000)
+    writeAt(path.join(chunkDir, '1.0.bin'), columnBytes, 6000)
+  }, 150)
+  const events = await collect(response, { ms: 1200, done: es => es.some(e => e.event === 'column') && es.filter(e => e.event === 'pose').length >= 2 })
+  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => [e.data.agent, e.data.pose.t]), [['Two', 7], ['Two', 8]])
+  assert.deepEqual(events.find(e => e.event === 'column').data, { agent: 'Two', cx: 1, cz: 0, mtime: 6000 * 1000 })
+})
+
+test('/poses skips agents without a pose and still streams the others', async () => {
+  const response = await get('/poses?agents=Nobody,Bob')
+  const events = await collect(response, { ms: 600, done: es => es.some(e => e.event === 'pose') })
+  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => e.data.agent), ['Bob'])
+})
+
+const badQueries = [
+  ['no agents', '/poses'],
+  ['empty list', '/poses?agents='],
+  ['a bad name', '/poses?agents=Bob,..%2FBob'],
+  ['a path name', '/poses?agents=Bob,a/b'],
+  ['more than 32 agents', `/poses?agents=${Array.from({ length: 33 }, (_, i) => `A${i}`).join(',')}`]
+]
+for (const [name, url] of badQueries) {
+  test(`/poses with ${name} is 400`, async () => assert.equal((await get(url)).status, 400))
+}
+
+test('/poses is a GET only and /pose/<Name> still works', async () => {
+  assert.equal((await get('/poses?agents=Bob', { method: 'POST' })).status, 405)
+  assert.equal((await get('/pose/Bob')).status, 200)
+})

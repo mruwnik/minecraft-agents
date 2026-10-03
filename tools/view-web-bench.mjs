@@ -1,5 +1,6 @@
 // Measures the browser view in headless Chromium over CDP.
 //   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub]
+// --beside-hub <hub url>: the url is a single view; measures its fps alone, then again with a hub page (own window, same browser) running beside it, and the hub's per-card rates.
 // --hub: the url is tools/view/web/hub-demo.html (many scenes in one context); samples window.__hub every second for --seconds and prints per-scene fps (min / median over scenes),
 //   main-thread frame cost, GPU time per scene render (timer query, and a gl.finish probe), GPU memory and JS heap instead of the single-view numbers.
 // --trace S: after the warm-up, records S seconds of the drawn camera (window.__view.camTrace) and adds `smooth` (with dropped frames), `shownLatency`, `decodeMs`, `uploadMs` and `columnChange` (file mtime to drawn).
@@ -23,7 +24,8 @@ const { values, positionals } = parseArgs({
     chromium: { type: 'string', default: '/usr/bin/chromium' },
     timeout: { type: 'string', default: '90' },
     trace: { type: 'string' },
-    hub: { type: 'boolean', default: false }
+    hub: { type: 'boolean', default: false },
+    'beside-hub': { type: 'string' }
   }
 })
 const url = positionals[0]
@@ -157,6 +159,18 @@ const smoothness = trace => {
 
 const median = list => percentile(list, 0.5)
 
+// renders per second of every card over the whole run, and its slowest 5-second window (samples one second apart)
+const WINDOW_S = 5
+const cardRates = samples => {
+  const agents = Object.keys(samples.at(-1).stats.scenes)
+  const per = Object.fromEntries(agents.map(a => {
+    const counts = samples.map(s => s.stats.scenes[a].renders)
+    const windows = counts.slice(WINDOW_S).map((c, i) => (c - counts[i]) / WINDOW_S)
+    return [a, { run: round((counts.at(-1) - counts[0]) / (counts.length - 1), 2), worstWindow: windows.length ? round(Math.min(...windows), 2) : null }]
+  }))
+  return { minRun: Math.min(...agents.map(a => per[a].run)), minWindow: Math.min(...agents.map(a => per[a].worstWindow ?? Infinity)), seconds: samples.length - 1, perCard: per }
+}
+
 // the hub page: per-second samples of window.__hub.stats(), then the numbers that matter for 11 cards at 6 fps
 const hubReport = async cdp => {
   const samples = []
@@ -164,6 +178,7 @@ const hubReport = async cdp => {
     await sleep(1000)
     samples.push(await cdp.evaluate('({ stats: __hub.stats(), heap: performance.memory ? performance.memory.usedJSHeapSize : null })'))
   }
+  const cards = cardRates(samples)
   const gpuProbe = await cdp.evaluate('__hub.probeGpu()')
   const longTasks = await cdp.evaluate('window.__longTasks ?? []')
   const final = samples.at(-1).stats
@@ -180,6 +195,7 @@ const hubReport = async cdp => {
     renderer: final.renderer,
     scenes: agents.length,
     scenesWithColumns: ready.length,
+    cardFps: cards,
     fps: { min: round(Math.min(...fpsList), 2), median: round(median(fpsList), 2), perScene: Object.fromEntries(agents.map((a, i) => [a, round(fpsList[i], 2)])) },
     frameCostMs: { p50: round(final.frameCostMs.p50, 2), p95: round(final.frameCostMs.p95, 2), max: round(final.frameCostMs.max, 2), n: final.frameCostMs.n },
     renderCpuMsP50: round(median(agents.map(a => final.scenes[a].renderMsP50).filter(v => v !== null)), 2),
@@ -189,6 +205,40 @@ const hubReport = async cdp => {
     longTasks: { n: longTasks.length, totalMs: round(longTasks.reduce((x, y) => x + y, 0), 1), maxMs: Math.max(0, ...longTasks) },
     console: cdp.logs.slice(0, 10)
   }
+}
+
+// a second window in the same browser (browser-level CDP), so both pages are visible and keep animating
+const openWindow = async (port, pageUrl, w, h) => {
+  const version = await fetch(`http://127.0.0.1:${port}/json/version`).then(r => r.json())
+  const browser = await connectCdp(version.webSocketDebuggerUrl)
+  const { targetId } = await browser.send('Target.createTarget', { url: pageUrl, newWindow: true, width: Number(w), height: Number(h) })
+  const targets = await fetch(`http://127.0.0.1:${port}/json`).then(r => r.json())
+  const target = targets.find(t => t.id === targetId)
+  const cdp = await connectCdp(target.webSocketDebuggerUrl)
+  await cdp.send('Runtime.enable')
+  await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+  return { cdp, browser }
+}
+
+const viewFps = async (cdp, seconds) => {
+  const first = await cdp.evaluate('({frames: __view.frames, t: performance.now()})')
+  await sleep(seconds * 1000)
+  const last = await cdp.evaluate('({frames: __view.frames, t: performance.now()})')
+  return round((last.frames - first.frames) / ((last.t - first.t) / 1000), 1)
+}
+
+const besideReport = async (port, cdp, w, h) => {
+  const alone = await viewFps(cdp, Number(values.seconds))
+  const { cdp: hubCdp, browser } = await openWindow(port, values['beside-hub'], w, h)
+  const hubReady = await waitUntil(() => hubCdp.evaluate('window.__hub?.ready === true'), Number(values.timeout) * 1000, 'window.__hub.ready')
+  await sleep(2000)
+  const before = await hubCdp.evaluate('__hub.stats()')
+  const fpsBeside = await viewFps(cdp, Number(values.seconds))
+  const after = await hubCdp.evaluate('__hub.stats()')
+  const cardFps = Object.keys(after.scenes).map(a => (after.scenes[a].renders - before.scenes[a].renders) / Number(values.seconds))
+  hubCdp.close()
+  browser.close()
+  return { alone, besideHub11: fpsBeside, hubReady, hubCardFps: { min: round(Math.min(...cardFps), 2), median: round(median(cardFps), 2) }, hubFrameCostMs: after.frameCostMs, console: [...cdp.logs, ...hubCdp.logs].slice(0, 10) }
 }
 
 const main = async () => {
@@ -218,6 +268,11 @@ const main = async () => {
     await cdp.send('Page.navigate', { url })
     const ready = await waitUntil(() => cdp.evaluate(values.hub ? 'window.__hub?.ready === true' : 'window.__view?.ready === true'), Number(values.timeout) * 1000, values.hub ? 'window.__hub.ready' : 'window.__view.ready')
     await sleep(2000)
+    if (values['beside-hub']) {
+      console.log(JSON.stringify({ ready, url, ...(await besideReport(port, cdp, w, h)) }))
+      cdp.close()
+      return
+    }
     if (values.hub) {
       const report = await hubReport(cdp)
       if (values.screenshot) fs.writeFileSync(values.screenshot, Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'))

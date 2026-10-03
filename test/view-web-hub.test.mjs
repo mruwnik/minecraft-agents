@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dueScenes, nextDueAt } from '../tools/view/web/hub.mjs'
+import { createViewHub, dueScenes, nextDueAt } from '../tools/view/web/hub.mjs'
 
 const entry = (id, dueAt, visible = true) => ({ id, dueAt, visible })
 
@@ -59,4 +59,26 @@ test('11 scenes that all start due at once still settle to 6 fps with at most 2 
   const scenes = Array.from({ length: 11 }, (_, i) => ({ id: `s${i}`, visible: true }))
   const result = simulate({ scenes, fps: 6, seconds: 10, perFrame: 2 })
   for (const s of result) assert.ok(s.renders.length / 10 >= 5.8, `${s.id}: ${s.renders.length / 10} fps`)
+})
+
+test('without WebGL2 the hub does not throw, says supported: false and leaves the canvas alone', async () => {
+  const warn = console.warn
+  console.warn = () => {}
+  globalThis.document = { createElement: () => ({ getContext: () => null }) }
+  try {
+    const hub = createViewHub({})
+    const scene = hub.addScene({ agent: 'Bob' })
+    const canvas = { width: 300, height: 150, getContext: () => assert.fail('the canvas must not be drawn on') }
+    scene.attach(canvas, { width: 320, height: 180 })
+    assert.equal(hub.supported, false)
+    assert.deepEqual([canvas.width, canvas.height], [300, 150])
+    assert.equal(scene.stats().status, 'unsupported')
+    await assert.rejects(scene.snapshot({ width: 8, height: 8 }))
+    scene.detach(canvas)
+    scene.close()
+    hub.close()
+  } finally {
+    console.warn = warn
+    delete globalThis.document
+  }
 })

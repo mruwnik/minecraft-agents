@@ -19,7 +19,7 @@ const FRAME_KEEP = 600
 const GPU_SMOOTHING = 0.2 // weight of the newest timer-query result in the running gpuMs
 const PLACEHOLDER = '#1a1a1d'
 const SNAPSHOT_UPLOAD_ROUNDS = 40
-const AGENTS_POLL_MS = 3000 // how often agents whose stream was dropped (offline) are checked for coming back
+const STREAM_DEBOUNCE_MS = 500 // scenes added or closed within this window share one reopening of the /poses stream
 
 // ---- scheduling (pure) ----
 
@@ -49,9 +49,40 @@ const keep = (list, value, max) => {
   if (list.length > max) list.shift()
 }
 
-export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudgetMs = 8, debugLevel = 0 } = {}) => {
+const tryRenderer = canvas => {
+  try {
+    return createRenderer(canvas)
+  } catch (error) {
+    console.warn(`view hub: no WebGL2 (${error.message}); cards keep what they show`)
+    return null
+  }
+}
+
+// without WebGL2: a hub that reports supported: false and whose scenes do nothing (attach leaves the canvas as it is)
+const unsupportedHub = () => ({
+  supported: false,
+  addScene: ({ agent }) => ({
+    id: null,
+    agent,
+    attach: () => {},
+    detach: () => {},
+    snapshot: () => Promise.reject(new Error('WebGL2 is not available')),
+    stats: () => ({ fps: 0, loaded: 0, wanted: 0, poseAge: null, status: 'unsupported' }),
+    ready: () => false,
+    close: () => {}
+  }),
+  stats: () => ({ supported: false, scenes: {} }),
+  probeGpu: () => ({}),
+  close: () => {}
+})
+
+export const createViewHub = (options = {}) => {
   const hidden = document.createElement('canvas')
-  const renderer = createRenderer(hidden)
+  const renderer = tryRenderer(hidden)
+  return renderer ? createSupportedHub(options, hidden, renderer) : unsupportedHub()
+}
+
+const createSupportedHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudgetMs = 8, debugLevel = 0 }, hidden, renderer) => {
   renderer.setDebug(debugLevel > 0)
   const gl = renderer.gl
   const decoder = createDecoder({ priority: decodePriority })
@@ -117,6 +148,7 @@ export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudg
     }
     entry.scene.drew()
     keep(entry.renders, now, FRAME_KEEP)
+    entry.renderCount++
     keep(entry.renderMs, performance.now() - started, FRAME_KEEP)
   }
 
@@ -141,25 +173,41 @@ export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudg
     if (rendered) keep(frameCosts, performance.now() - started, FRAME_KEEP)
   }
 
-  // a scene whose agent went offline dropped its stream; reopen it when the agent is online again or wrote a newer pose
-  const reviveStreams = async () => {
-    const dropped = [...entries.values()].filter(e => !e.scene.streaming())
-    if (!dropped.length) return
-    const agents = await fetch(`${baseUrl}/agents`).then(r => r.json()).catch(() => [])
-    for (const { name, status, t } of agents) {
-      const entry = dropped.find(e => e.scene.agent === name)
-      if (entry && (status !== 'offline' || t > (entry.scene.pose()?.t ?? 0))) entry.scene.reconnect()
+  // ONE /poses stream for all scenes (a browser holds only 6 HTTP/1.1 connections per origin); reopened, debounced, when the set
+  // of agents or the radius changes. Its events carry `agent` and go to every scene of that agent.
+  let stream = null // {key, source}
+  let streamTimer = null
+  const syncStream = () => {
+    const agents = [...new Set([...entries.values()].map(e => e.scene.agent))].sort()
+    const radius = Math.max(0, ...[...entries.values()].map(e => e.scene.radius))
+    const key = `${agents.join(',')}|${radius}`
+    if (stream?.key === key || (!agents.length && !stream)) return
+    stream?.source.close()
+    stream = null
+    if (!agents.length) return
+    const source = new EventSource(`${baseUrl}/poses?agents=${agents.map(encodeURIComponent).join(',')}&radius=${radius}`)
+    stream = { key, source }
+    for (const event of ['pose', 'hud', 'column']) {
+      source.addEventListener(event, e => {
+        const data = JSON.parse(e.data)
+        for (const entry of entries.values()) if (entry.scene.agent === data.agent) entry.scene.feed(event, data)
+      })
     }
+    source.onerror = () => console.warn('the /poses stream was interrupted; the browser will retry')
   }
-  const revive = setInterval(reviveStreams, AGENTS_POLL_MS)
+  const scheduleStream = () => {
+    clearTimeout(streamTimer)
+    streamTimer = setTimeout(syncStream, STREAM_DEBOUNCE_MS)
+  }
 
   const fpsOf = (entry, now) => entry.renders.filter(t => now - t <= FPS_WINDOW_MS).length
 
   const addScene = ({ agent, radius = 2, fov = 70, interp = true }) => {
     if (entries.size >= maxScenes) throw new Error(`the hub holds at most ${maxScenes} scenes`)
-    const scene = createScene({ agent, radius, fov, interp, renderer, decoder, baseUrl, debugLevel, closeWhenOffline: true })
-    const entry = { scene, targets: new Map(), dueAt: performance.now() + (entries.size % maxScenes) * 1000 / fps / maxScenes, renders: [], renderMs: [], gpuMs: undefined }
+    const scene = createScene({ agent, radius, fov, interp, renderer, decoder, baseUrl, debugLevel, ownStream: false })
+    const entry = { scene, targets: new Map(), dueAt: performance.now() + (entries.size % maxScenes) * 1000 / fps / maxScenes, renders: [], renderCount: 0, renderMs: [], gpuMs: undefined }
     entries.set(scene.id, entry)
+    scheduleStream()
 
     const attach = (canvas, { width = 320, height = 180 } = {}) => {
       canvas.width = width
@@ -197,6 +245,7 @@ export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudg
       for (const canvas of [...entry.targets.keys()]) detach(canvas)
       entries.delete(scene.id)
       scene.close()
+      scheduleStream()
     }
     const ready = () => {
       scene.stats()
@@ -222,14 +271,16 @@ export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudg
   const stats = () => ({
     renderer: renderer.renderer,
     gpuTimer: timer !== null,
-    scenes: Object.fromEntries([...entries.values()].map(e => [e.scene.agent, { ...e.scene.stats(), fps: fpsOf(e, performance.now()), renderMsP50: percentile(e.renderMs, 0.5), ...(e.gpuMs === undefined ? {} : { gpuMs: e.gpuMs }) }])),
+    scenes: Object.fromEntries([...entries.values()].map(e => [e.scene.agent, { ...e.scene.stats(), fps: fpsOf(e, performance.now()), renderMsP50: percentile(e.renderMs, 0.5), renders: e.renderCount, ...(e.gpuMs === undefined ? {} : { gpuMs: e.gpuMs }) }])),
     frameCostMs: { n: frameCosts.length, p50: percentile(frameCosts, 0.5), p95: percentile(frameCosts, 0.95), max: frameCosts.length ? Math.max(...frameCosts) : null },
     memory: renderer.memory()
   })
 
   const close = () => {
     closed = true
-    clearInterval(revive)
+    clearTimeout(streamTimer)
+    stream?.source.close()
+    stream = null
     cancelAnimationFrame(raf)
     for (const entry of [...entries.values()]) {
       for (const canvas of [...entry.targets.keys()]) observer?.unobserve(canvas)
@@ -241,5 +292,5 @@ export const createViewHub = ({ maxScenes = 12, fps = 6, baseUrl = '', frameBudg
   }
 
   raf = requestAnimationFrame(tick)
-  return { addScene, stats, probeGpu, close }
+  return { supported: true, addScene, stats, probeGpu, close }
 }
