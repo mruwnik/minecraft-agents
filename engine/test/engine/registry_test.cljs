@@ -12,6 +12,7 @@
      jobs.forestry.harvest-wood jobs.storage.deposit jobs.storage.withdraw jobs.storage.kit jobs.items.craft jobs.items.give jobs.items.bake jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box jobs.farm.find-spot jobs.farm.harvest
      jobs.apiary.harvest
      jobs.apiary.guard
+     jobs.apiary.maintain
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify})

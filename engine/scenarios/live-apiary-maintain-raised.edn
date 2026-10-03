@@ -1,0 +1,3 @@
+;; apiary.maintain live: ripe hive over a raised fire at 6108,101..103,6100, no campfire carried
+{:register []
+ :queue [(jobs.apiary.maintain {:box {:from {:x 6105 :y 100 :z 6096} :to {:x 6112 :y 110 :z 6104}}})]}

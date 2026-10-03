@@ -1,0 +1,3 @@
+;; apiary.maintain live: safe apiary (both hives emptied), bees below a target of 6, flowers carried; a wide box because bees fly about
+{:register []
+ :queue [(jobs.apiary.maintain {:box {:from {:x 6090 :y 100 :z 6090} :to {:x 6115 :y 112 :z 6115}} :target 6})]}
