@@ -8,11 +8,14 @@
             [clojure.string :as str]
             [dashboard.chat :as chat]
             [dashboard.engine-edn :as engine-edn]
+            [dashboard.chat-send :as chat-send]
             [dashboard.engine-events :as ee]
+            [dashboard.guard :as guard]
             [dashboard.items :as items]
             [dashboard.jobs-source :as jobs-source]
             [dashboard.legacy :as legacy]
             [dashboard.mapview :as mapview]
+            [dashboard.rcon :as rcon]
             [dashboard.routes :as routes]
             [dashboard.view-info :as view-info]
             [dashboard.worlds :as worlds]))
@@ -394,25 +397,44 @@
                       (when (<= @size limit) (swap! chunks conj chunk))))
     (.on req "end" #(on-done (when (<= @size limit) (.toString (js/Buffer.concat (to-array @chunks)) "utf8"))))))
 
-;; ---------------------------------------------------------------- chat send (POST /api/chat/send)
-;; js/chatroute.mjs validates the body and builds the tellraw command; the runner is RCON, or, with DASHBOARD_CHAT_DRY=1,
-;; one that only logs the command.
-(def chat-module (or (.-DASHBOARD_CHAT_MODULE js/process.env) (.join path dashboard-dir "js" "chatroute.mjs")))
-(def chat-dry? (= "1" (.-DASHBOARD_CHAT_DRY js/process.env)))
-(def max-chat-body-bytes 2048)
+;; ---------------------------------------------------------------- state-changing routes
+;; Every POST route goes through dashboard.guard (Host, Origin, Content-Type, method) and a body limit.
+(def port (js/Number (or (.-PORT js/process.env) 3701)))
 
-(defonce chat-route (delay (import-esm (.-href (.pathToFileURL url chat-module)))))
+(defn guarded-post!
+  "Refuses with the guard's status, else reads the body (nil when over limit-bytes) and calls (on-body text)."
+  [req res limit-bytes on-body]
+  (let [headers (.-headers req)
+        refused (or (guard/method-refusal (.-method req))
+                    (guard/refusal {:host (.-host headers) :origin (.-origin headers)
+                                    :content-type (aget headers "content-type") :port port}))]
+    (if refused
+      (send-json! res (:status refused) {:error (:error refused)})
+      (read-body req limit-bytes on-body))))
+
+;; ---------------------------------------------------------------- chat send (POST /api/chat/send)
+;; dashboard.chat-send validates the body and builds the fixed tellraw command; the runner is RCON (dashboard.rcon),
+;; or, with DASHBOARD_CHAT_DRY=1, one that only logs the command. The sender is DASHBOARD_CHAT_AS (default Dan).
+(def chat-dry? (= "1" (.-DASHBOARD_CHAT_DRY js/process.env)))
+(def chat-sender (or (.-DASHBOARD_CHAT_AS js/process.env) "Dan"))
+(def chat-stamps (atom []))
+
+(defn run-chat-command! [command]
+  (if chat-dry?
+    (do (println (str "chat send (dry run): " command)) (js/Promise.resolve "dry"))
+    (rcon/send-command! command)))
 
 (defn send-chat! [req res]
-  (if-not (= "POST" (.-method req))
-    (send-json! res 405 {:error "POST {text, target?} to send a chat line"})
-    (read-body req max-chat-body-bytes
-               (fn [text]
-                 (-> @chat-route
-                     (.then (fn [m]
-                              (.chatSendResponse m text (if chat-dry? #js {:run (.dryRunner m)} #js {}))))
-                     (.then (fn [r] (send-json-js! res (.-status r) (.-json r))))
-                     (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))})))))))))
+  (guarded-post!
+   req res guard/max-body-bytes
+   (fn [text]
+     (let [{:keys [status json command stamps]} (chat-send/plan text {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)})]
+       (reset! chat-stamps stamps)
+       (if status
+         (send-json! res status json)
+         (-> (run-chat-command! command)
+             (.then (fn [_] (send-json! res 200 {:ok true :command command})))
+             (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
 
 ;; ---------------------------------------------------------------- jobs (GET /api/jobs)
 ;; The job namespaces themselves, engine/src/jobs/**/*.cljs, parsed per file and cached until the file's mtime changes.
@@ -441,17 +463,16 @@
   (jobs-source/attach-usage (mapv read-job (job-files)) (jobs-source/usage (bodies now))))
 
 (defn preview! [req res]
-  (if-not (= "POST" (.-method req))
-    (send-json! res 405 {:error "POST a structured plan to preview"})
-    (read-body req max-preview-bytes
-               (fn [text]
-                 (if (nil? text)
-                   (send-json! res 413 {:error "preview body exceeds 2 MiB"})
-                   (try
-                     (let [input (js/JSON.parse text)
-                           detail (legacy/preview repo-root (.-plan input) (.-stock input))]
-                       (send-json-js! res (if (pos? (.-length (.-errors detail))) 400 200) detail))
-                     (catch :default e (send-json! res 400 {:error (ex-message e)}))))))))
+  (guarded-post!
+   req res max-preview-bytes
+   (fn [text]
+     (if (nil? text)
+       (send-json! res 413 {:error "preview body exceeds 2 MiB"})
+       (try
+         (let [input (js/JSON.parse text)
+               detail (legacy/preview repo-root (.-plan input) (.-stock input))]
+           (send-json-js! res (if (pos? (.-length (.-errors detail))) 400 200) detail))
+         (catch :default e (send-json! res 400 {:error (ex-message e)})))))))
 
 (defn blueprint-library []
   (legacy/library repo-root (all-places-js (read-worlds))))
@@ -526,8 +547,10 @@
         (send-json! res 500 {:error (str (ex-message e))})))))
 
 (defn main []
-  (let [port (js/Number (or (.-PORT js/process.env) 3701))
-        server (.createServer http handler)]
+  (when-not (chat-send/valid-sender? chat-sender)
+    (js/console.error (str "DASHBOARD_CHAT_AS must match " chat-send/sender-re ", got " (pr-str chat-sender)))
+    (.exit js/process 1))
+  (let [server (.createServer http handler)]
     (-> (load-view-mount)
         (.then (fn [_]
                  (.listen server port "127.0.0.1"

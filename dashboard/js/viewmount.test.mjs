@@ -61,3 +61,23 @@ test('/web/app.mjs is javascript and /agents is json', async () => {
   assert.match(js.type, /javascript/)
   assert.match(json.type, /json/)
 })
+
+const driveCases = [
+  ['forged Origin', { origin: 'http://evil.example', 'content-type': 'application/json' }, 403],
+  ['Origin null', { origin: 'null', 'content-type': 'application/json' }, 403],
+  ['forged Host', { host: 'evil.example', 'content-type': 'application/json' }, 403],
+  ['form content type', { 'content-type': 'application/x-www-form-urlencoded' }, 403]
+]
+for (const [name, headers, status] of driveCases) {
+  test(`POST /drive/ProbeWater with ${name} is refused`, async () => {
+    const server = await listen()
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/ProbeWater', method: 'POST', headers }, resolve)
+      req.on('error', reject)
+      req.end('{"cmd":"stop"}')
+    })
+    res.resume()
+    server.close()
+    assert.equal(res.statusCode, status)
+  })
+}

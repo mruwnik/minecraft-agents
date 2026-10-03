@@ -25,10 +25,18 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
   the `(def args ...)` map printed as EDN (one entry per line), `backoff` whether the namespace defines `backoff`.
   `running` and `reflex` are the bodies whose job list or reflex register mentions the job. A file that does not read
   has `error` instead.
-- POST `/api/chat/send`, body `{text, target?}` (JSON, at most 2 KB; `target` is `@a` by default, or a player name):
-  sends `tellraw <target> {"text":"<Dan> <text>"}` over RCON, so engine bodies hear it as a chat event. The sender is
-  always `Dan`. Replies `{ok, command}`, 400 `{error}` for bad input, 413 over the limit, 502 `{error}` when RCON fails.
-  `DASHBOARD_CHAT_DRY=1` makes the server log the command and not send it. Logic in `js/chatroute.mjs`, RCON in `js/chatsend.mjs`.
+- POST `/api/chat/send`, body `{text}` (JSON, at most 4 KB): sends the fixed command `tellraw @a {"text":"<Dan> <text>"}`
+  over RCON, so engine bodies hear it as a chat event. There is no target: a `target` (or any other) field gets 400.
+  The text component is built with `JSON.stringify`; control characters, newlines and section codes are stripped, the text
+  is capped at 256 chars and must not be empty. The sender is env `DASHBOARD_CHAT_AS` (default `Dan`, must match
+  `^[A-Za-z0-9_]{1,16}$`, checked at startup). Rate limit 1 per second and 5 per 30 s (429). Replies `{ok, command}`, 400 `{error}`,
+  502 `{error}` when RCON fails. `DASHBOARD_CHAT_DRY=1` logs the command instead of sending. Code: `dashboard.chat-send`
+  (pure), `dashboard.rcon` (socket, password read in-process).
+- Guard (`dashboard.guard`) on every state-changing route (POST `/api/chat/send`, POST `/api/blueprint-preview`), same rules as
+  `tools/view/drive-proxy.mjs` (whose check is not exported, so it is reimplemented): Host must be `127.0.0.1`, `localhost` or `[::1]`
+  with the server's port; Origin, when present, must equal `http://<Host>` (a foreign Origin or `null` is 403); Content-Type
+  must be `application/json` (415); other methods get 405; body limit 4 KB for chat (413), 2 MiB for blueprint-preview.
+  `/drive/<body>` goes through drive-proxy and keeps its own check.
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
   `/view`, `/agents`, `/pose/<body>`, `/hud/<body>`, `/drive/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
   `/blocks/`, `/textures/`.
