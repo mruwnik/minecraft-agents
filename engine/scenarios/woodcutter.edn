@@ -1,5 +1,5 @@
-;; Cut and replant oak, then put the wood in a known chest. Needs a :chest
-;; place in common memory for the deposit to run, and a :bed place for sleep.
+;; Cut and replant oak, then put the wood in a known chest. Deposit declines
+;; until body memory has a :chest entry, and sleep needs a :bed entry.
 {:register [{:trigger :hostile-near}
             {:trigger :health-low}
             {:trigger :night-and-bed-known}]
