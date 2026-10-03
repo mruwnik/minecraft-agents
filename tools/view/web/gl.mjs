@@ -22,6 +22,7 @@ precision highp float;
 precision highp int;
 precision highp usampler3D;
 precision highp usampler2D;
+precision highp sampler2D;
 precision highp sampler2DArray;
 uniform usampler3D uBlocks;
 uniform usampler3D uCoarse;
