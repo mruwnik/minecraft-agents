@@ -1,0 +1,4 @@
+;; batch-block: find-spot live case on the stone platform at 5000,5000 (y 99) with a water source at 4993,100,4993;
+;; default range 24 (the scan spreads over rounds), walking to the best spot
+{:register []
+ :queue [(jobs.farm.find-spot {:w 5 :h 5 :walk true})]}
