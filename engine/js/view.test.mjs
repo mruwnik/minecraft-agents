@@ -263,15 +263,29 @@ test('detach writes one offline pose and stops pose writes; attach resumes', asy
   const { view, dir } = makeView(bot, { now: () => clock })
   const file = path.join(dir, 'agents', 'Bob', 'view', 'pose.json')
   await view.tickPose()
+  clock = 500
   await view.detach()
-  assert.equal(readJson(file).status, 'offline')
+  const off = readJson(file)
+  assert.equal(off.status, 'offline')
+  assert.deepEqual(off.pos, { x: 10.123, y: 64, z: -3.5 })
+  assert.equal(off.yaw, 0.5)
+  assert.ok(Array.isArray(off.entities))
+  assert.equal(off.t, 500)
   clock = 9999
   await view.tickPose()
-  assert.equal(readJson(file).t, 1)
+  assert.equal(readJson(file).t, 500)
   const next = fakeBot()
   view.attach(next)
   await view.tickPose()
   assert.equal(readJson(file).status, 'online')
+})
+
+test('detach before any pose was written writes the short offline record', async () => {
+  const bot = fakeBot()
+  const { view, dir } = makeView(bot, { now: () => 7 })
+  await view.detach()
+  assert.deepEqual(readJson(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')),
+    { v: 1, t: 7, world: 'w', status: 'offline', mcVersion: VERSION })
 })
 
 test("the bot's own end event writes the offline pose", async () => {

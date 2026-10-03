@@ -148,7 +148,10 @@ export function poseSnapshot (bot, { world, now }) {
 // a string that changes when the pose does: time ignored, numbers rounded to two decimals
 export const poseKey = pose => JSON.stringify(pose, (k, v) => k === 't' ? undefined : typeof v === 'number' ? round2(v) : v)
 
-export const offlinePose = ({ world, now, mcVersion }) => ({ v: VIEW_VERSION, t: now, world, status: 'offline', mcVersion })
+// the last full pose marked offline (so a renderer still has a position), or the short record if none was ever written
+export const offlinePose = ({ world, now, mcVersion, last }) => last
+  ? { ...last, t: now, status: 'offline' }
+  : { v: VIEW_VERSION, t: now, world, status: 'offline', mcVersion }
 
 export function hudSnapshot (bot, now) {
   const slots = bot.inventory?.slots ?? []
@@ -189,6 +192,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let stats = zeroStats()
   let lastPoseKey = null
   let lastPoseAt = 0
+  let lastPose = null
   let lastHudKey = null
   let lastErrorAt = -Infinity
   let mcVersion = null
@@ -270,6 +274,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (key === lastPoseKey && t - lastPoseAt < POSE_REFRESH_MS) return Promise.resolve()
     lastPoseKey = key
     lastPoseAt = t
+    lastPose = pose
     stats.poses++
     return track(writePose(pose))
   }
@@ -328,6 +333,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     mcVersion = target.version
     lastPoseKey = null
     lastHudKey = null
+    lastPose = null
     unhook = hook(target)
     startTimers()
   }
@@ -337,7 +343,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     unhook()
     unhook = () => {}
     bot = null
-    return track(writePose(offlinePose({ world, now: now(), mcVersion })))
+    return track(writePose(offlinePose({ world, now: now(), mcVersion, last: lastPose })))
   }
 
   const stop = () => {

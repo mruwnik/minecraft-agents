@@ -57,7 +57,9 @@ loads a fresh prismarine `ChunkColumn` (constructed with `{minY, worldHeight}` f
 `eye` is position plus `bot.entity.height - 0.18` (1.62 standing, 1.27 sneaking, 1.62 if height is unknown). Yaw and
 pitch are raw mineflayer radians. `entities` lists every entity except the body within 48 blocks (`kind` and `health`
 are `null` when unknown). Change detection rounds position, yaw and pitch to two decimals. When offline the file is
-written once with `{"v":1,"t","world","status":"offline"}` and `mcVersion`, and not updated again until the body is back.
+written once: the last full pose (position, eye, yaw, pitch, entities as they were) with `status` `"offline"` and a fresh
+`t`, and not updated again until the body is back. If no pose was ever written it is the short record
+`{"v":1,"t","world","status":"offline","mcVersion"}`.
 
 ## hud.json
 
@@ -76,6 +78,9 @@ written once with `{"v":1,"t","world","status":"offline"}` and `mcVersion`, and 
 - Columns are never deleted on unload. The directory is a persistent mirror of every column any body has visited.
 - Known limitation: last writer wins. Two bodies that see different versions of a column (different times, or one has
   stale data) overwrite each other. The `t` and `body` header fields say who wrote it and when.
+- Known limitation: the pose shows the client's belief, not the server's facing. After a console `tp ... 180 0` the pose
+  yaw reads 0 for about 3.5 s, then flips to the body's last look direction, while the server reports -180 throughout.
+  This is a mineflayer teleport-rotation issue on this server version (26.1), not a dump bug.
 - Errors never escape a bot event handler. A write error emits a `view.error` warn event at most once a minute.
 - `view.stats` (info, once a minute): `{columns, bytes, ms, poses, huds}` since the last stats event. `ms` is main-thread
   time in `dump()` plus JSON building (`performance.now()`), `bytes` is compressed column bytes written.
