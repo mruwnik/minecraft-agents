@@ -161,7 +161,7 @@
           (await (core/tick! eng))
           (is (<= (count (calls p "place")) 4) "one round places only a few blocks")
           (is (<= (await (run-until-empty eng 6)) 3) "a few rounds of a few placements")
-          (is (= 9 (count (calls p "place"))) "four sides at feet and head height, one above")
+          (is (= 10 (count (calls p "place"))) "four sides at feet and head height, a roof support, the roof")
           (is (= [] (calls p "dig")))
           (is (= "dirt" (.-name (.blockAt p (tu/pos 0 66 0)))) "the roof")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 1 65 0)))) "a wall at head height")
@@ -175,7 +175,7 @@
         (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks (assoc floor "1,64,0" "stone" "0,64,1" "stone")})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 6))
-          (is (= 7 (count (calls p "place")))))))))
+          (is (= 8 (count (calls p "place")))))))))
 
 (deftest dig-in-digs-down-two-and-roofs-with-a-dug-block
   (async done
@@ -194,7 +194,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "cobblestone" :count 1}]
-                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore"}})]
+                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
           (is (= 2 (count (calls p "dig"))))
@@ -205,7 +205,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :drops {"iron_ore" "raw_iron"}
-                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore"}})]
+                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
           (is (= 2 (count (calls p "dig"))))
@@ -223,6 +223,47 @@
           (is (<= (await (run-until-empty eng 10)) 5) "bounded")
           (is (= 1 (count (emitted seen :dig_in_failed))))
           (is (= [{:pos {:x 0 :y 64 :z 0} :state :built}] (entries eng :shelter)) "records that it stopped, unroofed"))))))
+
+(deftest dig-in-walls-place-a-support-before-the-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack
+                                           :blocks (merge floor {"1,63,0" "stone" "-1,63,0" "stone" "0,63,1" "stone" "0,63,-1" "stone"})})
+              supported? (fn [pos] (some #(let [n (.-name (.blockAt p (tu/pos (+ (.-x pos) (first %)) (+ (.-y pos) (second %)) (+ (.-z pos) (nth % 2)))))]
+                                            (not (#{"air" "cave_air"} n)))
+                                         [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))]
+          (.override (.-world p) "place"
+                     (fn ^:async f [_ args impl]
+                       (if (supported? (.-pos args))
+                         (await (impl _ args))
+                         #js {:status "no-support"})))
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [{:x 1 :y 66 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (take-last 2 (calls p "place")))) "support, then roof")
+          (is (= [] (emitted seen :dig_in_failed)))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}] (entries eng :shelter))))))))
+
+(deftest dig-in-will-not-dig-through-a-thin-floor-into-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,63,0" "stone" "0,62,0" "water"}})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [] (calls p "dig")))
+          (is (= 1 (count (emitted seen :dig_in_failed))))
+          (is (re-find #"water" (:text (first (emitted seen :dig_in_failed))))))))))
+
+(deftest dig-in-will-not-dig-over-an-air-gap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,63,0" "stone"}})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [] (calls p "dig")))
+          (is (= 1 (count (emitted seen :dig_in_failed)))))))))
 
 ;; ----------------------------------------------------------------- shelter
 
@@ -267,7 +308,7 @@
         (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})]
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (tick-n eng 12))
-          (is (= 9 (count (calls p "place"))))
+          (is (= 10 (count (calls p "place"))))
           (is (= [] (calls p "dig")) "still walled in")
           (is (= 1 (count (:list (core/state eng)))) "still waiting for day")
           (is (= [:built] (mapv :state (entries eng :shelter))))

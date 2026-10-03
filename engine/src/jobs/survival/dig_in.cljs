@@ -7,8 +7,9 @@
   "Roof the body in for the night. Check: it is night and nothing solid is
   within :roof-height blocks above. With enough :blocks carried to fill every
   open cell, it walls a 1x1 shelter: the four sides at feet height, the four at
-  head height, then one above the head, at most :max-places placements per
-  round. With fewer it digs down two blocks (collecting the blocks it digs)
+  head height, a support cell beside the roof cell, then one above the head, at most :max-places placements per
+  round. With fewer it digs down two blocks, but only while the block under
+  each one is solid (never through a thin floor into water, lava or air) (collecting the blocks it digs)
   and places one above, at the cell the body stood in, from a carried or dug
   block; with none it just digs down two. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
@@ -42,11 +43,13 @@
 
 (defn open-cells
   "The cells to fill around the feet cell, in placement order: sides at feet
-  height, sides at head height, the one above the head; only those not solid."
+  height, sides at head height, a support beside the roof cell (a block needs a
+  solid face neighbour to be placed against, and the roof cell has none until
+  the support exists), then the roof cell above the head; only those not solid."
   [p {:keys [x y z]}]
   (filterv #(not (sh/solid-at? p %))
            (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-                   [{:x x :y (+ y 2) :z z}])))
+                   [{:x (inc x) :y (+ y 2) :z z} {:x x :y (+ y 2) :z z}])))
 
 (defn ^:async place-all!
   "Place item-picked blocks at cells in order. Resolves to :ok, or the first
@@ -82,16 +85,22 @@
 
 (defn ^:async descend-round
   "One step down toward the pit: dig the block below the feet, collect what
-  it dropped, and step into the hole."
+  it dropped, and step into the hole. Gives up (dig_in_failed warn, done)
+  rather than dig when the block below is a hazard or the cell under it is not
+  solid (a thin floor over water, lava or air)."
   [c]
   (let [{:keys [blocks]} (:args c)
         p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
-        name (u/block-name p below)]
+        name (u/block-name p below)
+        under (u/block-name p {:x x :y (- y 2) :z z})]
     (cond
       (hazards name) (do (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
+      (and (sh/solid-at? p below) (not (sh/solid? under)))
+      (do (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
+          :done)
       (not (sh/solid-at? p below)) (do (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))
                                        :continue)
       :else (let [r (await (ctx/act c :dig (clj->js {:pos below})))]
