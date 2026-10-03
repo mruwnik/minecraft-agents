@@ -74,12 +74,12 @@ A better next trial would use a world position with a reachable tree, a known ch
 Three runs.
 
 1. **woodcutter-cuts.edn, first run (about 100 s).** Look-around fired at once (seq 8). Harvest rounds now ran at 5 s spacing (seq 11, 14, 16) instead of four per second, and deposit was blocked once (seq 13, no chest known). After three dig failures `tree_blocked` (seq 17) and harvest completed (seq 18). The every-interval reflex fired again at 45 s intervals (seq 19, 22) but nothing was running to cut. That was the pre-fix `fell-tree`, which gave up on the first unreachable tree.
-2. **woodcutter-cuts.edn, after the dig-unreachable fix (about 100 s).** The body walked through all eight oak candidates in about 25 s, marking each unreachable, then warned `no reachable tree` (seq 27) and completed (seq 28). No spin, the round rate was sane. A read-only probe then showed the cause: the body stands in a closed cell (stone walls and an obsidian ceiling), the pathfinder is not allowed to dig, and `moveTo` is blocked toward every tree, so no tree in this world position is reachable by any logic. The harvest cannot run here at all.
+2. **woodcutter-cuts.edn, after the dig-unreachable fix (about 100 s).** The body went through the oak candidates one round at a time (eight rounds, about 25 s), marking each unreachable, then warned `no reachable tree` (seq 27) and completed (seq 28). No spin, the round rate was sane. A read-only probe then showed the cause: the body stands in a closed cell (stone walls and an obsidian ceiling), the pathfinder is not allowed to dig, and `moveTo` is blocked toward every tree, so no tree in this world position is reachable by any logic. The harvest cannot run here at all.
 3. **pace-cuts.edn (about 200 s).** Because harvest cannot run in the cell, I added a harmless long job `pace` (walk between two points inside the cell, three laps per round) and a scenario that puts `every-interval 20` first. This is not the harvest cut the brief asked for, but it exercises the same engine path with a real long round.
 
 ### Triggers fired
 
-In the pace run, `every-interval` fired 9 times at 20.1 s intervals (seq 6, 14, 19, 24, 29, 34, 39, 44, 49, then 59 and 83). `hostile-near` fired 5 times from about 179 s (seq 54, 64, 69, 74, 79), so a real hostile came within 8 blocks of the cell at dusk. Each retreat ended `completed_not_cleared`, and the 5 s cooldown re-fired it. `health-low` did not fire.
+In the pace run, `every-interval` fired 11 times, at 20 s intervals until a hostile appeared (seq 6, 14, 19, 24, 29, 34, 39, 44, 49, then 59 and 83). `hostile-near` fired 5 times from about 179 s (seq 54, 64, 69, 74, 79), so a real hostile came within 8 blocks of the cell at dusk. Each retreat ended `completed_not_cleared`, and the 5 s cooldown re-fired it. `health-low` did not fire.
 
 ### Cut and resume evidence
 
