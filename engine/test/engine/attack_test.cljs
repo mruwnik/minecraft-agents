@@ -44,7 +44,7 @@
   (doseq [[item ms] [["wooden_sword" 625] ["diamond_sword" 625] ["netherite_sword" 625]
                      ["wooden_axe" 1250] ["stone_axe" 1250] ["iron_axe" 1112]
                      ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
-                     ["iron_pickaxe" 250] ["stick" 250] [nil 250]]]
+                     ["iron_pickaxe" 500] ["stick" 500] [nil 500]]]
     (is (= ms (combat/attack-gap-ms item)) (str item))))
 
 (deftest target-list-normalises-to-a-vector
@@ -229,6 +229,16 @@
           (swap! clock + 600)
           (await (core/tick! eng))
           (is (= 2 (count (attacked s)))))))))
+
+(deftest an-explicit-attack-gap-ms-beats-the-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (await (h/first-round (spec {:targets [7] :attack-gap-ms 100}) {:inventory h/sword :entities [(zed 7 2)]}))]
+          (is (= 1 (count (attacked s))))
+          (swap! clock + 100)
+          (await (core/tick! eng))
+          (is (= 2 (count (attacked s))) "100 ms later, not the sword's 625 nor the 500 floor"))))))
 
 (deftest a-started-job-stays-until-lost-s-after-its-target-leaves
   (async done

@@ -65,12 +65,18 @@
 (def axe-gap-ms
   {"wooden_axe" 1250 "stone_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
 
+(def min-gap-ms
+  "Mobs ignore damage for 0.5 s after a hit, so a swing sooner than this is wasted."
+  500)
+
 (defn attack-gap-ms
-  "The full-strength attack cooldown, in ms, of the held item (nil: a fist)."
+  "The full-strength attack cooldown, in ms, of the held item (nil: a fist),
+  never below min-gap-ms."
   [item-name]
-  (cond
-    (and item-name (str/ends-with? item-name "_sword")) 625
-    :else (get axe-gap-ms item-name 250)))
+  (max min-gap-ms
+       (cond
+         (and item-name (str/ends-with? item-name "_sword")) 625
+         :else (get axe-gap-ms item-name min-gap-ms))))
 
 (def mob-max-health
   "Full health of the common hostiles; unknown ones count as 20."
