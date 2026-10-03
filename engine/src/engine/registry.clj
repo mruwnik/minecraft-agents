@@ -76,6 +76,53 @@
     (mapv #(describe dir %) (job-files dir))
     []))
 
+;; Metadata for tooling (the dashboard): what a file declares, without the export checks.
+
+(defn defining?
+  "Is the form a def/defn/defn- of the symbol named n?"
+  [n form]
+  (and (seq? form) (#{'def 'defn 'defn-} (first form)) (symbol? (second form)) (= n (name (second form)))))
+
+(defn def-value
+  "The value of (def n value), or nil."
+  [n forms]
+  (some->> forms (filter #(and (defining? n %) (= 'def (first %)))) first (drop 2) first))
+
+(defn ns-doc
+  "The docstring of the ns form (the first form), or nil."
+  [forms]
+  (let [form (first forms)
+        doc (when (and (seq? form) (= 'ns (first form))) (nth form 2 nil))]
+    (when (string? doc) doc)))
+
+(defn repo-path
+  "engine/src/... from a file under engine/src."
+  [file]
+  (str "engine/src/" (second (re-find #"/engine/src/(.+)$" (str/replace (.getPath file) "\\" "/")))))
+
+(defn file-metadata
+  "{:id :file :ns-doc :doc :args :backoff}, with :args the (def args ...) value itself, for the source file of
+  namespace id. A file that cannot be read gets {:id :file :error \"...\"} instead of throwing."
+  [id file]
+  (let [base {:id (str id) :file (repo-path file)}]
+    (try
+      (let [forms (read-forms file)
+            doc (def-value "doc" forms)]
+        (assoc base
+               :ns-doc (ns-doc forms)
+               :doc (when (string? doc) doc)
+               :args (def-value "args" forms)
+               :backoff (boolean (some #(defining? "backoff" %) forms))))
+      (catch Exception e
+        (assoc base :error (str "unreadable: " (ex-message e)))))))
+
+(defn job-metadata
+  "file-metadata of every job file under jobs/, in path order."
+  []
+  (if-let [dir (jobs-dir)]
+    (mapv #(file-metadata (expected-ns dir %) %) (job-files dir))
+    []))
+
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :backoff}} for every job namespace under jobs/."
   []
