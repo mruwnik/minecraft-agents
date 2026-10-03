@@ -12,7 +12,9 @@
      sleeps, so that player can skip the night;
   3. jobs.survival.dig-in, which roofs the body in.
   A sleep that ends without sleeping (the bed was gone, or unreachable) falls
-  through to the next choice in the same round. Once dug in it waits for day
+  through to the next choice in the same round and is recorded as
+  :sleep-failed, so later rounds of this shelter do not call sleep again (and
+  walk back toward the bed) while the other choices work. Once dug in it waits for day
   (jobs.time.wait-for-day), then opens the roof (or climbs out of the pit) and
   writes the :shelter entry again with :state :reopened. A body whose latest
   :slept entry is more than :max-days-awake in-game days (20 minutes each)
@@ -75,12 +77,15 @@
         a (child-args c radius)
         started (ctx/now c)]
     (when urgent (note-needs-bed! c))
-    (let [s (await (ctx/call-child c :sleep 'jobs.survival.sleep (:sleep a)))]
+    (let [s (if (:sleep-failed (ctx/mem c))
+              :declined
+              (await (ctx/call-child c :sleep 'jobs.survival.sleep (:sleep a))))]
       (cond
         (= :continue s) :continue
         (and (= :done s) (or (sh/sleeping? p) (not (sh/night? p)) (seq (ctx/since c :slept started)))) :done
         :else
-        (let [l (await (ctx/call-child c :log-out 'jobs.survival.log-out (:log-out a)))]
+        (let [_ (when (= :done s) (ctx/update-mem! c assoc :sleep-failed true))
+              l (await (ctx/call-child c :log-out 'jobs.survival.log-out (:log-out a)))]
           (cond
             (= :continue l) :continue
             (= :done l) :done

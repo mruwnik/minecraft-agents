@@ -319,6 +319,27 @@
           (is (= [:built :reopened] (mapv :state (entries eng :shelter))))
           (is (= [] (:list (core/state eng)))))))))
 
+(defn walks-to-bed [p]
+  (count (filter #(= {:x 6 :y 64 :z 0} (arg-pos %)) (calls p "moveTo"))))
+
+(deftest shelter-does-not-retry-a-sleep-that-already-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]
+                                           :unreachable ["6,64,0"]})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (loop [i 0]
+            (when (and (< i 60) (empty? (emitted seen :bed_unreachable)))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (= 1 (count (emitted seen :bed_unreachable))))
+          (let [walks (walks-to-bed p)]
+            (await (tick-n eng 12))
+            (is (= walks (walks-to-bed p)) "no more walking at the unreachable bed")
+            (is (= 10 (count (calls p "place"))) "dig-in finished the walls")))))))
+
 (deftest shelter-waits-without-new-actions-while-it-is-night
   (async done
     (tu/run-async done
