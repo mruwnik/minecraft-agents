@@ -389,6 +389,13 @@ are untested.
 - **`backoff`** (optional) is the job's own backoff config, `{:after :first-s
   :max-s}` or `false`; see Backoff. It applies to a job whose spec is that
   leaf, not to a combinator around it.
+  A reflex job that ends `:backoff` is dropped with its memory (the next
+  firing starts fresh); a listed job keeps its memory. So a job with its own
+  give-up must conclude within `:after` (default 3) fruitless rounds in a row,
+  or set its own `backoff` (a larger `:after`, or `false`). The jobs with
+  `backoff` false are `jobs.survival.sleep`, `jobs.survival.shelter` and
+  `jobs.maintenance.unstick`, each with its reason in its def's docstring; a
+  test pins that set.
 
 ## Job expressions
 
@@ -681,7 +688,9 @@ it never removes it, and it alerts.
   line, from where the act started to where it ended). A round of only
   neutral acts is not fruitless and does not reset.
 - *Fruitless round.* It ran at least one act and every act failed. A round
-  with no act, a cut round and a round that threw neither count nor reset.
+  with no act, a cut round and a round that threw neither count nor reset,
+  and neither does a round that ends `:declined` (the job saying "not now"
+  on purpose), listed job or reflex.
   The first progress act resets the count and the delay at once, mid-round.
 - *Schedule.* `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless
   rounds in a row the job gets no round for `:first-s` seconds; each further
@@ -692,7 +701,7 @@ it never removes it, and it alerts.
   leaves the body idle) and stays listed.
 - *Reflexes* are counted per reflex id across firings. On reaching backoff a
   job whose round continued ends with `reflex.ended` outcome `backoff`; one
-  whose round ended it (`done`, `declined`, failed, cut) keeps that outcome.
+  whose round ended it (`done`, failed, cut) keeps that outcome.
   Either way the reflex cannot fire until the delay ends.
 - *State* is the engine's `:backoffs` atom `{key {:fruitless :last :delay-ms
   :until :since :alerted}}` (key: instance id, or the reflex id keyword). It

@@ -285,7 +285,8 @@
 
 (defn book-round!
   "After a round of run ended with status: a fruitless round counts toward its
-  job's backoff (a cut or failed round, and a listed job that is done, do not).
+  job's backoff (a cut or failed round, a declined round, and a listed job that
+  is done, do not: :declined is the job saying not now, on purpose).
   True when the job is now backing off."
   [eng {:keys [id reflex]} status]
   (let [round (get @(:rounds eng) id)
@@ -295,7 +296,7 @@
     (boolean
      (when (and cfg
                 (backoff/fruitless-round? round)
-                (contains? (if reflex #{:done :continue :declined} #{:continue :declined}) status))
+                (contains? (if reflex #{:done :continue} #{:continue}) status))
        (backoff/backing-off? (fruitless! eng inst cfg (:last round)) (now eng))))))
 
 (defn recovered!

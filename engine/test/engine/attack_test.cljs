@@ -148,10 +148,11 @@
             (is (nil? (core/tick! eng)) (str targets))))))))
 
 (deftest gives-up-on-an-unreachable-target
+  ;; 5 ticks: three blocked-walk rounds are fruitless and back off 1 s (ticks 4 is skipped), so the finishing round is tick 5.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 6))
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 5))
               gave-up (events-of s :attack.gave-up)]
           (is (zero? (count (attacked s))))
           (is (= 3 (count (h/calls (:p s) "moveTo"))))
