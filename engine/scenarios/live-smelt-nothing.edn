@@ -1,0 +1,5 @@
+;; jobs.items.smelt live: only dirt and coal in the chest, no item named: nothing smeltable
+{:register []
+ :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"dirt" 3 "coal" 2}})
+              (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9500}}))
+         (repeat (jobs.movement.look-around {:every-ms 3000}))]}

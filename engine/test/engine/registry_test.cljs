@@ -13,6 +13,7 @@
      jobs.apiary.harvest
      jobs.apiary.guard
      jobs.apiary.maintain
+     jobs.items.smelt
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check})
