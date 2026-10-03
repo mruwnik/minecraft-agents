@@ -143,3 +143,21 @@
       :status :manual
       :manual "driven by dan since 14:30"
       :reason "hurt 0s ago")))
+
+(deftest card-model-mine
+  (let [mine (fn [who] (:mine? (t/card-model (body {:signals {:takeover? true :takeover-who "dashboard-k3x9ab"}}) now who)))]
+    (are [who expected] (= expected (mine who))
+      "dashboard-k3x9ab" true
+      "dashboard-other1" false
+      "dashboard" false
+      nil false))
+  (are [b expected] (= expected (:mine? (t/card-model b now "dashboard-k3x9ab")))
+    (body {:signals {:takeover? false :takeover-who "dashboard-k3x9ab"}}) false
+    (body {:up false :signals {:takeover? true :takeover-who "dashboard-k3x9ab"}}) false
+    (body) false))
+
+(deftest manual-for-any-driver-is-counted-and-sorted-first
+  (let [mk (fn [name who] {:name name :up true :engine {:signals {:takeover? true :takeover-who who}} :view {}})
+        bodies [(body) (mk "Z" "someone-else") (mk "Y" "dashboard-k3x9ab")]]
+    (is (= [:manual :manual :idle] (mapv #(t/status % now) (t/sort-bodies bodies now))))
+    (is (= 2 (:manual (t/counts bodies now))))))

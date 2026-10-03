@@ -14,7 +14,7 @@
 (def offline (-> online (assoc :up false) (assoc-in [:engine :up] false) (assoc :at (- now 2460000)) (assoc-in [:engine :age-ms] 2460000)))
 
 (deftest model-fields
-  (let [mdl (m/detail-model online now "wait")]
+  (let [mdl (m/detail-model online now "wait" "dashboard-k3x9ab")]
     (are [k expected] (= expected (k mdl))
       :name "Bob"
       :status :working
@@ -25,11 +25,11 @@
       :dimension "overworld"
       :world "w1"
       :last-seen "2s ago"
-      :iframe-src "/view?agent=Bob&embed=1&who=dashboard"
+      :iframe-src "/view?agent=Bob&embed=1&who=dashboard-k3x9ab"
       :offline-text nil)))
 
 (deftest offline-model
-  (let [mdl (m/detail-model offline now nil)]
+  (let [mdl (m/detail-model offline now nil "dashboard-k3x9ab")]
     (are [k expected] (= expected (k mdl))
       :online? false
       :status :offline
@@ -38,7 +38,7 @@
     (is (re-find #"^offline since \d\d:\d\d:\d\d \(41m ago\)$" (:offline-text mdl)))))
 
 (deftest missing-body
-  (are [k expected] (= expected (k (m/detail-model nil now nil)))
+  (are [k expected] (= expected (k (m/detail-model nil now nil "dashboard-k3x9ab")))
     :name nil
     :online? false))
 

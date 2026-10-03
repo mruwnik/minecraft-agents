@@ -3,6 +3,7 @@
             [dashboard.ui.api]
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
+            [dashboard.ui.drive :as drive]
             [dashboard.ui.logic :as logic]))
 
 (def state-ms 2000)
@@ -14,7 +15,7 @@
 (rf/reg-event-fx
  :init
  (fn [_ [_ search page]]
-   (let [initial (db/initial-db search)]
+   (let [initial (db/initial-db search (drive/new-who js/Math.random))]
      {:db initial
       :fx [[:dispatch [:fetch-worlds]]
            [:dispatch [:poll-state]]

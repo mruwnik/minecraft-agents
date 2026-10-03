@@ -38,9 +38,9 @@
      (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
      [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))
 
-(defn body-card [{:keys [name status reason manual severity health food job event event-age event-level] :as card}]
+(defn body-card [{:keys [name status reason manual severity mine? health food job event event-age event-level] :as card}]
   ^{:key name}
-  [:div.bcard {:class [(clojure.core/name status) (when reason (str "sev-" (clojure.core/name severity)))]
+  [:div.bcard {:class [(clojure.core/name status) (when mine? "mine") (when reason (str "sev-" (clojure.core/name severity)))]
                :tabIndex 0 :role "button"
                :on-click #(rf/dispatch [:open-detail name])
                :on-key-down #(when (= "Enter" (.-key %)) (rf/dispatch [:open-detail name]))}

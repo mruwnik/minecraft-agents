@@ -64,13 +64,30 @@
     (< waited-ms snapshot-timeout-ms) :waiting
     :else :timeout))
 
+(def cooling-off-ms 1000)
+
+(defn cooling-down
+  "The names whose scene was closed less than cooling-off-ms ago. The hub reopens its /poses stream only when the set of agents
+  changes, and applies a change 500 ms after the last add or close; a scene added for an agent before that has no pose, ever."
+  [closed-at now]
+  (into #{} (comp (filter (fn [[_ at]] (< (- now at) cooling-off-ms))) (map key)) closed-at))
+
+(defn keep-record?
+  "A snapshot record that stays when its card goes away: a failed one (so the card is not retried in a loop)."
+  [record]
+  (boolean (:failed? record)))
+
 (defn next-snapshot
   "The offline card to snapshot next, or nil. `wanted`: name -> pose mtime (nil: no view); `done`: name -> {:mtime ...} of the last
-  attempt (a failed one counts, it is not retried for the same pose). Alphabetical, one at a time."
-  [wanted done]
+  attempt (a failed one counts, it is not retried for the same pose); `blocked`: names to leave alone for now. Alphabetical, one at a time."
+  [wanted done blocked]
   (->> (sort-by key wanted)
-       (filter (fn [[name mtime]] (and mtime (not= mtime (:mtime (get done name))))))
+       (filter (fn [[name mtime]] (and mtime (not (contains? blocked name)) (not= mtime (:mtime (get done name))))))
        ffirst))
+
+(defonce closed-at (atom {})) ; name -> ms of the last time a scene of that body was closed
+
+(defn note-closed! [name] (swap! closed-at assoc name (js/Date.now)))
 
 (defn show-canvas?
   "The canvas replaces the still only once the scene has drawn or loaded something."
@@ -143,10 +160,10 @@
                             (some-> scene .stats (js->clj :keywordize-keys true))))
                          poll-ms))))
       :component-will-unmount
-      (fn [_]
+      (fn [this]
         (let [{:keys [timer scene canvas]} @state]
           (js/clearInterval timer)
-          (when scene (.detach scene canvas) (.close scene))))
+          (when scene (.detach scene canvas) (.close scene) (note-closed! (:name (r/props this))))))
       :reagent-render
       (fn [{:keys [shown?]}]
         [:canvas.live {:ref #(when % (swap! state assoc :canvas %))

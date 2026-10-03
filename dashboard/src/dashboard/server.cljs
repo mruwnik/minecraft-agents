@@ -179,9 +179,10 @@
   (let [view (try
                (ee/engine-view (read-engine (:name agent)) now)
                (catch :default e
-                 (assoc (ee/engine-view ee/empty-engine now) :error (str "events unreadable: " (ex-message e)))))]
-    (assoc (ee/engine-body agent (merge view (edn-fields (:name agent) now)))
-           :view (read-view (:name agent)))))
+                 (assoc (ee/engine-view ee/empty-engine now) :error (str "events unreadable: " (ex-message e)))))
+        pose-view (read-view (:name agent))]
+    (assoc (ee/engine-body agent (-> (ee/with-view-status view pose-view) (merge (edn-fields (:name agent) now))))
+           :view pose-view)))
 
 (defn agent-entries []
   (mapv (fn [n] {:name n :text (read-text (.join path agents-dir n "config.json"))}) (dir-names agents-dir)))

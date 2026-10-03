@@ -38,8 +38,8 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .pill { display: inline-block; padding: 0 8px; border-radius: 9px; font-size: 11px; line-height: 17px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
 .pill.count b { font-family: var(--mono); font-weight: 600; margin-right: 2px; }
 .pill.working { color: var(--working); border-color: rgba(63,185,80,.45); background: rgba(63,185,80,.10); }
-.pill.manual { color: var(--danger); border-color: rgba(248,81,73,.5); background: rgba(248,81,73,.12); }
-.pill.count.manual b { color: var(--danger); }
+.pill.manual { color: #79c0ff; border-color: rgba(121,192,255,.45); background: rgba(121,192,255,.1); }
+.pill.count.manual b { color: #79c0ff; }
 .pill.idle { color: var(--idle); border-color: rgba(139,148,158,.40); background: rgba(139,148,158,.08); }
 .pill.trouble { color: var(--trouble); border-color: rgba(210,153,34,.50); background: rgba(210,153,34,.12); }
 .pill.offline { color: var(--offline); border-color: rgba(110,118,129,.40); background: rgba(110,118,129,.08); }
@@ -75,7 +75,7 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .bcard { background: var(--panel); border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; min-width: 0; }
 .bcard:hover { background: var(--panel2); border-color: #39414d; }
 .bcard.trouble { border-left-color: var(--trouble); }
-.bcard.manual, .bcard.manual:hover { border-color: var(--danger); }
+.bcard.manual.mine, .bcard.manual.mine:hover { border-color: var(--danger); }
 .preview { position: relative; aspect-ratio: 16 / 9; background: #0a0c10; overflow: hidden; }
 .preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .preview canvas.live { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -111,7 +111,7 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .reason { font-size: 12px; font-weight: 600; }
 .reason.warn { color: var(--trouble); }
 .reason.danger { color: var(--danger); }
-.reason.manual { color: var(--danger); }
+.reason.manual { color: #79c0ff; }
 .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; color: var(--dim); background: rgba(15,17,21,.55); letter-spacing: .08em; text-transform: uppercase; font-size: 11px; }
 .footnote { color: var(--offline); margin-top: 14px; }
 

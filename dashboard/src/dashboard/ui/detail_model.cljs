@@ -17,7 +17,7 @@
 
 (defn detail-model
   "The popup's model for a /api/state body at time now; action is the running action's name from the log, if any."
-  [body now action]
+  [body now action who]
   (if-not body
     {:online? false}
     (let [{:keys [name engine view up world at]} body
@@ -36,7 +36,7 @@
        :world world
        :last-seen (when age (logic/time-ago-text age))
        :thumb (:thumb card)
-       :iframe-src (when up (str "/view?agent=" name "&embed=1&who=dashboard"))
+       :iframe-src (when up (str "/view?agent=" name "&embed=1&who=" (js/encodeURIComponent who)))
        :offline-text (when-not up (offline-text at age))
        :hud (:hud view)
        :jobs (:jobs engine)

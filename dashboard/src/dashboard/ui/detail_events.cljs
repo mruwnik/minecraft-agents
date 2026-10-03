@@ -31,11 +31,11 @@
  :close-detail
  (fn [{:keys [db]} _]
    (let [name (:detail-body db)
-         driving? (drive/driving-now? (:drive db))]
+         driving? (drive/driving-now? (:drive db) (:who db))]
      (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
               :replace-url (body-url nil)
               :stop-timers [:detail-log :detail-drive]}
-       (and name driving?) (assoc :drive-invoke {:op :release :name name :request (drive/release-request (:drive db)) :both? true})))))
+       (and name driving?) (assoc :drive-invoke {:op :release :name name :request (drive/release-request (:drive db) (:who db)) :both? true})))))
 
 ;; Esc: stop driving first, close when nobody is driven by us
 (rf/reg-event-fx
@@ -43,7 +43,7 @@
  (fn [{:keys [db]} _]
    (cond
      (not (:detail-body db)) {}
-     (drive/driving-now? (:drive db)) {:dispatch [:drive-release]}
+     (drive/driving-now? (:drive db) (:who db)) {:dispatch [:drive-release]}
      :else {:dispatch [:close-detail]})))
 
 (rf/reg-event-fx
@@ -90,12 +90,12 @@
  :drive-take
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:drive :error] nil)
-    :drive-invoke {:op :take :name (:detail-body db) :request (drive/take-request)}}))
+    :drive-invoke {:op :take :name (:detail-body db) :request (drive/take-request (:who db))}}))
 
 (rf/reg-event-fx
  :drive-release
  (fn [{:keys [db]} _]
-   {:drive-invoke {:op :release :name (:detail-body db) :request (drive/release-request (:drive db))}}))
+   {:drive-invoke {:op :release :name (:detail-body db) :request (drive/release-request (:drive db) (:who db))}}))
 
 (rf/reg-event-fx
  :drive-reply

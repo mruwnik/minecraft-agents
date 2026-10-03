@@ -39,14 +39,38 @@
     {:allive? true} :working :live))
 
 (deftest next-snapshot
-  (are [wanted done expected] (= expected (lc/next-snapshot wanted done))
-    {} {} nil
-    {"B" 5 "A" 4} {} "A"
-    {"B" 5 "A" 4} {"A" {:mtime 4}} "B"
-    {"B" 5 "A" 4} {"A" {:mtime 3}} "A"
-    {"B" 5 "A" 4} {"A" {:mtime 4} "B" {:mtime 5}} nil
-    {"A" nil} {} nil
-    {"A" 4} {"A" {:mtime 4 :failed? true}} nil))
+  (are [wanted done blocked expected] (= expected (lc/next-snapshot wanted done blocked))
+    {} {} #{} nil
+    {"B" 5 "A" 4} {} #{} "A"
+    {"B" 5 "A" 4} {"A" {:mtime 4}} #{} "B"
+    {"B" 5 "A" 4} {"A" {:mtime 3}} #{} "A"
+    {"B" 5 "A" 4} {"A" {:mtime 4} "B" {:mtime 5}} #{} nil
+    {"A" nil} {} #{} nil
+    {"A" 4} {"A" {:mtime 4 :failed? true}} #{} nil
+    {"B" 5 "A" 4} {} #{"A"} "B"
+    {"A" 4} {} #{"A"} nil))
+
+(deftest cooling-down
+  (are [closed-at now expected] (= expected (lc/cooling-down closed-at now))
+    {} 5000 #{}
+    {"A" 4500} 5000 #{"A"}
+    {"A" 4000} 5000 #{}
+    {"A" 4001 "B" 1000} 5000 #{"A"}))
+
+(deftest transition-plans
+  ;; a body going offline closes its live scene (card-view :live -> :still, which takes a snapshot) and the reverse starts a live one
+  (are [from to expected] (= expected [(lc/card-view :hub (lc/card-plan {:allive? false} from) true nil)
+                                       (lc/card-view :hub (lc/card-plan {:allive? false} to) true nil)])
+    :working :offline [:live :still]
+    :trouble :offline [:live :still]
+    :offline :working [:still :live]
+    :offline :idle [:still :live]))
+
+(deftest keep-record
+  (are [record expected] (= expected (lc/keep-record? record))
+    nil false
+    {:mtime 1 :bitmap :bmp} false
+    {:mtime 1 :failed? true} true))
 
 (deftest snapshot-state
   (are [ready? waited expected] (= expected (lc/snapshot-state ready? waited))

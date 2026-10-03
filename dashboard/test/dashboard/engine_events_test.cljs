@@ -1,5 +1,5 @@
 (ns dashboard.engine-events-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [deftest is testing are]]
             [dashboard.engine-events :as ee]))
 
 (def t0 1000000000000)
@@ -292,3 +292,50 @@
 (deftest parse-event-lines-with-line-filter
   (is (= [{:seq 2 :kind "chat"}]
          (ee/parse-event-lines "{\"seq\":1,\"kind\":\"x\"}\n{\"seq\":2,\"kind\":\"chat\"}\n" #(.includes % "chat")))))
+
+;; ---------------------------------------------------------------- offline as soon as the last lifecycle event says so
+(def spawned (fn [n] (ev n {:source "body" :kind "spawned"})))
+(def online-ev (fn [n] (ev n {:source "body" :kind "online"})))
+(def stopping (fn [n] (ev n {:source "system" :kind "stopping"})))
+(def disconnected (fn [n] (ev n {:source "body" :kind "disconnected" :reason "disconnect.quitting"})))
+(def kicked (fn [n] (ev n {:source "body" :kind "kicked" :level "error"})))
+(def reconnect-failed (fn [n] (ev n {:source "body" :kind "reconnect-failed" :level "error"})))
+(def started (fn [n] (ev n {:source "system" :kind "started" :job nil :chain nil})))
+
+(deftest offline-at-once-after-a-stop-or-crash
+  (doseq [[title events up]
+          [["running" [(spawned 1) (ev 2) (ev 3)] true]
+           ["SIGTERM: stopping then disconnected, 3 s old" [(spawned 1) (ev 2) (stopping 3) (disconnected 4)] false]
+           ["stopping alone" [(spawned 1) (stopping 2)] false]
+           ["a crash: disconnected only" [(spawned 1) (ev 2) (disconnected 3)] false]
+           ["kicked" [(spawned 1) (kicked 2)] false]
+           ["reconnected: spawned after the disconnect" [(spawned 1) (disconnected 2) (spawned 3)] true]
+           ["reconnected: online after the disconnect" [(spawned 1) (disconnected 2) (online-ev 3)] true]
+           ["reconnect failed" [(spawned 1) (disconnected 2) (reconnect-failed 3)] false]
+           ["engine restarted after a stop" [(spawned 1) (stopping 2) (disconnected 3) (started 4)] true]
+           ["events after a disconnect do not revive it" [(spawned 1) (disconnected 2) (ev 3)] false]]]
+    (testing title
+      (let [v (view events (+ t0 (* 1000 (inc (count events)))))]
+        (is (= up (:up v)))))))
+
+(deftest offline-error-names-the-lifecycle-event
+  (is (= "disconnected" (:error (view [(spawned 1) (disconnected 2)] (+ t0 3000)))))
+  (is (nil? (:error (view [(spawned 1) (disconnected 2) (spawned 3)] (+ t0 4000))))))
+
+(deftest signals-online-time
+  (are [events expected] (= expected (:online-t (signals events)))
+    [(spawned 1) (ev 2)] (+ t0 1000)
+    [(spawned 1) (disconnected 2) (online-ev 3)] (+ t0 3000)
+    [(spawned 1) (started 2)] (+ t0 2000)
+    [(ev 1)] nil))
+
+(deftest pose-offline-counts-only-when-newer-than-the-last-connect
+  (let [up-view (view [(spawned 1) (ev 2)] (+ t0 3000))
+        online-t (+ t0 1000)]
+    (are [pose-view expected] (= expected (:up (ee/with-view-status up-view pose-view)))
+      {:status "offline" :poseMtimeMs (+ online-t 500)} false
+      {:status "offline" :poseMtimeMs (- online-t 500)} true
+      {:status "online" :poseMtimeMs (+ online-t 500)} true
+      nil true)
+    (is (= "view offline" (:error (ee/with-view-status up-view {:status "offline" :poseMtimeMs (+ online-t 500)}))))
+    (is (= false (:up (ee/with-view-status (view [(ev 1)] (+ t0 99000)) {:status "online" :poseMtimeMs t0}))))))

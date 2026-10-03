@@ -26,33 +26,37 @@
                       (catch :default _ nil))
            started (js/Date.now)
            finish (fn [bitmap]
-                    (some-> scene .close)
+                    (when scene (.close scene) (live/note-closed! name))
                     (resolve (if bitmap {:mtime mtime :bitmap bitmap} {:mtime mtime :failed? true})))]
        (if-not scene
          (finish nil)
          (letfn [(waited [] (- (js/Date.now) started))
                  (again [] (js/setTimeout attempt retry-ms))
                  (attempt []
-                   (-> (.snapshot scene (clj->js live/canvas-size))
+                   (if-not (contains? @wanted name)
+                     (finish nil) ; the card went away (the body came online): release the scene
+                     (-> (.snapshot scene (clj->js live/canvas-size))
                        (.then (fn [bitmap]
                                 (case (live/snapshot-state (.ready scene) (waited))
                                   :ready (finish bitmap)
                                   :waiting (do (.close bitmap) (again))
                                   :timeout (do (.close bitmap) (finish nil)))))
                        (.catch (fn [_]
-                                 (if (= :timeout (live/snapshot-state false (waited))) (finish nil) (again))))))]
+                                 (if (= :timeout (live/snapshot-state false (waited))) (finish nil) (again)))))))]
            (attempt)))))))
 
 (defn tick! []
   (let [hub (live/view-hub)
-        name (live/next-snapshot @wanted @done)]
+        name (live/next-snapshot @wanted @done (live/cooling-down @live/closed-at (js/Date.now)))]
     (when (and hub name (not @busy?))
       (reset! busy? true)
       (let [mtime (get @wanted name)]
         (-> (snapshot! hub name mtime)
             (.then (fn [result]
-                     (some-> (:bitmap (get @done name)) .close)
-                     (swap! done assoc name result)))
+                     (if-not (contains? @wanted name)
+                       (some-> (:bitmap result) .close)
+                       (do (some-> (:bitmap (get @done name)) .close)
+                           (swap! done assoc name result)))))
             (.finally #(reset! busy? false)))))))
 
 (defn want! [name mtime]
@@ -62,7 +66,8 @@
 (defn unwant! [name]
   (swap! wanted dissoc name)
   (some-> (:bitmap (get @done name)) .close)
-  (swap! done dissoc name))
+  (when-not (live/keep-record? (get @done name))
+    (swap! done dissoc name)))
 
 (defn draw! [canvas {:keys [bitmap]}]
   (when bitmap

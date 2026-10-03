@@ -114,9 +114,15 @@
     (let [s (quot (- now mtime) 1000)]
       (if (< s 60) (str s " s old") (str (quot s 60) " min old")))))
 
+(defn mine?
+  "Does this page (its own `who`) hold the body? Only then does the card get the red edge."
+  [body who]
+  (boolean (and who (manual? body) (= who (get-in body [:engine :signals :takeover-who])))))
+
 (defn card-model
-  "Everything a body card shows, as plain data."
-  [{:keys [name up engine view] :as body} now]
+  "Everything a body card shows, as plain data. `who`: this page load's name, to tell its own takeover from another's."
+  ([body now] (card-model body now nil))
+  ([{:keys [name up engine view] :as body} now who]
   (let [st (status body now)
         top (first (reasons body now))
         last-event (peek (vec (:recent engine)))
@@ -125,6 +131,7 @@
      :status st
      :reason (:text top)
      :manual (manual-text body)
+     :mine? (mine? body who)
      :severity (:severity top)
      :thumb (thumb-src name view)
      :pose-mtime (:poseMtimeMs view)
@@ -135,4 +142,4 @@
      :event (:text last-event)
      :event-age (when last-event (ago now (:t last-event)))
      :event-level (:level last-event)
-     :offline (when-not up (offline-text (:age-ms engine)))}))
+     :offline (when-not up (offline-text (:age-ms engine)))})))

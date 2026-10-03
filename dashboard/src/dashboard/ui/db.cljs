@@ -4,8 +4,9 @@
             [dashboard.ui.mapmodel :as mm]
             [dashboard.ui.logic :as logic]))
 
-(defn initial-db [search]
-  {:world (logic/world-from-search search)
+(defn initial-db [search who]
+  {:who who
+   :world (logic/world-from-search search)
    :worlds []
    :state nil
    :chat []

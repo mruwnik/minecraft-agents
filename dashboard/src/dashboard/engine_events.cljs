@@ -38,13 +38,22 @@
     (= "ended" (:kind e)) (when-not (= (:reflex e) reflex) reflex)
     :else reflex))
 
+;; The last lifecycle event that says the body is gone: a stop (system.stopping), a disconnect or kick of the session,
+;; a failed reconnect. A later body.spawned / body.online or system.started ends it.
+(defn offline-event? [{:keys [source kind]}]
+  (or (and (= "system" source) (= "stopping" kind))
+      (and (= "body" source) (#{"disconnected" "kicked"} kind))
+      (= "reconnect-failed" kind)))
+
 ;; What the trouble rules read, kept even for debug events that never reach :recent:
-;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover? :takeover-who :takeover-t}
+;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover? :takeover-who :takeover-t :offline? :online-t}
 (defn next-signals [signals e]
   (let [{:keys [source kind t]} e
         backoff-key (or (:name e) (:reflex e) (:job e))]
     (cond
-      (system-started? e) {}
+      (system-started? e) {:online-t t}
+      (and (= "body" source) (#{"spawned" "online"} kind)) (assoc signals :offline? false :online-t t)
+      (offline-event? e) (assoc signals :offline? true)
       (and (= "body" source) (= "hurt" kind)) (assoc signals :hurt-t t)
       (and (= "body" source) (= "died" kind)) (assoc signals :died-t t)
       (and (#{"job" "reflex"} source) (= "backoff" kind)) (assoc-in signals [:backoffs backoff-key] t)
@@ -87,11 +96,14 @@
   (if-not (:last state)
     {:up false :error "no events yet" :at nil :age-ms nil :job nil :reflex nil :pos nil :recent [] :warn10m 0 :error10m 0 :signals {}}
     (let [age-ms (max 0 (- now (get-in state [:last :t])))
-          up (< age-ms engine-up-ms)
+          offline? (boolean (:offline? (:signals state)))
+          up (and (< age-ms engine-up-ms) (not offline?))
           warns (filter #(> (:t %) (- now warn-window-ms)) (:warns state))
           count-level (fn [level] (count (filter #(= level (:level %)) warns)))]
       {:up up
-       :error (when-not up (str "last event " (js/Math.round (/ age-ms 1000)) "s ago"))
+       :error (cond up nil
+                    offline? "disconnected"
+                    :else (str "last event " (js/Math.round (/ age-ms 1000)) "s ago"))
        :at (get-in state [:last :t])
        :age-ms age-ms
        :job (:job state)
@@ -101,6 +113,15 @@
        :warn10m (count-level "warn")
        :error10m (count-level "error")
        :signals (:signals state)})))
+
+;; pose.json's status "offline", written after the connect, also takes a body down (the pose is newer than the last spawn).
+(defn with-view-status [engine pose]
+  (if (and (:up engine)
+           (= "offline" (:status pose))
+           (number? (:poseMtimeMs pose))
+           (> (:poseMtimeMs pose) (or (get-in engine [:signals :online-t]) 0)))
+    (assoc engine :up false :error "view offline")
+    engine))
 
 ;; ---------------------------------------------------------------- reading the file in pieces
 (def newline-byte 10)
@@ -145,7 +166,7 @@
    (into [] (comp (remove empty?) (filter line-test) (mapcat parse-line)) (.split text "\n"))))
 
 ;; What fold-one reads, and nothing else: inventories, args and path dumps are never converted.
-(def fold-fields ["t" "seq" "pos" "job" "chain" "source" "kind" "name" "reflex" "level" "text" "error"])
+(def fold-fields ["t" "seq" "who" "pos" "job" "chain" "source" "kind" "name" "reflex" "level" "text" "error"])
 
 (defn fold-event [o]
   (reduce (fn [m k]

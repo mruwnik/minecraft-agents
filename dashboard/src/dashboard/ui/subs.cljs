@@ -9,7 +9,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats? :chat-send]]
+(doseq [k [:status :selected :chat-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-chip :detail-text :drive :notices :chat :worlds :detail-stats? :chat-send :who]]
   (reg-key-sub k))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
@@ -40,8 +40,9 @@
  :cards
  :<- [:split-bodies]
  :<- [:now]
- (fn [[{:keys [engine]} now] _]
-   (mapv #(trouble/card-model % now) (trouble/sort-bodies engine now))))
+ :<- [:who]
+ (fn [[{:keys [engine]} now who] _]
+   (mapv #(trouble/card-model % now who) (trouble/sort-bodies engine now))))
 
 (rf/reg-sub
  :status-counts
@@ -87,8 +88,9 @@
  :<- [:split-bodies]
  :<- [:detail-events]
  :<- [:now]
- (fn [[name {:keys [engine]} events now] _]
-   (detail-model/detail-model (first (filter #(= name (:name %)) engine)) (or now 0) (eventlog/current-action events))))
+ :<- [:who]
+ (fn [[name {:keys [engine]} events now who] _]
+   (detail-model/detail-model (first (filter #(= name (:name %)) engine)) (or now 0) (eventlog/current-action events) who)))
 
 (rf/reg-sub
  :detail-rows
@@ -100,9 +102,11 @@
 (rf/reg-sub
  :drive-banner
  :<- [:drive]
- (fn [d _] (drive/banner d (or (:at d) 0))))
+ :<- [:who]
+ (fn [[d who] _] (drive/banner d (or (:at d) 0) who)))
 
 (rf/reg-sub
  :driving-now?
  :<- [:drive]
- (fn [d _] (drive/driving-now? d)))
+ :<- [:who]
+ (fn [[d who] _] (drive/driving-now? d who)))
