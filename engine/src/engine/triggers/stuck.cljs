@@ -21,8 +21,10 @@
            (or (nil? target) (>= (dist from target) min-move)))))
 
 (defn stuck?
-  "True when the last :n :moved entries are all bad moves and the oldest of
-  them is less than :window-ms old. False with fewer than :n entries. Moves
+  "True when the last :n :moved entries are all bad moves and the newest of
+  them is less than :window-ms old (the body is still trying; a real moveTo
+  that makes no progress runs its whole 20 s time bound, so four of them span
+  60 s or more and the oldest would always be out of the window). False with fewer than :n entries. Moves
   written before the latest :stuck entry (a failed unstick) are not counted,
   so a body the job gave up on needs :n fresh bad moves to fire again, and
   not even then until that entry is :quiet-ms old."
@@ -32,7 +34,7 @@
         last-n (take-last n (filter #(> (:t %) gave-up) (mem/entries view :moved)))]
     (and (>= (- (:now view) gave-up) quiet-ms)
          (= n (count last-n))
-         (< (- (:now view) (:t (first last-n))) window-ms)
+         (< (- (:now view) (:t (last last-n))) window-ms)
          (every? #(bad-move? min-move (:data %)) last-n))))
 
 (def stuck

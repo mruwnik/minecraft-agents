@@ -570,7 +570,7 @@ down.
   | hostile-near | 5 | |
   | hungry | 90 | a body with no food does not retry every tick |
   | night-unsafe | 10 | keep trying through the night |
-  | stuck | 60 | must outlast the 60 s window of the moves that fired it |
+  | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
 - Agent-only edits (functions in `engine.core`): `register-reflex!`,
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
@@ -731,7 +731,7 @@ after three the job emits a warn and ends.
 | `jobs.survival.dig-in` | `{:roof-height 4 :blocks [building blocks] :max-places 4}` | night and no roof within `:roof-height` | `:mode` and its targets | writes `:shelter` (cap 10, 1 day) `{:pos :roof :state :built}`, plus `:door` (feet and head cells of a side it placed) in walls mode; shelter digs the roof and door and leaves through it |
 | `jobs.survival.log-out` | `{:bed-radius :offline-allowed true :offline-ms 300000 :player-radius 128}` | night, no usable bed, allowed, not unsupported before, another player sleeping | none | writes `:log-out` (cap 10, 1 day) |
 | `jobs.survival.recover-drops` | `{:margin 0 :danger-radius 8 :collect-radius 6}` | a `:died` with no newer `:recovered` | `:death-t` (the death it is about; a different death resets the rest), `:decided`, `:phase`, children `:go`, `:collect` | reads `:died`, `:respawned` (waits 2 s after a respawn before estimating); writes `:recovered` `{:decision :collected/:skip/:abandoned ...}` (cap 10, 1 day); emits info `:recover-drops.decided` with the decision and a `:text` |
-| `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; writes `:stuck` (cap 10, 1 h) when it gives up; equips the best pickaxe before digging |
+| `jobs.maintenance.unstick` | `{:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000 :max-attempts 4}` | stuck (as the stuck trigger), or an attempt under way | `:attempts` | reads `:moved`; each attempt ends with one `moveTo` toward the stored goal (range 1, `:maxDistance` 3); writes `:stuck` (cap 10, 1 h) when it gives up; equips the best pickaxe before digging |
 
 - `:fell-tree` digs up to two logs per round of the chosen column, lowest
   first, and is done when the column has no logs. It walks with `moveTo`
@@ -797,7 +797,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:hungry` | food below `:food` (default 6), or below `:food-when-hurt` (default 14) while health is below 20 | `(jobs.survival.get-food)` | cooldown 60 s |
 | `:night-unsafe` | night, awake, and nothing solid within `:roof-height` (default 4) above | `(jobs.survival.shelter)` | cooldown 10 s |
 | `:night-and-bed-known` | an alias of `:night-unsafe` under its old name, kept for the older scenarios; register one or the other | `(jobs.survival.shelter)` | cooldown 10 s |
-| `:stuck` | the last `:n` (4) `:moved` entries, all within `:window-ms` (60 s) and none older than the latest `:stuck`, are bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
+| `:stuck` | the last `:n` (4) `:moved` entries, none older than the latest `:stuck`, are all bad moves (not arrived or partial, or under `:min-move` 1.5 blocks), the newest of them is under `:window-ms` (60 s) old, and the latest `:stuck` is over `:quiet-ms` (5 min) old | `(jobs.maintenance.unstick)` | cooldown 60 s |
 | `:died` | a `:died` entry younger than five minutes with no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 0 |
 | `:inventory-nearly-full` | `:stacks` (default 30) or more carried stacks and a `:chest` entry exists | `(jobs.storage.deposit)` | cooldown 60 s |
 | `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |

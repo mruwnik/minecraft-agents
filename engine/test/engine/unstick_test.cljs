@@ -129,6 +129,24 @@
           (is (false? (stuck-now? eng)) "old entries do not count")
           (is (true? (stuck-now? eng {:window-ms 120000}))))))))
 
+(defn seed-spaced!
+  "Four bad moves, 20 s apart starting at t0, as four blocked 20 s moveTos write them."
+  [eng clock]
+  (doseq [i (range 4)]
+    (reset! clock (+ t0 (* i 20000)))
+    (seed-moved! eng [(bad-move)])))
+
+(deftest stuck-trigger-counts-the-window-from-the-newest-move
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {})]
+          (seed-spaced! eng clock)
+          (reset! clock (+ t0 61000))
+          (is (true? (stuck-now? eng)) "four bad moves spanning 60 s, the newest 1 s old")
+          (reset! clock (+ t0 60000 60000 1))
+          (is (false? (stuck-now? eng)) "newest move older than the window"))))))
+
 (deftest stuck-is-registered-and-valid-in-a-scenario
   (is (some? (get triggers/all :stuck)))
   (is (= [] (scenario/problems registry/jobs triggers/all (scenario/parse "{:register [{:trigger :stuck}]}")))))
@@ -156,8 +174,8 @@
           (is (true? (stuck-now? eng)))
           (core/submit! eng '(jobs.maintenance.unstick) {})
           (await (core/tick! eng))
-          (is (= [{:pos {:x 4 :y 64 :z 0} :range 0} {:pos {:x 7 :y 64 :z 0} :range 0}] (call-args p "moveTo"))
-              "one step back, away from the goal, then a short hop toward it")
+          (is (= [{:pos {:x 4 :y 64 :z 0} :range 0} {:pos goal :range 1 :maxDistance 3}] (call-args p "moveTo"))
+              "one step back, away from the goal, then a capped moveTo toward the goal itself")
           (is (= [] (:list (core/state eng))) "done after a good move")
           (is (= [] (calls p "dig")))
           (is (false? (stuck-now? eng)) "the good move is in the window, so no re-trigger"))))))
@@ -174,8 +192,8 @@
           (core/submit! eng '(jobs.maintenance.unstick) {})
           (await (core/tick! eng))
           (is (= [] (calls p "dig") (calls p "place")) "attempt 1 only moves")
-          (is (= [{:pos {:x 8 :y 64 :z 0} :range 0}] (call-args p "moveTo"))
-              "no free cell behind in a pit, so only the hop toward the goal")
+          (is (= [{:pos goal :range 1 :maxDistance 3}] (call-args p "moveTo"))
+              "no free cell behind in a pit, so only the capped moveTo toward the goal")
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))
           (is (= [{:pos {:x 6 :y 64 :z 0}} {:pos {:x 6 :y 65 :z 0}} {:pos {:x 5 :y 66 :z 0}}]

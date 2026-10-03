@@ -10,7 +10,8 @@
   front at feet and head height and the one above the head in a tight gap,
   3 places a block under the feet and steps up when walled in like a pit
   and a pillar block is carried (attempts past 3 repeat 3). After every attempt it
-  tries a short moveTo toward where the body was going. If that ends arrived
+  tries a moveTo toward the stored goal itself, capped at hop-blocks (3) along
+  the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If that ends arrived
   or partial and moves the body more than :min-move blocks the spell is over
   (:done); otherwise :continue. After :max-attempts attempts it emits the warn
   event unstick.failed with the position, writes a :stuck memory entry (cap 10,
@@ -18,7 +19,7 @@
 
   How it pairs with the stuck trigger (engine.triggers.stuck): both read only
   the :moved entries act writes after every moveTo. The trigger fires when the
-  last :n are all bad inside :window-ms; this job's check is that same
+  last :n are all bad and the newest is inside :window-ms; this job's check is that same
   condition, or an attempt already begun and not yet proven by a good move, so
   the spell is not abandoned halfway when its own bad attempts push the old
   evidence out of the window. The job's own moveTo calls write :moved entries
@@ -31,7 +32,7 @@
 (def args
   {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}
    :min-move {:doc "blocks a move must cover to count as progress" :default (:min-move stuck/defaults)}
-   :window-ms {:doc "the bad moves must all fall within this many ms" :default (:window-ms stuck/defaults)}
+   :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :default (:window-ms stuck/defaults)}
    :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
    :max-attempts {:doc "attempts before giving up with unstick.failed" :default 4}})
 
@@ -98,18 +99,6 @@
   "The way the body was trying to go, from the stored goal."
   [c here]
   (some->> (:goal (ctx/mem c)) (heading here)))
-
-(defn hop-point
-  "A point at most hop-blocks from here toward the stored goal, or nil."
-  [c here]
-  (when-let [target (:goal (ctx/mem c))]
-    (let [d (u/dist here target)]
-      (if (<= d hop-blocks)
-        (cell target)
-        (let [f (/ hop-blocks d)]
-          {:x (js/Math.round (+ (:x here) (* f (- (:x target) (:x here)))))
-           :y (js/Math.round (+ (:y here) (* f (- (:y target) (:y here)))))
-           :z (js/Math.round (+ (:z here) (* f (- (:z target) (:z here)))))})))))
 
 (defn free-cell? [c pos] (and (open? c pos) (open? c (up pos 1))))
 
@@ -181,12 +170,12 @@
       (await (go! c (up here 1))))))
 
 (defn ^:async hop!
-  "A short moveTo toward the target. True when it ended arrived or partial and
-  the body moved more than min-move blocks."
+  "One moveTo toward the stored goal, capped at hop-blocks. True when it ended
+  arrived or partial and the body moved more than min-move blocks."
   [c min-move]
   (let [before (u/self-pos c)]
-    (when-let [spot (hop-point c before)]
-      (let [r (await (go! c spot))]
+    (when-let [goal (:goal (ctx/mem c))]
+      (let [r (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks})))]
         (and (contains? stuck/ok-statuses (.-status r))
              (> (u/dist before (u/self-pos c)) min-move))))))
 
