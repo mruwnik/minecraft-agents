@@ -26,8 +26,9 @@ precision highp sampler2DArray;
 uniform usampler3D uBlocks;
 uniform usampler3D uCoarse;
 uniform usampler3D uLightTex;
-uniform usampler3D uBiomes; // reserved for view-textures: per-world biome ids, one texel per 4x4x4 blocks (tintFor will read them)
-uniform sampler2D uBiomeColors; // reserved: per-world biome id -> colours, 4 x 256
+uniform usampler3D uBiomes; // per-world biome ids, one texel per 4x4x4 blocks
+uniform sampler2D uBiomeColors; // per-world biome id (row) -> grass, foliage, dry foliage, water (columns), 4 x 256
+uniform int uHasBiomeColors; // 1 once the world has a colour table; else the fixed group colours
 uniform sampler2D uMats;
 uniform usampler2D uInfo;
 uniform sampler2D uElems;
@@ -169,10 +170,14 @@ bool crossHit (vec3 lo, vec3 dd, float t, uint layerCode, out float sHit, out ve
 }
 
 // The colour a face with this tint group (0 none, 1 grass, 2 foliage, 3 dry foliage, 4 water, 5 constant + its table index) is
-// multiplied by. Stage 1: one fixed colour per group; a per-biome lookup at the cell replaces it here and nowhere else.
+// multiplied by. Groups 1-4 read the biome of the cell's 4x4x4 block from the world's table; without a table, or in a slot
+// holding no column, the fixed colour of the group.
 vec3 tintFor (uint group, uint constIdx, ivec3 cell) {
+  if (group == 0u) return vec3(1.0);
   if (group == 5u) return uTintConst[min(constIdx, 31u)];
-  return uTintGroups[min(group, 5u)];
+  if (uHasBiomeColors == 0 || group > 4u || !inWindow(cell) || sectionFlag(cell) == 0u) return uTintGroups[min(group, 5u)];
+  uint id = texelFetch(uBiomes, wrapCell(cell) >> ivec3(2), 0).r;
+  return texelFetch(uBiomeColors, ivec2(int(group) - 1, int(id)), 0).rgb;
 }
 
 // ---- model elements (kind 5): the element table of tools/view/element-table.mjs ----
@@ -573,7 +578,7 @@ export function createRenderer (canvasOrGl) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -647,13 +652,14 @@ export function createRenderer (canvasOrGl) {
     const blocks = nearestTexture(gl, gl.TEXTURE_3D, 0)
     const coarse = nearestTexture(gl, gl.TEXTURE_3D, 1)
     const lightTex = nearestTexture(gl, gl.TEXTURE_3D, 5)
-    // Per-world biome data for view-textures (the shader only declares the samplers so far; tintFor does not read them yet):
+    // Per-world biome data (read by tintFor):
     // biomes is R8UI, (n*4, height/4, n*4), one texel per 4x4x4 blocks, filled by uploadColumn's optional biomes argument;
     // biomeColors is RGBA8 4 x 256 (biome id -> colours), per world because scenes may show different worlds.
     const biomes = nearestTexture(gl, gl.TEXTURE_3D, 7)
     const biomeColors = nearestTexture(gl, gl.TEXTURE_2D, 8)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 4, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4 * 256 * 4))
     let size = null
+    let hasColors = false
 
     const bind = () => {
       gl.activeTexture(gl.TEXTURE0)
@@ -714,6 +720,23 @@ export function createRenderer (canvasOrGl) {
       gl.activeTexture(gl.TEXTURE8)
       gl.bindTexture(gl.TEXTURE_2D, biomeColors)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 4, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, colors)
+      hasColors = true
+    }
+    // body: GET /biomes/<world>.json. Rows are biome ids, 4 texels each (grass, foliage, dry foliage, water); ids without data and
+    // row 255 take the plains row, or the fixed group colours when there is no plains. Without colours the world keeps the fixed colours.
+    const setBiomes = body => {
+      if (!body?.colors) return false
+      const count = body.colors.length / 12
+      const fixed = [1, 2, 3, 4].flatMap(g => [...tintGroups.slice(g * 3, g * 3 + 3)].map(v => Math.round(v * 255)))
+      const plainsAt = body.names.indexOf('plains')
+      const plains = plainsAt >= 0 ? body.colors.slice(plainsAt * 12, plainsAt * 12 + 12) : fixed
+      const bytes = new Uint8Array(4 * 256 * 4)
+      for (let id = 0; id < 256; id++) {
+        const row = id < count && id < 255 && body.names[id] ? body.colors.slice(id * 12, id * 12 + 12) : plains
+        for (let t = 0; t < 4; t++) bytes.set([row[t * 3], row[t * 3 + 1], row[t * 3 + 2], 255], (id * 4 + t) * 4)
+      }
+      setBiomeColors(bytes)
+      return true
     }
     // an unloaded slot reads as air with open sky (so loaded neighbours are not shaded black): only its flags are zeroed,
     // the stale blocks and light stay in the textures and every read checks the flag first
@@ -726,7 +749,7 @@ export function createRenderer (canvasOrGl) {
       worlds.delete(world)
     }
 
-    const world = { allocate, uploadColumn, clearSlot, setBiomeColors, biomes, biomeColors, dispose, bind, isAllocated: () => size !== null, size: () => size, bytes: 0 }
+    const world = { allocate, uploadColumn, clearSlot, setBiomeColors, setBiomes, hasBiomeColors: () => hasColors, biomes, biomeColors, dispose, bind, isAllocated: () => size !== null, size: () => size, bytes: 0 }
     worlds.add(world)
     return world
   }
@@ -758,6 +781,7 @@ export function createRenderer (canvasOrGl) {
     gl.uniform1i(uniform.uLightTex, 5)
     gl.uniform1i(uniform.uBiomes, 7)
     gl.uniform1i(uniform.uBiomeColors, 8)
+    gl.uniform1i(uniform.uHasBiomeColors, world.hasBiomeColors() ? 1 : 0)
     gl.uniform1f(uniform.uLodMax, lodMax)
     gl.uniform2f(uniform.uRes, width, height)
     gl.uniform3f(uniform.uEye, eye.x, eye.y, eye.z)

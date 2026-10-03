@@ -257,12 +257,6 @@ holes showing red, the dark stripe below 0.35 of the lit one, night below 0.5 of
 above the slab and the snow layer showing what is behind them. It exits 1 on a failure.
 
 ### Known gaps
-- The body does not re-dump a column when only its light changes: `engine/js/view.mjs` marks columns dirty on
-  `chunkColumnLoad` and `blockUpdate`, and mineflayer applies the `update_light` packet without an event. A torch
-  placed live shows no light until the column is loaded again, even in its own column (the light packet comes after
-  the 500 ms flush), and neighbouring columns it lights are never rewritten.
-- Grass, foliage and water use one fixed tint (no biome colours: `textures/` has no colormaps; the biome ids are in
-  the dumped sections and are skipped by the decoder).
 - Animated textures (water, lava, fire, portals) show their first frame. Water is a full cube (a source's surface is
   at 14/16), with no flow texture.
 - Stairs are full cubes; connected fences, walls and panes are their bounding box; torches, signs, levers and
@@ -374,8 +368,17 @@ is 26.1.2. The bake runs once per version on the server, in `tools/view/block-ba
   The shader loops over at most 24 elements per model voxel. It applies the element rotation with rescale, the vanilla
   uv and face rotation, an alpha test at 0.5, and light from the neighbour cell for faces on the voxel boundary.
 - **Tints:** each face carries a tint group: grass, foliage, dry foliage, water, or a constant from minecraft-data
-  `tints.json`. The colour comes from one shader function, `tintFor()`, which uses fixed per-group colours for now.
-  Per-biome colours come next.
+  `tints.json`. The colour comes from one shader function, `tintFor()`. For grass, foliage, dry foliage and water it
+  reads the biome of the hit's 4x4x4 cell from a per-world R8UI 3D texture (n*4 x height/4 x n*4: 0.44 MB at radius 8,
+  75 KB for a radius-3 preview) and that biome's colour from a 4 x 256 table (`GET /biomes/<world>.json`, built by
+  `tools/view/biome-colors.mjs` from the client jar's colormaps and biome JSON, by the names in the world's
+  `biomes.json`, i.e. the server's own registry). Approximations: hard edges at biome borders (the game blends over a
+  5x5 neighbourhood; a 3x3 blend measured +0.39 ms per frame at 1920x1080 outdoors and is not shipped), swamp grass is
+  its cold colour #6A7039 (the game picks one of two by noise). Without a usable `biomes.json` (missing, or more than
+  255 biomes) the page keeps the fixed group colours and the server notes it once in the block-issues log; ids are
+  never mapped through minecraft-data's order (this server has `sulfur_caves`, which shifts every id from 53 up).
+  Cost: no measurable frame or decode cost (1920x1080 frozen scene, 3 runs each: 1.46 ms per frame with biomes vs
+  1.61 ms without, within the run-to-run spread; decodeSections 1.31 vs 1.30 ms per column).
 - **No jar:** the legacy table is used unchanged.
 
 Effect on the log (world claude, 26.1 server, 26.1.2 jar):

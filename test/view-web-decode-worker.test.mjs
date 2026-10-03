@@ -8,7 +8,7 @@ import { columnFormat } from '../tools/view/web-format.mjs'
 const fixture = fileURLToPath(new URL('./fixtures/view-columns/128.117.bin', import.meta.url))
 const table = { type: 'table', format: columnFormat('26.1'), materialOf: new Uint16Array(40000).fill(1) }
 
-test('a job posts the result with its buffers and the elapsed ms in the transfer list', async () => {
+test('a job posts the result with its four buffers and the elapsed ms in the transfer list', async () => {
   const posted = []
   const handle = createHandler((message, transfer) => posted.push({ message, transfer }))
   await handle({ data: table })
@@ -16,7 +16,7 @@ test('a job posts the result with its buffers and the elapsed ms in the transfer
   const [{ message, transfer }] = posted
   assert.equal(message.id, 7)
   assert.equal(typeof message.ms, 'number')
-  assert.deepEqual(transfer, [message.result.mats.buffer, message.result.flags.buffer, message.result.light.buffer])
+  assert.deepEqual(transfer, [message.result.mats.buffer, message.result.flags.buffer, message.result.light.buffer, message.result.biomes.buffer])
 })
 
 test('a corrupt job posts an error with the same id and nothing to transfer', async () => {

@@ -7,8 +7,7 @@ import path from 'node:path'
 import { textureBytes } from './materials.mjs'
 import { columnFormat } from './web-format.mjs'
 import { createDriveProxy } from './drive-proxy.mjs'
-import { SEVERITIES } from './block-issues.mjs'
-import minecraftData from 'minecraft-data'
+import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
 
@@ -86,28 +85,54 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const stored = held ? null : await readJson(file)
     const payload = held ?? stored ?? await scanner.latest(world)
     if (!payload) return notFound(res)
-    send(res, 200, JSON.stringify(payload), { 'Content-Type': TYPES['.json'] })
+    send(res, 200, JSON.stringify(withBiomeIssues(world, payload)), { 'Content-Type': TYPES['.json'] })
   }
 
-  // biome id -> colours for a world: its biomes.json (written by the body) or, without one, minecraft-data's order for ?v=; cached per world and file mtime
+  // Biome problems found while serving /biomes, once per world and name; merged into the /block-issues payload.
+  const biomeIssues = new Map()
+  const noteBiomeIssue = (world, name, detail) => {
+    if (!biomeIssues.has(world)) biomeIssues.set(world, new Map())
+    if (biomeIssues.get(world).has(name)) return
+    biomeIssues.get(world).set(name, {
+      name, reason: 'tint-approximate', severity: severityOf('tint-approximate'), drawnAs: 'fixed plains colour', detail,
+      example: { stateId: 0, props: {} }, states: 0, seen: 0, firstSeen: null
+    })
+  }
+  const withBiomeIssues = (world, payload) => {
+    const extra = [...(biomeIssues.get(world)?.values() ?? [])]
+    if (!extra.length) return payload
+    const own = new Set(payload.records.map(r => `${r.name}\0${r.reason}`))
+    return { ...payload, records: [...payload.records, ...extra.filter(r => !own.has(`${r.name}\0${r.reason}`))] }
+  }
+
+  // biome id -> colours for a world: its biomes.json (written by the body). Ids are never guessed from minecraft-data's order (a
+  // server with extra biomes shifts every id above them), so a world without a usable biomes.json gets {fallback: true, colors: null}
+  // and the page draws the fixed group colours. Cached per world and file mtime.
+  const MAX_BIOMES = 255
   const biomeCache = new Map()
-  const sendBiomes = async (res, world, requested) => {
+  const sendBiomes = async (res, world) => {
     const worldDir = path.join(stateDir, 'worlds', world)
     if (!(await statOrNull(worldDir))?.isDirectory()) return notFound(res)
     const file = path.join(worldDir, 'biomes.json')
     const stat = await statOrNull(file)
     const doc = stat ? await readJson(file) : null
-    const fallback = !doc?.biomes
-    const version = fallback ? requested : doc.mcVersion
+    const reasonOf = !doc?.biomes ? 'no biomes.json for this world' : doc.biomes.length > MAX_BIOMES ? `biomes.json lists ${doc.biomes.length} biomes, more than the ${MAX_BIOMES} ids the view holds` : null
+    const answer = body => send(res, 200, JSON.stringify(body), { 'Content-Type': 'application/json' })
+    if (reasonOf) {
+      noteBiomeIssue(world, 'biome-registry', `${reasonOf}: biome tints are drawn as the fixed plains colours`)
+      return answer({ mcVersion: doc?.mcVersion ?? null, source: null, names: [], colors: null, unknown: [], fallback: true, reason: reasonOf })
+    }
+    const version = doc.mcVersion
     if (!version || !VERSION.test(version)) return notFound(res)
-    const key = `${world}\0${fallback ? `fallback:${version}` : stat.mtimeMs}`
+    const key = `${world}\0${stat.mtimeMs}`
     if (!biomeCache.has(key)) {
       const names = []
-      if (fallback) minecraftData(version).biomesArray.forEach(b => { names[b.id] = b.name })
-      else doc.biomes.forEach(b => { names[b.id] = b.name })
+      doc.biomes.forEach(b => { names[b.id] = b.name })
       const table = biomeTable(version, Array.from(names, n => n ?? ''), { jar: jarPath })
-      biomeCache.set(key, JSON.stringify({ mcVersion: version, source: table.source, names: table.names, colors: Array.from(table.colors), unknown: table.unknown, fallback }))
+      biomeCache.set(key, JSON.stringify({ mcVersion: version, source: table.source, names: table.names, colors: Array.from(table.colors), unknown: table.unknown, fallback: false }))
     }
+    const cached = JSON.parse(biomeCache.get(key))
+    for (const name of cached.unknown) noteBiomeIssue(world, `biome:${name}`, `biome ${name} has no colour data: drawn with the plains colours`)
     send(res, 200, biomeCache.get(key), { 'Content-Type': 'application/json' })
   }
 
@@ -293,7 +318,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       return send(res, 200, table, { 'Content-Type': 'application/json' })
     }
     const biomeWorld = head === 'biomes' && rest.length === 1 ? /^([A-Za-z0-9_-]+)\.json$/.exec(rest[0])?.[1] : null
-    if (biomeWorld) return sendBiomes(res, biomeWorld, url.searchParams.get('v'))
+    if (biomeWorld) return sendBiomes(res, biomeWorld)
     const textureVersion = versionOf('textures', 'bin')
     if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
     const elementVersion = versionOf('elements', 'bin')

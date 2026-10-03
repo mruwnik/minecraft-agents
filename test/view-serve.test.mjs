@@ -365,12 +365,35 @@ test('GET /biomes/<world>.json rebuilds when biomes.json changes', async () => {
   assert.deepEqual(body.names, ['swamp'])
 })
 
-test('GET /biomes/<world>.json falls back to minecraft-data order without biomes.json', async () => {
+test('GET /biomes/<world>.json without biomes.json says fallback with no colours', async () => {
   fs.rmSync(biomesFile)
   const body = await (await get('/biomes/w1.json?v=26.1')).json()
   assert.equal(body.fallback, true)
-  assert.ok(body.names.includes('plains'))
-  assert.equal(body.colors.length, body.names.length * 12)
+  assert.equal(body.colors, null)
+  assert.match(body.reason, /no biomes\.json/)
+})
+
+test('GET /biomes/<world>.json with more than 255 biomes says fallback with a reason', async () => {
+  const biomes = Array.from({ length: 256 }, (_, id) => ({ id, name: 'plains' }))
+  writeAt(biomesFile, JSON.stringify({ v: 1, mcVersion: '26.1', biomes }), 4000)
+  const body = await (await get('/biomes/w1.json')).json()
+  assert.equal(body.fallback, true)
+  assert.equal(body.colors, null)
+  assert.match(body.reason, /256 biomes/)
+})
+
+test('an unknown biome name is listed, gets plains colours, and shows in the block-issues payload', async () => {
+  writeAt(biomesFile, JSON.stringify({ v: 1, mcVersion: '26.1', biomes: [{ id: 0, name: 'plains' }, { id: 1, name: 'not_a_biome' }] }), 5000)
+  const body = await (await get('/biomes/w1.json')).json()
+  assert.deepEqual(body.unknown, ['not_a_biome'])
+  assert.deepEqual(body.colors.slice(12, 24), body.colors.slice(0, 12))
+  fs.mkdirSync(path.join(stateDir, 'worlds', 'w1', 'chunks'), { recursive: true })
+  fs.writeFileSync(path.join(stateDir, 'worlds', 'w1', 'chunks', '0.0.bin'), columnFile({ cx: 0, cz: 0, body: 'Ann', blocks: [] }))
+  const issues = await (await get('/block-issues/w1')).json()
+  const names = issues.records.filter(r => r.reason === 'tint-approximate').map(r => r.name)
+  assert.ok(names.includes('biome:not_a_biome'))
+  assert.ok(names.includes('biome-registry'))
+  assert.equal(names.filter(n => n === 'biome-registry').length, 1)
 })
 
 for (const p of ['/biomes/nope.json', '/biomes/..%2Fw1.json', '/biomes/a.b.json']) {

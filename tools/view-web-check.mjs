@@ -11,6 +11,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createViewServer } from './view/serve.mjs'
+import { biomeTable } from './view/biome-colors.mjs'
 import { FIXTURE, writeFixture, AGENT } from './view/fixture.mjs'
 import { withPage, freePort } from './view/headless.mjs'
 import { cameraBasis } from './view/web/camera.mjs'
@@ -47,6 +48,15 @@ const textureAverage = name => {
 }
 const diamondExpected = textureAverage('diamond_ore').map(v => v * Z_FACE_SHADE)
 
+// grass_block_top is grey and tinted by the biome's grass colour; its top face is unshaded (1.0)
+const grassTop = textureAverage('grass_block_top')
+const grassColors = biomeTable('26.1', ['plains', 'swamp']).colors
+const grassExpected = i => grassTop.map((v, c) => v * grassColors[i * 12 + c] / 255)
+const plainsGrassExpected = grassExpected(0)
+const swampGrassExpected = grassExpected(1)
+const GRASS_TOLERANCE = 35 // wider than the 25 first aimed at: ambient occlusion by the wall and mip averaging make the mean approximate (not measured yet)
+const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]))
+
 const limeExpected = textureAverage('lime_wool').map(v => v * Z_FACE_SHADE)
 const isLime = rgb => rgb.every((v, i) => Math.abs(v - limeExpected[i]) <= 40) // the block behind the glass, shaded like any z face
 const isRed = ([r, g, b]) => r > 70 && g < 50 && b < 50 // the shaded, AO-darkened wool
@@ -55,6 +65,24 @@ const isGold = ([r, g, b]) => r > 110 && g > 90 && b < 80
 
 // A check: {name, region, test(stats, all), describe(stats, all)}; `all` = {stats: this run's regions, runs: {run name: regions}}
 const TEXTURES = [
+  {
+    name: 'plains grass colour',
+    region: 'plains grass',
+    test: s => s.mean.every((v, i) => Math.abs(v - plainsGrassExpected[i]) <= GRASS_TOLERANCE),
+    describe: s => `mean ${fmt(s.mean)} vs ${fmt(plainsGrassExpected)} +-${GRASS_TOLERANCE}`
+  },
+  {
+    name: 'swamp grass colour',
+    region: 'swamp grass',
+    test: s => s.mean.every((v, i) => Math.abs(v - swampGrassExpected[i]) <= GRASS_TOLERANCE),
+    describe: s => `mean ${fmt(s.mean)} vs ${fmt(swampGrassExpected)} +-${GRASS_TOLERANCE}`
+  },
+  {
+    name: 'biomes differ',
+    region: 'plains grass',
+    test: (s, all) => distance(s.mean, all.stats['swamp grass'].mean) > 30,
+    describe: (s, all) => `distance ${distance(s.mean, all.stats['swamp grass'].mean).toFixed(1)} vs > 30 (plains ${fmt(s.mean)}, swamp ${fmt(all.stats['swamp grass'].mean)})`
+  },
   { name: 'diamond textured', region: 'diamond', test: s => s.std > 12, describe: s => `std ${s.std.toFixed(1)} vs > 12` },
   {
     name: 'diamond colour',
