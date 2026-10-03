@@ -308,3 +308,40 @@ test('craftItem: no merge while another window is open', async () => {
   await craftItem(bot, ctx, { item: 'bread' }, opts)
   assert.equal(items.filter(i => i.name === 'bread').length, 2)
 })
+
+test('craftItem: resyncs the inventory window at entry', async () => {
+  const { bot, state } = setup({ items: inv(['wheat', 3]), blocks: tableBlocks })
+  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.ok(state.syncs >= 1)
+})
+
+test('craftItem: a stale local view is fixed by the entry resync', async () => {
+  const { bot, items } = setup({ items: [], blocks: tableBlocks })
+  bot._syncWindow = async () => { if (!items.some(i => i.name === 'wheat')) items.push({ name: 'wheat', count: 6, type: ID.wheat, slot: 36 }) }
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 2 }, opts)
+  assert.equal(r.status, 'crafted')
+  assert.equal(r.made, 2)
+})
+
+test('craftItem: a batch that did not land is followed by a resync before the retry', async () => {
+  const { bot, state } = setup({ items: inv(['wheat', 6]), blocks: tableBlocks, mode: 'noop' })
+  const syncsAtCraft = []
+  const craft = bot.craft
+  bot.craft = async (...args) => { syncsAtCraft.push(state.syncs); return craft(...args) }
+  await craftItem(bot, ctx, { item: 'bread', count: 1 }, opts)
+  assert.ok(syncsAtCraft.length >= 2)
+  assert.ok(syncsAtCraft[1] > syncsAtCraft[0])
+})
+
+test('craftItem: a cursor holding something at entry closes the open window before the resync', async () => {
+  const { bot, state } = setup({ items: inv(['wheat', 3]), blocks: tableBlocks })
+  const win = { id: 1 }
+  const log = []
+  bot.currentWindow = win
+  bot.inventory.selectedItem = { name: 'wheat', count: 1 }
+  bot.closeWindow = w => log.push(['close', w])
+  bot._syncWindow = async () => { state.syncs++; log.push(['sync']) }
+  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  assert.deepEqual(log[0], ['close', win])
+  assert.deepEqual(log[1], ['sync'])
+})

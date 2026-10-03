@@ -124,12 +124,22 @@ async function settle (bot, ctx, timeScale) {
   }
 }
 
-// hand back whatever a 2x2 craft left in the grid or on the cursor
-async function settleGrid (bot, timeScale) {
+// ask the server to resend the whole inventory window (fixes a stale local view), bounded, errors ignored; then settle
+async function resync (bot, ctx, timeScale) {
+  await syncWindow(bot, timeScale)
+  await settle(bot, ctx, timeScale)
+}
+
+async function syncWindow (bot, timeScale) {
   let timer
   const bound = new Promise(resolve => { timer = setTimeout(resolve, 3000 * timeScale) })
   await Promise.race([Promise.resolve().then(() => bot._syncWindow?.(bot.inventory)).catch(() => {}), bound])
   clearTimeout(timer)
+}
+
+// hand back whatever a 2x2 craft left in the grid or on the cursor
+async function settleGrid (bot, timeScale) {
+  await syncWindow(bot, timeScale)
   const grid = [1, 2, 3, 4].some(i => bot.inventory.slots[i])
   if (grid || bot.inventory.selectedItem) bot.closeWindow(bot.inventory)
 }
@@ -198,6 +208,12 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
 
   ctx.onAbort(() => { if (bot.currentWindow) bot.closeWindow(bot.currentWindow) })
 
+  // a cut mid-batch can leave a cursor stack or an open window and a local view the server no longer shares
+  if (bot.inventory.selectedItem || (bot.currentWindow && bot.currentWindow !== bot.inventory)) {
+    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+  }
+  await resync(bot, ctx, timeScale)
+
   const before = carriedCounts(bot)
   const start = before[item] ?? 0
   const names = new Set()
@@ -211,7 +227,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
     if (made >= count) break
     const r = bot.recipesFor(id, null, 1, table)[0]
     if (!r) {
-      await settle(bot, ctx, timeScale)
+      await resync(bot, ctx, timeScale)
       if (bot.recipesFor(id, null, 1, table)[0]) continue
       shortage = shortOf(bot, id, table)
       break
@@ -227,6 +243,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
     const landed = await waitForCount(bot, ctx, item, now + r.result.count, timeScale)
     if (!landed) reason = reason ?? 'server rejected the craft'
     if (landed) reason = null
+    if (!landed) await resync(bot, ctx, timeScale)
     await settle(bot, ctx, timeScale)
     if (!table) await settleGrid(bot, timeScale)
   }
