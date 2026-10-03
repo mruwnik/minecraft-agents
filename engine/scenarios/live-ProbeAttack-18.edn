@@ -1,0 +1,4 @@
+;; batch-craft live: items.craft with the only table up on a pillar it cannot path to (three blocked walks end it)
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
+                    (jobs.items.craft {:item "bread" :count 1})))]}

@@ -1,0 +1,6 @@
+;; batch-craft live: items.craft with no table in radius, with an explicit table that is not one, and an unknown item
+{:register []
+ :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
+                    (jobs.items.craft {:item "bread" :count 1 :radius 8})
+                    (jobs.items.craft {:item "bread" :count 1 :table {:x -5000 :y 100 :z 5000}})
+                    (jobs.items.craft {:item "no_such_thing"})))]}

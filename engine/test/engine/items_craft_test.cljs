@@ -1,0 +1,196 @@
+(ns engine.items-craft-test
+  "jobs.items.craft against the fake world."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.registry :as registry]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]))
+
+(defn setup [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)
+        p (tu/fake world)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(defn ^:async run-until-empty [eng n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (await (core/tick! eng))
+          (recur (inc i))))))
+
+(defn ^:async child-outcome
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
+  [eng job args n]
+  (let [out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
+
+(defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
+(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+
+(def job 'jobs.items.craft)
+(def table {:x 10 :y 64 :z 0})
+(def table-block {"10,64,0" "crafting_table"})
+
+(defn ^:async craft
+  "Setup world, run the job with args; [result p seen]."
+  [world args]
+  (let [{:keys [eng p seen]} (setup world)
+        result (await (child-outcome eng job args 8))]
+    [result p seen]))
+
+(deftest craft-check-wants-an-item-name
+  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
+    {:item "stick"} true
+    {:item nil} false
+    {:item 3} false))
+
+(deftest craft-2x2-needs-no-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
+          (is (= {"oak_planks" 4} (inv p)))
+          (is (= {:made 4} result))
+          (is (empty? (calls p "moveTo"))))))))
+
+(deftest craft-walks-to-a-table-then-crafts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [{:item "bread"} {:item "bread" :table table}]]
+          (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} args))]
+            (is (= {"bread" 1} (inv p)))
+            (is (= {:made 1} result))
+            (is (= 1 (count (calls p "moveTo"))))))))))
+
+(deftest craft-without-a-table-in-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread"}))]
+          (is (= {:made 0 :reason "no-table"} result))
+          (is (empty? (calls p "moveTo")))
+          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
+
+(deftest craft-reports-what-is-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
+          (is (= {:made 0 :short {"wheat" 1}} result))
+          (is (some #(= :craft.short (:kind %)) @seen)))))))
+
+(deftest craft-an-unknown-item-cannot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ seen] (await (craft {} {:item "dragon_egg"}))]
+          (is (= {:made 0 :reason "no-recipe"} result))
+          (is (some #(and (= :craft.cannot (:kind %)) (= :warn (:level %))) @seen)))))))
+
+(deftest craft-count-is-on-top-of-what-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
+                                       {:item "oak_planks" :count 4}))]
+          (is (= {"oak_planks" 8} (inv p)))
+          (is (= {:made 4} result)))))))
+
+(deftest craft-gives-up-on-an-unreachable-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec [:unreachable :noPath]]
+          (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
+                                              {:item "bread"}))]
+            (is (= {:made 0 :reason "unreachable"} result))
+            (is (= 3 (count (calls p "moveTo"))))
+            (is (some #(and (= :craft.gave-up (:kind %)) (= :warn (:level %))) @seen))))))))
+
+(deftest craft-with-a-full-inventory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv #(hash-map :name (str "item_" %) :count 1) (range 35))
+              [result _ seen] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
+          (is (= {:made 0 :reason "full"} result))
+          (is (some #(and (= :craft.full (:kind %)) (= :warn (:level %))) @seen)))))))
+
+(deftest craft-gives-up-when-the-table-arg-is-not-a-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"10,64,0" "stone"}}
+                                            {:item "bread" :table table}))]
+          (is (= {:made 0 :reason "not-a-table"} result))
+          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
+
+(deftest craft-gives-up-when-in-reach-of-a-table-that-still-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
+              result (await (child-outcome eng job {:item "bread"} 8))]
+          (is (= {:made 0 :reason "unreachable"} result))
+          (is (empty? (calls p "moveTo")))
+          (is (some #(and (= :craft.gave-up (:kind %)) (= :warn (:level %))) @seen)))))))
+
+(deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "no-item" :short #js {"birch_log" 1} :alternatives #js {"birch_log" #js ["oak_log" "spruce_log"]}}))
+              result (await (child-outcome eng job {:item "birch_planks"} 8))]
+          (is (= {:made 0 :short {"birch_log" 1} :alternatives {"birch_log" ["oak_log" "spruce_log"]}} result)))))))
+
+(deftest craft-an-arrival-is-not-a-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
+              result (await (child-outcome eng job {:item "bread"} 10))]
+          (is (= {:made 0 :reason "unreachable"} result))
+          (is (= 1 (count (calls p "moveTo"))))
+          (is (= 4 (count (calls p "craft"))) "the walk is a round of its own, then 3 refusals in reach"))))))
+
+(deftest craft-a-gone-table-is-searched-for-afresh
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}]})
+              n (atom 0)
+              _ (.override (.-world p) "craft"
+                           (fn ^:async f [_ _ _]
+                             (if (= 1 (swap! n inc))
+                               #js {:status "out-of-reach" :reason "too-far" :table #js {:x 10 :y 64 :z 0}}
+                               #js {:status "unreachable" :reason "no-table"})))
+              result (await (child-outcome eng job {:item "bread"} 10))]
+          (is (= {:made 0 :reason "no-table"} result))
+          (is (= 1 (count (calls p "moveTo"))) "walked to the remembered cell once, not again"))))))
+
+(deftest craft-ignores-a-handed-over-table-beyond-the-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
+                                            {:item "bread" :radius 8}))]
+          (is (= {:made 0 :reason "no-table"} result))
+          (is (empty? (calls p "moveTo")))
+          (is (some #(and (= :craft.no-table (:kind %)) (= :warn (:level %))) @seen)))))))
