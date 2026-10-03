@@ -153,6 +153,34 @@ test('entities filters by kind and sorts by distance', () => {
   assert.deepEqual(p.entities({ kind: 'hostile', radius: 0.5 }), [])
 })
 
+const dropEntity = (extra) => ({ 9: { id: 9, name: 'item', type: 'object', position: at(2, 64, 0), ...extra } })
+const stack = { itemCount: 3, itemId: 1032, components: [] }
+const unreadable = () => { throw new TypeError("Cannot read properties of undefined (reading 'present')") }
+
+// Each case: the entity fields of a dropped item (as mineflayer 4.x leaves them) and the item the entities primitive reports.
+const dropShapes = [
+  ['an Item from getDroppedItem', { getDroppedItem: () => ({ name: 'stick', count: 2 }) }, { name: 'stick', count: 2 }],
+  ['a prismarine item with only a type', { getDroppedItem: () => ({ type: 1032, count: 2 }) }, { name: 'egg', count: 2 }],
+  ['a metadata slot {itemId, itemCount}', { getDroppedItem: () => null, metadata: [null, null, null, null, null, null, null, null, stack] }, { name: 'egg', count: 3 }],
+  ['a metadata slot with present: true', { getDroppedItem: () => null, metadata: { 8: { present: true, ...stack } } }, { name: 'egg', count: 3 }],
+  ['a metadata slot without a count', { metadata: [{ itemId: 1032 }] }, { name: 'egg', count: 1 }],
+  ['a pre-1.13 slot with blockId', { metadata: [{ blockId: 1032, itemCount: 4 }] }, { name: 'egg', count: 4 }],
+  ['getDroppedItem throwing on missing metadata, slot found by scan', { getDroppedItem: unreadable, metadata: [stack] }, { name: 'egg', count: 3 }],
+  ['an id the registry lacks', { metadata: [{ itemId: 99999, itemCount: 2 }] }, { name: 'unknown', count: 2 }],
+  ['an empty slot (present: false)', { getDroppedItem: () => null, metadata: [{ present: false, itemId: 1032, itemCount: 1 }] }, null],
+  ['a zero count', { getDroppedItem: () => null, metadata: [{ itemId: 1032, itemCount: 0 }] }, null],
+  ['no metadata at all', { getDroppedItem: unreadable, metadata: [] }, null]
+]
+
+for (const [label, extra, expected] of dropShapes) {
+  test(`entities reports the dropped item from ${label}`, () => {
+    const bot = stubBot({ entities: dropEntity(extra) })
+    bot.registry.items = { 1032: { name: 'egg' } }
+    const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+    assert.deepEqual(p.entities({ kind: 'item' }).map(e => e.item), [expected])
+  })
+}
+
 test('blocks matches by name, predicate and max, sorted by distance', () => {
   const { p } = rig(world)
   assert.deepEqual(p.blocks({ names: ['oak_log'] }).map(b => b.name), ['oak_log'])

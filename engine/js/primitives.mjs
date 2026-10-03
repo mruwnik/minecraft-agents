@@ -41,13 +41,25 @@ const entityKind = e => {
   return 'other'
 }
 
-const droppedItem = (bot, e) => {
-  const item = e.getDroppedItem?.()
-  if (item) return { name: item.name, count: item.count }
-  const meta = (e.metadata ?? []).find(m => m && typeof m === 'object' && m.itemId !== undefined)
-  const def = meta && bot.registry?.items?.[meta.itemId]
-  return def ? { name: def.name, count: meta.itemCount ?? 1 } : null
+// A slot value as the client library leaves it: a prismarine Item {name|type, count}, a network slot
+// {itemId, itemCount, present?} (1.13+) or {blockId, itemCount} (older), possibly without a count.
+const slotLike = m => m !== null && typeof m === 'object' && [m.itemId, m.blockId, m.type, m.name].some(v => v !== undefined)
+
+// {name, count} for a slot value; null for an empty slot; name 'unknown' for an id the registry lacks.
+const stackOf = (bot, slot) => {
+  if (!slotLike(slot) || slot.present === false) return null
+  const count = slot.itemCount ?? slot.count ?? 1
+  if (!(count > 0)) return null
+  const id = slot.itemId ?? slot.blockId ?? slot.type
+  return { name: slot.name ?? bot.registry?.items?.[id]?.name ?? 'unknown', count }
 }
+
+const attempt = f => { try { return f() } catch { return null } }
+
+// getDroppedItem throws or returns null when the library cannot read the slot (it reads one fixed metadata index),
+// so fall back to scanning the metadata for any slot-shaped value.
+const droppedItem = (bot, e) =>
+  stackOf(bot, attempt(() => e.getDroppedItem?.())) ?? stackOf(bot, Object.values(e.metadata ?? {}).find(slotLike))
 
 const itemCounts = items => items.reduce((acc, i) => ({ ...acc, [i.name]: (acc[i.name] ?? 0) + i.count }), {})
 const gained = (before, after) => Object.entries(after)
