@@ -196,11 +196,8 @@
     (is (false? (core/manual? eng)))))
 
 ;; The wire contract: every scenario of the shared fixture through handle and tick!, exact equality.
-;; The one scenario skipped is "ping moves expiresAt": a ping is a heartbeat and no longer counts as input
-;; (the idle clock), so it does not move expiresAt; ping-does-not-move-expires-at below asserts that.
 
 (def contract (tu/read-json "test/contract/drive-contract.json"))
-(def skipped-scenarios #{"ping moves expiresAt"})
 
 (defn run-contract-step [{:keys [eng clock world state]} name {:keys [at status tick req expect]}]
   (reset! clock (+ t0 at))
@@ -211,18 +208,18 @@
     :else (is (= expect (call eng (:method req) (:path req) (:body req))) (str name " at " at " " (pr-str req)))))
 
 (deftest every-drive-contract-scenario-matches-the-wire
-  (doseq [{:keys [name steps]} (remove #(skipped-scenarios (:name %)) contract)
+  (doseq [{:keys [name steps]} contract
           :let [rig (setup {})]]
     ;; the fake's self has no pos while offline; the fixture's GET still reports the last known {0 64 0}
     (set! (.-self (:primitives (:eng rig))) (fn [] #js {:pos (tu/pos 0 64 0)}))
     (doseq [step steps] (run-contract-step rig name step))))
 
-(deftest ping-does-not-move-expires-at
+(deftest ping-moves-expires-at
   (let [{:keys [eng clock]} (setup {})]
     (post eng {:op "take" :who "claude" :why "test"})
     (reset! clock (+ t0 5000))
-    (is (= {:expiresAt 1015000 :idleLeftS 10} (select-keys (get-in (post eng {:op "ping" :who "claude"}) [:json :manual])
+    (is (= {:expiresAt 1020000 :idleLeftS 15} (select-keys (get-in (post eng {:op "ping" :who "claude"}) [:json :manual])
                                                             [:expiresAt :idleLeftS])))
     (reset! clock (+ t0 5100))
-    (is (= {:expiresAt 1015000 :idleLeftS 9.9} (select-keys (get-in (call eng "GET" "/drive" nil) [:json :manual])
+    (is (= {:expiresAt 1020000 :idleLeftS 14.9} (select-keys (get-in (call eng "GET" "/drive" nil) [:json :manual])
                                                              [:expiresAt :idleLeftS])))))

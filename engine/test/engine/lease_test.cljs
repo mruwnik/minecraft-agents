@@ -1,6 +1,6 @@
 (ns engine.lease-test
-  "The takeover lease rules (engine.lease), ported one to one from js/control.test.mjs, plus the two-clock
-  tests (ping is a heartbeat, not input) and the wire contract in test/contract/drive-contract.json.
+  "The takeover lease rules (engine.lease), ported one to one from js/control.test.mjs, plus the one-clock
+  tests (any op from the holder keeps the lease) and the wire contract in test/contract/drive-contract.json.
   The three socket-level JS tests (real unix socket mode 0600, bodies over 16 KB, socket path over 100
   bytes) stay in js/control.test.mjs: they test node's http server, not the rules."
   (:require [cljs.test :refer [deftest is are]]
@@ -231,7 +231,7 @@
     (tick! rig)
     (is (empty? (calls-of rig :deadman)))))
 
-;; ping resets the silence (adapted: ping resets the dead-man clock but not the idle clock)
+;; ping resets the silence
 (deftest ping-resets-the-silence
   (let [rig (taken-rig)
         expires (:expiresAt (manual rig))]
@@ -246,27 +246,44 @@
     (is (= 1 (count (calls-of rig :deadman))))
     (is (= (+ 1000 15000 0) expires))))
 
-;; a person holding W with the page pinging must not lose the body to the idle limit
-(deftest a-held-control-with-a-live-heartbeat-keeps-the-body
+;; one clock: any op from the holder keeps the lease
+(deftest only-pings-for-ten-minutes-keeps-the-body
   (let [rig (taken-rig)]
-    (post! rig {:op "set" :who "claude" :controls {:forward true}})
-    (doseq [_ (range 40)]
+    (doseq [_ (range 1200)]
       (advance! rig 500)
       (post! rig {:op "ping" :who "claude"})
+      (tick! rig)
+      (advance! rig 250)
       (tick! rig))
-    (is (empty? (calls-of rig :release)) "20 s held, past the 15 s idle limit")
-    (is (true? (:forward (controls-of rig))))))
+    (is (some? (manual rig)))
+    (is (empty? (calls-of rig :release)))))
 
-(deftest a-held-control-after-the-dead-man-fired-does-not-keep-the-body
+(deftest silence-releases-keys-at-1-s-and-the-body-at-15-s
   (let [rig (taken-rig)]
     (post! rig {:op "set" :who "claude" :controls {:forward true}})
-    (advance! rig 1100)
+    (advance! rig 1000)
     (tick! rig)
+    (is (= 1 (count (calls-of rig :stop-driving))))
     (is (= 1 (count (calls-of rig :deadman))))
-    (post! rig {:op "ping" :who "claude"})
-    (advance! rig 13900)
+    (is (some? (manual rig)))
+    (advance! rig 13999)
+    (tick! rig)
+    (is (empty? (calls-of rig :release)))
+    (advance! rig 1)
     (tick! rig)
     (is (= [[:release "claude" "idle" 15000]] (calls-of rig :release)))))
+
+(deftest explicit-release-gives-back-at-once
+  (let [rig (taken-rig)]
+    (advance! rig 100)
+    (post! rig {:op "release" :who "claude"})
+    (is (= [[:release "claude" "released" 100]] (calls-of rig :release)))
+    (is (nil? (manual rig)))))
+
+(deftest an-offline-get-has-no-pos-key
+  (let [rig (make-rig)]
+    (set-world! rig {:offline true :pos nil})
+    (is (not (contains? (:json (get! rig)) :pos)))))
 
 ;; idle ends the takeover with reason idle
 (deftest idle-ends-the-takeover-with-reason-idle
@@ -362,7 +379,7 @@
     0 0.5 3601 "5" nil js/NaN true))
 
 ;; the lease view reports idleMs, expiresAt and idleLeftS, counting down from the last op
-;; (adapted: ping no longer moves expiresAt; set does)
+;; (ping moves it like any op)
 (deftest the-lease-view-reports-idle-ms-expires-at-and-idle-left-s-counting-down-from-the-last-op
   (let [rig (make-rig)
         r (post! rig {:op "take" :who "claude" :why "x" :idleS 30})]
@@ -374,10 +391,11 @@
       (is (= 31000 (:expiresAt g)))
       (is (= 17.7 (:idleLeftS g))))
     (let [p (get-in (post! rig {:op "ping" :who "claude"}) [:json :manual])]
-      (is (= 31000 (:expiresAt p)))
-      (is (= 17.7 (:idleLeftS p))))
+      (is (= 43340 (:expiresAt p)))
+      (is (= 30 (:idleLeftS p))))
+    (advance! rig 1000)
     (let [s (get-in (post! rig {:op "set" :who "claude" :controls {:jump true}}) [:json :manual])]
-      (is (= 43340 (:expiresAt s)))
+      (is (= 44340 (:expiresAt s)))
       (is (= 30 (:idleLeftS s))))))
 
 ;; idleLeftS never goes below zero
@@ -396,35 +414,6 @@
     (advance! rig 1000)
     (tick! rig)
     (is (= "idle" (nth (first (calls-of rig :release)) 2)))))
-
-;; new: the two clocks
-
-(deftest ping-does-not-extend-the-idle-limit
-  (let [rig (taken-rig)]
-    (advance! rig 14000)
-    (post! rig {:op "ping" :who "claude"})
-    (advance! rig 1000)
-    (tick! rig)
-    (is (= [[:release "claude" "idle" 15000]] (calls-of rig :release)))))
-
-(deftest set-extends-the-idle-limit
-  (let [rig (taken-rig)]
-    (advance! rig 14000)
-    (post! rig {:op "set" :who "claude" :controls {:jump true} :ms 10})
-    (advance! rig 1000)
-    (tick! rig)
-    (is (empty? (calls-of rig :release)))
-    (is (= 30000 (:expiresAt (manual rig))))))
-
-(deftest input-ops-decides-what-counts-as-input
-  (is (= #{"take" "set" "stop" "release"} lease/input-ops))
-  (let [rig (taken-rig {:opts {:input-ops (conj lease/input-ops "ping")}})]
-    (advance! rig 14000)
-    (post! rig {:op "ping" :who "claude"})
-    (advance! rig 1000)
-    (tick! rig)
-    (is (empty? (calls-of rig :release)))
-    (is (= 30000 (:expiresAt (manual rig))))))
 
 ;; the wire contract, scenario by scenario
 
@@ -465,12 +454,6 @@
     (set-world! rig {:pos contract-pos})
     (vec (keep #(run-step rig %) steps))))
 
-;; The only intended difference from the JS contract: ping is a heartbeat, not input, so it no longer
-;; moves expiresAt (and idleLeftS follows). Everything else must match exactly.
-(def expected-different
-  {"ping moves expiresAt" [[5000 {:expiresAt 1015000 :idleLeftS 10} {:expiresAt 1020000 :idleLeftS 15}]
-                           [5100 {:expiresAt 1015000 :idleLeftS 9.9} {:expiresAt 1020000 :idleLeftS 14.9}]]})
-
 (deftest every-drive-contract-scenario-matches-the-wire
   (doseq [{:keys [name steps]} contract]
-    (is (= (get expected-different name []) (run-scenario steps)) name)))
+    (is (= [] (run-scenario steps)) name)))

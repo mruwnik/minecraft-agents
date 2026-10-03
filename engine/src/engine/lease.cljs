@@ -4,8 +4,8 @@
   lease, the wire reply and effects as data, which engine.takeover applies later.
 
   Lease: {:who :why :since :idle-ms
-          :last-beat   any driver POST incl. ping; the dead-man clock
-          :last-input  input-ops only; the idle clock
+          :last-beat   the one clock: the last op from the holder (beat-ops, ping included); the lease
+                       ends after :idle-ms without one, held untimed controls after release-ms
           :controls {kw bool} :deadlines {kw ms} :yaw :pitch
           :deadman?    the dead-man already fired for this silence}
 
@@ -23,10 +23,9 @@
 (def default-release-ms 1000)
 (def default-idle-ms 15000)
 
-(def input-ops
-  "The ops that count as driver INPUT (they extend the idle limit). ping is a heartbeat, not input; add it
-  here to make pings hold the body."
-  #{"take" "set" "stop" "release"})
+(def beat-ops
+  "The ops that keep the lease (each restarts the one heartbeat clock)."
+  #{"take" "set" "stop" "ping" "release"})
 
 (def all-false (zipmap control-order (repeat false)))
 
@@ -35,6 +34,11 @@
   ([lease reply effects] {:lease lease :reply reply :effects effects}))
 
 (defn reply-of [json] {:status 200 :json json})
+(defn with-pos
+  "Add :pos to a reply map only when known: an offline body has none and the wire omits the key."
+  [m pos]
+  (cond-> m (some? pos) (assoc :pos pos)))
+
 (defn ok [json] (reply-of (assoc json :ok true)))
 (defn refuse
   ([reason] (refuse reason {}))
@@ -49,7 +53,7 @@
   "The wire `manual` map; :expiresAt is the idle deadline, :idleLeftS counts down to it (one decimal)."
   [lease now]
   (when lease
-    (let [expires (+ (:last-input lease) (:idle-ms lease))]
+    (let [expires (+ (:last-beat lease) (:idle-ms lease))]
       {:who (:who lease)
        :why (:why lease)
        :since (:since lease)
@@ -86,10 +90,10 @@
       (when (contains? req :ms) (ms-error (:ms req)))))
 
 (defn touch
-  "A driver request landed: the dead-man clock restarts; the idle clock only for input ops."
+  "A driver request landed: the heartbeat clock restarts when the op is in beat-ops."
   [lease op now opts]
-  (cond-> (assoc lease :last-beat now :deadman? false)
-    (contains? (:input-ops opts input-ops) op) (assoc :last-input now)))
+  (cond-> lease
+    (contains? (:beat-ops opts beat-ops) op) (assoc :last-beat now :deadman? false)))
 
 (defn ending [lease reason now]
   [[:release (:who lease) reason (- now (:since lease))]])
@@ -114,7 +118,7 @@
       :else
       (let [why (if (string? why) why "")
             l {:who who :why why :since now :controls all-false :deadlines {} :yaw nil :pitch nil
-               :last-beat now :last-input now :deadman? false
+               :last-beat now :deadman? false
                :idle-ms (if (contains? req :idleS) (* 1000 idleS) (:idle-ms opts default-idle-ms))}]
         (assoc (result l (ok {:manual (view l now)}) [[:take who why]]) :pending :take)))))
 
@@ -139,11 +143,11 @@
 
 (defn stop-op [lease _req now world opts]
   (let [l (assoc (touch lease "stop" now opts) :controls all-false :deadlines {})]
-    (result l (ok {:manual (view l now) :pos (:pos world)}) [[:stop-driving]])))
+    (result l (ok (with-pos {:manual (view l now)} (:pos world))) [[:stop-driving]])))
 
 (defn ping-op [lease _req now world opts]
   (let [l (touch lease "ping" now opts)]
-    (result l (ok {:manual (view l now) :pos (:pos world)}))))
+    (result l (ok (with-pos {:manual (view l now)} (:pos world))))))
 
 (defn release-op [lease req now _world _opts]
   (let [driver? (and lease (= (:who req) (:who lease)))]
@@ -164,8 +168,8 @@
   [lease {:keys [method path body]} now world opts]
   (cond
     (not= path "/drive") (result lease not-found)
-    (= method "GET") (result lease (ok {:manual (view lease now) :pos (:pos world)
-                                        :offline (:offline world) :settling (:settling world)}))
+    (= method "GET") (result lease (ok (with-pos {:manual (view lease now) :offline (:offline world) :settling (:settling world)}
+                                                 (:pos world))))
     (not= method "POST") (result lease not-found)
     (not (and (map? body) (contains? ops (:op body)))) (result lease bad-request)
     :else ((get ops (:op body)) lease body now world opts)))
@@ -181,12 +185,7 @@
   "Finish a pending set with the drive result {:pos :yaw :pitch}."
   [lease {:keys [pos yaw pitch]} now]
   (let [l (assoc lease :yaw yaw :pitch pitch)]
-    {:lease l :reply (ok {:manual (view l now) :pos pos})}))
-
-(defn untimed-held?
-  "Whether a control is held with no deadline (only a driver's next request or the dead-man ends it)."
-  [lease]
-  (boolean (some #(and (get (:controls lease) %) (not (contains? (:deadlines lease) %))) control-order)))
+    {:lease l :reply (ok (with-pos {:manual (view l now)} pos))}))
 
 (defn expire-holds [lease now release-ms]
   (let [expired (map key (filter (fn [[_ d]] (>= now d)) (:deadlines lease)))
@@ -195,7 +194,7 @@
               (update :deadlines #(apply dissoc % expired)))
         effects (mapv (fn [c] [:drive {:controls {c false}}]) expired)
         silent (- now (:last-beat l))
-        untimed-held? (untimed-held? l)]
+        untimed-held? (boolean (some #(and (get (:controls l) %) (not (contains? (:deadlines l) %))) control-order))]
     (cond
       (not untimed-held?) {:lease l :effects effects}
       (< silent release-ms) {:lease l :effects effects}
@@ -203,22 +202,15 @@
       :else {:lease (assoc l :controls all-false :deadlines {} :deadman? true)
              :effects (into effects [[:stop-driving] [:deadman (:who l) silent]])})))
 
-(defn holding-live?
-  "A control held without a deadline while the heartbeat is fresh: the person is holding it, which counts as input."
-  [lease now release-ms]
-  (and (untimed-held? lease) (< (- now (:last-beat lease)) release-ms)))
-
 (defn tick
-  "Time passing: offline and idle end the lease, due timed holds drop, the dead-man fires once per silence.
-  A held control with a live heartbeat counts as input (refreshes :last-input)."
+  "Time passing: offline and idle (no op from the holder for :idle-ms) end the lease, due timed holds drop,
+  the dead-man fires once per silence."
   [lease now world opts]
-  (let [release-ms (:release-ms opts default-release-ms)
-        lease (cond-> lease (and lease (holding-live? lease now release-ms)) (assoc :last-input now))]
-    (cond
-      (nil? lease) {:lease nil :effects []}
-      (:offline world) {:lease nil :effects (ending lease "offline" now)}
-      (>= (- now (:last-input lease)) (:idle-ms lease)) {:lease nil :effects (ending lease "idle" now)}
-      :else (expire-holds lease now release-ms))))
+  (cond
+    (nil? lease) {:lease nil :effects []}
+    (:offline world) {:lease nil :effects (ending lease "offline" now)}
+    (>= (- now (:last-beat lease)) (:idle-ms lease)) {:lease nil :effects (ending lease "idle" now)}
+    :else (expire-holds lease now (:release-ms opts default-release-ms))))
 
 (defn close
   "Effects that end a held lease for shutdown."
