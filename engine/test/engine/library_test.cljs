@@ -496,3 +496,34 @@
           (is (= [] (calls p "collect")) "an unknown stack is not collected when a filter is set")
           (is (= [] (:list (core/state eng))))
           (is (not-any? #(= :failed (:kind %)) @seen) "the job finishes instead of being dropped on a TypeError"))))))
+
+;; ------------------------------------------------------ trigger args from the entry
+
+(defn trigger-holds [trigger world args]
+  ((:when trigger) (tu/fake world) {} args))
+
+(def zombie-at-12 {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}}]})
+
+(deftest hostile-near-reads-its-radius-from-args
+  (is (false? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 8})))
+  (is (true? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 16}))))
+
+(deftest health-low-reads-its-threshold-from-args
+  (is (false? (trigger-holds triggers/health-low {:self {:health 10}} {:health 8})))
+  (is (true? (trigger-holds triggers/health-low {:self {:health 10}} {:health 12}))))
+
+(deftest inventory-nearly-full-reads-its-stack-count-from-args
+  (let [world {:inventory (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 5))}
+        memory {:common {:places {:chest [{:pos {:x 1 :y 64 :z 1}}]}}}]
+    (is (false? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 30})))
+    (is (true? ((:when triggers/inventory-nearly-full) (tu/fake world) memory {:stacks 5})))))
+
+(deftest a-scenario-radius-reaches-the-trigger-and-the-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup zombie-at-12)]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hostile-near :args {:radius 16}}]}"))
+          (is (= {:radius 16} (:args (first (:register (core/state eng))))))
+          (await (core/tick! eng))
+          (is (some #(= :fired (:kind %)) @seen)))))))

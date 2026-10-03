@@ -2,20 +2,26 @@
   "Trigger definitions. See README.md, Triggers and the register."
   (:require [engine.memory :as mem]))
 
+(def default-health 8)
+
 (def health-low
+  "Holds when health is at most :health (args, default 8)."
   {:name :health-low
-   :when (fn [world _memory _args] (<= (.-health (.self world)) 8))
+   :when (fn [world _memory args] (<= (.-health (.self world)) (:health args default-health)))
    :job :eat
-   :args {}
+   :args {:health default-health}
    :persistence :cooldown
    :cooldown-s 30})
 
 (def hostile-radius 8)
 
 (def hostile-near
+  "Holds when a hostile is within :radius (args, default 8). The same args
+  go to the :retreat job, so one :radius sets both."
   {:name :hostile-near
-   :when (fn [world _memory _args]
-           (pos? (.-length (.entities world #js {:radius hostile-radius :kind "hostile" :max 1}))))
+   :when (fn [world _memory args]
+           (let [radius (:radius args hostile-radius)]
+             (pos? (.-length (.entities world #js {:radius radius :kind "hostile" :max 1})))))
    :job :retreat
    :args {:radius hostile-radius}
    :persistence :cooldown
@@ -34,12 +40,14 @@
 (def nearly-full-stacks 30)
 
 (def inventory-nearly-full
+  "Holds when at least :stacks (args, default 30) stacks are carried and a
+  chest is known."
   {:name :inventory-nearly-full
-   :when (fn [world memory _args]
-           (and (>= (.-length (.-inventory (.self world))) nearly-full-stacks)
+   :when (fn [world memory args]
+           (and (>= (.-length (.-inventory (.self world))) (:stacks args nearly-full-stacks))
                 (boolean (seq (mem/places memory :chest)))))
    :job :deposit
-   :args {}
+   :args {:stacks nearly-full-stacks}
    :persistence :cooldown
    :cooldown-s 60})
 

@@ -467,9 +467,10 @@
   "A register entry from a spec {:trigger ...overrides}, filled from the trigger."
   [eng spec]
   (let [t (trigger-def eng (:trigger spec))]
-    (merge {:id (:trigger spec) :trigger (:trigger spec) :job (:job t) :args (:args t {})
+    (merge {:id (:trigger spec) :trigger (:trigger spec) :job (:job t)
             :persistence (:persistence t :retry) :cooldown-s (:cooldown-s t 0) :builtin? false}
-           (select-keys spec [:id :job :args :persistence :cooldown-s :builtin?]))))
+           (select-keys spec [:id :job :persistence :cooldown-s :builtin?])
+           {:args (merge (:args t {}) (:args spec))})))
 
 (defn register-reflex!
   "Append a reflex to the register. Returns its id."
