@@ -5669,7 +5669,7 @@ test('repeatByType: two kinds taking turns do not reset each other', () => {
   assert.equal(repeatByType(state, 'kicked', 'not whitelisted', 3000).say, null)
 })
 
-// Dan logs in with an agent's own account to look around: the server kicks the body with duplicate_login, the body
+// The owner logs in with an agent's own account to look around: the server kicks the body with duplicate_login, the body
 // was back ten seconds later and kicked him, and the two took turns every fifteen seconds (17 kicks on 2026-10-01).
 const DUPLICATE = '{"type":"compound","value":{"translate":{"type":"string","value":"multiplayer.disconnect.duplicate_login"}}}'
 const T0 = Date.parse('2026-10-01T22:35:00Z')

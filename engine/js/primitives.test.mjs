@@ -333,12 +333,12 @@ test('body events: health drop is hurt, death and respawn are forwarded, unsubsc
   bot.emit('death')
   bot.emit('respawn')
   bot.emit('spawn')
-  bot.emit('chat', 'Dan', 'hi')
+  bot.emit('chat', 'Ann', 'hi')
   off()
   bot.emit('wake')
   assert.deepEqual(seen.map(e => e.kind), ['hurt', 'died', 'spawned', 'respawned', 'chat'])
   assert.equal(seen[0].health, 14)
-  assert.deepEqual(seen[4], { kind: 'chat', from: 'Dan', message: 'hi' })
+  assert.deepEqual(seen[4], { kind: 'chat', from: 'Ann', message: 'hi' })
 })
 
 test('close quits the bot', async () => {
@@ -579,8 +579,8 @@ test('events of the new bot reach listeners and the old bot goes quiet', async (
   const { p, bots, seen } = await online()
   await p.offline('t1', { ms: 1000 })
   bots[0].emit('end', 'quit')
-  bots[0].emit('chat', 'Dan', 'ghost')
-  bots[1].emit('chat', 'Dan', 'hi')
+  bots[0].emit('chat', 'Ann', 'ghost')
+  bots[1].emit('chat', 'Ann', 'hi')
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online', 'chat'])
 })
 
@@ -2112,8 +2112,8 @@ test('body events: chat from the body itself is not reported, chat from others i
   const seen = []
   p.onBodyEvent(e => seen.push(e))
   bot.emit('chat', 'Stub', 'my own line')
-  bot.emit('chat', 'Dan', 'hi')
-  assert.deepEqual(seen, [{ kind: 'chat', from: 'Dan', message: 'hi' }])
+  bot.emit('chat', 'Ann', 'hi')
+  assert.deepEqual(seen, [{ kind: 'chat', from: 'Ann', message: 'hi' }])
 })
 
 // transfer waits for the window's slot updates to stop before it closes the window, and measures what moved

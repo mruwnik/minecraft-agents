@@ -228,9 +228,9 @@ test('self survival fields come from the spec', () => {
 })
 
 test('player entities default to awake with a username; mobs get neither', () => {
-  const p = createFake({ entities: [{ id: 1, name: 'Dan', kind: 'player', pos: at(1, 64, 0) }, { id: 2, name: 'creeper', kind: 'hostile', creeper: true, pos: at(2, 64, 0) }, { id: 3, name: 'Sue', kind: 'player', sleeping: true, pos: at(3, 64, 0) }] })
-  const [dan, creeper, sue] = p.entities({})
-  assert.deepEqual([dan.username, dan.sleeping, sue.sleeping, creeper.creeper, 'sleeping' in creeper], ['Dan', false, true, true, false])
+  const p = createFake({ entities: [{ id: 1, name: 'Ann', kind: 'player', pos: at(1, 64, 0) }, { id: 2, name: 'creeper', kind: 'hostile', creeper: true, pos: at(2, 64, 0) }, { id: 3, name: 'Sue', kind: 'player', sleeping: true, pos: at(3, 64, 0) }] })
+  const [ann, creeper, sue] = p.entities({})
+  assert.deepEqual([ann.username, ann.sleeping, sue.sleeping, creeper.creeper, 'sleeping' in creeper], ['Ann', false, true, true, false])
 })
 
 test('a creeper entity carries creeper: true without being told; other hostiles do not', () => {

@@ -44,7 +44,7 @@ export function repeatByType (seen, type, message, now) {
   return { say, seen: { ...seen, [type]: next } }
 }
 
-// Dan logs in with an agent's own account to look around or reach a bed. Reconnecting after ten seconds kicked him
+// The owner logs in with an agent's own account to look around or reach a bed. Reconnecting after ten seconds kicked them
 // straight back, and the two took turns every fifteen seconds, so a duplicate_login kick hands the account over for a while.
 export const YIELD_MS = 600000
 const RETRY_MS = 10000
