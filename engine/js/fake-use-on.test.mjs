@@ -151,7 +151,10 @@ test('blockAt and blocks show properties for a composter, and none for plain blo
   assert.deepEqual(p.blockAt(P).properties, { level: 3 })
   assert.equal('properties' in p.blockAt(at(2, 64, 0)), false)
   assert.deepEqual(p.blockAt(at(3, 64, 0)), { name: 'wheat', pos: at(3, 64, 0), age: 4, properties: { age: 4 } })
-  assert.deepEqual(p.blocks({ names: ['composter'] })[0].properties, { level: 3 })
+  assert.deepEqual(p.blocks({ names: ['composter'], properties: true })[0].properties, { level: 3 })
+  assert.equal('properties' in p.blocks({ names: ['composter'] })[0], false)
+  assert.equal(p.blocks({ names: ['wheat'] })[0].age, 4)
+  assert.deepEqual(p.blocks({ names: ['wheat'], properties: true })[0].properties, { age: 4 })
 })
 
 test('digging a block drops its states', async () => {
@@ -170,4 +173,45 @@ test('world.calls records useOn', async () => {
   const p = owned({ blocks: { '1,64,0': 'dirt' } })
   await p.useOn('t', { pos: P, face: 'north' })
   assert.deepEqual(p.world.calls, [{ name: 'useOn', token: 't', args: { pos: P, face: 'north' } }])
+})
+
+for (const [label, block, item, reason] of [
+  ['a bed', 'white_bed', 'iron_hoe', 'bed'],
+  ['a respawn anchor', 'respawn_anchor', 'iron_hoe', 'bed'],
+  ['a chest', 'chest', 'iron_hoe', 'container'],
+  ['a crafting table', 'crafting_table', 'iron_hoe', 'container'],
+  ['a barrel', 'barrel', 'iron_hoe', 'container'],
+  ['a crafter', 'crafter', 'iron_hoe', 'container'],
+  ['a command_block', 'command_block', 'iron_hoe', 'container'],
+  ['a chain_command_block', 'chain_command_block', 'iron_hoe', 'container'],
+  ['a repeating_command_block', 'repeating_command_block', 'iron_hoe', 'container'],
+  ['a structure_block', 'structure_block', 'iron_hoe', 'container'],
+  ['a jigsaw', 'jigsaw', 'iron_hoe', 'container'],
+  ['a vault', 'vault', 'iron_hoe', 'container'],
+  ['flint_and_steel', 'dirt', 'flint_and_steel', 'hazard'],
+  ['fire_charge', 'dirt', 'fire_charge', 'hazard'],
+  ['lava_bucket', 'dirt', 'lava_bucket', 'hazard'],
+  ['a block item', 'dirt', 'cobblestone', 'use-place'],
+  ['oak_planks', 'stone', 'oak_planks', 'use-place']
+]) {
+  test(`guard: ${label} is cannot/${reason} and the world is unchanged`, async () => {
+    const p = owned({ blocks: { '1,64,0': block }, inventory: [{ name: item, count: 2 }] })
+    const r = await p.useOn('t', { pos: P, item })
+    assert.deepEqual(r, { status: 'cannot', reason, before: { name: block, properties: {} }, after: { name: block, properties: {} }, consumed: 0 })
+    assert.equal(p.blockAt(P).name, block)
+    assert.equal(p.self().inventory[0].count, 2)
+  })
+}
+
+test('guard: a composter still accepts oak_leaves', async () => {
+  const p = owned({ blocks: { '1,64,0': 'composter' }, inventory: [{ name: 'oak_leaves', count: 2 }] })
+  const r = await p.useOn('t', { pos: P, item: 'oak_leaves' })
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 1)
+})
+
+test('too far: unreachable carries reason too-far and the distance', async () => {
+  const p = owned({ blocks: { '9,64,0': 'dirt' }, inventory: [{ name: 'iron_hoe', count: 1 }] })
+  const r = await p.useOn('t', { pos: at(9, 64, 0), item: 'iron_hoe' })
+  assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', 9.53])
 })

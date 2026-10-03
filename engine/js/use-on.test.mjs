@@ -67,7 +67,7 @@ test('an item consumed with the block unchanged is still used', async () => {
 const refusals = [
   { name: 'air', spec: {}, args: { pos: at(5, 64, 0), item: 'diamond_hoe' }, expect: { status: 'missing' } },
   { name: 'no item', spec: {}, args: { ...dirt, item: 'shears' }, expect: { status: 'no-item', consumed: 0 } },
-  { name: 'too far', spec: { blocks: { '1,64,9': 'dirt' } }, args: { pos: at(1, 64, 9), item: 'diamond_hoe' }, expect: { status: 'unreachable', consumed: 0 } }
+  { name: 'too far', spec: { blocks: { '1,64,9': 'dirt' } }, args: { pos: at(1, 64, 9), item: 'diamond_hoe' }, expect: { status: 'unreachable', reason: 'too-far', distance: 9.68, consumed: 0 } }
 ]
 for (const c of refusals) {
   test(`${c.name}: ${c.expect.status} and activateBlock is never called`, async () => {
@@ -163,9 +163,18 @@ test('blockAt and blocks report properties when present and omit them when empty
   const { p } = rig({ blocks: { '1,64,0': 'composter', '2,64,0': 'dirt' }, props: { [key(1, 64, 0)]: { level: '3' } } })
   assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, { level: 3 })
   assert.equal('properties' in p.blockAt(at(2, 64, 0)), false)
-  const found = p.blocks({ names: ['composter', 'dirt'] })
+  const found = p.blocks({ names: ['composter', 'dirt'], properties: true })
   assert.deepEqual(found.map(b => [b.name, b.properties]), [['composter', { level: 3 }], ['dirt', undefined]])
   assert.equal('properties' in found.find(b => b.name === 'dirt'), false)
+})
+
+test('blocks omits properties unless asked; blockAt always has them; age stays on both', () => {
+  const { p } = rig({ blocks: { '1,64,0': 'wheat' }, props: { [key(1, 64, 0)]: { age: '7' } } })
+  const plain = p.blocks({ names: ['wheat'] })[0]
+  assert.equal('properties' in plain, false)
+  assert.equal(plain.age, 7)
+  assert.deepEqual(p.blocks({ names: ['wheat'], properties: true })[0].properties, { age: 7 })
+  assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, { age: 7 })
 })
 
 test('blockAt keeps age as a number next to properties', () => {
@@ -180,7 +189,7 @@ const typedProps = { level: 8, age: 4, powered: false, facing: 'north' }
 test('blockAt and blocks report integer states as numbers', () => {
   const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } })
   assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, typedProps)
-  assert.deepEqual(p.blocks({ names: ['composter'] })[0].properties, typedProps)
+  assert.deepEqual(p.blocks({ names: ['composter'], properties: true })[0].properties, typedProps)
 })
 
 test('useOn before and after report integer states as numbers', async () => {
@@ -204,4 +213,86 @@ test('a tool with durability never waits for a count change after the block chan
   assert.equal(r.status, 'used')
   assert.equal(r.consumed, 0)
   assert.equal(polls, 3) // the change check, the status check and the after snapshot; no extra wait polls
+})
+
+const guardRefusals = [
+  { name: 'a bed', block: 'red_bed', item: 'diamond_hoe', reason: 'bed' },
+  { name: 'a respawn anchor', block: 'respawn_anchor', item: 'diamond_hoe', reason: 'bed' },
+  { name: 'a chest', block: 'chest', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a crafting table by hand', block: 'crafting_table', item: undefined, reason: 'container' },
+  { name: 'a furnace', block: 'furnace', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a lectern', block: 'lectern', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a crafter', block: 'crafter', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a command_block', block: 'command_block', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a chain_command_block', block: 'chain_command_block', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a repeating_command_block', block: 'repeating_command_block', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a structure_block', block: 'structure_block', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a jigsaw', block: 'jigsaw', item: 'diamond_hoe', reason: 'container' },
+  { name: 'a vault', block: 'vault', item: 'diamond_hoe', reason: 'container' },
+  { name: 'flint_and_steel', block: 'dirt', item: 'flint_and_steel', reason: 'hazard' },
+  { name: 'fire_charge', block: 'dirt', item: 'fire_charge', reason: 'hazard' },
+  { name: 'lava_bucket', block: 'dirt', item: 'lava_bucket', reason: 'hazard' },
+  { name: 'a block item on dirt', block: 'dirt', item: 'cobblestone', reason: 'use-place' }
+]
+for (const c of guardRefusals) {
+  test(`guard: ${c.name} is cannot/${c.reason}, nothing equipped or clicked`, async () => {
+    const stack = { name: c.item ?? 'diamond_hoe', count: 1, slot: 36 }
+    const { bot, p } = rig({ blocks: { '1,64,0': c.block }, items: [stack] })
+    bot.registry.blocksByName = { cobblestone: { id: 4 }, dirt: { id: 3 } }
+    const r = await p.useOn('t1', { pos: at(1, 64, 0), item: c.item })
+    assert.deepEqual(r, { status: 'cannot', reason: c.reason, before: { name: c.block, properties: {} }, after: { name: c.block, properties: {} }, consumed: 0 })
+    assert.equal(calls(bot, 'activateBlock').length, 0)
+    assert.equal(calls(bot, 'equip').length, 0)
+  })
+}
+
+test('guard: a composter still accepts a block item (oak_leaves)', async () => {
+  const items = [{ name: 'oak_leaves', count: 3, slot: 36 }]
+  const props = { [key(1, 64, 0)]: { level: '1' } }
+  const { bot, p } = rig({ blocks: { '1,64,0': 'composter' }, props, items, onUseBlock: () => { props[key(1, 64, 0)] = { level: '2' }; items[0].count -= 1 } })
+  bot.registry.blocksByName = { oak_leaves: { id: 5 } }
+  const r = await p.useOn('t1', { ...dirt, item: 'oak_leaves' })
+  assert.equal(r.status, 'used')
+  assert.equal(r.consumed, 1)
+})
+
+test('window guard: a window opened by the click is closed and reported', async () => {
+  const win = { title: 'w' }
+  const { bot, p } = rig({ onUseBlock: bot => { bot.emit('windowOpen', win) } })
+  const r = await p.useOn('t1', { ...dirt, item: 'diamond_hoe' })
+  assert.deepEqual(r, { status: 'cannot', reason: 'window', before: { name: 'dirt', properties: {} }, after: { name: 'dirt', properties: {} }, consumed: 0 })
+  assert.deepEqual(calls(bot, 'closeWindow').map(c => c.args), [[win]])
+  assert.equal(bot.listenerCount('windowOpen'), 0)
+})
+
+test('window guard: bot.currentWindow set after the click counts too', async () => {
+  const win = { title: 'w' }
+  const { bot, p } = rig({ onUseBlock: bot => { bot.currentWindow = win } })
+  const r = await p.useOn('t1', { ...dirt, item: 'diamond_hoe' })
+  assert.equal(r.reason, 'window')
+  assert.deepEqual(calls(bot, 'closeWindow').map(c => c.args), [[win]])
+})
+
+test('window guard: a window opening after activateBlock returned (during the poll) is closed and reported', async () => {
+  const win = { title: 'late' }
+  const { bot, p } = rig({ onUseBlock: bot => { setTimeout(() => bot.emit('windowOpen', win), 1) } })
+  const r = await p.useOn('t1', { ...dirt, item: 'diamond_hoe' })
+  assert.equal(r.status, 'cannot')
+  assert.equal(r.reason, 'window')
+  assert.deepEqual(calls(bot, 'closeWindow').map(c => c.args), [[win]])
+  assert.equal(bot.listenerCount('windowOpen'), 0)
+})
+
+test('window guard: no window leaves no listener behind', async () => {
+  const { bot, p } = rig()
+  await p.useOn('t1', { ...dirt, item: 'diamond_hoe' })
+  assert.equal(bot.listenerCount('windowOpen'), 0)
+})
+
+test('too far: unreachable carries reason too-far and the eye-to-centre distance', async () => {
+  const { bot, p } = rig({ blocks: { '1,64,9': 'dirt' } })
+  const r = await p.useOn('t1', { pos: at(1, 64, 9), item: 'diamond_hoe' })
+  const eyeY = 64 + (bot.entity.height ?? 1.62)
+  const want = Math.round(Math.hypot(bot.entity.position.x - 1.5, eyeY - 64.5, bot.entity.position.z - 9.5) * 100) / 100
+  assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', want])
 })

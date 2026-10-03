@@ -501,11 +501,11 @@ export function createFake (spec = {}) {
         .slice(0, max)
     },
 
-    blocks ({ radius = 16, names, match, max = 64 } = {}) {
+    blocks ({ radius = 16, names, match, max = 64, properties = false } = {}) {
       if (s.offline) return []
       const ok = names ? (n) => names.includes(n) : match ?? (() => true)
       return [...s.blocks.entries()]
-        .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k), ...propsOf(k) }))
+        .map(([k, name]) => ({ name, pos: parseKey(k), ...ageOf(k), ...(properties ? propsOf(k) : {}) }))
         .map(b => ({ ...b, distance: dist(s.self.pos, b.pos) }))
         .filter(b => b.distance <= radius && ok(b.name))
         .sort((a, b) => a.distance - b.distance)

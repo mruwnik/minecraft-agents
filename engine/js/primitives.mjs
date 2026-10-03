@@ -499,19 +499,19 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any
-  const blockInfo = block => {
+  const blockInfo = (block, withProps = true) => {
     const properties = stateProperties(block)
     const age = properties.age
-    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(Object.keys(properties).length > 0 && { properties }) }
+    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }) }
   }
 
-  const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64 } = {}) => {
+  const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64, properties = false } = {}) => {
     if (isOffline()) return []
     const wanted = names && new Set(names)
     const matching = block => Boolean(block) && (wanted ? wanted.has(block.name) : match ? match(block.name) : !isAir(block.name))
     const me = here()
     return bot.findBlocks({ matching, maxDistance: radius, count: max })
-      .map(p => ({ ...blockInfo(bot.blockAt(p)), distance: dist(me, p) }))
+      .map(p => ({ ...blockInfo(bot.blockAt(p), properties), distance: dist(me, p) }))
       .sort((a, b) => a.distance - b.distance)
   }
 

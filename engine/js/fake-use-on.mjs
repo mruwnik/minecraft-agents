@@ -11,15 +11,25 @@ const COMPOSTABLE = new Set([
   'oak_sapling', 'birch_sapling', 'spruce_sapling', 'bread', 'baked_potato', 'cookie', 'pumpkin', 'melon'
 ])
 
+const BED = /_bed$|^respawn_anchor$/
+// The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse window-opening blocks before the click.
+const CONTAINER = /chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$/
+const HAZARDS = new Set(['flint_and_steel', 'fire_charge', 'lava_bucket'])
+const BLOCK_ITEMS = new Set(['dirt', 'cobblestone', 'stone', 'oak_planks', 'oak_leaves', 'pumpkin', 'melon', 'hay_block'])
+
 export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
   const k = key(pos)
   const name = () => s.blocks.get(k) ?? 'air'
   const snapshot = () => ({ name: name(), properties: { ...(s.states.get(k) ?? {}), ...(s.ages.has(k) && { age: s.ages.get(k) }) } })
   const before = snapshot()
   if (before.name === 'air') return { status: 'missing' }
-  const result = (status, consumed = 0) => ({ status, before, after: snapshot(), consumed })
+  const result = (status, consumed = 0, extra = {}) => ({ status, ...extra, before, after: snapshot(), consumed })
+  if (BED.test(before.name)) return result('cannot', 0, { reason: 'bed' })
+  if (CONTAINER.test(before.name)) return result('cannot', 0, { reason: 'container' })
+  if (HAZARDS.has(item)) return result('cannot', 0, { reason: 'hazard' })
+  if (BLOCK_ITEMS.has(item) && before.name !== 'composter') return result('cannot', 0, { reason: 'use-place' })
   if (item !== undefined && !s.inventory.some(i => i.name === item)) return result('no-item')
-  if (!near(pos)) return result('unreachable')
+  if (!near(pos)) return result('unreachable', 0, { reason: 'too-far', distance: Math.round(Math.hypot(s.self.pos.x - (pos.x + 0.5), s.self.pos.y - (pos.y + 0.5), s.self.pos.z - (pos.z + 0.5)) * 100) / 100 })
   s.self.held = item ?? null
 
   const consume = () => {
