@@ -966,6 +966,7 @@ after three the job emits a warn and ends.
   `:harvest-wood` it can take the sapling the replant needs. Warn kind
   `chest_unusable`. `:keep` (`{item-name count}`) leaves at least that many of
   a name carried: with `:items` the names are taken in the order given (first
+| `jobs.animals.cull` | `{:mob "cow" :keep 2 :centre nil :radius 16 :box nil :count nil :collect-radius 8 :drops nil :weapons :max-skips 3}` | more than `:keep` adults of `:mob` inside the bound (`:box`, else `:radius` around `:centre`, else around the body; babies never count), or started | `:started :target :collecting :killed :skipped :skips :misses`, children `:attack`, `:collect` | none; attack and collect-drops children as hunt; candidates are not-skipped adults, ones whose `hittable` is not false first then nearest; hands over `{:killed :remaining :babies :reason :skipped}` with reason `:keep`, `:count`, `:unreachable`, `:gave-up` or `:none`; emits info `cull.done`, warns `cull.gave-up` |
   stack of the first name whose carried total is over its keep; without it,
   the first stack in inventory order) and the stack is moved, cut to `total - keep` when it is bigger. The job hands its
   parent `{:gave-up false}` when nothing was left to put away and `{:gave-up
