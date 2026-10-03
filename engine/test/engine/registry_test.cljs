@@ -3,11 +3,15 @@
             [engine.registry :as registry]))
 
 (def migrated
-  '#{jobs.survival.breathe jobs.survival.eat jobs.survival.extinguish jobs.survival.retreat jobs.survival.sleep jobs.survival.recover jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.get-food jobs.survival.shelter jobs.survival.dig-in jobs.survival.log-out jobs.survival.recover-drops
+  '#{jobs.survival.breathe jobs.survival.extinguish jobs.survival.recover
+     jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.retreat
+     jobs.survival.eat jobs.survival.get-food
+     jobs.survival.sleep jobs.survival.shelter jobs.survival.dig-in jobs.survival.log-out
+     jobs.survival.recover-drops jobs.maintenance.unstick
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.storage.deposit
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around
-     jobs.time.wait-for-day jobs.maintenance.unstick})
+     jobs.time.wait-for-day})
 
 (deftest the-registry-holds-every-job-namespace
   (is (= migrated (set (keys registry/jobs)))))

@@ -75,6 +75,9 @@
   (assoc night-unsafe/trigger :name :night-and-bed-known))
 
 (def all
-  "Every trigger by name."
+  "Every trigger by name, listed in the order a survival scenario registers
+  them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
-        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry night-unsafe/trigger stuck/stuck died/died]))
+        [suffocating/suffocating burning/burning health-low hostile-near hungry/hungry
+         night-unsafe/trigger night-and-bed-known stuck/stuck died/died
+         inventory-nearly-full every-interval]))
