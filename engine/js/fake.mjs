@@ -52,6 +52,8 @@ function initialState (spec) {
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
     drops: { ...(spec.drops ?? {}) },
     unreachable: new Set(spec.unreachable ?? []),
+    noPath: new Set(spec.noPath ?? []), // moveTo targets the pathfinder resolves on with no path
+    swimFails: spec.swimFails ?? false,
     nextEntityId: 1000,
     offline: false,
     offlineScale: spec.offlineScale ?? 0.001 // offline waits ms * this, so tests need not sit out minutes
@@ -106,6 +108,7 @@ function defaultActs (s) {
   return {
     async moveTo (token, { pos, range = 1, maxDistance = 64 }) {
       if (s.unreachable.has(key(pos))) return { status: 'blocked', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
+      if (s.noPath.has(key(pos))) return { status: 'blocked', reason: 'noPath', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       const d = dist(s.self.pos, pos)
       if (d <= range) return { status: 'arrived', pos: { ...s.self.pos }, distance: d }
       if (d > maxDistance) {
@@ -202,6 +205,16 @@ function defaultActs (s) {
       if (!near(pos)) return { status: 'unreachable' }
       s.time = 0
       return { status: 'sleeping' }
+    },
+
+    // Rises to the top water cell above the body and refills oxygen; swimFails makes it time out unmoved.
+    async swim () {
+      const before = s.self.oxygen
+      const head = () => blockName({ ...s.self.pos, y: s.self.pos.y + 1 })
+      if (s.swimFails) return { status: 'timeout', oxygen: { before, after: before } }
+      while (head() === 'water') s.self.pos = { ...s.self.pos, y: s.self.pos.y + 1 }
+      s.self.oxygen = 20
+      return { status: 'surfaced', oxygen: { before, after: 20 } }
     },
 
     async look () {

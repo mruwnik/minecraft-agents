@@ -262,3 +262,36 @@ test('a killed animal drops its listed items', async () => {
   assert.equal((await p.attack('t1', { id: 5 })).status, 'killed')
   assert.deepEqual(p.entities({ kind: 'item' }).map(e => [e.item.name, e.item.count]), [['beef', 2]])
 })
+
+test('moveTo can be told to fail with noPath: blocked, reason noPath, the body stays', async () => {
+  const p = owned({ noPath: ['9,64,9'] })
+  const r = await p.moveTo('t1', { pos: at(9, 64, 9) })
+  assert.deepEqual([r.status, r.reason, r.pos], ['blocked', 'noPath', at(0, 64, 0)])
+})
+
+const sea = { self: { pos: at(0, 60, 0), oxygen: 3, inWater: true }, blocks: { '0,60,0': 'water', '0,61,0': 'water', '0,62,0': 'water', '0,63,0': 'water' } }
+
+test('swim surfaces: the body rises to the top water cell and oxygen refills', async () => {
+  const p = owned(sea)
+  const r = await p.swim('t1', { ms: 3000 })
+  assert.deepEqual(r, { status: 'surfaced', oxygen: { before: 3, after: 20 } })
+  assert.deepEqual(p.self().pos, at(0, 63, 0))
+  assert.equal(p.self().oxygen, 20)
+})
+
+test('swim on dry land reports surfaced and changes nothing', async () => {
+  const p = owned({ self: { oxygen: 20 } })
+  assert.deepEqual(await p.swim('t1'), { status: 'surfaced', oxygen: { before: 20, after: 20 } })
+  assert.deepEqual(p.self().pos, at(0, 64, 0))
+})
+
+test('swim can be told to fail: timeout, nothing moves', async () => {
+  const p = owned({ ...sea, swimFails: true })
+  const r = await p.swim('t1')
+  assert.deepEqual(r, { status: 'timeout', oxygen: { before: 3, after: 3 } })
+  assert.deepEqual(p.self().pos, at(0, 60, 0))
+})
+
+test('swim with a stale token rejects with cut', async () => {
+  await assert.rejects(owned(sea).swim('other'), { code: 'cut' })
+})

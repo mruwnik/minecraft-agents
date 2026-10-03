@@ -138,7 +138,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 
 | method | args | statuses | bound | on cut |
 |---|---|---|---|---|
-| `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived`, `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress) | `timeoutS`, at most 60 | goal cleared, controls released |
+| `moveTo(token, a)` | `{pos, range = 1, timeoutS = 20, maxDistance = 64}` | `arrived` (the goal is satisfied where the body stands, not merely a resolved walk), `partial` (bound or `maxDistance` reached, closer than before), `blocked` (no path, or no progress; `reason: 'noPath'` when the pathfinder gave up with no path and the body is not there) | `timeoutS`, at most 60 | goal cleared, controls released |
 | `dig(token, a)` | `{pos}` | `dug`, `missing` (air), `unreachable` (more than 4.5 away), `cannot` (unbreakable) | 10 s | `stopDigging` |
 | `place(token, a)` | `{pos, item}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable` | 5 s | nothing placed after the cut |
 | `collect(token, a)` | `{id, timeoutS = 10}` | `collected`, `gone`, `unreachable`, `timeout` | `timeoutS`, at most 20 | as `moveTo` |
@@ -149,11 +149,13 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
 | `look(token, a)` | `{pos}` or `{yaw, pitch}` | `ok` | 1 s | none needed |
+| `swim(token, a)` | `{ms = 3000}`, at most 10000 | `surfaced` (head out of water), `timeout` | `ms`, at most 10 s | jump released |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
 Extra fields on the result:
 
-- `moveTo`: `pos` (where the body ended), `distance` (to the target).
+- `moveTo`: `pos` (where the body ended), `distance` (to the target), `reason` (`'noPath'`, only on `blocked`).
+- `swim`: `oxygen` (`{before, after}`, the air level when the call started and ended).
 - `dig`: `block` (name dug), `drops` (`[{id, name, count, pos}]`, the item
   entities that appeared within 2 blocks during up to 1 s after the break).
 - `place`: `block` (name placed).
@@ -173,6 +175,11 @@ cancels it and resolves `{status: 'closed'}` (a bot the reconnect already produc
 fails it emits `disconnected` and rejects with the last error. Only `createPrimitives`, which owns the connection
 params, supports it; `createPrimitivesFromBot` resolves `{status: 'unsupported'}` without touching the bot. A stale
 token rejects with `cut` on entry and bad `ms` (not a number, negative) with `bad-args`.
+
+`swim` holds the jump control until the block at the head is no longer water, polling every 50 ms, because the
+pathfinder has no swim-up move and `moveTo` cannot surface a submerged body. It releases jump on every exit:
+surfaced, the bound, a cut, an error. A body whose head is already out returns `surfaced` at once without pressing
+anything. Bad `ms` (not a number, zero or negative) rejects with `bad-args`.
 
 Reach for `dig`, `place`, `inspectContainer`, `transfer`, `sleep` and
 `attack` is the caller's job: walk there first with `moveTo` (`range` 2 to 3).
@@ -217,6 +224,8 @@ const p = createFake({
   containers: { '1,64,1': [{ name: 'cobblestone', count: 10 }] },
   drops: { stone: 'cobblestone' },              // block -> dropped item; default: the block itself
   unreachable: ['9,64,9'],                      // moveTo / collect targets reported as blocked
+  noPath: ['8,64,8'],                           // moveTo targets blocked with reason 'noPath', body unmoved
+  swimFails: false,                             // true: swim times out and moves nothing
   ages: { '5,64,0': 7 },                        // "x,y,z" -> crop age, reported as `age`
 })
 p.world.state            // the mutable world (self, time, blocks, entities, inventory, containers)
@@ -228,7 +237,7 @@ p.world.setTime(13000)
 p.world.die()            // emits died (pos, inventory, experience), drops the inventory as items, zeroes experience
 ```
 
-Fake semantics: `moveTo` jumps to the target if within `maxDistance`, else
+Fake semantics: `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
 inventory. `attack` takes 5 health per swing. `sleep` succeeds at night on a
@@ -776,7 +785,8 @@ that has `code: 'cut'` (and `cut: true`); bad args reject with `code: 'bad-args'
 
 | primitive | what it does to the bot |
 |---|---|
-| `moveTo` | `pathfinder.goto(GoalNear)`. Beyond `maxDistance` it walks a `GoalNearXZ` point that far along the straight line, so the result is `partial`. Cleanup: `setGoal(null)`, `clearControlStates`. After the bound or a pathfinder failure: `partial` if at least 1 block closer, else `blocked`. Movements are built by `connect.mjs` with digging, towers and scaffolding off |
+| `moveTo` | `pathfinder.goto(GoalNear)`. Beyond `maxDistance` it walks a `GoalNearXZ` point that far along the straight line, so the result is `partial`. Cleanup: `setGoal(null)`, `clearControlStates`. After the bound or a pathfinder failure: `partial` if at least 1 block closer, else `blocked`. A resolved `goto` counts as `arrived` only if `goal.isEnd` holds for the floored body position: goto.js (patched) also resolves on a `noPath` update with an empty path, which is `blocked` with `reason: 'noPath'`. Movements are built by `connect.mjs` with digging, towers and scaffolding off |
+| `swim` | `setControlState('jump', true)` while `blockAt(eye cell)` is water, `false` on every exit |
 | `dig` | checks `blockAt`, reach (eye to cell center, 4.5) and `diggable`, then `bot.dig(block, true)`. Cleanup `stopDigging`. Then polls up to 1 s for item entities within 2 blocks of the cell |
 | `place` | picks a solid neighbour as the reference (below first), `equip` to hand, `placeBlock`. Liquids count as replaceable |
 | `collect` | `goto` next to the item entity, then waits until the entity is gone. `collected` carries the inventory diff; an entity that vanished with no gain is `gone` |

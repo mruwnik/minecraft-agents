@@ -19,6 +19,8 @@ const DEFAULT_RADIUS = 16
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
+const SWIM_DEFAULT_MS = 3000
+const SWIM_MAX_MS = 10000
 const RECONNECT_TRIES = 3
 const RECONNECT_RETRY_MS = 5000
 const POSE_SLEEPING = 2
@@ -220,12 +222,45 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const goal = capped
       ? new goals.GoalNearXZ(Math.round(start.x + (target.x - start.x) * maxDistance / before), Math.round(start.z + (target.z - start.z) * maxDistance / before), 2)
       : new goals.GoalNear(target.x, target.y, target.z, range)
+    // `reached` is only what the pathfinder promised: goto resolves on a noPath update with an empty path, so the
+    // goal itself is checked against where the body stands.
+    const satisfied = () => !capped && goal.isEnd(vec(here()).floored())
     const outcome = (reached) => {
       const distance = dist(here(), target)
-      const status = reached && !capped ? 'arrived' : distance < before - 1 ? 'partial' : 'blocked'
-      return { status, pos: here(), distance }
+      const base = { pos: here(), distance }
+      if (reached && satisfied()) return { status: 'arrived', ...base }
+      if (distance < before - 1) return { status: 'partial', ...base }
+      return { status: 'blocked', ...(reached && !capped && { reason: 'noPath' }), ...base }
     }
     return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome(false) }, async ctx => outcome(await walk(ctx, goal)))
+  }
+
+  const oxygenNow = () => bot.oxygenLevel ?? 20
+  const headUnderwater = () => bot.blockAt(vec(cell(eye())))?.name === 'water'
+
+  // Holds jump until the head is out of the water. The pathfinder has no swim-up move, so a submerged body cannot
+  // surface with moveTo. Jump is released on every exit: surfaced, timeout, cut, error.
+  const swim = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
+    const ms = Math.min(a.ms ?? SWIM_DEFAULT_MS, SWIM_MAX_MS)
+    const before = oxygenNow()
+    const result = status => ({ status, oxygen: { before, after: oxygenNow() } })
+    return act(token, { boundS: ms / 1000, onTimeout: () => result('timeout') }, async ctx => {
+      let pressed = false
+      const release = () => { if (pressed) { pressed = false; bot.setControlState('jump', false) } }
+      ctx.onAbort(release)
+      try {
+        while (headUnderwater()) {
+          if (!pressed) { pressed = true; bot.setControlState('jump', true) }
+          await sleepMs(POLL_MS * timeScale)
+          ctx.alive()
+        }
+        return result('surfaced')
+      } finally {
+        release()
+      }
+    })
   }
 
   const dropsNear = p => Object.values(bot.entities)
@@ -519,7 +554,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
-  return { setOwner, isOwner, self, entities, blocks, blockAt, moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, offline, onBodyEvent, close }
+  return { setOwner, isOwner, self, entities, blocks, blockAt, moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.

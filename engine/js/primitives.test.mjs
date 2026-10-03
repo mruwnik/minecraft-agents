@@ -32,7 +32,8 @@ const acting = [
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
   { name: 'sleep', args: { pos: at(2, 64, 1) }, hang: 'sleep', cleanup: 'wake', timeout: 'timeout', over: { entities: {} } },
-  { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' }
+  { name: 'look', args: { pos: at(1, 64, 1) }, hang: 'lookAt', cleanup: null, timeout: 'timeout' },
+  { name: 'swim', args: { ms: 3000 }, hang: 'setControlState', cleanup: 'setControlState', timeout: 'timeout', over: { blocks: { ...world.blocks, '0,65,0': 'water' } } }
 ]
 const hanging = c => ({ ...world, ...c.over, hang: [c.hang] })
 const cutError = err => err.code === 'cut' && err.cut === true
@@ -500,4 +501,80 @@ test('blocks and blockAt carry the age state of a crop, and only then', () => {
   assert.deepEqual(p.blocks({ names: ['carrots'] }).map(b => b.age), [7])
   assert.equal(p.blockAt(at(1, 64, 0)).age, 7)
   assert.equal('age' in p.blockAt(at(2, 64, 0)), false)
+})
+
+// moveTo: goto.js resolves when the pathfinder reports noPath with an empty path, so a resolve proves nothing.
+const noPathRig = (spec) => {
+  const { bot, p } = rig({ ...world, ...spec })
+  bot.pathfinder.goto = () => { bot.emit('path_update', { status: 'noPath', path: [] }); return Promise.resolve() }
+  return p
+}
+
+test('moveTo: a goto that resolves on noPath with the body unmoved is blocked, not arrived', async () => {
+  const result = await noPathRig({}).moveTo('t1', { pos: at(30, 64, 0) })
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'noPath')
+  assert.deepEqual(result.pos, at(0, 64, 0))
+})
+
+test('moveTo: a goto that resolves with the body moved but short of the goal is partial', async () => {
+  const { bot, p } = rig(world)
+  bot.pathfinder.goto = () => { bot.entity.position = new Vec3(10, 64, 0); return Promise.resolve() }
+  const result = await p.moveTo('t1', { pos: at(30, 64, 0) })
+  assert.equal(result.status, 'partial')
+})
+
+test('moveTo: a goto that resolves within range is arrived', async () => {
+  const { bot, p } = rig(world)
+  bot.pathfinder.goto = () => { bot.entity.position = new Vec3(29.5, 64, 0.5); return Promise.resolve() }
+  assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0) })).status, 'arrived')
+})
+
+// swim
+const waterAbove = { ...world, blocks: { ...world.blocks, '0,65,0': 'water', '0,64,0': 'water' }, oxygen: 4 }
+const controls = bot => bot.calls.filter(c => c.name === 'setControlState').map(c => c.args)
+
+test('swim: holds jump until the head is out of the water, then releases and reports surfaced with oxygen', async () => {
+  const blocks = { '0,65,0': 'water', '0,64,0': 'water' }
+  const { bot, p } = rig({ blocks, oxygen: 4 })
+  setTimeout(() => { delete blocks['0,65,0']; bot.oxygenLevel = 20 }, 5)
+  const result = await p.swim('t1', { ms: 3000 })
+  assert.equal(result.status, 'surfaced')
+  assert.deepEqual(result.oxygen, { before: 4, after: 20 })
+  assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
+})
+
+test('swim: already surfaced returns at once without pressing jump', async () => {
+  const { bot, p } = rig(world)
+  assert.deepEqual(await p.swim('t1'), { status: 'surfaced', oxygen: { before: 20, after: 20 } })
+  assert.deepEqual(controls(bot), [])
+})
+
+test('swim: a head that stays under water ends at the bound as timeout and releases jump', async () => {
+  const { bot, p } = rig(waterAbove)
+  const result = await p.swim('t1', { ms: 3000 })
+  assert.equal(result.status, 'timeout')
+  assert.deepEqual(result.oxygen, { before: 4, after: 4 })
+  assert.deepEqual(controls(bot).at(-1), ['jump', false])
+})
+
+test('swim: ms is capped at 10 s', async () => {
+  const { p } = rig(waterAbove)
+  const started = Date.now()
+  await p.swim('t1', { ms: 600000 })
+  assert.ok(Date.now() - started < 10000 * SCALE + 200)
+})
+
+test('swim: a cut releases jump', async () => {
+  const { bot, p } = rig(waterAbove)
+  const call = p.swim('t1', { ms: 3000 })
+  await new Promise(r => setTimeout(r, 5))
+  p.setOwner('t2')
+  await assert.rejects(call, cutError)
+  assert.deepEqual(controls(bot).at(-1), ['jump', false])
+})
+
+test('swim with bad ms rejects with bad-args', async () => {
+  const { p } = rig(world)
+  await assert.rejects(p.swim('t1', { ms: -1 }), err => err.code === 'bad-args')
 })

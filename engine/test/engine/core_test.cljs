@@ -31,6 +31,11 @@
   (await (ctx/act c :eat #js {}))
   :done)
 
+(defn ^:async swim-round [c]
+  (let [r (await (ctx/act c :swim #js {:ms 3000}))]
+    (ctx/update-mem! c assoc :swim [(.-status r) (.. r -oxygen -after)])
+    :done))
+
 (defn ^:async fail-round [_]
   (throw (js/Error. "nope")))
 
@@ -635,6 +640,18 @@
                   [:action :started "look"] [:action :done "look"]]
                  (->> @seen (filter #(= :action (:source %))) (mapv (juxt :source :kind :name)))))
           (is (every? #(= :debug (:level %)) (filter #(= :action (:source %)) @seen))))))))
+
+(deftest swim-is-an-acting-primitive-through-ctx-act
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 0 :y 60 :z 0} :oxygen 2}
+                                          :blocks {"0,60,0" "water" "0,61,0" "water"}})
+              eng (assoc-in eng [:jobs 'swimmer] {:check always :round swim-round})]
+          (core/submit! eng '(swimmer) {})
+          (await (core/tick! eng))
+          (is (= ["swim"] (mapv #(.-name %) (array-seq (.. p -world -calls)))))
+          (is (= [20 61] [(.-oxygen (.self p)) (.-y (.-pos (.self p)))])))))))
 
 (deftest a-check-cannot-act-or-write
   (let [{:keys [eng]} (setup)

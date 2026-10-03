@@ -235,6 +235,14 @@
                (await (child-outcome (:eng (setup {:unreachable ["9,64,9"]}))
                                      'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
 
+(deftest go-to-treats-a-nopath-block-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:arrived false :reason :unreachable}
+               (await (child-outcome (:eng (setup {:noPath ["9,64,9"]}))
+                                     'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
+
 (deftest collect-drops-hands-over-how-many-it-collected
   (async done
     (tu/run-async done

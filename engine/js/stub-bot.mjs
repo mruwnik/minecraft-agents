@@ -8,7 +8,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ blocks = {}, items = [], entities = {}, hang = [], pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -45,7 +45,9 @@ export function stubBot ({ blocks = {}, items = [], entities = {}, hang = [], po
       return found.slice(0, count)
     },
     pathfinder: { goto: act('goto'), setGoal: act('setGoal'), setMovements: () => {} },
+    oxygenLevel: oxygen,
     clearControlStates: act('clearControlStates'),
+    setControlState: act('setControlState'),
     dig: act('dig'),
     stopDigging: act('stopDigging'),
     placeBlock: act('placeBlock'),
