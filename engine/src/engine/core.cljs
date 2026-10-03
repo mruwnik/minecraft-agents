@@ -700,8 +700,10 @@
   (doseq [spec queue]
     (submit! eng spec {:by :scenario})))
 
-(defn self-pos [p]
-  (let [pos (.-pos (.self p))]
+(defn self-pos
+  "The body's position, or nil when self() has none (the offline record is just {status: 'offline'})."
+  [p]
+  (when-let [pos (.-pos (.self p))]
     {:x (.-x pos) :y (.-y pos) :z (.-z pos)}))
 
 (def error-kinds #{"died" "error" "reconnect-failed"})
@@ -787,7 +789,7 @@
         ev (or events (events/make {:body username :file (path/join dir "events.jsonl") :stdout? true
                                     :now now :pos-fn #(self-pos primitives)}))
         store (mem/open dir {:now now
-                             :world-time #(.-timeOfDay (.self primitives))
+                             :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :live-jobs #(set (keys (:instances @st)))})
         eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
