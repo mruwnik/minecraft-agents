@@ -330,3 +330,42 @@ test('only hostiles carry visible, and a spec can force it', () => {
   assert.equal(p.entities({ kind: 'hostile' })[0].visible, true)
 })
 
+test('wait returns ok at once and a held wait is cut by an owner change', async () => {
+  const p = owned()
+  assert.deepEqual(await p.wait('t1', { ms: 2000 }), { status: 'ok' })
+  p.world.hold('wait')
+  const call = p.wait('t1', { ms: 2000 })
+  p.setOwner('t2')
+  await assert.rejects(call, err => err.code === 'cut')
+})
+
+test('while offline the fake reports it, and sensing says offline instead of stale values', async () => {
+  const p = owned({ offlineScale: 0.001, entities: [{ id: 1, name: 'zombie', kind: 'hostile', pos: at(2, 64, 0) }], blocks: { '1,64,0': 'stone' } })
+  assert.equal(p.isOffline(), false)
+  const pending = p.offline('t1', { ms: 20000 })
+  await tick()
+  assert.equal(p.isOffline(), true)
+  assert.deepEqual(p.self(), { status: 'offline' })
+  assert.deepEqual(p.entities({}), [])
+  assert.deepEqual(p.blocks({}), [])
+  assert.equal(p.blockAt(at(1, 64, 0)), null)
+  await pending
+  assert.equal(p.isOffline(), false)
+  assert.equal(p.self().username, 'Fake')
+  assert.equal(p.entities({}).length, 1)
+})
+
+test('a cut ends the fake wait early and the body is back before the offline call resolves', async () => {
+  const p = owned({ offlineScale: 1 })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e.kind))
+  const t0 = Date.now()
+  const pending = p.offline('t1', { ms: 600000 })
+  await tick()
+  p.setOwner('t2')
+  assert.equal(p.isOffline(), true)
+  assert.deepEqual(await pending, { status: 'cut' })
+  assert.ok(Date.now() - t0 < 1000)
+  assert.equal(p.isOffline(), false)
+  assert.deepEqual(seen, ['offline', 'online'])
+})

@@ -718,3 +718,72 @@ test('only hostiles carry visible', () => {
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
 })
 
+test('wait resolves ok after its time, scaled by timeScale', async () => {
+  const { p } = rig(world)
+  const t0 = Date.now()
+  assert.deepEqual(await p.wait('t1', { ms: 1000 }), { status: 'ok' })
+  assert.ok(Date.now() - t0 < 500)
+})
+
+test('a cut during a wait rejects at once', async () => {
+  const { p } = rig(world)
+  const t0 = Date.now()
+  const call = p.wait('t1', { ms: 10000 })
+  p.setOwner('t2')
+  await assert.rejects(call, err => err.code === 'cut')
+  assert.ok(Date.now() - t0 < 50)
+})
+
+test('a wait with a stale token rejects with cut', async () => {
+  const { p } = rig(world)
+  await assert.rejects(p.wait('old', { ms: 10 }), err => err.code === 'cut')
+})
+
+test('a wait is clamped to 10 s and to at least 0', async () => {
+  const bot = stubBot(world)
+  const p = createPrimitivesFromBot(bot, { timeScale: 0.0001 })
+  p.setOwner('t1')
+  const t0 = Date.now()
+  assert.deepEqual(await p.wait('t1', { ms: 1e9 }), { status: 'ok' })
+  assert.deepEqual(await p.wait('t1', { ms: -5 }), { status: 'ok' })
+  assert.ok(Date.now() - t0 < 500)
+})
+
+// ---- offline as body state ----
+
+test('while offline isOffline is true and sensing answers offline instead of stale values', async () => {
+  const { p } = await online()
+  assert.equal(p.isOffline(), false)
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  assert.equal(p.isOffline(), true)
+  assert.deepEqual(p.self(), { status: 'offline' })
+  assert.deepEqual(p.entities({}), [])
+  assert.deepEqual(p.blocks({}), [])
+  assert.equal(p.blockAt(at(2, 64, 0)), null)
+  p.setOwner('t2')
+  await pending
+  assert.equal(p.isOffline(), false)
+  assert.equal(p.self().username, 'Stub')
+})
+
+test('after a cut the new owner acts on the reconnected bot, never on the quit one', async () => {
+  const { p, bots } = await online()
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  p.setOwner('t2')
+  assert.equal(p.isOffline(), true)
+  await p.look('t2', { yaw: 0, pitch: 0 })
+  assert.deepEqual(await pending, { status: 'cut' })
+  assert.deepEqual(names(bots[0]), ['quit'])
+  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), ['look'])
+})
+
+test('a call whose owner is cut while waiting for the reconnect rejects with cut', async () => {
+  const { p, bots } = await online()
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  p.setOwner('t2')
+  const look = p.look('t2', { yaw: 0, pitch: 0 })
+  p.setOwner('t3')
+  await assert.rejects(look, err => err.code === 'cut')
+  await pending
+  assert.deepEqual(names(bots[1]).filter(n => n !== 'blockAt'), [])
+})

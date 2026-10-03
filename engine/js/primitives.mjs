@@ -28,6 +28,7 @@ const RECONNECT_RETRY_MS = 5000
 const POSE_SLEEPING = 2
 const FLAG_ON_FIRE = 0x01
 
+const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
@@ -176,7 +177,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     }
   }
 
-  const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
   // Whether a block stops the eye: a full-cube bounding box, except glass. An unloaded cell never blocks, so a
   // threat is not hidden by a gap in the map.
   const blocksSight = p => {
@@ -186,6 +186,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // eye to the middle of the entity; the walk is bounded by that segment, which the caller keeps within its radius
   const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, blocksSight)
 
+  const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
     const me = here()
     return Object.values(bot.entities)
       .filter(e => e !== bot.entity && e.position)
@@ -199,8 +200,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         kind: k,
         pos: xyz(e.position),
         distance,
-        ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'hostile' && { visible: canSee(e) }),
+        ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))
@@ -514,6 +515,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  // Waits `ms` (clamped to 0..WAIT_MAX_MS, scaled by timeScale) without touching the bot; a cut rejects at once.
+  const wait = async (token, a = {}) => {
+    const ms = Math.min(Math.max(isNum(a.ms) ? a.ms : 0, 0), WAIT_MAX_MS)
+    // the act's own time bound is the wait: it resolves ok when the bound passes, and a cut rejects before that
+    return act(token, { boundS: ms / 1000, onTimeout: () => ({ status: 'ok' }) }, () => new Promise(() => {}))
+  }
+
   // ---- body events ----
 
   const emit = event => listeners.forEach(fn => fn(event))
@@ -636,7 +644,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, collect, inspectContainer, transfer, equip, eat, attack, sleep, look, swim })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, offline, onBodyEvent, close }
+  return { setOwner, isOwner, self, entities, blocks, blockAt, ...acting, wait, offline, onBodyEvent, close }
 }
 
 // The README's factory: connects, resolves once spawned.

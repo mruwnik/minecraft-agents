@@ -163,6 +163,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `attack(token, a)` | `{id}` | `hit`, `killed`, `gone`, `out-of-reach` | 1 s (one swing) | none needed |
 | `sleep(token, a)` | `{pos}` (a bed) | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` | 5 s | wake if asleep |
 | `look(token, a)` | `{pos}` or `{yaw, pitch}` | `ok` | 1 s | none needed |
+| `wait(token, a)` | `{ms}`, clamped to 0..10000 | `ok` | `ms` (scaled by `timeScale`) | none needed; a cut rejects at once |
 | `swim(token, a)` | `{ms = 3000}`, at most 10000 | `surfaced` (head out of water), `timeout` | `ms`, at most 10 s | jump released |
 | `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
 
@@ -631,7 +632,7 @@ Plus kind-specific fields. Kinds the engine emits: `job.queued`,
 `job.round_started`, `job.yielded` (a `:continue`), `job.cut`,
 `job.completed`, `job.failed`, `job.retried`, `job.cancelled`, `job.stalled` (warn),
 `job.memory_written` (debug, `memory` is the kind), `action.started` and
-`action.done` (debug), `reflex.fired`, `reflex.ended` (`how`: `cleared`,
+`action.done` (debug), `reflex.fired` and `reflex.ended` (both with `text` "reflex → job"; ended carries `outcome`: `done`, `declined`, `cut`, `failed` or `dropped`, exactly one per fired job, including on shutdown and for jobs a crash left behind; `how`: `cleared`,
 `completed_not_cleared`, `dropped`), `reflex.changed`, `reflex.reverted`,
 `body.<kind>` for body events, `system.started`, `system.restored`,
 `system.stopping`.
@@ -671,7 +672,7 @@ registry and the triggers before connecting. `--state-dir <dir>` overrides the r
 and `survival.edn` end to end against the fake primitives. `survival.edn`
 registers every survival trigger in the order of the Triggers table and
 queues `(repeat (jobs.movement.look-around))`, so the body looks around
-between reflexes; its test drops the health, then places a zombie, then kills
+(once per `:every-ms`, default 2000) between reflexes; its test drops the health, then places a zombie, then kills
 the body, and checks that recover, respond-to-hostile and recover-drops fire
 in turn and that the body goes back to looking around.
 
@@ -688,7 +689,7 @@ after three the job emits a warn and ends.
 | `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count | none; hands over `{:arrived bool :reason?}` |
 | `jobs.time.wait-for-day` | none | it is day | none | none |
 | `jobs.survival.eat` | `{:item nil :until 18 :allow-bad false}` | food below `:until` and something edible carried | none | writes `:fed` (cap 20, 6 h) |
-| `jobs.movement.look-around` | none | always | none | writes `:looked` (cap 1, forever) |
+| `jobs.movement.look-around` | `{:every-ms 2000}` | always | none | writes `:looked` (cap 1, forever) |
 | `jobs.movement.pace` | `{:a pos :b pos :laps 3 :rounds 8 :range 1}` | always | `:rounds-run` | none |
 | `jobs.forestry.fell-tree` | `{:species nil :radius 16}` | a column is chosen, or every candidate was unreachable, or a tree (log column with leaves near its top) is in radius | `:column {:x :z}`, `:species`, `:base`, `:partials`, `:unreachable` | writes one `:forestry/replant` `{:pos base :species}` when the base log is dug |
 | `jobs.forestry.collect-drops` | `{:radius 16 :filter [names] or nil}` | always | `:skipped` ids of unreachable items, `:collected` count | none; hands over `{:collected n}` |
@@ -773,8 +774,9 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |
 
 `:every-interval` is a wall-clock reflex: `look-around` looks at a point
-three blocks ahead and writes `:looked`, which survives a restart and makes
-the trigger stop holding. With no entry it fires at once.
+three blocks ahead and writes `:looked` (which survives a restart and makes
+the trigger stop holding), then waits `:every-ms` (default 2000) before its
+next round. With no entry it fires at once.
 `scenarios/woodcutter-cuts.edn` is the woodcutter with it first in the
 register; `scenarios/pace-cuts.edn` puts it above a long `pace` job.
 

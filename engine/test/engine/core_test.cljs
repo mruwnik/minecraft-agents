@@ -1141,3 +1141,127 @@
             (is (pos? (:count e)))
             (is (pos? (:bytes e)))
             (is (>= (:ms e) (:max-ms e) 0))))))))
+
+(defn look-calls [world]
+  (filterv #(= "look" (.-name %)) (.-calls world)))
+
+(deftest look-around-looks-once-then-waits-so-ticks-do-not-spin
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {})
+              world (.-world p)]
+          (core/submit! eng '(repeat (jobs.movement.look-around)) {})
+          (.hold world "wait")
+          (dotimes [_ 10]
+            (core/tick! eng)
+            (swap! clock + 250))
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+          (is (= 1 (count (look-calls world))) "the round is parked in its wait, so ticks start nothing")
+          (is (= [{:ms 2000}] (mapv #(js->clj (.-args %) :keywordize-keys true)
+                                    (filter #(= "wait" (.-name %)) (.-calls world))))
+              "it waits :every-ms, default 2000"))))))
+
+(deftest a-cut-rejects-look-around-s-wait-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:inventory [{:name "bread" :count 3}]})
+              world (.-world p)]
+          (core/register-reflex! eng {:trigger :hurt})
+          (core/submit! eng '(repeat (jobs.movement.look-around)) {})
+          (.hold world "wait")
+          (let [looking (core/tick! eng)]
+            (set! (.. world -state -self -health) 6)
+            (let [reflex-round (core/tick! eng)]
+              (await looking)
+              (await reflex-round)))
+          (is (= [:fired :cut] (->> @seen (map :kind) (filter #{:fired :cut})))))))))
+
+(deftest look-around-rounds-count-as-progress-so-the-job-never-stalls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {})]
+          (core/submit! eng '(hold (repeat (jobs.movement.look-around))) {})
+          (loop [i 0]
+            (when (< i 30)
+              (await (core/tick! eng))
+              (swap! clock + 250)
+              (recur (inc i))))
+          (is (empty? (filter #(= :stalled (:kind %)) @seen))))))))
+
+;; ---------------------------------------------------------------- reflex events
+
+(defn reflex-events [seen kind]
+  (filterv #(= [:reflex kind] [(:source %) (:kind %)]) @seen))
+
+(def hostile-world
+  {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})
+
+(deftest reflex-fired-and-ended-name-the-reflex-and-its-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:health 5}})]
+          (core/register-reflex! eng {:trigger :hurt})
+          (await (core/tick! eng))
+          (is (= ["hurt → eat"] (mapv :text (reflex-events seen :fired))))
+          (let [[e] (reflex-events seen :ended)]
+            (is (= "hurt → eat: done" (:text e)))
+            (is (= :done (:outcome e)))))))))
+
+(deftest every-reflex-exit-emits-exactly-one-ended-with-its-outcome
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [outcomes (fn [seen] (mapv :outcome (reflex-events seen :ended)))]
+          (testing "declined"
+            (let [{:keys [eng seen]} (declined-setup)]
+              (reset! flag false)
+              (core/register-reflex! eng {:trigger :gated-any})
+              (await (core/tick! eng))
+              (is (= [:declined] (outcomes seen)))))
+          (testing "failed"
+            (let [{:keys [eng seen]} (setup)]
+              (core/register-reflex! eng {:trigger :boom})
+              (await (core/tick! eng))
+              (is (= [:failed] (outcomes seen)))))
+          (testing "cut by a primitive"
+            (let [{:keys [eng seen p]} (setup hostile-world)]
+              (.override (.-world p) "moveTo" (fn [_ _ _] (js/Promise.reject (core/cut-error))))
+              (core/register-reflex! eng {:trigger :near})
+              (await (core/tick! eng))
+              (is (= [:cut] (outcomes seen)))))
+          (testing "dropped by a higher reflex"
+            (let [{:keys [eng seen p]} (setup {:self {:food 5} :entities (:entities hostile-world)})
+                  world (.-world p)]
+              (core/register-reflex! eng {:trigger :near})
+              (core/register-reflex! eng {:trigger :hungry})
+              (.hold world "moveTo")
+              (let [release-eat (.hold world "eat")
+                    r1 (core/tick! eng)]
+                (core/move! eng :hungry {:above :near} 60)
+                (let [r2 (core/tick! eng)]
+                  (await r1)
+                  (release-eat)
+                  (await r2)
+                  (is (= [:dropped :done] (outcomes seen)))
+                  (is (= 2 (count (reflex-events seen :fired))))))))
+          (testing "shutdown mid-round"
+            (let [{:keys [eng seen p]} (setup hostile-world)]
+              (core/register-reflex! eng {:trigger :near})
+              (.hold (.-world p) "moveTo")
+              (let [round (core/tick! eng)]
+                (core/shutdown! eng)
+                (await round)
+                (is (= [:dropped] (outcomes seen)))
+                (is (= {} (:instances (core/state eng)))))))
+          (testing "a crash left a reflex job behind"
+            (let [dir (tu/tmp-dir)
+                  {:keys [eng p]} (setup hostile-world dir)]
+              (core/register-reflex! eng {:trigger :near})
+              (.hold (.-world p) "moveTo")
+              (core/tick! eng)
+              (let [[_ seen2] (restore-with dir registry triggers)]
+                (is (= [:dropped] (outcomes seen2)))))))))))

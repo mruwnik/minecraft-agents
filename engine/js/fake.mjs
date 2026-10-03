@@ -234,6 +234,8 @@ function defaultActs (s) {
       return { status: 'ok' }
     },
 
+    async wait () {
+      return { status: 'ok' }
     }
   }
 }
@@ -243,14 +245,14 @@ export function createFake (spec = {}) {
   const ageOf = (k) => (s.ages.has(k) ? { age: s.ages.get(k) } : {})
   const listeners = new Set()
   const calls = []
-  const holds = new Map() // name -> array of pending hold records
-  const pending = new Set() // { token, reject }
   // a cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not
   const blocksSight = (cell) => !SEE_THROUGH.has(s.blocks.get(key(cell)) ?? 'air') && !s.unloaded.has(key(cell))
   const canSee = (e) => lineClear(
     { x: s.self.pos.x + 0.5, y: s.self.pos.y + EYE, z: s.self.pos.z + 0.5 },
     { x: e.pos.x + 0.5, y: e.pos.y + BODY_MIDDLE, z: e.pos.z + 0.5 },
     blocksSight)
+  const holds = new Map() // name -> array of pending hold records
+  const pending = new Set() // { token, reject }
   const overrides = new Map()
   const acts = defaultActs(s)
   let owner = null
