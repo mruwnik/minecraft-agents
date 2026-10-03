@@ -10,7 +10,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter
+  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS
 } from './view.mjs'
 
 const { Vec3 } = vec3
@@ -416,4 +416,35 @@ test('rapid pose ticks while a write is in flight never raise a view.error', asy
   await view.detach()
   await view.idle()
   assert.deepEqual(events, [])
+})
+
+const statsEventsAcross = async phases => {
+  mock.timers.enable({ apis: ['setInterval'] })
+  try {
+    const dir = tmp()
+    const events = []
+    const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: e => events.push(e), enabled: true })
+    const counts = []
+    for (const phase of phases) {
+      const before = events.filter(e => e.kind === 'view.stats').length
+      await phase(view)
+      mock.timers.tick(STATS_MS + 1)
+      await new Promise(resolve => setImmediate(resolve))
+      counts.push(events.filter(e => e.kind === 'view.stats').length - before)
+    }
+    view.stop()
+    return counts
+  } finally {
+    mock.timers.reset()
+  }
+}
+
+test('view.stats is emitted only while a bot is attached', async () => {
+  const counts = await statsEventsAcross([
+    () => {},                                  // never attached
+    view => view.attach(fakeBot()),            // online
+    view => view.detach(),                     // offline
+    view => view.attach(fakeBot())             // back online
+  ])
+  assert.deepEqual(counts, [0, 1, 0, 1])
 })

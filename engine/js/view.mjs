@@ -354,6 +354,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     }
   }
 
+  // nothing while offline; counters are left to accumulate and go out with the first report after the next attach
+  const emitStats = () => {
+    if (!bot) return
+    onEvent({ source: 'body', kind: 'view.stats', level: 'info', ...takeStats() })
+  }
+
   const startTimers = () => {
     if (timers.length) return
     const every = (ms, fn) => {
@@ -365,7 +371,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       every(FLUSH_MS, flushColumns),
       ...(poseHz > 0 ? [every(1000 / poseHz, tickPose)] : []),
       every(HUD_MS, tickHud),
-      every(STATS_MS, () => onEvent({ source: 'body', kind: 'view.stats', level: 'info', ...takeStats() }))
+      every(STATS_MS, emitStats)
     ]
   }
 
