@@ -5,7 +5,8 @@
   (:require [engine.memory :as mem]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
-            [engine.triggers.hungry :as hungry]))
+            [engine.triggers.hungry :as hungry]
+            [engine.triggers.night-unsafe :as night-unsafe]))
 
 (def default-health 7)
 
@@ -34,16 +35,6 @@
    :args {:radius hostile-radius}
    :persistence :cooldown
    :cooldown-s 5})
-
-(def night-and-bed-known
-  {:name :night-and-bed-known
-   :when (fn [world memory _args]
-           (and (not (.-isDay (.self world)))
-                (some? (mem/place memory :bed))))
-   :job '(jobs.survival.sleep)
-   :args {}
-   :persistence :cooldown
-   :cooldown-s 60})
 
 (def nearly-full-stacks 30)
 
@@ -76,7 +67,12 @@
    :persistence :cooldown
    :cooldown-s 0})
 
+(def night-and-bed-known
+  "Alias of night-unsafe under its old name, which the shipped scenarios
+  still register (they are not edited here). It now fires shelter."
+  (assoc night-unsafe/trigger :name :night-and-bed-known))
+
 (def all
   "Every trigger by name."
   (into {} (map (juxt :name identity))
-        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry]))
+        [health-low hostile-near night-and-bed-known inventory-nearly-full every-interval suffocating/suffocating burning/burning hungry/hungry night-unsafe/trigger]))
