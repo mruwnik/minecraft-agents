@@ -33,7 +33,7 @@
   that did not move the body more than :min-move blocks from where it stood
   (status is ignored), it retries once uncapped (range 1, :timeoutS 6). If
   either moved it that far the spell is over (:done); otherwise :continue. After :max-attempts attempts it emits the warn
-  event unstick.failed with the position, :reasons and a :text naming them, writes a :stuck memory entry (cap 10,
+  event unstick.failed with the position, :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
   ttl 1 hour) and ends so the list resumes.
 
   How it pairs with the stuck trigger (engine.triggers.stuck): both read only
@@ -300,9 +300,16 @@
             (do (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))
                 (moved?)))))))
 
+(defn summarize-reasons
+  "Each distinct reason once, in first-seen order, with \" (xN)\" appended when it occurred N > 1 times."
+  [reasons]
+  (let [counts (frequencies reasons)]
+    (mapv #(if (> (counts %) 1) (str % " (x" (counts %) ")") %)
+          (distinct reasons))))
+
 (defn give-up! [c attempts]
   (let [pos (u/self-pos c)
-        reasons (vec (:reasons (ctx/mem c)))]
+        reasons (summarize-reasons (:reasons (ctx/mem c)))]
     (ctx/emit! c :unstick.failed :warn {:pos pos :attempts attempts :reasons reasons
                                          :text (str "still stuck after " attempts " attempts: " (str/join "; " reasons))})
     (ctx/remember! c :stuck {:pos pos} stuck-policy)

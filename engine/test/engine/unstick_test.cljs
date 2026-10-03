@@ -530,7 +530,8 @@
           (await (run-attempts! eng p 7 false))
           (let [ev (failed-event seen)]
             (is (= 6 (:attempts ev)))
-            (is (= 6 (count (filter #(= "dig: cannot" %) (:reasons ev))))))
+            (is (= ["pillar: no block in inventory (x6)" "dig: cannot (x6)"] (:reasons ev)))
+            (is (= "still stuck after 6 attempts: pillar: no block in inventory (x6); dig: cannot (x6)" (:text ev))))
           (is (= [] (filter #(zero? (:range %)) (call-args p "moveTo"))) "no step-back, no stair move"))))))
 
 (deftest unstick-stair-refuses-a-cell-under-gravel
@@ -540,7 +541,7 @@
         (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks (assoc dirt-pit "6,67,0" "gravel")})]
           (await (run-attempts! eng p 7 false))
           (is (not-any? #{{:x 6 :y 66 :z 0}} (dig-positions p)) "the cell under the gravel is not dug")
-          (is (some #(= "dig: gravel above (6 66 0)" %) (:reasons (failed-event seen)))))))))
+          (is (some #(re-find #"^dig: gravel above \(6 66 0\)" %) (:reasons (failed-event seen)))))))))
 
 (deftest unstick-stair-refuses-a-cell-next-to-lava
   (async done
@@ -549,7 +550,7 @@
         (let [{:keys [eng p seen]} (setup {:self dirt-self :blocks (assoc dirt-pit "7,65,0" "lava")})]
           (await (run-attempts! eng p 7 false))
           (is (not-any? #{{:x 6 :y 65 :z 0}} (dig-positions p)))
-          (is (some #(= "dig: lava next to (6 65 0)" %) (:reasons (failed-event seen)))))))))
+          (is (some #(re-find #"^dig: lava next to \(6 65 0\)" %) (:reasons (failed-event seen)))))))))
 
 (deftest unstick-roofed-pit-with-blocks-digs-the-roof-instead-of-pillaring
   (async done
@@ -569,4 +570,17 @@
                                            :inventory [{:name "dirt" :count 4}]})]
           (await (run-attempts! eng p 7 false))
           (is (= [] (calls p "jumpPlace")))
-          (is (some #(= "dig: cannot" %) (:reasons (failed-event seen)))))))))
+          (is (some #(re-find #"^dig: cannot" %) (:reasons (failed-event seen)))))))))
+
+(deftest summarize-reasons-counts-repeats-once-each-in-first-seen-order
+  (is (= ["pillar: no block in inventory (x6)" "dig: cannot (x6)"]
+         (unstick/summarize-reasons (take 12 (cycle ["pillar: no block in inventory" "dig: cannot"]))))))
+
+(deftest summarize-reasons-omits-suffix-for-a-single-occurrence
+  (is (= ["dig: cannot"] (unstick/summarize-reasons ["dig: cannot"]))))
+
+(deftest summarize-reasons-keeps-first-seen-order
+  (is (= ["b (x2)" "a" "c"] (unstick/summarize-reasons ["b" "a" "b" "c"]))))
+
+(deftest summarize-reasons-of-nothing-is-empty
+  (is (= [] (unstick/summarize-reasons []))))
