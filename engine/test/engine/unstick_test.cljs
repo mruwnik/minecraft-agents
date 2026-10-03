@@ -13,14 +13,16 @@
 
 (def t0 1000000)
 
-(defn setup [world]
-  (let [clock (atom t0)
-        [seen sink] (tu/capture-sink)
-        p (tu/fake world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen :clock clock}))
+(defn setup
+  ([world] (setup world (tu/tmp-dir) t0))
+  ([world dir start]
+   (let [clock (atom start)
+         [seen sink] (tu/capture-sink)
+         p (tu/fake world)
+         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir
+                           :now #(deref clock)
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+      {:eng eng :p p :seen seen :clock clock :dir dir})))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
@@ -257,6 +259,63 @@
           (seed-moved! eng (repeat 4 (bad-move)))
           (is (true? (stuck-now? eng)) "quiet period over")
           (is (false? (stuck-now? eng {:quiet-ms 600000})) ":quiet-ms is an argument"))))))
+
+(defn restart! [eng clock at]
+  (reset! clock at)
+  (mem/write! (:store eng) :restart {}))
+
+(deftest stuck-trigger-ignores-moves-from-before-the-latest-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {})]
+          (reset! clock (+ t0 1000))
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (restart! eng clock (+ t0 2000))
+          (reset! clock (+ t0 3000))
+          (is (false? (stuck-now? eng)) "four bad moves, all before the restart")
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (is (true? (stuck-now? eng)) "four bad moves after it"))))))
+
+(deftest stuck-trigger-needs-n-moves-after-the-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {})]
+          (reset! clock (+ t0 1000))
+          (seed-moved! eng (repeat 2 (bad-move)))
+          (restart! eng clock (+ t0 2000))
+          (reset! clock (+ t0 3000))
+          (seed-moved! eng (repeat 2 (bad-move)))
+          (is (false? (stuck-now? eng)) "two before and two after"))))))
+
+(deftest stuck-trigger-quiet-check-ignores-the-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {})]
+          (mem/write! (:store eng) :stuck {:pos at5} {:cap 10 :ttl 3600000})
+          (restart! eng clock (+ t0 1000))
+          (reset! clock (+ t0 300001))
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (is (true? (stuck-now? eng)) "give-up over quiet-ms old, restart newer")
+          (is (false? (stuck-now? eng {:quiet-ms 400000})) "measured from the :stuck, not the restart"))))))
+
+(deftest engine-over-a-memory-with-recent-bad-moves-does-not-fire-stuck-on-its-first-tick
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock dir]} (setup {})]
+          (reset! clock (+ t0 1000))
+          (seed-moved! eng (repeat 4 (bad-move)))
+          (core/save-memory! eng)
+          (let [{again :eng seen :seen} (setup {} dir (+ t0 2000))]
+            (core/register-reflex! again {:trigger :stuck})
+            (is (= 4 (count (moved again))) "the moves were persisted")
+            (is (false? (stuck-now? again)))
+            (await (core/tick! again))
+            (is (not-any? #(= :stuck (:trigger %)) @seen))
+            (is (= [] (:list (core/state again))) "no unstick job was started")))))))
 
 (deftest unstick-has-a-quiet-ms-arg
   (is (= (:quiet-ms stuck/defaults) (get-in unstick/args [:quiet-ms :default])))

@@ -24,14 +24,18 @@
   "True when the last :n :moved entries are all bad moves and the newest of
   them is less than :window-ms old (the body is still trying; a real moveTo
   that makes no progress runs its whole 20 s time bound, so four of them span
-  60 s or more and the oldest would always be out of the window). False with fewer than :n entries. Moves
-  written before the latest :stuck entry (a failed unstick) are not counted,
-  so a body the job gave up on needs :n fresh bad moves to fire again, and
-  not even then until that entry is :quiet-ms old."
+  60 s or more and the oldest would always be out of the window). False with
+  fewer than :n entries. Moves written before the latest :stuck entry (a
+  failed unstick) are not counted, so a body the job gave up on needs :n fresh
+  bad moves to fire again, and not even then until that entry is :quiet-ms
+  old. Moves from before the latest restart are evidence about a previous
+  process and do not count."
   [view args]
   (let [{:keys [n min-move window-ms quiet-ms]} (merge defaults args)
         gave-up (or (:t (mem/latest view :stuck)) 0)
-        last-n (take-last n (filter #(> (:t %) gave-up) (mem/entries view :moved)))]
+        restarted (or (:t (mem/latest view :restart)) 0)
+        counted? (fn [{:keys [t]}] (and (> t gave-up) (>= t restarted)))
+        last-n (take-last n (filter counted? (mem/entries view :moved)))]
     (and (>= (- (:now view) gave-up) quiet-ms)
          (= n (count last-n))
          (< (- (:now view) (:t (last last-n))) window-ms)
@@ -39,7 +43,7 @@
 
 (def stuck
   "Holds when stuck? does, with :n, :min-move, :window-ms and :quiet-ms from
-  the args. The job it starts is (jobs.maintenance.unstick); see its doc for
+  the args. Moves from before the latest restart do not count. The job it starts is (jobs.maintenance.unstick); see its doc for
   how the two interact. After a give-up the :stuck entry silences the trigger
   for :quiet-ms (5 min), so a body still blocked under the resumed job does
   not re-fire it every cooldown; the 60 s cooldown only covers the spell
