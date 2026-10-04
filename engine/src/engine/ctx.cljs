@@ -137,6 +137,17 @@
   [ctx]
   (world/zones (:world (:engine ctx))))
 
+(defn claims
+  "The active, unexpired area claims of the body's world (claims.edn) at the clock: [{:id :owner :min :max :until ..}].
+  Zones and claims are a rule jobs consult (engine.access.zones); the engine enforces neither."
+  [ctx]
+  (world/live-claims (world/area-claims (:world (:engine ctx))) (now ctx)))
+
+(defn self-name
+  "The body's own username, the owner name zones and claims are compared with."
+  [ctx]
+  (.-username (.self (:primitives ctx))))
+
 (defn footprints
   "{[x y z] plan-id}: the cells of every :active plan, as engine.access.rules takes :footprints (a refusal then names
   the :plan). A job working plan P passes {:except P} to leave P's own cells out."

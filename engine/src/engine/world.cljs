@@ -14,6 +14,10 @@
   dig or place job declines; an empty vector is a valid \"no zones\". A bad edit keeps the last good copy
   (world.zones-unreadable).
 
+  The claims file (worlds/<world>/claims.edn, checked by engine.zones/parse-claims) is read the same way, but a missing
+  file is [] (no claims, no warn); a bad edit keeps the last good copy (world.claims-unreadable). These are the
+  shared-map area claims of bodies, held under :area-claims; the :claims of the state are the plans' cells.
+
   The state: {:plans {id entry} :blueprints {id entry} :zones entry :expanded {id expansion} :claims {id #{cell}}
   :footprints {cell id} :checked-at ms}, an entry being {:stamp [mtime size] :value v :error text}, :value the last
   good copy and :error the current file's trouble; the zone entry is {:missing true} while there is no file.
@@ -151,6 +155,29 @@
     :else (let [[entries warn] (absorb {:zones (dissoc entry :missing)} :zones stamp (parsed))]
             [(:zones entries) warn])))
 
+(defn read-claims
+  "The claims file parsed into {:value claims} or {:errors [..]}; an unreadable file is an error."
+  [file]
+  (let [text (try (.readFileSync fs file "utf8") (catch :default e {:error (ex-message e)}))]
+    (if (map? text)
+      {:errors [(str "unreadable file: " (:error text))]}
+      (zones/parse-claims text))))
+
+(defn absorb-claims
+  "Fold the claims file's stamp (nil: no file) into its entry: [entry warn]. No file is no claims; a bad file keeps
+  the last good copy and warns {:id :error :kept} like absorb. parsed is a thunk, called only when the stamp changed."
+  [entry stamp parsed]
+  (cond
+    (nil? stamp) [{:value []} nil]
+    (= stamp (:stamp entry)) [entry nil]
+    :else (let [[entries warn] (absorb {:area-claims entry} :area-claims stamp (parsed))]
+            [(:area-claims entries) warn])))
+
+(defn claims-warn-event [file {:keys [error kept]}]
+  {:source :system :kind :world.claims-unreadable :level :warn :path file :error error :kept kept
+   :text (str "claims file " file " cannot be read (" error ")"
+              (if kept "; the last good copy is still used" "; it was never readable, no claims are known"))})
+
 (defn zones-warn-event [file {:keys [missing error kept]}]
   (if missing
     {:source :system :kind :world.zones-missing :level :warn :path file
@@ -179,14 +206,21 @@
               file (:zones-file opts)
               [zone-entry zone-warn] (if file
                                        (absorb-zones (:zones old) (file-stamp file) #(read-zones file))
-                                       [(:zones old) nil])]
-          (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry)
+                                       [(:zones old) nil])
+              claims-file (:claims-file opts)
+              [claims-entry claims-warn] (if claims-file
+                                           (absorb-claims (:area-claims old) (file-stamp claims-file) #(read-claims claims-file))
+                                           [(:area-claims old) nil])]
+          (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry
+                                       :area-claims claims-entry)
                           (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) expand-all))
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
           (when zone-warn
-            ((:emit opts) (zones-warn-event file zone-warn))))))))
+            ((:emit opts) (zones-warn-event file zone-warn)))
+          (when claims-warn
+            ((:emit opts) (claims-warn-event claims-file claims-warn))))))))
 
 ;; ------------------------------------------------------------------ worlds
 
@@ -210,18 +244,23 @@
   memory, no files (tests)."
   ([plans blueprints] (of-data plans blueprints []))
   ([plans blueprints zones]
-   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones))) :said (atom #{}) :derived (atom {})
+   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones) :area-claims {:value []})) :said (atom #{}) :derived (atom {})
     :opts {}}))
 
 (defn set-data!
   "Replace the plans and blueprints of a world made with of-data; its zones stay."
   [w plans blueprints]
-  (swap! (:state w) #(assoc (data-state plans blueprints) :zones (:zones %))))
+  (swap! (:state w) #(assoc (data-state plans blueprints) :zones (:zones %) :area-claims (:area-claims %))))
 
 (defn set-zones!
   "Replace the zones of a world made with of-data (nil: never read)."
   [w zones]
   (swap! (:state w) assoc :zones (zone-entry zones)))
+
+(defn set-area-claims!
+  "Replace the claims of a world made with of-data."
+  [w claims]
+  (swap! (:state w) assoc :area-claims {:value claims}))
 
 (defn plan
   "The answer for plan id (see answer); nil for a nil world."
@@ -275,3 +314,17 @@
           (if (contains? claims except)
             (footprint-index (dissoc claims except))
             (or footprints {}))))))
+
+(defn area-claims
+  "The world's area claims as read from claims.edn ([] when there is no file or no world; the last good copy when it is
+  bad). Not filtered by status or expiry: see live-claims."
+  [w]
+  (if-not w
+    []
+    (do (refresh! w)
+        (or (get-in @(:state w) [:area-claims :value]) []))))
+
+(defn live-claims
+  "The claims that are :active (keyword or text) and whose :until is after now (ms)."
+  [claims now]
+  (filterv #(and (= "active" (some-> (:status %) name)) (> (:until %) now)) claims))

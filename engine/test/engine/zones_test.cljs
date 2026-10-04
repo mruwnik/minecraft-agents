@@ -45,3 +45,18 @@
   (are [zs] (= [] (zones/zone-errors zs))
     [(assoc farm :allow #{:take})]
     [(assoc farm :allow #{:take :put :dig})]))
+
+(def a-claim {:id "c1" :owner "Miles" :status :active :until 5000 :min [0 60 0] :max [9 70 9]})
+
+(deftest parse-claims-reads-good-files-and-names-each-problem
+  (are [text expected] (= expected (zones/parse-claims text))
+    (pr-str [a-claim]) {:value [a-claim]}
+    "[]" {:value []}
+    "{}" {:errors ["the claims file must hold a vector of claims"]}
+    "[3]" {:errors ["claim 0: not a map"]}
+    (pr-str [(dissoc a-claim :owner)]) {:errors ["claim c1: :owner must be a non-empty string"]}
+    (pr-str [(assoc a-claim :status :gone)]) {:errors ["claim c1: :status must be :active or :released"]}
+    (pr-str [(assoc a-claim :x 1)]) {:errors ["claim c1: unknown key :x"]}))
+
+(deftest parse-claims-reports-unreadable-edn
+  (is (re-find #"^unreadable EDN" (first (:errors (zones/parse-claims "[{:id "))))))

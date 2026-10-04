@@ -56,3 +56,29 @@
       {:errors [(:error read)]}
       (let [errors (zone-errors (:value read))]
         (if (seq errors) {:errors errors} {:value (:value read)})))))
+
+(def claim-keys #{:id :owner :min :max :until :status :note})
+
+(defn claim-problems [i {:keys [id owner min max until status] :as claim}]
+  (let [where (str "claim " (if (text? id) id i) ": ")]
+    (map #(str where %)
+         (filterv some?
+                  (concat
+                   [(when-not (text? id) ":id must be a non-empty string")
+                    (when-not (text? owner) ":owner must be a non-empty string")
+                    (when-not (and (coords? min) (coords? max)) ":min and :max must be [x y z] integers")
+                    (when-not (integer? until) ":until must be an integer (ms)")
+                    (when-not (#{"active" "released"} (some-> status name)) ":status must be :active or :released")]
+                   (for [k (keys claim) :when (not (claim-keys k))] (str "unknown key " k)))))))
+
+(defn parse-claims
+  "Text of the claims file -> {:value claims} or {:errors [text ...]}; never throws."
+  [text]
+  (let [read (try {:value (reader/read-string text)} (catch :default e {:error (str "unreadable EDN: " (ex-message e))}))
+        claims (:value read)]
+    (cond
+      (:error read) {:errors [(:error read)]}
+      (not (vector? claims)) {:errors ["the claims file must hold a vector of claims"]}
+      :else (let [errors (vec (mapcat (fn [i c] (if (map? c) (claim-problems i c) [(str "claim " i ": not a map")]))
+                                      (range) claims))]
+              (if (seq errors) {:errors errors} {:value claims})))))

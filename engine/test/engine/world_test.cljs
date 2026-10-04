@@ -241,3 +241,61 @@
     (is (= {[0 64 0] "pad" [1 64 0] "pad"} (world/footprints w "wall")))
     (is (= 3 (count (world/footprints w "other"))))
     (is (= {} (world/footprints nil nil)))))
+
+;; ------------------------------------------------------------------ claims
+
+(def a-claim {:id "c1" :owner "Miles" :status :active :until 5000 :min [0 60 0] :max [9 70 9]})
+
+(defn claim-reader
+  "A world over fresh dirs and a claims file path (not written yet); warns are collected in seen."
+  []
+  (let [dir (tu/tmp-dir)
+        clock (atom 0)
+        seen (atom [])
+        file (path/join dir "claims.edn")
+        w (world/open {:plans-dir (path/join dir "plans") :blueprint-dir (path/join dir "bps")
+                       :claims-file file :now #(deref clock) :every-ms 3000 :emit #(swap! seen conj %)})]
+    {:file file :clock clock :seen seen :w w}))
+
+(defn later-claims! [clock w] (swap! clock + 3000) (world/area-claims w))
+
+(deftest a-missing-claims-file-is-no-claims-without-a-warn
+  (let [{:keys [clock seen w]} (claim-reader)]
+    (is (= [] (world/area-claims w)))
+    (is (= [] (later-claims! clock w)))
+    (is (= [] @seen))))
+
+(deftest a-good-claims-file-is-read-and-a-broken-edit-keeps-the-last-good-copy-with-one-warn
+  (let [{:keys [file clock seen w]} (claim-reader)]
+    (write-zones! file (pr-str [a-claim]))
+    (is (= [a-claim] (world/area-claims w)))
+    (write-zones! file (pr-str [(dissoc a-claim :owner)]))
+    (is (= [a-claim] (later-claims! clock w)))
+    (is (= [a-claim] (later-claims! clock w)))
+    (is (= [:world.claims-unreadable] (map :kind @seen)))
+    (write-zones! file (pr-str [(assoc a-claim :id "c2")]))
+    (is (= "c2" (:id (first (later-claims! clock w)))))
+    (is (= 1 (count @seen)))))
+
+(deftest a-claims-file-moved-away-is-no-claims
+  (let [{:keys [file clock w]} (claim-reader)]
+    (write-zones! file (pr-str [a-claim]))
+    (world/area-claims w)
+    (fs/unlinkSync file)
+    (is (= [] (later-claims! clock w)))))
+
+(deftest a-world-from-data-has-no-claims-unless-given
+  (let [w (world/of-data {} {})]
+    (is (= [] (world/area-claims w)))
+    (world/set-area-claims! w [a-claim])
+    (world/set-data! w {"field" wheat} {})
+    (is (= [a-claim] (world/area-claims w))))
+  (is (= [] (world/area-claims nil))))
+
+(deftest only-active-unexpired-claims-are-live
+  (are [claims now expected] (= expected (map :id (world/live-claims claims now)))
+    [a-claim] 1000 ["c1"]
+    [a-claim] 5000 []
+    [(assoc a-claim :status :released)] 1000 []
+    [(assoc a-claim :status "active")] 1000 ["c1"]
+    [a-claim (assoc a-claim :id "c2" :until 100)] 1000 ["c1"]))

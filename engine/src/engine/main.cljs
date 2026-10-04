@@ -113,6 +113,7 @@
     (assoc (world/open {:plans-dir (path/join dir "plans")
                         :blueprint-dir (path/resolve root ".." "blueprints")
                         :zones-file (path/join dir "zones.edn")
+                        :claims-file (path/join dir "claims.edn")
                         :emit emit})
            :notes (notes/open {:world-dir dir :body agent :emit emit}))))
 
