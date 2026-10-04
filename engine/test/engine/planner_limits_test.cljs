@@ -119,3 +119,26 @@
     gap-up-around [10 65 1]
     swim-around [12 64 1]
     four-wide-around [12 64 1]))
+
+;; thin ground covers are stood in, over a floor; a block directly over the cell leaves no room for the body
+
+(defn covered
+  "near-floor with the block name at (3 64 1), and lid (when not nil) at (3 65 1)."
+  [name lid]
+  (cond-> (assoc near-floor "3,64,1" name)
+    lid (assoc "3,65,1" lid)))
+
+(deftest a-body-stands-in-a-thin-ground-cover
+  (are [cover] (= "found" (:status (plan-over (covered cover nil) [3 64 1] true)))
+    "leaf_litter"
+    "white_carpet"
+    "moss_carpet"
+    "snow"
+    "pink_petals"
+    "wildflowers"
+    "short_grass"))
+
+(deftest a-ground-cover-under-a-leaf-block-is-no-place-to-stand
+  (are [lid] (= "none" (:status (plan-over (covered "leaf_litter" lid) [3 64 1] true)))
+    "oak_leaves"
+    "stone"))
