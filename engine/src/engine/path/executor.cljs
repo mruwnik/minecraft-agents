@@ -29,6 +29,8 @@
    :gap-jump {1 {:from 0.2 :sprint false}  ; by gap width: jump once the feet are within :from of the takeoff
               2 {:from 0.4 :sprint true}   ; edge; sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
+   :gap-jump-down {2 {:from 0.0 :sprint false}}  ; one block down, by width, where it differs (live: a sprint
+                                                  ; jump over 2 overshot a 1x1 landing 3 of 5 times)
    :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :sprint true})
@@ -245,10 +247,13 @@
                     (or on-ground on-climbable))))))
 
 (defn gap-rule
-  "The :gap-jump entry for the gap step i of steps."
+  "The :gap-jump entry for the gap step i of steps; for a gap down, its :gap-jump-down entry when there is one."
   [policy steps i]
-  (let [[n] (gap-cells (nth steps (dec i)) (nth steps i))]
-    (get (:gap-jump policy) n)))
+  (let [prev (nth steps (dec i))
+        step (nth steps i)
+        [n] (gap-cells prev step)]
+    (or (when (< (stand-y step) (stand-y prev)) (get (:gap-jump-down policy) n))
+        (get (:gap-jump policy) n))))
 
 (defn gap-jump?
   "On the takeoff cell, close enough to its edge: jump. Otherwise the plain rule (a body that fell into a

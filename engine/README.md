@@ -1497,12 +1497,13 @@ p50 1.09 ms, p99 89 ms (as `plan`); k=3 p50 7.0 ms, p99 335 ms, with 2 or 3 path
 the `steer` primitive, deciding every physics tick in `engine.path.executor` (pure). It walks `:start :walk :diagonal :corner :jump :drop
 :climb-up :climb-down :jump-climb :gap` steps; a plan with any other step (door, swimming) is refused with `{:status :refused :kind :at :reason}`
 before the body moves. A gap jump (1 to 3 empty cells, landing level or up to one block lower) is jumped from the takeoff edge, by width: over 1 a
-walking jump from 0.2 before the edge, over 2 a sprint jump from 0.4 before, over 3 a sprint jump from 0.1 before; the body aims at the landing point
+walking jump from 0.2 before the edge, over 2 a sprint jump from 0.4 before (one block down: a walking jump from the edge), over 3 a sprint
+jump from 0.1 before; the body aims at the landing point
 in the air too, which brakes an overshoot, and the landing counts only on the ground. No run-up is needed. Refused: `:gap-up` (landing higher; not
 measured), `:gap-low-ceiling` (a block within 3 of the takeoff's feet over the takeoff or gap cells: the planner allows feet+2, where the head hits at
 once), `:gap-takeoff` (from a ladder), `:gap-width`. These numbers come from prismarine-physics (the body's own physics) driven by this executor,
-not yet from a live body: 58 of 60 simulated courses landed; the 2 misses are a 2-wide gap down onto a 1x1 landing after a run-up, which
-overshoots (off the plan, re-planned). Result statuses: `:arrived`, `:refused`, `:no-path` (`:reason`), `:stuck` (`:why`, also a walk past `:timeout-s`), `:gave-up`
+then measured on a live body (Paper 26.1): the server accepted every jump (no pull-back), landings matched the simulation, and the sprint jump
+over 2 one block down overshot a 1x1 landing 3 of 5 times (fell, re-planned), hence the walking jump there. Result statuses: `:arrived`, `:refused`, `:no-path` (`:reason`), `:stuck` (`:why`, also a walk past `:timeout-s`), `:gave-up`
 (`:reason :replan-limit`), `:failed`, `:unsupported` (no `pathWorld`); all carry `:replans`. A body that ends off the plan (also a partial plan walked to
 its end short of the goal) is planned again, at most 5 times (`executor/policy`: every number the executor uses). `moveTo` and `jobs.movement.go-to`
 do not use it. Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.

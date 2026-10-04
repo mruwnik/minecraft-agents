@@ -403,6 +403,20 @@
     1 11.4 false
     3 11.4 false))
 
+(deftest gap-jump-down-two-walks-from-the-edge
+  (are [x expected] (= expected (gap-jump-of (gap-steps 2 :landing-y 63) (pose x 64 0.5)))
+    10.65 false
+    10.95 false
+    11.05 true
+    11.25 true
+    11.35 false))
+
+(deftest gap-jump-down-other-widths-as-level
+  (are [n x expected] (= expected (gap-jump-of (gap-steps n :landing-y 63) (pose x 64 0.5)))
+    1 10.85 true
+    3 10.85 false
+    3 10.95 true))
+
 (deftest gap-jump-needs-the-ground
   (is (false? (gap-jump-of (gap-steps 1) (pose 10.9 64 0.5 {:on-ground false})))))
 
@@ -422,6 +436,10 @@
     3 (pose 10.5 64 0.5) true
     3 (pose 11.5 64.4 0.5 {:on-ground false}) true
     1 (pose 11.5 64.4 0.5 {:on-ground false}) false)
+  (are [n expected] (= expected (:sprint (controls-of (ex/tick p (state-at (gap-steps n :landing-y 63) 2) (pose 10.5 64 0.5)))))
+    1 false
+    2 false
+    3 true)
   (is (false? (:sprint (controls-of (ex/tick (assoc p :sprint false) (state-at (gap-steps 3) 2) (pose 10.5 64 0.5)))))))
 
 (deftest gap-reached-only-on-the-ground
