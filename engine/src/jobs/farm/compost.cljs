@@ -1,19 +1,27 @@
 (ns jobs.farm.compost
   (:require [engine.ctx :as ctx]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
   "Feed a composter what a farm cannot use and take the bone meal it makes. Walks
   to the composter, feeds it until it fills, empties it and collects the bone meal,
   until :times are taken, nothing is left to feed or it keeps failing. Ends with a
-  result {:fed {name n} :bone-meal n}, plus a :reason when it stopped early.")
+  result {:fed {name n} :bone-meal n}, plus a :reason when it stopped early.
+
+  Zones and claims are a rule the job consults: a composter in a zone or claim of another owner, or in a plan's
+  footprint, is not one to use (the bone meal is the owner's to give, a :harvest of the zone rules), asked when it is
+  chosen and again right before each use of it; with none left the job ends as it does with no composter. One
+  compost.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone list it
+  declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
 
 (def args
   {:at {:doc "the composter position; the nearest composter within :radius when nil" :default nil}
    :radius {:doc "how far to look for a composter, when :at is nil" :default 16}
    :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :default nil}
    :keep {:doc "{item count} reserves never fed" :default {}}
-   :times {:doc "bone meal to take before done" :default 1}})
+   :times {:doc "bone meal to take before done" :default 1}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def compostable
   "Everything a composter accepts, any chance."
@@ -54,10 +62,18 @@
 (defn level-of [b]
   (or (some-> b .-properties .-level) 0))
 
-(defn nearest-composter [c]
+(defn composter-allowed?
+  "Whether the job may use the composter at pos (zones, claims, footprints; one warn when refused)."
+  [c pos]
+  (gate/allowed? c :compost.declined "compost" :harvest pos))
+
+(defn nearest-composter
+  "The nearest composter within :radius that the zone rules let the job use."
+  [c]
   (let [me (u/self-pos c)]
     (->> (array-seq (.blocks (:primitives c) #js {:radius (:radius (:args c)) :names #js ["composter"]}))
          (map #(u/pos-of (.-pos %)))
+         (gate/allowed c :compost.declined "compost" :harvest)
          (sort-by #(u/dist me %))
          first)))
 
@@ -94,7 +110,7 @@
   (let [p (:primitives c)
         {:keys [times items at] reserve :keep} (:args c)
         mem (ctx/mem c)
-        pos (or (:composter mem) at (nearest-composter c))
+        pos (or (:composter mem) (when at (when (composter-allowed? c at) at)) (when-not at (nearest-composter c)))
         block (when pos (.blockAt p (clj->js pos)))]
     (if-not (and pos block (= "composter" (.-name block)))
       (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
@@ -121,6 +137,10 @@
                 :partial :continue
                 :blocked (strike! c level)
                 (cond
+                  (not (composter-allowed? c pos))
+                  (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
+                      (finish! c {:reason :no-composter}))
+
                   (= 8 level)
                   (let [r (await (ctx/act c :useOn #js {:pos (clj->js pos) :face "up"}))]
                     (if (= "used" (.-status r))

@@ -8,13 +8,15 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.farm.till :as till]))
 
-(defn setup [world]
+(defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -217,7 +219,7 @@
   (let [p (tu/fake world)
         orig (.bind (.-blockAt p) p)]
     (set! (.-blockAt p) (fn [pos] (swap! reads update (js/JSON.stringify pos) (fnil inc 0)) (orig pos)))
-    {:primitives p :args args :view (constantly {}) :root "till-check" :slots []}))
+    {:primitives p :args args :view (constantly {}) :root "till-check" :slots [] :engine {:world (ew/of-data {} {} [])}}))
 
 (def sixteen {:from {:x 0 :y 63 :z 0} :to {:x 15 :y 63 :z 15}})
 (def sixteen-cells (till/cells sixteen))
@@ -236,3 +238,28 @@
     (is (true? (till/check c)) "nothing pending passes without a hoe")
     (is (<= (reduce + (vals @reads)) 256))
     (is (every? #(= 1 %) (vals @reads)))))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(def zone-over-one {:name "farm" :min [1 60 1] :max [1 70 1]})
+
+(deftest a-cell-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra tilled] [["Fake" {} 4] ["FAKE" {} 4] ["Miles" {} 3] ["Miles" {:ignore-zones? true} 4]]]
+          (let [{:keys [eng seen]} (setup {:inventory hoe :blocks four} (ew/of-data {} {} [(assoc zone-over-one :owner owner)]))
+                result (await (child-outcome eng job (merge box extra) 20))]
+            (is (= tilled (:tilled result)) (pr-str [owner extra]))
+            (is (= (if (= 3 tilled) [{:reason :refused :zones ["farm"]}] [])
+                   (mapv #(select-keys % [:reason :zones]) (kinds seen :till.declined))) (pr-str [owner extra]))))))))
+
+(deftest no-zone-list-declines-the-till
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory hoe :blocks four} (ew/of-data {} {} nil))]
+          (core/submit! eng (list job box) {})
+          (await (run-until-empty eng 10))
+          (is (empty? (calls p "useOn")))
+          (is (= [:no-zones] (mapv :reason (kinds seen :till.declined)))))))))

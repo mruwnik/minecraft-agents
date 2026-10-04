@@ -1,17 +1,25 @@
 (ns jobs.farm.fertilize
   (:require [engine.ctx :as ctx]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
   "Use bone meal on crops that are not ripe: the crop at :at, or the unripe crops
   within :radius of the body, nearest first, at most :max uses. A crop that refuses
-  bone meal or cannot be reached is left alone. Ends with a result {:used n}.")
+  bone meal or cannot be reached is left alone. Ends with a result {:used n}.
+
+  Zones and claims are a rule the job consults: a crop in a zone or claim of another owner, or in a plan's footprint,
+  is no target (the bone meal is the owner's to give, a :harvest of the zone rules), asked when chosen and again
+  right before the use. One fertilize.declined warn per job names the zones, claims and plans ({:reason :refused
+  ...}); without a zone list it declines with {:reason :no-zones}. A job whose every crop is refused ends like one
+  with none. :ignore-zones? acts regardless.")
 
 (def args
   {:at {:doc "one crop position to fertilize; the crops around the body when nil" :default nil}
    :radius {:doc "crops within this many blocks of the body count, when :at is nil" :default 8}
    :center {:doc "centre of the radius search; the body's position when nil" :default nil}
-   :max {:doc "bone meal uses, at most" :default 16}})
+   :max {:doc "bone meal uses, at most" :default 16}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
 
@@ -43,8 +51,8 @@
                      (filter unripe?)
                      (map #(u/pos-of (.-pos %)))
                      (filter #(<= (u/dist mid %) radius))))]
-    (->> found
-         (remove refused)
+    (->> (remove refused found)
+         (gate/allowed c :fertilize.declined "fertilize" :harvest)
          (sort-by #(u/dist me %)))))
 
 (defn has-meal? [p]
@@ -75,8 +83,10 @@
         (case w
           :partial :continue
           :blocked (do (refuse!) :continue)
-          (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
-            (if (= "used" (.-status r))
-              (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
-              (refuse!))
-            :continue))))))
+          (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target)
+            (do (refuse!) :continue)
+            (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
+              (if (= "used" (.-status r))
+                (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
+                (refuse!))
+              :continue)))))))

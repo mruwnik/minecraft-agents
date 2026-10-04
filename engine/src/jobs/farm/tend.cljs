@@ -73,7 +73,8 @@
    :fertilize {:doc "use bone meal on unripe crops" :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :default nil}
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :default nil}
-   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :default {}}})
+   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :default false}})
 
 (def steps [:harvest :till :plant :fertilize :compost :deposit])
 
@@ -508,6 +509,13 @@
         (dissoc :call-args)
         (assoc-in [:report step] (if (= :done outcome) (summary step r) {:skipped :declined})))))
 
+(defn with-zone-opt-out
+  "The args of the child of step, with :ignore-zones? true when the tend job has it (the children that change blocks)."
+  [c step child-args]
+  (if (and (:ignore-zones? (:args c)) (not= :deposit step))
+    (assoc child-args :ignore-zones? true)
+    child-args))
+
 (defn ^:async work [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {} :till-tried #{} :tilled 0))
@@ -517,7 +525,7 @@
       (finish! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            outcome (await (ctx/call-child c step (:job call) (:args call)))]
+            outcome (await (ctx/call-child c step (:job call) (with-zone-opt-out c step (:args call))))]
         (when (#{:done :declined} outcome)
           (ctx/update-mem! c after-child step (:args call) outcome (when (= :done outcome) (ctx/child-result c step))))
         :continue))))

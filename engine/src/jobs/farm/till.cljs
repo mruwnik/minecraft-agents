@@ -1,6 +1,7 @@
 (ns jobs.farm.till
-  (:require [engine.access.permit :as permit]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -18,7 +19,8 @@
    :to {:doc "opposite box corner (inclusive)" :default nil}
    :center {:doc "centre of a square of cells at its y; with :radius" :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its cells are checked against zones and the other active plans' footprints; nil: no check" :default nil}})
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-cells 256)
 (def tillable #{"dirt" "grass_block" "dirt_path"})
@@ -63,14 +65,13 @@
          vec)))
 
 (defn permitted?
-  "Whether action at pos passes the access rules for the plan the job works; always without :for-plan."
+  "Whether action at pos passes the zone rules, for the plan the job works when it has :for-plan."
   [c action pos]
-  (let [plan (:for-plan (:args c))]
-    (or (nil? plan) (nil? (permit/refusal c plan action pos)))))
+  (gate/allowed? c :till.declined "till" action pos {:except (:for-plan (:args c))}))
 
 (defn check
-  "True when nothing is pending (the round can finish), false without a hoe, and with :for-plan false while no zone
-  list has been read. Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
+  "True when nothing is pending (the round can finish), false without a hoe, and false while no zone list has been
+  read (unless :ignore-zones?). Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
   that needs work, reading each cell at most once."
   [c]
   (let [skipped (:skipped (ctx/mem c) {})
@@ -78,7 +79,8 @@
         todo? (try (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %))))
                          (cells (:args c)))
                    (catch :default _ nil))]
-    (and (or (nil? (:for-plan (:args c))) (some? (ctx/zones c)))
+    (and (or (:ignore-zones? (:args c)) (some? (ctx/zones c))
+             (access/decline! c :till.declined "till" {:reason :no-zones}))
          (or (nil? todo?) (some? (hoe-of p))))))
 
 (defn skip!

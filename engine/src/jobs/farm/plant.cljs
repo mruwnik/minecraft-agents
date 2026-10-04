@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.access.permit :as permit]
             [engine.ctx :as ctx]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]
             [jobs.farm.harvest :as harvest]))
 
@@ -22,14 +23,21 @@
   The result is {:planted :skipped :refused :short [seed names carried none of] :reason r}, :reason :no-seed when
   nothing else was left to sow and some seed was short. The check declines, with one plant.declined warn naming the
   plan and the reason, while the plan is missing, unreadable, holds no crop cells (in :part) or no zone
-  list has been read.")
+  list has been read.
+
+  In box mode zones and claims are a rule the job consults: a cell whose sowing is in a zone or claim of another owner
+  (or in the footprint of a plan) is not a candidate, left bare, and does not count as work (all refused ends the
+  job with reason :none, as no bare cell does); the cell is asked when chosen and again right before the place. One
+  plant.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone list it
+  declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :default nil}
    :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default 4.2}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :default nil}
-   :part {:doc "with :plan, only the cells of this part" :default nil}})
+   :part {:doc "with :plan, only the cells of this part" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-fails 3)
 
@@ -83,10 +91,24 @@
   (boolean (and (not (:trouble field))
                 (or (:started (ctx/mem c)) (seq (:ready (sowing c (:cells field))))))))
 
+(defn sowable-cells
+  "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
+  [c cells]
+  (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells)))]
+    (filterv #(ok (update % :y inc)) cells)))
+
+(defn box-check
+  "owes?, and unless the run has started a bare cell that zones and claims let the job sow."
+  [c]
+  (let [{:keys [box] :as a} (:args c)
+        m (ctx/mem c)]
+    (and (owes? (:primitives c) a m)
+         (boolean (or (:started m) (seq (sowable-cells c (bare-cells (:primitives c) box (:skipped m)))))))))
+
 (defn check [c]
   (if (:plan (:args c))
     (plan-check c (planned c))
-    (owes? (:primitives c) (:args c) (ctx/mem c))))
+    (box-check c)))
 
 ;; ------------------------------------------------------------------ plan mode
 
@@ -191,11 +213,12 @@
 (defn ^:async plant-one!
   "Place seed on cell and settle by the status: :no-seed when the seed is gone, else nil."
   [c cell seed]
-  (let [r (await (ctx/act c :place (clj->js {:pos (update cell :y inc) :item seed})))]
-    (case (.-status r)
-      ("placed" "occupied") (do (ctx/update-mem! c harvest/inc-in :planted) nil)
-      "no-item" :no-seed
-      (do (ctx/update-mem! c count-fail :fails cell) nil))))
+  (when (seq (sowable-cells c [cell]))
+    (let [r (await (ctx/act c :place (clj->js {:pos (update cell :y inc) :item seed})))]
+      (case (.-status r)
+        ("placed" "occupied") (do (ctx/update-mem! c harvest/inc-in :planted) nil)
+        "no-item" :no-seed
+        (do (ctx/update-mem! c count-fail :fails cell) nil)))))
 
 (defn ^:async plant-all!
   "Plant each cell in turn; :no-seed when the seeds ran out, else nil."
@@ -210,7 +233,7 @@
     (ctx/update-mem! c assoc :started true))
   (let [p (:primitives c)
         m (ctx/mem c)
-        cells (vec (bare-cells p (:box (:args c)) (:skipped m)))
+        cells (sowable-cells c (bare-cells p (:box (:args c)) (:skipped m)))
         seed (pick-seed (:seed (:args c)) (u/inventory p))]
     (cond
       (empty? cells) (finish! c (cond (seq (:skipped m)) :gave-up (pos? (:planted m 0)) :done :else :none))

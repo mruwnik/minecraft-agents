@@ -7,13 +7,15 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.farm.compost :as compost]))
 
-(defn setup [world]
+(defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -148,3 +150,32 @@
             (is (= :gave-up (:reason result)))
             (is (= 3 (count (calls p "useOn"))))
             (is (= 1 (count (kinds seen :compost.gave-up))))))))))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(def zone-over-composter {:name "farm" :min [2 60 0] :max [2 70 0]})
+
+(deftest a-composter-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner at-arg extra meal reason] [["Fake" {:at at} {} 1 nil] ["FAKE" {} {} 1 nil]
+                                                  ["Miles" {:at at} {} 0 :no-composter] ["Miles" {} {} 0 :no-composter]
+                                                  ["Miles" {:at at} {:ignore-zones? true} 1 nil]]]
+          (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block}
+                                            (ew/of-data {} {} [(assoc zone-over-composter :owner owner)]))
+                result (await (child-outcome eng job (merge {:items ["wheat_seeds"]} at-arg extra) 40))]
+            (is (= meal (:bone-meal result)) (pr-str [owner at-arg extra]))
+            (is (= reason (:reason result)) (pr-str [owner at-arg extra]))
+            (is (= (if reason [{:reason :refused :zones ["farm"]}] [])
+                   (mapv #(select-keys % [:reason :zones]) (kinds seen :compost.declined))) (pr-str [owner at-arg extra]))
+            (is (= (if reason 10 3) (carried p "wheat_seeds")) (pr-str [owner at-arg extra]))))))))
+
+(deftest no-zone-list-declines-the-composting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block} (ew/of-data {} {} nil))
+              result (await (child-outcome eng job {:at at :items ["wheat_seeds"]} 40))]
+          (is (= :no-composter (:reason result)))
+          (is (= [:no-zones] (mapv :reason (kinds seen :compost.declined)))))))))

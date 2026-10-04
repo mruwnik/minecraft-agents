@@ -6,13 +6,15 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [engine.world :as ew]))
 
-(defn setup [world]
+(defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -120,3 +122,31 @@
           (await (child-outcome eng job {:center {:x 30 :y 64 :z 2} :radius 4} 20))
           (is (= 7 (age p "30,64,0")) "near the centre, far from the body")
           (is (= 5 (age p "2,64,0")) "near the body, outside the centre's radius"))))))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(def zone-over-one {:name "farm" :min [2 60 0] :max [2 70 0]})
+
+(deftest a-crop-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra used declined] [["Fake" {} 4 []] ["FAKE" {} 4 []] ["Miles" {} 2 [{:reason :refused :zones ["farm"]}]]
+                                         ["Miles" {:ignore-zones? true} 4 []]]]
+          (let [{:keys [eng seen]} (setup two-wheat (ew/of-data {} {} [(assoc zone-over-one :owner owner)]))
+                r (await (child-outcome eng job extra 30))]
+            (is (= used (:used r)) (pr-str [owner extra]))
+            (is (= declined
+                   (mapv #(select-keys % [:reason :zones]) (kinds seen :fertilize.declined))) (pr-str [owner extra]))))))))
+
+(deftest no-zone-list-declines-the-fertilizing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup two-wheat (ew/of-data {} {} nil))
+              r (await (child-outcome eng job {} 10))]
+          (is (= {:used 0} r))
+          (is (empty? (calls p "useOn")))
+          (is (= [:no-zones] (mapv :reason (kinds seen :fertilize.declined)))))))))

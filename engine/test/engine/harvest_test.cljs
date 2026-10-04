@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.farm.harvest :as harvest]))
 
 (def clock
@@ -16,10 +17,11 @@
 
 (defn start
   "An engine over primitives p (made from world when not given) on dir."
-  [{:keys [world p dir]}]
+  [{:keys [world p dir shared]}]
   (let [[seen sink] (tu/legacy-capture-sink)
         p (or p (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
+                          :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -356,3 +358,35 @@
           (let [result (await (child-outcome eng job {} 100))]
             (is (= 3 (count (filterv #(zero? (.-x (.-pos (.-args %)))) (calls p "moveTo")))))
             (is (= {:cut 1 :replanted 0 :bare [cell] :lost [] :gave-up false} result))))))))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(def zoned-world
+  {:blocks (field "wheat" 7 [2] [2])
+   :ages (ages 7 [2] [2])
+   :inventory [{:name "wheat_seeds" :count 4}]
+   :drops wheat-drops})
+
+(defn zone-over-crop [owner] {:name "farm" :min [2 60 2] :max [2 70 2] :owner owner})
+
+(deftest a-crop-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra cut] [["Fake" {} 1] ["FAKE" {} 1] ["Miles" {} 0] ["Miles" {:ignore-zones? true} 1]]]
+          (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} [(zone-over-crop owner)])})]
+            (core/submit! eng (list job (merge {:radius 6} extra)) {})
+            (await (run-until-empty eng 60))
+            (is (= cut (count (calls p "dig"))) (pr-str [owner extra]))
+            (is (= (if (zero? cut) [["farm"]] [])
+                   (mapv :zones (events-of seen :harvest.declined))) (pr-str [owner extra]))))))))
+
+(deftest no-zone-list-declines-the-harvest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} nil)})]
+          (core/submit! eng (list job {:radius 6}) {})
+          (await (run-until-empty eng 60))
+          (is (zero? (count (calls p "dig"))))
+          (is (= [:no-zones] (mapv :reason (events-of seen :harvest.declined)))))))))

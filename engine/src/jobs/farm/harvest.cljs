@@ -1,6 +1,7 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -20,7 +21,13 @@
   the plan wants there, crops outside the plan are left standing, and every planned cell standing bare
   (air over farmland) owes the planned crop's seed (the plan is the debt; memory only keeps the counts of
   refused places). The check declines, with one harvest.declined warn naming the plan and the reason, while
-  the plan is missing, unreadable or holds no crop cells; :assign in the plan is not read.")
+  the plan is missing, unreadable or holds no crop cells; :assign in the plan is not read.
+
+  Zones and claims are a rule the job consults: a crop (and a bare cell to replant) in a zone or claim of another
+  owner, or in another plan's footprint, is not a candidate, left standing. One harvest.declined warn per job names
+  the zones, claims and plans ({:reason :refused :zones :claims :plans}); without a zone list (zones.edn missing or
+  never valid) it declines with {:reason :no-zones}. A job whose every crop is refused ends like one with none to
+  cut. :ignore-zones? acts regardless.")
 
 (def args
   {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}
@@ -30,7 +37,8 @@
    :give-up {:doc "unreachable crops after which cutting stops" :default 4}
    :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :default 4.2}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :default nil}
-   :part {:doc "with :plan, only the cells of this part" :default nil}})
+   :part {:doc "with :plan, only the cells of this part" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
 
@@ -220,12 +228,25 @@
   (let [here (u/pos-of (.-pos (.self p)))]
     (first (sort-by #(u/dist here %) cells))))
 
+(defn permitted
+  "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see engine.jobs.gate)."
+  [c action poss]
+  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c))}))
+
+(defn cut-action
+  "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)
+  ask for a cut."
+  [c]
+  (if (:plan (:args c)) :dig :harvest))
+
 (defn ripe-of
-  "The ripe crops to cut: the planned ones with :plan, else those within :radius of the centre."
+  "The ripe crops to cut: the planned ones with :plan, else those within :radius of the centre; none that zones,
+  claims or other plans' footprints refuse."
   [c skipped]
-  (if-let [cells (:plan-cells c)]
-    (planned-ripe (:primitives c) (:args c) cells skipped)
-    (ripe-crops (:primitives c) (:args c) (center-of c) skipped)))
+  (permitted c (cut-action c)
+             (if-let [cells (:plan-cells c)]
+               (planned-ripe (:primitives c) (:args c) cells skipped)
+               (ripe-crops (:primitives c) (:args c) (center-of c) skipped))))
 
 (defn planned
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan
@@ -253,13 +274,21 @@
           (update :args assoc :center center :radius radius)))
     c))
 
+(defn permitted-debts
+  "The debts whose cell the job may sow."
+  [c debts]
+  (let [ok (set (permitted c :sow (map :pos debts)))]
+    (filterv #(ok (:pos %)) debts)))
+
 (defn sowable
   "The planned bare cells whose seed is carried, unless replanting is off or the cell was given up."
   [c]
   (when (:replant (:args c))
     (let [have (carried-names (:primitives c))
           given-up (set (:bare (ctx/mem c)))]
-      (filter #(and (have (:seed %)) (not (given-up (:pos %)))) (planned-bare (:primitives c) (:plan-cells c))))))
+      (->> (planned-bare (:primitives c) (:plan-cells c))
+           (filter #(and (have (:seed %)) (not (given-up (:pos %)))))
+           (permitted-debts c)))))
 
 (defn gave-up? [c]
   (>= (:unreachable (ctx/mem c) 0) (:give-up (:args c))))
@@ -295,13 +324,15 @@
 (defn ^:async plant-one!
   "Place the seed of debt at its cell and settle the debt by the status."
   [c {:keys [pos seed]}]
-  (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
-    (case (.-status r)
-      ("placed" "occupied") (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
-                                                            (inc-in :replanted)
-                                                            (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
-      ("no-item" "unreachable") nil
-      (ctx/update-mem! c fail-debt pos))))
+  (if-not (seq (permitted c :sow [pos]))
+    (ctx/update-mem! c bare-debt pos)
+    (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
+      (case (.-status r)
+        ("placed" "occupied") (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
+                                                              (inc-in :replanted)
+                                                              (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
+        ("no-item" "unreachable") nil
+        (ctx/update-mem! c fail-debt pos)))))
 
 (defn ^:async replant!
   "Step 1: :continue when a seed was planted or a walk made, else nil."
@@ -309,7 +340,7 @@
   (let [p (:primitives c)
         owed (drop-settled! c)
         have (carried-names p)
-        plantable (filterv #(have (:seed %)) owed)]
+        plantable (permitted-debts c (filterv #(have (:seed %)) owed))]
     (when (seq plantable)
       (let [here (u/self-pos c)
             reach (:reach (:args c))
@@ -330,14 +361,15 @@
 (defn ^:async cut-cell!
   "Write the debt of the crop at pos, dig it, and settle by the status."
   [c pos]
-  (let [seed (get seed-of (u/block-name (:primitives c) pos))]
-    (when (and (:replant (:args c)) seed)
-      (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
-    (let [r (await (ctx/act c :dig (clj->js {:pos pos})))]
-      (case (.-status r)
-        "dug" (ctx/update-mem! c inc-in :cut)
-        "missing" nil
-        (ctx/update-mem! c skip-crop pos)))))
+  (when (seq (permitted c (cut-action c) [pos]))
+    (let [seed (get seed-of (u/block-name (:primitives c) pos))]
+      (when (and (:replant (:args c)) seed)
+        (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
+      (let [r (await (ctx/act c :dig (clj->js {:pos pos})))]
+        (case (.-status r)
+          "dug" (ctx/update-mem! c inc-in :cut)
+          "missing" nil
+          (ctx/update-mem! c skip-crop pos))))))
 
 (defn warn-gave-up! [c]
   (let [m (ctx/mem c)]
