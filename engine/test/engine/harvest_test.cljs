@@ -168,7 +168,7 @@
           (is (= 0 (:replanted result)))
           (is (= #{{:x 1 :y 64 :z 2} {:x 2 :y 64 :z 2} {:x 1 :y 64 :z 3} {:x 2 :y 64 :z 3}} (set (:bare result))))
           (is (= (set (:bare result)) (set (map #(into {} %) (:cells warn)))))
-          (is (= :warn (:level warn)))
+          (is (= 1 (count (events-of seen :harvest.bare))) "one event, the event stream carries no severity")
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest unreachable-crops-are-given-up-on
@@ -184,7 +184,6 @@
           (is (zero? (count (calls p "dig"))))
           (is (= 1 (count (events-of seen :harvest.gave-up))))
           (is (= 4 (:unreachable warn)))
-          (is (= :warn (:level warn)))
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} result)))))))
 
 (deftest farmland-gone-before-replanting-leaves-the-cell-bare
