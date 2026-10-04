@@ -1,9 +1,12 @@
 (ns jobs.movement.go-to
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.places :as places]))
 
 (def doc
-  "Walk to :pos. A walk that ends more than 1 closer than any before (:best)
+  "Walk to :pos, [x y z] or {:x :y :z} (read by places/parse-pos, so fractional values are floored to the cell). A
+  :pos that is not one is refused in the first round, before any walk: a :refused warn event with :reason
+  :bad-pos and :text, and the result {:arrived false :reason :bad-pos}. A walk that ends more than 1 closer than any before (:best)
   is progress and resets the count; any other walk that does not arrive
   (partial without a new best, blocked) counts, and three in a row give up
   with an unreachable warn (last status and reason). A far hop that fell back
@@ -37,9 +40,12 @@
   (when (= "xz" (.-hop r))
     (ctx/emit! c :hop-fallback :info {:target pos :text "far hop: no surface reachable from underground, walking to the XZ point"})))
 
-(defn ^:async round [c]
-  (let [{:keys [pos range]} (:args c)
-        d (u/dist (u/self-pos c) pos)]
+(defn refuse! [c {:keys [reason message]}]
+  (ctx/emit! c :refused :warn {:reason reason :text message})
+  (finish! c {:arrived false :reason reason}))
+
+(defn ^:async walk! [c pos range]
+  (let [d (u/dist (u/self-pos c) pos)]
     (if (<= d range)
       (arrived! c)
       (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))
@@ -53,3 +59,9 @@
             (if (< tries max-blocked)
               :continue
               (give-up! c pos tries r))))))))
+
+(defn ^:async round [c]
+  (let [parsed (places/parse-pos (:pos (:args c)))]
+    (if (:reason parsed)
+      (refuse! c parsed)
+      (await (walk! c (:pos parsed) (:range (:args c)))))))

@@ -252,6 +252,30 @@
                (await (child-outcome (:eng (setup {:unreachable ["9,64,9"]}))
                                      'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
 
+(defn ^:async go-to-with
+  "Run go-to with args; {:outcome :refusals :walks}."
+  [args]
+  (let [{:keys [eng p seen]} (setup {})
+        outcome (await (child-outcome eng 'jobs.movement.go-to args 3))]
+    {:outcome outcome
+     :refusals (->> @seen (filter #(= :refused (:kind %))) (mapv #(select-keys % [:reason])))
+     :walks (count (calls p "moveTo"))}))
+
+(deftest go-to-refuses-a-bad-pos-as-data-without-walking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused {:outcome {:arrived false :reason :bad-pos}
+                       :refusals [{:reason :bad-pos}]
+                       :walks 0}]
+          (is (= refused (await (go-to-with {:pos "9 64 9"}))) "a string")
+          (is (= refused (await (go-to-with {:pos [9 64]}))) "two numbers")
+          (is (= refused (await (go-to-with {:pos {:x "9" :y 64 :z 9}}))) "a non-number")
+          (is (= refused (await (go-to-with {}))) "no pos at all")
+          (is (= {:outcome {:arrived true} :refusals [] :walks 1}
+                 (await (go-to-with {:pos [5 64 0]})))
+              "the vector form of a position walks"))))))
+
 (deftest go-to-treats-a-nopath-block-as-unreachable
   (async done
     (tu/run-async done
