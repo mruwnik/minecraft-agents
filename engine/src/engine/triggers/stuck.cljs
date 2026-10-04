@@ -1,13 +1,13 @@
 (ns engine.triggers.stuck
   "The stuck trigger and the condition the unstick job shares with it. Both
-  read only the :moved entries: engine.core/act writes one after every moveTo, jobs.movement.go-to one after every walk."
+  read only the :moved entries: engine.core/act writes one after every moveTo, engine.path.near one after every walk (go-to and walk-near!)."
   (:require [engine.memory :as mem]))
 
 (def defaults
   {:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000})
 
 (def moved-policy
-  "Policy of the :moved entries, written by engine.core/act after each moveTo and by jobs.movement.go-to after each walk."
+  "Policy of the :moved entries, written by engine.core/act after each moveTo and by engine.path.near after each walk (go-to, walk-near!)."
   {:cap 20 :ttl (* 10 60 1000)})
 
 (def ok-statuses #{"arrived" "partial"})

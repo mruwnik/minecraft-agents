@@ -1,12 +1,9 @@
 (ns jobs.movement.go-to
-  (:require [engine.access.click :as click]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
-            [engine.path.executor :as executor]
-            [engine.path.pass :as pass]
+            [engine.path.near :as near]
             [engine.path.walk :as walk]
-            [engine.places :as places]
-            [engine.triggers.stuck :as stuck]))
+            [engine.places :as places]))
 
 (def doc
   "Walk to :pos, [x y z] or {:x :y :z} (read by places/parse-pos, so fractional values are floored to the cell), until
@@ -48,8 +45,6 @@
            :default :shut}})
 
 (def max-blocked 3)
-
-(def walk-timeout-s 60)
 
 (defn check [_c] true)
 
@@ -97,47 +92,6 @@
   (ctx/emit! c :refused :warn {:reason reason :text message})
   (finish! c {:arrived false :reason reason}))
 
-(defn iron-cells
-  "The cells {:x :y :z} among the blocks the steps open that a hand cannot open: iron doors and iron trapdoors."
-  [c steps]
-  (vec (distinct (for [s steps o (:opens s)
-                       :let [cell (select-keys o [:x :y :z])]
-                       :when (= :iron (click/kind-of (some-> (pass/block-at c cell) .-name)))]
-                   cell))))
-
-(defn door-stuck [cells] {:status :no-path :reason :door-stuck :cells cells})
-
-(defn ^:async walk-once!
-  "Plan from where the body stands and follow the plan once: the walk's result map (engine.path.walk), or the no-path
-  result of a plan that is not walked. With doors other than :never, a plan may open blocks (iron ones are walls); one that
-  will not open is a wall for one more plan, then the result is :no-path :door-stuck."
-  [c pw to range doors]
-  (await (walk/settle! c))
-  (let [policy (if (= :never doors) executor/policy executor/door-policy)]
-    (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
-    (loop [walls [] stuck nil]
-      (let [plan (walk/plan-walk c pw to range walk/default-weight {:policy policy :walls walls})
-            iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
-        (if (seq iron)
-          (recur (into walls iron) stuck)
-          (if-let [no (walk/no-walk plan 0 policy)]
-            (if stuck (door-stuck stuck) no)
-            (let [[done _] (await (if (= :never doors)
-                                    (walk/walk! c (:steps plan) walk-timeout-s)
-                                    (pass/walk! c (:steps plan) {:timeout-s walk-timeout-s :doors doors})))]
-              (cond
-                (not= :door-stuck (:status done)) (walk/partial-end done (:status plan) to range (:steps plan) (:stop plan))
-                stuck (door-stuck (:cells done))
-                :else (recur (into walls (:cells done)) (:cells done))))))))))
-
-(defn move-status
-  "The :moved entry's status of a walk that began d from the target and ended left from it."
-  [arrived? d left]
-  (cond
-    arrived? "arrived"
-    (< left (dec d)) "partial"
-    :else "blocked"))
-
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
@@ -150,14 +104,10 @@
       (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
 
       :else
-      (let [result (await (walk-once! c pw [(:x pos) (:y pos) (:z pos)] range doors))
-            to (u/self-pos c)
+      (let [{:keys [result status to]} (await (near/walk-round! c pw pos range doors))
             left (u/dist to pos)
-            arrived? (u/within? to pos range)
-            status (move-status arrived? d left)
             best (:best (ctx/mem c) d)]
-        (ctx/remember! c :moved {:from from :to to :status status :target pos} stuck/moved-policy)
-        (if arrived?
+        (if (= "arrived" status)
           (arrived! c)
           (let [progress? (< left (dec best))
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
