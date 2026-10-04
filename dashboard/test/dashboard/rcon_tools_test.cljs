@@ -18,8 +18,12 @@
     ["list"] ["list"]
     ["time" "day"] ["time set day"]
     ["time" "noon"] ["time set noon"]
+    ["time" "night"] ["time set night"]
+    ["time" "midnight"] ["time set midnight"]
     ["time" "6000"] ["time set 6000"]
     ["weather" "thunder"] ["weather thunder"]
+    ["weather" "clear"] ["weather clear"]
+    ["weather" "rain"] ["weather rain"]
     ["tp" t "10" "64" "-5.5"] [(str "tp " t " 10 64 -5.5")]
     ["give" t "bread"] [(str "give " t " minecraft:bread 1")]
     ["give" t "iron_sword" "64"] [(str "give " t " minecraft:iron_sword 64")]
@@ -27,6 +31,7 @@
     ["effect" t "poison"] [(str "effect give " t " minecraft:poison 30 0")]
     ["effect" t "wither" "120" "4"] [(str "effect give " t " minecraft:wither 120 4")]
     ["effect-clear" t] [(str "effect clear " t)]
+    ["damage" t "4"] [(str "damage " t " 4")]
     ["damage" t "20"] [(str "damage " t " 20")]
     ["heal" t] [(str "effect give " t " minecraft:instant_health 1 10")]
     ["feed" t] [(str "effect give " t " minecraft:saturation 1 10")]
@@ -44,6 +49,12 @@
 (deftest build-command-refuses
   (are [argv pattern] (refuses? argv pattern)
     ["gamemode" "creative" t] #"unknown or forbidden subcommand"
+    ["op" t] #"unknown or forbidden subcommand"
+    ["deop" t] #"unknown or forbidden subcommand"
+    ["gamerule" "x"] #"unknown or forbidden subcommand"
+    ["nonsense"] #"unknown or forbidden subcommand"
+    ["tp" t "1,5" "1" "2"] #"number"
+    ["summon" "zombie" "^" "1" "2"] #"number"
     ["op" t] #"unknown or forbidden subcommand"
     ["stop"] #"unknown or forbidden subcommand"
     ["execute" "as" t] #"unknown or forbidden subcommand"
