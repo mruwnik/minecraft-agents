@@ -931,6 +931,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
 | `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
 | `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4) |
+| `GET /inventory` | read-only carried stack and worn equipment snapshot, independent of manual takeover |
 | `GET /job?id=<id>&limit=<n>` | one listed or reflex job's bounded parsed spec, effective args, state and linked outstanding requests |
 | `GET /catalog?kind=jobs&prefix=jobs.farm.&limit=20&offset=0` | bounded page of exact job names (names only) |
 | `GET /catalog?kind=triggers&prefix=health&limit=20&offset=0` | bounded page of exact trigger names (names only) |
@@ -955,11 +956,18 @@ For a compact terminal/agent read, `node engine/tools/observe.mjs <agent> --worl
 prints the status projection as EDN. It reads the same private event socket and
 does not contact or disturb Mineflayer. Use `job <id>` or `catalog job|trigger
 <name>` only when the summary needs detail; `--world` is required (a name is unique only within a world); `--state <dir>` selects another
-state root and `--limit <n>` bounds the listed queue rows.
+state root and `--limit <n>` bounds the listed queue rows. `inventory` returns
+aggregate carried counts and non-empty equipment slots in one read; `--slots`
+adds each carried stack's slot. `equipment` returns only equipped gear. Both
+modes are read-only and need no takeover lease; `--raw` returns the bounded
+stack and equipment snapshot.
 
 ```sh
 node engine/tools/observe.mjs Bob --world claude
 node engine/tools/observe.mjs Bob --world claude --raw
+node engine/tools/observe.mjs Bob --world claude inventory
+node engine/tools/observe.mjs Bob --world claude inventory --slots
+node engine/tools/observe.mjs Bob --world claude equipment --raw
 node engine/tools/observe.mjs Bob --world claude job j17
 node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10
 node engine/tools/observe.mjs Bob --world claude catalog job jobs.forestry.harvest-wood

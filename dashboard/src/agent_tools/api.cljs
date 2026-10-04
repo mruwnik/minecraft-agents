@@ -2,6 +2,7 @@
   "Compatibility boundary for the existing Node entry points and black-box tests.
    Tool implementations use native ClojureScript values internally."
   (:require [agent-tools.changes :as changes]
+            [agent-tools.inventory :as inventory]
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
@@ -51,6 +52,9 @@
 
 (defn changes-main [argv]
   (changes/main! (vec argv)))
+
+(defn inventory-summary [value mode slots]
+  (compat/to-js (inventory/compact (compat/from-js value) (keyword mode) slots)))
 
 (defn time-options [argv] (compat/to-js (time-tool/options (vec argv))))
 (defn time-clock [ctx now] (compat/to-js (time-tool/clock (compat/from-js ctx) now)))

@@ -40,6 +40,7 @@
                                :changesExecute agent-tools.api/changes-execute
                                :changesMain agent-tools.api/changes-main
                                :changesUsage agent-tools.changes/usage
+                               :inventorySummary agent-tools.api/inventory-summary
                                :planExecute agent-tools.plans/execute
                                :prepare dashboard.agent-plan-tools/prepare
                                :score dashboard.agent-plan-tools/score

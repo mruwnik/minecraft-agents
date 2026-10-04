@@ -3,13 +3,18 @@ import http from 'node:http'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { readEDN, writeEDN, compactStatus, waitObserve } from './observe-lib.mjs'
+import { readEDN, writeEDN, compactStatus, keyword, waitObserve } from './observe-lib.mjs'
 import { defaultStateDir } from './drive-lib.mjs'
 import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
 
 export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
-export const usage = `usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+export const usage = `usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+
+async function inventorySummary (value, mode, slots) {
+  const { default: tools } = await import('./agent-tools-loader.mjs')
+  return tools.inventorySummary(value, mode, slots)
+}
 
 export function unsupportedObserveRoute (response) {
   return response.status === 404 && /^application\/edn(?:;|$)/i.test(response.contentType ?? '') &&
@@ -18,7 +23,8 @@ export function unsupportedObserveRoute (response) {
 
 export function legacyEngineNotice (request) {
   const endpoint = request.path.split('?')[0]
-  return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build :fallback {:op :status :raw true :world ${JSON.stringify(request.world)} :state ${JSON.stringify(request.state)}}}`
+  const fallback = endpoint === '/inventory' ? '' : ` :fallback {:op :status :raw true :world ${JSON.stringify(request.world)} :state ${JSON.stringify(request.state)}}`
+  return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build${fallback}}`
 }
 
 export function requestFor (argv) {
@@ -32,6 +38,7 @@ export function requestFor (argv) {
         limit: { type: 'string' },
         offset: { type: 'string' },
         raw: { type: 'boolean', default: false },
+        slots: { type: 'boolean', default: false },
         verbose: { type: 'boolean', default: false },
         wait: { type: 'boolean', default: false },
         timeout: { type: 'string' },
@@ -51,6 +58,7 @@ export function requestFor (argv) {
   }
   const [agent, requestedOp, kindOrId, ...rest] = parsed.positionals
   const op = requestedOp ?? 'status'
+  if (parsed.values.slots && op !== 'inventory') return { error: '--slots is only valid for inventory' }
   if (!agent || !/^[A-Za-z0-9_-]{1,40}$/.test(agent)) return { error: 'agent must be a body name' }
   const world = parsed.values.world
   if (world === undefined) return { error: missingWorldError('--world') }
@@ -68,6 +76,12 @@ export function requestFor (argv) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 32) return { error: '--limit must be an integer from 1 to 32' }
       params.set('limit', String(limit))
     }
+  } else if (op === 'inventory' || op === 'equipment') {
+    if (kindOrId !== undefined || rest.length) return { error: `${op} takes no positional arguments` }
+    if (parsed.values.limit !== undefined || parsed.values.offset !== undefined) return { error: `--limit and --offset are not valid for ${op}` }
+    if (parsed.values.raw && parsed.values.slots) return { error: '--slots is redundant with --raw' }
+    if (op === 'equipment' && parsed.values.slots) return { error: '--slots is only valid for inventory' }
+    endpoint = '/inventory'
   } else if (op === 'job') {
     if (!kindOrId || rest.length) return { error: 'job needs one job ID, such as j12' }
     if (parsed.values.raw || parsed.values.offset !== undefined) return { error: '--raw and --offset are only valid for status and catalog lists respectively' }
@@ -135,6 +149,7 @@ export function requestFor (argv) {
     world,
     state,
     ...(waitOptions ? { waitOptions } : {}),
+    ...(op === 'inventory' || op === 'equipment' ? { inventoryMode: op, slots: parsed.values.slots, raw: parsed.values.raw } : {}),
     ...(v.verbose ? { verbose: true } : {}),
     socketPath: path.join(bodyDir(state, world, agent), 'engine', 'events.sock'),
     path: query ? `${endpoint}?${query}` : endpoint
@@ -213,7 +228,7 @@ export async function main (argv = process.argv.slice(2)) {
       process.stdout.write(`{:ok false :reason :bad-response :detail :unexpected-content-type}\n`)
       return 1
     }
-    if (request.path.startsWith('/status') || request.path.startsWith('/job') || request.path.startsWith('/catalog')) {
+    if (request.path.startsWith('/status') || request.path.startsWith('/job') || request.path.startsWith('/catalog') || request.path.startsWith('/inventory')) {
       if (unsupportedObserveRoute(response)) {
         process.stdout.write(`${legacyEngineNotice(request)}\n`)
         return 2
@@ -222,6 +237,16 @@ export async function main (argv = process.argv.slice(2)) {
     if (request.path.startsWith('/status') && !request.verbose && response.status === 200) {
       process.stdout.write(`${writeEDN(compactStatus(readEDN(response.text)))}\n`)
       return 0
+    }
+    if (request.path.startsWith('/inventory') && request.inventoryMode && !request.raw && response.status === 200) {
+      const result = readEDN(response.text)
+      process.stdout.write(`${writeEDN(await inventorySummary(result, request.inventoryMode, request.slots))}\n`)
+      return result?.ok === false ? 1 : 0
+    }
+    if (request.path.startsWith('/inventory') && request.inventoryMode === 'equipment' && request.raw && response.status === 200) {
+      const result = readEDN(response.text)
+      process.stdout.write(`${writeEDN({ equipment: result.equipment ?? keyword('none') })}\n`)
+      return result?.ok === false ? 1 : 0
     }
     process.stdout.write(response.text.endsWith('\n') ? response.text : `${response.text}\n`)
     return response.status >= 200 && response.status < 300 ? 0 : 1
