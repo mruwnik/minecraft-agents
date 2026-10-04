@@ -9,9 +9,10 @@
   whatever the policy: a pass through somebody's pen must not let anything out. Only a block the walker found shut is ever
   shut by it, never one that was open already.
 
-  Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms} before the click; it is
-  dropped when the block is shut. A walk that is cut between the open and the shut leaves it, for the next round of the same
-  job (shut-leftovers!) or a trigger. A block that is not shut because an animal stands in its cell (the walker waits and tries
+  Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
+  click (:shut? false: the policy leaves it open); it is dropped when the block is shut. A walk that is cut between the open
+  and the shut leaves it, for the next round of the same job (shut-leftovers!) or the door-left trigger
+  (engine.triggers.door-left), whose job jobs.maintenance.shut-doors walks back and shuts it. A block that is not shut because an animal stands in its cell (the walker waits and tries
   again, never pushes) or because the click did nothing stays open with its entry and one :door-left-open warn."
   (:require [engine.access.click :as click]
             [engine.ctx :as ctx]
@@ -95,9 +96,10 @@
   (or (= :shut doors) (foreign? (ctx/zones c) (self-name c) [x y z])))
 
 (defn ^:async open-block!
-  "Open the block at cell by hand unless it is open. {:result :opened :column} (the walker opened it, its entry written),
-  {:result :was-open}, or {:result :stuck}: not a block a hand opens, or it did not open."
-  [c cell]
+  "Open the block at cell by hand unless it is open. {:result :opened :column} (the walker opened it, its entry written,
+  with shut? saying whether the walker will shut it again), {:result :was-open}, or {:result :stuck}: not a block a hand
+  opens, or it did not open."
+  [c cell shut?]
   (let [b (block-at c cell)
         name (some-> b .-name)
         props (click/props-of b)]
@@ -107,7 +109,7 @@
       (not= :openable (click/kind-of name)) {:result :stuck}
       (click/reached? :open props) {:result :was-open}
       :else
-      (do (ctx/remember! c :opened {:cell cell :by (:id c) :t (ctx/now c)} opened-policy)
+      (do (ctx/remember! c :opened {:cell cell :by (:id c) :t (ctx/now c) :shut? shut?} opened-policy)
           (let [{:keys [outcome]} (await (click/click! c cell :open name))]
             (if (= :changed outcome)
               {:result :opened :column (column-of cell props)}
@@ -174,9 +176,10 @@
   (loop [todo cells pending [] stuck []]
     (if-let [o (first todo)]
       (let [cell (select-keys o [:x :y :z])
-            {:keys [result column]} (await (open-block! c cell))]
+            will-shut? (shut? c doors cell)
+            {:keys [result column]} (await (open-block! c cell will-shut?))]
         (recur (rest todo)
-               (cond-> pending (and (= :opened result) (shut? c doors cell)) (conj column))
+               (cond-> pending (and (= :opened result) will-shut?) (conj column))
                (cond-> stuck (= :stuck result) (conj cell))))
       {:pending pending :stuck stuck})))
 

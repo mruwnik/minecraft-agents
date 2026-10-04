@@ -11,7 +11,10 @@
             [engine.path.walk :as walk]
             [engine.triggers.stuck :as stuck]))
 
-(def walk-timeout-s 60)
+(def walk-timeout-s
+  "The default bound of one steer of a walk round. A caller that chases something that moves passes a shorter one, so it
+  aims again at where the thing is now."
+  60)
 
 (defn iron-cells
   "The cells {:x :y :z} among the blocks the steps open that a hand cannot open: iron doors and iron trapdoors."
@@ -41,30 +44,35 @@
   "Plan from where the body stands and follow the plan (walk/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (engine.path.walk), or the no-path result of a plan that
-  is not walked. pw is the pathWorld the caller checked is there; every plan reads a fresh one. With doors other than
-  :never, a plan may open blocks (iron ones are walls); one that will not open is a wall for one more plan, then the result
-  is :no-path :door-stuck."
-  [c _pw to range doors]
+  is not walked. Every plan reads a fresh pathWorld; the caller has checked there is one. Each steer is bounded by timeout-s.
+  With doors other than :never, a plan may open blocks (iron ones are walls); one that will not open is a wall for one more
+  plan, then the result is :no-path :door-stuck. Before and after the walk, the blocks this job opened and left (a cut
+  round, a walk that ended in a doorway) are shut when within reach (pass/shut-leftovers!); farther ones, and those a cut
+  leaves, are the door-left trigger's (engine.triggers.door-left)."
+  [c to range doors timeout-s]
   (await (walk/settle! c))
   (let [policy (if (= :never doors) executor/policy executor/door-policy)
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
-                    (walk/walk! c steps walk-timeout-s watch)
-                    (pass/walk! c steps {:timeout-s walk-timeout-s :doors doors :watch watch})))]
+                    (walk/walk! c steps timeout-s watch)
+                    (pass/walk! c steps {:timeout-s timeout-s :doors doors :watch watch})))]
     (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
-    (loop [walls [] stuck nil]
-      (let [plan (plan! c to range doors policy walls)]
-        (if-let [no (walk/no-walk plan 0 policy)]
-          (if stuck (door-stuck stuck) no)
-          (let [{done :done last-plan :plan}
-                (await (walk/follow! c plan {:plan-fn #(plan! c to range doors policy (into walls %)) :walk-fn walk-fn
-                                             :to to :policy policy :announce! announce!}))]
-            (cond
-              (not= :door-stuck (:status done))
-              (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))
-              stuck (door-stuck (:cells done))
-              :else (recur (into walls (:cells done)) (:cells done)))))))))
+    (let [result (loop [walls [] stuck nil]
+                   (let [plan (plan! c to range doors policy walls)]
+                     (if-let [no (walk/no-walk plan 0 policy)]
+                       (if stuck (door-stuck stuck) no)
+                       (let [{done :done last-plan :plan}
+                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors policy (into walls %))
+                                                          :walk-fn walk-fn :to to :policy policy :announce! announce!}))]
+                         (cond
+                           (not= :door-stuck (:status done))
+                           (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))
+                           stuck (door-stuck (:cells done))
+                           :else (recur (into walls (:cells done)) (:cells done)))))))]
+      ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
+      (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
+      result)))
 
 (defn move-status
   "The :moved entry's status of a walk that began d from the target and ended left from it."
@@ -75,15 +83,18 @@
     :else "blocked"))
 
 (defn ^:async walk-round!
-  "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands, over pw (the primitives'
-  pathWorld), with its :moved entry {:from :to :status :target} written. {:result :status :from :to}: result is the walk's
+  "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
+  primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
+  backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :timeout-s}: doors as
+  walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result is the walk's
   result map, status the entry's."
-  [c pw pos range doors]
+  [c pos range {:keys [doors timeout-s] :or {timeout-s walk-timeout-s}}]
   (let [from (u/self-pos c)
-        result (await (walk-once! c pw [(:x pos) (:y pos) (:z pos)] range doors))
+        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors timeout-s))
         to (u/self-pos c)
         status (move-status (u/within? to pos range) (u/dist from pos) (u/dist to pos))]
     (ctx/remember! c :moved {:from from :to to :status status :target pos} stuck/moved-policy)
+    (ctx/note-walk! c status (u/dist from to))
     {:result result :status status :from from :to to}))
 
 (defn cell-of [pos] (into {} (map (fn [k] [k (js/Math.floor (k pos))])) [:x :y :z]))
@@ -91,17 +102,17 @@
 (defn ^:async walk-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), skipping the walk when it already is: one
   round of plan and walk (walk-round!, at most 60 s). Resolves to :there, :partial (ended more than 1 closer, call again)
-  or :blocked (no path, a walk that got no nearer, or a body with no pathWorld sensing). opts {:doors}: the door policy of
-  engine.path.pass, default :shut (open a shut door, gate or trapdoor on the way, pass, shut it again); a job that works
-  gates itself passes :never (a shut one is a wall)."
+  or :blocked (no path, a walk that got no nearer, or a body with no pathWorld sensing; booked as a failed walk). opts
+  {:doors :timeout-s}: the door policy of engine.path.pass, default :shut (open a shut door, gate or trapdoor on the way,
+  pass, shut it again); a job that works gates itself passes :never (a shut one is a wall). timeout-s bounds each steer
+  (default walk-timeout-s); a job chasing a mob or a villager passes a short one, so it aims again at where it is now."
   ([c pos range] (walk-near! c pos range nil))
-  ([c pos range {:keys [doors] :or {doors :shut}}]
-   (let [cell (cell-of pos)
-         pw (walk/path-world (:primitives c))]
+  ([c pos range {:keys [doors timeout-s] :or {doors :shut timeout-s walk-timeout-s}}]
+   (let [cell (cell-of pos)]
      (cond
        (u/within? (u/self-pos c) cell range) :there
-       (nil? pw) :blocked
-       :else (case (:status (await (walk-round! c pw cell range doors)))
+       (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
+       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s})))
                "arrived" :there
                "partial" :partial
                :blocked)))))

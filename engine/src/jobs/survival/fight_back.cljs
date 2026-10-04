@@ -61,13 +61,17 @@
                      (fn [m] (cond-> (-> (or m {}) (assoc :name (.-name target)) (update :hits (fnil inc 0)))
                                (number? h) (assoc :health h))))))
 
+(def chase-timeout-s
+  "Bound of one walk toward the mob: it moves, so the walk aims again at where it is now this often."
+  10)
+
 (defn ^:async swing!
   "Walk into reach if needed, then face and hit target once. Resolves to the
   walk's outcome: :there, :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))
         r (if (> (u/dist (u/self-pos c) tpos) reach)
-            (await (near/walk-near! c tpos 2))
+            (await (near/walk-near! c tpos 2 {:timeout-s chase-timeout-s}))
             :there)]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)

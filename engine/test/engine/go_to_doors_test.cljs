@@ -18,21 +18,22 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async tick-out!
-  "Tick until the list is empty, at most n ticks."
-  [eng n]
+  "Tick until the list is empty, at most n ticks, a second apart (a job whose walks get nowhere backs off for one)."
+  [eng clock n]
   (loop [i 0]
     (when (and (< i n) (seq (:list (core/state eng))))
       (await (core/tick! eng))
+      (swap! clock + 1000)
       (recur (inc i)))))
 
 (defn ^:async go!
   "Run go-to with args as the child of a recording parent over world (with zones); {:eng :p :seen :out}, out the child's result."
   ([world args] (go! world args []))
   ([world args zones]
-   (let [{:keys [eng] :as s} (setup world zones)
+   (let [{:keys [eng clock] :as s} (setup world zones)
          out (atom :not-done)
          parent {:check (constantly true)
                  :round (fn ^:async recording-round [c]
@@ -41,7 +42,7 @@
                             r))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
      (core/submit! eng '(recording-parent) {})
-     (await (tick-out! eng 40))
+     (await (tick-out! eng clock 40))
      (assoc s :eng eng :out out))))
 
 (defn at [p] (let [pos (.-pos (.self p))] [(.-x pos) (.-y pos) (.-z pos)]))

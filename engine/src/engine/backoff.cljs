@@ -20,19 +20,32 @@
   (contains? failure-statuses status))
 
 (def neutral-acts
-  "Acts that neither count toward a fruitless round nor reset a backoff."
-  #{:look :wait :equip})
+  "Acts that neither count toward a fruitless round nor reset a backoff. A
+  steer is one leg of a walk round (engine.path.near), which is booked whole
+  as a :walk; breathe's steer that holds the body still is a wait."
+  #{:look :wait :equip :steer})
 
 (def moved-min
-  "Blocks a failed walk must have moved the body to be neutral."
+  "Blocks a failed moveTo must have moved the body to be neutral."
   1)
 
+(def walk-moved-min
+  "Blocks a walk round that got no nearer must have moved the body to be
+  neutral: a long way round is not a failure, shuffling on the spot is."
+  8)
+
 (defn neutral?
-  "Whether act with status is neutral: a neutral act, or a failed moveTo that
-  moved the body (straight line, blocks) at least moved-min."
+  "Whether act with status is neutral: a neutral act, a failed moveTo that
+  moved the body (straight line, blocks) at least moved-min, or a :walk round
+  (booked by engine.path.near) that made progress: it ended nearer
+  (\"partial\") or moved the body at least walk-moved-min. An arrival is
+  progress; a walk with no path or that got nowhere is a failure."
   [act status moved]
   (or (contains? neutral-acts act)
-      (and (= :moveTo act) (failure? status) (some? moved) (>= moved moved-min))))
+      (and (= :moveTo act) (failure? status) (some? moved) (>= moved moved-min))
+      (and (= :walk act)
+           (or (= "partial" status)
+               (and (failure? status) (some? moved) (>= moved walk-moved-min))))))
 
 (defn validate!
   "Throws unless cfg is nil, false (off) or a map of :after :first-s :max-s to positive numbers."
@@ -61,7 +74,7 @@
 
 (defn note-act
   "The round after an act with status (and reason, when the result has one);
-  moved is how far a moveTo moved the body, else nil. A neutral act leaves it as is."
+  moved is how far a moveTo or a walk round moved the body, else nil. A neutral act leaves it as is."
   [round act status reason moved]
   (if (neutral? act status moved)
     round

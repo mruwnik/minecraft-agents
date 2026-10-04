@@ -106,7 +106,7 @@
       (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
 
       :else
-      (let [{:keys [result status to]} (await (near/walk-round! c pw pos range doors))
+      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors}))
             left (u/dist to pos)
             best (:best (ctx/mem c) d)]
         (if (= "arrived" status)

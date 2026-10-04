@@ -133,6 +133,7 @@
       (fn ^:async t []
         (let [{:keys [p eng]} (await (first-round '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]}))]
           (is (= 1 (count (tu/walked-to eng))))
+          (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
           (is (= 1 (count (calls p "attack")))))))))
 
 (deftest fight-back-declines-when-hurt-or-nothing-is-near

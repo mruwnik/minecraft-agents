@@ -9,7 +9,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.pen-gate :as pg]
-            [engine.world :as world]))
+            [engine.world :as world]
+            [clojure.string :as str]))
 
 ;; ------------------------------------------------------------------ plans
 
@@ -228,10 +229,14 @@
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
 
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
+  ;; The ring is a stone wall two high here, not fence: the fake's steer takes a fence cell for a full block while the
+  ;; planner walks beside the post (card aef2106d), so a walk round a fence ring gets stuck in the fake only.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 30))]
+        (let [walls (into {} (for [[k _] ring y [64 65]] [(str/replace k ",64," (str "," y ",")) "stone"]))
+              s (await (run-job (pen-world true 2 7 {:blocks (merge ground walls {"2,64,0" "oak_fence_gate"})})
+                                {"pen-a" pen-a} {} 30))]
           (is (seq (mem/entries (mem/view (:store (:eng s))) :moved)) "it walked")
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))))

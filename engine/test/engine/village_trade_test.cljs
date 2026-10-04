@@ -218,6 +218,7 @@
                                        {:count 2}))]
           (is (= {:bought 2 :paid {"emerald" 2} :item "bread"} result))
           (is (seq (tu/walk-calls p)))
+          (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (tu/walk-calls p))) "a short walk: it aims again at the villager")
           (is (= {"emerald" 1 "bread" 2} (inv p))))))))
 
 (deftest a-restart-keeps-what-was-bought

@@ -112,3 +112,75 @@
           (is (= :blocked @out))
           (is (= [0 64 0] (at p)))
           (is (false? (open? p [5 64 0]))))))))
+
+;; ---------------------------------------------------------------- the steer bound
+
+(defn steer-timeouts [p] (mapv #(.-timeoutS (.-args %)) (filter #(= "steer" (.-name %)) (.-calls (.-world p)))))
+
+(deftest each-steer-is-bounded-by-the-walk-limit-or-the-callers-shorter-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[opts limit] [[nil 60] [{:timeout-s 10} 10]]]
+          (let [{:keys [out p]} (await (walk! {:blocks flat} [{:x 10 :y 64 :z 0} 0 opts]))]
+            (is (= :there @out) (str opts))
+            (is (seq (steer-timeouts p)) (str opts))
+            (is (every? #(= limit %) (steer-timeouts p)) (str opts))))))))
+
+;; ---------------------------------------------------------------- walks and the backoff
+
+(defn repeat-walker
+  "A job whose every round is one walk-near! with args, then :continue."
+  [args]
+  {:check (constantly true)
+   :round (fn ^:async repeat-round [c]
+            (await (apply near/walk-near! c args))
+            :continue)})
+
+(defn ^:async walk-rounds!
+  "Run walk-near! with args as the round of job j1, over world, for n ticks at one instant; {:eng :p}."
+  [world args prep n]
+  (let [clock (atom 1000000)
+        [_ sink] (tu/legacy-capture-sink)
+        p (prep (tu/fake (merge {:self {:pos start}} world)))
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker (repeat-walker args)) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(walker) {})
+    (dotimes [_ n] (await (core/tick! eng)))
+    {:eng eng :p p}))
+
+(defn backing-off? [eng] (some? (:until (core/backoff-entry eng "j1"))))
+
+(defn still-steer
+  "Make every steer time out at once without moving the body: a walk that gets nowhere."
+  [p]
+  (.override (.-world p) "steer"
+             (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {:x 0.5 :y 64 :z 0.5}})))
+  p)
+
+(def long-floor (floor -2 -3 400 3))
+
+(deftest a-long-walk-cut-by-its-limit-after-fifty-blocks-is-no-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (walk-rounds! {:blocks long-floor} [{:x 390 :y 64 :z 0} 0]
+                                                   #(doto % (tu/short-walks! 250)) 3))]
+          (is (= ["partial" "partial" "partial"] (mapv :status (moved eng))))
+          (is (< 140 (first (at p))) "three walks of 50 blocks or more")
+          (is (not (backing-off? eng)))
+          (is (zero? (:fruitless (core/backoff-entry eng "j1") 0))))))))
+
+(def walled-in (merge (box 9 64 -1 11 65 -1 "stone") (box 9 64 1 11 65 1 "stone")
+                      (box 9 64 0 9 65 0 "stone") (box 11 64 0 11 65 0 "stone")))
+
+(deftest walks-that-get-nowhere-three-times-back-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label world prep] [["no path" {:blocks (merge flat walled-in)} identity]
+                                    ["a steer that does not move" {:blocks flat} still-steer]]]
+          (let [{:keys [eng p]} (await (walk-rounds! world [{:x 10 :y 64 :z 0} 0] prep 3))]
+            (is (= [0 64 0] (mapv js/Math.floor (at p))) label)
+            (is (backing-off? eng) label)))))))

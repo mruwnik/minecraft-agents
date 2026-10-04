@@ -445,7 +445,8 @@
           (is (finished? s)))))))
 
 (def stone-tunnel
-  "A dirt block east of the start with a stone tunnel through it: (2,63,0) is ground under the start, 3 and 4 lie beyond it and are buried until it is dug."
+  "A dirt block east of the start with a stone tunnel through it: (2,63,0) is ground under the start, 3 and 4 lie beyond it and are buried until it is dug.
+  The test keeps the floor's cell west of it air, so (2,63,0) is exposed."
   (merge (cells "dirt" (range 2 6) [62 63 64] [-1 0 1])
          (cells "stone" [2 3 4] [63] [0])))
 
@@ -453,7 +454,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "stone" :count 2} {:blocks stone-tunnel :drops cobble :inventory pickaxe} 200))]
+        (let [s (await (scenario {:block "stone" :count 2}
+                                 {:blocks (assoc stone-tunnel "1,63,0" "air") :drops cobble :inventory pickaxe} 200))]
           (is (= :count (:reason (done-event s))))
           (is (= 2 (:got (done-event s))))
           (is (= 3 (dig-count s)) "the ground cell, then the two beyond it")

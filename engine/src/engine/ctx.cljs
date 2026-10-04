@@ -107,6 +107,13 @@
   ([ctx kind level] (emit! ctx kind level {}))
   ([ctx kind level fields] ((:emit ctx) kind level fields)))
 
+(defn note-walk!
+  "Book one walk round for the backoff (engine.backoff): status is its :moved status (\"arrived\", \"partial\",
+  \"blocked\"), moved the blocks the body moved. The steer acts of the walk are neutral; this is what counts. A ctx with
+  no engine behind it books nothing."
+  [ctx status moved]
+  (when-let [f (:note-walk ctx)] (f status moved)))
+
 (defn act
   "Call acting primitive k (a keyword such as :moveTo) with this round's
   token, through the engine's act wrapper: token check, memory saved before

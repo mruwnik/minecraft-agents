@@ -7,6 +7,7 @@
             [engine.jobs.util :as u]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
+            [engine.triggers.door-left :as door-left]
             [engine.triggers.hungry :as hungry]
             [engine.triggers.pen-gate :as pen-gate]
             [engine.triggers.night-unsafe :as night-unsafe]
@@ -97,4 +98,4 @@
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
          night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
-         inventory-nearly-full every-interval scaffold-left/trigger mounted/trigger player-joined/trigger]))
+         door-left/trigger inventory-nearly-full every-interval scaffold-left/trigger mounted/trigger player-joined/trigger]))

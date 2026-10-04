@@ -34,6 +34,10 @@
 (def search-radius 48)
 (def reach 2)
 
+(def chase-timeout-s
+  "Bound of one walk toward the villager: it wanders, so the walk aims again at where it is now this often."
+  15)
+
 (defn check
   "A villager uuid and an item name are given."
   [c]
@@ -153,7 +157,7 @@
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (nil? e) (give-up! c "gone" "the villager is not here")
       :else
-      (case (await (near/walk-near! c (u/pos-of (.-pos e)) reach))
+      (case (await (near/walk-near! c (u/pos-of (.-pos e)) reach {:timeout-s chase-timeout-s}))
         :partial :continue
         :blocked (give-up! c "unreachable" "cannot reach the villager")
         (await (trade! c))))))

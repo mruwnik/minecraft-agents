@@ -491,6 +491,7 @@
                      (mem/forget-until! store kind t)
                      (wrote! kind))
      :act (fn [k act-args] (act! eng base id k act-args))
+     :note-walk (fn [status moved] (record-act! eng base :walk #js {:status status} moved))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
      :result (fn [data] (check!) (swap! results assoc id data))
      :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
