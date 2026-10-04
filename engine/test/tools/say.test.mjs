@@ -6,7 +6,7 @@ import path from 'node:path'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { requestFor } from '../../tools/say.mjs'
+import { failureFor, requestFor } from '../../tools/say.mjs'
 import { readEDN } from '../../tools/observe-lib.mjs'
 
 test('say validates one bounded public line and whisper recipient locally', () => {
@@ -18,6 +18,17 @@ test('say validates one bounded public line and whisper recipient locally', () =
   assert.ok(requestFor(['Bob', '--world', 'w', '/op Steve']).error)
   assert.ok(requestFor(['Bob', '--world', 'w', '--to', 'bad name', 'hello']).error)
   assert.ok(requestFor(['Bob', '--world', 'w', 'x'.repeat(257)]).error)
+})
+
+test('say distinguishes a pre-send socket permission denial from unknown delivery', () => {
+  const denied = failureFor({ code: 'EPERM' })
+  assert.equal(denied.reason.key, 'socket-access-denied')
+  assert.equal('confirmation' in denied, false)
+  assert.match(denied.message, /message was not sent/)
+
+  const uncertain = failureFor({ code: 'ETIMEDOUT' })
+  assert.equal(uncertain.reason.key, 'transport-error')
+  assert.equal(uncertain.confirmation.key, 'unknown')
 })
 
 test('say CLI sends a single chat request to the correct body and world', async t => {

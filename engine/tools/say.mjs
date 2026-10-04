@@ -7,6 +7,13 @@ import { writeEDN, keyword } from './observe-lib.mjs'
 
 export const usage = tools.sayUsage
 export const requestFor = argv => tools.sayRequestFor(argv)
+export function failureFor (error) {
+  if (error.code === 'EPERM' || error.code === 'EACCES') {
+    return { ok: false, reason: keyword('socket-access-denied'), message: 'Permission denied connecting to the body event socket; the message was not sent.' }
+  }
+  return { ok: false, reason: keyword(['ENOENT', 'ECONNREFUSED'].includes(error.code) ? 'no-running-body' : 'transport-error'),
+    confirmation: keyword('unknown'), message: 'Chat confirmation is unknown; inspect server chat before sending again.' }
+}
 
 export async function main (argv = process.argv.slice(2)) {
   const r = requestFor(argv)
@@ -20,8 +27,7 @@ export async function main (argv = process.argv.slice(2)) {
     process.stdout.write(response.text.endsWith('\n') ? response.text : response.text + '\n')
     return response.status === 200 ? 0 : 1
   } catch (error) {
-    process.stdout.write(writeEDN({ ok: false, reason: keyword(['ENOENT', 'ECONNREFUSED'].includes(error.code) ? 'no-running-body' : 'transport-error'),
-      confirmation: keyword('unknown'), message: 'Chat confirmation is unknown; inspect server chat before sending again.' }) + '\n')
+    process.stdout.write(writeEDN(failureFor(error)) + '\n')
     return 2
   }
 }
