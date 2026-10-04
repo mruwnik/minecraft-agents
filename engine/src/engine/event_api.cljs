@@ -6,6 +6,7 @@
             [engine.expr :as expr]
             [engine.events :as events]
             [engine.job-api :as job-api]
+            [engine.trigger-api :as trigger-api]
             ["fs" :as fs]
             ["http" :as http]
             ["net" :as net]
@@ -255,14 +256,17 @@
                             (respond! res 200 (job-api/list-jobs eng offset limit))
                             (bad! res 400 :bad-query)))
 
-                        (and (= method "POST") (= pathname "/jobs"))
+                        (and (= method "GET") (= pathname "/triggers"))
+                        (respond! res 200 (trigger-api/triggers-view eng))
+
+                        (and (= method "POST") (contains? #{"/jobs" "/triggers"} pathname))
                         (if-not (.startsWith (or (aget (.-headers req) "content-type") "") "application/edn")
                           (bad! res 415 :content-type-must-be-application-edn)
                           (-> (read-body req)
                               (.then (fn [text]
                                        (let [{:keys [value error]} (parse-edn text)]
                                          (if error (bad! res 400 error)
-                                           (let [result (job-api/mutate! eng value)]
+                                           (let [result ((if (= pathname "/jobs") job-api/mutate! trigger-api/request!) eng value)]
                                              (respond! res (if (:ok result) 200 409) result))))))
                               (.catch (fn [e] (bad! res (if (= "body too large" (.-message e)) 413 400)
                                                        (if (= "body too large" (.-message e)) :too-large :bad-request))))))

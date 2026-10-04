@@ -6,6 +6,7 @@
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.takeover :as takeover]
+            [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             [engine.world :as world]
             ["fs" :as fs]
@@ -52,6 +53,11 @@
   (str "engine: " file " does not exist. The body needs the real primitives layer"
        " (js/primitives.mjs exporting createPrimitives); refusing to start."))
 
+(defn body-triggers
+  "The built-in triggers plus :condition, the trigger of ad hoc :when entries."
+  []
+  (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
+
 (def usage "usage: npm run body -- --agent <name> --scenario <file> [--fresh] [--state-dir <dir>]")
 
 (defn preflight
@@ -63,7 +69,7 @@
         cfg (when agent (load-agent state-dir agent))
         max-bytes (when-not (:error cfg) (event-cap events-max-bytes (:events-max-bytes cfg)))
         plan (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
-        issues (when plan (scenario/problems registry/jobs triggers/all plan))]
+        issues (when plan (scenario/problems registry/jobs (body-triggers) plan))]
     (cond
       (nil? agent) {:error usage}
       (:error cfg) {:error (:text cfg)}
@@ -111,16 +117,17 @@
                                :blueprint-dir (path/resolve root ".." "blueprints")
                                :zones-file (path/join state-dir "worlds" (:world cfg) "zones.edn")
                                :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
-            eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (:engine-dir cfg)
+            eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
                               :body (:username cfg) :max-event-bytes events-max-bytes :world world})
             _ (reset! eng-ref eng)]
-        (when (and plan (not restoring?)) (core/load-scenario! eng plan))
+        (trigger-api/restore-conditions! eng)
+        (when (and plan (not restoring?)) (trigger-api/load-scenario! eng plan))
         (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
           (try
             (await ((:listen event-socket)))
             (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
                   control (await (start-control! root eng cfg lease-opts))
-                  stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(takeover/tick! eng lease-opts)})]
+                  stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
               {:engine eng :stop (fn [] (stop-ticks) (takeover/close! eng) (some-> control .close)
                                    ((:close event-socket)) (core/shutdown! eng) (.close p))})
             (catch :default e

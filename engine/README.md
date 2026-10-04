@@ -822,6 +822,8 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /catalog?kind=triggers&prefix=health&limit=20&offset=0` | bounded page of exact trigger names (names only) |
 | `GET /catalog?kind=job&name=jobs.<namespace>.<name>` | one job's description and argument defaults |
 | `GET /catalog?kind=trigger&name=<name>` | one trigger's default job, args, persistence and cooldown |
+| `GET /triggers` | the register in its own order, each entry with its live `:muted`, `:moved`, `:cooling-until`, `:stopped?` and `:backing-off`, and `:order`, the ids in firing order now |
+| `POST /triggers` | one register edit (below): 200 with the result, 409 with a refusal |
 
 For example, read a snapshot without taking control of the body:
 
@@ -878,6 +880,48 @@ npm run body -- --agent Bob
 That script compiles `out/body.cjs` from the current ClojureScript source
 before starting the body. Do not start a second process for an agent that is
 already running.
+
+### Editing the register and the list
+
+A running body takes one edit per request on the same socket; nothing needs a
+restart. An edit applies when its request arrives: the handler and `tick!` share
+one event loop, so it lands between two ticks, and no edit cuts a round in
+flight except a cancel or an interrupt (by token rotation, as a reflex cuts).
+Each applied edit emits its event. A refusal is data, `{:ok false :reason r :at
+[key ...] :message text}`, and changes nothing. On `/triggers`, `:generation-id`
+is optional (checked when given); `:by` names who asks (a short string or
+keyword) and is kept on the entry.
+
+| `:op` | request | applies |
+|---|---|---|
+| `:put` | `{:op :put :id :health-low-12 :trigger :health-low :args {:health 12}}`, or ad hoc `{:op :put :id :bread-low :when (< (inventory "bread") 8) :job (jobs.survival.eat)}`; also `:persistence :cooldown-s :backoff :ttl-s :by` | creates the entry, or replaces the one with that id in place (its mute or move kept; latch, cooldown, backoff and condition state start over); a built-in entry is refused |
+| `:remove` | `{:op :remove :id :bread-low}` | `remove-reflex!` (built-ins refused); a round of its job in flight finishes, then the job is dropped (`reflex.ended` `:dropped`) |
+| `:mute` | `{:op :mute :id :hostile-near :ttl-s 60}` | `mute!` |
+| `:move` | `{:op :move :id :bread-low :above :hostile-near :ttl-s 60}` (or `:below`) | `move!` |
+| `:clear` | `{:op :clear :id :bread-low :property :mute}` (or `:position`) | `clear-change!` |
+
+An ad hoc entry gives `:when`, a condition (an EDN list, `engine.condition`),
+instead of `:trigger`. It needs `:id` and `:job`, takes no `:args`, and defaults
+to `:persistence :stop :cooldown-s 0`: it fires when the condition is definitely
+true, and once its job has ended with the condition still true it waits until the
+condition has been false. The condition is compiled at the request (a refusal
+carries the language's own `:at`, `:message` and `:allowed` under `:condition`);
+`engine.edn` keeps the form, boot compiles it again, and an entry that no longer
+compiles is dropped with one `system.dropped` warn. Each entry has its own
+compiled condition (its own `held-for` timers). Until `engine.condition` is in
+the build every `:when` is refused (`:conditions-unavailable`).
+
+`:ttl-s` on a put removes the entry after that long (`reflex.expired`); without
+it the entry stays. An entry put over the socket whose job keeps failing while
+it holds backs off like any reflex and also raises one required request
+(`:reason :reflex-backoff`), resolved when the backoff ends or the entry goes.
+Rounds that throw or decline do not count toward a backoff, so under
+`:cooldown` or `:retry` a job failing that way fires again every cooldown. A scenario's register goes through the
+same validation and is loaded as puts by `:scenario`; its ids must be unique.
+
+`POST /jobs` (`tools/jobs.mjs`, below) also takes `:front?`, `:hold?`,
+`:backoff` and `:by` on `:submit`, and `:by` on `:interrupt`; `:by` is kept on
+the instance.
 
 ## Manual takeover
 
@@ -1225,7 +1269,7 @@ server and mineflayer, none of it checked live:
 ## Not built (hooks only)
 
 Claims, no-touch regions, flapping counters, the per-body no-progress
-detector, progress events, a general job-control API, multi-body, world memory, soft
+detector, progress events, multi-body, world memory, soft
 pathfinding weights, a reflex pointing at a listed instance (a register entry
 may carry `:instance` later).
 
@@ -1427,7 +1471,7 @@ bytes. `GET /jobs?limit=8&offset=0` lists at most 32 jobs per page; `show` reuse
 `GET /job` and removes bookkeeping metadata. `POST /jobs` handles only submit,
 interrupt, cancel and retry. The engine owns scheduling, interruption, native
 job/child memory and failure attention; the tool owns transport/request metadata.
-Trigger management is not included.
+Trigger edits are `POST /triggers` (Local event API).
 
 An interrupt cuts a running listed job, queues the new job at the front holding
 the body, and preserves the predecessor for resumption. Reflexes retain their

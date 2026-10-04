@@ -1,5 +1,5 @@
 (ns engine.job-api-test
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.job-api :as api]
@@ -79,3 +79,26 @@
           (command eng "cancel-failed" :cancel {:id "j2"})
           (is (empty? (:list (core/state eng))))
           (core/shutdown! eng))))))
+(deftest submit-takes-front-hold-backoff-and-who-added-it
+  (let [{:keys [eng]} (setup)]
+    (command eng "first" :submit {:spec '(wait)})
+    (let [r (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"})
+          id (get-in r [:job :id])]
+      (is (true? (:ok r)))
+      (is (= [id "j1"] (:list (core/state eng))))
+      (is (= {:hold? true :backoff {:after 5} :by "steward"}
+             (select-keys (get-in (core/state eng) [:instances id]) [:hold? :backoff :by]))))
+    (is (= :agent (get-in (core/state eng) [:instances "j1" :by])) "who defaults to :agent")
+    (is (true? (:duplicate (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"}))))
+    (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done)}))) "the options are part of the request")
+    (core/shutdown! eng)))
+(deftest bad-submit-options-are-refused-before-anything-changes
+  (let [{:keys [eng]} (setup)]
+    (are [extra reason] (= reason (:reason (command eng (str (random-uuid)) :submit (merge {:spec '(done)} extra))))
+      {:front? "yes"} :bad-field
+      {:hold? 1} :bad-field
+      {:backoff {:after 0}} :bad-backoff
+      {:by 7} :bad-by)
+    (is (= [] (:list (core/state eng))))
+    (is (empty? (get-in (core/state eng) [:job-requests :records])))
+    (core/shutdown! eng)))
