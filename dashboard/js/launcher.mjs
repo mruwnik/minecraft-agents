@@ -1,3 +1,5 @@
+// Why JavaScript: pure state machine in Node, outside the cljs build, survives a broken
+// compile. Imported by start.mjs, which depends on it for the same reason.
 // Pure decisions of the dashboard launcher (start.mjs): no processes, no clocks, no IO.
 // Phases: idle, building. A restart request during a build sets `pending` (they coalesce into one more build).
 // `stopping` is why the server is being stopped: 'swap' (replace it) or 'quit' (the launcher is ending).

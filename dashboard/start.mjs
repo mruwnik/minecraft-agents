@@ -1,3 +1,5 @@
+// Why JavaScript: spawns shadow-cljs and supervises the server; must not depend on
+// a cljs build or a broken compile would break the launcher that keeps the old server alive.
 // Launcher for `npm start`: a small Node supervisor, plain JS because it only spawns processes (the dashboard itself is
 // ClojureScript). Builds, runs out/server.cjs with inherited stdio, and on a restart request from the server (IPC message
 // {type:"restart"}, sent by POST /api/restart) builds FIRST while the old server keeps running; only a good build replaces it.
