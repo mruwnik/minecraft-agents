@@ -7,11 +7,12 @@
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]
+            [dashboard.ui.statusfilter :as statusfilter]
             [dashboard.ui.trouble :as trouble]))
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who]]
+(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who :status-filter]]
 (rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))
   (reg-key-sub k))
 
@@ -20,6 +21,7 @@
 (rf/reg-sub :canvas (fn [d _] (:canvas d)))
 (rf/reg-sub :now (fn [d _] (get-in d [:state :at])))
 (rf/reg-sub :bodies (fn [d _] (db/all-bodies d)))
+(rf/reg-sub :shown-bodies (fn [d _] (db/shown-bodies d)))
 (rf/reg-sub :places (fn [d _] (:places (db/world-of d))))
 (rf/reg-sub :zones (fn [d _] (:zones (db/world-of d))))
 (rf/reg-sub :humans (fn [d _] (:humans (db/world-of d))))
@@ -44,14 +46,21 @@
  :<- [:split-bodies]
  :<- [:now]
  :<- [:who]
- (fn [[{:keys [engine]} now who] _]
-   (mapv #(trouble/card-model % now who) (trouble/sort-bodies engine now))))
+ :<- [:status-filter]
+ (fn [[{:keys [engine]} now who pressed] _]
+   (mapv #(trouble/card-model % now who) (trouble/sort-bodies (statusfilter/only-states engine pressed now) now))))
 
 (rf/reg-sub
  :status-counts
  :<- [:split-bodies]
  :<- [:now]
  (fn [[{:keys [engine]} now] _] (trouble/counts engine now)))
+
+(rf/reg-sub
+ :status-chips
+ :<- [:status-counts]
+ :<- [:status-filter]
+ (fn [[counts pressed] _] (statusfilter/chips counts pressed)))
 
 (rf/reg-sub
  :foreign-count
@@ -73,7 +82,7 @@
 
 (rf/reg-sub
  :player-rows
- :<- [:bodies]
+ :<- [:shown-bodies]
  :<- [:humans]
  :<- [:now]
  (fn [[bodies humans now] _] (mm/player-rows bodies humans #(trouble/status % (or now 0)))))
@@ -88,7 +97,7 @@
  :map-model
  :<- [:view]
  :<- [:canvas]
- :<- [:bodies]
+ :<- [:shown-bodies]
  :<- [:places]
  :<- [:zones]
  :<- [:humans]

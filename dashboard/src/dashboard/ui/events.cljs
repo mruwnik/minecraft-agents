@@ -6,7 +6,8 @@
             [dashboard.ui.drive :as drive]
             [dashboard.ui.listprefs :as listprefs]
             [dashboard.ui.logic :as logic]
-            [dashboard.ui.mapmodel :as mm]))
+            [dashboard.ui.mapmodel :as mm]
+            [dashboard.ui.statusfilter :as statusfilter]))
 
 (def state-ms 2000)
 (def chat-ms 3000)
@@ -18,13 +19,18 @@
  :init
  (fn [_ [_ search page]]
    (let [fresh (db/initial-db search (drive/new-who js/Math.random))
-         initial (merge fresh (listprefs/open-flags (select-keys fresh (keys listprefs/list-names)) (listprefs/read-stored)))]
+         initial (merge fresh (listprefs/open-flags (select-keys fresh (keys listprefs/list-names)) (listprefs/read-stored)))
+         initial (assoc initial :status-filter (statusfilter/parse-stored (statusfilter/read-stored)))]
      {:db initial
       :fx [[:dispatch [:fetch-worlds]]
            [:dispatch [:poll-state]]
            [:dispatch [:poll-chat]]
            [:start-timers [[:state state-ms [:poll-state]] [:chat chat-ms [:poll-chat]]]]
            (when-let [body (:detail-body initial)] [:dispatch [:open-detail body]])]})))
+
+(rf/reg-event-fx
+ :toggle-status-filter
+ (fn [{:keys [db]} [_ k]] (statusfilter/toggle-fx db k)))
 
 (rf/reg-event-fx
  :fetch-worlds

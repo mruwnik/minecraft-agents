@@ -446,3 +446,7 @@ canvas.plan-grid { cursor: default; border: 1px solid var(--line); image-renderi
 .plan-errors .err { margin: 2px 0; }
 .plan-elements .chip { margin-left: 8px; padding: 0 8px; }
 button.on { background: #27405f; border-color: #3d6396; }
+.pill.count { cursor: pointer; font: inherit; font-size: 11px; line-height: 17px; padding: 0 8px; }
+.pill.count:hover { filter: brightness(1.2); }
+.pill.count.on { box-shadow: 0 0 0 1px currentColor inset; border-color: currentColor; font-weight: 600; }
+.pill.count.dim { opacity: .45; }

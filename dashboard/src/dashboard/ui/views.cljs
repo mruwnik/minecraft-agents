@@ -26,19 +26,19 @@
               :on-change #(rf/dispatch [:set-world (.. % -target -value)])}
      (for [n names] ^{:key n} [:option {:value n} n])]))
 
-(def count-pills [[:manual "manual"] [:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]])
-
-(defn count-pill [counts [k label]]
-  ^{:key k}
-  [:span.pill.count {:class (name k) :title label}
-   [:b (get counts k 0)] " " label])
+(defn count-pill [{:keys [state label count pressed? dim? title]}]
+  ^{:key state}
+  [:button.pill.count {:class [(name state) (when pressed? "on") (when dim? "dim")]
+                       :title title :aria-pressed pressed?
+                       :on-click #(rf/dispatch [:toggle-status-filter state])}
+   [:b count] " " label])
 
 (defn topbar [page]
-  (let [counts @(rf/subscribe [:status-counts])]
+  (let [chips @(rf/subscribe [:status-chips])]
     [:header#topbar
      [:h1 "Minecraft agents"]
      [world-select]
-     (into [:div.counts] (map #(count-pill counts %)) count-pills)
+     (into [:div.counts] (map count-pill) chips)
      [:span.spacer]
      [:span.dim.mono @(rf/subscribe [:clock-text])]
      [:span.dim @(rf/subscribe [:status])]

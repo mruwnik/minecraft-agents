@@ -3,6 +3,7 @@
   (:require [re-frame.core :as rf]
             [dashboard.ui.livecards :as live]
             [dashboard.ui.logic :as logic]
+            [dashboard.ui.statusfilter :as statusfilter]
             [dashboard.ui.trouble :as trouble]))
 
 (def status-label {:manual "manual" :trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
@@ -65,10 +66,13 @@
 
 (defn page []
   (let [cards @(rf/subscribe [:cards])
-        foreign @(rf/subscribe [:foreign-count])]
+        foreign @(rf/subscribe [:foreign-count])
+        pressed @(rf/subscribe [:status-filter])
+        engine-bodies? (seq (:engine @(rf/subscribe [:split-bodies])))]
     [:main.page-bodies
-     (if (empty? cards)
-       [:div.empty "no engine bodies in this world"]
-       (into [:div.cards] (map body-card) cards))
+     (cond
+       (seq cards) (into [:div.cards] (map body-card) cards)
+       (and (seq pressed) engine-bodies?) [:div.empty (statusfilter/empty-text pressed)]
+       :else [:div.empty "no engine bodies in this world"])
      (when (pos? foreign)
        [:div.footnote (str foreign " folders without an engine are not shown")])]))

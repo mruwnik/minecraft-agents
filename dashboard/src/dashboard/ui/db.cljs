@@ -2,7 +2,8 @@
   (:require [dashboard.mapview :as mv]
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.mapmodel :as mm]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.ui.statusfilter :as statusfilter]))
 
 (defn initial-db [search who]
   {:who who
@@ -14,6 +15,7 @@
    :canvas nil
    :user-view nil
    :selected nil
+   :status-filter #{}
    :chat-open? true
    :places-open? true
    :players-open? false
@@ -35,6 +37,15 @@
 (defn all-bodies [db]
   (or (get-in db [:state :bodies]) (:bodies (world-of db)) []))
 
+(defn shown-bodies
+  "The bodies the status chips let through, plus the selected one and the one open in the detail."
+  [db]
+  (let [selected (:selected db)
+        keep (cond-> #{}
+               (= :body (:kind selected)) (conj (:name selected))
+               (:detail-body db) (conj (:detail-body db)))]
+    (statusfilter/only-states (all-bodies db) (:status-filter db) (get-in db [:state :at] 0) keep)))
+
 (defn body-outstanding [snapshot body-name]
   (or (:outstanding (some #(when (or (= body-name (:name %)) (= body-name (:username %))) %)
                            (:bodies snapshot)))
@@ -50,7 +61,7 @@
   [db]
   (let [{:keys [w h]} (:canvas db)]
     (when (and w h (pos? w) (pos? h))
-      (-> (mm/body-points (all-bodies db))
+      (-> (mm/body-points (shown-bodies db))
           (mv/world-bounds 48)
           (mv/fit-view w h)))))
 

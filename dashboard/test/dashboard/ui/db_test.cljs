@@ -75,3 +75,34 @@
     "?world=claude&show=Probe_1" "Probe_1")
   (is (= true (:places-open? (db/initial-db "" "who"))))
   (is (= false (:players-open? (db/initial-db "" "who")))))
+
+(def mixed-world
+  {:bodies [{:name "Work" :up true :state {:pos {:x 0 :z 0}} :engine {:job {:id "j" :name "dig"}}}
+            {:name "Idle" :up true :state {:pos {:x 10 :z 10}} :engine {}}
+            {:name "Gone" :up false :engine {}}]})
+
+(defn mixed [extra] (merge {:canvas {:w 1000 :h 500} :state {:at 5 :worlds [mixed-world]}} extra))
+
+(defn shown-names [m] (mapv :name (db/shown-bodies m)))
+
+(deftest no-status-filter-shows-all-bodies
+  (is (= ["Work" "Idle" "Gone"] (shown-names (mixed {}))))
+  (is (= ["Work" "Idle" "Gone"] (shown-names (mixed {:status-filter #{}})))))
+
+(deftest a-status-filter-hides-the-other-states
+  (are [pressed expected] (= expected (shown-names (mixed {:status-filter pressed})))
+    #{:working} ["Work"]
+    #{:idle :offline} ["Idle" "Gone"]))
+
+(deftest the-selected-and-detail-bodies-stay-shown
+  (are [extra expected] (= expected (shown-names (mixed (assoc extra :status-filter #{:working}))))
+    {:selected {:kind :body :name "Gone"}} ["Work" "Gone"]
+    {:selected {:kind :place :name "Gone"}} ["Work"]
+    {:detail-body "Idle"} ["Work" "Idle"]
+    {:selected {:kind :body :name "Gone"} :detail-body "Idle"} ["Work" "Idle" "Gone"]))
+
+(deftest fit-bodies-fits-the-shown-bodies
+  (let [all (db/bodies-view (mixed {}))
+        only-work (db/bodies-view (mixed {:status-filter #{:working}}))]
+    (is (some? only-work))
+    (is (> (:scale only-work) (:scale all)))))
