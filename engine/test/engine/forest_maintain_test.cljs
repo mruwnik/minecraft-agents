@@ -363,15 +363,15 @@
               {:keys [p]} (await (run oak-world {"forest" plan} {:plan "forest"} 40))]
           (is (= 4 (count (digs p)))))))))
 
-(deftest a-zone-that-forbids-placing-keeps-the-sapling-in-the-hand
+(deftest a-zone-that-forbids-placing-is-no-obstacle-to-replanting-a-plan-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (with-zones [{:name "vault" :min [3 64 0] :max [3 64 0] :allow #{:dig}}]
                                         #(run {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]}
                                               {"forest" oak-cell} {:plan "forest"} 20)))]
-          (is (= [] (places p)))
-          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :zone}] (warns seen :forest.left))))))))
+          (is (= [[3 64 0 "oak_sapling"]] (places p)))
+          (is (= [] (warns seen :forest.left))))))))
 
 (deftest without-a-zone-list-the-job-declines-with-one-warn
   (async done

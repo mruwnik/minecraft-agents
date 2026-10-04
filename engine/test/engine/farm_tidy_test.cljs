@@ -256,17 +256,16 @@
 
 (defn zone [name [x y z] allow] {:name name :min [x y z] :max [x y z] :owner "someone" :allow allow})
 
-(deftest a-stray-inside-a-zone-is-refused-and-the-rest-dug
+(deftest a-stray-inside-a-foreign-zone-is-dug-the-plan-is-the-permission
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start tidy-spec {"field" field-plan} [(zone "shrine" [3 64 2] #{})])
               result (await (outcome eng {:plan "field"} 200))]
-          (is (= (disj (set strays) [3 64 2]) (dug p)))
-          (is (= "cobblestone" (block-at p 3 64 2)))
-          (is (= [{:pos [3 64 2] :block "cobblestone" :reason :zone :zone "shrine"}] (:refused result)))
-          (is (= 4 (:dug result)))
-          (is (= 1 (count (of-kind seen :tidy.refused)))))))))
+          (is (= (set strays) (dug p)))
+          (is (= [] (:refused result)))
+          (is (= 5 (:dug result)))
+          (is (empty? (of-kind seen :tidy.refused))))))))
 
 (deftest a-zone-allowing-digging-is-no-obstacle
   (async done
@@ -292,16 +291,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p w]} (start (assoc tidy-spec :self {:pos {:x 3 :y 64 :z 3}}) {"field" field-plan})]
+        (let [{:keys [eng p w]} (start (assoc tidy-spec :self {:pos {:x 3 :y 64 :z 3}}) {"field" field-plan})
+              late-plan {:id "late" :parts [{:id "l" :cells [[3 64 2] [4 64 3] [2 64 4]] :want "stone"}]}]
           (.override (.-world p) "dig"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
-                         (world/set-zones! w [(zone "late" [3 64 2] #{}) (zone "later" [4 64 3] #{}) (zone "latest" [2 64 4] #{})])
+                         (world/set-data! w {"field" field-plan "late" late-plan} {})
                          r)))
           (let [result (await (outcome eng {:plan "field"} 200))]
-            (is (= 2 (count (dug p))) "the first dig of the round goes through and the zones close the rest")
+            (is (= 2 (count (dug p))) "the first dig of the round goes through and the other plan closes the rest")
             (is (= 3 (count (:refused result))))
-            (is (= #{:zone} (set (map :reason (:refused result)))))))))))
+            (is (= #{:footprint} (set (map :reason (:refused result)))))))))))
 
 ;; ---------------------------------------------------------------- hazards
 
@@ -448,16 +448,6 @@
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
             (is (= 1 (count (of-kind (:seen b) :tidy.done))))
             (is (= 5 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the count keeps what the first run dug")))))))
-
-(deftest a-zone-follows-its-owner-and-the-opt-out
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[owner extra refused] [["Fake" {} 0] ["fake" {} 0] ["Miles" {} 1] ["Miles" {:ignore-zones? true} 0]]]
-          (let [{:keys [eng]} (start tidy-spec {"field" field-plan}
-                                     [(assoc (zone "shrine" [3 64 2] #{}) :owner owner)])
-                result (await (outcome eng (merge {:plan "field"} extra) 200))]
-            (is (= refused (count (:refused result))) (pr-str [owner extra]))))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done

@@ -2,6 +2,7 @@
   "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, planted), against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.forest-maintain-test :refer [ground forest-plan item start ticks digs places warns listed? give! with-zones]]
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
@@ -234,13 +235,21 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[zones plans cleared planted reason]
-                [[[{:name "vault" :min [4 64 0] :max [4 64 0] :allow #{}}] {"forest" two-cells} 1 1 :zone]
-                 [[] {"forest" two-cells "other" stone-plan} 1 1 :footprint]
-                 [[{:name "vault" :min [4 64 0] :max [4 64 0] :allow #{:dig}}] {"forest" two-cells} 2 1 :zone]]]
+                [[[] {"forest" two-cells "other" stone-plan} 1 1 :footprint]]]
           (let [{:keys [p result seen]} (await (with-zones zones #(outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2)) plans)))]
             (is (= (expect {:cleared cleared :planted planted :refused [{:pos [4 64 0] :reason reason}]}) result) (str reason))
             (is (= [[3 64 0 "oak_sapling"]] (places p)) (str reason))
             (is (= [{:pos {:x 4 :y 64 :z 0} :reason reason}] (warns seen :prepare.refused)) (str reason))))))))
+
+(deftest a-zone-over-a-plan-cell-is-no-obstacle-the-plan-is-the-permission
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [allow [#{} #{:dig}]]
+          (let [{:keys [p result]} (await (with-zones [{:name "vault" :min [4 64 0] :max [4 64 0] :allow allow}]
+                                            #(outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells})))]
+            (is (= (expect {:cleared 2 :planted 2}) result) (pr-str allow))
+            (is (= [[3 64 0 "oak_sapling"] [4 64 0 "oak_sapling"]] (places p)) (pr-str allow))))))))
 
 (deftest a-zone-over-the-ground-under-a-cell-refuses-the-soil-work
   (async done

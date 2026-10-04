@@ -194,15 +194,28 @@
           (is (= #{[2 64 3] [3 64 3]} (set (keys (placed s)))))
           (is (= ["air" "air"] (mapv #(block-at s % 64 2) [2 3]))))))))
 
-(deftest a-zone-over-part-of-the-field-keeps-the-body-from-sowing-there
+(defn foreign-plan
+  "Another plan claiming cells, a footprint that refuses every builder of a different plan."
+  [cells]
+  {:id "other" :parts [{:id "o" :cells (vec cells) :want "stone"}]})
+
+(deftest another-plan-over-part-of-the-field-keeps-the-body-from-sowing-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed)
+                            {"mix" (plan-of) "other" (foreign-plan [[3 64 2] [3 64 3]])} 60))]
+          (is (= #{[2 64 2] [2 64 3]} (set (keys (placed s)))))
+          (is (= ["air" "air"] (mapv #(block-at s 3 64 %) [2 3])))
+          (is (true? (finished? s))))))))
+
+(deftest a-foreign-zone-over-the-field-is-no-obstacle-the-plan-is-the-permission
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [3 60 2] :max [3 70 3] :owner "x" :allow #{}}
               s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} [zone] 60))]
-          (is (= #{[2 64 2] [2 64 3]} (set (keys (placed s)))))
-          (is (= ["air" "air"] (mapv #(block-at s 3 64 %) [2 3])))
-          (is (true? (finished? s))))))))
+          (is (= #{[2 64 2] [3 64 2] [2 64 3] [3 64 3]} (set (keys (placed s))))))))))
 
 (deftest a-zone-allowing-place-and-dig-lets-the-field-be-worked
   (async done
@@ -319,10 +332,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zone {:name "keep-out" :min [3 60 2] :max [3 70 2] :owner "x" :allow #{}}
-              [r s] (await (child-result 'jobs.farm.plant {:plan "mix"} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]})
-                                         {"mix" (plan-of)} [zone] 20))]
-          (is (= {:planted 1 :skipped [] :refused [{:pos {:x 3 :y 64 :z 2} :reason :zone}] :short ["carrot"] :reason :no-seed} r))
+        (let [[r s] (await (child-result 'jobs.farm.plant {:plan "mix"} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]})
+                                         {"mix" (plan-of) "other" (foreign-plan [[3 64 2]])} [] 20))]
+          (is (= {:planted 1 :skipped [] :refused [{:pos {:x 3 :y 64 :z 2} :reason :footprint}] :short ["carrot"] :reason :no-seed} r))
           (is (= #{[2 64 2]} (set (keys (placed s))))))))))
 
 (deftest plant-over-a-plan-asks-the-rules-again-right-before-the-place
@@ -331,8 +343,8 @@
       (fn ^:async t []
         (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "farmland" [[8 0]]) {:inventory [(item "wheat_seeds" 3)]}) {"mix" plan} [])
-              zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
-          (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
+              late (foreign-plan [[8 64 0]])]
+          (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
           (core/submit! (:eng s) (list 'jobs.farm.plant {:plan "mix"}) {})
           (dotimes [_ 6]
             (swap! (:clock s) + 700)
@@ -375,10 +387,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0] [8 64 1]] :want {:crop "wheat"}}]}
-              zone {:name "late" :min [8 60 0] :max [8 70 1] :owner "x" :allow #{}}
+              late (foreign-plan [[8 64 0] [8 64 1]])
+              ground-zone {:name "late" :min [8 63 0] :max [8 63 1] :owner "x" :allow #{}}
               s (setup (world-of (ground "dirt" [[8 0]]) (ground "farmland" [[8 1]])
                                  {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 5)]}) {"mix" plan} [])]
-          (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
+          (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {})
+                                                       (world/set-zones! (:w s) [ground-zone])
+                                                       (impl token args)))
           (core/submit! (:eng s) (list job {:plan "mix"}) {})
           (dotimes [_ 30]
             (swap! (:clock s) + 700)
@@ -398,7 +413,7 @@
                             {"mix" (plan-of)} [zone] 60))]
           (is (empty? (events-of s :till.skipped)) "the till child never saw the cell"))))))
 
-(deftest a-cut-cell-in-a-zone-that-forbids-placing-is-not-sown-again
+(deftest a-cut-cell-in-a-zone-that-forbids-placing-is-sown-again-the-plan-is-the-permission
   (async done
     (tu/run-async done
       (fn ^:async t []

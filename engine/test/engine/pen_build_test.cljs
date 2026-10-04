@@ -103,18 +103,15 @@
 
 (def zone b/zone)
 
-(deftest a-cell-in-a-zone-is-reported-not-forced
+(deftest a-cell-in-a-foreign-zone-is-built-the-plan-is-the-permission
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan)} {}
-                                             [(zone "shrine" [4 64 3] [4 64 3] #{})]))
-              [warn] (kinds-of seen :pen-build.leaky)]
-          (is (= "air" (h/block-at p 4 64 3)))
-          (is (= :leak (:reason result)))
-          (is (= [[4 64 3]] (mapv :pos (get-in result [:built :refused]))))
-          (is (= [{:pos [4 64 3] :reason :zone :zone "shrine"}] (:refused warn)))
-          (is (= 1 (count (kinds-of seen :pen-build.leaky)))))))))
+                                             [(zone "shrine" [4 64 3] [4 64 3] #{})]))]
+          (is (= "oak_fence" (h/block-at p 4 64 3)))
+          (is (true? (:closed? result)))
+          (is (empty? (kinds-of seen :pen-build.leaky))))))))
 
 (deftest a-cell-in-another-plans-footprint-is-reported-not-forced
   (async done

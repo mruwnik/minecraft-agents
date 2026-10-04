@@ -102,8 +102,8 @@
                 [[{} {:plan "line"} [] [{:plan "line" :reason :plan}]]
                  [{"line" holed-plan} {:plan "line"} [] [{:plan "line" :reason :not-a-line :why :gap}]]
                  [{"line" (line-plan {})} {:plan "line"} :none [{:plan "line" :reason :no-zones}]]
-                 [{"line" (line-plan {})} {:plan "line"} [(b/zone "shrine" [7 64 0] [7 64 0] #{})]
-                  [{:plan "line" :reason :refused :refused [{:pos [7 64 0] :reason :zone :zone "shrine"}]}]]]]
+                 [{"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} {:plan "line"} []
+                  [{:plan "line" :reason :refused :refused [{:pos [7 64 0] :reason :footprint :plan "other"}]}]]]]
           (let [r (await (declines (spec "stone" 63 (kit {})) plans args zones))]
             (is (= declined (:declined r)) (pr-str declined))
             (is (= 1 (:warns r)) (pr-str declined))
@@ -422,13 +422,14 @@
           (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (= [{:pos [19 64 0] :why :gap}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
 
-(deftest a-corner-in-a-zone-declines-before-anything-is-placed
+(deftest a-corner-in-another-plans-footprint-declines-before-anything-is-placed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (declines (route-world l-route {} flat-top) {"line" (route-plan l-route {})} {:plan "line"}
-                                 [(b/zone "shrine" [19 64 0] [19 64 0] #{})]))]
-          (is (= [{:plan "line" :reason :refused :refused [{:pos [19 64 0] :reason :zone :zone "shrine"}]}] (:declined r)))
+        (let [r (await (declines (route-world l-route {} flat-top)
+                                 {"line" (route-plan l-route {}) "other" {:id "other" :parts [{:id "o" :cells [[19 64 0]] :want "stone"}]}}
+                                 {:plan "line"} []))]
+          (is (= [{:plan "line" :reason :refused :refused [{:pos [19 64 0] :reason :footprint :plan "other"}]}] (:declined r)))
           (is (= 0 (:places r))))))))
 
 (deftest a-cut-mid-build-of-a-corner-line-resumes-and-finishes-once
