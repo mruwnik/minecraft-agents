@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.jobs.util :as u]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as fs]))
@@ -47,6 +48,11 @@
   (into {} (for [dx (range w) dz (range h)] [(str (+ x dx) "," y "," (+ z dz)) name])))
 
 (def small {:w 3 :h 3 :range 6})
+
+(defn ice-path
+  "Ice at y 63 from x0 to x1, z -1 to 2: ground to walk on that is no spot (an ice top is not a floor to farm)."
+  [x0 x1]
+  (tu/box x0 63 -1 x1 63 2 "ice"))
 
 ;; ---- pure
 
@@ -154,18 +160,19 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (patch 4 0 3 3 63 "dirt")})]
           (await (child-outcome eng job (assoc small :range 8 :walk false) 4))
-          (is (empty? (calls p "moveTo"))))))))
+          (is (empty? (tu/walked-to eng)))
+          (is (empty? (tu/walk-calls p))))))))
 
 (deftest walk-true-walks-and-hands-over
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (patch 4 0 3 3 63 "dirt")})
+        (let [{:keys [eng p]} (setup {:blocks (merge (ice-path -2 3) (patch 4 0 3 3 63 "dirt"))})
               r (await (child-outcome eng job (assoc small :range 8 :walk true) 4))]
           (is (= {:x 4 :y 63 :z 0} (:spot r)))
           (is (= true (:walked r)))
-          (is (= 1 (count (calls p "moveTo"))))
-          (is (= 4 (.-x (.-pos (.self p))))))))))
+          (is (= 1 (count (tu/walked-to eng))))
+          (is (u/within? (u/self-pos {:primitives p}) {:x 4 :y 64 :z 0} 2)))))))
 
 (deftest unreachable-spot-is-reported
   (async done
@@ -181,13 +188,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (patch 100 0 3 3 63 "dirt")})
+        (let [{:keys [eng p seen]} (setup {:blocks (merge (ice-path -2 99) (patch 100 0 3 3 63 "dirt"))})
+              _ (tu/short-walks! p 40 1)
               n (atom 0)
               orig (.-blocks p)
               _ (set! (.-blocks p) (fn [& a] (swap! n inc) (.apply orig p (to-array a))))
               r (await (child-outcome eng job (assoc small :range 8 :walk true :center {:x 102 :y 64 :z 1}) 12))]
           (is (= true (:walked r)))
-          (is (= 2 (count (calls p "moveTo"))) "far enough for a partial walk")
+          (is (= 2 (count (tu/walked-to eng))) "a walk cut short is partial, the next one arrives")
           (is (= 2 @n) "one water read per scan round (2 rounds); the walk rounds do not rescan")
           (is (= 1 (count (kinds seen :find-spot.found)))))))))
 

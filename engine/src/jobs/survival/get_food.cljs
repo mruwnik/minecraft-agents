@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [engine.triggers.hungry :as hungry]
             [jobs.survival.eat :as eat]))
 
@@ -156,7 +157,7 @@
   (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
     (when pos
       (access/trespass! c "get-food" trespass)
-      (let [walked (await (u/walk-near! c pos reach))]
+      (let [walked (await (near/walk-near! c pos reach))]
         (if (not= :there walked)
           (do (when (= :blocked walked) (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos))
               :continue)
@@ -248,7 +249,7 @@
     (or (await (collect-drops! c drop-radius))
         (when animal
           (let [apos (u/pos-of (.-pos animal))
-                walked (await (u/walk-near! c apos 2))]
+                walked (await (near/walk-near! c apos 2))]
             (case walked
               :there (await (swing! c animal))
               :partial :continue

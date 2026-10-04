@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.apiary :as apiary]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Keep the lit campfires of an apiary in the standard column: the fire one
@@ -224,7 +225,7 @@
 (defn ^:async work!
   "Walk to the fire, stand clear of its cell and do the action once."
   [c {:keys [pos action kind item]}]
-  (let [w (await (u/walk-near! c pos reach))]
+  (let [w (await (near/walk-near! c pos reach))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :continue)
@@ -238,7 +239,7 @@
   "A cut left a sink half done: walk back and run its steps again."
   [c]
   (let [{:keys [fire]} (:sinking (ctx/mem c))
-        w (await (u/walk-near! c fire reach))]
+        w (await (near/walk-near! c fire reach))]
     (case w
       :partial :continue
       :blocked (do (abandon! c fire :unreachable) :continue)

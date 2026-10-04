@@ -4,6 +4,7 @@
             [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [engine.triggers.pen-gate :as pg]))
 
 (def doc
@@ -363,7 +364,7 @@
   (let [{:keys [box target]} (:args c)
         centre (box-centre box)]
     (if (> (u/dist (u/self-pos c) centre) near-pen)
-      (if (= :blocked (await (u/walk-near! c centre approach-range)))
+      (if (= :blocked (await (near/walk-near! c centre approach-range {:doors :never})))
         (finish! c :unreachable)
         :continue)
       (let [answer (read-pen c)

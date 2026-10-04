@@ -13,7 +13,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -124,8 +124,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]}))]
-          (is (= 1 (count (calls p "moveTo"))))
+        (let [{:keys [p eng]} (await (first-round '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]}))]
+          (is (= 1 (count (tu/walked-to eng))))
           (is (= 1 (count (calls p "attack")))))))))
 
 (deftest fight-back-declines-when-hurt-or-nothing-is-near
@@ -224,7 +224,7 @@
 (def when-hostile-near (:when triggers/hostile-near))
 
 (defn holds? [world args]
-  (when-hostile-near (tu/fake world) {:data mem/empty-data :now 0} args))
+  (when-hostile-near (tu/fake-on-floor world) {:data mem/empty-data :now 0} args))
 
 (deftest hostile-near-needs-a-hostile-mob-within-radius
   (is (holds? {:entities [(zombie 5 0)]} {:radius 8}))
@@ -246,7 +246,7 @@
   (is (holds? {:blocks wall :entities [(zombie 5 0)]} {:radius 8 :visible-only false}) "visible-only false counts it again"))
 
 (deftest combat-hostiles-can-filter-or-prefer-visible
-  (let [p (tu/fake {:blocks wall :entities [(zombie 1 3 3) (zombie 2 4 0)]})
+  (let [p (tu/fake-on-floor {:blocks wall :entities [(zombie 1 3 3) (zombie 2 4 0)]})
         ids (fn [hs] (mapv #(.-id %) hs))]
     (is (= [2 1] (ids (combat/hostiles p 8))) "two arguments: unchanged, nearest first, sight ignored")
     (is (= [1] (ids (combat/hostiles p 8 {:sight :only}))))
@@ -254,8 +254,11 @@
 
 ;; ------------------------------------------------------- unreachable hostiles
 
-(defn walks-to [p pos]
-  (count (filter #(let [a (.. % -args -pos)] (and (= (:x pos) (.-x a)) (= (:z pos) (.-z a)))) (calls p "moveTo"))))
+(defn walks-to
+  "How many walks went to pos's x and z: walk-near! walks (their :moved entries) and moveTo calls."
+  [{:keys [p eng]} pos]
+  (+ (count (filter #(and (= (:x pos) (:x %)) (= (:z pos) (:z %))) (tu/walked-to eng)))
+     (count (filter #(let [a (.. % -args -pos)] (and (= (:x pos) (.-x a)) (= (:z pos) (.-z a)))) (calls p "moveTo")))))
 
 (deftest respond-retreats-from-a-hostile-it-cannot-reach
   (async done
@@ -266,12 +269,12 @@
           (dotimes [_ 3]
             (await (core/tick! eng))
             (swap! clock + 1000))
-          (is (= 3 (walks-to p {:x 6 :z 0})) "three blocked walks towards the zombie")
+          (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "three blocked walks towards the zombie")
           (is (< (:x (last-move p)) 0) "then it walks away instead")
           (dotimes [_ 3]
             (await (core/tick! eng))
             (swap! clock + 1000))
-          (is (= 3 (walks-to p {:x 6 :z 0})) "the unreachable zombie is not walked at again")
+          (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "the unreachable zombie is not walked at again")
           (is (zero? (count (calls p "attack")))))))))
 
 ;; ------------------------------------------------------- ranged mobs count further out
@@ -285,7 +288,7 @@
   (is (= 16 (:ranged-radius (:args triggers/hostile-near))) "16 by default"))
 
 (deftest combat-hostiles-takes-a-ranged-radius
-  (let [p (tu/fake {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
+  (let [p (tu/fake-on-floor {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
         ids (fn [hs] (mapv #(.-id %) hs))]
     (is (= [3] (ids (combat/hostiles p 8))))
     (is (= [3 2] (ids (combat/hostiles p 8 {:ranged-radius 16}))))))
@@ -294,8 +297,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round respond {:inventory sword :entities [(skeleton 7 13 0)]}))]
-          (is (pos? (walks-to p {:x 13 :z 0})) "armed and healthy: it closes in on the skeleton"))))))
+        (let [s (await (first-round respond {:inventory sword :entities [(skeleton 7 13 0)]}))]
+          (is (pos? (walks-to s {:x 13 :z 0})) "armed and healthy: it closes in on the skeleton"))))))
 
 ;; ------------------------------------------------------- retreat keeps going and minds walls
 

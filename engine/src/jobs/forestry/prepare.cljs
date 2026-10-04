@@ -5,6 +5,7 @@
             [engine.jobs.forestry :as forestry]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.farm.tidy :as tidy]
             [jobs.forestry.maintain :as maintain]))
 
@@ -395,7 +396,7 @@
   "Walk within reach of target; with column? also off the column of the planned cell. nil when ready to act, else
   :continue."
   [c cell target column?]
-  (let [w (await (u/walk-near! c target 3))]
+  (let [w (await (near/walk-near! c target 3))]
     (cond
       (= :partial w) :continue
       (= :blocked w) (fail! c cell :unreachable)

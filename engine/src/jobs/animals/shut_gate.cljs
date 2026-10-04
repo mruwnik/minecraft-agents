@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.apiary :as apiary]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [engine.triggers.pen-gate :as pg]))
 
 (def doc
@@ -105,7 +106,7 @@
       (fail-gate! c cell (if (= "unreachable" (.-status r)) :unreachable :refused)))))
 
 (defn ^:async walk-and-click! [c cell]
-  (case (await (u/walk-near! c (cell-pos cell) (:reach (:args c))))
+  (case (await (near/walk-near! c (cell-pos cell) (:reach (:args c)) {:doors :never}))
     :there (await (click! c cell))
     :partial :continue
     (fail-gate! c cell :unreachable)))

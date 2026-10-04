@@ -5,6 +5,7 @@
             [engine.events :as events]
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -38,7 +39,7 @@
   "An engine over the fake world spec with the plans {id plan} as its world data and the zones in test-zones, on dir
   when given."
   ([spec plans] (start spec plans (tu/tmp-dir)))
-  ([spec plans dir] (start spec plans dir (tu/fake spec)))
+  ([spec plans dir] (start spec plans dir (tu/fake-on-floor spec)))
   ([spec plans dir p]
    (let [[seen sink] (tu/legacy-capture-sink)
          w (world/of-data plans {} @test-zones)
@@ -91,7 +92,7 @@
 
 (deftest a-cell-is-classified-by-what-stands-on-it
   (are [here below above expected]
-       (= expected (maintain/classify (tu/fake {:blocks {"3,64,0" here "3,63,0" below "3,65,0" above}}) {:x 3 :y 64 :z 0} "oak"))
+       (= expected (maintain/classify (tu/fake-on-floor {:blocks {"3,64,0" here "3,63,0" below "3,65,0" above}}) {:x 3 :y 64 :z 0} "oak"))
     "oak_log" "dirt" "air" :ripe
     "oak_sapling" "dirt" "air" :growing
     "birch_sapling" "dirt" "air" :foreign
@@ -106,7 +107,7 @@
     "air" "dirt" "oak_log" :cramped))
 
 (deftest an-unloaded-cell-is-unloaded
-  (is (= :unloaded (maintain/classify (tu/fake {:unloaded ["3,64,0"]}) {:x 3 :y 64 :z 0} "oak"))))
+  (is (= :unloaded (maintain/classify (tu/fake-on-floor {:unloaded ["3,64,0"]}) {:x 3 :y 64 :z 0} "oak"))))
 
 ;; ------------------------------------------------------------------ fell-tree :at
 
@@ -134,7 +135,7 @@
         (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})]
           (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
           (is (= [[6 64 0] [6 65 0] [6 66 0] [6 67 0] [6 68 0]] (digs p)))
-          (is (= [[6 64 0]] (mapv pos-xyz (h/calls p "moveTo"))) "one walk, to the column's foot, none for the high logs"))))))
+          (is (= [[6 64 0]] (mapv (juxt :x :y :z) (tu/walked-to eng))) "one walk, to the column's foot, none for the high logs"))))))
 
 (deftest fell-tree-tries-a-wider-stand-when-the-foot-of-the-column-has-no-path
   (async done
@@ -142,14 +143,15 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})
               n (atom 0)]
-          (.override (.-world p) "moveTo"
+          (.override (.-world p) "steer"
                      (fn ^:async f [token args impl]
                        (if (= 1 (swap! n inc))
-                         #js {:status "blocked" :reason "noPath"}
+                         #js {:status "failed" :reason "test: the first walk goes nowhere"}
                          (await (impl token args)))))
           (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
           (is (= 5 (count (digs p))))
-          (is (= [2 3] (mapv #(.-range (.-args %)) (h/calls p "moveTo")))))))))
+          (is (= ["blocked" "arrived"] (take 2 (mapv :status (mapv :data (mem/entries (mem/view (:store eng)) :moved)))))
+              "the walk to within 2 of the foot is blocked, the one to within 3 arrives"))))))
 
 (deftest fell-tree-at-does-nothing-where-no-log-stands
   (async done
@@ -424,7 +426,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake oak-world)
+              p (tu/fake-on-floor oak-world)
               first-run (start oak-world {"forest" oak-cell} dir p)]
           (core/submit! (:eng first-run) (list job {:plan "forest"}) {})
           (loop [i 0]

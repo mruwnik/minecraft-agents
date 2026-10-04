@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.gate :as gate]
             [engine.jobs.forestry :refer [debts target-of sapling-for log-name? replant-kind]]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt.
@@ -40,7 +41,7 @@
   (let [p (:primitives c)]
     (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
       (do (ctx/update-mem! c dissoc :meal) :done)
-      (let [w (await (u/walk-near! c pos 3))]
+      (let [w (await (near/walk-near! c pos 3))]
         (case w
           :partial :continue
           (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
@@ -75,7 +76,7 @@
       (not (spot-allowed? c (:pos t))) :done
       (nil? sapling) :continue
       :else
-      (let [w (await (u/walk-near! c (:pos t) 3))]
+      (let [w (await (near/walk-near! c (:pos t) 3))]
         (case w
           :partial :continue
           :blocked (u/fail! c :plant_blocked "cannot reach the planting spot")

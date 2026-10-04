@@ -1,7 +1,8 @@
 (ns jobs.farm.fertilize
   (:require [engine.ctx :as ctx]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Use bone meal on crops that are not ripe: the crop at :at, or the unripe crops
@@ -79,7 +80,7 @@
           :done)
       (let [target (first todo)
             refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)
-            w (await (u/walk-near! c target 3))]
+            w (await (near/walk-near! c target 3))]
         (case w
           :partial :continue
           :blocked (do (refuse!) :continue)

@@ -299,7 +299,7 @@
       (fn ^:async t []
         (let [claim {:id "other" :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
               s (start (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan})]
-          (.override (.-world (:p s)) "moveTo"
+          (.override (.-world (:p s)) "steer"
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {"forest" far-plan "other" claim} {})
                        (await (impl token args))))
@@ -313,8 +313,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [claim {:id "other" :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
-              {:keys [p seen]} (await (run (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan "other" claim} {:plan "forest"} 20))]
-          (is (= [] (h/calls p "moveTo")) "asked when the cell is chosen, before the walk")
+              {:keys [seen eng]} (await (run (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan "other" claim} {:plan "forest"} 20))]
+          (is (= [] (tu/walked-to eng)) "asked when the cell is chosen, before the walk")
           (is (= [{:pos {:x 9 :y 64 :z 0} :reason :footprint}] (warns seen :prepare.refused))))))))
 
 (deftest the-body-steps-off-a-cell-before-soiling-and-planting-it
@@ -331,9 +331,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (forest-plan ["a" [[9 64 0] [3 64 0]] "oak"])
-              {:keys [p result seen]} (await (outcome (assoc (far-world {"9,64,0" "short_grass" "3,64,0" "short_grass"} (item "oak_sapling" 2)) :unreachable ["9,64,0"])
-                                                      {"forest" plan}))]
-          (is (= 3 (count (h/calls p "moveTo"))))
+              {:keys [p result seen eng]} (await (outcome (assoc (far-world {"9,64,0" "short_grass" "3,64,0" "short_grass"} (item "oak_sapling" 2)) :unreachable ["9,64,0"])
+                                                          {"forest" plan}))]
+          (is (= 3 (count (filter #(= 9 (:x %)) (tu/walked-to eng)))) "three walks toward the cell at x 9")
           (is (= [[3 64 0]] (digs p)))
           (is (= (expect {:cleared 1 :planted 1 :refused [{:pos [9 64 0] :reason :unreachable}]}) result))
           (is (= 1 (count (warns seen :prepare.refused)))))))))
@@ -451,7 +451,7 @@
       (fn ^:async t []
         (let [spec (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1))
               dir (tu/tmp-dir)
-              p (tu/fake spec)
+              p (tu/fake-on-floor spec)
               first-run (start spec {"forest" one-cell} dir p)]
           (core/submit! (:eng first-run) (list job {:plan "forest"}) {})
           (loop [i 0]

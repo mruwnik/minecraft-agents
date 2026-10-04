@@ -41,7 +41,7 @@
   (let [clock (atom 1000000)
         checks (atom [])
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake spec)
+        p (tu/fake-on-floor spec)
         logged (assoc-in registry/jobs ['jobs.farm.tend :check] (fn [c] (let [r (tend/check c)] (swap! checks conj r) r)))
         eng (core/create {:primitives p :jobs logged :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

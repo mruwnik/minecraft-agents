@@ -153,12 +153,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (tree 30 0 "oak" 3)})]
+        (let [{:keys [eng p seen clock]} (setup {:blocks (tree 30 0 "oak" 3)})]
           (tu/short-walks! p 10)
           (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 40}) {})
           (await (run-until-empty eng 2))
           (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
-          (await (run-until-empty eng 10))
+          (dotimes [_ 10] ; a walk cut short is a failed act: the clock moves past its backoff
+            (swap! clock + 30000)
+            (await (core/tick! eng)))
           (is (= [] (calls p "dig")))
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
@@ -745,7 +747,7 @@
 ;; ------------------------------------------------------ trigger args from the entry
 
 (defn trigger-holds [trigger world args]
-  ((:when trigger) (tu/fake world) (view-with :none nil nil 0) args))
+  ((:when trigger) (tu/fake-on-floor world) (view-with :none nil nil 0) args))
 
 (def zombie-at-12 {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}}]})
 

@@ -1,7 +1,8 @@
 (ns jobs.survival.fight-back
   (:require [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Equip the best weapon, step up to the nearest hostile within :range and hit
@@ -66,7 +67,7 @@
   [c target]
   (let [tpos (u/pos-of (.-pos target))
         r (if (> (u/dist (u/self-pos c) tpos) reach)
-            (await (u/walk-near! c tpos 2))
+            (await (near/walk-near! c tpos 2))
             :there)]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)

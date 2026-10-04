@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.apiary :as apiary]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre with shears
@@ -145,7 +146,7 @@
 (defn ^:async harvest!
   "Walk to the hive and use the tool once; book the outcome."
   [c pos tool]
-  (let [w (await (u/walk-near! c pos reach))]
+  (let [w (await (near/walk-near! c pos reach))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :continue)

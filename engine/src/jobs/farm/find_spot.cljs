@@ -1,6 +1,7 @@
 (ns jobs.farm.find-spot
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Read the ground around and pick where a :w x :h farm would go: flat first,
@@ -177,7 +178,7 @@
             result {:spot pos :spots found}]
         (if-not (:walk a)
           (do (ctx/result! c (assoc result :walked false)) :done)
-          (case (await (u/walk-near! c (update pos :y inc) 2))
+          (case (await (near/walk-near! c (update pos :y inc) 2))
             :partial :continue
             :blocked (do (ctx/result! c (assoc result :walked false :reason :unreachable)) :done)
             (do (ctx/result! c (assoc result :walked true)) :done)))))))

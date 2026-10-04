@@ -5,6 +5,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [plan.shape :as shape]))
 
 (def doc
@@ -240,7 +241,7 @@
   "Walk to within 3 of the stray; a walk that is blocked, or ends out of reach, counts a failure."
   [c {:keys [pos] :as stray}]
   (let [give-up (:give-up (:args c))
-        w (await (u/walk-near! c (pos-map pos) 3))]
+        w (await (near/walk-near! c (pos-map pos) 3))]
     (when (= :blocked w)
       (ctx/update-mem! c count-fail stray :unreachable give-up))
     (when (and (= :there w) (not (in-reach? c pos)))

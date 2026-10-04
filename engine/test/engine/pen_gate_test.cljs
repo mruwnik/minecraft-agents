@@ -119,7 +119,7 @@
 (defn fake-at
   "A fake world: the gate of pen-a open or shut, the body at x z."
   [open? x z & [more]]
-  (tu/fake (merge {:self {:pos {:x x :y 64 :z z}}
+  (tu/fake-on-floor (merge {:self {:pos {:x x :y 64 :z z}}
                    :blocks {"2,64,0" "oak_fence_gate"}
                    :states {"2,64,0" {:open open?}}}
                   more)))
@@ -178,7 +178,7 @@
 
 (defn start [spec plans]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake spec)
+        p (tu/fake-on-floor spec)
         w (world/of-data plans {})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
@@ -209,7 +209,8 @@
 (def ground (into {} (for [x (range -5 30) z (range -5 30)] [(str x ",63," z) "stone"])))
 
 (defn pen-world
-  "The pen ring with its gate at 2,64,0 (open?), the body at x z, and a second gate of pen-b at 20,64,0 when more."
+  "The pen ring with its gate at 2,64,0 (open?), the body at x z (the tests that walk start south of the ring, on the gate's
+  side: the planner may plan along a fence's free side, which the fake's block-wise steer cannot walk), and a second gate of pen-b at 20,64,0 when more."
   [open? x z & [more]]
   (merge {:self {:pos {:x x :y 64 :z z}}
           :blocks (merge ground ring {"2,64,0" "oak_fence_gate"})
@@ -220,7 +221,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 20))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {} 20))]
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (empty? (:list (core/state (:eng s)))))
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
@@ -255,7 +256,7 @@
       (fn ^:async t []
         (let [two (pen-plan "pen-a" [2 64 0])
               two (update two :parts conj {:id "gate2" :cells [[0 64 2]] :want gate-want})
-              spec (pen-world true 2 6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "0,64,2" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
+              spec (pen-world true 2 -6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "0,64,2" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
                                         :states {"2,64,0" {:open true} "0,64,2" {:open true} "20,64,0" {:open true}}})
               s (await (run-job spec {"pen-a" two "pen-b" pen-b} {:plan "pen-a"} 40))]
           (is (not (gate-open? (:p s) 2 64 0)))
@@ -267,7 +268,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [spec (pen-world true 2 6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
+        (let [spec (pen-world true 2 -6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
                                         :states {"2,64,0" {:open true} "20,64,0" {:open true}}})
               s (await (run-job spec {"pen-a" pen-a "pen-b" pen-b} {} 40))]
           (is (not (gate-open? (:p s) 2 64 0)))
@@ -304,7 +305,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (start (pen-world true 2 5) {"pen-a" pen-a})]
+        (let [{:keys [eng p seen]} (start (pen-world true 2 -5) {"pen-a" pen-a})]
           (core/register-reflex! eng {:trigger :pen-gate})
           (loop [i 0]
             (when (and (< i 30) (gate-open? p 2 64 0))

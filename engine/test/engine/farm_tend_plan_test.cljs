@@ -44,7 +44,7 @@
   ([spec plans zones jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake spec)
+        p (tu/fake-on-floor spec)
         w (world/of-data plans {} zones)
         eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
@@ -354,12 +354,12 @@
         (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "dirt" [[8 0]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" plan} [])
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
-          (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
+          (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
           (core/submit! (:eng s) (list 'jobs.farm.till {:from {:x 8 :y 63 :z 0} :to {:x 8 :y 63 :z 0} :for-plan "mix"}) {})
           (dotimes [_ 6]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
-          (is (seq (calls s "moveTo")))
+          (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
           (is (= "dirt" (block-at s 8 63 0))))))))
 
@@ -378,12 +378,12 @@
               zone {:name "late" :min [8 60 0] :max [8 70 1] :owner "x" :allow #{}}
               s (setup (world-of (ground "dirt" [[8 0]]) (ground "farmland" [[8 1]])
                                  {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 5)]}) {"mix" plan} [])]
-          (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
+          (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
           (core/submit! (:eng s) (list job {:plan "mix"}) {})
           (dotimes [_ 30]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
-          (is (seq (calls s "moveTo")))
+          (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
           (is (empty? (calls s "place")))
           (is (= ["dirt" "air" "air"] [(block-at s 8 63 0) (block-at s 8 64 0) (block-at s 8 64 1)])))))))

@@ -3,7 +3,8 @@
             [engine.jobs.gate :as gate]
             [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius logs-per-round max-partials eye-dist dig-reach]]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Fell the nearest tree (a log column with leaves near its top), two logs a
@@ -54,9 +55,9 @@
   (if (<= (eye-dist (u/self-pos c) pos) dig-reach)
     :there
     (let [foot (assoc pos :y (:y (:base (ctx/mem c))))
-          w (await (u/walk-near! c foot 2))]
+          w (await (near/walk-near! c foot 2))]
       (if (= :blocked w)
-        (await (u/walk-near! c foot 3))
+        (await (near/walk-near! c foot 3))
         w))))
 
 (defn ^:async dig-up!

@@ -26,7 +26,7 @@
   ([spec plans] (start spec plans []))
   ([spec plans zones]
    (let [[seen sink] (tu/capture-sink)
-         p (tu/fake spec)
+         p (tu/fake-on-floor spec)
          w (world/of-data plans {} zones)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
@@ -427,7 +427,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake tidy-spec)
+              p (tu/fake-on-floor tidy-spec)
               mk (fn []
                    (let [[seen sink] (tu/capture-sink)]
                      {:seen seen

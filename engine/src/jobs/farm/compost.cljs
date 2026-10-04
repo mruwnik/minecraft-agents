@@ -1,7 +1,8 @@
 (ns jobs.farm.compost
   (:require [engine.ctx :as ctx]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Feed a composter what a farm cannot use and take the bone meal it makes. Walks
@@ -132,7 +133,7 @@
               (finish! c {:level level}))
 
             :else
-            (let [w (await (u/walk-near! c pos 3))]
+            (let [w (await (near/walk-near! c pos 3))]
               (case w
                 :partial :continue
                 :blocked (strike! c level)

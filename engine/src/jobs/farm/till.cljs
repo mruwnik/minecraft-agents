@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells,
@@ -132,7 +133,7 @@
 
         :else
         (let [[target _] (nearest c cands)
-              w (await (u/walk-near! c target 3))]
+              w (await (near/walk-near! c target 3))]
           (case w
             :partial :continue
             :blocked (do (bump! c target :unreachable) :continue)
