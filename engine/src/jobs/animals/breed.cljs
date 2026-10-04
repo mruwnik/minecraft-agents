@@ -40,7 +40,11 @@
   item), :emptied (unequipped, or already empty) or :full (no free slot: the
   food stays in hand, and a warn breed.hand-full); no :hand when nothing was
   fed. A cut job restores the hand when it resumes and ends; a job cancelled
-  while cut does not (there is no cancel hook).")
+  while cut does not (there is no cancel hook). A run that fed at least two
+  animals leaves one body-memory entry of kind :bred/<mob> (:bred/cow, data
+  {:fed [uuids]}, the engine's default policy: an hour), so a trigger on
+  (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)) breeds again
+  20 minutes after the last time; a run that fed nobody or one leaves nothing.")
 
 (def args
   {:mob {:doc "the mob type to breed, such as \"cow\"" :default nil}
@@ -80,6 +84,13 @@
   (when-not (:hand-noted (ctx/mem c))
     (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true)))
 
+(defn mark-bred!
+  "Leave one entry of kind :bred/<mob> when the run fed at least two animals, for (since :bred/cow)."
+  [c]
+  (let [fed (vec (:fed (ctx/mem c)))]
+    (when (>= (count fed) 2)
+      (ctx/remember! c (keyword "bred" (:mob (:args c))) {:fed fed}))))
+
 (defn ^:async finish!
   "Put the hand back, emit the outcome, hand it to the parent and end the job."
   [c reason]
@@ -94,6 +105,7 @@
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
                 :babies (count (animals/babies p mob radius))})]
+    (mark-bred! c)
     (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)))))
     (when (not= :fed reason)
       (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason))}))

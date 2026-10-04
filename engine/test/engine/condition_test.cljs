@@ -381,6 +381,13 @@
     (is (false? (at 3600000 [1000])) "3599 s ago")
     (is (true? (at 3602000 [1000])) "3601 s ago")))
 
+(deftest since-reads-a-namespaced-kind
+  (let [form '(or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200))
+        at (fn [now ts] (value form (env (tu/fake) (memory-at now :bred/cow ts forever))))]
+    (is (true? (value form (env))) "never")
+    (is (false? (at 1000000 [1000])) "999 s ago")
+    (is (true? (at 1202000 [1000])) "1201 s ago")))
+
 (deftest since-does-not-see-an-expired-entry
   (is (= ? (value '(> (since :looked) 0) (env (tu/fake) (memory-at 7200000 :looked [1000] {:cap 5 :ttl 3600000}))))))
 

@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.jobs.animals :as animals]
+            [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]))
 
@@ -70,6 +71,25 @@
           (is (= 0 (count-of s "wheat")))
           (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s))))
           (is (empty? (events-of s :breed.gave-up))))))))
+
+(defn bred-entry [{:keys [eng]} mob]
+  (mem/latest (mem/view (:store eng)) (keyword "bred" mob)))
+
+(deftest a-fed-run-records-the-kind-of-its-mob-for-the-since-fact
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 4))]
+          (is (= 2 (count (:fed (:data (bred-entry s "cow"))))))
+          (is (nil? (bred-entry s "sheep"))))))))
+
+(deftest a-run-that-fed-nobody-records-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} 4))]
+          (is (= :too-few (:reason (done-event s))))
+          (is (nil? (bred-entry s "cow"))))))))
 
 (deftest feeds-four-when-asked
   (async done

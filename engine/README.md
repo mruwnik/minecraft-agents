@@ -759,6 +759,8 @@ never evaluated. Not wired into the register or any command yet.
   A job sequence writes its own kind with `jobs.memory.remember`: `(seq (jobs.animals.breed {...}) (jobs.memory.remember
   {:kind :bred-cows}))` plus a trigger on `(or (not (known? (since :bred-cows))) (> (since :bred-cows) 1200))` breeds again
   20 minutes after the last time. The entry lasts an hour unless `:ttl-s` says longer; once it expires the condition is unknown.
+  `jobs.animals.breed` writes such a kind itself, `:bred/<mob>` (e.g. `:bred/cow`), when a run fed at least two animals, so
+  `(since :bred/cow)` needs no `remember`; a run that fed nobody leaves nothing.
 - `compile` validates once, at registration: an unknown symbol, wrong arity,
   wrong argument type (`known?` also refuses a literal), incomparable `=`, a bad held-for duration, a leading
   quote or a non-boolean top is refused as data `{:ok false :reason :at
