@@ -88,12 +88,31 @@
       (let [n (cut-at rest budget)]
         (recur (str/trim (subs rest n)) (conj out (str/trim (subs rest 0 n))))))))
 
+(def player-name #"[A-Za-z0-9_]{3,16}")
+
+(defn budget
+  "Characters one line may hold: all of max-chars, less the /tell header for a whisper."
+  [to]
+  (if to (- (:max-chars limits) (count (str "/tell " to " "))) (:max-chars limits)))
+
+(defn validate
+  "The one check for a single outgoing line, to all or to the player `to`:
+  {:message cleaned}, or {:status \"cannot\" :reason bad-name|empty|command|too-long}."
+  [message to]
+  (let [cleaned (clean message)]
+    (cond
+      (not (or (nil? to) (and (string? to) (re-matches player-name to)))) {:status "cannot" :reason "bad-name"}
+      (empty? cleaned) {:status "cannot" :reason "empty"}
+      (str/starts-with? cleaned "/") {:status "cannot" :reason "command"}
+      (> (count cleaned) (budget to)) {:status "cannot" :reason "too-long"}
+      :else {:message cleaned})))
+
 (defn parts
   "{:parts [line ...]} for text, to a player (a whisper) or all; or
   {:status \"cannot\" :reason \"command\"} when the text or any part starts with a slash."
   [text to]
   (let [cleaned (clean text)
-        budget (if to (- (:max-chars limits) (count (str "/tell " to " "))) (:max-chars limits))
+        budget (budget to)
         ps (split cleaned budget)]
     (if (or (str/starts-with? cleaned "/") (some #(str/starts-with? % "/") ps))
       {:status "cannot" :reason "command"}
@@ -108,10 +127,13 @@
   "The act-boundary check for one :chat line; args is the JS object handed to the
   act. Blocked lines never reach the primitive. Waits for the gap, calls the
   primitive, records the time only when it was sent. Returns the primitive's result.
-  The primitive is handed the cleaned message: it does no cleaning of its own."
+  Validated by `validate`; the primitive is handed the cleaned message and does no checking of its own."
   [eng p token args]
-  (let [cleaned (js/Object.assign #js {} args #js {:message (clean (.-message args))})]
-    (await (enqueue! eng #(send-gated! eng (fn [t a] (.call (aget p "chat") p t a)) token cleaned)))))
+  (let [{:keys [message status reason]} (validate (.-message args) (.-to args))]
+    (if-not message
+      #js {:status status :reason reason}
+      (let [cleaned (js/Object.assign #js {} args #js {:message message})]
+        (await (enqueue! eng #(send-gated! eng (fn [t a] (.call (aget p "chat") p t a)) token cleaned)))))))
 
 (defn ^:async send-gated!
   "One serialized, rate-limited send through `send-line`, shared by jobs and the direct chat API."
@@ -132,16 +154,9 @@
 (defn ^:async direct!
   "Fast control-adjacent chat; shares limits with job chat and never acquires the body lease."
   [eng message to]
-  (let [cleaned (clean message)
-        to-valid? (or (nil? to) (and (string? to) (re-matches #"[A-Za-z0-9_]{3,16}" to)))
-        budget (if to (- (:max-chars limits) (count (str "/tell " to " "))) (:max-chars limits))
-        invalid (cond
-                  (not to-valid?) {:status "cannot" :reason "bad-name"}
-                  (empty? cleaned) {:status "cannot" :reason "empty"}
-                  (str/starts-with? cleaned "/") {:status "cannot" :reason "command"}
-                  (> (count cleaned) budget) {:status "cannot" :reason "too-long"})]
-    (if invalid
-      invalid
+  (let [{cleaned :message :as checked} (validate message to)]
+    (if-not cleaned
+      checked
       (let [state (.get chat-states eng)
             pending (if state (.-pending state) 0)]
         (if (or (pos? pending) (.has direct-busy eng))

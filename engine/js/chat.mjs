@@ -1,10 +1,8 @@
 // Chat and whisper: send one line, then listen briefly for
 // the server's refusal (a system line only this body sees; an unsigned /tell looks sent otherwise).
 
-export const CHAT_MAX = 256
-export const PLAYER_NAME = /^[A-Za-z0-9_]{3,16}$/
-
-// the message arrives cleaned (engine.chat/clean: control characters and § gone, trimmed); this layer only refuses a slash
+// The rules (cleaning, empty, slash, player name, length budget) live in engine.chat/validate, which gate! and
+// direct! run before any send. This layer keeps the Mineflayer calls, the server-refusal parsing and assertSendable.
 
 const REFUSALS = [/^Command had invalid signature/, /^No player was found/, /^Unknown or incomplete command/, /^An unexpected error occurred trying to execute that command/, /^That player cannot be found/i]
 
@@ -22,17 +20,18 @@ const listen = async (ctx, ms, stepMs) => {
   ctx.alive()
 }
 
-// last guard at the send: a public part that starts with a slash would be a command, so it is never sent
-export const sendPublic = (bot, part) => {
-  if (part.startsWith('/')) throw new Error('refusing to send a chat line that starts with a slash')
-  bot.chat(part)
+// Last line of defence, not cleaning: a line that is not a string, starts with a slash (a command) or holds a
+// control character (a second line) is never sent.
+export const assertSendable = message => {
+  if (typeof message !== 'string' || message.startsWith('/') || /[\x00-\x1f\x7f]/.test(message)) {
+    throw new Error('refusing to send a chat line that is not a string, starts with a slash or holds a control character')
+  }
 }
 
 export async function say (bot, ctx, a, { timeScale = 1, listenMs = 1000 } = {}) {
   const message = a.message
   const to = a.to
-  if (message.startsWith('/')) return { status: 'cannot', reason: 'command' }
-  if (to && !PLAYER_NAME.test(to)) return { status: 'cannot', reason: 'bad-name' }
+  assertSendable(message)
   if (to && !Object.hasOwn(bot.players ?? {}, to)) return { status: 'gone', to }
   const refusals = []
   const onMessage = (text, position) => {
@@ -44,7 +43,7 @@ export async function say (bot, ctx, a, { timeScale = 1, listenMs = 1000 } = {})
   bot.on('messagestr', onMessage)
   ctx.onAbort(unsubscribe)
   try {
-    to ? bot.whisper(to, message) : sendPublic(bot, message)
+    to ? bot.whisper(to, message) : bot.chat(message)
     await listen(ctx, listenMs * timeScale, 50 * timeScale)
   } finally {
     unsubscribe()

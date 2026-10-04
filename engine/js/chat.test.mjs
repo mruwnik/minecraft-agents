@@ -79,22 +79,24 @@ test('a cut rejects and removes the listener', async () => {
   assert.equal(bot.listenerCount('messagestr'), before)
 })
 
-test('a message that starts with a slash is a command and is never sent', async () => {
-  for (const [message, to] of [['/op me', undefined], ['/op me', 'Steve']]) {
-    const bot = chatBot()
-    assert.deepEqual(await say(bot, ctx(), { message, to }, OPTS()), { status: 'cannot', reason: 'command' }, message)
-    assert.deepEqual(bot.sent, [])
+// the last-line assertion: engine.chat/validate cleans and refuses first, so reaching the sink with these is a bug
+test('the sink throws on a leading slash or any control character, to all or to a player, and sends nothing', async () => {
+  const bad = ['/op me', '\n/stop', 'hi\nthere', 'a\u0000b', 'tab\there', 'del\u007f', undefined, 42]
+  for (const to of [undefined, 'Steve']) {
+    for (const message of bad) {
+      const bot = chatBot()
+      await assert.rejects(say(bot, ctx(), { message, to }, OPTS()), /refusing/, String(message))
+      assert.deepEqual(bot.sent, [])
+    }
   }
 })
 
-test('say refuses bad whisper targets and prototype names', async () => {
+test('say leaves whisper targets not in the player list gone, prototype names included', async () => {
   const cases = [
     ['constructor', { status: 'gone', to: 'constructor' }],
     ['toString', { status: 'gone', to: 'toString' }],
     ['__proto__', { status: 'gone', to: '__proto__' }],
-    ['@a', { status: 'cannot', reason: 'bad-name' }],
-    ['Name extra', { status: 'cannot', reason: 'bad-name' }],
-    ['ab', { status: 'cannot', reason: 'bad-name' }]
+    ['@a', { status: 'gone', to: '@a' }]
   ]
   for (const [to, expected] of cases) {
     const bot = chatBot()

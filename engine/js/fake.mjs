@@ -3,7 +3,7 @@
 
 import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
-import { PLAYER_NAME } from './chat.mjs'
+import { assertSendable } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeTrade } from './fake-trade.mjs'
@@ -335,8 +335,7 @@ function defaultActs (s, emit) {
     },
 
     async chat (token, { message, to }) {
-      if (message.startsWith('/')) return { status: 'cannot', reason: 'command' }
-      if (to && !PLAYER_NAME.test(to)) return { status: 'cannot', reason: 'bad-name' }
+      assertSendable(message)
       if (to && !s.entities.some(e => e.kind === 'player' && (e.username === to || e.name === to))) return { status: 'gone', to }
       s.chat.push({ message, to })
       return to ? { status: 'sent', parts: 1, to } : { status: 'sent', parts: 1 }

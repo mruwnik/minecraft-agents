@@ -246,3 +246,74 @@
           (is (= "rate" (:reason r)))
           (is (= 1 (:parts r)))
           (is (= 1 (count (chat-lines (:p s))))))))))
+
+;; ------------------------------------------------------------------ one validator for every send
+
+(def bad-sends
+  [["\n/stop" nil "command"]
+   ["§/x" nil "command"]
+   ["  /x" nil "command"]
+   ["/op x" "Steve" "command"]
+   [js/undefined nil "empty"]
+   [nil nil "empty"]
+   ["  \n " nil "empty"]
+   ["hello" "not a valid name" "bad-name"]
+   ["hello" "ab" "bad-name"]
+   ["hello" "Steve\n/op" "bad-name"]
+   ["hello" 42 "bad-name"]
+   [(apply str (repeat 257 "x")) nil "too-long"]
+   [(apply str (repeat 250 "x")) "Steve" "too-long"]])
+
+(deftest validate-cleans-and-refuses
+  (are [message to reason] (= reason (:reason (chat/validate message to)))
+    "\n/stop" nil "command"
+    "§/x" nil "command"
+    "  /x" nil "command"
+    js/undefined nil "empty"
+    "hello" "ab" "bad-name"
+    (apply str (repeat 257 "x")) nil "too-long"
+    "hello" nil nil)
+  (is (= {:message "hi /op x"} (chat/validate "hi\n/op x" nil)))
+  (is (= {:message "a b c d"} (chat/validate "  a\nb §c\u0000d " nil))))
+
+(deftest gate-refuses-every-bad-send-before-the-primitive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup no-gap)
+              calls (atom 0)
+              _ (.setOwner p 1)
+              _ (aset p "chat" (fn [_ _] (swap! calls inc) (js/Promise.resolve #js {:status "sent"})))
+              rs (loop [todo bad-sends acc []]
+                   (if (empty? todo)
+                     acc
+                     (let [[message to] (first todo)]
+                       (recur (rest todo) (conj acc (await (chat/gate! eng p 1 #js {:message message :to to})))))))]
+          (is (= (mapv last bad-sends) (mapv #(.-reason %) rs)))
+          (is (every? #(= "cannot" (.-status %)) rs))
+          (is (zero? @calls))
+          (is (empty? @(:said eng))))))))
+
+(deftest direct-refuses-every-bad-send-before-the-primitive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup no-gap)
+              calls (atom 0)
+              _ (aset p "chatDirect" (fn [_] (swap! calls inc) (js/Promise.resolve #js {:status "sent"})))
+              rs (loop [todo bad-sends acc []]
+                   (if (empty? todo)
+                     acc
+                     (let [[message to] (first todo)]
+                       (recur (rest todo) (conj acc (await (chat/direct! eng message to)))))))]
+          (is (= (mapv last bad-sends) (mapv :reason rs)))
+          (is (zero? @calls)))))))
+
+(deftest a-slash-after-a-newline-is-one-line-of-text-not-a-command
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup no-gap)
+              _ (.setOwner p 1)
+              _ (await (chat/gate! eng p 1 #js {:message "hi\n/op x"}))]
+          (is (= ["hi /op x"] (chat-lines p))))))))

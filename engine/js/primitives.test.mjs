@@ -2177,13 +2177,10 @@ test('drive on a sleeping body writes leave_bed', () => {
   assert.equal(leaveBeds(bot).length, 1)
 })
 
-test('craft and chat with bad args reject with bad-args', async () => {
+test('craft with bad args rejects with bad-args', async () => {
   const { p } = rig()
-  const bad = [['craft', {}], ['craft', { item: '' }], ['craft', { item: 'stick', count: 0 }], ['craft', { item: 'stick', count: 1.5 }], ['craft', { item: 'stick', table: { x: 1 } }],
-    ['chat', {}], ['chat', { message: 'hi', to: '' }], ['chat', { message: 'hi', to: 'ab' }], ['chat', { message: 'hi', to: 'a b c' }], ['chat', { message: 'hi', to: 'x'.repeat(17) }],
-    ['chat', { message: '' }],
-    ['chat', { message: 'x'.repeat(257) }], ['chat', { message: 'x'.repeat(245), to: 'Steve' }]]
-  for (const [name, args] of bad) await assert.rejects(p[name]('t1', args), err => err.code === 'bad-args', name)
+  const bad = [{}, { item: '' }, { item: 'stick', count: 0 }, { item: 'stick', count: 1.5 }, { item: 'stick', table: { x: 1 } }]
+  for (const args of bad) await assert.rejects(p.craft('t1', args), err => err.code === 'bad-args', JSON.stringify(args))
 })
 
 test('craft and chat with a stale token reject with cut', async () => {
@@ -2213,21 +2210,23 @@ test('craft through the wrapper crafts and chat through the wrapper sends', asyn
   assert.deepEqual(sent, ['hello'])
 })
 
-test('chat through the wrapper refuses a command and sends nothing', async () => {
+test('chat through the wrapper fails on what engine.chat would have refused and sends nothing', async () => {
   const { bot, p } = rig()
   const sent = []
   Object.assign(bot, { chat: m => sent.push(m), whisper: (...a) => sent.push(a), players: { Steve: {} } })
-  assert.deepEqual(await p.chat('t1', { message: '/op me' }), { status: 'cannot', reason: 'command' })
-  assert.deepEqual(await p.chat('t1', { message: '/op me', to: 'Steve' }), { status: 'cannot', reason: 'command' })
+  for (const args of [{ message: '/op me' }, { message: '/op me', to: 'Steve' }, { message: 'a\n/op me' }, {}, { message: undefined, to: 'Steve' }]) {
+    const r = await p.chat('t1', args)
+    assert.equal(r.status, 'failed', JSON.stringify(args))
+    assert.match(r.reason, /refusing/, JSON.stringify(args))
+  }
   assert.deepEqual(sent, [])
 })
 
-test('chat through the wrapper rejects bad whisper names and resolves gone for prototype names', async () => {
+test('chat through the wrapper resolves gone for names not in the player list, prototype names included', async () => {
   const { bot, p } = rig()
   const sent = []
   Object.assign(bot, { chat: m => sent.push(m), whisper: (...a) => sent.push(a), players: { Steve: {} } })
-  for (const to of ['@a', 'Name extra', 'ab']) await assert.rejects(p.chat('t1', { message: 'hi', to }), { code: 'bad-args' }, to)
-  assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'constructor' }), { status: 'gone', to: 'constructor' })
+  for (const to of ['@a', 'Name extra', 'ab', 'constructor']) assert.deepEqual(await p.chat('t1', { message: 'hi', to }), { status: 'gone', to }, to)
   assert.deepEqual(sent, [])
 })
 
