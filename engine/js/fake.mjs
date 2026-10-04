@@ -10,6 +10,7 @@ import { fakeTrade } from './fake-trade.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 import { dragLeashed } from './fake-leash.mjs'
 import { temptFollow } from './fake-tempt.mjs'
+import { railProperties } from './fake-rail.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 import { fakeEnchant } from './fake-enchant.mjs'
@@ -180,7 +181,7 @@ function defaultActs (s, emit) {
       if (Object.keys(b.properties).length) s.states.set(key(b.pos), b.properties)
       else s.states.delete(key(b.pos))
     }
-    return { status: 'placed', block: item, placed: { name: r.blocks[0].name, properties: r.blocks[0].properties } }
+    return { status: 'placed', block: item, placed: { name: r.blocks[0].name, properties: { ...railProperties(s, pos), ...r.blocks[0].properties } } }
   }
 
   // Where the body stands decides lava and water: lava is left by stepping out of it, water puts out fire.
@@ -428,7 +429,7 @@ export function createFake (spec = {}) {
   const s = initialState(spec)
   const ageOf = (k) => (s.ages.has(k) ? { age: s.ages.get(k) } : {})
   const propsOf = (k) => {
-    const properties = { ...(s.states.get(k) ?? {}), ...ageOf(k) }
+    const properties = { ...railProperties(s, parseKey(k)), ...(s.states.get(k) ?? {}), ...ageOf(k) }
     return Object.keys(properties).length ? { properties } : {}
   }
   const listeners = new Set()
