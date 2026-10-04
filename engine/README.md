@@ -1294,3 +1294,64 @@ Every converted body gets an (empty, when it has no bed or chest) `engine/memory
 
 Migrated entries have `:t` = the mtime of `places.json` and `:wt` 0. The place policy is `:ttl :forever`, so the first
 start's sweep keeps them (tested in `migrate_test.cljs`).
+
+`observe` now projects a small EDN status by default: rounded `:pos`, health,
+food, mode, and any current work or outstanding attention. Empty/nil fields,
+body names, cursors and generation UUIDs are omitted. `--verbose` retains the
+bounded machine status; `--raw` retains the complete engine snapshot.
+
+```bash
+node engine/tools/observe.mjs Bob --wait
+node engine/tools/observe.mjs Bob --wait --timeout 30s --watch j17
+node engine/tools/observe.mjs Bob --wait --chatter all --from Dan --observer builder
+node engine/tools/observe.mjs Bob --wait --chatter none --danger --disconnect
+```
+
+The external tool polls the existing EDN event API locally (250 ms default,
+`--poll-ms 50..5000`). The engine is unchanged. A wait defaults to 60 seconds
+(`--timeout` accepts milliseconds, seconds or minutes, maximum 60 minutes).
+Addressed public chat (whole body name, case insensitive), whispers when emitted
+by the running body, new/changed durable attention and explicitly watched job
+completion/failure wake immediately. `--chatter none|addressed|all` controls chat;
+`--from` narrows chat to a sender. Classification by a model is deferred.
+Danger and individual disconnections wake only with their explicit flags;
+exhausted reconnection (`:reconnect-failed`) wakes by default. This is a
+momentary notification, not a new durable engine attention request.
+
+Routine movement/action progress stays quiet. At timeout the tool returns a
+bounded summary of job completions/failures, pickups, health/disconnection
+outcomes and notices, or `{:wake :timeout :changed false}`. Summaries contain
+counts and at most four examples, with `:more?` when examples are omitted.
+The tool does not resolve attention requests or alter jobs/reflexes.
+
+Each named observer stores its EDN cursor and semantic attention signatures
+outside the engine state, in `state/observers/<body>/<observer>.edn`. The first
+call establishes a baseline at the current event cursor, including outstanding
+attention; later calls replay intervening events. Different observers are
+independent; simultaneous waits using the same observer return `:observer-busy`.
+There are at most 64 observer files per body and 4096 tracked attention requests;
+exceeding either limit is explicit. Reads require write access to this tool state
+folder. An initial baseline survives cancellation, while consumed cursors advance
+only after output is accepted by stdout. Cancellation/crashes can replay already
+printed events; delivery is at least once, not exactly once. `SIGINT`/`SIGTERM`
+cancel and release the lock, and dead-process locks are reclaimed. Stream gaps
+and engine start/restore events return a small `:reset` notice. No cursor or UUID
+appears in normal model-facing output.
+
+The tool can only expose events the body emits. Older body builds without a
+whisper listener do not expose incoming whispers; addressed public chat works
+through the existing chat event. Restart a body with the current build when
+upgrading its event support.
+
+Live validation used the isolated `ObserveWaitTest` body on the test server,
+with tool state under `/tmp/observe-wait-live`. Two-second quiet waits returned
+31-byte EDN (32 bytes including the newline). Real addressed public chat and whispers woke about 70–80 ms after
+injection in these samples; public banter remained quiet under `addressed` and
+woke under `all`, while `none` suppressed whispers. A real wheat pickup produced
+a timeout summary, and a running look-around job woke its watcher on completion.
+The test used the primary checkout's existing engine build and concurrent
+whisper-listener changes; this tool change contains no engine modifications.
+The temporary body stopped and its added whitelist entry was removed. Durable
+attention lifecycle, cancellation/replay, bounds and reset behavior are covered
+by simulated API tests; a live failure injection did not create required attention
+because the existing wait primitive normalized the malformed argument.
