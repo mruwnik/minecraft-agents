@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
+            [engine.notes :as notes]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.takeover :as takeover]
@@ -101,6 +102,17 @@
         (core/emit! eng {:source :system :kind :control_unavailable :level :error :text (str (.-message e))})
         nil))))
 
+(defn open-world
+  "The body's world (engine.world: plans, blueprints, zones) with its notes store (engine.notes) as :notes, in
+  the world folder state/worlds/<world>; the body's notes are written as agent's."
+  [{:keys [state-dir world agent root emit]}]
+  (let [dir (path/join (bodies/worlds-dir state-dir) world)]
+    (assoc (world/open {:plans-dir (path/join dir "plans")
+                        :blueprint-dir (path/resolve root ".." "blueprints")
+                        :zones-file (path/join dir "zones.edn")
+                        :emit emit})
+           :notes (notes/open {:world-dir dir :body agent :emit emit}))))
+
 (defn ^:async run
   "Start a body. Resolves to {:engine eng :stop f} or {:error text}."
   [{:keys [fresh?] :as opts}]
@@ -120,9 +132,7 @@
             p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
                                              :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
                                                         :onEvent on-view-event}}))
-            world (world/open {:plans-dir (path/join state-dir "worlds" (:world cfg) "plans")
-                               :blueprint-dir (path/resolve root ".." "blueprints")
-                               :zones-file (path/join state-dir "worlds" (:world cfg) "zones.edn")
+            world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                                :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
             eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
                               :body (:username cfg) :max-event-bytes events-max-bytes :world world})
