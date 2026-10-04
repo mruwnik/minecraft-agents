@@ -53,8 +53,7 @@
                                 (map #(select-keys (plan-over blocks goal %) [:status :refused]) [false true]))
     gap-up-around [10 65 1] :gap-up
     ceiling-around [10 64 1] :gap-low-ceiling
-    vine-around [10 66 1] :gap-takeoff
-    swim-around [12 64 1] :swim))
+    vine-around [10 66 1] :gap-takeoff))
 
 (deftest the-limited-planner-finds-no-whole-path-where-only-the-refused-step-leads
   (are [blocks goal refused] (= [{:status "found" :refused refused} false]
@@ -62,8 +61,25 @@
                                  (= "found" (:status (plan-over blocks goal true)))])
     gap-up-only [10 65 1] :gap-up
     ceiling-only [10 64 1] :gap-low-ceiling
-    vine-only [10 66 1] :gap-takeoff
-    swim-only [12 64 1] :swim))
+    vine-only [10 66 1] :gap-takeoff))
+
+;; water x 5..8, 3 deep (y 61..63) over stone at 60: a flush bank on the near side (stand 64), on the far side flush (x 9..14
+;; stand 64) or one higher (stand 65), which a floating body cannot climb onto
+(def deep-pond (merge (box 0 60 -8 14 60 10 "stone") (box 0 61 -8 4 63 10 "stone") (box 5 61 -8 8 63 10 "water")))
+(def deep-flush (merge deep-pond (box 9 61 -8 14 63 10 "stone")))
+(def deep-high (merge deep-pond (box 9 61 -8 14 64 10 "stone")))
+
+(deftest water-is-planned-within-the-limits
+  (are [blocks goal] (= {:status "found" :refused nil :swims true}
+                        (let [r (plan-over blocks goal true)]
+                          {:status (:status r) :refused (:refused r) :swims (contains? (:moves r) :swim)}))
+    swim-only [12 64 1]
+    deep-flush [12 64 1]))
+
+(deftest a-bank-too-high-to-leave-the-water-is-no-path-either-way
+  (are [limited?] (not= "found" (:status (plan-over deep-high [12 65 1] limited?)))
+    false
+    true))
 
 (deftest a-gap-over-4-is-never-planned
   (are [limited?] (= {:status "found" :refused nil :gap false}

@@ -8,9 +8,10 @@
 (def doc
   "Debug job: plan a path to :to with the path planner and follow it with the plan executor (steer), instead
   of moveTo. One round does the whole walk and ends :done. Plans from the body's cell within the executor's
-  abilities (the planner is told executor/planner-limits, so it walks round gap jumps, doors and water it cannot
-  do), still refuses a plan with a step the executor cannot walk (a start in water), re-plans when the body ends
-  off the plan (at most 5 times), and hands over {:status ...}: :arrived, :refused (:kind :at), :no-path
+  abilities (the planner is told executor/planner-limits, so it walks round gap jumps and doors it cannot do; it
+  swims), still refuses a plan with a step the executor cannot walk (a backstop), walks a partial plan only up to its
+  last step out of water, re-plans when the body ends off the plan (at most 5 times), and hands over {:status ...}:
+  :arrived, :refused (:kind :at), :no-path
   (:reason; :abilities with :kind :at when only a step the executor cannot do leads there), :stuck (:why :at),
   :gave-up (:reason :replan-limit), :failed (:reason) or :unsupported (no pathWorld), plus :replans. Emits
   :walk-plan.plan per plan, :walk-plan.replan, and :walk-plan.result (:kind as :refused-kind) with :ms, :walked
@@ -26,7 +27,9 @@
 
 (def max-timeout-s 120)
 (def max-settle-waits 20)
-(def climbables #{"ladder" "vine"})
+(def held-in
+  "Blocks at the feet that hold a body still enough to plan from: climbables, and water (it swims from there)."
+  #{"ladder" "vine" "water"})
 
 (defn check [_c] true)
 
@@ -64,14 +67,14 @@
     (js/Object.defineProperty "decide" #js {:value decide})))
 
 (defn ^:async settle!
-  "Wait (100 ms at a time, at most 20 waits) until the body stands on the ground or in a climbable."
+  "Wait (100 ms at a time, at most 20 waits) until the body stands on the ground, in a climbable or in water."
   [c]
   (let [p (:primitives c)
         grounded? (fn []
                     (let [s (.self p)
                           pos (.-pos s)
                           b (.blockAt p #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
-                      (or (.-onGround s) (contains? climbables (some-> b .-name)))))]
+                      (or (.-onGround s) (contains? held-in (some-> b .-name)))))]
     (loop [n 0]
       (when (and (< n max-settle-waits) (not (grounded?)))
         (await (ctx/act c :wait #js {:ms 100}))
@@ -122,6 +125,13 @@
         (cond-> within
           (= "found" (.-status wide)) (assoc :beyond (executor/refusal executor/policy (plan-steps pw wide))))))))
 
+(defn dry-end
+  "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
+  bank too high to climb out, say)."
+  [steps]
+  (let [k (last (keep-indexed (fn [i s] (when-not (:swim s) i)) steps))]
+    (if k (subvec steps 0 (inc k)) [])))
+
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer act."
@@ -167,13 +177,14 @@
         (await (settle! c))
         (let [pw (path-world p)
               {:keys [r steps beyond]} (plan-within c pw to range weight)
-              planner-status (.-status r)]
+              planner-status (.-status r)
+              steps (if (= "partial" planner-status) (dry-end steps) steps)]
           (cond
             beyond
             (finish! c {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
                      t0 walked walk-ms)
 
-            (= "none" planner-status)
+            (or (= "none" planner-status) (and (= "partial" planner-status) (< (count steps) 2)))
             (finish! c {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans} t0 walked walk-ms)
 
             :else

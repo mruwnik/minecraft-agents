@@ -17,9 +17,12 @@
 
 (def policy
   "Every number the executor uses, and the step kinds it walks."
-  {:moves #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb}
+  {:moves #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb
+            :swim :swim-up :swim-down :exit}
    :max-replans 5          ; re-plans before giving up
    :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
+   :swim-no-progress-ticks 120  ; the same for a step in water: a body that plunged in comes up at ~1.2 blocks/s
+   :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
    :arrive-xz 0.35         ; final step: horizontal distance to px/pz
    :arrive-y 0.5           ; |feet y - stand-y| that counts as at a step's height
    :off-plan-xz 1.5        ; horizontal distance from the current leg that counts as off the plan
@@ -45,6 +48,13 @@
    :swim-down :exit])
 
 (def sprint-moves #{:walk :diagonal})
+(def swim-moves #{:swim :swim-up :swim-down :exit})
+(def climb-moves #{:climb-up :climb-down :jump-climb})
+
+(defn water-step?
+  "A step in a water cell, or a swimming move (an exit ends on the bank)."
+  [{:keys [move swim]}]
+  (boolean (or swim (contains? swim-moves move))))
 
 ;; ---------------------------------------------------------------- steps
 
@@ -70,9 +80,9 @@
   (cond
     (not (contains? (:moves policy) move)) move
     (some? opens) :open
-    swim :swim))
+    (and swim (not (contains? (:moves policy) :swim))) :swim))
 
-(def takeoff-blockers #{:climb-up :climb-down :jump-climb})
+(def takeoff-blockers climb-moves)
 
 (defn gap-cells
   "[n dx dz] of a gap: the empty cells between takeoff and landing, and the step's direction; n is nil
@@ -250,12 +260,16 @@
 ;; ---------------------------------------------------------------- tick
 
 (defn off-plan?
-  "Too far from the leg (previous step's point to the aim), or too far below or above it."
-  [policy prev step [ax az] {:keys [x y z]}]
+  "Too far from the leg (previous step's point to the aim), or too far below or above it. A body in water that is
+  below the leg sank or plunged in; it comes up again, so only the land counts that as falling off."
+  [policy prev step [ax az] {:keys [x y z in-water]}]
   (let [y1 (stand-y prev) y2 (stand-y step)]
     (or (> (dist-to-segment x z (:px prev) (:pz prev) ax az) (:off-plan-xz policy))
-        (< y (- (min y1 y2) (:off-plan-below policy)))
+        (and (not in-water) (< y (- (min y1 y2) (:off-plan-below policy))))
         (> y (+ (max y1 y2) (:off-plan-above policy))))))
+
+(defn no-progress-ticks [policy step]
+  (if (water-step? step) (:swim-no-progress-ticks policy) (:no-progress-ticks policy)))
 
 (defn stuck-why [{:keys [i tick since steps]}]
   (let [s (nth steps i)]
@@ -270,6 +284,14 @@
       (boolean (and (> (- sy y) (:rise policy))
                     (<= dist (:jump-xz policy))
                     (or on-ground on-climbable))))))
+
+(defn swim-jump?
+  "In water, jump (swim up) while the feet are below the step's height plus :swim-float: at the surface that keeps the
+  head out, under it the body at the step's level; onto a bank the water's lift and the push at its edge carry the body
+  out. On a :swim-down the body sinks."
+  [policy {:keys [move] :as step} {:keys [y]}]
+  (and (not= :swim-down move)
+       (< y (+ (stand-y step) (:swim-float policy)))))
 
 (defn gap-rule
   "The :gap-jump entry for the gap step i of steps; for a gap down, its :gap-jump-down entry when there is one."
@@ -293,12 +315,15 @@
                       (< past (:gap-past policy))))
         (jump? policy step pose dist))))
 
-(defn sprint? [policy steps i {:keys [on-ground]}]
+(defn sprint?
+  "Never in water: sprinting there is the server's swimming pose, a body one block high."
+  [policy steps i {:keys [on-ground in-water]}]
   (let [window (take 3 (drop i steps))]
     (boolean (if (= :gap (:move (first window)))
                (and (:sprint policy) (:sprint (gap-rule policy steps i)))
                (and (:sprint policy)
                     on-ground
+                    (not in-water)
                     (= 3 (count window))
                     (every? #(contains? sprint-moves (:move %)) window)
                     (not-any? #(some? (:cx %)) window))))))
@@ -316,9 +341,10 @@
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward moving? :back false :left false :right false
-                :jump (if (= :gap (:move step))
-                         (gap-jump? policy steps i pose dist)
-                         (jump? policy step pose dist))
+                :jump (cond
+                        (= :gap (:move step)) (gap-jump? policy steps i pose dist)
+                        (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)
+                        :else (jump? policy step pose dist))
                 :sneak false
                 :sprint (sprint? policy steps i pose)}
      :yaw yaw' :pitch 0}))
@@ -328,12 +354,15 @@
   [steps _now-tick]
   {:steps steps :i (min 1 (max 0 (dec (count steps)))) :since 0 :tick 0 :yaw nil})
 
-(defn arrived? [policy steps i {:keys [x z on-ground on-climbable] :as pose}]
+(defn arrived?
+  "At the final step: reached, close to its point, and held there: on the ground, on a climbable, or (a final step in a
+  water cell) floating."
+  [policy steps i {:keys [x z on-ground on-climbable in-water] :as pose}]
   (let [final (nth steps i)]
     (and (= i (dec (count steps)))
          (reached? policy final pose)
          (<= (dist-xz x z (:px final) (:pz final)) (:arrive-xz policy))
-         (boolean (or on-ground on-climbable)))))
+         (boolean (or on-ground on-climbable (and in-water (:swim final)))))))
 
 (defn tick
   "One physics tick: the controls for this pose, or :done."
@@ -353,7 +382,7 @@
       (and (pos? i) (off-plan? policy (nth steps (dec i)) step aim pose))
       {:state state' :done {:status :off-plan :at at :step i}}
 
-      (> (- n since) (:no-progress-ticks policy))
+      (> (- n since) (no-progress-ticks policy step))
       {:state state'
        :done {:status :stuck :at at :step i :move (:move step) :target [(:x step) (:y step) (:z step)]
               :why (stuck-why state')}}
