@@ -249,7 +249,7 @@
                 [[{:blocks (assoc ground "6,57,0" "iron_ore") :zones [{:name "test-zone" :min [6 57 0] :max [6 57 0]}]}
                   {:target [6 57 0]} :zone]
                  [{:blocks (assoc ground "6,57,0" "iron_ore")
-                   :plans {"wall" {:id "wall" :status :active :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}
+                   :plans {"wall" {:id "wall" :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}
                   {:target [6 57 0]} :footprint]
                  [{:blocks ground} {:target [6 57 0] :max-length 6} :too-far]
                  [{:blocks (merge ground (into {} (for [x (range -12 13) z (range -3 4)] [(str x ",55," z) "air"])))}

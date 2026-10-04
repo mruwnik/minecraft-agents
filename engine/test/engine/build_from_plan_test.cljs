@@ -27,8 +27,8 @@
 
 (defn pen-plan
   "A 3x3 fence ring at y 64 over x 2..4, z 2..4, a gate at 3 64 2 and a torch on the post at 2 64 2."
-  [status]
-  {:id "pen" :status status
+  []
+  {:id "pen"
    :parts [{:id "fence" :outline [[2 64 2] [4 64 4]] :want "oak_fence"}
            {:id "gate" :cells [[3 64 2]] :want {:block "oak_fence_gate" :facing :north}}
            {:id "light" :cells [[2 65 2]] :want "torch"}]})
@@ -45,7 +45,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan :active)})
+        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan)})
               result (await (h/child-outcome eng job {:plan "pen"} 200))
               order (mapv first (places p))]
           (is (every? #(= "oak_fence" (block p %)) ring))
@@ -60,7 +60,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (update (pen-plan :active) :parts conj {:id "eye" :cells [[3 65 2]] :want {:block "observer" :facing :north}})
+        (let [plan (update (pen-plan) :parts conj {:id "eye" :cells [[3 65 2]] :want {:block "observer" :facing :north}})
               {:keys [eng p]} (start {:inventory (conj kit {:name "observer" :count 1})} {"pen" plan})
               body-z (atom nil)]
           (.override (.-world p) "place"
@@ -78,7 +78,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan :active)})
+        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan)})
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= "north" (:facing (state-at p [3 64 2]))))
           (is (= [0] (mapv :yaw (clicks p "oak_fence_gate"))))
@@ -90,7 +90,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
                                                        {:name "torch" :count 1}]}
-                                          {"pen" (pen-plan :active)})
+                                          {"pen" (pen-plan)})
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= 4 (count (filter #(= "oak_fence" (block p %)) ring))))
           (is (= {"oak_fence" 3} (:short result)))
@@ -103,7 +103,7 @@
       (fn ^:async t []
         (let [built (into {"3,64,2" "oak_fence_gate" "2,65,2" "torch"}
                           (map (fn [[x y z]] [(h/cell-key x y z) "oak_fence"]) (remove #{[4 64 3]} ring)))
-              {:keys [eng p]} (start {:blocks built :inventory kit} {"pen" (pen-plan :active)})
+              {:keys [eng p]} (start {:blocks built :inventory kit} {"pen" (pen-plan)})
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= [[[4 64 3] "oak_fence"]] (places p)))
           (is (= 1 (:placed result))))))))
@@ -112,7 +112,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:blocks {"4,64,3" "stone"} :inventory kit} {"pen" (pen-plan :active)})
+        (let [{:keys [eng p]} (start {:blocks {"4,64,3" "stone"} :inventory kit} {"pen" (pen-plan)})
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (empty? (h/calls p "dig")))
           (is (= "stone" (block p [4 64 3])))
@@ -122,7 +122,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan :active)})]
+        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan)})]
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]
                        (if (= [4 3] [(.-x (.-pos args)) (.-z (.-pos args))])
@@ -138,7 +138,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "far" :status :active :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
+        (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               {:keys [eng]} (start {:inventory kit :unreachable (map #(apply h/cell-key %) (build/stand-cells [40 64 0] 64 nil #{}))} {"far" plan})
               result (await (h/child-outcome eng job {:plan "far"} 200))]
           (is (= {[40 64 0] :unreachable} (:given-up result)))
@@ -148,7 +148,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "far" :status :active :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
+        (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:inventory kit :unloaded ["40,64,0"]} {"far" plan})
               result (await (h/child-outcome eng job {:plan "far"} 200))]
           (is (seq (h/calls p "moveTo")))
@@ -167,11 +167,9 @@
 (deftest the-check-declines-a-plan-it-cannot-build-with-one-warn
   (let [kit-spec {:inventory kit}]
     (is (= [0 [{:plan "nope" :reason "no such plan"}]] (declines kit-spec {} {:plan "nope"})))
-    (is (= [0 [{:plan "pen" :reason "the plan is :retired"}]] (declines kit-spec {"pen" (pen-plan :retired)} {:plan "pen"})))
-    (is (= [0 [{:plan "pen" :reason "the plan is :proposed"}]] (declines kit-spec {"pen" (pen-plan :proposed)} {:plan "pen"})))
-    (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan :active)} {:plan "pen" :part "nope"})))
+    (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
     (is (= [0 [{:plan "pen" :reason "nothing carried to build with: oak_fence 7, oak_fence_gate 1, torch 1"}]]
-           (declines {:inventory []} {"pen" (pen-plan :active)} {:plan "pen"})))))
+           (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen"})))))
 
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start {:inventory kit} {})]
@@ -210,13 +208,13 @@
 
 (defn zone [name [x0 y0 z0] [x1 y1 z1] allow] {:name name :min [x0 y0 z0] :max [x1 y1 z1] :owner "someone" :allow allow})
 
-(def other-plan {:id "other" :status :active :parts [{:id "o" :cells [[4 64 3]] :want "stone"}]})
+(def other-plan {:id "other" :parts [{:id "o" :cells [[4 64 3]] :want "stone"}]})
 
 (deftest cells-in-a-zone-are-refused-and-listed-the-rest-built
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan :active)} [(zone "shrine" [4 64 2] [4 64 4] #{})])
+        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan)} [(zone "shrine" [4 64 2] [4 64 4] #{})])
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= 6 (:placed result)))
           (is (= #{[4 64 2] [4 64 3] [4 64 4]} (set (map :pos (:refused result)))))
@@ -229,7 +227,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan :active)} [(zone "yard" [2 64 2] [4 65 4] #{:place})])
+        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)} [(zone "yard" [2 64 2] [4 65 4] #{:place})])
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= 9 (:placed result)))
           (is (= [] (:refused result))))))))
@@ -238,30 +236,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan :active) "other" other-plan})
+        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan) "other" other-plan})
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
           (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result)))
           (is (= "air" (block p [4 64 3])))
           (is (= 8 (:placed result))))))))
 
-(deftest a-retired-plan-claims-nothing-for-the-builder
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan :active) "other" (assoc other-plan :status :retired)})
-              result (await (h/child-outcome eng job {:plan "pen"} 200))]
-          (is (= 9 (:placed result)))
-          (is (= [] (:refused result))))))))
-
 (deftest no-zone-list-declines-and-never-means-no-zones
   (is (= [0 [{:plan "pen" :reason "no zone list has been read"}]]
-         (declines {:inventory kit} {"pen" (pen-plan :active)} {:plan "pen"} nil))))
+         (declines {:inventory kit} {"pen" (pen-plan)} {:plan "pen"} nil))))
 
 (deftest the-access-is-checked-again-right-before-each-place
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p w]} (start {:inventory kit} {"pen" (pen-plan :active)})]
+        (let [{:keys [eng p w]} (start {:inventory kit} {"pen" (pen-plan)})]
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
@@ -276,7 +265,7 @@
 (defn ^:async run-beside
   "Build the pen with the fluid at 5 64 3 (beside the ring cell 4 64 3) and args: [placed, refused]."
   [fluid args]
-  (let [{:keys [eng]} (start {:inventory kit :blocks {"5,64,3" fluid}} {"pen" (pen-plan :active)})
+  (let [{:keys [eng]} (start {:inventory kit :blocks {"5,64,3" fluid}} {"pen" (pen-plan)})
         result (await (h/child-outcome eng job (assoc args :plan "pen") 200))]
     [(:placed result) (:refused result)]))
 
@@ -299,7 +288,7 @@
 (defn ^:async build
   "Build plan parts {:id .. :cells .. :want ..} over the blocks with the inventory: [result p seen]."
   [parts blocks inventory]
-  (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} {"house" {:id "house" :status :active :parts parts}})
+  (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} {"house" {:id "house" :parts parts}})
         result (await (h/child-outcome eng job {:plan "house"} 200))]
     [result p seen]))
 
@@ -362,7 +351,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:blocks ground :inventory [{:name "oak_stairs" :count 3}]}
-                                          {"house" {:id "house" :status :active
+                                          {"house" {:id "house"
                                                     :parts [{:id "step" :cells [[3 64 3]] :want {:block "oak_stairs" :facing :east}}]}})]
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]

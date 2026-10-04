@@ -23,11 +23,11 @@ assigns those historic inspection intentions to that world; contradictory
 marker/inspection anchors and duplicate inspection identities are refused.
 The legacy JSON files remain untouched.
 
-For an existing native plan, the migration preserves its status, geometry,
+For an existing native plan, the migration preserves its geometry,
 assignments, note, and other native metadata. It adds `:kind :village`, the
 recorded `:at`, and nonconflicting provenance metadata. Existing values that
 conflict with the intended metadata cause refusal before any writes. A missing
-plan is created with `:status :proposed`, `:parts []`, and
+plan is created with `:parts []` and
 `:metadata {:geometry :incomplete ...}`. Marker descriptions do not become
 guessed building geometry or automatic active protections.
 

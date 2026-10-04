@@ -6,9 +6,9 @@
             [engine.test-util :as tu]
             [engine.world :as world]))
 
-(def wheat {:id "field" :status :active :parts [{:id "rows" :box [[0 64 0] [1 64 0]] :want {:crop "wheat"}}]})
+(def wheat {:id "field" :parts [{:id "rows" :box [[0 64 0] [1 64 0]] :want {:crop "wheat"}}]})
 (def hut-bp {:id "hut" :front :south :key {"S" "stone"} :layers [["S"]]})
-(def huts {:id "huts" :status :proposed :parts [{:id "h1" :blueprint "hut" :at [5 64 5]}]})
+(def huts {:id "huts" :parts [{:id "h1" :blueprint "hut" :at [5 64 5]}]})
 
 ;; ------------------------------------------------------------------ pure
 
@@ -47,8 +47,8 @@
   (let [state (world/expand-all {:plans {"field" {:value wheat} "huts" {:value huts :error "bad edit"}}
                                  :blueprints {"hut" {:value hut-bp}}})]
     (are [id expected] (= expected (dissoc (world/answer state id) :cells))
-      "field" {:id "field" :plan wheat :status :active :errors []}
-      "huts" {:id "huts" :plan huts :status :proposed :errors [] :error "bad edit"}
+      "field" {:id "field" :plan wheat :errors []}
+      "huts" {:id "huts" :plan huts :errors [] :error "bad edit"}
       "none" nil)
     (is (= [{:pos [0 64 0] :want {:crop "wheat"} :part "rows"} {:pos [1 64 0] :want {:crop "wheat"} :part "rows"}]
            (:cells (world/answer state "field"))))
@@ -56,10 +56,10 @@
 
 (deftest a-world-from-data-answers-without-a-disk
   (let [w (world/of-data {"field" wheat} {})]
-    (is (= :active (:status (world/plan w "field"))))
+    (is (= wheat (:plan (world/plan w "field"))))
     (is (nil? (world/plan w "other")))
-    (world/set-data! w {"field" (assoc wheat :status :retired)} {})
-    (is (= :retired (:status (world/plan w "field"))))))
+    (world/set-data! w {"field" (assoc wheat :note "later")} {})
+    (is (= "later" (:note (:plan (world/plan w "field")))))))
 
 (deftest a-key-is-new-only-once
   (let [w (world/of-data {} {})]
@@ -93,19 +93,19 @@
     (write! plans "huts" (pr-str huts))
     (write! bps "hut" (pr-str hut-bp))
     (fs/writeFileSync (path/join plans "notes.txt") "not a plan")
-    (is (= :active (:status (world/plan w "field"))))
+    (is (= wheat (:plan (world/plan w "field"))))
     (is (= 1 (count (:cells (world/plan w "huts")))))
     (is (nil? (world/plan w "notes")))))
 
 (deftest an-edit-is-seen-after-the-recheck-interval-only
   (let [{:keys [plans clock w]} (reader)]
     (write! plans "field" (pr-str wheat))
-    (is (= :active (:status (world/plan w "field"))))
-    (touch-later! plans "field" (pr-str (assoc wheat :status :retired)))
+    (is (nil? (:note (:plan (world/plan w "field")))))
+    (touch-later! plans "field" (pr-str (assoc wheat :note "later")))
     (swap! clock + 1000)
-    (is (= :active (:status (world/plan w "field"))))
+    (is (nil? (:note (:plan (world/plan w "field")))))
     (swap! clock + 3000)
-    (is (= :retired (:status (world/plan w "field"))))))
+    (is (= "later" (:note (:plan (world/plan w "field")))))))
 
 (deftest a-broken-edit-keeps-the-last-good-copy-with-one-warn
   (let [{:keys [plans clock seen w]} (reader)]
@@ -121,7 +121,7 @@
 
 (deftest a-plan-broken-from-the-start-is-reported-broken
   (let [{:keys [plans seen w]} (reader)]
-    (write! plans "field" "{:id \"other\" :status :active :parts []}")
+    (write! plans "field" "{:id \"other\" :parts []}")
     (is (re-find #"file name" (:broken (world/plan w "field"))))
     (is (= [false] (map :kept @seen)))))
 
@@ -225,11 +225,11 @@
 
 ;; ------------------------------------------------------------------ footprints
 
-(def pad {:id "pad" :status :active :parts [{:id "p" :box [[0 64 0] [1 64 0]] :want "stone"}]})
-(def wall {:id "wall" :status :active :parts [{:id "w" :box [[1 64 0] [1 65 0]] :want "stone"}]})
+(def pad {:id "pad" :parts [{:id "p" :box [[0 64 0] [1 64 0]] :want "stone"}]})
+(def wall {:id "wall" :parts [{:id "w" :box [[1 64 0] [1 65 0]] :want "stone"}]})
 
-(deftest footprints-are-the-cells-of-active-plans-by-plan
-  (let [w (world/of-data {"pad" pad "wall" wall "field" (assoc wheat :status :proposed)} {})
+(deftest footprints-are-the-cells-of-the-plans-by-plan
+  (let [w (world/of-data {"pad" pad "wall" wall} {})
         fps (world/footprints w nil)]
     (is (= #{[0 64 0] [1 64 0] [1 65 0]} (set (keys fps))))
     (is (= "pad" (fps [0 64 0])))

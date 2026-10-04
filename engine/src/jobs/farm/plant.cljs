@@ -21,7 +21,7 @@
   and again right before the place; a refused cell is left bare and listed in the result's :refused [{:pos :reason}].
   The result is {:planted :skipped :refused :short [seed names carried none of] :reason r}, :reason :no-seed when
   nothing else was left to sow and some seed was short. The check declines, with one plant.declined warn naming the
-  plan and the reason, while the plan is missing, not :active, unreadable, holds no crop cells (in :part) or no zone
+  plan and the reason, while the plan is missing, unreadable, holds no crop cells (in :part) or no zone
   list has been read.")
 
 (def args

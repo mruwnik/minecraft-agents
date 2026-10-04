@@ -29,12 +29,11 @@
 (def carrot-cells [[2 3] [3 3]])
 
 (defn plan-of
-  "An :active plan (or of status) with wheat over wheat-cells and carrots over carrot-cells at y 64."
-  ([] (plan-of :active))
-  ([status]
-   {:id "mix" :status status
-    :parts [{:id "wheat" :cells (mapv (fn [[x z]] [x 64 z]) wheat-cells) :want {:crop "wheat"}}
-            {:id "carrots" :cells (mapv (fn [[x z]] [x 64 z]) carrot-cells) :want {:crop "carrots"}}]}))
+  "A plan with wheat over wheat-cells and carrots over carrot-cells at y 64."
+  []
+  {:id "mix"
+   :parts [{:id "wheat" :cells (mapv (fn [[x z]] [x 64 z]) wheat-cells) :want {:crop "wheat"}}
+           {:id "carrots" :cells (mapv (fn [[x z]] [x 64 z]) carrot-cells) :want {:crop "carrots"}}]})
 
 (def farmland-all (ground "farmland" (concat wheat-cells carrot-cells)))
 
@@ -217,7 +216,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [other {:id "other" :status :active :parts [{:id "hut" :cells [[3 64 2]] :want "oak_planks"}]}
+        (let [other {:id "other" :parts [{:id "hut" :cells [[3 64 2]] :want "oak_planks"}]}
               s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of) "other" other} 60))]
           (is (= #{[2 64 2] [2 64 3] [3 64 3]} (set (keys (placed s)))))
           (is (= "air" (block-at s 3 64 2))))))))
@@ -234,7 +233,7 @@
           (is (= "dirt" (block-at s 2 63 2)))
           (is (= #{[3 64 2]} (set (keys (placed s))))))))))
 
-(deftest a-plan-retired-mid-job-is-not-worked-in-the-next-round
+(deftest a-plan-deleted-mid-job-is-not-worked-in-the-next-round
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -243,12 +242,12 @@
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (let [before (count (calls s "place"))]
-            (world/set-data! (:w s) {"mix" (plan-of :retired)} {})
+            (world/set-data! (:w s) {} {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)
               (await (core/tick! (:eng s))))
             (is (< before 4))
-            (is (= before (count (calls s "place"))) "nothing is placed after the plan was retired")
+            (is (= before (count (calls s "place"))) "nothing is placed after the plan was deleted")
             (is (nil? (done-event s)))))))))
 
 ;; ---------------------------------------------------------------- declines
@@ -256,10 +255,8 @@
 (deftest the-job-declines-and-touches-nothing-when-the-plan-cannot-be-worked
   (let [spec (world-of farmland-all all-seed)]
     (is (untouched? {:plan "mix"} spec {}) "no such plan")
-    (is (untouched? {:plan "mix"} spec {"mix" (plan-of :retired)}) "retired")
-    (is (untouched? {:plan "mix"} spec {"mix" (plan-of :proposed)}) "proposed")
     (is (untouched? {:plan "mix" :part "nope"} spec {"mix" (plan-of)}) "no cells in the part")
-    (is (untouched? {:plan "mix"} spec {"mix" {:id "mix" :status :active :parts [{:id "hut" :cells [[2 64 2]] :want "oak_planks"}]}})
+    (is (untouched? {:plan "mix"} spec {"mix" {:id "mix" :parts [{:id "hut" :cells [[2 64 2]] :want "oak_planks"}]}})
         "no crop cells")
     (is (untouched? {:plan "mix"} spec {"mix" (plan-of)} nil) "no zone list has been read")))
 
@@ -267,11 +264,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of :retired)} 5))
+        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {} 5))
               warns (events-of s :farm-tend.declined)]
           (is (= 1 (count warns)))
           (is (= "mix" (:plan (first warns))))
-          (is (re-find #"retired" (:reason (first warns)))))
+          (is (= "no such plan" (:reason (first warns)))))
         (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 5))
               warns (events-of s :farm-tend.declined)]
           (is (= 1 (count warns)))
@@ -332,7 +329,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "mix" :status :active :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
+        (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "farmland" [[8 0]]) {:inventory [(item "wheat_seeds" 3)]}) {"mix" plan} [])
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
           (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
@@ -354,7 +351,7 @@
                                          {"mix" (plan-of)} [zone] 20))]
           (is (= {:tilled 1 :skipped {{:x 3 :y 63 :z 2} :not-permitted}} r))
           (is (= ["farmland" "dirt"] [(block-at s 2 63 2) (block-at s 3 63 2)])))
-        (let [plan {:id "mix" :status :active :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
+        (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "dirt" [[8 0]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" plan} [])
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
           (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
@@ -377,7 +374,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "mix" :status :active :parts [{:id "far" :cells [[8 64 0] [8 64 1]] :want {:crop "wheat"}}]}
+        (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0] [8 64 1]] :want {:crop "wheat"}}]}
               zone {:name "late" :min [8 60 0] :max [8 70 1] :owner "x" :allow #{}}
               s (setup (world-of (ground "dirt" [[8 0]]) (ground "farmland" [[8 1]])
                                  {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 5)]}) {"mix" plan} [])]

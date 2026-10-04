@@ -239,7 +239,7 @@
   (into {} (for [y (range 64 (+ 64 h))] [(str x "," y "," z) block])))
 
 (def farm-zone {:name "farm" :min [2 60 -2] :max [4 70 2] :owner "Miles"})
-(defn plan-over [id [x y z] want] {:id id :status :active :parts [{:id "p" :box [[x y z] [x y z]] :want want}]})
+(defn plan-over [id [x y z] want] {:id id :parts [{:id "p" :box [[x y z] [x y z]] :want want}]})
 
 ;; ------------------------------------------------------------------ stalks: cut above the base
 
@@ -448,7 +448,7 @@
           (is (not (finished? s))))))))
 
 (def farm-plan
-  {:id "farm" :status :active
+  {:id "farm"
    :parts [{:id "beds" :box [[2 64 0] [4 64 0]] :want {:crop "carrots"}}
            {:id "store" :box [[10 64 0] [10 64 0]] :want "chest"}]})
 
@@ -468,7 +468,6 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[plans reason] [[{} :plan-missing]
-                                [{"farm" (assoc farm-plan :status :draft)} :plan-inactive]
                                 [{"farm" (update farm-plan :parts subvec 0 1)} :no-chest-cell]]]
           (let [s (await (in-world {:item "carrot" :plan "farm"} (chest-world [{:name "carrot" :count 5}])
                                    (ew/of-data plans {} []) 5))]

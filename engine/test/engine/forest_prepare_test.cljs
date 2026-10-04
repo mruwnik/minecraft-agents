@@ -14,7 +14,7 @@
 
 (defn expect [m] (merge zero m))
 
-(defn oak-plan [& cells] (forest-plan :active ["a" (vec cells) "oak"]))
+(defn oak-plan [& cells] (forest-plan ["a" (vec cells) "oak"]))
 
 (def one-cell (oak-plan [3 64 0]))
 (def two-cells (oak-plan [3 64 0] [4 64 0]))
@@ -152,7 +152,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "forest" :status :active
+        (let [plan {:id "forest"
                     :parts [{:id "a" :cells [[3 64 0] [4 64 0]] :want {:tree "oak"}} {:id "b" :cells [[4 63 0]] :want "stone"}]}
               {:keys [p result]} (await (outcome (world {"4,63,0" "stone" "3,64,0" "short_grass"} (item "dirt" 3) (item "oak_sapling" 2))
                                                  {"forest" plan}))]
@@ -220,14 +220,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "birch"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "birch"])
               {:keys [p seen]} (await (run (world {"3,64,0" "short_grass" "3,71,0" "stone"} (item "birch_sapling" 1)) {"forest" plan} {:plan "forest"} 20))]
           (is (= 0 (calls-made p)))
           (is (= [{:pos {:x 3 :y 64 :z 0} :at [3 71 0] :block "stone"}] (warns seen :prepare.cramped))))))))
 
 ;; ------------------------------------------------------------------ access
 
-(def stone-plan {:id "other" :status :active :parts [{:id "o" :cells [[4 64 0]] :want "stone"}]})
+(def stone-plan {:id "other" :parts [{:id "o" :cells [[4 64 0]] :want "stone"}]})
 
 (deftest a-zone-or-another-plans-footprint-refuses-the-cell-and-the-rest-is-prepared
   (async done
@@ -266,7 +266,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "oak"] ["b" [[4 64 0]] "oak"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[4 64 0]] "oak"])
               {:keys [p]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2))
                                           {"forest" plan} {:plan "forest" :part "b"}))]
           (is (= [[4 64 0]] (digs p)))
@@ -297,7 +297,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [claim {:id "other" :status :active :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
+        (let [claim {:id "other" :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
               s (start (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan})]
           (.override (.-world (:p s)) "moveTo"
                      (fn ^:async f [token args impl]
@@ -312,7 +312,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [claim {:id "other" :status :active :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
+        (let [claim {:id "other" :parts [{:id "o" :cells [[9 64 0]] :want "stone"}]}
               {:keys [p seen]} (await (run (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan "other" claim} {:plan "forest"} 20))]
           (is (= [] (h/calls p "moveTo")) "asked when the cell is chosen, before the walk")
           (is (= [{:pos {:x 9 :y 64 :z 0} :reason :footprint}] (warns seen :prepare.refused))))))))
@@ -330,7 +330,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[9 64 0] [3 64 0]] "oak"])
+        (let [plan (forest-plan ["a" [[9 64 0] [3 64 0]] "oak"])
               {:keys [p result seen]} (await (outcome (assoc (far-world {"9,64,0" "short_grass" "3,64,0" "short_grass"} (item "oak_sapling" 2)) :unreachable ["9,64,0"])
                                                       {"forest" plan}))]
           (is (= 3 (count (h/calls p "moveTo"))))
@@ -342,7 +342,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "mangrove"] ["b" [[4 64 0]] "oak"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "mangrove"] ["b" [[4 64 0]] "oak"])
               {:keys [p result]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2) (item "mangrove_propagule" 1))
                                                  {"forest" plan}))]
           (is (= [[4 64 0]] (digs p)))
@@ -354,10 +354,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [crops {:id "crops" :status :active :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
+        (let [crops {:id "crops" :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
           (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
-                                       [{"forest" (assoc one-cell :status :retired)} {:plan "forest"} "the plan is :retired"]
-                                       [{"forest" (assoc one-cell :status :proposed)} {:plan "forest"} "the plan is :proposed"]
                                        [{"crops" crops} {:plan "crops"} "no tree cells"]
                                        [{"forest" one-cell} {:plan "forest" :part "zz"} "no tree cells"]]]
             (let [s (start (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) plans)]
@@ -424,20 +422,20 @@
           (is (= before (calls-made p)) "no act in 40 ticks")
           (is (listed? eng)))))))
 
-(deftest a-plan-retired-while-the-job-runs-stops-it
+(deftest a-plan-deleted-while-the-job-runs-stops-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells})]
           (.override (.-world (:p s)) "dig"
                      (fn ^:async f [token args impl]
-                       (world/set-data! (:w s) {"forest" (assoc two-cells :status :retired)} {})
+                       (world/set-data! (:w s) {} {})
                        (await (impl token args))))
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
           (await (ticks (:eng s) 40))
           (is (= [[3 64 0]] (digs (:p s))) "the dig under way ends, nothing after it")
           (is (= [] (places (:p s))))
-          (is (= ["the plan is :retired"] (mapv :reason (h/events-of (:seen s) :prepare.declined)))))))))
+          (is (= ["no such plan"] (mapv :reason (h/events-of (:seen s) :prepare.declined)))))))))
 
 (deftest the-saplings-a-dug-leaf-drops-are-collected-and-planted
   (async done

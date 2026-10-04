@@ -21,7 +21,7 @@
   The state: {:plans {id entry} :blueprints {id entry} :zones entry :expanded {id expansion} :claims {id #{cell}}
   :footprints {cell id} :checked-at ms}, an entry being {:stamp [mtime size] :value v :error text}, :value the last
   good copy and :error the current file's trouble; the zone entry is {:missing true} while there is no file.
-  :claims holds the cells of each :active plan, :footprints the same keyed by cell."
+  :claims holds the cells of each plan, :footprints the same keyed by cell."
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
@@ -60,9 +60,9 @@
        {:id id :error error :kept (some? old)}])))
 
 (defn claims
-  "{id #{[x y z]}}: the expanded cells of each plan whose last good copy is :active."
+  "{id #{[x y z]}}: the expanded cells of each plan that has a last good copy."
   [{:keys [plans expanded]}]
-  (into {} (keep (fn [[id e]] (when (= :active (get-in e [:value :status]))
+  (into {} (keep (fn [[id e]] (when (:value e)
                                 [id (into #{} (map :pos) (get-in expanded [id :cells]))])))
         plans))
 
@@ -83,7 +83,7 @@
 
 (defn answer
   "What a job gets for plan id: nil (no such file), {:id :broken text} (never readable), or
-  {:id :plan :status :cells :errors} (:cells [{:pos [x y z] :want :part}], :errors those of the expansion), with
+  {:id :plan :cells :errors} (:cells [{:pos [x y z] :want :part}], :errors those of the expansion), with
   :error when the current file is bad and this is the last good copy."
   [state id]
   (let [{:keys [value error] :as entry} (get-in state [:plans id])
@@ -91,7 +91,7 @@
     (cond
       (nil? entry) nil
       (nil? value) {:id id :broken error}
-      :else (cond-> {:id id :plan value :status (:status value) :cells (:cells expansion) :errors (:errors expansion)}
+      :else (cond-> {:id id :plan value :cells (:cells expansion) :errors (:errors expansion)}
               error (assoc :error error)))))
 
 ;; ------------------------------------------------------------------ files
@@ -304,7 +304,7 @@
     (get-in @(:state w) [:zones :value])))
 
 (defn footprints
-  "{[x y z] plan-id}: the cells the :active plans claim, without plan except's own (nil leaves none out); {} for a
+  "{[x y z] plan-id}: the cells the plans claim, without plan except's own (nil leaves none out); {} for a
   nil world. A cell plan except shares with another plan stays, under the other's id."
   [w except]
   (if-not w

@@ -1,2 +1,2 @@
-{:id "south-field" :status :active
+{:id "south-field"
  :parts [{:id "yard" :box [[2 64 2] [5 64 5]] :want "dirt"}]}

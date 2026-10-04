@@ -15,9 +15,9 @@
 (def gate-want [:any "oak_fence_gate" "spruce_fence_gate"])
 
 (defn pen-plan
-  "A pen plan: a fence part and a gate part at gate-cell (a vector), with the given status."
-  [id status gate-cell]
-  {:id id :status status
+  "A pen plan: a fence part and a gate part at gate-cell (a vector)."
+  [id gate-cell]
+  {:id id
    :parts [{:id "fence" :outline [[0 64 0] [4 64 4]] :want "oak_fence"}
            {:id "gate" :cells [gate-cell] :want gate-want}]})
 
@@ -25,16 +25,15 @@
   (let [w (world/of-data plans {})]
     (keep #(world/plan w %) (keys plans))))
 
-(def pen-a (pen-plan "pen-a" :active [2 64 0]))
-(def pen-b (pen-plan "pen-b" :active [20 64 0]))
-(def pen-old (pen-plan "pen-old" :retired [40 64 0]))
+(def pen-a (pen-plan "pen-a" [2 64 0]))
+(def pen-b (pen-plan "pen-b" [20 64 0]))
 
 ;; ------------------------------------------------------------------ the gate index
 
-(deftest gate-cells-are-the-cells-of-active-plans-that-want-a-gate
+(deftest gate-cells-are-the-cells-of-the-plans-that-want-a-gate
   (is (= {[2 64 0] "pen-a" [20 64 0] "pen-b"}
-         (pg/gate-cells (answers {"pen-a" pen-a "pen-b" pen-b "pen-old" pen-old})))
-      "several plans, the retired one ignored; fence cells are not gates"))
+         (pg/gate-cells (answers {"pen-a" pen-a "pen-b" pen-b})))
+      "several plans; fence cells are not gates"))
 
 (deftest a-want-names-a-gate-as-a-name-a-choice-or-a-block-with-state
   (are [want gate?] (= gate? (boolean (pg/gate-want? want)))
@@ -46,18 +45,18 @@
     :clear false
     {:crop "wheat"} false))
 
-(deftest a-broken-or-proposed-plan-gives-no-gates
-  (is (= {} (pg/gate-cells [{:id "x" :broken "bad"} (first (answers {"p" (assoc pen-a :status :proposed)}))]))))
+(deftest a-broken-plan-gives-no-gates
+  (is (= {} (pg/gate-cells [{:id "x" :broken "bad"}]))))
 
 (deftest the-index-follows-an-edited-plan-and-is-kept-between-reads
   (let [w (world/of-data {"pen-a" pen-a} {})
         first-read (pg/gate-index w)]
     (is (= {[2 64 0] "pen-a"} first-read))
     (is (identical? first-read (pg/gate-index w)) "no plan change: the same index, not rebuilt")
-    (world/set-data! w {"pen-a" (pen-plan "pen-a" :active [3 64 4])} {})
+    (world/set-data! w {"pen-a" (pen-plan "pen-a" [3 64 4])} {})
     (is (= {[3 64 4] "pen-a"} (pg/gate-index w)) "the gate moved in the plan")
-    (world/set-data! w {"pen-a" (assoc pen-a :status :retired)} {})
-    (is (= {} (pg/gate-index w)) "retired: no gates")))
+    (world/set-data! w {} {})
+    (is (= {} (pg/gate-index w)) "plan removed: no gates")))
 
 ;; ------------------------------------------------------------------ the condition
 
@@ -148,8 +147,6 @@
          (holds-over (fake-at true 2 20) (knowledge pen-a) times)) "too far away")
   (is (= [false false false false false false false]
          (holds-over (fake-at true 2 5) (knowledge) times)) "the gate is in no plan")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 5) (knowledge pen-old) times)) "the plan is retired")
   (is (= [false false false false false false false]
          (holds-over (fake-at true 2 5) nil times)) "no world data at all"))
 
@@ -256,7 +253,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [two (pen-plan "pen-a" :active [2 64 0])
+        (let [two (pen-plan "pen-a" [2 64 0])
               two (update two :parts conj {:id "gate2" :cells [[0 64 2]] :want gate-want})
               spec (pen-world true 2 6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "0,64,2" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
                                         :states {"2,64,0" {:open true} "0,64,2" {:open true} "20,64,0" {:open true}}})
@@ -276,11 +273,11 @@
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (gate-open? (:p s) 20 64 0) "12 blocks off: beyond the radius"))))))
 
-(deftest a-plan-that-is-missing-or-not-active-is-declined-with-one-warn
+(deftest a-plan-that-is-missing-is-declined-with-one-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[plans reason] [[{} "no such plan"] [{"pen-a" (assoc pen-a :status :retired)} ":retired"]]]
+        (doseq [[plans reason] [[{} "no such plan"]]]
           (let [s (await (run-job (pen-world true 2 7) plans {:plan "pen-a"} 6))
                 warns (events-of s :shut-gate.declined)]
             (is (= 1 (count warns)) reason)

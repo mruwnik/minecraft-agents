@@ -34,7 +34,7 @@
   carried than at the start, at least 0.
   Declines (one warn get-seeds.declined {:reason r} per reason): :no-source (a
   material of no known way), :no-chest (the chest way with no :chest and no known
-  chest place), :plan-missing, :plan-broken, :plan-inactive, :no-chest-cell (the
+  chest place), :plan-missing, :plan-broken, :no-chest-cell (the
   :plan has no chest cell), :no-zones (the break way with no zone list read), and :too-short (cane or bamboo
   in range but no stand of two or more: the job stays queued, a stand may grow).")
 
@@ -45,9 +45,10 @@
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :default nil}
    :per-round {:doc "blocks dug per round at most" :default 4}
    :chest {:doc "chest position: take the item from it instead of breaking blocks" :default nil}
-   :plan {:doc "id of an :active plan: take the item from the chest cell (want \"chest\") of the plan" :default nil}
+   :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :default nil}
    :collect-radius {:doc "how far around to collect drops after a batch" :default 8}
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :default 40}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
             :default #{:falling-block :under-feet}}})
 
@@ -85,7 +86,6 @@
     (cond
       (nil? answer) {:trouble :plan-missing}
       (:broken answer) {:trouble :plan-broken}
-      (not= :active (:status answer)) {:trouble :plan-inactive}
       (nil? cell) {:trouble :no-chest-cell}
       :else {:chest cell})))
 
@@ -138,7 +138,7 @@
     (cond
       (= :unknown m) (decline! c :no-source)
       (= :chest m) (if-let [reason (:trouble (chest-target c))] (decline! c reason) true)
-      (nil? (ctx/zones c)) (decline! c :no-zones)
+      (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
       (or (:goal (ctx/mem c)) (seq (source-blocks c))) true
       (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
       :else false)))

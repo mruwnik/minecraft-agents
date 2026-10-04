@@ -1,6 +1,7 @@
 (ns jobs.forestry.maintain
   (:require [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.forestry :as forestry]
             [engine.jobs.util :as u]))
 
@@ -23,8 +24,8 @@
   before the first dig and again before every felling round: another active plan's footprint or a zone) or when
   planting it was refused or failed three times (may-place?).
 
-  The check declines, with one forest.declined warn naming the plan and the reason, while the plan is missing, not
-  :active, unreadable or holds no tree cells, and while no zone list is loaded. Otherwise it passes only when a
+  The check declines, with one forest.declined warn naming the plan and the reason, while the plan is missing,
+  unreadable or holds no tree cells, and while no zone list is loaded. Otherwise it passes only when a
   step would act: a grown tree stands on a planned cell that is not left, or a bare planned cell has its sapling
   carried; so with nothing ripe and nothing to plant it declines, and what it reads each tick is the planned cells
   (a few block reads), nothing is polled in a round.")
@@ -35,7 +36,8 @@
    :max-logs {:doc "a tree whose column holds more logs than this is too tall to fell from the ground and is left" :default 6}
    :accept {:doc "dig hazards (engine.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet"
             :default #{:fluid-adjacent :falling-block}}
-   :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :default 8}})
+   :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 ;; ------------------------------------------------------------------ access
 
@@ -49,12 +51,11 @@
   "The rules' input for a cell as the body is now."
   [c pos]
   (let [p (:primitives c)]
-    {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
-     :cell (cell-vec pos)
-     :feet (feet-cell c)
-     :zones (ctx/zones c)
-     :footprints (ctx/footprints c {:except (:plan (:args c))})
-     :ledger #{}}))
+    (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
+            :cell (cell-vec pos)
+            :feet (feet-cell c)
+            :ledger #{}}
+           (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))))
 
 (defn refusal
   "The reason the body may not dig the log at pos (a hazard it does not accept, or a refusal), nil when it may."
@@ -85,7 +86,6 @@
   (cond
     (nil? answer) "no such plan"
     (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
     (empty? cells) "no tree cells"))
 
 (def soil #{"dirt" "grass_block" "coarse_dirt" "podzol" "rooted_dirt" "moss_block"})
@@ -151,7 +151,7 @@
         answer (ctx/plan c plan)
         trees (tree-cells answer part)
         trouble (or (plan-trouble answer trees)
-                    (when (nil? (ctx/zones c)) "no zone list"))]
+                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
     (if-not trouble
       {:trees trees}
       (do (ctx/warn-once! c [plan trouble] :forest.declined

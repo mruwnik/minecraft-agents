@@ -1,2 +1,2 @@
-{:id "agreeing" :status :active
+{:id "agreeing"
  :parts [{:id "edge" :box [[0 64 0] [1 64 0]] :want "farmland"}]}

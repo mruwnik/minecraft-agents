@@ -39,10 +39,10 @@
         population (or (:population metadata) (:population inspection))
         report (:report inspection)
         [x y z] (:at p)]
-    ;; Inspection metadata is historical evidence. A proposed plan, including
-    ;; one with no cells yet, never claims current population or housing.
+    ;; Inspection metadata is historical evidence. A plan with
+    ;; no cells yet never claims current population or housing.
     {:name (:id p) :world world :kind "village" :x x :y y :z z :by (:by original) :note (:note p)
-     :planId (:id p) :planStatus (:status p)
+     :planId (:id p)
      :geometry (get metadata :geometry (if (seq (:parts p)) :planned :incomplete))
      :population population :blueprintId (get-in metadata [:source :id])
      :state (if (:observedAt inspection) "stale" (if population "not-inspected" "unplanned"))

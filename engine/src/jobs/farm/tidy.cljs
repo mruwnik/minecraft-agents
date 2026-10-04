@@ -2,12 +2,13 @@
   (:require [clojure.string :as str]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [plan.shape :as shape]))
 
 (def doc
-  "Dig the stray blocks over an :active plan of the body's world (:plan, optionally only its :part) and pick the drops
+  "Dig the stray blocks over a plan of the body's world (:plan, optionally only its :part) and pick the drops
   up. Bodies only read plans; the plan does not say what a stray is, this job does. Over the cells the plan names:
   a cell it wants :clear holds a stray when anything is in it; a crop cell (want {:crop c}) holds one when it holds
   anything but that crop (weeds, saplings, leaves, stone, dirt ...); and the one cell of air above every crop cell
@@ -27,7 +28,7 @@
   drops (jobs.forestry.collect-drops, everything within the field's extent plus 4 blocks, as a child). Ends with a
   result {:dug n :collected n :kept [...] :wrong [...] :refused [...]} and the info tidy.done; convergent: over a
   tidy field it digs nothing and says \"nothing to dig\". The check declines, with one tidy.declined warn naming
-  the plan and the reason, while the plan is missing, not :active, unreadable or has no cells (in :part), and while
+  the plan and the reason, while the plan is missing, unreadable or has no cells (in :part), and while
   no zone list has been read (nil zones never mean no zones).")
 
 (def args
@@ -36,17 +37,18 @@
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block, :under-feet"
             :default #{:fluid-adjacent}}
    :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :default 4.2}
-   :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :default 3}})
+   :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :default 3}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def eye-height 1.62)
 
 ;; ------------------------------------------------------------------ access
 
 (defn access-world
-  "{:zones :footprints} as the rules take them, read now: zones nil when the zone file was never read, footprints
-  of every active plan but this one."
+  "The social half of the rules' input, read now (engine.jobs.access/zone-input): zones nil when the zone file was never
+  read, claims, footprints of every plan but this one, the body's name, the clock and the job's :ignore-zones? arg."
   [c]
-  {:zones (ctx/zones c) :footprints (ctx/footprints c {:except (:plan (:args c))})})
+  (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))
 
 ;; ------------------------------------------------------------------ the rule, pure
 
@@ -136,7 +138,7 @@
   [v accept]
   (cond
     (= :not-loaded (:reason v)) :skip
-    (not (:ok v)) [:refuse (select-keys v [:reason :zone :plan])]
+    (not (:ok v)) [:refuse (select-keys v [:reason :zone :claim :plan])]
     (rules/accepts? (update v :hazards (fn [hs] (mapv #(assoc % :reason (hazard-reason %)) hs))) accept) :dig
     :else [:hazard (mapv hazard-reason (:hazards v))]))
 
@@ -146,7 +148,6 @@
   (cond
     (nil? answer) "no such plan"
     (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
     (not-any? #(or (nil? part) (= part (:part %))) (:cells answer)) "no cells"))
 
 ;; ------------------------------------------------------------------ reading the world
@@ -165,10 +166,9 @@
 (defn permit
   "The may-dig? verdict for pos now: zones and footprints read afresh, the body's feet where they are."
   [c pos]
-  (let [{:keys [zones footprints]} (access-world c)
-        p (:primitives c)]
-    (rules/may-dig? {:block-at (fn [cell] (:name (world-block p cell))) :cell pos :feet (feet-of c)
-                     :zones zones :footprints footprints :ledger #{}})))
+  (let [p (:primitives c)]
+    (rules/may-dig? (merge {:block-at (fn [cell] (:name (world-block p cell))) :cell pos :feet (feet-of c) :ledger #{}}
+                           (access-world c)))))
 
 (defn decide [c pos] (judge-verdict (permit c pos) (:accept (:args c))))
 
@@ -187,7 +187,8 @@
   (let [{:keys [plan part]} (:args c)
         answer (ctx/plan c plan)
         trouble (or (plan-trouble answer part)
-                    (when (nil? (:zones (access-world c))) "no zone list has been read"))]
+                    (let [{:keys [zones ignore-zones?]} (access-world c)]
+                      (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read")))]
     (if-not trouble
       {:answer answer}
       (do (ctx/warn-once! c [plan trouble] :tidy.declined

@@ -118,7 +118,7 @@
 
 (defn plan
   "The body's world's plan id, from memory (engine.world/answer): nil when there is no such plan,
-  {:id :broken text} when it was never readable, else {:id :plan :status :cells :errors}, with :error
+  {:id :broken text} when it was never readable, else {:id :plan :cells :errors}, with :error
   when the file is bad now and this is its last good copy."
   [ctx id]
   (world/plan (:world (:engine ctx)) id))
@@ -149,7 +149,7 @@
   (.-username (.self (:primitives ctx))))
 
 (defn footprints
-  "{[x y z] plan-id}: the cells of every :active plan, as engine.access.rules takes :footprints (a refusal then names
+  "{[x y z] plan-id}: the cells of every plan, as engine.access.rules takes :footprints (a refusal then names
   the :plan). A job working plan P passes {:except P} to leave P's own cells out."
   ([ctx] (footprints ctx {}))
   ([ctx {:keys [except]}]

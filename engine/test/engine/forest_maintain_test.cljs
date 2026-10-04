@@ -22,11 +22,11 @@
 
 (defn forest-plan
   "A plan whose parts are given as [id cells species]."
-  [status & parts]
-  {:id "forest" :status status
+  [& parts]
+  {:id "forest"
    :parts (mapv (fn [[id cells species]] {:id id :cells cells :want {:tree species}}) parts)})
 
-(def oak-cell (forest-plan :active ["a" [[3 64 0]] "oak"]))
+(def oak-cell (forest-plan ["a" [[3 64 0]] "oak"]))
 
 (defn item [name n] {:name name :count n})
 
@@ -179,7 +179,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cells (for [x [2 3] z [0 1]] [x z])
-              plan {:id "forest" :status :active :parts [{:id "d" :box [[2 64 0] [3 64 1]] :want {:tree "dark_oak"}}]}
+              plan {:id "forest" :parts [{:id "d" :box [[2 64 0] [3 64 1]] :want {:tree "dark_oak"}}]}
               {:keys [eng p]} (start {:blocks (merge (ground cells) (into {} (map (fn [[x z]] (lt/tree x z "dark_oak" 3))) cells))
                                       :inventory [(item "dark_oak_sapling" 4)]}
                                      {"forest" plan})
@@ -225,7 +225,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "oak"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "oak"])
               s (start oak-world {"forest" plan})]
           (.override (.-world (:p s)) "dig"
                      (fn ^:async f [token args impl]
@@ -239,14 +239,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
               s (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})
               dug (atom 0)]
           (.override (.-world (:p s)) "dig"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
                          (when (= 2 (swap! dug inc))
-                           (world/set-data! (:w s) {"forest" (forest-plan :active ["b" [[9 64 0]] "birch"])} {}))
+                           (world/set-data! (:w s) {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))
                          r)))
           (await (h/child-outcome (:eng s) job {:plan "forest"} 200))
           (is (= [[3 64 0 "oak_sapling"]] (places (:p s))) "the cut cell is replanted though the plan dropped it")
@@ -256,10 +256,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [crops {:id "crops" :status :active :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
+        (let [crops {:id "crops" :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
           (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
-                                       [{"forest" (assoc oak-cell :status :retired)} {:plan "forest"} "the plan is :retired"]
-                                       [{"forest" (assoc oak-cell :status :proposed)} {:plan "forest"} "the plan is :proposed"]
                                        [{"crops" crops} {:plan "crops"} "no tree cells"]
                                        [{"forest" oak-cell} {:plan "forest" :part "zz"} "no tree cells"]]]
             (let [{:keys [p seen]} (await (run oak-world plans args 5))]
@@ -284,7 +282,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0] [5 64 0] [7 64 0]] "oak"])
+        (let [plan (forest-plan ["a" [[3 64 0] [5 64 0] [7 64 0]] "oak"])
               {:keys [p eng seen]} (await (run {:blocks (merge (ground [[3 0] [5 0] [7 0]]) {"3,64,0" "oak_sapling" "5,64,0" "stone"})}
                                                {"forest" plan} {:plan "forest"} 40))]
           (is (= [] (vec (.-calls (.-world p)))) "40 ticks, not one act")
@@ -328,7 +326,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (run {:blocks (merge (ground [[8 0]]) (lt/tree 8 0 "oak" 4)) :unreachable ["8,64,0"]}
-                                           {"forest" (forest-plan :active ["a" [[8 64 0]] "oak"])} {:plan "forest"} 80))]
+                                           {"forest" (forest-plan ["a" [[8 64 0]] "oak"])} {:plan "forest"} 80))]
           (is (= [] (places p)))
           (is (= [{:pos {:x 8 :y 64 :z 0} :reason :unreachable}] (warns seen :forest.left))))))))
 
@@ -343,7 +341,7 @@
 
 (def other-plan
   "Another active plan claiming the cell over the second log of the tree at x 3."
-  {:id "other" :status :active :parts [{:id "o" :cells [[3 66 0]] :want "stone"}]})
+  {:id "other" :parts [{:id "o" :cells [[3 66 0]] :want "stone"}]})
 
 (deftest a-log-over-another-plans-footprint-or-a-zone-leaves-the-whole-tree-standing
   (async done
@@ -396,11 +394,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (forest-plan :active ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
+        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
               {:keys [p eng w]} (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})]
           (core/submit! eng (list job {:plan "forest"}) {})
           (await (ticks eng 1))
-          (world/set-data! w {"forest" (forest-plan :active ["b" [[9 64 0]] "birch"])} {})
+          (world/set-data! w {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {})
           (await (ticks eng 30))
           (is (= [] (vec (.-calls (.-world p)))) "no dig, no place on the cell holding the tree")
           (is (= "oak_log" (h/block-at p 3 64 0))))))))

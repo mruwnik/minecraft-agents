@@ -27,7 +27,7 @@
   :refused [...]}
   and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
   build.wrong (warn). The check declines, with one build.declined warn naming the plan and the reason, while the
-  plan is missing, not :active, unreadable or has no cells to build (in :part), and, before the job has begun,
+  plan is missing, unreadable or has no cells to build (in :part), and, before the job has begun,
   while cells are missing but none of their blocks is carried, and while no zone list has been read. Every place goes
   through engine.access.rules/may-place? with the zones and the footprints of the OTHER active plans, when the cell is
   chosen and again right before the place; a cell in a zone that does not allow :place, or in another active plan's
@@ -45,6 +45,7 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
 
 (def eye-height 1.62)
@@ -123,7 +124,6 @@
   (cond
     (nil? answer) "no such plan"
     (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
     (empty? cells) "no cells to build"))
 
 ;; ------------------------------------------------------------------ access
@@ -142,12 +142,12 @@
 (defn decide
   "What to do with the cell at pos under rules input in (access/rules-input) and the hazards accepted: :place, :skip
   (not loaded, own body or not replaceable: the place primitive and the plan judge deal with it) or
-  [:refuse {:reason :zone|:footprint|:hazard ...}]."
+  [:refuse {:reason :zone|:claim|:footprint|:hazard ...}]."
   [in accept pos]
   (let [v (rules/may-place? (assoc in :cell pos))
         bad (remove (set accept) (hazards (:block-at in) pos))]
     (cond
-      (#{:zone :footprint} (:reason v)) [:refuse (select-keys v [:reason :zone :plan])]
+      (#{:zone :claim :footprint} (:reason v)) [:refuse (select-keys v [:reason :zone :plan :claim])]
       (not (:ok v)) :skip
       (seq bad) [:refuse {:reason :hazard :hazards (vec (distinct bad))}]
       :else :place)))
@@ -197,7 +197,7 @@
         cells (when (and answer (not (:broken answer)))
                 (judged (:primitives c) answer part (set (keys (carried-counts (:primitives c))))))
         trouble (or (plan-trouble answer cells)
-                    (when (nil? (ctx/zones c)) "no zone list has been read"))]
+                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :build.declined

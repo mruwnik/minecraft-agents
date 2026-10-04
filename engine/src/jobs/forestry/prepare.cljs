@@ -41,7 +41,7 @@
   chosen and again right before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
   place, planting) skips the cell for 10 minutes (body memory :forestry/prepare-skip) and is reported as :refused
   {:pos :reason} (warn prepare.refused). The check declines, with one prepare.declined warn, while the plan is
-  missing, not :active, unreadable or holds no tree cells (in :part), and while no zone list is loaded. Otherwise it
+  missing, unreadable or holds no tree cells (in :part), and while no zone list is loaded. Otherwise it
   passes only while a step can be taken (or once the job has begun): a field where every cell is done, wrong,
   cramped, without soil or short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil,
   prepare.cramped, prepare.wet) and one per species short (prepare.short {:species :missing}); the job wakes when what
@@ -55,7 +55,8 @@
    :accept {:doc "dig hazards (engine.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet; lava beside is :lava-adjacent and never taken by default"
             :default #{:fluid-adjacent}}
    :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :default {}}
-   :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :default 8}})
+   :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 ;; ------------------------------------------------------------------ the rule, pure
 
@@ -238,7 +239,7 @@
         answer (ctx/plan c plan)
         trees (maintain/tree-cells answer part)
         trouble (or (maintain/plan-trouble answer trees)
-                    (when (nil? (ctx/zones c)) "no zone list"))]
+                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
     (if-not trouble
       {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
       (do (ctx/warn-once! c [plan trouble] :prepare.declined
@@ -345,9 +346,9 @@
   "What the access rules say of placing at the cell pos: :ok, :wait (not loaded, or the body in it) or [:refuse reason]."
   [c pos]
   (let [p (:primitives c)
-        {:keys [zones footprints]} (tidy/access-world c)
-        v (rules/may-place? {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z})) :cell pos
-                             :feet (maintain/feet-cell c) :zones zones :footprints footprints :ledger #{}})]
+        v (rules/may-place? (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z})) :cell pos
+                                    :feet (maintain/feet-cell c) :ledger #{}}
+                                   (tidy/access-world c)))]
     (cond
       (:ok v) :ok
       (#{:not-loaded :own-body} (:reason v)) :wait

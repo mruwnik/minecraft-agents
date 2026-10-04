@@ -15,12 +15,11 @@
   ascending_east, south_east ...), orientation (jigsaw, crafter), and any other state naming a side in its value."
   (:require [clojure.string :as str]))
 
-(def statuses #{:proposed :active :completed :retired})
 (def turns #{0 90 180 270})
 (def sides [:north :east :south :west])
 (def max-cells 200000)
 
-(def plan-keys #{:id :status :parts :assign :note :kind :at :metadata})
+(def plan-keys #{:id :parts :assign :note :kind :at :metadata})
 (def where-keys [:box :outline :cells])
 (def area-part-keys #{:id :box :outline :cells :want :note})
 (def blueprint-part-keys #{:id :blueprint :at :turn :note})
@@ -103,8 +102,6 @@
           ids (keep #(when (map? %) (:id %)) (when (vector? parts) parts))]
       (vec (concat
             (for [e [(when-not (= file-id (:id plan)) (str ":id must equal the file name, " (pr-str file-id)))
-                     (when-not (contains? statuses (:status plan))
-                       (str ":status must be one of " (str/join " " (sort statuses))))
                      (when-not (vector? parts) ":parts must be a vector of parts")
                      (when (and (contains? plan :kind) (not (keyword? (:kind plan)))) ":kind must be a keyword")
                      (when (and (contains? plan :at) (not (anchor? (:at plan)))) ":at must be three finite coordinates [x y z]")

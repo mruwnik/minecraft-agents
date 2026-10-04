@@ -20,7 +20,7 @@
   the plan wants there, crops outside the plan are left standing, and every planned cell standing bare
   (air over farmland) owes the planned crop's seed (the plan is the debt; memory only keeps the counts of
   refused places). The check declines, with one harvest.declined warn naming the plan and the reason, while
-  the plan is missing, not :active, unreadable or holds no crop cells; :assign in the plan is not read.")
+  the plan is missing, unreadable or holds no crop cells; :assign in the plan is not read.")
 
 (def args
   {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}
@@ -56,7 +56,6 @@
   (cond
     (nil? answer) "no such plan"
     (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
     (empty? cells) "no crop cells"))
 
 (defn ripe-at?

@@ -1,6 +1,6 @@
 ;; Two huts facing each other across a north-south path (the village example of docs/design.md). Heights are
 ;; plausible, not surveyed.
-{:id "claude-village" :status :proposed
+{:id "claude-village"
  :note "Proposed: nothing here is built yet, so most of it reads as missing."
  :parts
  [{:id "jizo-hut"  :blueprint "hut" :at [101 64 202] :turn 90}

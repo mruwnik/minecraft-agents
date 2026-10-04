@@ -6,7 +6,7 @@
 (defn expansion [& cells]
   {:cells (mapv (fn [[pos want]] {:pos pos :want want :part "p"}) cells)})
 
-(defn plan [id status & parts] {:id id :status status :parts (vec parts)})
+(defn plan [id & parts] {:id id :parts (vec parts)})
 (defn area [id [a b] want] {:id id :box [a b] :want want})
 
 (defn pairs [result] (mapv :plans result))
@@ -59,29 +59,27 @@
 (def stone-field (area "field" [[0 64 0] [3 64 3]] "stone"))
 (def dirt-field (area "field" [[2 64 2] [5 64 5]] "dirt"))
 
-(deftest only-active-plans-count
-  (let [conflicting (fn [status-b] (conflicts/active-conflicts {"a" (plan "a" :active stone-field) "b" (plan "b" status-b dirt-field)} {}))]
-    (is (= [["a" "b"]] (pairs (conflicting :active))))
-    (is (= 4 (:count (first (conflicting :active)))))
-    (is (= [] (conflicting :proposed)))
-    (is (= [] (conflicting :retired)))))
+(deftest every-plan-counts
+  (let [conflicting (conflicts/active-conflicts {"a" (plan "a" stone-field) "b" (plan "b" dirt-field)} {})]
+    (is (= [["a" "b"]] (pairs conflicting)))
+    (is (= 4 (:count (first conflicting))))))
 
 (deftest a-part-of-a-plan-holds-only-the-cells-it-won
-  (let [a (plan "a" :active (area "base" [[0 64 0] [3 64 0]] "stone") (area "patch" [[0 64 0] [1 64 0]] "dirt"))
-        b (plan "b" :active (area "row" [[0 64 0] [3 64 0]] "dirt"))]
+  (let [a (plan "a" (area "base" [[0 64 0] [3 64 0]] "stone") (area "patch" [[0 64 0] [1 64 0]] "dirt"))
+        b (plan "b" (area "row" [[0 64 0] [3 64 0]] "dirt"))]
     ;; the later part of a wins the first two cells: they agree with b, the other two are stone against dirt
     (is (= [{:plans ["a" "b"] :count 2 :same 2 :box {:min [2 64 0] :max [3 64 0]} :cells [[2 64 0] [3 64 0]]}]
            (conflicts/active-conflicts {"a" a "b" b} {})))))
 
 (deftest a-blueprint-part-conflicts-through-its-placed-cells
   (let [hut {:id "hut" :front :south :key {"S" "cobblestone"} :layers [["SS"]]}
-        a (plan "a" :active {:id "h" :blueprint "hut" :at [0 64 0]})
-        b (plan "b" :active (area "yard" [[1 64 0] [1 64 0]] :clear))]
+        a (plan "a" {:id "h" :blueprint "hut" :at [0 64 0]})
+        b (plan "b" (area "yard" [[1 64 0] [1 64 0]] :clear))]
     (is (= [["a" "b"]] (pairs (conflicts/active-conflicts {"a" a "b" b} {"hut" hut}))))))
 
 (deftest tens-of-thousands-of-cells-stay-cheap
-  (let [result (conflicts/conflicts {"a" (shape/expand (plan "a" :active (area "x" [[0 64 0] [199 64 199]] "stone")) {})
-                                     "b" (shape/expand (plan "b" :active (area "x" [[100 64 100] [299 64 299]] "dirt")) {})})]
+  (let [result (conflicts/conflicts {"a" (shape/expand (plan "a" (area "x" [[0 64 0] [199 64 199]] "stone")) {})
+                                     "b" (shape/expand (plan "b" (area "x" [[100 64 100] [299 64 299]] "dirt")) {})})]
     (is (= 10000 (:count (first result))))
     (is (= {:min [100 64 100] :max [199 64 199]} (:box (first result))))))
 

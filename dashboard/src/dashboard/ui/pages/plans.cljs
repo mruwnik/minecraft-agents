@@ -14,13 +14,13 @@
        ^{:key k} [:span {:class (name k) :style {:width (str (get w k) "%")}}])]))
 
 (defn plan-row [selected {:keys [plan depth]}]
-  (let [{:keys [id name owner kind status counts percent conflicts]} plan]
+  (let [{:keys [id name owner kind counts percent conflicts]} plan]
     ^{:key id}
     [:div.plan-row {:class (when (= id selected) "sel") :style {:margin-left (str (* depth 16) "px")}
                     :on-click #(rf/dispatch [:plans/select id])}
      [:div.prow1 [:span.pname (when (pos? depth) [:span.dim "└ "]) name] [:span.ppct (pm/percent-text {:percent percent})]]
      [completion-bar counts]
-     [:div.prow2 [:span kind] [:span {:class (str "pstatus " status)} status] (when owner [:span (str "by " owner)])
+     [:div.prow2 [:span kind] (when owner [:span (str "by " owner)])
       [:span.dim (str (:total counts) " blocks")]]
      (for [{:keys [with] :as conflict} conflicts]
        ^{:key with}
@@ -211,12 +211,12 @@
       detail-failed [:main.plan-detail [:div.err detail-failed]]
       (nil? detail) [:main.plan-detail [:div.dim.pempty "loading..."]]
       :else
-      (let [{:keys [name kind status owner note region at counts layers grid errors spots assign checked conflicts]} detail
+      (let [{:keys [name kind owner note region at counts layers grid errors spots assign checked conflicts]} detail
             layer (first (filter #(= current (:y %)) layers))
             rows (if (= :bird view) (pm/bird-rows layers mode) (:rows layer))]
         [:main.plan-detail
          [:div.phead
-          [:h2 name] [:span.pill kind] [:span {:class (str "pill pstatus " status)} status]
+          [:h2 name] [:span.pill kind]
           (when owner [:span.dim (str "by " owner)])
           [:span.ppct.big (pm/percent-text counts)]]
          [completion-bar counts]

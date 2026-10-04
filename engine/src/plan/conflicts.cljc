@@ -58,9 +58,9 @@
        vec))
 
 (defn active-conflicts
-  "{id plan} and {name blueprint}: the conflicts between the :active plans. Proposed and retired plans conflict with nothing."
+  "{id plan} and {name blueprint}: the conflicts between the plans."
   [plans blueprints]
-  (conflicts (into {} (for [[id plan] plans :when (= :active (:status plan))] [id (shape/expand plan blueprints)]))))
+  (conflicts (into {} (for [[id plan] plans] [id (shape/expand plan blueprints)]))))
 
 (defn per-plan
   "Conflicts as each plan sees them: {plan-id [{:with other :count n :box ..}]}, the worst first."

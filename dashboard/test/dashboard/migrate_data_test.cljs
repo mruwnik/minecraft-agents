@@ -15,7 +15,7 @@
                  :source {:id "old-house" :dimensions [5 4 6]}
                  :report {:satisfied true :population 5 :assigned ["historical-uuid"]
                           :roles [{:id "books" :uuids ["historical-uuid"] :status "satisfied"}]}})
-(def existing {:id "inspected-village" :status :active :note "Preserve the native plan's intention."
+(def existing {:id "inspected-village" :note "Preserve the native plan's intention."
                :parts [{:id "house" :cells [[20 63 30]] :want "stone"}]
                :assign [{:spot "house" :body "Builder" :use :build}]
                :metadata {:native-extra "preserved"}})
@@ -56,7 +56,7 @@
       (is (= "preserved" (get-in p [:metadata :native-extra])))
       (is (= inspection (get-in p [:metadata :legacy-inspection])))
       (is (= :planned (get-in p [:metadata :geometry])))
-      (is (= :proposed (:status new)))
+      (is (not (contains? new :status)))
       (is (= [] (:parts new)))
       (is (= marker (get-in new [:metadata :legacy-place])))
       (is (= :incomplete (get-in new [:metadata :geometry])))

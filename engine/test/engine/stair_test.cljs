@@ -394,7 +394,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "wall" :status :active :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]}
+        (let [plan {:id "wall" :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]}
               {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))]
           (is (= :footprint (:reason @out)))
           (is (= "wall" (:plan @out)))

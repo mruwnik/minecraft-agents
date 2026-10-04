@@ -4,7 +4,7 @@
             [plan.shape :as shape]))
 
 ;; ---------------------------------------------------------------- reading and checking a plan
-(def wheat-plan {:id "p" :status :active :parts [{:id "wheat" :box [[0 65 0] [1 65 1]] :want {:crop "wheat"}}]})
+(def wheat-plan {:id "p" :parts [{:id "wheat" :box [[0 65 0] [1 65 1]] :want {:crop "wheat"}}]})
 
 (defn errors-of [plan] (shape/plan-errors plan "p"))
 (defn parts-erring [plan] (mapv :part (errors-of plan)))
@@ -13,9 +13,7 @@
 (deftest a-good-plan-has-no-errors
   (are [plan] (= [] (errors-of plan))
     wheat-plan
-    (assoc wheat-plan :status :proposed :note "a note")
-    (assoc wheat-plan :status :completed)
-    (assoc wheat-plan :status :retired)
+    (assoc wheat-plan :note "a note")
     (with-part {:id "fence" :outline [[0 64 0] [5 64 5]] :want "oak_fence"})
     (with-part {:id "gate" :cells [[1 64 0] [2 64 0]] :want {:block "oak_fence_gate" :facing :north}})
     (with-part {:id "wall" :box [[0 64 0] [0 66 4]] :want [:any "cobblestone" "stone_bricks"]})
@@ -29,15 +27,15 @@
   (are [plan fragment] (some #(and (nil? (:part %)) (str/includes? (:error %) fragment)) (errors-of plan))
     [1 2] "one map"
     (assoc wheat-plan :id "q") "file name"
-    (assoc wheat-plan :status :done) ":status"
-    (dissoc wheat-plan :status) ":status"
+    (assoc wheat-plan :status :active) "unknown key :status"
+    (assoc wheat-plan :status :retired) "unknown key :status"
     (assoc wheat-plan :parts {}) ":parts"
     (assoc wheat-plan :elements []) ":elements"
     (assoc wheat-plan :assign {}) ":assign"
     (assoc wheat-plan :parts [{:id "a" :cells [[0 0 0]] :want "stone"} {:id "a" :cells [[1 0 0]] :want "stone"}]) "unique"))
 
 (deftest a-village-marker-has-an-anchor-and-intent-without-geometric-claims
-  (let [p {:id "p" :status :proposed :kind :village :at [1.5 64 -3]
+  (let [p {:id "p" :kind :village :at [1.5 64 -3]
            :metadata {:population {:target 8} :legacy-place {:name "home"}}
            :parts []}]
     (is (= [] (errors-of p)))
@@ -207,7 +205,7 @@
 
 ;; ---------------------------------------------------------------- expanding a plan
 (def hill-farm
-  {:id "hill-farm" :status :active
+  {:id "hill-farm"
    :parts [{:id "wheat" :box [[200 65 300] [202 65 301]] :want {:crop "wheat"}}
            {:id "carrots" :box [[200 66 303] [202 66 304]] :want {:crop "carrots"}}
            {:id "fence-low" :outline [[199 65 299] [203 65 302]] :want "oak_fence"}
@@ -238,7 +236,7 @@
       (+ 6 6 13 14 1) (count (:cells e)))))
 
 (deftest a-placed-blueprint-brings-its-cells-and-spots
-  (let [e (expanded {:id "v" :status :proposed
+  (let [e (expanded {:id "v"
                      :parts [{:id "shed-1" :blueprint "shed" :at [10 64 20] :turn 90}
                              {:id "lectern-1" :cells [[13 65 20]] :want "lectern"}]
                      :assign [{:spot "shed-1/seat" :body "Jizo" :use :seat}
@@ -253,10 +251,10 @@
 
 (deftest expansion-errors-name-the-part-or-the-assignment
   (are [plan errors] (= errors (:errors (expanded plan)))
-    {:id "v" :status :active :parts [{:id "barn-1" :blueprint "barn" :at [0 64 0] :turn 0}]}
+    {:id "v" :parts [{:id "barn-1" :blueprint "barn" :at [0 64 0] :turn 0}]}
     [{:part "barn-1" :error "no blueprint called \"barn\""}]
 
-    {:id "v" :status :active :parts [{:id "shed-1" :blueprint "shed" :at [0 64 0] :turn 0}]
+    {:id "v" :parts [{:id "shed-1" :blueprint "shed" :at [0 64 0] :turn 0}]
      :assign [{:spot "shed-1/bed" :body "Jizo" :use :bed} {:spot "lectern-9" :profession :farmer}]}
     [{:assign "shed-1/bed" :error "no part or spot called \"shed-1/bed\""}
      {:assign "lectern-9" :error "no part or spot called \"lectern-9\""}]))

@@ -86,7 +86,7 @@
 (deftest ground-is-under-the-rails-and-the-buffers-and-the-buffers-but-never-a-source
   (is (= (disj (set (concat (for [x (range 1 7)] [x 63 0]) [[0 64 0] [7 64 0] [0 63 0] [7 63 0]])) [3 63 0])
          (rail/ground plan-cells)))
-  (is (contains? (rail/ground (:cells (shape/expand {:id "p" :status :active
+  (is (contains? (rail/ground (:cells (shape/expand {:id "p"
                                                      :parts (:parts (rail/layout [0 64 0] [29 64 0] {}))} {})))
                  [3 63 -1])
       "under a torch"))
@@ -96,7 +96,7 @@
 
 ;; ---------------------------------------------------------------- layout
 
-(defn expanded [{:keys [parts]}] (:cells (shape/expand {:id "p" :status :active :parts parts} {})))
+(defn expanded [{:keys [parts]}] (:cells (shape/expand {:id "p" :parts parts} {})))
 
 (defn chain-of [laid] (rail/line (expanded laid)))
 
@@ -204,7 +204,7 @@
                                                [pos {:name b :state (into {} (map (fn [[k v]] [k (shape/state-text v)]))
                                                                          (when (map? want) (dissoc want :block)))}]))))
                                 cells)]
-                (and (= [] (shape/plan-errors {:id "p" :status :active :parts parts} "p"))
+                (and (= [] (shape/plan-errors {:id "p" :parts parts} "p"))
                      (= 30 (count (rail/line cells)))
                      (= {:ok? true :breaks [] :hazards []} (rail/judge-line cells (block-at world)))))
     {} {:style :all-powered} {:power :lever} {:launch-ends :first}))
@@ -303,7 +303,7 @@
 (deftest a-layout-of-corners-and-slopes-is-a-good-plan-whose-world-passes-the-proof
   (are [waypoints opts] (let [l (route waypoints opts)
                               cells (expanded l)]
-                          (and (= [] (shape/plan-errors {:id "p" :status :active :parts (:parts l)} "p"))
+                          (and (= [] (shape/plan-errors {:id "p" :parts (:parts l)} "p"))
                                (= {:ok? true :breaks [] :hazards []} (rail/judge-line cells (block-at (world-of cells))))))
     l-route {}
     l-route {:style :all-powered}

@@ -205,7 +205,7 @@
 ;; ------------------------------------------------------------------ zones and footprints
 
 (def farm-zone {:name "farm" :min [1 60 1] :max [1 70 2] :owner "Miles"})
-(def pad-plan {:id "pad" :status :active :parts [{:id "p" :box [[2 64 1] [2 65 2]] :want "stone"}]})
+(def pad-plan {:id "pad" :parts [{:id "p" :box [[2 64 1] [2 65 2]] :want "stone"}]})
 
 (defn ^:async listed-after [eng n]
   (core/submit! eng (list job box) {})

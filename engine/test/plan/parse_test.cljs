@@ -3,7 +3,7 @@
             [clojure.string :as str]
             [plan.parse :as parse]))
 
-(def good {:id "p" :status :active :parts [{:id "a" :box [[0 64 0] [1 64 1]] :want {:crop "wheat"}}]})
+(def good {:id "p" :parts [{:id "a" :box [[0 64 0] [1 64 1]] :want {:crop "wheat"}}]})
 (def shed {:id "shed" :front :south :key {"S" "stone"} :layers [["SS"]]})
 
 (deftest parse-never-throws

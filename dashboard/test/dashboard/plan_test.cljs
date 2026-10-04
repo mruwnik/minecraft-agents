@@ -9,7 +9,7 @@
 (def fixtures-dir (.resolve path js/__dirname ".." "test" "fixtures" "plans"))
 (def blueprints-dir (.resolve path js/__dirname ".." "test" "fixtures" "blueprints"))
 
-(def good {:id "p" :status :active :parts [{:id "a" :box [[0 64 0] [1 64 1]] :want {:crop "wheat"}}]})
+(def good {:id "p" :parts [{:id "a" :box [[0 64 0] [1 64 1]] :want {:crop "wheat"}}]})
 (def shed {:id "shed" :front :south :key {"S" "stone"} :layers [["SS"]]})
 
 (defn temp-dir [] (.mkdtempSync fs (.join path (.tmpdir os) "plans-")))

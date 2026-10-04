@@ -41,7 +41,6 @@
    [:div.head
     [:span.name (:name v)]
     [:span.muted (str (:x v) ", " (:y v) ", " (:z v))]
-    (when-let [status (:planStatus v)] [:span.state (name status)])
     [:span.state (vv/population-text v)]
     [:span {:class (str "state " (:state v))} (vv/state-text v)]]
    [:div.detail

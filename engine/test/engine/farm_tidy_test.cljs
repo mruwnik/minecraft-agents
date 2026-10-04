@@ -60,7 +60,7 @@
 ;; 6 64 2, and a row at z 4 the plan wants clear.
 
 (def field-plan
-  {:id "field" :status :active
+  {:id "field"
    :parts [{:id "ground" :box [[2 63 2] [5 63 3]] :want "farmland"}
            {:id "water" :cells [[6 63 2]] :want "water"}
            {:id "wheat" :box [[2 64 2] [5 64 3]] :want {:crop "wheat"}}
@@ -133,7 +133,7 @@
 (defn expanded [plan] (:cells (shape/expand plan {})))
 
 (deftest the-air-over-a-crop-cell-is-worked-unless-the-plan-names-it
-  (let [plan {:id "p" :status :active
+  (let [plan {:id "p"
               :parts [{:id "a" :cells [[1 64 1] [2 64 1]] :want {:crop "wheat"}}
                       {:id "b" :cells [[2 65 1]] :want "oak_fence"}
                       {:id "c" :cells [[5 70 5]] :want "stone"}]}
@@ -218,8 +218,6 @@
 (deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
   (are [plans args reason] (= [0 [{:plan (:plan args) :reason reason}]] (declines plans args))
     {} {:plan "nope"} "no such plan"
-    {"field" (assoc field-plan :status :retired)} {:plan "field"} "the plan is :retired"
-    {"field" (assoc field-plan :status :proposed)} {:plan "field"} "the plan is :proposed"
     {"field" field-plan} {:plan "field" :part "nothing"} "no cells"
     {"field" (assoc field-plan :parts [])} {:plan "field"} "no cells"))
 
@@ -279,7 +277,7 @@
           (is (= (set strays) (dug p)))
           (is (= [] (:refused result))))))))
 
-(def other-plan {:id "other" :status :active :parts [{:id "o" :cells [[2 64 4]] :want "stone"}]})
+(def other-plan {:id "other" :parts [{:id "o" :cells [[2 64 4]] :want "stone"}]})
 
 (deftest a-stray-inside-another-plans-footprint-is-refused
   (async done
@@ -289,15 +287,6 @@
               result (await (outcome eng {:plan "field"} 200))]
           (is (= (disj (set strays) [2 64 4]) (dug p)))
           (is (= [{:pos [2 64 4] :block "dirt" :reason :footprint :plan "other"}] (:refused result))))))))
-
-(deftest a-retired-plan-claims-nothing
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (start tidy-spec {"field" field-plan "other" (assoc other-plan :status :retired)})
-              result (await (outcome eng {:plan "field"} 200))]
-          (is (= (set strays) (dug p)))
-          (is (= [] (:refused result))))))))
 
 (deftest the-access-is-checked-again-right-before-each-dig
   (async done
@@ -317,12 +306,12 @@
 ;; ---------------------------------------------------------------- hazards
 
 (def hazard-plan
-  {:id "h" :status :active :parts [{:id "c" :cells [[2 64 2]] :want :clear}]})
+  {:id "h" :parts [{:id "c" :cells [[2 64 2]] :want :clear}]})
 
 (defn hazard-world [& cells] {:blocks (apply put [2 64 2 "dirt"] cells)})
 
 (def falling-plan
-  {:id "h" :status :active :parts [{:id "c" :cells [[0 66 0]] :want :clear}]})
+  {:id "h" :parts [{:id "c" :cells [[0 66 0]] :want :clear}]})
 
 (defn ^:async run-hazard [spec args]
   (let [{:keys [eng p]} (start spec {"h" hazard-plan})
@@ -391,7 +380,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "w" :status :active :parts [{:id "w" :cells [[2 64 2] [3 64 2]] :want [:any "water" {:block "oak_slab" :waterlogged true}]}]}
+        (let [plan {:id "w" :parts [{:id "w" :cells [[2 64 2] [3 64 2]] :want [:any "water" {:block "oak_slab" :waterlogged true}]}]}
               {:keys [eng p]} (start {:blocks (put [2 64 2 "water"] [3 64 2 "stone"])} {"w" plan})
               result (await (outcome eng {:plan "w"} 100))]
           (is (zero? (count (calls p "dig"))))
@@ -404,7 +393,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "far" :status :active :parts [{:id "c" :cells [[30 64 2]] :want :clear}]}
+        (let [plan {:id "far" :parts [{:id "c" :cells [[30 64 2]] :want :clear}]}
               {:keys [eng p]} (start {:blocks (put [30 64 2 "dirt"]) :unreachable ["30,64,2"]} {"far" plan})
               result (await (outcome eng {:plan "far"} 100))]
           (is (zero? (count (calls p "dig"))))
@@ -414,7 +403,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "b" :status :active :parts [{:id "c" :cells [[2 64 2] [3 64 2]] :want :clear}]}
+        (let [plan {:id "b" :parts [{:id "c" :cells [[2 64 2] [3 64 2]] :want :clear}]}
               {:keys [eng p]} (start {:blocks (put [2 64 2 "bedrock"] [3 64 2 "dirt"])} {"b" plan})
               result (await (outcome eng {:plan "b"} 100))]
           (is (= ["bedrock" "air"] [(block-at p 2 64 2) (block-at p 3 64 2)]))
@@ -425,7 +414,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "u" :status :active :parts [{:id "c" :cells [[2 64 2] [3 64 2]] :want :clear}]}
+        (let [plan {:id "u" :parts [{:id "c" :cells [[2 64 2] [3 64 2]] :want :clear}]}
               {:keys [eng p]} (start {:blocks (put [3 64 2 "dirt"]) :unloaded ["2,64,2"]} {"u" plan})
               result (await (outcome eng {:plan "u"} 100))]
           (is (= #{[3 64 2]} (dug p)))

@@ -23,8 +23,8 @@
 
 (defn field-plan
   "A plan holding one wheat row per z over x 2..5, parts named row-<z>."
-  [status zs]
-  {:id "field" :status status
+  [zs]
+  {:id "field"
    :parts (mapv (fn [z] {:id (str "row-" z) :box [[2 64 z] [5 64 z]] :want {:crop "wheat"}}) zs)})
 
 (def mixed-field
@@ -42,7 +42,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start mixed-field {"field" (field-plan :active [2])})
+        (let [{:keys [eng p]} (start mixed-field {"field" (field-plan [2])})
               result (await (h/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "wheat_seeds"] [4 2 "wheat_seeds"]} (placed p)))
@@ -56,7 +56,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start (merge mixed-field {:inventory [] :drops {"wheat" ["wheat"]}})
-                                     {"field" (field-plan :active [2])})
+                                     {"field" (field-plan [2])})
               result (await (h/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= {:cut 1 :replanted 0 :bare [{:x 2 :y 64 :z 2} {:x 4 :y 64 :z 2}] :lost [] :gave-up false}
@@ -67,7 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (h/field "wheat" 7 [2 3] [2 3]) :ages (h/ages 7 [2 3] [2 3]) :drops h/wheat-drops}
-                                     {"field" (field-plan :active [2 3])})
+                                     {"field" (field-plan [2 3])})
               result (await (h/child-outcome eng h/job {:plan "field" :part "row-3"} 200))]
           (is (= #{[2 3] [3 3]} (dug p)))
           (is (= 2 (:cut result))))))))
@@ -81,12 +81,10 @@
     [(count (h/calls p "dig")) (count (h/calls p "place")) (mapv #(select-keys % [:plan :reason]) (h/events-of seen :harvest.declined))]))
 
 (deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
-  (let [cane {:id "cane" :status :active :parts [{:id "c" :cells [[2 64 2]] :want {:crop "sugar_cane"}}]}]
+  (let [cane {:id "cane" :parts [{:id "c" :cells [[2 64 2]] :want {:crop "sugar_cane"}}]}]
     (is (= [0 0 [{:plan "nope" :reason "no such plan"}]] (declines {} {:plan "nope"})))
-    (is (= [0 0 [{:plan "field" :reason "the plan is :retired"}]] (declines {"field" (field-plan :retired [2])} {:plan "field"})))
-    (is (= [0 0 [{:plan "field" :reason "the plan is :proposed"}]] (declines {"field" (field-plan :proposed [2])} {:plan "field"})))
     (is (= [0 0 [{:plan "cane" :reason "no crop cells"}]] (declines {"cane" cane} {:plan "cane"})))
-    (is (= [0 0 [{:plan "field" :reason "no crop cells"}]] (declines {"field" (field-plan :active [2])} {:plan "field" :part "row-9"})))))
+    (is (= [0 0 [{:plan "field" :reason "no crop cells"}]] (declines {"field" (field-plan [2])} {:plan "field" :part "row-9"})))))
 
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start mixed-field {})]
@@ -103,10 +101,10 @@
       (fn ^:async t []
         (let [{:keys [eng p w]} (start {:blocks (h/field "wheat" 7 (range 2 6) [2 9]) :ages (h/ages 7 (range 2 6) [2 9])
                                         :drops h/wheat-drops}
-                                       {"field" (field-plan :active [2 9])})]
+                                       {"field" (field-plan [2 9])})]
           (.override (.-world p) "dig"
                      (fn ^:async f [token args impl]
-                       (world/set-data! w {"field" (field-plan :active [2])} {})
+                       (world/set-data! w {"field" (field-plan [2])} {})
                        (await (impl token args))))
           (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
             (is (= #{2} (set (map second (dug p)))))
@@ -133,10 +131,10 @@
       (fn ^:async t []
         (let [{:keys [eng p w]} (start {:blocks (h/field "wheat" 7 (range 2 6) [9]) :ages (h/ages 7 (range 2 6) [9])
                                         :drops h/wheat-drops}
-                                       {"field" (field-plan :active [2 9])})]
+                                       {"field" (field-plan [2 9])})]
           (.override (.-world p) "moveTo"
                      (fn ^:async f [token args impl]
-                       (world/set-data! w {"field" (field-plan :active [2])} {})
+                       (world/set-data! w {"field" (field-plan [2])} {})
                        (await (impl token args))))
           (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
             (is (= #{} (dug p)))

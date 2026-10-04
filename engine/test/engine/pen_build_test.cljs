@@ -22,8 +22,8 @@
 
 (defn ring-plan
   "The 3x3 fence ring at y 64 over x 2..4, z 2..4 with a gate at 3 64 2; without cells in skip."
-  [status & [skip]]
-  {:id "pen" :status status
+  [& [skip]]
+  {:id "pen"
    :parts [{:id "fence" :cells (vec (remove (set skip) fenced-ring)) :want "oak_fence"}
            {:id "gate" :cells [[3 64 2]] :want {:block "oak_fence_gate" :facing :north}}]})
 
@@ -63,7 +63,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan :active)} {}))]
+        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan)} {}))]
           (is (true? (:closed? result)))
           (is (nil? (:reason result)))
           (is (= [] (:leaks result)))
@@ -78,7 +78,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan :active [[3 64 4]])} {}))
+        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))
               warns (kinds-of seen :pen-build.leaky)]
           (is (= 7 (get-in result [:built :placed])) "everything the plan asks for is placed")
           (is (false? (:closed? result)))
@@ -94,7 +94,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world-spec (assoc (spec kit built-pen) :states {"3,64,2" {:open true :facing "north"}})
-              [result seen] (await (build! world-spec {"pen" (ring-plan :active)} {}))]
+              [result seen] (await (build! world-spec {"pen" (ring-plan)} {}))]
           (is (= :leak (:reason result)))
           (is (= [:open-gate] (mapv :why (:leaks result))))
           (is (= 1 (count (kinds-of seen :pen-build.leaky)))))))))
@@ -107,7 +107,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan :active)} {}
+        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan)} {}
                                              [(zone "shrine" [4 64 3] [4 64 3] #{})]))
               [warn] (kinds-of seen :pen-build.leaky)]
           (is (= "air" (h/block-at p 4 64 3)))
@@ -120,7 +120,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan :active) "other" b/other-plan} [])
+        (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
               result (await (h/child-outcome eng job {:plan "pen"} 300))
               [warn] (kinds-of seen :pen-build.leaky)]
           (is (= "air" (h/block-at p 4 64 3)))
@@ -132,7 +132,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result seen] (await (build! (spec [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}])
-                                           {"pen" (ring-plan :active)} {}))
+                                           {"pen" (ring-plan)} {}))
               [warn] (kinds-of seen :pen-build.leaky)]
           (is (= {"oak_fence" 3} (get-in result [:built :short])))
           (is (= {"oak_fence" 3} (:short warn)))
@@ -156,7 +156,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (declines (spec kit built-pen) {"pen" (ring-plan :active)} {:plan "pen"}))]
+        (let [r (await (declines (spec kit built-pen) {"pen" (ring-plan)} {:plan "pen"}))]
           (is (= 0 (:places r)))
           (is (= [] (:declined r)))
           (is (= 0 (:done r))))))))
@@ -165,7 +165,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan :active [[3 64 4]])} [])]
+        (let [{:keys [eng seen]} (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan [[3 64 4]])} [])]
           (core/submit! eng (list job {:plan "pen"}) {})
           (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (= 1 (count (kinds-of seen :pen-build.leaky))))
@@ -175,14 +175,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stone-plan {:id "pen" :status :active :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
+        (let [stone-plan {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
           (doseq [[plans args zones reason]
                   [[{} {:plan "pen"} [] "no such plan"]
-                   [{"pen" (ring-plan :retired)} {:plan "pen"} [] "the plan is :retired"]
-                   [{"pen" (ring-plan :proposed)} {:plan "pen"} [] "the plan is :proposed"]
-                   [{"pen" (ring-plan :active)} {:plan "pen" :part "nope"} [] "no cells to build"]
+                   [{"pen" (ring-plan)} {:plan "pen" :part "nope"} [] "no cells to build"]
                    [{"pen" stone-plan} {:plan "pen"} [] "the plan has no fence, wall or gate cells"]
-                   [{"pen" (ring-plan :active)} {:plan "pen"} :none "no zone list has been read"]]]
+                   [{"pen" (ring-plan)} {:plan "pen"} :none "no zone list has been read"]]]
             (let [r (await (declines (spec kit) plans args zones))]
               (is (= [{:plan "pen" :reason reason}] (:declined r)))
               (is (= 0 (:places r))))))))))
@@ -202,7 +200,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (b/start (spec []) {"pen" (ring-plan :active)} [])]
+        (let [{:keys [eng p seen]} (b/start (spec []) {"pen" (ring-plan)} [])]
           (core/submit! eng (list job {:plan "pen"}) {})
           (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (empty? (h/calls p "place")))
@@ -214,7 +212,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan :active)} [])
+        (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan)} [])
               release (.hold (.-world p) "place")]
           (core/submit! eng (list job {:plan "pen"}) {})
           (let [round (core/tick! eng)]

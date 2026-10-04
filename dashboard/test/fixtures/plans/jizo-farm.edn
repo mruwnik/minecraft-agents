@@ -1,6 +1,6 @@
 ;; Jizo's farm, copied by hand from the places jizo-crop-field (origin -17 62 -97) and jizo-melon-patch (origin -1 62 -88).
 ;; Heights are plausible, not surveyed: crops stand at y 63 on farmland at y 62, the channels are at y 62.
-{:id "jizo-farm" :status :active
+{:id "jizo-farm"
  :note "Carrots, potatoes, melon and pumpkin stems in the field, three wheat plots with two covered water channels in the patch."
  :parts
  [{:id "potatoes"     :box [[-11 63 -97] [-10 63 -96]] :want {:crop "potatoes"}}

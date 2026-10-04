@@ -23,7 +23,7 @@
   :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused :given-up :short). Either way it
   ends :done with {:ok? :breaks :hazards :built {:placed :missing :short :given-up :wrong :refused}}; :hazards lists
   falling beds (gravel, sand). The check declines with one rail-build.declined warn (:plan :reason) while the plan is
-  missing, not :active or unreadable (:plan), its rail cells are not one chain (:not-a-line, :why :gap|:branch|
+  missing or unreadable (:plan), its rail cells are not one chain (:not-a-line, :why :gap|:branch|
   :two-chains|:loop|:no-rails), no zone list has been read (:no-zones), or a cell still to build is refused by the
   access rules (:refused, the whole list [{:pos :reason :zone|:plan}]), or a cell wanting a redstone block holds
   another block (:source-blocked, the :cells; the builder never digs, so on natural ground :power :block cannot be
@@ -42,6 +42,7 @@
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :default 1}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :dig {:doc "dig :clear cells and wrong blocks in bed and rail cells; not used yet (slice 3)" :default false}})
 
 ;; ------------------------------------------------------------------ the plan
@@ -70,7 +71,7 @@
                                          :text (str "its rail cells are not one line: " (name (:error chain))
                                                     (when (:at chain) (str " at " (pr-str (:at chain)))))}
                                         (select-keys chain [:at]))
-                  (nil? (ctx/zones c)) {:reason :no-zones :text "no zone list has been read"})]
+                  (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) {:reason :no-zones :text "no zone list has been read"})]
     (if-not trouble
       {:cells cells}
       (do (decline! c trouble)

@@ -8,11 +8,10 @@
 
 (defn opts [block-at] {:dir dir :blueprint-dir blueprint-dir :block-at block-at})
 
-(deftest a-village-anchor-preserves-proposed-status-without-invented-completion
-  (let [p {:id "marker" :kind :village :at [4 65 -2] :status :proposed
+(deftest a-village-anchor-has-no-invented-completion
+  (let [p {:id "marker" :kind :village :at [4 65 -2]
            :parts [] :metadata {:geometry :incomplete :population {:target 8}}}
         item (api/list-item {} (fn [& _] (throw (js/Error. "marker must not read blocks"))) {} ["marker" p])]
-    (is (= :proposed (:status item)))
     (is (= :village (:kind item)))
     (is (= [4 65 -2] (:at item)))
     (is (= {:geometry :incomplete} (:metadata item)))
@@ -46,7 +45,6 @@
     (is (= ["claude-village" "jizo-farm" "spawn-clear"] (map :id plans)))
     (are [path expected] (= expected (get-in farm path))
       [:name] "jizo-farm"
-      [:status] :active
       [:children] []
       [:counts :total] 307
       [:counts :match] 0
@@ -106,11 +104,11 @@
 (deftest detail-of-an-unknown-plan-is-nil
   (is (nil? (api/detail (opts nothing-dumped) "nope"))))
 
-;; ---------------------------------------------------------------- active plans that want different things of one cell
+;; ---------------------------------------------------------------- plans that want different things of one cell
 (def conflict-dir (.resolve path js/__dirname ".." "test" "fixtures" "plans-conflict"))
 (defn conflict-opts [] {:dir conflict-dir :blueprint-dir blueprint-dir :block-at nothing-dumped})
 
-(deftest summaries-list-the-conflicts-between-active-plans
+(deftest summaries-list-the-conflicts-between-plans
   (let [{:keys [plans conflicts]} (api/summaries (conflict-opts))]
     (is (= [{:plans ["north-field" "south-field"] :count 4 :same 0 :shown 4
              :box {:min [2 64 2] :max [3 64 3]} :cells [[2 64 2] [2 64 3] [3 64 2] [3 64 3]]}]
@@ -118,8 +116,7 @@
     (are [id expected] (= expected (:conflicts (by-id plans id)))
       "north-field" [{:with "south-field" :count 4 :box {:min [2 64 2] :max [3 64 3]}}]
       "south-field" [{:with "north-field" :count 4 :box {:min [2 64 2] :max [3 64 3]}}]
-      "agreeing" []        ; the same want on a shared cell is no conflict
-      "old-idea" [])))     ; a retired plan conflicts with nothing
+      "agreeing" [])))     ; the same want on a shared cell is no conflict
 
 (deftest summaries-without-conflicts-say-so
   (is (= [] (:conflicts (api/summaries (opts nothing-dumped))))))

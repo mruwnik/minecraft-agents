@@ -18,7 +18,7 @@
   :unloaded; at most 12) and what the build left: :refused, :given-up, :short {item n}. Either way it ends :done with
   {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up :wrong :refused}}, :reason nil
   when closed, else :leak, :unbounded, :unloaded or :no-start (see jobs.animals.pen-check). The check declines with
-  one pen-build.declined warn while the plan is missing, not :active, unreadable, has no cells (in :part), no fence
+  one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), no fence
   cells, or no zone list has been read; it declines without a warn while nothing is missing and the pen already holds
   (nothing to do, nothing is rebuilt or re-checked after a restart: the world is the memory), and through the
   builder's own build.declined while materials are not carried. Once begun the check stays true.")

@@ -63,7 +63,7 @@
                    marker (assoc :legacy-place marker)
                    inspection (assoc :legacy-inspection inspection :source (:source inspection))
                    population (assoc :population population))
-        value (cond-> {:id id :kind :village :status :proposed :parts [] :metadata metadata
+        value (cond-> {:id id :kind :village :parts [] :metadata metadata
                         :note (or (:note marker) "Migrated village intention; geometry is incomplete.")}
                 at (assoc :at at))
         errors (shape/plan-errors value id)]
@@ -150,7 +150,7 @@
         backup-dir (.join path dir ".migration-backups" "village-plans")
         writes (mapv #(planned-write (.join path dir "plans" (str (:id %) ".edn")) % backup-dir) plans)]
     {:world world :state-dir state :writes (vec writes)
-     :warnings ["Existing native plan layout, status, assignments and plan notes are preserved. New plans are proposed with incomplete geometry."
+     :warnings ["Existing native plan layout, assignments and plan notes are preserved. New plans have incomplete geometry."
                 "Legacy inspection reports are historical evidence; no villagers are enrolled as plan members."]
      :village-count (count plans)}))
 

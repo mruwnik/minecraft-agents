@@ -21,8 +21,8 @@
   [block y]
   (into {} (for [x (range -5 35) z (range -4 5)] [(h/cell-key x y z) block])))
 
-(defn line-plan [opts & [status]]
-  {:id "line" :status (or status :active) :parts (:parts (rail/layout from to opts))})
+(defn line-plan [opts]
+  {:id "line" :parts (:parts (rail/layout from to opts))})
 
 (defn kit
   "Exactly the items the layout counts, the fill as cobblestone, plus extra {item n}."
@@ -90,7 +90,7 @@
      :warns (count (filter #(re-find #"^(rail-)?build\." (name (:kind %))) @seen))}))
 
 (def holed-plan
-  {:id "line" :status :active
+  {:id "line"
    :parts [{:id "bed" :box [[-1 63 0] [5 63 0]] :want [:any "stone"]}
            {:id "rails" :cells [[0 64 0] [1 64 0] [3 64 0] [4 64 0]] :want {:block "rail" :shape :east_west}}]})
 
@@ -100,7 +100,6 @@
       (fn ^:async t []
         (doseq [[plans args zones declined]
                 [[{} {:plan "line"} [] [{:plan "line" :reason :plan}]]
-                 [{"line" (line-plan {} :proposed)} {:plan "line"} [] [{:plan "line" :reason :plan}]]
                  [{"line" holed-plan} {:plan "line"} [] [{:plan "line" :reason :not-a-line :why :gap}]]
                  [{"line" (line-plan {})} {:plan "line"} :none [{:plan "line" :reason :no-zones}]]
                  [{"line" (line-plan {})} {:plan "line"} [(b/zone "shrine" [7 64 0] [7 64 0] #{})]
@@ -270,7 +269,7 @@
 (def slope-route [[0 64 0] [19 64 0] [25 70 0] [45 70 0]])
 (def down-route [[0 70 0] [14 70 0] [20 64 0] [40 64 0]])
 
-(defn route-plan [waypoints opts] {:id "line" :status :active :parts (:parts (rail/layout waypoints opts))})
+(defn route-plan [waypoints opts] {:id "line" :parts (:parts (rail/layout waypoints opts))})
 
 (defn route-kit
   "Exactly the items the layout of the waypoints counts, the fill as cobblestone, plus extra {item n}."

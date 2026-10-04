@@ -48,7 +48,7 @@
   false; a ripe crop that cannot be reached makes the check pass on every run
   (harvest gives up on it, the run still ends).
 
-  With :plan (and optionally :part) the field is the :active plan's crop cells instead of the :box (wants {:crop c} of
+  With :plan (and optionally :part) the field is the plan's crop cells instead of the :box (wants {:crop c} of
   a crop harvest knows: wheat, carrots, potatoes, beetroots; the plan's other cells are never touched). The same six
   steps, each per cell with the crop the plan names there: harvest cuts the ripe planned crop (a ripe crop of another
   kind in a crop cell stands: tend never digs a wrong crop, it lists it as :wrong {:pos :found :want}, warn
@@ -60,14 +60,14 @@
   twice the planned cells of each crop. Tilling is checked with may-dig? on the ground cell and sowing with may-place?
   on the crop cell, with the zones and the footprints of the OTHER active plans, when the cell is chosen and again
   right before the act (in jobs.farm.till and jobs.farm.plant, called with the plan). The check declines, with one
-  farm-tend.declined warn naming the plan and the reason, while the plan is missing, not :active, unreadable, holds no
+  farm-tend.declined warn naming the plan and the reason, while the plan is missing, unreadable, holds no
   crop cells (in :part) or no zone list has been read; a started run declines in its next round when the plan stopped
   being workable. The :field of the result then also holds :wrong, and the explicit farmland the plan wants without a
   crop over it is not tilled (it would revert).")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :default nil}
-   :plan {:doc "id of an :active plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :default nil}
+   :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :default nil}
    :part {:doc "with :plan, only the cells of this part" :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :default true}
    :fertilize {:doc "use bone meal on unripe crops" :default false}

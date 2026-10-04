@@ -503,7 +503,7 @@
 ;; ------------------------------------------------------------------ zones and footprints
 
 (def farm-zone {:name "farm" :min [2 60 -2] :max [4 70 2] :owner "Miles"})
-(def pad-plan {:id "pad" :status :active :parts [{:id "p" :box [[6 64 0] [6 64 0]] :want "sand"}]})
+(def pad-plan {:id "pad" :parts [{:id "p" :box [[6 64 0] [6 64 0]] :want "sand"}]})
 (def two-in-two-out {"3,64,0" "sand" "3,64,1" "sand" "6,64,0" "sand" "6,64,1" "sand"})
 
 (defn ^:async zoned

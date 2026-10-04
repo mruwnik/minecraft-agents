@@ -1,7 +1,7 @@
 (ns engine.triggers.pen-gate
   "The pen-gate trigger, and the pure reading the shut-gate job shares with it.
 
-  Where the gates are comes from the plans: a gate is a cell of an :active plan whose want is a fence gate. The index
+  Where the gates are comes from the plans: a gate is a cell of a plan whose want is a fence gate. The index
   {cell plan-id} is built once per plan change (engine.world/derived), never per tick.
 
   The trigger holds when a planned gate within :radius (8) blocks of the body stands open, the body is farther than
@@ -39,12 +39,12 @@
   (some #(str/ends-with? % "_fence_gate") (want-names want)))
 
 (defn gate-cells
-  "{[x y z] plan-id} of the cells of the :active plans (answers, see engine.world/answer) that want a fence gate;
-  a cell several plans want belongs to the first by id. A broken or unactive plan has none."
+  "{[x y z] plan-id} of the cells of the plans (answers, see engine.world/answer) that want a fence gate;
+  a cell several plans want belongs to the first by id. A broken plan has none."
   [answers]
   (into {}
-        (for [{:keys [id status cells broken] :as a} (reverse (sort-by :id (remove nil? answers)))
-              :when (and (not broken) (= :active status))
+        (for [{:keys [id cells broken] :as a} (reverse (sort-by :id (remove nil? answers)))
+              :when (not broken)
               {:keys [pos want]} cells
               :when (gate-want? want)]
           [(vec pos) id])))

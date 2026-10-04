@@ -27,7 +27,7 @@
        mtime-of (assoc :checked (assoc (cmp/checked (:cells expansion) mtime-of) :now (js/Date.now)))))))
 
 (defn header [id p]
-  (merge {:id id :name id :status (:status p) :note (:note p) :children []}
+  (merge {:id id :name id :note (:note p) :children []}
          (select-keys p [:kind :at])
          (when (:metadata p) {:metadata (select-keys (:metadata p) [:geometry])})))
 
