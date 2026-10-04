@@ -350,6 +350,17 @@
                   (recur (inc y) 1)
                   (recur (inc y) blocked)))))))))
 
+  ;; DAMAGE_TOUCH cells (berry bush, wither rose, cactus) in column x,z over lo..hi (1/16 absolute): a diagonal brushes both
+  ;; side columns, so each one hurts as one in the body's own column does (`fits`' touch)
+  (sideTouch [s x z lo hi]
+    (let [last-y (bit-shift-right (dec hi) 4)]
+      (loop [y (bit-shift-right lo 4)
+             touched 0]
+        (if (> y last-y)
+          touched
+          (let [id (.stateAt s x y z)]
+            (recur (inc y) (if (and (not (== id UNLOADED)) (== (aget tbl-hazard id) DAMAGE-TOUCH)) (inc touched) touched)))))))
+
   ;; does the body fit in the column of feet cell y at x,z, its feet at absolute lo (1/16)? `id` stands for the feet cell
   ;; itself. Sets `touch`. Collision that leaves gaps is for the tight-cell mask to judge, not for refusing the cell.
   (fits [s x y z lo id]
@@ -1458,10 +1469,11 @@
                          ;; (the walker's test of a jump that slides along a corner: limit-corner)
                          (or (not jump) (zero? slide) (nil? limit-corner)
                              (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))))
-                (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from enter-slow)))) (* slide CORNER-S))]
+                (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from enter-slow)))) (* slide CORNER-S))
+                      brushed (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))]
                   (.edge s x2 y2 z2 h1
                          (cond jump MOVE-JUMP (== slide 1) MOVE-CORNER :else MOVE-DIAGONAL)
-                         i (+ (if jump (+ walk JUMP-S) walk) enter-extra) enter-risk enter-slow slide 0)))))))))
+                         i (+ (if jump (+ walk JUMP-S) walk) enter-extra) (+ enter-risk brushed) enter-slow slide 0)))))))))
 
   ;; region -1: every region of a tight cell (the goal flood does not know which one it comes from)
   (expandMoves [s x y z h slow-from i region]

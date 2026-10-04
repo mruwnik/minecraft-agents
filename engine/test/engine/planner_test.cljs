@@ -104,6 +104,17 @@
     [[3 64 2 "oak_fence"]]
     [[3 65 2 "stone"]]))
 
+;; the 0.6 wide body on a diagonal brushes both side cells: a plant that hurts on touch there costs as much as one in the
+;; body's own cell, so a cheap way round is taken (soak j69: a berry bush beside a diagonal, -1 hp)
+(deftest a-diagonal-beside-a-hurting-plant-is-walked-round
+  (are [block] (let [r (run (world {:blocks [[3 64 2 block]]}) (near 3 64 3))]
+                 (and (= "found" (:status r))
+                      (not= [[2 64 2] [3 64 3]] (cells r))
+                      (= 0 (cost r :risk))))
+    "sweet_berry_bush"
+    "wither_rose"
+    "cactus"))
+
 (deftest block-touching-diagonal-only-at-far-corner-does-not-stop-it
   (let [r (run (world {:blocks [[4 64 3 "stone"]]}) (near 3 64 3))]
     (is (= [[2 64 2] [3 64 3]] (cells r)))))
