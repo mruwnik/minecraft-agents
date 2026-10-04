@@ -1,7 +1,8 @@
 (ns jobs.items.smelt
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Smelt count of an item in a furnace, blast furnace or smoker without
@@ -333,7 +334,7 @@
 (defn ^:async round-at!
   "Reach the furnace, read it, then load (first) or collect."
   [c furnace owed?]
-  (case (await (u/walk-near! c furnace 3))
+  (case (await (near/walk-near! c furnace 3))
     :partial :continue
     :blocked (give-up! c "unreachable")
     (let [state (await (visit! c "read" {}))]

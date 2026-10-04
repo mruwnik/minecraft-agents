@@ -4,6 +4,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
+            [engine.path.near :as near]
             [engine.places :as places]))
 
 (def doc
@@ -99,7 +100,7 @@
       (nil? chest) :continue
       (access/container-refusal c :put chest) (refuse! c (access/container-refusal c :put chest))
       :else
-      (let [w (await (u/walk-near! c chest 3))]
+      (let [w (await (near/walk-near! c chest 3))]
         (case w
           :partial :continue
           :blocked (give-up! c :chest_unusable "cannot reach the chest" "unreachable")

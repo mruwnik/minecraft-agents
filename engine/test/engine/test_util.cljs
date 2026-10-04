@@ -47,6 +47,26 @@
   "The :floor rectangle most go-to callers' tests use: every spot they walk between."
   [-30 -10 40 10])
 
+(defn fake-on-floor
+  "fake with stone at y 63 under the walk-floor rectangle (or the spec's :floor), in the columns the spec's :blocks leave
+  empty: the ground the walks of jobs that use engine.path.near/walk-near! need, without touching ground a test built."
+  [spec]
+  (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] [x z]))) (keys (:blocks spec)))
+        ground (into {} (remove (fn [[k _]] (let [[x _ z] (.split k ",")] (built [x z]))))
+                     (apply floor (:floor spec walk-floor)))]
+    (fake (-> spec (dissoc :floor) (assoc :blocks (merge ground (:blocks spec)))))))
+
+(defn short-walks!
+  "Make the fake's walks end early, as a steer that timed out after ticks ticks (the fake walks about 0.2 blocks a tick):
+  a walk-near! toward a target farther than that ends :partial. Only the first n walks when n is given."
+  ([p ticks] (short-walks! p ticks js/Infinity))
+  ([p ticks n]
+   (let [walks (atom 0)]
+     (.override (.-world p) "steer"
+                (fn [token args impl]
+                  (when (< (dec (swap! walks inc)) n) (set! (.-timeoutS args) (/ ticks 20)))
+                  (impl token args))))))
+
 (defn walk-calls
   "The calls the fake's world recorded that walk the body: the old moveTo and the planner's steer."
   [p]

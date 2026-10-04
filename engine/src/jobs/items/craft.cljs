@@ -1,7 +1,8 @@
 (ns jobs.items.craft
   (:require [engine.craft :as craft]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Craft count more of an item: 2x2 recipes anywhere, bigger ones at a crafting
@@ -69,7 +70,7 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (give-up! c made "unreachable")
-            (case (await (u/walk-near! c table 3))
+            (case (await (near/walk-near! c table 3))
               :blocked (give-up! c made "unreachable")
               :continue))))))
 

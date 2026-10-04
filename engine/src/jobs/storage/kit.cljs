@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.items.craft]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]
@@ -287,7 +288,7 @@
   [c chest still]
   (if-let [stacks (:chest-items (ctx/mem c))]
     stacks
-    (let [w (await (u/walk-near! c chest 3))]
+    (let [w (await (near/walk-near! c chest 3))]
       (case w
         :partial :continue
         :blocked (give-up! c "unreachable" (into {} still))
@@ -337,7 +338,7 @@
       (= :craft (:phase (ctx/mem c))) (await (craft-round c))
       (empty? still) (finish! c {})
       :else
-      (let [w (await (u/walk-near! c chest 3))]
+      (let [w (await (near/walk-near! c chest 3))]
         (case w
           :partial :continue
           :blocked (give-up! c "unreachable" (into {} still))

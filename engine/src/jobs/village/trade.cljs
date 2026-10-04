@@ -1,6 +1,7 @@
 (ns jobs.village.trade
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Buy :count of :buy from the villager with uuid :villager. Each round is one
@@ -152,7 +153,7 @@
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (nil? e) (give-up! c "gone" "the villager is not here")
       :else
-      (case (await (u/walk-near! c (u/pos-of (.-pos e)) reach))
+      (case (await (near/walk-near! c (u/pos-of (.-pos e)) reach))
         :partial :continue
         :blocked (give-up! c "unreachable" "cannot reach the villager")
         (await (trade! c))))))

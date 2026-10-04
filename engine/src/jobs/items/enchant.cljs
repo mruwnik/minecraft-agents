@@ -1,6 +1,7 @@
 (ns jobs.items.enchant
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Enchant one :item at an enchanting table. Each round walks to the table (the
@@ -180,7 +181,7 @@
         pos (or table (find-table (:primitives c) radius))]
     (if-not pos
       (give-up! c "no-table" {})
-      (case (await (u/walk-near! c pos reach))
+      (case (await (near/walk-near! c pos reach))
         :partial :continue
         :blocked (fail-up! c "unreachable")
         (await (consider! c pos))))))

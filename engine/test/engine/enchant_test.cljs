@@ -65,7 +65,7 @@
 
 (defn start [world]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         dir (tu/tmp-dir)
         make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
@@ -177,7 +177,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[r p] (await (enchant! (assoc table-world :blocks {"20,64,0" "enchanting_table"}) {:radius 40}))]
-          (is (seq (calls p "moveTo")))
+          (is (seq (tu/walk-calls p)))
           (is (true? (:enchanted r))))))))
 
 (deftest the-nearest-table-in-the-radius-is-found-and-the-table-argument-wins

@@ -11,7 +11,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -45,11 +45,11 @@
 (def table-block {"10,64,0" "crafting_table"})
 
 (defn ^:async craft
-  "Setup world, run the job with args; [result p seen]."
+  "Setup world, run the job with args; [result p seen eng]."
   [world args]
   (let [{:keys [eng p seen]} (setup world)
         result (await (child-outcome eng job args 8))]
-    [result p seen]))
+    [result p seen eng]))
 
 (deftest craft-check-wants-an-item-name
   (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
@@ -61,35 +61,35 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
+        (let [[result p _ eng] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
           (is (= {"oak_planks" 4} (inv p)))
           (is (= {:made 4} result))
-          (is (empty? (calls p "moveTo"))))))))
+          (is (empty? (tu/walked-to eng))))))))
 
 (deftest craft-walks-to-a-table-then-crafts
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [args [{:item "bread"} {:item "bread" :table table}]]
-          (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} args))]
+          (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} args))]
             (is (= {"bread" 1} (inv p)))
             (is (= {:made 1} result))
-            (is (= 1 (count (calls p "moveTo"))))))))))
+            (is (= 1 (count (tu/walked-to eng))))))))))
 
 (deftest craft-without-a-table-in-radius
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread"}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread"}))]
           (is (= {:made 0 :reason "no-table"} result))
-          (is (empty? (calls p "moveTo")))
+          (is (empty? (tu/walked-to eng)))
           (is (some #(= :craft.no-table (:kind %)) @seen)))))))
 
 (deftest craft-reports-what-is-missing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
           (is (= {:made 0 :short {"wheat" 1}} result))
           (is (some #(= :craft.short (:kind %)) @seen)))))))
 
@@ -105,7 +105,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
+        (let [[result p _ eng] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
                                        {:item "oak_planks" :count 4}))]
           (is (= {"oak_planks" 8} (inv p)))
           (is (= {:made 4} result)))))))
@@ -115,10 +115,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [spec [:unreachable :noPath]]
-          (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
+          (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
                                               {:item "bread"}))]
             (is (= {:made 0 :reason "unreachable"} result))
-            (is (= 3 (count (calls p "moveTo"))))
+            (is (= 3 (count (tu/walked-to eng))))
             (is (some #(= :craft.gave-up (:kind %)) @seen))))))))
 
 (deftest craft-with-a-full-inventory
@@ -147,7 +147,7 @@
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
               result (await (child-outcome eng job {:item "bread"} 8))]
           (is (= {:made 0 :reason "unreachable"} result))
-          (is (empty? (calls p "moveTo")))
+          (is (empty? (tu/walked-to eng)))
           (is (some #(= :craft.gave-up (:kind %)) @seen)))))))
 
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
@@ -176,7 +176,7 @@
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
               result (await (child-outcome eng job {:item "bread"} 10))]
           (is (= {:made 0 :reason "unreachable"} result))
-          (is (= 1 (count (calls p "moveTo"))))
+          (is (= 1 (count (tu/walked-to eng))))
           (is (= 4 (count (calls p "craft"))) "the walk is a round of its own, then 3 refusals in reach"))))))
 
 (deftest craft-a-gone-table-is-searched-for-afresh
@@ -192,14 +192,14 @@
                                #js {:status "unreachable" :reason "no-table"})))
               result (await (child-outcome eng job {:item "bread"} 10))]
           (is (= {:made 0 :reason "no-table"} result))
-          (is (= 1 (count (calls p "moveTo"))) "walked to the remembered cell once, not again"))))))
+          (is (= 1 (count (tu/walked-to eng))) "walked to the remembered cell once, not again"))))))
 
 (deftest craft-ignores-a-handed-over-table-beyond-the-radius
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
                                             {:item "bread" :radius 8}))]
           (is (= {:made 0 :reason "no-table"} result))
-          (is (empty? (calls p "moveTo")))
+          (is (empty? (tu/walked-to eng)))
           (is (some #(= :craft.no-table (:kind %)) @seen)))))))

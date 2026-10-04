@@ -202,7 +202,7 @@
   (let [clock (atom 1000000)
         dir (tu/tmp-dir)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
     {:eng (make) :make make :p p :seen seen :clock clock}))
@@ -327,7 +327,7 @@
         (let [{:keys [eng p]} (setup {:blocks {"20,64,0" "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
           (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
           (await (ticks eng 2))
-          (is (seq (calls p "moveTo")))
+          (is (seq (tu/walk-calls p)))
           (is (= {"raw_iron" 0 "coal" 1} (select-keys (merge {"raw_iron" 0} (inv-of p)) ["raw_iron" "coal"])))
           (is (= 3 (:count (:input (js->clj (.get (.. p -world -state -furnaces) "20,64,0") :keywordize-keys true))))))))))
 

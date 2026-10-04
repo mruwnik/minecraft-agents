@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [engine.places :as places]
             [jobs.storage.deposit :as deposit]))
 
@@ -70,7 +71,7 @@
       (empty? short) (do (ctx/result! c {:gave-up false :short {}}) :done)
       (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
       :else
-      (let [w (await (u/walk-near! c chest 3))]
+      (let [w (await (near/walk-near! c chest 3))]
         (case w
           :partial :continue
           :blocked (give-up! c "unreachable" short)

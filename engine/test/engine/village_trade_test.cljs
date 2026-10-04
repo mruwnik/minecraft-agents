@@ -16,7 +16,7 @@
   "An engine over primitives p (made from world when not given) on dir."
   [{:keys [world p dir]}]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake world))
+        p (or p (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -217,7 +217,7 @@
         (let [[result p] (await (trade {:entities [(villager [(bread {})] {:pos {:x 30 :y 64 :z 0}})] :inventory [{:name "emerald" :count 3}]}
                                        {:count 2}))]
           (is (= {:bought 2 :paid {"emerald" 2} :item "bread"} result))
-          (is (seq (calls p "moveTo")))
+          (is (seq (tu/walk-calls p)))
           (is (= {"emerald" 1 "bread" 2} (inv p))))))))
 
 (deftest a-restart-keeps-what-was-bought

@@ -1,6 +1,7 @@
 (ns jobs.items.bake
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -211,7 +212,7 @@
         chest (deposit/chest-of (ctx/view c) (:args c))
         _ (when-not (contains? (ctx/mem c) :bread0)
             (ctx/update-mem! c assoc :bread0 (carried p "bread")))
-        w (await (u/walk-near! c chest 3))]
+        w (await (near/walk-near! c chest 3))]
     (case w
       :partial :continue
       :blocked (give-up! c "cannot reach the chest" "unreachable")
