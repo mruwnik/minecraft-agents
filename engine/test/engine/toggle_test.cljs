@@ -1,0 +1,219 @@
+(ns engine.toggle-test
+  "jobs.access.toggle against the fake world."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.registry :as registry]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [jobs.access.toggle :as toggle]))
+
+(defn setup
+  ([world] (setup world (tu/legacy-capture-sink)))
+  ([world [seen sink]]
+   (let [clock (atom 1000000)
+         p (tu/fake world)
+         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+     {:eng eng :p p :seen seen})))
+
+(defn ^:async run-until-empty [eng n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (await (core/tick! eng))
+          (recur (inc i))))))
+
+(defn ^:async child-outcome
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
+  [eng job args n]
+  (let [out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
+
+(defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
+(defn props [p pos] (js->clj (.-properties (.blockAt p (clj->js pos))) :keywordize-keys true))
+(defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(def job 'jobs.access.toggle)
+(def at {:x 3 :y 64 :z 0})
+(def ground (into {} (for [x (range -5 20) z (range -5 20)] [(str x ",63," z) "stone"])))
+
+(defn world
+  "Ground, the block name at 3,64,0 with its state, the body at x z."
+  ([name state] (world name state 3 2))
+  ([name state x z]
+   {:self {:pos {:x x :y 64 :z z}}
+    :blocks (assoc ground "3,64,0" name)
+    :states (if state {"3,64,0" state} {})}))
+
+(defn ^:async run [w args]
+  (let [{:keys [eng p seen]} (setup w)
+        result (await (child-outcome eng job args 40))]
+    {:result result :p p :seen seen}))
+
+(defn head [m ks] (select-keys m ks))
+
+;; ------------------------------------------------------------------ reaching the wanted state
+
+(deftest a-block-is-brought-to-the-wanted-state-with-one-click
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[name from want key value] [["oak_fence_gate" {:open false} :open :open true]
+                                            ["oak_fence_gate" {:open true} :closed :open false]
+                                            ["oak_door" {:open false} :open :open true]
+                                            ["spruce_trapdoor" {:open true} :closed :open false]
+                                            ["copper_door" {:open false} :open :open true]
+                                            ["lever" {:powered false} :on :powered true]
+                                            ["lever" {:powered true} :off :powered false]
+                                            ["stone_button" {:powered false} :press :powered true]]]
+          (let [{:keys [result p seen]} (await (run (world name from) {:pos at :state want}))]
+            (is (= {:status :done :reason :changed :block name :wanted want} (head result [:status :reason :block :wanted])) name)
+            (is (= value (key (props p at))) name)
+            (is (= 1 (count (calls p "useOn"))) (str name ": one click"))
+            (is (= 1 (count (kinds seen :toggle.done))) name)))))))
+
+(deftest a-block-already-in-the-wanted-state-is-not-clicked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[name from want] [["oak_fence_gate" {:open true} :open]
+                                  ["oak_door" {:open false} :closed]
+                                  ["oak_door" nil :closed]
+                                  ["lever" {:powered true} :on]
+                                  ["lever" nil :off]
+                                  ["stone_button" {:powered true} :press]]]
+          (let [{:keys [result p]} (await (run (world name from) {:pos at :state want}))]
+            (is (= {:status :done :reason :already} (head result [:status :reason])) (str name want))
+            (is (empty? (calls p "useOn")) (str name want ": no click"))))))))
+
+(deftest a-far-body-walks-into-reach-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (run (world "oak_fence_gate" {:open false} 3 14) {:pos at :state :open}))]
+          (is (= :changed (:reason result)))
+          (is (true? (:open (props p at))))
+          (is (seq (calls p "moveTo"))))))))
+
+(deftest the-position-may-be-a-vector-and-the-state-a-string
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (run (world "lever" {:powered false}) {:pos [3 64 0] :state "on"}))]
+          (is (= :changed (:reason result)))
+          (is (true? (:powered (props p at)))))))))
+
+;; ------------------------------------------------------------------ declined before any walk or click
+
+(deftest a-request-the-hand-cannot-meet-is-declined-without-a-click-or-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[name from args reason] [["iron_door" {:open false} {:pos at :state :open} :needs-redstone]
+                                         ["iron_trapdoor" {:open false} {:pos at :state :open} :needs-redstone]
+                                         ["stone" nil {:pos at :state :open} :not-toggleable]
+                                         ["air" nil {:pos at :state :open} :no-block]
+                                         ["lever" {:powered false} {:pos at :state :open} :bad-state]
+                                         ["oak_door" {:open false} {:pos at :state :on} :bad-state]
+                                         ["oak_door" {:open false} {:pos at :state :press} :bad-state]
+                                         ["oak_button" {:powered false} {:pos at :state :on} :bad-state]
+                                         ["oak_door" {:open false} {:pos at :state :ajar} :bad-state]
+                                         ["oak_door" {:open false} {:pos at} :bad-args]
+                                         ["oak_door" {:open false} {:state :open} :bad-args]
+                                         ["oak_door" {:open false} {:pos [1 2] :state :open} :bad-args]]]
+          (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
+            (is (= {:status :declined :reason reason} (head result [:status :reason])) (str name args))
+            (is (empty? (calls p "useOn")) (str name args))
+            (is (empty? (calls p "moveTo")) (str name args ": no walk"))
+            (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
+
+(deftest an-unloaded-cell-is-declined-not-loaded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
+          (is (= {:status :declined :reason :not-loaded} (head result [:status :reason])))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest the-body-standing-in-a-door-is-not-shut-in-but-may-open-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut (await (run (world "oak_door" {:open true} 3 0) {:pos at :state :closed}))
+              open (await (run (world "oak_door" {:open false} 3 0) {:pos at :state :open}))
+              upper (await (run (-> (world "oak_door" {:open true} 3 0)
+                                   (assoc-in [:blocks "3,65,0"] "oak_door")
+                                   (assoc-in [:states "3,65,0"] {:open true}))
+                               {:pos (assoc at :y 65) :state :closed}))]
+          (is (= {:status :declined :reason :standing-in} (head (:result shut) [:status :reason])))
+          (is (= {:status :declined :reason :standing-in} (head (:result upper) [:status :reason])) "the door's upper half")
+          (is (empty? (calls (:p shut) "useOn")))
+          (is (= :changed (:reason (:result open)))))))))
+
+;; ------------------------------------------------------------------ gave up after one click
+
+(deftest a-click-that-changes-nothing-is-given-up-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (world "oak_door" {:open false :locked true}) (tu/capture-sink))
+              result (await (child-outcome eng job {:pos at :state :open} 40))
+              warns (filterv #(= :toggle.gave-up (:kind %)) @seen)]
+          (is (= {:status :gave-up :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
+          (is (= 1 (count (calls p "useOn"))) "one click, no retry")
+          (is (= 1 (count warns)))
+          (is (= :unchanged (:reason (:data (first warns))))))))))
+
+(deftest a-block-somebody-else-flipped-just-before-the-click-is-named-wrong-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the door reads shut, somebody opens it, the click then shuts it again: it moved, but not to what was wanted
+        (let [{:keys [eng p]} (setup (world "oak_door" {:open false}))
+              real-use (.-useOn p)
+              state (atom :first)
+              _ (set! (.-useOn p) (fn [token a]
+                                    (let [click #(.call real-use p token a)]
+                                      (if (= :first @state)
+                                        (do (reset! state :done)
+                                            (.then (click) click))
+                                        (click)))))
+              result (await (child-outcome eng job {:pos at :state :open} 40))]
+          (is (= {:status :gave-up :reason :wrong-way} (head result [:status :reason])))
+          (is (false? (:open (props p at)))))))))
+
+(deftest a-hand-that-cannot-be-emptied-is-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (world "oak_door" {:open false}))
+              _ (set! (.-useOn p) (fn [_ _] (js/Promise.resolve #js {:status "no-room"})))
+              result (await (child-outcome eng job {:pos at :state :open} 40))]
+          (is (= {:status :gave-up :reason :no-room} (head result [:status :reason])))
+          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+
+(deftest a-block-the-body-cannot-walk-to-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (world "oak_door" {:open false} 3 14) :unreachable ["3,64,0"])
+              {:keys [result p seen]} (await (run w {:pos at :state :open}))]
+          (is (= {:status :gave-up :reason :unreachable} (head result [:status :reason])))
+          (is (empty? (calls p "useOn")))
+          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+
+(deftest the-job-is-registered-with-doc-and-args
+  (let [j (get registry/jobs job)]
+    (is (string? (:doc j)))
+    (is (= 3 (get-in j [:args :reach :default])))
+    (is (some? toggle/doc))))

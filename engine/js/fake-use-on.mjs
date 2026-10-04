@@ -48,8 +48,19 @@ export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
   if (/_fence$/.test(here) && (item === 'lead' || item === undefined)) {
     return result(tieToPost(s, pos) > 0 ? 'used' : 'unchanged')
   }
-  if (/_fence_gate$/.test(here) && item === undefined) {
+  // doors, trapdoors and gates flip `open` (iron ones ignore a hand); a lever flips `powered`; a button sets it (it never falls back here).
+  // A block with `locked: true` models a protected area: the click is lost.
+  if (item === undefined && s.states.get(k)?.locked) return result('unchanged')
+  if (item === undefined && /_(fence_gate|door|trapdoor)$/.test(here) && !/^iron_/.test(here)) {
     s.states.set(k, { ...s.states.get(k), open: !s.states.get(k)?.open })
+    return result('used')
+  }
+  if (item === undefined && here === 'lever') {
+    s.states.set(k, { ...s.states.get(k), powered: !s.states.get(k)?.powered })
+    return result('used')
+  }
+  if (item === undefined && /_button$/.test(here) && !s.states.get(k)?.powered) {
+    s.states.set(k, { ...s.states.get(k), powered: true })
     return result('used')
   }
   if (item?.endsWith('_hoe') && TILLABLE.has(here) && face !== 'down' && !s.blocks.has(key({ ...pos, y: pos.y + 1 }))) {

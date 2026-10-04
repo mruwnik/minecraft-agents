@@ -254,3 +254,42 @@ test('an empty-handed click on a fence gate toggles it open and shut', async () 
   const shut = await p.useOn('t', { pos: P })
   assert.deepEqual(shut.after, { name: 'oak_fence_gate', properties: { open: false } })
 })
+
+for (const name of ['oak_door', 'spruce_trapdoor', 'copper_door', 'bamboo_fence_gate']) {
+  test(`an empty-handed click on ${name} flips open`, async () => {
+    const p = owned({ blocks: { '1,64,0': name } })
+    const opened = await p.useOn('t', { pos: P })
+    assert.equal(opened.status, 'used')
+    assert.deepEqual(opened.after, { name, properties: { open: true } })
+    const shut = await p.useOn('t', { pos: P })
+    assert.deepEqual(shut.after, { name, properties: { open: false } })
+  })
+}
+
+for (const name of ['iron_door', 'iron_trapdoor']) {
+  test(`${name} ignores a hand`, async () => {
+    const p = owned({ blocks: { '1,64,0': name } })
+    assert.equal((await p.useOn('t', { pos: P })).status, 'unchanged')
+  })
+}
+
+test('a click on a lever flips powered', async () => {
+  const p = owned({ blocks: { '1,64,0': 'lever' } })
+  assert.deepEqual((await p.useOn('t', { pos: P })).after, { name: 'lever', properties: { powered: true } })
+  assert.deepEqual((await p.useOn('t', { pos: P })).after, { name: 'lever', properties: { powered: false } })
+})
+
+test('a button is pressed once and a pressed one is unchanged', async () => {
+  const p = owned({ blocks: { '1,64,0': 'stone_button' } })
+  const first = await p.useOn('t', { pos: P })
+  assert.equal(first.status, 'used')
+  assert.deepEqual(first.after, { name: 'stone_button', properties: { powered: true } })
+  assert.equal((await p.useOn('t', { pos: P })).status, 'unchanged')
+})
+
+test('a block marked locked (a protected area) does not change', async () => {
+  const p = owned({ blocks: { '1,64,0': 'oak_door' }, states: { '1,64,0': { open: false, locked: true } } })
+  const r = await p.useOn('t', { pos: P })
+  assert.equal(r.status, 'unchanged')
+  assert.equal(r.after.properties.open, false)
+})
