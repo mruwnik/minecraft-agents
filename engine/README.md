@@ -966,6 +966,32 @@ node engine/tools/observe.mjs Bob --world claude catalog job jobs.forestry.harve
 node engine/tools/observe.mjs Bob --world claude catalog trigger hostile-near
 ```
 
+List recently observed entities without asking Mineflayer to scan or changing
+the body's lease:
+
+```sh
+node engine/tools/entities.mjs Bob --world claude
+node engine/tools/entities.mjs Bob --world claude --type zombie --radius 32
+node engine/tools/entities.mjs Bob --world claude --player Alex --limit 20
+node engine/tools/entities.mjs Bob --world claude --center 100,64,-20 --dimension overworld --raw
+```
+
+The command reads the body's in-memory `/entities` cache. By default it centers
+a 64-block, 3D radius on the newest unexpired self observation, uses that
+observation's dimension, and returns the nearest 10 rows. Players and other
+entity types are included; `--type` and exact `--player` filters narrow the
+result. `--limit` accepts 1..50 and `--offset` accepts 0..10000; `:more?` and
+`:next-offset` continue a bounded page. If the body has not observed its own
+position, give `--center X,Y,Z`; a dimension override with a self-centered query
+is refused so coordinates from one dimension are never reused in another.
+
+Each observation expires two minutes after the server timestamp supplied by the
+body. Rows still cached after disconnect are returned with `:online? false` on
+the result and their original `:age-ms`; the command never refreshes their
+timestamps. `--raw` returns the selected rows with their observed/expiry times
+and cache metadata, still within the same page bound. The CLI does not write
+files, start a body, or create a movement lease.
+
 The default status contains body identity, generation and event cursor,
 scheduled/manual/offline/settling mode, position, health/food, current job,
 up to four queue rows, failed IDs and up to four outstanding required

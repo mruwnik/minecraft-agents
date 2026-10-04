@@ -2,6 +2,7 @@
   "Compatibility boundary for the existing Node entry points and black-box tests.
    Tool implementations use native ClojureScript values internally."
   (:require [agent-tools.changes :as changes]
+            [agent-tools.entities :as entities]
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
@@ -74,3 +75,9 @@
     (when-let [spec (get-in request [:request :spec])]
       (aset (.-request converted) "spec" (edn-value-js spec)))
     converted))
+
+(def entities-usage entities/usage)
+(defn entities-options [argv]
+  (compat/to-js (entities/options (vec argv))))
+(defn entities-project [request snapshot]
+  (compat/to-js (entities/project (compat/from-js request) (compat/from-js snapshot))))

@@ -40,6 +40,9 @@
                                :changesExecute agent-tools.api/changes-execute
                                :changesMain agent-tools.api/changes-main
                                :changesUsage agent-tools.changes/usage
+                               :entitiesUsage agent-tools.api/entities-usage
+                               :entitiesOptions agent-tools.api/entities-options
+                               :entitiesProject agent-tools.api/entities-project
                                :planExecute agent-tools.plans/execute
                                :prepare dashboard.agent-plan-tools/prepare
                                :score dashboard.agent-plan-tools/score
