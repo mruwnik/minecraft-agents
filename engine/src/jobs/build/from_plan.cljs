@@ -1,6 +1,8 @@
 (ns jobs.build.from-plan
   (:require [clojure.string :as str]
+            [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [plan.shape :as shape]))
 
@@ -15,18 +17,25 @@
   side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
   finish. A cell whose place is refused (anything but placed, occupied or
   no-item) or whose stand cell cannot be walked to :give-up times is given up. It finishes with a result {:placed n
-  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded} :wrong [{:pos :found :want}]}
+  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded} :wrong [{:pos :found :want}] :refused [...]}
   and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
   build.wrong (warn). The check declines, with one build.declined warn naming the plan and the reason, while the
   plan is missing, not :active, unreadable or has no cells to build (in :part), and, before the job has begun,
-  while cells are missing but none of their blocks is carried. The stand cell is taken at the body's feet height:
+  while cells are missing but none of their blocks is carried, and while no zone list has been read. Every place goes
+  through engine.access.rules/may-place? with the zones and the footprints of the OTHER active plans, when the cell is
+  chosen and again right before the place; a cell in a zone that does not allow :place, or in another active plan's
+  footprint, is refused for good (not retried, not counted as given up) and listed in the result's :refused
+  [{:pos :reason :zone|:plan}] with one build.refused warn per reason. Water beside a cell is no obstacle by default;
+  :accept names the fluid hazards taken (:fluid-adjacent water beside, :lava-adjacent lava beside), a cell with an
+  untaken one is refused as :hazard (with :hazards). The stand cell is taken at the body's feet height:
   it assumes flat ground.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
    :part {:doc "only the cells of this part" :default nil}
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
-   :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}})
+   :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
+   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}})
 
 (def eye-height 1.62)
 
@@ -98,6 +107,49 @@
     (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
     (empty? cells) "no cells to build"))
 
+;; ------------------------------------------------------------------ access
+
+(defn hazard-reason
+  "The reason a hazard of placing is accepted by: lava beside is :lava-adjacent, kept apart from water."
+  [{:keys [reason fluid]}]
+  (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
+
+(defn hazards
+  "The fluid hazards of placing at cell: one per fluid neighbour, as the rules name them for a dig."
+  [block-at cell]
+  (mapv (fn [[n at]] (hazard-reason {:reason :fluid-adjacent :fluid n :at at}))
+        (rules/fluid-neighbours block-at cell)))
+
+(defn decide
+  "What to do with the cell at pos under rules input in (access/rules-input) and the hazards accepted: :place, :skip
+  (not loaded, own body or not replaceable: the place primitive and the plan judge deal with it) or
+  [:refuse {:reason :zone|:footprint|:hazard ...}]."
+  [in accept pos]
+  (let [v (rules/may-place? (assoc in :cell pos))
+        bad (remove (set accept) (hazards (:block-at in) pos))]
+    (cond
+      (#{:zone :footprint} (:reason v)) [:refuse (select-keys v [:reason :zone :plan])]
+      (not (:ok v)) :skip
+      (seq bad) [:refuse {:reason :hazard :hazards (vec (distinct bad))}]
+      :else :place)))
+
+(defn rules-input [c] (access/rules-input c {:except (:plan (:args c))}))
+
+(defn refuse
+  "m with pos refused for good, as {:reason ...why}."
+  [m pos why]
+  (-> m (update :fails dissoc pos) (assoc-in [:refused pos] why)))
+
+(defn permitted
+  "The cells of todo the access rules allow now; a refused one is booked on the way."
+  [c todo]
+  (let [in (rules-input c)
+        accept (:accept (:args c))
+        decided (map (juxt identity #(decide in accept (:pos %))) todo)]
+    (doseq [[cell d] decided :when (vector? d)]
+      (ctx/update-mem! c refuse (:pos cell) (second d)))
+    (into [] (keep (fn [[cell d]] (when (= :place d) cell))) decided)))
+
 ;; ------------------------------------------------------------------ reading the world
 
 (defn world-block
@@ -125,7 +177,8 @@
         answer (ctx/plan c plan)
         cells (when (and answer (not (:broken answer)))
                 (judged (:primitives c) answer part (set (keys (carried-counts (:primitives c))))))
-        trouble (plan-trouble answer cells)]
+        trouble (or (plan-trouble answer cells)
+                    (when (nil? (ctx/zones c)) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :build.declined
@@ -182,12 +235,19 @@
       (-> m (update :fails dissoc pos) (assoc-in [:given-up pos] reason))
       (assoc-in m [:fails pos] n))))
 
-(defn ^:async place-one! [c {:keys [pos item]}]
-  (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] pos) :item item})))]
-    (case (.-status r)
-      "placed" (ctx/update-mem! c update :placed (fnil inc 0))
-      ("occupied" "no-item") nil
-      (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))
+(defn ^:async place-one!
+  "Place the cell's item after asking the access rules once more; a refusal is booked, nothing is placed."
+  [c {:keys [pos item]}]
+  (let [d (decide (rules-input c) (:accept (:args c)) pos)]
+    (cond
+      (vector? d) (ctx/update-mem! c refuse pos (second d))
+      (not= :place d) nil
+      :else
+      (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] pos) :item item})))]
+        (case (.-status r)
+          "placed" (ctx/update-mem! c update :placed (fnil inc 0))
+          ("occupied" "no-item") nil
+          (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))))
 
 (defn in-reach
   "The buildable cells the body can place from where it stands, lowest first, then nearest."
@@ -230,7 +290,9 @@
         short (shortage left (carried-counts p))
         wrong (mapv (fn [{:keys [pos found want]}] {:pos pos :found found :want (shape/want-text want)})
                     (filter #(#{:wrong :extra} (:answer %)) cells))
-        result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong}
+        refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
+        result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong
+                :refused refused}
         plan (:plan (:args c))]
     (when (seq short)
       (ctx/emit! c :build.short :warn {:plan plan :short short
@@ -239,6 +301,10 @@
       (ctx/emit! c :build.gave-up :warn {:plan plan :cells given-up
                                          :text (str "build of " plan " gave up " (count given-up) " cells: "
                                                     (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))}))
+    (doseq [[reason group] (group-by :reason refused)]
+      (ctx/emit! c :build.refused :warn {:plan plan :reason reason :cells group
+                                         :text (str "build of " plan " refused " (count group) " cells (" (name reason) "): "
+                                                    (str/join ", " (map #(str (pr-str (:pos %)) " " (or (:zone %) (:plan %) (str/join "," (map name (:hazards %))))) group)))}))
     (when (seq wrong)
       (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
@@ -253,8 +319,9 @@
     (if trouble
       :declined
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
-          (let [given-up (:given-up (ctx/mem c) {})
-                todo (buildable cells (carried-counts (:primitives c)) given-up)
+          (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+                todo (permitted c (buildable cells (carried-counts (:primitives c)) (closed)))
+                given-up (closed)
                 near (in-reach c todo)
                 nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
             (cond
