@@ -19,7 +19,8 @@
   (jobs.forestry.collect-drops) when the next step is on another cell or none is left, so the saplings leaves drop are
   planted too. Provisioning is another job: (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
 
-  Water in the cell is repaired: a source in the cell is filled with carried dirt (then the dirt is dug as a stray);
+  Water in the cell is repaired: a source in the cell is filled with carried dirt (then the dirt is dug as a stray), but a source beside it on its level
+  is dammed first, as it would flood the dug cell back;
   a flow is traced upstream (blockAt properties.level: 0 source, 1-7 flowing, 8+ falling; at most 16 cells) and its
   source filled with carried dirt, after which the cell is given 10 s to recede (the check declines, the round
   returns :declined: nothing is polled). Water that cannot be traced, no dirt carried, or a source the access rules
@@ -177,14 +178,24 @@
         (when (number? l) l)))))
 
 (defn wet-state
-  "{:state ...} of a planned cell holding water: :fill (the source is in the cell), :dam (the source is at :target),
-  both with the :item to place and the :source, or :wet with :why :untraced / :no-dirt."
+  "{:state ...} of a planned cell holding water: :fill (the source is in the cell and no source lies beside it),
+  :dam (the source is at :target: upstream, or beside a source cell, which would flood back once dug), both with the
+  :item to place and the :source, or :wet with :why :untraced / :no-dirt."
   [p pos species carried]
   (let [l (water-level p pos)
         cell (maintain/cell-vec pos)
+        level-at (fn [[x y z]] (water-level p {:x x :y y :z z}))
+        beside (when (and l (zero? l))
+                 (let [[x y z] cell]
+                   (->> rules/neighbour-deltas
+                        (filter (fn [[_ dy _]] (zero? dy)))
+                        (map (fn [[dx _ dz]] [(+ x dx) y (+ z dz)]))
+                        (filter #(= 0 (level-at %)))
+                        first)))
         source (cond (nil? l) nil
+                     beside beside
                      (zero? l) cell
-                     :else (upstream (fn [[x y z]] (water-level p {:x x :y y :z z})) cell))
+                     :else (upstream level-at cell))
         dirt (soil-item carried species)]
     (cond
       (nil? source) {:state :wet :why :untraced}
