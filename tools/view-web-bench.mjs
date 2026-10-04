@@ -13,6 +13,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
+import { cardRates, dashboardLoadError, meanSceneFps } from './view/bench-rates.mjs'
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -162,18 +163,6 @@ const smoothness = trace => {
 
 const median = list => percentile(list, 0.5)
 
-// renders per second of every card over the whole run, and its slowest 5-second window (samples one second apart)
-const WINDOW_S = 5
-const cardRates = samples => {
-  const agents = Object.keys(samples.at(-1).stats.scenes)
-  const per = Object.fromEntries(agents.map(a => {
-    const counts = samples.map(s => s.stats.scenes[a].renders)
-    const windows = counts.slice(WINDOW_S).map((c, i) => (c - counts[i]) / WINDOW_S)
-    return [a, { run: round((counts.at(-1) - counts[0]) / (counts.length - 1), 2), worstWindow: windows.length ? round(Math.min(...windows), 2) : null }]
-  }))
-  return { minRun: Math.min(...agents.map(a => per[a].run)), minWindow: Math.min(...agents.map(a => per[a].worstWindow ?? Infinity)), seconds: samples.length - 1, perCard: per }
-}
-
 // the hub page: per-second samples of window.__hub.stats(), then the numbers that matter for 11 cards at 6 fps
 const hubReport = async cdp => {
   const samples = []
@@ -185,7 +174,7 @@ const hubReport = async cdp => {
   const attachSamples = samples.map(s => Object.values(s.stats.scenes).flatMap(scene => scene.attaches ?? []))
   const bigSamples = attachSamples.map(list => list.find(a => a.fps === 'raf')).filter(Boolean)
   const cardCount = attachSamples.at(-1).filter(a => a.fps !== 'raf').length
-  const cardFpsMeans = Array.from({ length: cardCount }, (_, i) => attachSamples.reduce((sum, list) => sum + list.filter(a => a.fps !== 'raf')[i].measuredFps, 0) / attachSamples.length)
+  const cardFpsMeans = Array.from({ length: cardCount }, (_, i) => (() => { const fps = attachSamples.map(list => list.filter(a => a.fps !== 'raf')[i]?.measuredFps).filter(v => v !== undefined); return fps.reduce((a, b) => a + b, 0) / fps.length })())
   const bigReport = bigSamples.length ? {
     size: [bigSamples.at(-1).width, bigSamples.at(-1).height],
     measuredFpsMin: Math.min(...bigSamples.map(a => a.measuredFps)),
@@ -200,7 +189,7 @@ const hubReport = async cdp => {
   const longTasks = await cdp.evaluate('window.__longTasks ?? []')
   const final = samples.at(-1).stats
   const agents = Object.keys(final.scenes)
-  const meanFps = agent => samples.reduce((sum, s) => sum + s.stats.scenes[agent].fps, 0) / samples.length
+  const meanFps = agent => meanSceneFps(samples, agent)
   const fpsList = agents.map(meanFps)
   const ready = agents.filter(a => final.scenes[a].loaded > 0)
   const heaps = samples.map(s => s.heap).filter(h => h !== null)
@@ -284,9 +273,18 @@ const main = async () => {
     // main-thread long tasks (> 50 ms by the browser's definition) from the start of the page, for every page version
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__longTasks = []; new PerformanceObserver(list => { for (const e of list.getEntries()) window.__longTasks.push(Math.round(e.duration * 10) / 10) }).observe({ entryTypes: ['longtask'] })` })
     if (values.dashboard) await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__raf = []; let last = 0; const tick = t => { if (last) window.__raf.push(t - last); last = t; requestAnimationFrame(tick) }; requestAnimationFrame(tick)` })
-    await cdp.send('Page.navigate', { url })
+    const navigation = await cdp.send('Page.navigate', { url })
+    if (navigation.errorText) {
+      console.error(dashboardLoadError(url, navigation.errorText))
+      process.exitCode = 1
+      return
+    }
     if (values.dashboard) {
       const ready = await waitUntil(() => cdp.evaluate('window.getViewHub?.() != null && document.querySelectorAll("canvas").length > 0'), Number(values.timeout) * 1000, 'dashboard hub and canvases')
+      if (!ready) {
+        process.exitCode = 1
+        return
+      }
       await cdp.evaluate('window.__hub = { stats: () => getViewHub().stats(), probeGpu: o => getViewHub().probeGpu ? getViewHub().probeGpu(o) : {} }; true')
       await sleep(3000)
       await cdp.evaluate('window.__raf.length = 0; window.__longTasks.length = 0; true')
