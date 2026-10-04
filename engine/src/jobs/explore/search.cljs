@@ -35,7 +35,8 @@
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :default true}
    :seen-ttl-s {:doc "how long a note of a block seen lasts" :default 259200}
    :entity-ttl-s {:doc "how long a note of an entity seen lasts" :default 600}
-   :searched-ttl-s {:doc "how long a note of searched ground lasts" :default 86400}})
+   :searched-ttl-s {:doc "how long a note of searched ground lasts" :default 86400}
+   :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :default 30}})
 
 (def backoff
   "A failed leg is up to three fruitless go-to rounds and three failed legs in a row end the search, so it
@@ -43,6 +44,7 @@
   {:after 9})
 
 (def max-failed-in-row 3)
+(def wait-ms 2000)
 (def reach 12)
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 (def patterns #{:spiral :outward})
@@ -127,10 +129,16 @@
 
 ;; ------------------------------------------------------------------ the body
 
+(defn waiting?
+  "Whether job memory m says the job waits at now for leg columns to load."
+  [m now]
+  (> (:wait-until m 0) now))
+
 (defn check
-  "A target is named."
+  "A target is named, and the job is not waiting for leg columns to load."
   [c]
-  (boolean (seq (targets c))))
+  (and (boolean (seq (targets c)))
+       (not (waiting? (ctx/mem c) (ctx/now c)))))
 
 (defn cell [p] (mapv js/Math.floor [(.-x p) (.-y p) (.-z p)]))
 (defn here [c] (cell (.-pos (.self (:primitives c)))))
@@ -183,7 +191,8 @@
       (spiral-points [ox oz] spacing max-distance))))
 
 (defn choose-leg
-  "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n}."
+  "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
+  :unloaded [{:pos :reason :not-loaded}]}; an unloaded column is not tried, so a later round looks again."
   [c m names ns]
   (let [{:keys [max-distance]} (:args c)
         [ox y oz] (here c)
@@ -191,16 +200,17 @@
         tried (set (:tried m))
         p (:primitives c)
         block-at (fn [[bx by bz]] (u/block-name p {:x bx :y by :z bz}))]
-    (loop [[pt & more] (candidates c m) acc {:tried [] :failed [] :skipped 0}]
+    (loop [[pt & more] (candidates c m) acc {:tried [] :failed [] :skipped 0 :unloaded []}]
       (cond
         (nil? pt) acc
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more acc)
         (some #(notes/covers? % pt names) ns) (recur more (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
-                    acc (update acc :tried conj pt)]
-                (if fail
-                  (recur more (update acc :failed conj {:pos [(pt 0) y (pt 1)] :reason fail}))
-                  (assoc acc :leg [(pt 0) sy (pt 1)])))))))
+                    failed {:pos [(pt 0) y (pt 1)] :reason fail}]
+                (cond
+                  (= :not-loaded fail) (recur more (update acc :unloaded conj failed))
+                  fail (recur more (-> acc (update :tried conj pt) (update :failed conj failed)))
+                  :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
 
 (defn ^:async walk!
   "One go-to round toward the leg; on its end book the leg arrived or failed."
@@ -228,15 +238,22 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg tried failed skipped]} (choose-leg c m names ns)]
+      :else (let [{:keys [leg tried failed skipped unloaded]} (choose-leg c m names ns)
+                  now (ctx/now c)
+                  waited (- now (:waiting-since m now))]
               (ctx/update-mem! c (fn [m] (-> m
                                              (update :tried (fnil into []) tried)
                                              (update :failed (fnil into []) failed)
                                              (update :skipped (fnil + 0) skipped))))
-              (if-not leg
-                (finish! c :not-found :distance)
-                (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg) (update :legs (fnil inc 0)))))
-                    (await (walk! c))))))))
+              (cond
+                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg) (update :legs (fnil inc 0)))))
+                        (await (walk! c)))
+                (empty? unloaded) (finish! c :not-found :distance)
+                (< waited (* 1000 (:load-wait-s (:args c))))
+                (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now wait-ms))
+                    :continue)
+                :else (do (ctx/update-mem! c update :failed (fnil into []) unloaded)
+                          (finish! c :not-found :not-loaded)))))))
 
 (defn bad-args? [c]
   (let [{:keys [pattern heading]} (:args c)]

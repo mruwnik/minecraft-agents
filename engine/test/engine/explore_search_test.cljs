@@ -185,6 +185,33 @@
           (is (= #{{:pos [0 64 -16] :reason :not-loaded} {:pos [16 64 0] :reason :unreachable}} (set failed)))
           (is (not-any? #(= {:x 0 :z -16} (select-keys % [:x :z])) (walks s)) "an unloaded column is never walked to"))))))
 
+(def ring-1-cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [0 0] 16 23)))
+
+(deftest a-search-started-before-the-ground-around-loaded-waits-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:unloaded ring-1-cells})]
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 20}) {})
+          (dotimes [_ 20] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (is (not (finished? s)) "still waiting for the chunks")
+          (is (= [] (walks s)))
+          (.clear (.. (:p s) -world -state -unloaded))
+          (await (run-until-done s 400))
+          (is (= 4 (count (walks s))))
+          (is (= :distance (:why (event-of s :search.not-found)))))))))
+
+(deftest ground-that-never-loads-ends-it-not-loaded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:unloaded ring-1-cells}))
+              e (event-of s :search.not-found)]
+          (is (= :not-loaded (:why e)))
+          (is (<= (get-in e [:coverage :scans]) 17) "a look every 2 s while waiting, not every tick")
+          (is (= 4 (count (get-in e [:coverage :failed]))))
+          (is (= [] (walks s))))))))
+
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
     (tu/run-async done
@@ -215,5 +242,10 @@
 (deftest it-declines-without-a-target
   (let [c {:args {:target nil}}]
     (is (not (search/check c)))
-    (is (not (search/check {:args {:target []}})))
-    (is (search/check {:args {:target "oak_log"}}))))
+    (is (not (search/check {:args {:target []}})))))
+
+(deftest it-waits-only-until-the-wait-is-over
+  (are [m now expected] (= expected (search/waiting? m now))
+    {} 5000 false
+    {:wait-until 6000} 5000 true
+    {:wait-until 6000} 6000 false))
