@@ -57,6 +57,14 @@
                      :output-to "out/agent-tools.cjs"
                      :output-dir "out/agent-tools-js"
                      :compiler-options {:infer-externs true}}
+  :rcon-tools {:target :node-library
+               :exports {:whitelistMain dashboard.rcon-tools/whitelist-main
+                         :rawMain dashboard.rcon-tools/raw-main
+                         :testMain dashboard.rcon-tools/test-main}
+               :output-to "out/rcon-tools.cjs"
+               :output-dir "out/rcon-tools-js"
+               ;; :simple keeps property names, so the node API calls need no externs
+               :compiler-options {:optimizations :simple :infer-externs false}}
   :ui {:target :browser
        :output-dir "out/public/js"
        :asset-path "/js"

@@ -1,12 +1,12 @@
 (ns dashboard.rcon
-  "A minimal RCON client over node net (packet layout as tools/rcon.mjs). The password is read in-process only."
+  "The one RCON packet codec and client (node net), shared by the dashboard server and the tools/rcon*.mjs entry points via dashboard.rcon-tools. The password is read in-process only."
   (:require ["fs" :as fs]
             ["net" :as net]
             ["os" :as os]
             ["path" :as path]))
 
 (def host "127.0.0.1")
-(def port 25575)
+(def default-port 25575)
 (def auth-type 3)
 (def command-type 2)
 
@@ -40,15 +40,27 @@
        (.once socket "error" reject)
        (.write socket (encode-packet id type body))))))
 
+(defn send-commands!
+  "Connects, authenticates, sends each command in order on one connection (ids 2, 3, ...), resolves to the vector of
+  reply bodies. opts: :port (default 25575)."
+  [{:keys [port] :or {port default-port}} commands]
+  (-> (js/Promise.resolve nil)
+      (.then (fn [_]
+               (let [secret (.trim (.readFileSync fs (password-file) "utf8"))
+                     socket (.connect net #js {:host host :port port})]
+                 (-> (js/Promise. (fn [resolve reject] (.once socket "connect" resolve) (.once socket "error" reject)))
+                     (.then #(exchange socket 1 auth-type secret))
+                     (.then (fn [auth]
+                              (when (= -1 (:id auth)) (throw (js/Error. "RCON refused the password")))
+                              (reduce (fn [chain [i command]]
+                                        (.then chain (fn [replies]
+                                                       (.then (exchange socket (+ i 2) command-type command)
+                                                              #(conj replies (:body %))))))
+                                      (js/Promise.resolve [])
+                                      (map-indexed vector commands))))
+                     (.finally #(.end socket))))))))
+
 (defn send-command!
   "Sends one command, resolves to the reply body."
   [command]
-  (let [secret (.trim (.readFileSync fs (password-file) "utf8"))
-        socket (.connect net #js {:host host :port port})]
-    (-> (js/Promise. (fn [resolve reject] (.once socket "connect" resolve) (.once socket "error" reject)))
-        (.then #(exchange socket 1 auth-type secret))
-        (.then (fn [auth]
-                 (when (= -1 (:id auth)) (throw (js/Error. "RCON refused the password")))
-                 (exchange socket 2 command-type command)))
-        (.then :body)
-        (.finally #(.end socket)))))
+  (.then (send-commands! {} [command]) first))

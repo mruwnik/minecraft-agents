@@ -184,3 +184,10 @@ overview optimization caches one `Path2D` of world-coordinate chunk coverage and
 instead of rebuilding and filling a visible rectangle for every column on each redraw.
 
 A further close-pan experiment tested a spatial grid for label collision checks. One browser comparison showed only a small 2–4% CPU reduction, with slightly higher overview script time and unchanged 16.7 ms frame p95. The paired repeat did not complete, so the candidate was discarded; this pass changes the benchmark only and establishes no additional rendering speedup.
+
+## RCON tools bundle
+
+`tools/rcon.mjs`, `tools/rcon-raw.mjs` and `tools/rcon-test.mjs` are thin entry points over the compiled
+`out/rcon-tools.cjs` (`dashboard.rcon-tools`, codec and client in `dashboard.rcon`). A fresh checkout builds it
+once with `npm --prefix dashboard run build-rcon-tools`; unbuilt, the tools print that command and exit 1.
+Startup is about 80 ms. Rebuild after editing the allow-list in `rcon_tools.cljs`.
