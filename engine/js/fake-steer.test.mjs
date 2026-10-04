@@ -202,3 +202,48 @@ test('a body walks along rails', async () => {
   assert.equal(r.status, 'done')
   assert.equal(p.world.state.self.pos.x, 5)
 })
+
+// ---- doors, gates and trapdoors: open ones let the body through, shut ones are walls
+
+const gateAt = (open, extra = {}) => ({ blocks: { '3,64,0': 'oak_fence_gate' }, states: { '3,64,0': { open, facing: 'east' } }, ...extra })
+const doorRig = ({ blocks, states }) => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: { ...floor(), ...blocks }, states })
+  p.setOwner('t')
+  return p
+}
+
+test('a body walks through an open gate and stops at a shut one', async () => {
+  const through = await doorRig(gateAt(true)).steer('t', decideOf(walkTo(5.5)))
+  const shut = await doorRig(gateAt(false)).steer('t', decideOf(walkTo(5.5)), { timeoutS: 1 })
+  assert.deepEqual([through.status, shut.status], ['done', 'timeout'])
+  assert.ok(shut.pose.x < 3)
+})
+
+test('a body walks through the open halves of a door', async () => {
+  const blocks = { '3,64,0': 'oak_door', '3,65,0': 'oak_door' }
+  const states = open => ({ '3,64,0': { half: 'lower', open }, '3,65,0': { half: 'upper', open } })
+  const through = await doorRig({ blocks, states: states(true) }).steer('t', decideOf(walkTo(5.5)))
+  const shut = await doorRig({ blocks, states: states(false) }).steer('t', decideOf(walkTo(5.5)), { timeoutS: 1 })
+  assert.deepEqual([through.status, shut.status], ['done', 'timeout'])
+})
+
+test('a body climbs a ladder up through an open trapdoor and not through a shut one', async () => {
+  const hatch = open => ({
+    blocks: { '3,64,0': 'ladder', '3,65,0': 'ladder', '3,66,0': 'oak_trapdoor', '2,66,0': 'stone', '4,66,0': 'stone', '3,63,1': 'stone' },
+    states: { '3,66,0': { open } }
+  })
+  const climb = pose => (pose.y >= 67 ? { done: { status: 'arrived' } } : { controls: { forward: false, jump: true }, yaw: 0 })
+  const start = { x: 3, y: 64, z: 0 }
+  const run = async open => {
+    const p = createFake({ self: { pos: start }, blocks: { ...floor(), ...hatch(open).blocks }, states: hatch(open).states })
+    p.setOwner('t')
+    return p.steer('t', decideOf(climb), { timeoutS: 2 })
+  }
+  assert.deepEqual([(await run(true)).status, (await run(false)).status], ['done', 'timeout'])
+})
+
+test('pathWorld reads the open state of a gate', () => {
+  const [open, shut] = [true, false].map(o => doorRig(gateAt(o)).pathWorld().snapshot.stateAt(3, 64, 0))
+  assert.equal(open, stateId('oak_fence_gate', { open: true, facing: 'east' }))
+  assert.equal(shut, stateId('oak_fence_gate', { open: false, facing: 'east' }))
+})

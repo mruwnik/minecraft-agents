@@ -46,6 +46,11 @@
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :sprint true})
 
+(def door-policy
+  "policy plus the steps that open a door, gate or trapdoor by hand: the walk driver that cuts a plan at them
+  (engine.path.pass) does the opening, the tick never sees one."
+  (update policy :moves conj :open))
+
 (def move-names
   [:start :walk :diagonal :jump :drop :gap :corner :climb-up :climb-down :jump-climb :open :swim :swim-up
    :swim-down :exit])
@@ -82,7 +87,7 @@
   [policy {:keys [move opens swim]}]
   (cond
     (not (contains? (:moves policy) move)) move
-    (some? opens) :open
+    (and (some? opens) (not (contains? (:moves policy) :open))) :open
     (and swim (not (contains? (:moves policy) :swim))) :swim))
 
 (def takeoff-blockers climb-moves)

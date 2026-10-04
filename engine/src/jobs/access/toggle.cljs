@@ -1,5 +1,5 @@
 (ns jobs.access.toggle
-  (:require [clojure.string :as str]
+  (:require [engine.access.click :as click]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.places :as places]))
@@ -14,7 +14,7 @@
   any other block is :not-toggleable; a state the block cannot have is :bad-state with :valid. Closing a door, gate
   or trapdoor in whose column the body stands is declined :standing-in; opening never is. Working a gate in someone's
   zone or in a plan's footprint is permitted (no block type changes, so zones and footprints do not apply). The body
-  walks within :reach of the block (jobs.movement.go-to child; a walk that gives up is :unreachable), then clicks
+  walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach opens nothing; a walk that gives up is :unreachable), then clicks
   ONCE with an empty hand (useOn with no item, which never tosses what was held: a hand that cannot be emptied is
   :no-room) and reads the block again. No second click: a click that changed nothing (an iron-like block, a
   protected area, lag; these cannot be told apart) is :unchanged, a block that moved but not to the wanted state
@@ -35,43 +35,6 @@
 
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
-
-(defn kind-of
-  "What works block name: :iron (a hand cannot), :openable, :lever, :button, or nil."
-  [name]
-  (cond
-    (nil? name) nil
-    (#{"iron_door" "iron_trapdoor"} name) :iron
-    (re-find #"_(fence_gate|door|trapdoor)$" name) :openable
-    (= "lever" name) :lever
-    (str/ends-with? name "_button") :button
-    :else nil))
-
-(defn reached?
-  "Whether a block with properties props (a map with keyword keys, or nil) is in state; the strings \"true\" and
-  \"false\" read as booleans."
-  [state props]
-  (let [on? (fn [k] (let [v (get props (keyword k))] (or (true? v) (= "true" v))))]
-    (case state
-      :open (on? "open")
-      :closed (not (on? "open"))
-      :on (on? "powered")
-      :off (not (on? "powered"))
-      :press (on? "powered")
-      false)))
-
-(defn props-of [b] (some-> b .-properties (js->clj :keywordize-keys true)))
-
-(defn air? [name] (or (nil? name) (= "air" name) (str/ends-with? name "_air")))
-
-(defn standing-in?
-  "Whether the body stands in the column of an openable block at cell: its feet or its head are in that cell, or in
-  either cell of a door (half is the :half property of the block, or nil for a gate or trapdoor)."
-  [self {:keys [x y z]} half]
-  (let [fx (js/Math.floor (:x self)) fy (js/Math.floor (:y self)) fz (js/Math.floor (:z self))
-        low (if (= "upper" half) (dec y) y)
-        high (if half (inc low) low)]
-    (and (= x fx) (= z fz) (<= low (inc fy)) (<= fy high))))
 
 (defn parse
   "{:pos {:x :y :z} :state kw} of the args, or {:error text}."
@@ -116,26 +79,19 @@
 (defn ^:async click!
   "Click once with an empty hand and read the block again."
   [c pos state block]
-  (let [r (await (ctx/act c :useOn (clj->js {:pos pos})))
-        status (.-status r)
-        before (js->clj (some-> r .-before .-properties) :keywordize-keys true)
-        after (js->clj (some-> r .-after .-properties) :keywordize-keys true)
-        b (.blockAt (:primitives c) (clj->js pos))
-        now (props-of b)
-        facts {:block block :was before :now now}
+  (let [{:keys [outcome facts why status reason]} (await (click/click! c pos state block))
         text (str block " at " (pr-str pos))]
-    (cond
-      (= "missing" status) (give-up! c :gone pos state (str text " is gone") facts)
-      (= "no-room" status) (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
-      (= "unreachable" status) (give-up! c :unreachable pos state (str text " is out of reach") facts)
-      (not (#{"used" "unchanged"} status)) (give-up! c :refused pos state (str text " refused the click: " status " " (.-reason r)) facts)
-      (nil? b) (give-up! c :gone pos state (str text " is no longer loaded") facts)
-      (or (reached? state now) (reached? state after)) (finish! c :changed pos state (str text " is now " (name state)) facts)
-      (= before now) (give-up! c :unchanged pos state (str text " did not change after the click (protected, iron-like or lag)") facts)
-      :else (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
+    (case outcome
+      :gone (give-up! c :gone pos state (str text (if (= :unloaded why) " is no longer loaded" " is gone")) facts)
+      :no-room (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
+      :unreachable (give-up! c :unreachable pos state (str text " is out of reach") facts)
+      :refused (give-up! c :refused pos state (str text " refused the click: " status " " reason) facts)
+      :changed (finish! c :changed pos state (str text " is now " (name state)) facts)
+      :unchanged (give-up! c :unchanged pos state (str text " did not change after the click (protected, iron-like or lag)") facts)
+      :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
 (defn ^:async walk! [c pos state block]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (:reach (:args c))}))]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (:reach (:args c)) :doors :never}))]
     (cond
       (not= :done r) :continue
       (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :continue)
@@ -147,17 +103,17 @@
       (decline! c :bad-args nil nil error)
       (let [b (.blockAt (:primitives c) (clj->js pos))
             block (some-> b .-name)
-            kind (kind-of block)
+            kind (click/kind-of block)
             text (str block " at " (pr-str pos))]
         (cond
           (nil? b) (decline! c :not-loaded pos state (str (pr-str pos) " is not loaded"))
-          (air? block) (decline! c :no-block pos state (str "no block at " (pr-str pos)))
+          (click/air? block) (decline! c :no-block pos state (str "no block at " (pr-str pos)))
           (= :iron kind) (decline! c :needs-redstone pos state (str text " ignores a hand") {:block block})
           (nil? kind) (decline! c :not-toggleable pos state (str text " is not a gate, door, trapdoor, lever or button") {:block block})
           (not (contains? (valid-states kind) state))
           (decline! c :bad-state pos state (str text " cannot be " (name state)) {:block block :valid (sort (valid-states kind))})
-          (reached? state (props-of b)) (finish! c :already pos state (str text " is already " (name state)) {:block block :now (props-of b)})
-          (and (= :openable kind) (= :closed state) (standing-in? (u/self-pos c) pos (:half (props-of b))))
+          (click/reached? state (click/props-of b)) (finish! c :already pos state (str text " is already " (name state)) {:block block :now (click/props-of b)})
+          (and (= :openable kind) (= :closed state) (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))
           (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
           (and (not (:arrived (ctx/mem c)))
                (not (or (u/within? (u/self-pos c) pos (:reach (:args c)))

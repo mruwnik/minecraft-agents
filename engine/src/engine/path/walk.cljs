@@ -52,6 +52,26 @@
   (doto (js-obj "timeoutS" (min max-timeout-s timeout-s))
     (js/Object.defineProperty "decide" #js {:value decide})))
 
+(defn wall-id
+  "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."
+  [table]
+  (let [top (.-top table) kind (.-kind table) special (.-special table) openable (.-openable table) hazard (.-hazard table)]
+    (first (filter (fn [id] (and (== 16 (aget top id)) (== 1 (aget kind id)) (zero? (aget special id))
+                                 (zero? (aget openable id)) (zero? (aget hazard id))))
+                   (range 1 (.-length top))))))
+
+(defn with-walls
+  "pw (the primitives' pathWorld) with the cells walls ({:x :y :z} maps) read as stone: a cell the walk found it cannot pass."
+  [pw walls]
+  (if (empty? walls)
+    pw
+    (let [snapshot (.-snapshot pw)
+          id (wall-id (.-table pw))
+          wall? (into #{} (map (juxt :x :y :z)) walls)
+          walled (js/Object.create snapshot)]
+      (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))
+
 (defn plan-from
   "Plan from the body's cell to the goal, within limits (the planner's options.limits, nil for none); the planner's JS
   result."
@@ -82,17 +102,18 @@
       solid?)))
 
 (defn plan-within
-  "Plan within the executor's abilities: {:r :steps} (steps nil when r has no path). When that finds no whole path but a
-  search without the limits does, also :beyond, the executor's refusal of that path: no path within abilities, and the
-  kind of step that would have made one."
-  [c pw to range weight]
-  (let [r (plan-from c pw to range weight (executor/planner-limits executor/policy (solid-fn pw)))
-        within {:r r :steps (when (.-path r) (plan-steps pw r))}]
-    (if (= "found" (.-status r))
-      within
-      (let [wide (plan-from c pw to range weight nil)]
-        (cond-> within
-          (= "found" (.-status wide)) (assoc :beyond (executor/refusal executor/policy (plan-steps pw wide))))))))
+  "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
+  that finds no whole path but a search without the limits does, also :beyond, the executor's refusal of that path: no path
+  within abilities, and the kind of step that would have made one."
+  ([c pw to range weight] (plan-within c pw to range weight executor/policy))
+  ([c pw to range weight policy]
+   (let [r (plan-from c pw to range weight (executor/planner-limits policy (solid-fn pw)))
+         within {:r r :steps (when (.-path r) (plan-steps pw r))}]
+     (if (= "found" (.-status r))
+       within
+       (let [wide (plan-from c pw to range weight nil)]
+         (cond-> within
+           (= "found" (.-status wide)) (assoc :beyond (executor/refusal policy (plan-steps pw wide)))))))))
 
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
@@ -130,32 +151,35 @@
   "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last dry step
   (dry-end). The planner ends a partial plan at the nearest node the body can come back from; {:r :steps :beyond :status :stop}:
   stop is the no-path result for a plan with a nearer end behind a step that cannot be undone (the planner's oneWay,
-  stopped-one-way), nil otherwise."
-  [c pw to range weight]
-  (let [{:keys [r steps beyond]} (plan-within c pw to range weight)
-        status (.-status r)
-        walked (if (= "partial" status) (dry-end steps) steps)
-        one-way (one-way-of r)]
-    {:r r :steps walked :beyond beyond :status status
-     :stop (when one-way (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to one-way))}))
+  stopped-one-way), nil otherwise. opts {:policy :walls}: the executor policy the plan must fit (default executor/policy) and
+  the cells {:x :y :z} to read as walls."
+  ([c pw to range weight] (plan-walk c pw to range weight nil))
+  ([c pw to range weight {:keys [policy walls] :or {policy executor/policy}}]
+   (let [{:keys [r steps beyond]} (plan-within c (with-walls pw walls) to range weight policy)
+         status (.-status r)
+         walked (if (= "partial" status) (dry-end steps) steps)
+         one-way (one-way-of r)]
+     {:r r :steps walked :beyond beyond :status status
+      :stop (when one-way (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to one-way))})))
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a plan cut at a one-way step
-  with no step left, no path, a plan the executor refuses. replans goes in the result."
-  [{:keys [r steps beyond status stop]} replans]
-  (let [partial? (= "partial" status)]
-    (cond
-      beyond
-      {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
+  with no step left, no path, a plan the policy (default executor/policy) refuses. replans goes in the result."
+  ([plan replans] (no-walk plan replans executor/policy))
+  ([{:keys [r steps beyond status stop]} replans policy]
+   (let [partial? (= "partial" status)]
+     (cond
+       beyond
+       {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
 
-      (and stop (< (count steps) 2))
-      (assoc stop :replans replans)
+       (and stop (< (count steps) 2))
+       (assoc stop :replans replans)
 
-      (or (= "none" status) (and partial? (< (count steps) 2)))
-      {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+       (or (= "none" status) (and partial? (< (count steps) 2)))
+       {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
 
-      :else
-      (some-> (executor/refusal executor/policy steps) (assoc :replans replans)))))
+       :else
+       (some-> (executor/refusal policy steps) (assoc :replans replans))))))
 
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,

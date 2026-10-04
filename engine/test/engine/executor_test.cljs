@@ -81,6 +81,18 @@
     [(step 0 64 0 :start) (step 1 64 0 :open)] :open "unsupported step kind :open at [1 64 0]" [1 64 0]
     [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1}]})] :open "unsupported step kind :open at [1 64 0]" [1 64 0]))
 
+(deftest refusal-the-door-policy-walks-steps-that-open-something
+  (are [steps] (nil? (ex/refusal ex/door-policy steps))
+    [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1 :y 64 :z 0}]})]
+    [(step 0 64 0 :start) (step 1 65 0 :open {:opens [{:x 1 :y 65 :z 0}]})])
+  (is (= (conj (:moves p) :open) (:moves ex/door-policy)))
+  (is (= (dissoc ex/door-policy :moves) (dissoc p :moves))))
+
+(deftest planner-limits-do-not-avoid-opening-under-the-door-policy
+  (are [policy kinds] (= kinds (.-kinds (ex/planner-limits policy (constantly false))))
+    p 4
+    ex/door-policy 0))
+
 (def dry-moves (apply disj (:moves p) [:swim :swim-up :swim-down :exit]))
 
 (deftest refusal-a-policy-that-cannot-swim

@@ -2,12 +2,12 @@
 // fast) it asks decide(pose), then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump),
 // drops to the next floor at once, and climbs or descends a ladder. A tick budget of timeoutS * 20 (at most 2400) stands
 // in for the real time bound. Results have the real steer's shapes.
-import { createSnapshot } from './path/snapshot.mjs'
-import { stateId } from './path/fixture.mjs'
+import { fixtureSnapshot } from './path/fixture.mjs'
 import { defaultStateTable } from './path/blocks.mjs'
 import * as space from './path/space.mjs'
 import { dragLeashed } from './fake-leash.mjs'
 import { temptFollow } from './fake-tempt.mjs'
+import { isOpen, climbsThrough, pathProps } from './fake-doors.mjs'
 
 const MAX_TICKS = 2400
 const TICKS_PER_S = 20
@@ -42,21 +42,16 @@ function buried (s) {
 }
 
 export function fakePathWorld (s) {
-  const snapshot = createSnapshot({})
   const entries = [...[...s.blocks].map(([k, name]) => [k.split(',').map(Number), name]), ...buried(s)]
-  const columns = new Set(entries.map(([[x, , z]]) => `${x >> 4},${z >> 4}`))
-  columns.forEach(c => {
-    const [cx, cz] = c.split(',').map(Number)
-    for (let sy = 0; sy < snapshot.height >> 4; sy++) snapshot.setSection(cx, sy, cz, new Uint16Array(4096))
-  })
-  entries.forEach(([[x, y, z], name]) => snapshot.setState(x, y, z, stateId(name)))
+  // the fixture joins fences, walls and panes to their neighbours, as the server does: a lone post is a gap a body slips through
+  const snapshot = fixtureSnapshot({ blocks: entries.map(([[x, y, z], name]) => [x, y, z, name, pathProps(s, key(x, y, z))]) })
   return { snapshot, table: defaultStateTable(), space }
 }
 
 export function fakeSteer (s, ownerOf, CutError) {
   const nameAt = (x, y, z) => s.blocks.get(key(x, y, z)) ?? 'air'
-  const solid = (x, y, z) => !PASSABLE.has(nameAt(x, y, z))
-  const climbable = (x, y, z) => CLIMBABLE.has(nameAt(x, y, z))
+  const solid = (x, y, z) => !PASSABLE.has(nameAt(x, y, z)) && !isOpen(s, key(x, y, z))
+  const climbable = (x, y, z) => CLIMBABLE.has(nameAt(x, y, z)) || climbsThrough(s, x, y, z)
 
   // ground level of the cell (x, z) for a body whose feet are at y: the first y' from one above down to SCAN_DOWN below
   // with a solid cell under it and two free cells above, else null

@@ -150,3 +150,15 @@
       [(s 0 false) (s 1 false) (s 2 true) (s 3 true)] [0 1]
       [(s 0 true) (s 1 true)] []
       [(s 0 false) (s 1 false)] [0 1])))
+
+(deftest with-walls-reads-the-named-cells-as-one-stone-state-and-leaves-the-rest
+  (let [pw (.pathWorld (tu/fake {:blocks (merge (box 0 64 0 2 64 0 "oak_fence_gate") (box 0 65 0 0 65 0 "air"))}))
+        walled (walk/with-walls pw [{:x 1 :y 64 :z 0}])
+        id (walk/wall-id (.-table pw))
+        at (fn [pw x] (.stateAt (.-snapshot pw) x 64 0))]
+    (is (identical? pw (walk/with-walls pw [])) "no walls: the same pathWorld")
+    (is (= [(at pw 0) id (at pw 2)] [(at walled 0) (at walled 1) (at walled 2)]))
+    (is (not= id (at pw 1)))
+    (is (= 1 (aget (.-kind (.-table walled)) id)) "a solid block")
+    (is (= [16 0] [(aget (.-top (.-table walled)) id) (aget (.-openable (.-table walled)) id)]))
+    (is (= [(.-table pw) (.-space pw)] [(.-table walled) (.-space walled)]))))
