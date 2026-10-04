@@ -1503,7 +1503,9 @@ the `steer` primitive, deciding every physics tick in `engine.path.executor` (pu
 The planner is told them (`executor/planner-limits`: no doors, and every gap jump tested by the executor's own gap refusal), so it
 plans round what the executor cannot do. When that search finds no whole path, one without the limits is run: if it finds one,
 the result is `{:status :no-path :reason :abilities :kind :at}`, the kind and cell of its first step the executor refuses (no path within
-abilities; the body does not move). A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
+abilities; the body does not move). Otherwise `:reason` is the planner's: `:exhausted` (no `:kind`) means every cell the body can
+reach was searched and none is the goal even with every ability, as with a gap of 4 or more cells (wider than any jump), a wall or
+a drop too deep; the walk first goes to the reachable cell nearest the goal (live: 6 blocks to the edge of a 4-wide gap). A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
 before the body moves (a backstop). In the `:walk-plan.result` event `:kind` is `:refused-kind` (an event's `:kind`
 is its own). `jobs.access.stair`'s way-back check plans the same way (`walk-plan/plan-within`).
 Swimming (steps in water cells: `:swim :swim-up :swim-down :exit`, a drop into water, wading in water 1 deep, a start in water) is a
@@ -1527,6 +1529,16 @@ true refuses that gap jump (takeoff feet cell, stand height in 1/16, the move th
 `corner(x, y, z, h, lx, ly, lz, lh)` returning anything but true refuses a diagonal jump with one blocked side (a corner slide)
 from that takeoff to that landing.
 Without it the search is planner.mjs's. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
+
+A partial plan ends at the node nearest the goal that the body can come back from. A step is one-way when the planner cannot plan
+its undoing: a gap jump down, a drop of more than a jump up (1.25 blocks), or a drop with no step-up move back from the lower
+cell (a drop of exactly 1 is returnable when that move is legal, by the planner's own rule: it does not look at the headroom over
+the upper cell, which no jump's rule does). When the path to the nearest node of all holds one, a second search with
+`options.returnable` (one-way steps never planned; no goal flood) finds the partial end, and `result.oneWay` is
+`{move, x, y, z, distance}`: the first one-way step on the way to the nearer node (the move code, the cell it enters) and that
+node's distance to the goal; `null` when nothing nearer lies behind one, and on every complete plan (which are never changed).
+With no returnable node 2 blocks nearer the status is `none` with `oneWay` set. `engine.path.walk` turns `oneWay` into the walk-plan
+`:one-way {:kind :at}` stop. A search where the path to its nearest node has no one-way step pays nothing.
 
 then measured on a live body (Paper 26.1): the server accepted every jump (no pull-back), landings matched the simulation, and the sprint jump
 over 2 one block down overshot a 1x1 landing 3 of 5 times (fell, re-planned), hence the walking jump there.

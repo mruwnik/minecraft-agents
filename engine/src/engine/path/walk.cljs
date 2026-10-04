@@ -106,25 +106,38 @@
   [{:keys [x y z]} [gx gy gz]]
   (/ (js/Math.round (* 10 (js/Math.hypot (- gx x) (- gy y) (- gz z)))) 10))
 
+(defn one-way-of
+  "The planner's oneWay of a result as {:kind :at}: the first step on the way to a node nearer the goal that the body cannot undo
+  (a drop of more than a block, a gap jump down), nil when there is none."
+  [r]
+  (when-let [^js ow (.-oneWay r)]
+    {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]}))
+
 (defn stopped-one-way
-  "The no-path result of a partial plan cut short at a step that cannot be undone: that step, and how near to the goal
+  "The no-path result of a plan whose nearer end lies behind a step that cannot be undone: that step, and how near to the goal
   the walk got (from: the last step kept, or the start)."
   [r from to one-way]
   (assoc {:status :no-path :reason :one-way :planner (some-> (.-reason r) keyword)}
          :one-way one-way :near (near-goal from to)))
 
+(defn body-cell
+  "The cell the body stands in, as a step's {:x :y :z}."
+  [c]
+  (let [pos (.-pos (.self (:primitives c)))]
+    {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))
+
 (defn plan-walk
-  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its first
-  one that cannot be undone (reversible-prefix) and its last dry step (dry-end). {:r :steps :beyond :status :stop}; stop
-  is the no-path result of a plan cut at a one-way step (stopped-one-way), nil otherwise."
+  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last dry step
+  (dry-end). The planner ends a partial plan at the nearest node the body can come back from; {:r :steps :beyond :status :stop}:
+  stop is the no-path result for a plan with a nearer end behind a step that cannot be undone (the planner's oneWay,
+  stopped-one-way), nil otherwise."
   [c pw to range weight]
   (let [{:keys [r steps beyond]} (plan-within c pw to range weight)
         status (.-status r)
-        partial? (= "partial" status)
-        {:keys [kept one-way]} (if partial? (executor/reversible-prefix steps) {:kept steps})
-        steps (if partial? (dry-end kept) steps)]
-    {:r r :steps steps :beyond beyond :status status
-     :stop (when one-way (stopped-one-way r (or (peek steps) (first kept)) to one-way))}))
+        walked (if (= "partial" status) (dry-end steps) steps)
+        one-way (one-way-of r)]
+    {:r r :steps walked :beyond beyond :status status
+     :stop (when one-way (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to one-way))}))
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a plan cut at a one-way step

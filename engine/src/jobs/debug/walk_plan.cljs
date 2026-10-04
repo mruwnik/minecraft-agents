@@ -7,9 +7,10 @@
   "Debug job: plan a path to :to with the path planner and follow it with the plan executor (steer), instead
   of moveTo. One round does the whole walk and ends :done. Plans from the body's cell within the executor's
   abilities (the planner is told executor/planner-limits, so it walks round gap jumps and doors it cannot do; it
-  swims), still refuses a plan with a step the executor cannot walk (a backstop), walks a partial plan only up to its
-  first step it cannot undo (a drop of more than a block, a gap jump down: :no-path :reason :one-way, :one-way {:kind :at},
-  :near) and its last step out of water, re-plans when the body ends off the plan (at most 5 times), and hands over {:status ...}:
+  swims), still refuses a plan with a step the executor cannot walk (a backstop), walks a partial plan (the planner ends it at the
+  node nearest the goal that the body can come back from) up to its last step out of water and, when a nearer node lies behind a
+  step it cannot undo (a drop of more than a block, a gap jump down), ends there: :no-path :reason :one-way, :one-way {:kind :at},
+  :near; re-plans when the body ends off the plan (at most 5 times), and hands over {:status ...}:
   :arrived, :refused (:kind :at), :no-path
   (:reason; :abilities with :kind :at when only a step the executor cannot do leads there), :stuck (:why :at),
   :gave-up (:reason :replan-limit), :failed (:reason) or :unsupported (no pathWorld), plus :replans. Emits

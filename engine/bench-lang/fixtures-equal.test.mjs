@@ -37,7 +37,7 @@ const runCompared = file => {
 const compared = Object.fromEntries(plannerTests.map(file => [file, runCompared(file)]))
 
 test('the planner test files are the ones this gate runs', () => {
-  assert.deepEqual(plannerTests, ['planner-climb.test.mjs', 'planner-courses.test.mjs', 'planner-doors.test.mjs', 'planner-water.test.mjs', 'planner.test.mjs'])
+  assert.deepEqual(plannerTests, ['planner-climb.test.mjs', 'planner-courses.test.mjs', 'planner-doors.test.mjs', 'planner-partial.test.mjs', 'planner-water.test.mjs', 'planner.test.mjs'])
 })
 
 for (const file of plannerTests) {

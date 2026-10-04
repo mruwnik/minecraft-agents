@@ -104,6 +104,46 @@
           (is (= [:plan] announced) "the island part was walked, no replan")
           (is (<= (first at) 5) "the body never went down the drop"))))))
 
+;; a gap of 4 empty cells (x 5..8) is wider than any jump: no ability would help, so the answer is :exhausted, not :abilities, and the
+;; walk goes to the edge
+(deftest a-gap-wider-than-any-jump-ends-exhausted-at-the-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (floor (range 5)) (floor (range 9 14)))
+              [{:keys [result]} _ at] (await (walk-to blocks [12 64 1] start))]
+          (is (= {:status :no-path :reason :exhausted} (select-keys result [:status :reason])))
+          (is (not (contains? result :kind)))
+          (is (>= (first at) 4) "at the edge"))))))
+
+;; an island of x 0..1 gets no nearer than 1 block to the goal: no plan is walked, the drop is the only way nearer
+(def tiny-island-and-pillar
+  (merge (box 0 63 0 1 63 2 "stone") (box 2 60 0 11 60 2 "stone") (box 10 61 0 10 63 2 "stone")))
+
+(deftest a-drop-is-the-only-way-nearer-and-no-step-is-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[{:keys [result]} announced at] (await (walk-to tiny-island-and-pillar [10 64 1] start))]
+          (is (= {:status :no-path :reason :one-way} (select-keys result [:status :reason])))
+          (is (= :drop (:kind (:one-way result))))
+          (is (= [] announced) "nothing was planned to walk")
+          (is (<= (first at) 1) "the body never went down the drop"))))))
+
+;; the island, then a ledge one below it, then the lower floor 2 below the ledge: the walk goes on to the ledge, which it can
+;; climb back from, and stops before the drop
+(def island-ledge-and-pillar
+  (merge (box 0 63 0 4 63 2 "stone") (box 5 62 0 6 62 2 "stone") (box 7 60 0 11 60 2 "stone") (box 10 61 0 10 63 2 "stone")))
+
+(deftest the-walk-goes-down-a-one-block-drop-to-the-ledge-and-stops-before-the-bigger-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[{:keys [result]} _ at] (await (walk-to island-ledge-and-pillar [10 64 1] start))]
+          (is (= {:status :no-path :reason :one-way} (select-keys result [:status :reason])))
+          (is (= [7 61 1] (:at (:one-way result))))
+          (is (<= 5 (first at) 6) "on the ledge"))))))
+
 (deftest dry-end-keeps-a-partial-plan-up-to-its-last-dry-step
   (let [s (fn [x swim?] (cond-> {:x x :move :walk} swim? (assoc :swim true)))]
     (are [steps kept] (= kept (mapv :x (walk/dry-end steps)))

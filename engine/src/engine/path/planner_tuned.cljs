@@ -263,7 +263,9 @@
    ^:mutable ^boolean boxed ; some node was refused by the box
    ^:mutable goal-node ^:mutable best-node ; expanded node nearest the goal
    ^:mutable best-distance ^:mutable start-distance ^:mutable expanded ^:mutable t0 ^:mutable elapsed
-   ^:mutable start-h ^:mutable start-slow]
+   ^:mutable start-h ^:mutable start-slow
+   ;; the returnable search (options.returnable): no step the body cannot undo is planned; the drops it has not yet probed
+   ^boolean returnable ^js held ^:mutable ^boolean replaying]
 
   Object
 
@@ -648,6 +650,7 @@
         ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget tbl-farmland (.stateAt snapshot x y z)) 1)) nil
+        (and returnable (not replaying) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
         ^boolean (.refusedKind s limit-kinds x y z move) nil
         :else
         (let [extra (if avoiding (.avoidCost s x y z move dsec drisk) 0)]
@@ -672,6 +675,19 @@
                     (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
 
                     :else nil)))))))))
+
+  (stand16 [s node] (+ (* (aget ys node) 16) (aget hs node)))
+
+  ;; The returnable search plans no step the body cannot undo. True when the move is not considered now: a gap jump down is
+  ;; refused, a drop of more than JUMP-UP too, any other drop is held back until the probe (canReturn) says the body can climb back
+  ;; (the probe runs the moves of another cell, so it cannot run inside an expansion: see flushHeld).
+  (holdsBack [s x y z h move parent-node dsec drisk slow-to corner shape]
+    (cond
+      (== move MOVE-GAP) (< (+ (* y 16) h) (.stand16 s parent-node))
+      (== move MOVE-DROP) (do (when-not (> (- (.stand16 s parent-node) (+ (* y 16) h)) JUMP-UP)
+                                (.push held #js [x y z h move parent-node dsec drisk slow-to corner shape move-open move-air move-peak move-water]))
+                              true)
+      :else false))
 
   ;; is entering x,y,z by `move` of one of `kinds` (bits: climbing, water, opening something)?
   (refusedKind [s kinds x y z move]
@@ -1885,7 +1901,59 @@
               (set! best-distance d)
               (set! best-node i))
             (.expandAt s x y z (aget hs i) (aget slows i) i (bit-and (aget shapes i) 15))
+            (when (pos? (.-length held)) (.flushHeld s))
             (when over-budget (.finish s "budget")))))))
+
+  ;; ---- steps the body cannot undo ----
+
+  ;; Can the planner's own moves take the body from the lower cell back to the upper one? Runs the moves out of the lower cell
+  ;; and looks for the one that enters the upper cell (the goal flood's probe, for one cell).
+  (canReturn [s lx ly lz lh ux uy uz]
+    (set! flooding true)
+    (set! fx ux)
+    (set! fy uy)
+    (set! fz uz)
+    (set! hit false)
+    (.expandAt s lx ly lz lh 0 -1 -1)
+    (set! flooding false)
+    hit)
+
+  ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, or a drop the planner
+  ;; has no step-up move back from (see planner.mjs isOneWay).
+  (isOneWay [s node]
+    (let [p (aget parents node)
+          m (aget moves node)]
+      (cond
+        (== m MOVE-GAP) (< (.stand16 s node) (.stand16 s p))
+        (not (== m MOVE-DROP)) false
+        :else (or (> (- (.stand16 s p) (.stand16 s node)) JUMP-UP)
+                  (not ^boolean (.canReturn s (aget xs node) (aget ys node) (aget zs node) (aget hs node) (aget xs p) (aget ys p) (aget zs p)))))))
+
+  ;; the first one-way step on the way to the node (nearest the start), or -1
+  (firstOneWay [s node]
+    (loop [i node
+           first -1]
+      (if (== (aget parents i) -1)
+        first
+        (recur (aget parents i) (if ^boolean (.isOneWay s i) i first)))))
+
+  (flushHeld [s]
+    (set! replaying true)
+    (let [held-now (.splice held 0)]
+      (dotimes [k (.-length held-now)]
+        (let [^js d (aget held-now k)
+              x (aget d 0) y (aget d 1) z (aget d 2) p (aget d 5)]
+          (when ^boolean (.canReturn s x y z (aget d 3) (aget xs p) (aget ys p) (aget zs p))
+            (set! move-open (aget d 11))
+            (set! move-air (aget d 12))
+            (set! move-peak (aget d 13))
+            (set! move-water (aget d 14))
+            (.consider s x y z (aget d 3) (aget d 4) p (aget d 6) (aget d 7) (aget d 8) (aget d 9) (aget d 10))))))
+    (set! replaying false)
+    (set! move-open 0)
+    (set! move-air 0)
+    (set! move-peak 0)
+    (set! move-water 0))
 
   ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs once, after flood-after forward expansions
   (step [s max-expansions]
@@ -2035,30 +2103,50 @@
                                    best))}]
       #js {:steps steps :cost cost :summary (.summarize s steps node)}))
 
-  (outcome [s status why path]
+  (outcome [s status why path one-way]
     #js {:status status
          :reason why
          :ms elapsed
          :expanded expanded
          :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded}
-         :path path})
+         :path path
+         :oneWay one-way})
 
-  (partialOutcome [s why]
-    (.outcome s "partial" why (if (== best-node -1) nil (.pathTo s best-node))))
-
-  (result [s]
+  ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
+  ;; says so
+  (settle [s]
     (when-not finished (.finish s "budget"))
-    ;; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air, says so
     (cond
       (and (identical? reason "exhausted") gap-seen) (set! reason "ladder-gap")
-      (and (identical? reason "exhausted") air-seen) (set! reason "air"))
+      (and (identical? reason "exhausted") air-seen) (set! reason "air")))
+
+  ;; the first one-way step on the way to the node nearest the goal, -1 when there is none or the result has no partial end
+  (oneWayNode [s]
+    (if (or (nil? reason) (identical? reason "start-not-standable") (identical? reason "goal-not-standable") returnable (== best-node -1))
+      -1
+      (.firstOneWay s best-node)))
+
+  (nearest [s]
+    #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
+
+  ;; the result; one-way-node is the first one-way step on the way to the nearest node (-1: none), clean-end the nearest node of
+  ;; the returnable search then run ({path distance}, see planner.mjs partialEnd)
+  (resultFrom [s one-way-node ^js clean-end]
     (cond
-      (or (identical? reason "start-not-standable") (identical? reason "goal-not-standable")) (.outcome s "none" reason nil)
-      (nil? reason) (.outcome s "found" reason (.pathTo s goal-node))
-      (identical? reason "budget") (.partialOutcome s "budget")
-      goal-unloaded (.partialOutcome s "goal-unloaded")
-      (and (not (== best-node -1)) (>= (- start-distance best-distance) MIN-CLOSER)) (.partialOutcome s reason)
-      :else (.outcome s "none" reason nil))))
+      (or (identical? reason "start-not-standable") (identical? reason "goal-not-standable")) (.outcome s "none" reason nil nil)
+      (nil? reason) (.outcome s "found" reason (.pathTo s goal-node) nil)
+      :else
+      (let [clean (not (neg? one-way-node))
+            end-path (cond clean (.-path clean-end) (== best-node -1) nil :else (.pathTo s best-node))
+            end-distance (cond clean (.-distance clean-end) (== best-node -1) js/Infinity :else best-distance)
+            one-way (when (and clean (< best-distance end-distance))
+                      #js {:move (aget moves one-way-node) :x (aget xs one-way-node) :y (aget ys one-way-node) :z (aget zs one-way-node)
+                           :distance best-distance})]
+        (cond
+          (identical? reason "budget") (.outcome s "partial" "budget" end-path one-way)
+          goal-unloaded (.outcome s "partial" "goal-unloaded" end-path one-way)
+          (and (some? end-path) (>= (- start-distance end-distance) MIN-CLOSER)) (.outcome s "partial" reason end-path one-way)
+          :else (.outcome s "none" reason nil one-way))))))
 
 (defn- option [^js options k default]
   (let [v (unchecked-get options k)]
@@ -2141,18 +2229,34 @@
      ;; progress: started finished reason over-budget boxed goal-node best-node
      false false nil false false -1 -1
      ;; best-distance start-distance expanded t0 elapsed start-h start-slow
-     js/Infinity 0 0 (js/performance.now) 0 -1 0)))
+     js/Infinity 0 0 (js/performance.now) 0 -1 0
+     ;; returnable held replaying
+     (true? (option options "returnable" false)) #js [] false)))
+
+(defn- result-of
+  "The result of a finished search; when the path to its nearest node holds a one-way step, a second search with options.returnable
+  (and no goal flood) supplies the partial end (see planner.mjs partialEnd)."
+  [^Search search snapshot query options]
+  (.settle search)
+  (let [node (.oneWayNode search)]
+    (if (neg? node)
+      (.resultFrom search -1 nil)
+      (let [^Search clean (new-search snapshot query (js/Object.assign #js {} options #js {:returnable true :goalFlood 0}))]
+        (.init clean)
+        (.step clean js/Infinity)
+        (.resultFrom search node (.nearest clean))))))
 
 (defn create-search
-  "{step, result} as planner.mjs's createSearch returns them. options.table and options.space are required."
+  "{step, result, nearest} as planner.mjs's createSearch returns them. options.table and options.space are required."
   [snapshot query options]
   (let [search (new-search snapshot query options)]
     (.init search)
     #js {:step (fn [max-expansions] (.step search max-expansions))
-         :result (fn [] (.result search))}))
+         :result (fn [] (result-of search snapshot query options))
+         :nearest (fn [] (.nearest search))}))
 
 (defn plan [snapshot query options]
   (let [search (new-search snapshot query options)]
     (.init search)
     (.step search js/Infinity)
-    (.result search)))
+    (result-of search snapshot query options)))

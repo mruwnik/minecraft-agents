@@ -116,7 +116,8 @@ export function createSearch (snapshot, query, options = {}) {
   const {
     maxNodes = 200000, maxDrop = 3, weight = 1, riskWeight = 2,
     table = defaultStateTable(),
-    goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48
+    goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48,
+    returnable = false // plan no step the body cannot undo (see isOneWay): the search a partial end is taken from
   } = options
   const costs = { ...DEFAULT_COSTS, ...options.costs }
   const { top, base, kind, hazard, stairUp, partial, climb, climbName, facing, floor, special, flowing, bubble, magma, dripleaf, farmland, openable, openState, openKind, doorHalf, activator, attach } = table
@@ -428,6 +429,12 @@ export function createSearch (snapshot, query, options = {}) {
   let moveOpen = 0 // 1 + index in openLists of what the move being made opens (see expandAt), 0 for nothing
   const openLists = []
 
+  // The returnable search holds back every drop of at most JUMP_UP until the probe (canReturn) has said the body can climb back:
+  // the probe runs the moves of another cell, so it cannot run inside an expansion (see flushHeld, which `step` calls after each).
+  const stand16 = node => ys[node] * 16 + hs[node]
+  const held = []
+  let replaying = false
+
   // relax the edge to a node: insert it, or lower its cost if this way is cheaper
   // a tight cell's node also has its region, the region's point and the crossing the move came in by: `shape`
   // A node reached again with a very different air use gets a record of its own (see the header): the hash points at the newest.
@@ -440,6 +447,14 @@ export function createSearch (snapshot, query, options = {}) {
     // a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node is the
     // farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
     if ((move === MOVE.GAP || move === MOVE.DROP) && farmland[rawAt(x, y, z)] === 1) return
+    if (returnable && !replaying) {
+      if (move === MOVE.GAP && y * 16 + h < stand16(parentNode)) return
+      if (move === MOVE.DROP) {
+        if (stand16(parentNode) - (y * 16 + h) > JUMP_UP) return
+        held.push([x, y, z, h, move, parentNode, dsec, drisk, slowTo, corner, shape, moveOpen, moveAir, movePeak, moveWater])
+        return
+      }
+    }
     const key = keyOf(x, y, z, region)
     let s = hashOf(x, y, z, region) & (slots - 1)
     let found = -1
@@ -1394,6 +1409,50 @@ export function createSearch (snapshot, query, options = {}) {
 
   const endsOnMagma = (x, y, z, h) => bubble[rawAt(x, y, z)] === 2 || h === 0 && magma[stateAt(x, y - 1, z)] === 1
 
+  // ---- steps the body cannot undo ----
+
+  // Can the planner's own moves take the body from the lower cell back to the upper one? Runs the moves out of the lower cell
+  // and looks for the one that enters the upper cell (what the goal flood's probe does for its cells).
+  const canReturn = (lx, ly, lz, lh, ux, uy, uz) => {
+    let hit = false
+    edge = (x, y, z) => { if (x === ux && y === uy && z === uz) hit = true }
+    expandAt(lx, ly, lz, lh, 0, -1, -1)
+    edge = consider
+    return hit
+  }
+
+  // A one-way step cannot be undone with the body's own moves: a gap jump down (the way back is a gap jump up, which the walker
+  // refuses), a drop of more than JUMP_UP, or a drop the planner has no step-up move back from. A drop of exactly 1 is returnable
+  // exactly when the planner's step up is legal from the lower cell. Everything else (walk, diagonal, corner, jump, climbs, swims,
+  // exit) has a reverse.
+  const isOneWay = node => {
+    const p = parent[node]
+    if (moves[node] === MOVE.GAP) return stand16(node) < stand16(p)
+    if (moves[node] !== MOVE.DROP) return false
+    return stand16(p) - stand16(node) > JUMP_UP || !canReturn(xs[node], ys[node], zs[node], hs[node], xs[p], ys[p], zs[p])
+  }
+
+  // the first one-way step on the way to the node (nearest the start), or -1
+  const firstOneWay = node => {
+    let first = -1
+    for (let i = node; parent[i] !== -1; i = parent[i]) if (isOneWay(i)) first = i
+    return first
+  }
+
+  const flushHeld = () => {
+    replaying = true
+    for (const [x, y, z, h, move, p, dsec, drisk, slowTo, corner, shape, open, air, peak, water] of held.splice(0)) {
+      if (!canReturn(x, y, z, h, xs[p], ys[p], zs[p])) continue
+      moveOpen = open
+      moveAir = air
+      movePeak = peak
+      moveWater = water
+      consider(x, y, z, h, move, p, dsec, drisk, slowTo, corner, shape)
+    }
+    replaying = false
+    moveOpen = moveAir = movePeak = moveWater = 0
+  }
+
   const step = maxExpansions => {
     if (!started) begin()
     for (let n = 0; n < maxExpansions && !finished; n++) {
@@ -1418,6 +1477,7 @@ export function createSearch (snapshot, query, options = {}) {
       const d = distanceTo(xs[i], zs[i])
       if (!deadly && d < bestDistance) { bestDistance = d; best = i }
       expand(i)
+      if (held.length > 0) flushHeld()
       if (overBudget) finish('budget')
     }
     return finished
@@ -1532,24 +1592,43 @@ export function createSearch (snapshot, query, options = {}) {
     return { steps, cost, summary: summarize(steps, node) }
   }
 
+  // The end of a partial plan: the node nearest the goal that the body reached, and can come back from, without a one-way step.
+  // When the path to the nearest node of all holds a one-way step, a second search that plans none finds that node; oneWay then
+  // says what lies behind the step (its move, the cell it enters, how near the goal the node behind it is), or null when nothing
+  // nearer does. { path, distance, oneWay }
+  const partialEnd = () => {
+    if (best === -1) return { path: null, distance: Infinity, oneWay: null }
+    const step = returnable ? -1 : firstOneWay(best)
+    if (step === -1) return { path: pathTo(best), distance: bestDistance, oneWay: null }
+    const clean = createSearch(snapshot, query, { ...options, returnable: true, goalFlood: 0 })
+    clean.step(Infinity)
+    const end = clean.nearest()
+    const oneWay = bestDistance < end.distance ? { move: moves[step], x: xs[step], y: ys[step], z: zs[step], distance: bestDistance } : null
+    return { path: end.path, distance: end.distance, oneWay }
+  }
+
+  const nearest = () => ({ path: best === -1 ? null : pathTo(best), distance: bestDistance })
+
   const result = () => {
     if (!finished) finish('budget')
-    stats.flooded = flooded
-    stats.tightCells = tightSeen.size
-    const base = { ms: elapsed, expanded, stats }
-    if (reason === 'start-not-standable' || reason === 'goal-not-standable') return { status: 'none', reason, ...base, path: null }
-    if (reason === null) return { status: 'found', reason, ...base, path: pathTo(goalNode) }
     // an exhausted search that turned a ladder away at a gap says so
     if (reason === 'exhausted' && gapSeen) reason = 'ladder-gap'
     else if (reason === 'exhausted' && airSeen) reason = 'air'
-    const partial = (why) => ({ status: 'partial', reason: why, ...base, path: best === -1 ? null : pathTo(best) })
-    if (reason === 'budget') return partial('budget')
-    if (goalUnloaded) return partial('goal-unloaded')
-    if (best !== -1 && startDistance - bestDistance >= MIN_CLOSER) return partial(reason)
-    return { status: 'none', reason, ...base, path: null }
+    const done = (status, path, oneWay = null, why = reason) => {
+      stats.flooded = flooded
+      stats.tightCells = tightSeen.size
+      return { status, reason: why, ms: elapsed, expanded, stats, path, oneWay }
+    }
+    if (reason === 'start-not-standable' || reason === 'goal-not-standable') return done('none', null)
+    if (reason === null) return done('found', pathTo(goalNode))
+    const end = partialEnd()
+    if (reason === 'budget') return done('partial', end.path, end.oneWay)
+    if (goalUnloaded) return done('partial', end.path, end.oneWay, 'goal-unloaded')
+    if (end.path !== null && startDistance - end.distance >= MIN_CLOSER) return done('partial', end.path, end.oneWay)
+    return done('none', null, end.oneWay)
   }
 
-  return { step, result }
+  return { step, result, nearest }
 }
 
 export function plan (snapshot, query, options) {
