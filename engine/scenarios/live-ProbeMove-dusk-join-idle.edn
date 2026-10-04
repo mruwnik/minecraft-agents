@@ -1,0 +1,2 @@
+;; ProbeMove live cases for jobs.time.wait-for-dusk and the :player-joined trigger: idle, jobs and triggers are submitted with tools/jobs.mjs and tools/triggers.mjs
+{:register [] :queue []}
