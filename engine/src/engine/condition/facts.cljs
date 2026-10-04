@@ -53,6 +53,15 @@
   (let [gear (.-equipment s)]
     (boolean (some #(= item (some-> (aget gear %) .-name)) ["head" "torso" "legs" "feet" "offHand"]))))
 
+(defn seconds-since
+  "Seconds from the latest unexpired entry of kind to the view's now, or
+  unknown when there is none. The clock and the entry are the ones the
+  :every-interval trigger uses."
+  [view kind]
+  (if-let [t (:t (mem/latest view kind))]
+    (/ (- (:now view) t) 1000)
+    unknown))
+
 (defn distance-to [p s pos]
   (if (position? pos)
     (u/dist (u/pos-of (.-pos s)) pos)
@@ -82,6 +91,9 @@
            :read (fn [{:keys [memory]} kind]
                    (let [pos (mem/place memory kind)]
                      (if (position? pos) pos unknown)))}
+   'since {:args [:keyword] :type :number :cost :cheap
+           :doc "seconds since memory last recorded an entry of that kind (:slept :fed :looked ...); unknown when none"
+           :read (fn [{:keys [memory]} kind] (seconds-since memory kind))}
    'distance-to {:args [:position] :type :number :cost :cheap :doc "blocks from the body to the position"
                  :read (online distance-to)}
    'daytime {:args [] :type :boolean :cost :cheap :doc "the sun is up"

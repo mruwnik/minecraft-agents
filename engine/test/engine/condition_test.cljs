@@ -2,6 +2,8 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.condition :as c]
             [engine.condition.facts :as facts]
+            [engine.memory :as mem]
+            [engine.triggers :as triggers]
             [engine.test-util :as tu]))
 
 (def ? c/unknown)
@@ -344,3 +346,82 @@
 (deftest the-fact-table-declares-a-cost-for-every-fact
   (is (every? #{:cheap :scan} (map :cost (vals facts/table))))
   (is (every? pos? (keep :refresh-s (vals facts/table)))))
+
+;; ------------------------------------------------------------------ since
+
+(defn memory-at
+  "A memory view at now (ms) holding entries of kind written at each t, under policy."
+  [now kind ts policy]
+  {:now now
+   :data (reduce (fn [d t] (mem/add-entry d kind {:t t :data {}} policy)) mem/empty-data ts)})
+
+(def forever {:cap 50 :ttl :forever})
+
+(deftest since-is-the-seconds-since-the-latest-entry-of-the-kind
+  (are [now ts seconds] (true? (value (list '= '(since :slept) seconds) (env (tu/fake) (memory-at now :slept ts forever))))
+    10000 [4000] 6
+    10000 [1000 4000] 6
+    10000 [4000 1000] 9
+    1500 [1000] 0.5
+    1000 [1000] 0))
+
+(deftest since-is-unknown-without-an-entry-and-known-says-never
+  (let [e (env (tu/fake) (memory-at 10000 :looked [1000] forever))]
+    (are [form expected] (= expected (value form e))
+      '(< (since :slept) 5) ?
+      '(= (since :slept) 0) ?
+      '(known? (since :slept)) false
+      '(not (known? (since :slept))) true
+      '(known? (since :looked)) true)))
+
+(deftest since-never-or-too-long-ago
+  (let [form '(or (not (known? (since :slept))) (> (since :slept) 3600))
+        at (fn [now ts] (value form (env (tu/fake) (memory-at now :slept ts forever))))]
+    (is (true? (value form (env))) "never")
+    (is (false? (at 3600000 [1000])) "3599 s ago")
+    (is (true? (at 3602000 [1000])) "3601 s ago")))
+
+(deftest since-does-not-see-an-expired-entry
+  (is (= ? (value '(> (since :looked) 0) (env (tu/fake) (memory-at 7200000 :looked [1000] {:cap 5 :ttl 3600000}))))))
+
+(deftest since-agrees-with-the-every-interval-trigger
+  (let [form '(or (not (known? (since :looked))) (>= (since :looked) 60))
+        both (fn [now ts]
+               (let [m (memory-at now :looked ts mem/place-policy)]
+                 [((:when triggers/every-interval) nil m {:seconds 60})
+                  (value form (env (tu/fake) m))]))]
+    (are [now ts] (let [[trigger cond] (both now ts)] (= trigger cond))
+      1000 []
+      60999 [1000]
+      61000 [1000]
+      61001 [1000]
+      200000 [1000 150000]
+      209000 [1000 150000]
+      210000 [1000 150000])
+    (is (= [[true true] [false false] [true true]]
+           [(both 1000 []) (both 60999 [1000]) (both 61000 [1000])]))))
+
+(deftest since-takes-one-keyword-literal
+  (are [form reason at] (let [r (refusal form)]
+                          (and (false? (:ok r)) (= reason (:reason r)) (= at (:at r))
+                               (= ["(since keyword) -> number"] (:allowed r))))
+    '(< (since "slept") 5) :type "slept"
+    '(< (since 3) 5) :type 3
+    '(< (since (place :home)) 5) :type '(place :home)
+    '(< (since) 5) :arity '(since)
+    '(< (since :a :b) 5) :arity '(since :a :b)))
+
+(deftest since-is-in-the-vocabulary-and-compiles-with-any-kind
+  (is (some #{"(since keyword) -> number"} (:allowed (refusal '(nope)))))
+  (is (:ok (c/compile '(> (since :never-written-kind) 5)))))
+
+(deftest explain-shows-since-with-its-value-and-unknown-as-unknown
+  (is (= [{:form '(> (since :slept) 5) :value true}
+          {:form '(since :slept) :value 9}
+          {:form :slept :value :slept}
+          {:form 5 :value 5}]
+         (c/explain (node '(> (since :slept) 5)) (env (tu/fake) (memory-at 10000 :slept [1000] forever)) {})))
+  (is (= [{:form '(known? (since :slept)) :value false}
+          {:form '(since :slept) :value ?}
+          {:form :slept :value :slept}]
+         (c/explain (node '(known? (since :slept))) (env) {}))))

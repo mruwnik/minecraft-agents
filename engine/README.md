@@ -731,6 +731,20 @@ never evaluated. Not wired into the register or any command yet.
   (suffocating) (night-unsafe) (stuck) (wearing "item")` booleans (`wearing`: the
   item is in an armour slot or the off-hand, from `self().equipment`). Cost `:cheap` is read every
   tick; `:scan` (`blocks-near`) is cached per instance for `:refresh-s` (5 s).
+- `(since :kind)` is a number: the seconds (wall clock) since body memory last
+  recorded an unexpired entry of that kind, unknown when there is none, so
+  `(not (known? (since :slept)))` says "never" and `(or (not (known? (since
+  :slept))) (> (since :slept) 3600))` says "never, or more than an hour ago".
+  The kind is a keyword literal and is open: a kind nothing writes is simply
+  unknown. It reads the latest entry of that one kind (at most its `:cap`
+  entries are looked at) with the clock and entry `:every-interval` uses, and
+  only sees entries within their policy's ttl, so a kind meant to answer "more
+  than a day ago" must be written with a ttl longer than that (`:slept` keeps
+  seven in-game days). Entries carry `:wt`, the time of day (0 to 24000, which
+  wraps), not the world's age, so there is no days-since fact. A bare timer
+  ("every N seconds" with nothing recorded) is deliberately not in the
+  language: periodic work is a job that declines in its check until its own
+  clock says so, and rate limiting is `:cooldown`.
 - No variables, arithmetic, `let`, `fn` or functions of one's own: what the
   vocabulary cannot say becomes a new fact, written in ClojureScript with a test.
 - A fact can be unknown (body offline, no such place). Unknown propagates
@@ -739,8 +753,9 @@ never evaluated. Not wired into the register or any command yet.
   `known?` is how to ask about absence: "no home yet" is `(not (known? (place
   :home)))` (without it `(not (place :home))` is unknown and never fires),
   and `(and (known? (place :home)) (< (distance-to (place :home)) 16))` says
-  the same near-home test with the absent case spelled out. It gives no clock:
-  "every N minutes" still has no way to say "since the last time".
+  the same near-home test with the absent case spelled out. For a clock
+  there is `since`: "every N minutes" is `(or (not (known? (since :kind)))
+  (>= (since :kind) 60N))` for a kind the job writes.
 - `compile` validates once, at registration: an unknown symbol, wrong arity,
   wrong argument type (`known?` also refuses a literal), incomparable `=`, a bad held-for duration, a leading
   quote or a non-boolean top is refused as data `{:ok false :reason :at
