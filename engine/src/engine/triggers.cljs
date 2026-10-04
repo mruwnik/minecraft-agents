@@ -11,6 +11,7 @@
             [engine.triggers.pen-gate :as pen-gate]
             [engine.triggers.night-unsafe :as night-unsafe]
             [engine.triggers.player-sleeping-nearby :as player-sleeping-nearby]
+            [engine.triggers.scaffold-left :as scaffold-left]
             [engine.triggers.stuck :as stuck]
             [engine.triggers.died :as died]))
 
@@ -94,4 +95,4 @@
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
          night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
-         inventory-nearly-full every-interval]))
+         inventory-nearly-full every-interval scaffold-left/trigger]))

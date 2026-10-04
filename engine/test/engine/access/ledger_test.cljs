@@ -96,3 +96,87 @@
     (swap! clock + (* 30 24 60 60 1000))
     (mem/save! s)
     (is (= [a] (mapv :cell (ledger/open-entries (mem/view (mem/open dir {:now #(deref clock)}))))))))
+
+;; ------------------------------------------------------------------ cleanup
+
+(deftest begin-removal-marks-the-entry
+  (let [l (-> [] (ledger/intend (entry a)) (ledger/confirm a) (ledger/intend (entry b)) (ledger/begin-removal a))]
+    (is (= [[a :removing] [b :intent]] (mapv (juxt :cell :state) l)))))
+
+(deftest settle-decides-each-picked-entry-from-its-cell
+  (are [state found what] (= what (first (ledger/settle-entry (assoc (entry a) :state state) (world a found))))
+    :placed "dirt" :keep
+    :placed "stone" :dropped
+    :placed "air" :dropped
+    :placed nil :keep
+    :intent "dirt" :keep
+    :intent "air" :dropped
+    :intent nil :keep
+    :removing "dirt" :keep
+    :removing "air" :removed
+    :removing "cave_air" :removed
+    :removing "stone" :dropped
+    :removing nil :keep))
+
+(deftest settle-confirms-a-kept-entry-holding-its-item-and-names-what-a-dropped-one-found
+  (is (= [:keep (assoc (entry a) :state :placed)] (ledger/settle-entry (assoc (entry a) :state :removing) (world a "dirt"))))
+  (is (= [:keep (assoc (entry a) :state :intent)] (ledger/settle-entry (assoc (entry a) :state :intent) (world))))
+  (is (= [:dropped (assoc (entry a) :state :placed :found "stone")]
+         (ledger/settle-entry (assoc (entry a) :state :placed) (world a "stone")))))
+
+(deftest settle-leaves-entries-it-was-not-asked-about
+  (let [l [(assoc (entry a) :state :removing) (assoc (entry b :job "j2") :state :placed) (assoc (entry [0 66 0]) :state :placed)]
+        r (ledger/settle l #(= "j1" (:job %)) (world a "air" b "air" [0 66 0] "stone"))]
+    (is (= [b] (mapv :cell (:ledger r))))
+    (is (= [a] (mapv :cell (:removed r))))
+    (is (= [[[0 66 0] "stone"]] (mapv (juxt :cell :found) (:dropped r))))))
+
+(deftest the-owner-is-the-root-instance
+  (are [job root] (= root (ledger/owner {:job job}))
+    "j4" "j4"
+    "j4/kid" "j4"
+    "j4/c0/pillar" "j4"))
+
+(deftest an-entry-belongs-to-an-instance-and-its-children
+  (are [job yes?] (= yes? (ledger/of-instance? "j4" {:job job}))
+    "j4" true
+    "j4/kid" true
+    "j41" false
+    "j41/kid" false
+    "j5" false))
+
+(defn view-with-jobs [& ids]
+  (let [s (store (tu/tmp-dir))]
+    (doseq [id ids] (mem/write! s (mem/job-kind id) {:args {} :children {}} {:cap 1 :ttl :forever}))
+    (mem/view s)))
+
+(deftest the-owner-is-live-while-its-job-memory-exists
+  (let [v (view-with-jobs "j4")]
+    (is (ledger/owner-live? v {:job "j4/kid"}))
+    (is (not (ledger/owner-live? v {:job "j5"})))))
+
+(deftest select-picks-by-the-job-argument
+  (let [v (view-with-jobs "j4")
+        l [(entry a :job "j4/kid") (entry b :job "j5") (entry [0 66 0] :job "j41")]]
+    (are [job cells] (= cells (mapv :cell (ledger/select l v job)))
+      nil [b [0 66 0]]
+      :all [a b [0 66 0]]
+      "j4" [a]
+      "j41" [[0 66 0]])))
+
+(deftest offered-entries-are-selected-loaded-and-not-held
+  (let [s (store (tu/tmp-dir))
+        l [(entry a :job "j9") (entry b :job "j9") (entry [0 66 0] :job "j9")]]
+    (ledger/write! s l)
+    (is (= [a b] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") nil))) "an unloaded cell is not offered")
+    (ledger/hold! s [b])
+    (is (= [a] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") nil))) "a held cell is not offered")
+    (is (= [] (ledger/offered (mem/view s) (world a "dirt" b "air") "j8")))))
+
+(deftest held-cells-are-forgotten-after-a-while
+  (let [clock (atom 1000)
+        s (mem/open (tu/tmp-dir) {:now #(deref clock)})]
+    (ledger/hold! s [a])
+    (is (= #{a} (ledger/held-cells (mem/view s))))
+    (swap! clock + (:ttl ledger/held-policy) 1)
+    (is (= #{} (ledger/held-cells (mem/view s))))))
