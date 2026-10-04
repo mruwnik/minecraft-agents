@@ -629,6 +629,67 @@
           (await (run-until-empty eng 8))
           (is (seq (calls p "place"))))))))
 
+(deftest dig-in-refuses-lateral-fluid-before-opening-a-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [fluid ["water" "lava"]]
+          (let [{:keys [eng p]} (setup {:time night :blocks (assoc floor "1,63,0" fluid)
+                                      :inventory [{:name "dirt" :count 1}]})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (empty? (calls p "dig")) "the fluid barrier remains intact")
+            (is (empty? (calls p "place")) "no roof traps the body beside fluid")
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (is (nil? (core/tick! eng)) "carried dirt does not make the site safe")
+            (is (= :fluid-adjacent (:reason (first (entries eng :dig-in-futile)))))))))))
+
+(deftest dig-in-bounds-descent-without-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [status ["blocked" "arrived"]]
+          (let [{:keys [eng p seen]} (setup {:time night :blocks (assoc floor "0,63,0" "air")})]
+            (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status status}))
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (is (< (await (run-until-empty eng 10)) 10))
+            (is (= 3 (count (calls p "moveTo"))) "measure descent, even when the primitive says arrived")
+            (is (= 1 (count (emitted seen :dig_in_failed))))
+            (is (= :descent-stalled (:reason (first (entries eng :dig-in-futile)))))
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (is (nil? (core/tick! eng)))))))))
+
+(deftest a-failed-roof-does-not-deepen-the-pit-on-refiring
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :blocks floor})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (refuse-placing! p)
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (tick-n eng 8))
+          (is (= 2 (count (calls p "dig"))))
+          (is (= :roof-failed (:reason (first (entries eng :dig-in-futile)))))
+          (swap! clock + 11000)
+          (await (tick-n eng 8))
+          (is (= 2 (count (calls p "dig"))) "fresh reflex cannot excavate another two blocks")
+          (is (= 3 (count (calls p "place"))) "failed roof is not retried at the same site"))))))
+
+(deftest unsupported-walls-are-not-retried-on-every-reflex-firing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory dirt-stack})
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (refuse-placing! p)
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (tick-n eng 8))
+          (is (= :walls-failed (:reason (first (entries eng :dig-in-futile)))))
+          (swap! clock + 11000)
+          (await (tick-n eng 8))
+          (is (= 3 (count (calls p "place"))))
+          (is (empty? (calls p "dig"))))))))
+
 (deftest needs-bed-is-warned-once-across-firings
   (async done
     (tu/run-async done
