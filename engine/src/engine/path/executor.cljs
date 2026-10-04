@@ -31,6 +31,9 @@
    :lookahead 3            ; later steps checked for an overshoot
    :jump-xz 1.3            ; a rise is jumped once within this of the aim point
    :rise 0.6               ; a rise above this (vanilla step height) needs a jump
+   :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
+                           ; by the client physics, which lifts the body by the step height first)
+   :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
@@ -113,16 +116,24 @@
       (refuse :gap-low-ceiling (str "gap jump at " (pr-str at) " under a ceiling lower than "
                                     (:gap-headroom policy) " blocks")))))
 
+(defn corner-refused
+  "The refusal for a :jump step that slides along a corner and has a :high-corner mark, or nil."
+  [{:keys [x y z high-corner]}]
+  (when high-corner
+    {:status :refused :kind :corner-jump :at [x y z]
+     :reason (str "corner jump at " (pr-str [x y z]) " past a block as high as the landing")}))
+
 (defn step-refusal
   "The refusal for step s (after prev), or nil: an unsupported step kind, else a :gap step that cannot
-  be jumped from prev."
+  be jumped from prev, else a corner jump that cannot slide clear."
   [policy prev s]
   (let [{:keys [x y z]} s]
     (or (when-let [kind (unsupported-kind policy s)]
           {:status :refused :kind kind :at [x y z]
            :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))})
         (when (and (= :gap (:move s)) (some? prev))
-          (gap-refused policy prev s)))))
+          (gap-refused policy prev s))
+        (corner-refused s))))
 
 (defn refusal
   "nil when every step can be walked, else the refusal for the first one that cannot."
@@ -140,6 +151,28 @@
                    (range 0 (inc (or n 0))))
         top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
     (boolean (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells))))
+
+(defn high-corner?
+  "A diagonal jump to the landing cell lx ly lz (stand height lh in 1/16) from the cell x z slides out of the corner's
+  column while it is in the air: that works only when the blocks beside the diagonal are lower than the landing floor.
+  True when a side cell holds collision at the landing's feet or head height. solid? is a fn [x y z] -> bool."
+  [policy x z lx ly lz lh solid?]
+  (let [top (dec (Math/ceil (+ ly (/ lh 16) (:body-height policy))))]
+    (boolean (some (fn [[sx sz]] (some #(solid? sx % sz) (range ly (inc top))))
+                   [[lx z] [x lz]]))))
+
+(defn with-high-corners
+  "Add :high-corner to each :corner :jump step whose corner is too high to slide past (high-corner?). solid? is a fn
+  [x y z] -> bool."
+  [policy steps solid?]
+  (vec (map-indexed
+        (fn [i s]
+          (cond-> s
+            (and (pos? i) (= :jump (:move s)) (:corner s)
+                 (let [prev (nth steps (dec i))]
+                   (high-corner? policy (:x prev) (:z prev) (:x s) (:y s) (:z s) (:h s) solid?)))
+            (assoc :high-corner true)))
+        steps)))
 
 (defn with-gap-ceilings
   "Add :low-ceiling to each gap step whose takeoff or gap cells have a solid block within :gap-headroom
@@ -163,14 +196,17 @@
 (defn planner-limits
   "The planner's options.limits for this policy: kinds, the planner kinds with a step the policy cannot walk; gap, a
   test of each gap jump (takeoff cell x y z, stand h in 1/16, reached by move code; landing lx ly lz lh) by gap-refused
-  with the takeoff's ceiling. solid? is a fn [x y z] -> bool."
+  with the takeoff's ceiling; corner, a test of each jump that slides along a corner (takeoff x y z h, landing lx ly lz lh)
+  by high-corner?. solid? is a fn [x y z] -> bool."
   [policy solid?]
   #js {:kinds (reduce + 0 (keep (fn [[bit moves]] (when-not (every? (:moves policy) moves) bit)) planner-kinds))
        :gap (fn [x y z h move lx ly lz lh]
               (let [prev {:x x :y y :z z :h h :move (nth move-names move)}
                     step {:x lx :y ly :z lz :h lh :move :gap}]
                 (nil? (gap-refused policy prev (cond-> step
-                                                 (low-ceiling? policy prev step solid?) (assoc :low-ceiling true))))))})
+                                                 (low-ceiling? policy prev step solid?) (assoc :low-ceiling true))))))
+       :corner (fn [x _y z _h lx ly lz lh]
+                 (not (high-corner? policy x z lx ly lz lh solid?)))})
 
 ;; ---------------------------------------------------------------- corner slides
 
@@ -276,12 +312,14 @@
     (str "no progress on step " i " (" (pr-str (:move s)) " to " (pr-str [(:x s) (:y s) (:z s)]) ") for "
          (.toFixed (/ (- tick since) 20) 1) " s")))
 
-(defn jump? [policy {:keys [move] :as step} {:keys [y on-ground on-climbable]} dist]
-  (let [sy (stand-y step)]
+(defn jump? [policy {:keys [move] :as step} {:keys [y on-ground on-climbable collided]} dist]
+  (let [sy (stand-y step)
+        rise (- sy y)]
     (case move
       (:climb-up :jump-climb) (< y (+ sy (:climb-over policy)))
       :climb-down false
-      (boolean (and (> (- sy y) (:rise policy))
+      (boolean (and (or (> rise (:rise policy))
+                        (and collided (> rise (:pressed-rise policy))))
                     (<= dist (:jump-xz policy))
                     (or on-ground on-climbable))))))
 

@@ -104,12 +104,15 @@
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
 (defn plan-steps
-  "The executor's steps for a found plan r over pw: corner free sides and gap ceilings marked."
+  "The executor's steps for a found plan r over pw: corner free sides, high corners and gap ceilings marked."
   [pw r]
   (let [solid? (solid-fn pw)]
     (executor/with-gap-ceilings
       executor/policy
-      (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
+      (executor/with-high-corners
+        executor/policy
+        (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
+        solid?)
       solid?)))
 
 (defn plan-within

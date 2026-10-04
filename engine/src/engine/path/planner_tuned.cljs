@@ -15,9 +15,11 @@
    free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
 
    Not in planner.mjs: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
-   (see avoidCost), and options.limits {kinds, gap}, what the walker can do: kinds (the same bits) are never planned, and
+   (see avoidCost), and options.limits {kinds, gap, corner}, what the walker can do: kinds (the same bits) are never planned,
    gap(x, y, z, h, move, lx, ly, lz, lh) -> false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h in 1/16,
-   reached by move) to the landing (engine.path.executor/planner-limits). Without them the search is planner.mjs's.")
+   reached by move) to the landing, and corner(x, y, z, h, lx, ly, lz, lh) -> false refuses a diagonal jump with one blocked
+   side (a corner slide) from the takeoff node to the landing (engine.path.executor/planner-limits). Without them the search
+   is planner.mjs's.")
 
 (set! *warn-on-infer* true)
 
@@ -206,8 +208,9 @@
    max-nodes max-drop weight risk-weight goal-flood flood-after
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
-   ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump (nil: every one)
-   limit-kinds ^js limit-gap
+   ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump and of each corner
+   ;; slide jump (nil: every one)
+   limit-kinds ^js limit-gap ^js limit-corner
    ;; costs (options.costs over DEFAULT-COSTS)
    c-climb-up c-climb-down c-jump-climb c-open c-open-redstone c-open-plate c-beside-magma c-swim-h c-swim-up c-swim-down
    c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-max-water-drop c-dripleaf c-dripleaf-risk
@@ -1416,7 +1419,11 @@
                   sa (.side s x2 z lo hi)
                   sb (.side s x z2 lo hi)
                   slide (+ sa sb)] ; 1 when exactly one side is blocked
-              (when (and (< slide 2) (or (not jump) ^boolean (.clear s x z h0 hi)))
+              (when (and (< slide 2)
+                         (or (not jump) ^boolean (.clear s x z h0 hi))
+                         ;; (the walker's test of a jump that slides along a corner: limit-corner)
+                         (or (not jump) (zero? slide) (nil? limit-corner)
+                             (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))))
                 (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from enter-slow)))) (* slide CORNER-S))]
                   (.edge s x2 y2 z2 h1
                          (cond jump MOVE-JUMP (== slide 1) MOVE-CORNER :else MOVE-DIAGONAL)
@@ -2095,7 +2102,7 @@
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      ;; limits
-     (if (some? limits) (or-else (.-kinds limits) 0) 0) (if (some? limits) (.-gap limits) nil)
+     (if (some? limits) (or-else (.-kinds limits) 0) 0) (if (some? limits) (.-gap limits) nil) (if (some? limits) (.-corner limits) nil)
      ;; costs
      (unchecked-get costs "climbUp") (unchecked-get costs "climbDown") (unchecked-get costs "jumpClimb") (unchecked-get costs "open")
      (unchecked-get costs "openRedstone") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")

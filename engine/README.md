@@ -1521,13 +1521,22 @@ jump from 0.1 before; the body aims at the landing point
 in the air too, which brakes an overshoot, and the landing counts only on the ground. No run-up is needed. Refused: `:gap-up` (landing higher; not
 measured), `:gap-low-ceiling` (a block within 3 of the takeoff's feet over the takeoff or gap cells: the planner allows feet+2, where the head hits at
 once), `:gap-takeoff` (from a ladder), `:gap-width`. These numbers come from prismarine-physics (the body's own physics) driven by this executor,
-The tuned planner also takes `options.limits {kinds, gap}` (not in planner.mjs): what the walker can do. `kinds` (the
+The tuned planner also takes `options.limits {kinds, gap, corner}` (not in planner.mjs): what the walker can do. `kinds` (the
 `AVOID-*` bits: climbing, water, doors) are never planned; `gap(x, y, z, h, move, lx, ly, lz, lh)` returning anything but
-true refuses that gap jump (takeoff feet cell, stand height in 1/16, the move that reached it; landing cell and height).
+true refuses that gap jump (takeoff feet cell, stand height in 1/16, the move that reached it; landing cell and height);
+`corner(x, y, z, h, lx, ly, lz, lh)` returning anything but true refuses a diagonal jump with one blocked side (a corner slide)
+from that takeoff to that landing.
 Without it the search is planner.mjs's. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
 
 then measured on a live body (Paper 26.1): the server accepted every jump (no pull-back), landings matched the simulation, and the sprint jump
-over 2 one block down overshot a 1x1 landing 3 of 5 times (fell, re-planned), hence the walking jump there. Result statuses: `:arrived`, `:refused`, `:no-path` (`:reason`), `:stuck` (`:why`, also a walk past `:timeout-s`), `:gave-up`
+over 2 one block down overshot a 1x1 landing 3 of 5 times (fell, re-planned), hence the walking jump there.
+A diagonal jump that slides along a corner (one side cell blocked) works only when the corner is no higher than the landing's floor:
+the body must slide out of the corner's column while it is in the air, and over a higher corner (a leaf block beside the leaf
+block it jumps onto, live) it falls back 0.04 short. Refused: `:corner-jump` (a side cell holds collision at the landing's feet or
+head height; `high-corner?`), and the planner is told (`:corner`) so it plans round it. A step of any size ahead that the body is
+pressed on (`:collided`) is jumped: prismarine-physics lifts the body 0.6 where it stands before it steps, and refuses when the
+lifted body meets a ceiling over the step (live: a 1/16 step under leaves 0.26 above the head). Stairs, slabs, staircases and a
+stair roof walk with no special case (`stairs_physics_test`, prismarine-physics). Result statuses: `:arrived`, `:refused`, `:no-path` (`:reason`), `:stuck` (`:why`, also a walk past `:timeout-s`), `:gave-up`
 (`:reason :replan-limit`), `:failed`, `:unsupported` (no `pathWorld`); all carry `:replans`. A body that ends off the plan (also a partial plan walked to
 its end short of the goal) is planned again, at most 5 times (`executor/policy`: every number the executor uses). `moveTo` and `jobs.movement.go-to`
 do not use it. Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.

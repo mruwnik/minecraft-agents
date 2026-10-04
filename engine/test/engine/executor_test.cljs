@@ -628,3 +628,47 @@
     4 {:status :off-plan :at [1 2 3] :step 4} {:replan 5}
     5 {:status :off-plan :at [1 2 3] :step 4} {:finish {:status :gave-up :reason :replan-limit :replans 5 :at [1 2 3]}}
     3 {:status :stuck :at [1 2 3] :step 4 :why "w"} {:finish {:status :stuck :at [1 2 3] :step 4 :why "w" :replans 3}}))
+
+;; a small step under a low ceiling: pressed on the block ahead, any rise is jumped
+
+(def small-rise-steps [(step 0 64 3 :start) (step 3 64 3 :walk {:h 1 :px 3.5 :pz 3.5})])
+
+(deftest jump-for-a-small-rise-only-when-pressed-on-the-block
+  (are [ps jump?] (= jump? (:jump (controls-of (ex/tick p (state-at small-rise-steps 1) ps))))
+    (pose 2.4 64 3.5) false
+    (pose 2.4 64 3.5 {:collided true}) true
+    (pose 2.4 64 3.5 {:collided true :on-ground false}) false
+    (pose 2.4 64.0625 3.5 {:collided true}) false))
+
+;; corner jumps: a diagonal jump that slides along a corner needs the side cells clear at the landing's level
+
+(defn corner-allowed?
+  "The planner-limits corner test for a jump from (10 64 0) to (11 65 1) with solid cells."
+  [solid]
+  ((.-corner (ex/planner-limits p (solid-set solid))) 10 64 0 0 11 65 1 0))
+
+(deftest planner-limits-corner-test-is-the-high-corner-rule
+  (are [solid allowed?] (= allowed? (corner-allowed? solid))
+    #{} true
+    #{[11 64 0]} true      ; a corner block no higher than the landing's floor
+    #{[11 65 0]} false     ; collision at the landing's feet level
+    #{[10 66 1]} false     ; ... or at its head level
+    #{[11 67 0]} true      ; above the body
+    #{[10 65 1]} false))
+
+(def corner-jump-steps [(step 10 64 0 :start) (step 11 65 1 :jump {:corner true})])
+
+(deftest with-high-corners-marks-corner-jumps-with-a-high-side
+  (are [solid marked?] (= marked? (boolean (:high-corner (nth (ex/with-high-corners p corner-jump-steps (solid-set solid)) 1))))
+    #{[11 64 0]} false
+    #{[11 65 0]} true
+    #{[11 66 0]} true))
+
+(deftest with-high-corners-leaves-other-steps-alone
+  (let [steps [(step 10 64 0 :start) (step 11 65 1 :jump) (step 12 65 1 :walk {:corner true})]]
+    (is (= steps (ex/with-high-corners p steps (solid-set #{[11 65 0] [12 65 0]}))))))
+
+(deftest refusal-names-a-high-corner-jump
+  (let [steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]}))]
+    (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal p steps) [:status :kind :at])))
+    (is (nil? (ex/refusal p corner-jump-steps)))))
