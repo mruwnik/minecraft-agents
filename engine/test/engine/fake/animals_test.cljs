@@ -117,16 +117,16 @@
     (is (= 1 (lead-items w)))
     (is (= [1 64 0] (:pos (first (filter #(= "item" (:kind %)) (:entities w))))))))
 
-(deftest breaks-at-breaks-the-lead-when-the-body-passes-that-distance-during-a-walk
-  (let [w (lead-on (world (assoc fenced :blocks {} :entities [(cow :trail 6 :breaks-at 8 :pace 0.5)])))
+(deftest break-at-breaks-the-lead-when-the-body-passes-that-distance-during-a-walk
+  (let [w (lead-on (world (assoc fenced :blocks {} :entities [(cow :trail 6 :break-at 8 :pace 0.5)])))
         short (walk w [4 64 0])
         long (walk short [30 64 0])]
-    (is (true? (:leashed-to-me (entity short 1))) "a walk that stays within breaks-at of it")
+    (is (true? (:leashed-to-me (entity short 1))) "a walk that stays within break-at of it")
     (is (false? (:leashed-to-me (entity long 1))) "a 26-block walk by a body twice as fast as the animal")
     (is (= 1 (lead-items long)))))
 
-(deftest breaks-at-with-pace-1-survives-a-long-walk
-  (let [w (lead-on (world (assoc fenced :blocks {} :entities [(cow :trail 6 :breaks-at 8)])))
+(deftest break-at-with-pace-1-survives-a-long-walk
+  (let [w (lead-on (world (assoc fenced :blocks {} :entities [(cow :trail 6 :break-at 8)])))
         far (walk w [30 64 0])
         farther (walk far [60 64 0])]
     (is (= [true true] [(:leashed-to-me (entity far 1)) (:leashed-to-me (entity farther 1))]))))

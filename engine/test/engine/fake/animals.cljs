@@ -2,9 +2,9 @@
   "The animals of the fake world over cljs world data {:blocks {[x y z] name} :states {[x y z] props} :inventory
   [{:name :count}] :entities [{:id :name :kind :pos [x y z] ...}] :next-entity-id :self {:pos [x y z] :held}}:
   interact (feed, shear, lead on and off, knots), the lead's drag and its path regime, the food's tempt, and the
-  line walk they share. Pure functions, test-only; the same rules as js/fake-interact.mjs, fake-leash.mjs,
+  line walk they share. Pure functions, test-only; ported from the deleted js/fake-interact.mjs, fake-leash.mjs,
   fake-lead-path.mjs, fake-tempt.mjs and fake-walkline.mjs.
-  Entity flags are kebab-case keywords (:in-love :leashed-to-me :leash-holder :breaks-at ...). The interact refusal
+  Entity flags are kebab-case keywords (:in-love :leashed-to-me :leash-holder :break-at ...). The interact refusal
   list is copied from js/interact.mjs (REFUSED), not read by interop: the cljs tests do not load the Mineflayer
   adapter."
   (:require [engine.fake.pockets :as pockets]
@@ -153,11 +153,11 @@
 (defn find-entity [w id] (first (filter #(= id (:id %)) (:entities w))))
 
 (defn stretches-on-walk?
-  "breaks-at (a number on the spec): the lead breaks when, at any point of the walk, the body is farther than that
+  "break-at (a number on the spec): the lead breaks when, at any point of the walk, the body is farther than that
   from the animal. The body goes from `from` to where it is now in one-block steps; the animal, once the body is
   beyond its trail, closes in :pace (default 1: keeps up) blocks per block the body walks."
   [w e from]
-  (when-some [breaks-at (:breaks-at e)]
+  (when-some [break-at (:break-at e)]
     (let [to (get-in w [:self :pos])
           total (flat from to)
           gap (or (:trail e) follow-gap)
@@ -169,7 +169,7 @@
                 body [(+ fx (* (- tx fx) k)) 0 (+ fz (* (- tz fz) k))]
                 d (flat [ax 0 az] body)]
             (cond
-              (> d breaks-at) true
+              (> d break-at) true
               (<= d gap) (recur (inc walked) [ax az])
               :else (let [s (min (or (:pace e) 1) (- d gap))]
                       (recur (inc walked) [(+ ax (/ (* (- (first body) ax) s) d)) (+ az (/ (* (- (last body) az) s) d))])))))))))
@@ -194,7 +194,7 @@
 
 (defn drag-leashed
   "Animals on the body's lead follow it after a walk that began at `from`; a spec with :snaps, or a lead stretched past
-  :breaks-at, breaks the lead and it drops as an item. A led animal is dragged in a straight line: anything at its
+  :break-at, breaks the lead and it drops as an item. A led animal is dragged in a straight line: anything at its
   feet but open air stops it on its side."
   ([w] (drag-leashed w (get-in w [:self :pos])))
   ([w from] (reduce #(drag-one %1 from %2) w (map :id (filter :leashed-to-me (:entities w))))))
