@@ -1,6 +1,7 @@
 (ns agent-tools.observe-test
   (:require [cljs.test :refer [deftest is async]]
             [agent-tools.fake-socket :as fake]
+            [agent-tools.job-results :as job-results]
             [agent-tools.observe :as observe]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
@@ -139,8 +140,8 @@
   [["default status is compact" ["status"] {:text "{:mode :scheduled :current nil :health 20 :food 18}"} 0
     "{:mode :scheduled :idle true :health 20 :food 18}\n"]
    ["a verbose status is passed through" ["status" "--verbose"] {:text "{:mode :scheduled}"} 0 "{:mode :scheduled}\n"]
-   ["a non-success status is passed through with exit 1" ["job" "j1"] {:status 404 :text "{:ok false :reason :job-not-found}"} 1
-    "{:ok false :reason :job-not-found}\n"]
+   ["a non-success status is passed through with exit 1" ["job" "j1"] {:status 400 :text "{:ok false :reason :bad-id}"} 1
+    "{:ok false :reason :bad-id}\n"]
    ["a refused inventory exits 1" ["inventory"] {:text "{:ok false :reason :nope}"} 1 "{:ok false :reason :nope}\n"]
    ["an older engine gets the restart notice" ["status"] {:status 404 :text "{:ok false :reason :not-found}"} 2 nil]
    ["a non-EDN answer is a bad response" ["status"] {:content-type "text/plain" :text "hi"} 1
@@ -303,17 +304,20 @@
    (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "observe-unit-"))
          req (request "--world" "w" "Probe" "--state" dir "--wait" "--timeout" timeout "--poll-ms" "50")
          world (atom {:generation "g" :outstanding {} :events [] :gap false})
+         queries (atom [])
          get! (fn [_socket endpoint _options]
+                (swap! queries conj endpoint)
                 (let [{:keys [generation outstanding events gap]} @world
                       cursor {:stream-id "s" :seq (count events)}
                       value (cond
-                              (= "/snapshot" endpoint) {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
+                              (= "/snapshot" endpoint) (cond-> {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
+                                                         (contains? @world :instances) (assoc :state {:instances (:instances @world)}))
                               (= "/status" endpoint) {:mode :scheduled :current nil}
                               :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" endpoint))) "after"))]
                                       {:gap? gap :stream-id "s" :latest-seq (count events) :cursor cursor
                                        :events (filterv #(> (:seq %) after) events)}))]
                   (js/Promise.resolve {:status 200 :content-type "application/edn" :text (data/write-edn value)})))]
-     {:dir dir :req req :world world :get! get!
+     {:dir dir :req req :world world :get! get! :queries queries
       :file (.join path dir "worlds" "w" "observers" "Probe" "agent.edn")
       :cleanup #(.rmSync fs dir #js {:recursive true :force true})
       :wait! (fn [& [signal deliver]] (observe/wait-observe req get! signal (or deliver (fn [_] (js/Promise.resolve nil)))))})))
@@ -541,3 +545,81 @@
             (.then (fn [_]
                      (is (.existsSync fs (.join path (.dirname path (:file f)) "builder.edn")))
                      (is (.existsSync fs (:file f))))))))))
+
+;; Job outcomes from the retained history
+
+(defn job-event [n id kind & [data]]
+  {:seq n :generation-id "g" :source :job :kind kind :context {:job-id id :chain [id]} :data (or data {})})
+
+(def search-found [{:what "stone" :pos [5 70 3]}])
+
+(def search-job
+  [(job-event 1 "j4" :queued)
+   (job-event 2 "j4" :search.done {:found search-found :coverage {:scans 1}})
+   (job-event 3 "j4" :completed)])
+
+(deftest result-and-fresh-watched-completion-expose-search-coordinates-reading-history-once-each
+  (with-fixture ["1s"]
+    (fn [f]
+      (apply push! f search-job)
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])]
+        (-> (job-results/read! (:get! f) "/unused" "j4" {})
+            (.then (fn [result]
+                     (is (= :completed (:status result)))
+                     (is (= search-found (get-in result [:events 0 :data :found])))
+                     (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))))
+            (.then (fn [wake]
+                     (is (= :job-finished (:wake wake)))
+                     (is (= :complete (:history wake)))
+                     (is (= search-found (get-in wake [:events 0 :data :found])))
+                     (is (= 4 (count @(:queries f))) "result, then the fresh watcher, each read snapshot and history once"))))))))
+
+(deftest a-watched-job-finishing-during-the-wait-carries-its-outcome
+  (with-fixture ["1s"]
+    (fn [f]
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])
+            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
+        (-> (js/Promise.resolve nil)
+            (.then (fn [_] (js/setTimeout #(apply push! f search-job) 20) (wait!)))
+            (.then (fn [wake]
+                     (is (= :job-finished (:wake wake)))
+                     (is (= search-found (get-in wake [:events 0 :data :found]))))))))))
+
+(deftest a-fresh-watch-for-a-job-outside-the-retained-window-reports-history-unavailable
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :instances {})
+      (apply push! f (map #(job-event % "j8" :memory_written) (range 1 6)))
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])]
+        (-> (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))
+            (.then (fn [wake]
+                     (is (= :history-unavailable (:reason wake)))
+                     (is (= ["j4"] (:jobs wake))))))))))
+
+(deftest a-fresh-watch-for-a-live-job-without-events-keeps-waiting
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :instances {"j4" {}})
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])]
+        (-> (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))
+            (.then (fn [wake] (is (= :timeout (:wake wake))))))))))
+
+(deftest observe-result-validates-ids-before-connecting
+  (is (= "j4" (:result-id (request "--world" "w" "Probe" "result" "j4"))))
+  (doseq [argv [["result" "not-a-job"] ["result" "j4" "--limit" "9"] ["result"] ["result" "j4" "j5"]]]
+    (is (string? (:error (apply request "--world" "w" "Probe" argv))) (pr-str argv))))
+
+(defn job-history-handler [{:keys [path]}]
+  (cond
+    (str/starts-with? path "/job?") {:status 404 :text "{:ok false :reason :job-not-found}"}
+    (= "/snapshot" path) {:text (data/write-edn {:body "ProbeBody" :generation-id "g" :cursor {:stream-id "s" :seq 3}})}
+    :else {:text (data/write-edn {:stream-id "s" :latest-seq 3 :gap? false :events search-job})}))
+
+(deftest a-completed-job-and-an-explicit-result-print-the-same-outcome
+  (async done
+    (finish! done
+             (-> (series [#(run-main! ["job" "j4"] job-history-handler) #(run-main! ["result" "j4"] job-history-handler)])
+                 (.then (fn [[job result]]
+                          (is (= 0 (:code job)) (:out job))
+                          (is (= (:out job) (:out result)))
+                          (is (= search-found (get-in (data/read-edn (:out result)) [:events 0 :data :found])))))))))

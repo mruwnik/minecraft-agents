@@ -6,6 +6,7 @@
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.inventory :as inventory]
+            [agent-tools.job-results :as job-results]
             [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
             [shadow.cljs.modern :refer (js-await)]
@@ -20,7 +21,7 @@
 (def private-dir-mode 448)  ; 0700
 (def private-file-mode 384) ; 0600
 
-(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]")
+(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]")
 
 ;; Small helpers
 
@@ -256,6 +257,34 @@
        (keep #(classify % opts body))
        vec))
 
+(defn with-history
+  "A job-finished wake with the job's projected outcome (agent-tools.job-results/project): its retained domain
+  events, how complete the history is (:history, :unavailable when it could not be read) and :events-truncated?."
+  [wake outcome]
+  (cond-> wake
+    (:events outcome) (assoc :events (:events outcome))
+    :always (assoc :history (or (:history outcome) :unavailable))
+    (:events-truncated? outcome) (assoc :events-truncated? true)))
+
+(defn with-projections
+  "The recent results with each job-finished wake carrying its outcome projected from the history already read."
+  [results history generation]
+  (mapv #(if (= :job-finished (:wake %))
+           (with-history % (job-results/project (:job %) generation (:events history) (:partial? history)))
+           %)
+        results))
+
+(defn unavailable-jobs
+  "Watched jobs found neither among the retained events of this generation nor in the snapshot's live scheduler
+  state: their outcome has left the history window. Nil when the snapshot carries no scheduler state."
+  [events cursor generation opts snap]
+  (when-let [instances (get-in snap [:state :instances])]
+    (let [seen (->> events
+                    (filter #(and (<= (:seq %) (:seq cursor)) (= generation (:generation-id %))))
+                    (keep #(watched-event % opts))
+                    set)]
+      (filterv #(not (or (seen (str "job:" %)) (contains? instances %))) (:watch opts)))))
+
 (defn attention-wake [changes]
   (cond-> (array-map :wake :attention :requests (:changed changes))
     (:more changes) (assoc :more? true)))
@@ -282,12 +311,19 @@
                     (when-not (and (= 200 (:status response)) (http/edn-response? (:content-type response)))
                       (throw (coded (if (= 404 (:status response)) "EOBSERVEUNAVAILABLE" "EBADRESPONSE") (:text response))))
                     (data/read-edn (:text response))))
+          job-history (fn [result]
+                        (if (and (= :job-finished (:wake result)) (not (contains? result :history)))
+                          (-> (job-results/read! get! (:socket-path request) (:job result) {:signal signal :deadline @deadline})
+                              (.then #(with-history result %))
+                              (.catch (fn [error] (if (aborted?) (throw error) (with-history result {})))))
+                          (js/Promise.resolve result)))
           finish! (fn [result]
                     (when (aborted?) (throw (coded "ABORT_ERR" "cancelled")))
-                    (let [output (summary-result @summary result)]
-                      (js-await [_ (js/Promise.resolve (deliver output))]
-                        (checkpoint! file @st)
-                        output)))
+                    (js-await [result (job-history result)]
+                      (let [output (summary-result @summary result)]
+                        (js-await [_ (js/Promise.resolve (deliver output))]
+                          (checkpoint! file @st)
+                          output))))
           timeout! (fn [] (finish! (if (seq (:counts @summary)) (array-map :wake :timeout) (array-map :wake :timeout :changed false))))
           reset-with-status! (fn [reason]
                                (js-await [status (read! "/status")]
@@ -365,12 +401,9 @@
                                      (timeout!)
                                      (poll))))
                                (lookup-history []
-                                 (let [{:keys [cursor]} @st
-                                       from (max 0 (- (:seq cursor) 1000))]
-                                   (js-await [history (read! (events-query (:stream-id cursor) from 1000))]
-                                     (if (and (:gap? history) (number? (:oldest-seq history)))
-                                       (read! (events-query (:stream-id cursor) (max from (dec (:oldest-seq history))) 1000))
-                                       history))))
+                                 (job-results/history! get! (:socket-path request)
+                                                       {:signal signal :deadline @deadline
+                                                        :snap (assoc (:snap @st) :cursor (:cursor @st))}))
                                (step []
                                  (let [changes (attention-changes (:outstanding (:snap @st)) (:seen @st))]
                                    (swap! st assoc :seen (:seen changes))
@@ -379,11 +412,21 @@
 
                                      (and (:lookup @st) watching?)
                                      (js-await [history (lookup-history)]
-                                       (if (:gap? history)
-                                         (do (swap! st assoc :lookup false)
-                                             (finish! (array-map :wake :reset :reason :history-unavailable)))
-                                         (do (swap! st assoc :pending (recent-results (:events history) (:cursor @st) generation opts body))
-                                             (after-lookup))))
+                                       (let [unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
+                                         (cond
+                                           (:gap? history)
+                                           (do (swap! st assoc :lookup false)
+                                               (finish! (array-map :wake :reset :reason :history-unavailable)))
+
+                                           (seq unavailable)
+                                           (do (swap! st assoc :lookup false)
+                                               (finish! (array-map :wake :reset :reason :history-unavailable :jobs unavailable
+                                                                   :history-window job-results/history-limit)))
+
+                                           :else
+                                           (do (swap! st assoc :pending (-> (recent-results (:events history) (:cursor @st) generation opts body)
+                                                                            (with-projections history generation)))
+                                               (after-lookup)))))
 
                                      :else (after-lookup))))]
                          (step)))))))))
@@ -464,8 +507,10 @@
         (check (and (= "equipment" op) (:slots values)) "--slots is only valid for inventory")
         ["/inventory" []])
 
-    "job"
-    (do (check (or (not (truthy-text? kind-or-id)) (seq rest)) "job needs one job ID, such as j12")
+    ("job" "result")
+    (do (check (or (not (truthy-text? kind-or-id)) (seq rest)) (str op " needs one job ID, such as j12"))
+        (check (and (= "result" op) (not (re-matches #"j[0-9]+" kind-or-id))) "result needs a job ID such as j12")
+        (check (and (= "result" op) (some? (:limit values))) "result has a fixed bounded history; --limit is not accepted")
         (check (or (:raw values) (some? (:offset values))) "--raw and --offset are only valid for status and catalog lists respectively")
         ["/job" (into [["id" kind-or-id]] (when-let [limit (limit-param (:limit values) 32)] [["limit" limit]]))])
 
@@ -532,6 +577,7 @@
                  :socket-path (.join path (bodies/body-dir state world agent) "engine" "events.sock")
                  :path (if (seq query) (str endpoint "?" query) endpoint)}
           wait-options (assoc :wait-options wait-options)
+          (= "result" op) (assoc :result-id kind-or-id)
           (#{"inventory" "equipment"} op) (assoc :inventory-mode (keyword op) :slots (:slots values) :raw (:raw values))
           (:verbose values) (assoc :verbose true))))
     (catch :default error
@@ -588,9 +634,24 @@
                     (.removeListener js/process "SIGINT" cancel)
                     (.removeListener js/process "SIGTERM" cancel))))))
 
+(defn print-outcome!
+  "Print a job's projected outcome (agent-tools.job-results/project); a promise of the exit code."
+  [output outcome]
+  (-> (output (str (data/write-edn outcome) "\n")) (.then (constantly (if (false? (:ok outcome)) 1 0)))))
+
+(defn job-outcome!
+  "Read job id's outcome from the retained event history and print it; a promise of the exit code."
+  [request {:keys [output get!]} id]
+  (-> (job-results/read! get! (:socket-path request) id {})
+      (.then #(print-outcome! output %))))
+
+(defn job-not-found? [status text]
+  (and (= 404 status) (= :job-not-found (:reason (data/read-edn text)))))
+
 (defn respond!
-  "Print the engine's answer the way the request asked for it; a promise of the exit code."
-  [request {:keys [output]} {:keys [status content-type text] :as response}]
+  "Print the engine's answer the way the request asked for it; a promise of the exit code. A job the scheduler
+  no longer holds is answered from the retained event history."
+  [request {:keys [output] :as opts} {:keys [status content-type text] :as response}]
   (let [path (:path request)
         starts? (fn [& prefixes] (some #(str/starts-with? path %) prefixes))
         print! #(output (str (data/write-edn %) "\n"))]
@@ -608,6 +669,9 @@
       (let [result (data/read-edn text)]
         (-> (print! (inventory/compact result (:inventory-mode request) (:slots request)))
             (.then (constantly (if (false? (:ok result)) 1 0)))))
+
+      (and (starts? "/job?") (job-not-found? status text))
+      (job-outcome! request opts (.get (js/URLSearchParams. (second (str/split path #"\?" 2))) "id"))
 
       (and (starts? "/inventory") (= :equipment (:inventory-mode request)) (:raw request) (= 200 status))
       (let [result (data/read-edn text)]
@@ -630,8 +694,10 @@
        (do (js/console.error (str (:error request) "\n" usage)) (js/Promise.resolve 2))
        (-> (js/Promise.resolve nil)
            (.then (fn []
-                    (if (:wait-options request)
-                      (wait! request opts)
+                    (cond
+                      (:wait-options request) (wait! request opts)
+                      (:result-id request) (job-outcome! request opts (:result-id request))
+                      :else
                       (-> (get-fn (:socket-path request) (:path request) {})
                           (.then #(respond! request opts %))))))
            (.catch (fn [error]

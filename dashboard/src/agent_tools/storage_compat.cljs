@@ -17,11 +17,11 @@
     (and v (= "object" (goog/typeOf v)))
     (let [keys (vec (js/Object.keys v))]
       (cond
-        (= keys ["key"]) (keyword (.-key v))
-        (= keys ["sym"]) (symbol (.-sym v))
-        (= keys ["set"]) (let [items (mapv from-js (array-seq (.-set v)))]
+        (= keys ["key"]) (keyword (aget v "key"))
+        (= keys ["sym"]) (symbol (aget v "sym"))
+        (= keys ["set"]) (let [items (mapv from-js (array-seq (aget v "set")))]
                            (with-meta (set items) {:edn-items (vec (distinct items))}))
-        (= keys ["list"]) (apply list (map from-js (array-seq (.-list v))))
+        (= keys ["list"]) (apply list (map from-js (array-seq (aget v "list"))))
         :else (let [keys (filterv #(not (undefined? (aget v %))) keys)
                     native-keys (mapv #(or (aliases %) (keyword %)) keys)]
                 (with-meta (into {} (map (fn [k nk] [nk (from-js (aget v k))]) keys native-keys))
