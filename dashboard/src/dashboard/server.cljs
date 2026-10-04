@@ -606,7 +606,7 @@
                                        :gap? gap?
                                        :more? (< (or (:seq cursor) after) (or (:latest-seq page) (:seq cursor) after))}))))
         (.catch (fn [e] (when-not (.-headersSent res)
-                          (send-edn! res 503 {:error (str "engine event service unavailable: " (ex-message e))})))))
+                          (send-edn! res 503 {:error (ee/socket-failure-text e)})))))
 
     ;; Compatibility for old running bodies only. A body with events.edn/events.sock never also reads JSONL.
     (not (file-exists? (events-file name)))
@@ -640,7 +640,7 @@
                          (-> (event-socket-request! name "POST" "/attention/resolve" request)
                              (.then #(send-edn! res 200 %))
                              (.catch (fn [e] (when-not (.-headersSent res)
-                                               (send-edn! res 503 {:error (str "engine event service unavailable: " (ex-message e))})))))))))))))
+                                               (send-edn! res 503 {:error (ee/socket-failure-text e)})))))))))))))
 
 ;; ---------------------------------------------------------------- item pictures
 ;; The textures the view uses (repo textures/: blocks at the top, items under item/): the first candidate that exists.

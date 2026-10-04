@@ -365,3 +365,15 @@
     true true
     false nil)
   (is (not (contains? (ee/body-view base-view base-ctx) :settling))))
+
+(defn error-with-code [message code]
+  (doto (js/Error. message) (aset "code" code)))
+
+(deftest socket-failure-text-names-the-cause-without-the-path
+  (are [e expected] (= expected (ee/socket-failure-text e))
+    (error-with-code "connect ENOENT /home/x/state/agents/B/engine/events.sock" "ENOENT")
+    "engine event service unavailable: ENOENT"
+    (error-with-code "connect ECONNREFUSED /a/b.sock" "ECONNREFUSED")
+    "engine event service unavailable: ECONNREFUSED"
+    (js/Error. "engine event API timed out") "engine event service unavailable: engine event API timed out"
+    (js/Error. "engine event API HTTP 500") "engine event service unavailable: engine event API HTTP 500"))

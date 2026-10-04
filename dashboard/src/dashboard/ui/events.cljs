@@ -4,6 +4,7 @@
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.drive :as drive]
+            [dashboard.ui.listprefs :as listprefs]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]))
 
@@ -16,7 +17,8 @@
 (rf/reg-event-fx
  :init
  (fn [_ [_ search page]]
-   (let [initial (db/initial-db search (drive/new-who js/Math.random))]
+   (let [fresh (db/initial-db search (drive/new-who js/Math.random))
+         initial (merge fresh (listprefs/open-flags (select-keys fresh (keys listprefs/list-names)) (listprefs/read-stored)))]
      {:db initial
       :fx [[:dispatch [:fetch-worlds]]
            [:dispatch [:poll-state]]
@@ -116,9 +118,13 @@
 (rf/reg-event-fx
  :player-click
  (fn [_ [_ row]] {:fx (mapv (fn [event] [:dispatch event]) (mm/player-click-events row))}))
-(rf/reg-event-db :toggle-chat (fn [db _] (update db :chat-open? not)))
-(rf/reg-event-db :toggle-places (fn [db _] (update db :places-open? not)))
-(rf/reg-event-db :toggle-players (fn [db _] (update db :players-open? not)))
+(defn toggle-list [open-key]
+  (fn [{:keys [db]} _]
+    (let [db (update db open-key not)]
+      {:db db :store-lists (select-keys db (keys listprefs/list-names))})))
+(rf/reg-event-fx :toggle-chat (toggle-list :chat-open?))
+(rf/reg-event-fx :toggle-places (toggle-list :places-open?))
+(rf/reg-event-fx :toggle-players (toggle-list :players-open?))
 (rf/reg-event-db :chat-filter (fn [db [_ text]] (assoc db :chat-filter text)))
 ;; sending a chat line as the owner: POST /api/chat/send; the line shows in the log once the bodies record it
 (def ack-ms 3000)

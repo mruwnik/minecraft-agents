@@ -5,6 +5,7 @@
             [dashboard.ui.livecards :as live]
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.chatsend :as cs]
+            [dashboard.ui.detail-model :as detail-model]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.hudmodel :as hudmodel]
@@ -191,10 +192,10 @@
    [:span.ltext text]
    [:span.attention (case attention :required "required" :notice "notice" :resolved "handled" "routine")]])
 
-(defn attention-panel []
+(defn attention-panel [online?]
   (let [outstanding @(rf/subscribe [:attention-outstanding])
         notices @(rf/subscribe [:detail-notices])
-        error @(rf/subscribe [:attention-error])]
+        note (detail-model/attention-note @(rf/subscribe [:attention-error]) online?)]
     [:section.dattention
      [:div.attention-section
       [:h3 "Needs attention"]
@@ -210,7 +211,7 @@
                                 :on-click #(rf/dispatch [:attention-resolve id])} "Mark handled"]]))
               (sort-by key outstanding))
         [:div.dim "No outstanding requests"])
-      (when error [:div.attention-error error])
+      (when note [:div {:class (if (= :error (:kind note)) "attention-error" "dim")} (:text note)])
       [:p.dim "Mark handled acknowledges the request; it does not retry the job."]]
      [:div.attention-section
       [:h3 "Notices"]
@@ -242,5 +243,5 @@
         [header m]
         [:div.dleft [chrome (:online? m)] [whisper-box (:name m) (:online? m)] [view-box m]]
         [:div.dright [hud-panel (:hud m)] [inventory-panel (:hud m)] [jobs-panel m]]
-        [attention-panel]
+        [attention-panel (:online? m)]
         [log-panel]]])))

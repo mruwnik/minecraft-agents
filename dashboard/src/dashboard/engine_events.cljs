@@ -286,3 +286,9 @@
   "The last n log-worthy events of a list, oldest first."
   [events n]
   (vec (take-last n (filter log-worthy? events))))
+
+(defn socket-failure-text
+  "What the dashboard says when a body's event service cannot be reached: the system error code (ENOENT,
+  ECONNREFUSED) when there is one, never the socket path inside the error message."
+  [e]
+  (str "engine event service unavailable: " (or (.-code e) (ex-message e))))

@@ -49,3 +49,14 @@
 
 (defn embed-css [stats?]
   (str (clojure.string/join ", " (hidden-selectors stats?)) " { display: none !important; }"))
+
+(def offline-note-text "offline: outstanding requests cannot be read")
+
+(defn attention-note
+  "What the popup's attention section adds for a failed read: nothing without an error; the muted offline line while
+  the body is offline (a missing event service is expected then); the error itself for a body that is up."
+  [error online?]
+  (cond
+    (not error) nil
+    online? {:kind :error :text error}
+    :else {:kind :offline :text offline-note-text}))

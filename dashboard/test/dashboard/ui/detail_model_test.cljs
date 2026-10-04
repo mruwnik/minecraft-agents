@@ -52,3 +52,11 @@
   (are [stats? expected] (= expected (m/embed-css stats?))
     false "#overlay, #bar, #drive-banner { display: none !important; }"
     true "#bar, #drive-banner { display: none !important; }"))
+
+(deftest attention-note-cases
+  (are [error online? expected] (= expected (m/attention-note error online?))
+    nil true nil
+    nil false nil
+    "engine event service unavailable: ENOENT" true {:kind :error :text "engine event service unavailable: ENOENT"}
+    "engine event service unavailable: ENOENT" false {:kind :offline :text "offline: outstanding requests cannot be read"}
+    "http 500" false {:kind :offline :text "offline: outstanding requests cannot be read"}))
