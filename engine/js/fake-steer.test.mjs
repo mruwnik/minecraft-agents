@@ -203,6 +203,15 @@ test('a body walks along rails', async () => {
   assert.equal(p.world.state.self.pos.x, 5)
 })
 
+for (const name of ['lever', 'stone_button', 'torch', 'wall_torch', 'oak_pressure_plate', 'oak_sign']) {
+  test(`a body walks through a lone ${name} on flat ground`, async () => {
+    const p = rig({ '3,64,0': name })
+    const r = await p.steer('t', decideOf(walkTo(5.5)))
+    assert.equal(r.status, 'done')
+    assert.equal(p.world.state.self.pos.x, 5)
+  })
+}
+
 // ---- doors, gates and trapdoors: open ones let the body through, shut ones are walls
 
 const gateAt = (open, extra = {}) => ({ blocks: { '3,64,0': 'oak_fence_gate' }, states: { '3,64,0': { open, facing: 'east' } }, ...extra })

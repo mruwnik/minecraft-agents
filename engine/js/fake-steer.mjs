@@ -22,6 +22,8 @@ const SCAN_DOWN = 4
 const FALL_LIMIT = 256
 const BURY = 3
 const PASSABLE = new Set(['air', 'water', 'ladder', 'vine', 'short_grass', 'tall_grass', 'rail', 'powered_rail', 'detector_rail', 'activator_rail'])
+// small blocks with no collision box: the planner and the game walk through them
+const NO_COLLISION = /^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$/
 const CLIMBABLE = new Set(['ladder', 'vine'])
 const key = (x, y, z) => `${x},${y},${z}`
 const round = n => Math.round(n * 1e6) / 1e6
@@ -50,7 +52,7 @@ export function fakePathWorld (s) {
 
 export function fakeSteer (s, ownerOf, CutError) {
   const nameAt = (x, y, z) => s.blocks.get(key(x, y, z)) ?? 'air'
-  const solid = (x, y, z) => !PASSABLE.has(nameAt(x, y, z)) && !isOpen(s, key(x, y, z))
+  const solid = (x, y, z) => !PASSABLE.has(nameAt(x, y, z)) && !NO_COLLISION.test(nameAt(x, y, z)) && !isOpen(s, key(x, y, z))
   const climbable = (x, y, z) => CLIMBABLE.has(nameAt(x, y, z)) || climbsThrough(s, x, y, z)
 
   // ground level of the cell (x, z) for a body whose feet are at y: the first y' from one above down to SCAN_DOWN below
