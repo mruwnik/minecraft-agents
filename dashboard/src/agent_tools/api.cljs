@@ -1,7 +1,8 @@
 (ns agent-tools.api
   "Compatibility boundary for the existing Node entry points and black-box tests.
    Tool implementations use native ClojureScript values internally."
-  (:require [agent-tools.changes :as changes]
+  (:require [agent-tools.workspace]
+            [agent-tools.changes :as changes]
             [agent-tools.entities :as entities]
             [agent-tools.inventory :as inventory]
             [agent-tools.jobs :as jobs]

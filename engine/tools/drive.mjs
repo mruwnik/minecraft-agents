@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import http from 'node:http'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { requestFor, exitCodeFor, socketPathFor, usage } from './drive-lib.mjs'
 
 const send = (socketPath, { method, path, body }) => new Promise((resolve, reject) => {
@@ -14,8 +16,8 @@ const send = (socketPath, { method, path, body }) => new Promise((resolve, rejec
   req.end(payload)
 })
 
-const main = async () => {
-  const req = requestFor(process.argv.slice(2))
+export const main = async (argv = process.argv.slice(2)) => {
+  const req = requestFor(argv)
   if (req.error) {
     console.error(`${req.error}\n${usage}`)
     return 2
@@ -32,4 +34,4 @@ const main = async () => {
   return exitCodeFor({ status: reply.status, json })
 }
 
-process.exitCode = await main()
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main()

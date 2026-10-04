@@ -21,7 +21,7 @@ const edn = value => {
   throw new Error('unsupported EDN value')
 }
 
-const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--state <dir>]
+export const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--state <dir>]
   submit move-to <x> <y> <z> [--range <n>] [--timeout-s <1..10>] [--max-distance <1..64>]
   submit dig <x> <y> <z> | submit place <x> <y> <z> <item>
   submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]
@@ -138,8 +138,8 @@ const send = (socketPath, body) => new Promise((resolve, reject) => {
   req.end(payload)
 })
 
-const main = async () => {
-  const parsed = requestFor(process.argv.slice(2))
+export const main = async (argv = process.argv.slice(2)) => {
+  const parsed = requestFor(argv)
   if (parsed.error) { console.error(`${parsed.error}\n${usage}`); return 2 }
   const socketPath = socketPathFor(parsed)
   try {
