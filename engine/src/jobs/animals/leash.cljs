@@ -6,8 +6,8 @@
 (def doc
   "Put a lead on one animal of the mob type :mob (a name such as \"cow\")
   within :radius and end: a one-shot order that starts and ends itself. Each
-  round takes the nearest animal not on a lead already (to anyone) and not
-  given up on, walks to within 3 blocks (moveTo range 2, :walk-timeout-s) and
+  round takes the nearest animal not on a lead already (to anyone), not
+  given up on and not named in :skip (uuids or ids), walks to within 3 blocks (moveTo range 2, :walk-timeout-s) and
   uses the lead the body carries on it. Animals are tracked by uuid (entity
   ids change when chunks reload), by id when it has none. The use counts only
   when the sensing then shows the animal on this body's lead (leashedToMe); an
@@ -29,6 +29,7 @@
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
    :radius {:doc "animals within this many blocks count" :default 8}
+   :skip {:doc "keys (uuids, else ids) of animals never to leash" :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :default 5}
    :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}})
 
@@ -54,9 +55,9 @@
   (animals/herd (:primitives c) (:mob (:args c)) (:radius (:args c))))
 
 (defn candidates
-  "The animals within radius not on a lead and not given up on, nearest first."
+  "The animals within radius not on a lead, not given up on and not in :skip, nearest first."
   [c]
-  (let [skip (set (keys (:given-up (ctx/mem c))))]
+  (let [skip (into (set (:skip (:args c))) (keys (:given-up (ctx/mem c))))]
     (filterv #(and (not (animals/leashed? %)) (not (contains? skip (animals/key-of %)))) (herd c))))
 
 (defn none-reason

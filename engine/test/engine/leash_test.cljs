@@ -54,6 +54,17 @@
           (is (= :leashed (:reason (done-event s))))
           (is (= [2] (on-lead s))))))))
 
+(deftest skips-the-animals-it-is-told-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:skip ["u2"]} {:inventory lead :entities [(cow 1 5) (cow 2 3)]} 4))]
+          (is (= "u1" (:animal (done-event s))))
+          (is (= [1] (on-lead s))))
+        (let [s (await (scenario {:skip ["u1" "u2"]} {:inventory lead :entities [(cow 1 5) (cow 2 3)]} 4))]
+          (is (= :none (:reason (done-event s))))
+          (is (empty? (on-lead s))))))))
+
 (deftest ends-without-leashing
   (async done
     (tu/run-async done
