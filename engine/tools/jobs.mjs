@@ -2,56 +2,16 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
-import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { parseArgs } from 'node:util'
-import edn from 'edn-data'
-import { defaultStateDir } from './drive-lib.mjs'
-import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
+import tools from './agent-tools-loader.mjs'
 import { get } from './observe.mjs'
 import { readEDN, writeEDN, keyword } from './observe-lib.mjs'
 
-export const usage = `usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> | interrupt <EDN-spec> | cancel <jID> | retry <jID> [--state DIR] [--request-id ID]
-  jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
-  jobs.mjs Bob --world claude interrupt '(jobs.movement.look-around {:every-ms 2000})'
-Mutations return immediately; observe.mjs Bob --world claude --wait --watch jID tracks completion.`
-export function specFor (text) {
-  if (typeof text !== 'string' || Buffer.byteLength(text) > 12000) throw new Error('spec must be EDN text, at most 12000 bytes')
-  const outer = edn.parseEDNString(`(${text})`)
-  if (outer?.list?.length !== 1 || !outer.list[0]?.list?.[0]?.sym) throw new Error('spec must be one native EDN job expression list')
-  return outer.list[0]
-}
-export function requestFor (argv) {
-  try {
-    const p = parseArgs({ args: argv, allowPositionals: true, options: {
-      state: { type: 'string', default: defaultStateDir }, world: { type: 'string' }, 'request-id': { type: 'string' },
-      limit: { type: 'string' }, offset: { type: 'string' }
-    } })
-    const [body, op = 'list', arg, ...extra] = p.positionals
-    if (!body || !/^[A-Za-z0-9_-]{1,40}$/.test(body)) throw new Error('body must be a valid name')
-    if (p.values.world === undefined) throw new Error(missingWorldError('--world'))
-    if (!NAME.test(p.values.world)) throw new Error('the world must be a name of letters, digits, _ and -')
-    if (!['list', 'show', 'submit', 'interrupt', 'cancel', 'retry'].includes(op)) throw new Error('unknown operation')
-    if (extra.length || (op === 'list' ? arg !== undefined : arg === undefined)) throw new Error(op === 'list' ? 'list takes no argument' : `${op} needs exactly one argument`)
-    const mutating = ['submit', 'interrupt', 'cancel', 'retry'].includes(op)
-    if (!mutating && p.values['request-id'] !== undefined) throw new Error('--request-id requires a mutation')
-    if (op !== 'list' && (p.values.limit !== undefined || p.values.offset !== undefined)) throw new Error('--limit and --offset require list')
-    const state = path.resolve(p.values.state)
-    const socketPath = path.join(bodyDir(state, p.values.world, body), 'engine', 'events.sock')
-    if (op === 'list') {
-      const limit = Number(p.values.limit ?? 8), offset = Number(p.values.offset ?? 0)
-      if (!Number.isInteger(limit) || limit < 1 || limit > 32 || !Number.isInteger(offset) || offset < 0 || offset > 10000) throw new Error('list limit must be1..32 and offset0..10000')
-      return { body, state, socketPath, path: `/jobs?limit=${limit}&offset=${offset}`, mutating: false }
-    }
-    if (['show', 'cancel', 'retry'].includes(op) && !/^j[0-9]+$/.test(arg)) throw new Error('job ID must be j<number>')
-    if (op === 'show') return { body, state, socketPath, path: `/job?id=${arg}`, mutating: false }
-    const id = p.values['request-id'] ?? crypto.randomUUID()
-    if (!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)) throw new Error('--request-id must be a short identifier')
-    return { body, state, socketPath, path: '/jobs', mutating: true, request: {
-      op: keyword(op), 'request-id': id, ...(['submit', 'interrupt'].includes(op) ? { spec: specFor(arg) } : { id: arg })
-    } }
-  } catch (error) { return { error: error.message } }
-}
+// Validation and native request construction live in compiled ClojureScript.
+// Existing HTTP/EDN transport remains at this JavaScript library boundary.
+export const usage = tools.jobsUsage
+export const specFor = tools.jobsSpecFor
+export const requestFor = argv => tools.jobsRequestFor(argv)
 export function post (socketPath, body, { timeoutMs = 3000, requestImpl = http.request } = {}) {
   return new Promise((resolve, reject) => {
     const payload = writeEDN(body)

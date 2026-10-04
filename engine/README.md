@@ -1657,8 +1657,10 @@ these commands return immediately, while `observe --wait --watch` handles wakeup
 node engine/tools/jobs.mjs Bob --world claude list
 node engine/tools/jobs.mjs Bob --world claude show j17
 node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
+node engine/tools/jobs.mjs Bob --world claude submit '(jobs.time.wait-for-day)' --hold
 node engine/tools/jobs.mjs Bob --world claude interrupt '(jobs.movement.look-around {:every-ms 2000})'
 node engine/tools/jobs.mjs Bob --world claude cancel j17
+node engine/tools/jobs.mjs Bob --world claude cancel-all
 node engine/tools/jobs.mjs Bob --world claude retry j17
 node engine/tools/observe.mjs Bob --world claude --wait --watch j17
 ```
@@ -1669,7 +1671,11 @@ The server validates names/shape before changing any job or reserving a command.
 Expressions are limited to 256 nodes/depth 24 and the CLI caps input at 12000
 bytes. `GET /jobs?limit=8&offset=0` lists at most 32 jobs per page; `show` reuses
 `GET /job` and removes bookkeeping metadata. `POST /jobs` handles only submit,
-interrupt, cancel, cancel-all (not in the tool yet) and retry. The engine owns scheduling, interruption, native
+interrupt, cancel, cancel-all and retry. `submit --hold` sets `:hold? true`: the
+listed job keeps the body while its check declines; an interrupt already holds
+the body. `cancel-all` takes no job ID and cancels every listed job (including
+queued, held and failed ones) through the engine's existing cancellation path;
+reflexes stay registered. The engine owns scheduling, interruption, native
 job/child memory and failure attention; the tool owns transport/request metadata.
 Trigger edits are `POST /triggers` (Local event API).
 
@@ -1692,6 +1698,10 @@ leaves it pending, retry returns `:request-uncertain` and does not execute again
 inspect jobs/attention before deciding another command. This prevents automatic
 duplicate execution, rather than claiming an atomic transaction across memory
 and engine files.
+
+Job request parsing and EDN construction run in the ahead-of-time CLJS tools
+bundle, built once with `cd dashboard && npm run build-agent-tools`; the Node
+entry point retains the existing HTTP transport boundary.
 
 The CLI retains original generation metadata for its latest 128 IDs under
 `state/commands/<body>/jobs/` (outside engine/observer state), so reuse after a
