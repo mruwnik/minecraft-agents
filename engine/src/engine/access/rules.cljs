@@ -20,7 +20,7 @@
   danger it accepts (see accepts?).
   Refused, impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block).
   Refused, not permitted: :footprint (+ :plan id, for a footprint map), :zone (+ :zone name), :no-zones.
-  Hazards of a dig, all that apply, in this order: :fluid-adjacent (+ :fluid :at), :falling-block (+ :block :at),
+  Hazards of a dig, all that apply, in this order: one :fluid-adjacent (+ :fluid :at) per neighbouring fluid cell, :falling-block (+ :block :at),
   :under-feet.
   Refusals run in this order and the first is the verdict, so the most specific reason wins and :no-zones, the
   general one, only shows when nothing else is wrong (a caller that overrides it for an emergency can rely on
@@ -69,10 +69,10 @@
 (defn refuse [reason & {:as detail}]
   (assoc detail :ok false :reason reason))
 
-(defn fluid-neighbour
-  "[name pos] of the first water, lava or bubble column among the six neighbours of cell, or nil."
+(defn fluid-neighbours
+  "[name pos] of every water, lava or bubble column among the six neighbours of cell, in neighbour-deltas order."
   [block-at cell]
-  (some (fn [d] (let [pos (apply offset cell d) n (block-at pos)] (when (fluids n) [n pos])))
+  (keep (fn [d] (let [pos (apply offset cell d) n (block-at pos)] (when (fluids n) [n pos])))
         neighbour-deltas))
 
 (defn falls-on-body?
@@ -107,13 +107,14 @@
   solid floor (not magma) or the cell is in the body's own ledger: stairs, not shafts."
   [{:keys [block-at cell feet ledger]}]
   (let [[fx fy fz] feet]
-    (filterv some?
-             [(when-let [[n at] (fluid-neighbour block-at cell)] {:reason :fluid-adjacent :fluid n :at at})
-              (when-let [[n at] (falls-on-body? block-at cell feet)] {:reason :falling-block :block n :at at})
-              (when (and (= cell [fx (dec fy) fz])
-                         (not (contains? ledger cell))
-                         (not (solid-floor? block-at (offset cell 0 -1 0))))
-                {:reason :under-feet})])))
+    (vec (concat
+          (for [[n at] (fluid-neighbours block-at cell)] {:reason :fluid-adjacent :fluid n :at at})
+          (filter some?
+                  [(when-let [[n at] (falls-on-body? block-at cell feet)] {:reason :falling-block :block n :at at})
+                   (when (and (= cell [fx (dec fy) fz])
+                              (not (contains? ledger cell))
+                              (not (solid-floor? block-at (offset cell 0 -1 0))))
+                     {:reason :under-feet})])))))
 
 (defn may-dig?
   "Verdict for digging the block at :cell. See the namespace docstring for the input and the output. Refusals are

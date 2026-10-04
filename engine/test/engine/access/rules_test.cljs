@@ -97,6 +97,23 @@
   (is (nil? (:hazards (dig plain [5 64 5]))))
   (is (= {:ok true} (dig plain [5 64 5]))))
 
+(deftest every-fluid-neighbour-is-a-hazard
+  (is (= {:ok true :hazards [{:reason :fluid-adjacent :fluid "water" :at [6 64 5]}
+                             {:reason :fluid-adjacent :fluid "lava" :at [5 64 6]}]}
+         (dig (world [5 64 5] "stone" [6 64 5] "water" [5 64 6] "lava") [5 64 5])))
+  (is (= {:ok true :hazards [{:reason :fluid-adjacent :fluid "lava" :at [6 64 5]}
+                             {:reason :fluid-adjacent :fluid "water" :at [5 65 5]}
+                             {:reason :fluid-adjacent :fluid "water" :at [5 64 4]}]}
+         (dig (world [5 64 5] "stone" [6 64 5] "lava" [5 65 5] "water" [5 64 4] "water") [5 64 5])))
+  (is (= [:fluid-adjacent :fluid-adjacent :falling-block]
+         (mapv :reason (:hazards (dig (world [0 66 0] "stone" [1 66 0] "water" [0 66 1] "lava" [0 67 0] "gravel")
+                                      [0 66 0]))))))
+
+(deftest accepts-is-unchanged-by-several-fluids
+  (let [v (dig (world [5 64 5] "stone" [6 64 5] "water" [5 64 6] "lava") [5 64 5])]
+    (is (rules/accepts? v #{:fluid-adjacent}))
+    (is (not (rules/accepts? v #{})))))
+
 (def air-spot (world [5 64 5] "air" [0 64 0] "air" [0 65 0] "air"))
 
 (deftest place-verdicts
