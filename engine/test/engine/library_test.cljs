@@ -10,6 +10,7 @@
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
 
@@ -20,6 +21,7 @@
          [seen sink] (tu/legacy-capture-sink)
          p (tu/fake world)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock})))
 
@@ -151,9 +153,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3)})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "partial"}))
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 20}) {})
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 30 0 "oak" 3)})]
+          (tu/short-walks! p 10)
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 40}) {})
           (await (run-until-empty eng 2))
           (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
           (await (run-until-empty eng 10))
@@ -164,14 +166,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 4)})
-              calls-made (atom 0)]
-          (.override (.-world p) "moveTo"
-                     (fn ^:async f [token args impl]
-                       (if (<= (swap! calls-made inc) 2)
-                         #js {:status "partial"}
-                         (await (impl token args)))))
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 20}) {})
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 20 0 "oak" 4)})]
+          (tu/short-walks! p 10 2)
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
           (is (pos? (await (run-until-empty eng 30))))
           (is (= 4 (count (calls p "dig"))) "two partials, then the walk arrives: the high logs are dug from the foot of the column")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
@@ -723,8 +720,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (tree 90 0 "oak" 3)})]
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 120}) {})
+        (let [{:keys [eng p]} (setup {:blocks (tree 30 0 "oak" 3)})]
+          (tu/short-walks! p 10 1)
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 40}) {})
           (await (core/tick! eng))
           (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
           (is (nil? (:failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
@@ -780,3 +778,48 @@
           (is (= {:radius 16 :ranged-radius 16} (:args (first (:register (core/state eng))))))
           (await (core/tick! eng))
           (is (some #(= :fired (:kind %)) @seen)))))))
+
+;; ------------------------------------------------------------ zones and claims
+
+(defn zone-of [owner [x0 z0] [x1 z1]] {:name "grove" :min [x0 60 z0] :max [x1 70 z1] :owner owner})
+
+(defn declined-of [seen kind]
+  (mapv #(select-keys % [:reason :zones]) (filterv #(= kind (:kind %)) @seen)))
+
+(deftest fell-tree-follows-the-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra dug declined] [["Fake" {} [3] []] ["FAKE" {} [3] []]
+                                            ["Miles" {} [8] [{:reason :refused :zones ["grove"]}]]
+                                            ["Miles" {:ignore-zones? true} [3] []]]]
+          (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 3 0 "oak" 3) (tree 8 0 "oak" 3))
+                                             :zones [(zone-of owner [2 -1] [4 1])]})]
+            (core/submit! eng (list 'jobs.forestry.fell-tree (merge {:radius 10} extra)) {})
+            (await (run-until-empty eng 12))
+            (is (= dug (vec (distinct (map #(.-x (.-pos (.-args %))) (calls p "dig"))))) (pr-str [owner extra]))
+            (is (= declined (declined-of seen :fell-tree.declined)) (pr-str [owner extra]))))))))
+
+(deftest fell-tree-with-no-zone-list-declines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 3 0 "oak" 3) :zones nil})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 10}) {})
+          (await (run-until-empty eng 6))
+          (is (empty? (calls p "dig")))
+          (is (= [{:reason :no-zones :zones []}] (declined-of seen :fell-tree.declined))))))))
+
+(deftest plant-sapling-follows-the-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra placed declined] [["Fake" {} 1 []] ["FAKE" {} 1 []]
+                                               ["Miles" {} 0 [{:reason :refused :zones ["grove"]}]]
+                                               ["Miles" {:ignore-zones? true} 1 []]]]
+          (let [{:keys [eng p seen]} (setup {:inventory [{:name "birch_sapling" :count 1}]
+                                             :zones [(zone-of owner [4 4] [6 6])]})]
+            (core/submit! eng (list 'jobs.forestry.plant-sapling (merge {:at {:x 5 :y 64 :z 5}} extra)) {})
+            (await (run-until-empty eng 6))
+            (is (= placed (count (calls p "place"))) (pr-str [owner extra]))
+            (is (= declined (declined-of seen :plant-sapling.declined)) (pr-str [owner extra]))))))))

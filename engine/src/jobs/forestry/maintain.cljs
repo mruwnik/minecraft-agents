@@ -286,7 +286,9 @@
                   (leave! c pos :refused :why (second bad) :log (first bad))
                   :continue)
           :else
-          (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree {:at pos :species species :radius 16}))]
+          (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree
+                                                 {:at pos :species species :radius 16 :for-plan (:plan (:args c))
+                                                  :ignore-zones? (:ignore-zones? (:args c))}))]
             (when (not= :continue r) (finished-felling! c pos species))
             :continue)))
 

@@ -1,17 +1,32 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
+            [engine.jobs.gate :as gate]
             [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius logs-per-round max-partials eye-dist dig-reach]]
             [engine.jobs.util :as u]))
 
 (def doc
   "Fell the nearest tree (a log column with leaves near its top), two logs a
-  round, lowest first; write a :forestry/replant debt before the base log is dug.")
+  round, lowest first; write a :forestry/replant debt before the base log is dug.
+
+  Zones and claims are a rule the job consults: a tree whose base log is in a zone or claim of another owner, or in
+  a plan's footprint (but :for-plan's own), is not a candidate; a log of the chosen tree that turns out to be refused
+  (a zone edge through the trunk) is asked again right before the dig and the tree is left, as an unreachable one
+  is. One fell-tree.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone
+  list it declines with {:reason :no-zones}. A job whose every tree is refused ends like one with no tree in sight.
+  :ignore-zones? acts regardless.")
 
 (def args
   {:species {:doc "log species such as \"oak\"; any when nil" :default nil}
    :radius {:doc "search radius in blocks" :default default-radius}
-   :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :default nil}})
+   :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+
+(defn log-allowed?
+  "Whether the job may dig the log at pos (one warn per job when refused)."
+  [c pos]
+  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos {:except (:for-plan (:args c))}))
 
 (defn column-logs
   "Logs standing in the chosen column, lowest first."
@@ -58,14 +73,16 @@
         (case w
           :blocked :blocked
           :partial :partial
-          (let [base? (= (:pos l) (:base (ctx/mem c)))
+          (if-not (log-allowed? c (:pos l))
+            :refused
+            (let [base? (= (:pos l) (:base (ctx/mem c)))
                 wrote? (and base? (record-debt! c))
                 r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
             (when (and wrote? (untouched-statuses (.-status r)))
               (ctx/forget-where! c replant-kind #(= (:pos l) (:pos %))))
             (if (#{"dug" "missing"} (.-status r))
               (recur more)
-              (keyword (.-status r)))))))))
+              (keyword (.-status r))))))))))
 
 (defn candidate
   "The tree to fell: the one at :at (nil once marked unreachable), else the nearest of species within radius."
@@ -74,8 +91,12 @@
         excluded (unreachable-set (ctx/mem c))]
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
-        (when-not (excluded [(:x at) (:z at)]) t))
-      (tree-near p radius species excluded))))
+        (when-not (or (excluded [(:x at) (:z at)]) (not (log-allowed? c (:base t)))) t))
+      (loop [excluded excluded]
+        (when-let [t (tree-near p radius species excluded)]
+          (if (log-allowed? c (:base t))
+            t
+            (recur (conj excluded [(:x (:column t)) (:z (:column t))]))))))))
 
 (defn tree-logs
   "The logs of the chosen column: read from :at up when the job was given one, else those in radius."
@@ -135,7 +156,7 @@
             (case r
               :ok (do (ctx/update-mem! c assoc :partials 0) :continue)
               (:partial :blocked) (walk-failed! c r)
-              (:unreachable :cannot :out-of-reach) (do (mark-unreachable! c) :continue)
+              (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
 
 (defn check

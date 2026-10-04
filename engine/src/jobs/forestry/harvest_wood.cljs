@@ -9,14 +9,15 @@
 (def args
   {:species {:doc "log species; any when nil" :default nil}
    :radius {:doc "search radius in blocks" :default default-radius}
-   :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :default nil}})
+   :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}})
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot."
-  [{:keys [species radius filter]}]
-  [[:fell 'jobs.forestry.fell-tree {:species species :radius radius}]
+  [{:keys [species radius filter ignore-zones?]}]
+  [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
    [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species))}]
-   [:plant 'jobs.forestry.plant-sapling {:species species}]])
+   [:plant 'jobs.forestry.plant-sapling {:species species :ignore-zones? ignore-zones?}]])
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."

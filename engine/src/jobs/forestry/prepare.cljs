@@ -491,7 +491,9 @@
           (let [v (place-verdict c (maintain/cell-vec pos))]
             (if (not= :ok v)
               (blocked! c pos v)
-              (do (await (ctx/call-child c :plant 'jobs.forestry.plant-sapling {:at pos :species species}))
+              (do (await (ctx/call-child c :plant 'jobs.forestry.plant-sapling
+                                {:at pos :species species :for-plan (:plan (:args c))
+                                 :ignore-zones? (:ignore-zones? (:args c))}))
                   (if (= item (u/block-name (:primitives c) pos))
                     (ctx/update-mem! c bump :planted)
                     (fail! c pos :failed))
