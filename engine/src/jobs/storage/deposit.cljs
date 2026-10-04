@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.places :as places]))
 
 (def doc
   "Walk to the chest and deposit one stack per round: the named items, in the
@@ -11,7 +12,11 @@
   that many of a name carried (the stack moved is cut short to respect it).
   Ends with a result {:gave-up false} when nothing is left to put away, or
   {:gave-up true :reason r} (the transfer status, or \"unreachable\") when
-  the failed attempts used it up and the warn was emitted.")
+  the failed attempts used it up and the warn was emitted. A :chest argument that took at least one item and
+  finished clean is offered to the :chest place: recorded when none is recorded or the recorded one is gone,
+  never over a different live recorded chest (the argument may be a one-off errand; one place.kept event says
+  so; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing (loaded cell, nothing
+  to open) retracts it with one chest_missing warn.")
 
 (def args
   {:chest {:doc "chest position; the known :chest place when nil" :default nil}
@@ -71,7 +76,10 @@
         chest (chest-of (ctx/view c) (:args c))
         pick (to-deposit (u/inventory (:primitives c)) items keep)]
     (cond
-      (nil? pick) (do (ctx/result! c {:gave-up false}) :done)
+      (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0)))
+                        (places/offer! c :chest (:chest (:args c))))
+                      (ctx/result! c {:gave-up false})
+                      :done)
       (nil? chest) :continue
       :else
       (let [w (await (u/walk-near! c chest 3))]
@@ -81,5 +89,7 @@
           (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                          :item (:name (:stack pick)) :count (:count pick)})))]
             (if (= "ok" (.-status r))
-              :continue
-              (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))
+              (do (when (pos? (or (.-moved r) 0)) (ctx/update-mem! c update :deposited (fnil inc 0)))
+                  :continue)
+              (do (places/retract-if-missing! c :chest chest (.-status r))
+                  (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r))))))))))

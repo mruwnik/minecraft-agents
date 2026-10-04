@@ -1,6 +1,7 @@
 (ns jobs.storage.withdraw
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
+            [engine.places :as places]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -11,7 +12,8 @@
   everything is carried, else what the chest could not supply), or
   {:gave-up true :reason r :short {...}} (the inspect or transfer status,
   \"unreachable\" for a blocked walk, \"nothing-moved\") when the failed attempts
-  used it up and the warn was emitted.")
+  used it up and the warn was emitted. A container that is missing at the recorded :chest (loaded cell)
+  retracts that place with one chest_missing warn.")
 
 (def args
   {:chest {:doc "chest position; the known :chest place when nil" :default nil}
@@ -60,7 +62,8 @@
           :blocked (give-up! c "unreachable" short)
           (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
             (if (not= "ok" (.-status seen))
-              (give-up! c (.-status seen) short)
+              (do (places/retract-if-missing! c :chest chest (.-status seen))
+                  (give-up! c (.-status seen) short))
               (let [pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
                                                 (when (pos? held) [name (min n held)])))
                                short)]
@@ -73,6 +76,7 @@
                   (let [[name n] pick
                         r (await (ctx/act c :transfer (clj->js {:pos chest :direction "withdraw" :item name :count n})))]
                     (cond
-                      (not= "ok" (.-status r)) (give-up! c (.-status r) short)
+                      (not= "ok" (.-status r)) (do (places/retract-if-missing! c :chest chest (.-status r))
+                                                   (give-up! c (.-status r) short))
                       (zero? (.-moved r)) (give-up! c "nothing-moved" short)
                       :else :continue)))))))))))
