@@ -57,7 +57,9 @@ const sendFile = async (res, file, contentType) => {
   }
 }
 
-export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250, blockJar, blockSweepMs = 5000, blockWriteMs = 5000 }) {
+export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, columnPollMs = 250, push = 'watch', watchFallbackMs = 250, blockJar, blockSweepMs = 5000, blockWriteMs = 5000, blockScan = false }) {
+  // the block scan sweeps every column file of a world: it starts for a world when /block-issues is asked for it, or for every streamed world with blockScan
+  const trackStreamed = world => { if (blockScan) scanner.track(world) }
   const jarPath = blockJar === undefined ? findClientJar() : blockJar
   const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
   const driveProxy = createDriveProxy({ stateDir })
@@ -268,7 +270,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const streamAgent = async (req, res, body, radius) => {
     const first = await readJson(agentFile(body, 'pose.json'))
     if (!first) return notFound(res)
-    scanner.track(first.world)
+    trackStreamed(first.world)
     sseHead(res)
     const stop = watchAgent(body, first, radius, (event, data) => sseWrite(res, event, data))
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
@@ -283,7 +285,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const firsts = await Promise.all(keys.map(async key => [key, await readJson(agentFile(bodyOfKey(key), 'pose.json'))]))
     sseHead(res)
     const stops = firsts.filter(([, first]) => first).map(([key, first]) => {
-      scanner.track(first.world)
+      trackStreamed(first.world)
       return watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data }))
     })
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)

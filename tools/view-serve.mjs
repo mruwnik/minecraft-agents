@@ -1,5 +1,5 @@
 // Why JavaScript: thin launcher for the JS view server (tools/view/serve.mjs), which serves binary column files and the WebGL page.
-// Serves the browser view: node tools/view-serve.mjs [--port 3702] [--state dir] [--host 127.0.0.1] [--push watch|poll] [--poll-ms 50]
+// Serves the browser view: node tools/view-serve.mjs [--port 3702] [--state dir] [--host 127.0.0.1] [--push watch|poll] [--poll-ms 50] [--block-scan]
 import path from 'node:path'
 import { storageRoot, worldsDir } from '../engine/js/bodies.mjs'
 import { parseArgs } from 'node:util'
@@ -13,7 +13,8 @@ const { values } = parseArgs({
     state: { type: 'string' }, worlds: { type: 'string' },
     host: { type: 'string', default: '127.0.0.1' },
     push: { type: 'string', default: 'watch' },
-    'poll-ms': { type: 'string', default: '50' }
+    'poll-ms': { type: 'string', default: '50' },
+    'block-scan': { type: 'boolean', default: false }
   }
 })
 
@@ -22,7 +23,8 @@ const server = createViewServer({
   textureDir: path.join(repo, 'textures'),
   webDir: path.join(repo, 'tools', 'view', 'web'),
   push: values.push,
-  pollMs: Number(values['poll-ms'])
+  pollMs: Number(values['poll-ms']),
+  blockScan: values['block-scan']
 })
 server.listen(Number(values.port), values.host, () => {
   console.log(`view server: http://${values.host}:${server.address().port}/`)
