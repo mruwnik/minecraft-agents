@@ -127,14 +127,19 @@
                           (when-not (= :clear want) [(apply h/cell-key pos) (shape/want-block want)])))
                (:cells (shape/expand plan {})))))
 
-(deftest a-sound-line-declines-without-a-word
+(deftest a-sound-line-resubmitted-finishes-at-once-with-one-done-and-places-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (declines {:inventory (kit {}) :blocks (built-world (line-plan {}) "stone")
-                                  :self {:pos {:x 0 :y 64 :z 3}}}
-                                 {"line" (line-plan {})} {:plan "line"}))]
-          (is (= {:places 0 :declined [] :texts [] :short [] :warns 0} r)))))))
+        (let [plan (line-plan {})
+              {:keys [eng p seen]} (b/start {:inventory (kit {}) :blocks (built-world plan "stone")
+                                             :self {:pos {:x 0 :y 64 :z 3}}}
+                                            {"line" plan} [])
+              _ (core/submit! eng (list job {:plan "line"}) {})]
+          (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+          (is (= 1 (count (h/events-of seen :rail-build.done))))
+          (is (= 0 (count (h/events-of seen :rail-build.declined))))
+          (is (= 0 (count (h/calls p "place")))))))))
 
 ;; ---------------------------------------------------------------- redstone blocks on ground that is there
 

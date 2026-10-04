@@ -30,7 +30,8 @@
   built: use :torch or :lever, or a raised bed); with :all-carried, while the items for every cell still to build
   are not all carried (ONE warn rail-build.short {item n}; an :any want counts every choice carried; only cells
   seen empty are owed, and the warn's :up-to {item n} counts the cells nobody has seen as well). Without :all-carried it builds what is carried, and with nothing to build
-  it goes straight to the proof. It declines without a warn while the line is sound and nothing is missing. Once
+  it goes straight to the proof. A line that is sound already starts and ends at once with rail-build.done (placed
+  0): a job that stayed queued would hold the body's queue for ever. Once
   begun the check stays true; a restart resumes in the phase it was in (the world is the memory).")
 
 (def args
@@ -158,8 +159,8 @@
     (boolean
      (and (not trouble)
           (or (:phase (ctx/mem c))
-              (and (not (sound? c cells))
-                   (ready? c cells)))))))
+              (sound? c cells)
+              (ready? c cells))))))
 
 ;; ------------------------------------------------------------------ rounds
 
