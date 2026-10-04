@@ -17,7 +17,7 @@
      jobs.village.trade
      jobs.items.smelt
      jobs.items.enchant
-     jobs.build.from-plan
+     jobs.build.from-plan jobs.build.pen
      jobs.access.pillar
      jobs.explore.search
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
