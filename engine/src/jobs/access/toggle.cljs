@@ -156,5 +156,5 @@
           (reached? state (props-of b)) (finish! c :already pos state (str text " is already " (name state)) {:block block :now (props-of b)})
           (and (= :openable kind) (= :closed state) (standing-in? (u/self-pos c) pos))
           (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
-          (not (u/within? (u/self-pos c) pos (:reach (:args c)))) (await (walk! c pos state block))
+          (not (<= (u/dist (u/self-pos c) pos) (:reach (:args c)))) (await (walk! c pos state block))
           :else (await (click! c pos state block)))))))

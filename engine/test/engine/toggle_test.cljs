@@ -113,6 +113,16 @@
           (is (= :changed (:reason result)))
           (is (true? (:powered (props p at)))))))))
 
+(deftest euclidean-distance-in-reach-arrives-without-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (world "oak_fence_gate" {:open false} 7896.33 7592.32) :blocks (assoc (:blocks (world "oak_fence_gate" {:open false})) "7897,64,7595" "oak_fence_gate") :states (assoc {} "7897,64,7595" {:open false}))
+              {:keys [result p]} (await (run w {:pos {:x 7897 :y 64 :z 7595} :state :open}))]
+          (is (= :changed (:reason result)) "should change, not loop forever")
+          (is (empty? (calls p "moveTo")) "should not walk when within reach by Euclidean distance")
+          (is (= 1 (count (calls p "useOn"))) "should click exactly once"))))))
+
 ;; ------------------------------------------------------------------ declined before any walk or click
 
 (deftest a-request-the-hand-cannot-meet-is-declined-without-a-click-or-a-walk
