@@ -30,6 +30,13 @@ ClojureScript.
 Install the root dependencies with `npm install`, then follow the engine and
 dashboard READMEs for their dependencies and launch commands.
 
+## Local ViaProxy
+
+The local ViaProxy installation lives in `viaproxy/`; its jar, configuration,
+saved servers, plugin data, and logs stay local. Start it from the repository
+root with `./viaproxy/start`. The launcher sets `viaproxy/` as the working
+directory so ViaProxy can find its relative files.
+
 ```sh
 npm test                             # current renderer and shared infrastructure
 npm --prefix engine test             # engine tests
