@@ -115,8 +115,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[r p seen] (await (enchant! (assoc table-world :self {:experience {:level 5}}) {}))]
-          (is (= {:enchanted true :item "diamond_sword" :slot 3 :level-cost 5 :levels-spent 3 :lapis-spent 3 :xp-level 2} (dissoc r :enchants)))
+          (is (= {:enchanted true :item "diamond_sword" :slot 3 :level-cost 5 :levels-spent 3 :lapis-spent 3 :xp-level 2} (dissoc r :enchants :hint)))
           (is (= [{:name "sharpness" :level 1}] (:enchants r)))
+          (is (= {:enchant "sharpness" :level 1} (:hint r)) "the hint the table gave for the chosen offer")
           (is (= {"diamond_sword" 1 "lapis_lazuli" 6} (inv p)))
           (is (= 2 (level p)))
           (is (= ["offers" "enchant"] (ops p)))

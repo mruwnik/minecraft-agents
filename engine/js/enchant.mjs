@@ -8,6 +8,7 @@ const { Vec3 } = vec3
 const OPEN_WAIT_MS = 3000
 const OFFERS_WAIT_MS = 3000
 const ENCHANT_WAIT_MS = 4000
+const LEVEL_WAIT_MS = 2000
 const QUIET_MS = 150
 const SETTLE_MAX_MS = 2000
 const POLL_MS = 25
@@ -54,6 +55,24 @@ async function offersArrive (win, timeScale) {
     await sleepMs(POLL_MS * timeScale)
   }
   return true
+}
+
+// Resolves wait() once the body's level differs from `from` (or after the bound)
+function watchLevel (bot, from) {
+  let on
+  const moved = new Promise(resolve => {
+    on = () => { if ((bot.experience?.level ?? 0) !== from) resolve() }
+    bot.on('experience', on)
+    on()
+  })
+  return {
+    async wait (ms) {
+      let timer
+      await Promise.race([moved, new Promise(resolve => { timer = setTimeout(resolve, ms) })])
+      clearTimeout(timer)
+    },
+    stop () { bot.removeListener('experience', on) }
+  }
 }
 
 // Listens for the server's updates that land after the close; wait() returns once they have been quiet for a moment
@@ -139,6 +158,7 @@ async function enchant (bot, ctx, win, a, timeScale, xpLevel) {
   let timer
   let stalled = false
   let error = null
+  const levelMoved = watchLevel(bot, xpLevel)
   try {
     const call = Promise.resolve(win.enchant(a.choice))
     call.catch(() => {})
@@ -150,6 +170,9 @@ async function enchant (bot, ctx, win, a, timeScale, xpLevel) {
     clearTimeout(timer)
   }
   ctx.alive()
+  // the server's new level can arrive after the window call has returned
+  if (!stalled && !error) await levelMoved.wait(LEVEL_WAIT_MS * timeScale)
+  levelMoved.stop()
   return { measure: { stalled, error } }
 }
 

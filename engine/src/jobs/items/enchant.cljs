@@ -13,7 +13,7 @@
   offer costs its slot number in lapis and in levels, and needs levels of at
   least its level cost (and at least its slot number). Ends with a result
   {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants
-  [{:name :level}] :xp-level} measured by the primitive from what is carried
+  [{:name :level}] :xp-level :hint {:enchant :level}|nil} measured by the primitive from what is carried
   and the body's level after the window closed; info enchant.done. It gives up
   with {:enchanted false :reason r :levels-spent n :lapis-spent n} and warn
   enchant.gave-up: no-table, not-a-table, no-item, already-enchanted (every
@@ -118,7 +118,7 @@
   "Info and finish with the measured result."
   [c r offer]
   (let [result {:enchanted true :slot (inc (:choice r)) :level-cost (:level-cost offer) :levels-spent (:levelsSpent r)
-                :lapis-spent (:lapisSpent r) :enchants (:enchants r) :xp-level (:xpLevel r)}]
+                :lapis-spent (:lapisSpent r) :enchants (:enchants r) :xp-level (:xpLevel r) :hint (:hint offer)}]
     (ctx/emit! c :enchant.done :info (assoc result :item (:item (:args c)) :text (str "enchanted " (:item (:args c)))))
     (finish! c result)))
 

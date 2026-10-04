@@ -20,7 +20,7 @@ const stack = (name, count = 1, enchants = []) => ({ name, count, enchants })
 const makeBot = ({
   block = 'enchanting_table', pockets = [], level = 30, offers = [4, 9, 16], hints = [[5, 1], [8, 2], [5, 3]],
   open = 'now', offersNever = false, enchantHangs = false, enchantThrows = null, enchantable = true, landTimes = 1, afterEnchant = [stack('diamond_sword', 1, [{ name: 'sharpness', lvl: 3 }])],
-  levelLands = true, dropsOnClose = false
+  levelLands = true, dropsOnClose = false, levelLateMs = null
 } = {}) => {
   const bot = new EventEmitter()
   const calls = []
@@ -53,7 +53,7 @@ const makeBot = ({
       else if (!dropsOnClose) places[free] = { ...held, slot: 36 + free }
       win.slots[i] = null
     }
-    experience.level = pendingLevel
+    if (levelLateMs === null) experience.level = pendingLevel
     sync()
     setTimeout(() => { inventory.emit('updateSlot', 36) }, 1)
     bot.currentWindow = null
@@ -67,7 +67,8 @@ const makeBot = ({
     lapis.count -= choice + 1
     if (lapis.count === 0) win.slots[1] = null
     pendingLevel = level - (choice + 1)
-    if (levelLands) experience.level = pendingLevel
+    if (levelLateMs !== null) setTimeout(() => { experience.level = pendingLevel; bot.emit('experience') }, levelLateMs)
+    else if (levelLands) experience.level = pendingLevel
     win.slots[0] = { ...afterEnchant[0] }
     return win.slots[0]
   }
@@ -294,6 +295,12 @@ test('enchant: the body level is read after the close, where it lands', async ()
   const r = await run(bot, { op: 'enchant', item: 'diamond_sword', choice: 2 })
   assert.equal(r.levelsSpent, 3)
   assert.equal(r.xpLevel, 27)
+})
+
+test('enchant: a level that arrives after the window call returned is waited for', async () => {
+  const bot = makeBot({ pockets: [sword, lapis(5)], levelLateMs: 30, levelLands: false })
+  const r = await run(bot, { op: 'enchant', item: 'diamond_sword', choice: 1 })
+  assert.deepEqual([r.levelsSpent, r.xpLevel], [2, 28])
 })
 
 test('enchant: an item that came back unenchanted is a failure, never enchanted', async () => {
