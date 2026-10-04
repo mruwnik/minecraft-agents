@@ -17,6 +17,7 @@
      jobs.items.smelt
      jobs.items.enchant
      jobs.build.from-plan
+     jobs.explore.search
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
