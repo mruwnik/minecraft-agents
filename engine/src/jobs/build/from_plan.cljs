@@ -1,0 +1,268 @@
+(ns jobs.build.from-plan
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
+            [engine.jobs.util :as u]
+            [plan.shape :as shape]))
+
+(def doc
+  "Build what a plan of the body's world wants (:plan, optionally only its :part) from what the body carries: every
+  planned cell that stands empty (plan.shape judges it :missing) gets its block placed. Wrong blocks are reported,
+  never dug, and :clear cells, crops and trees are not this job's. Each round re-reads the plan and the world and
+  takes the first step that applies: (1) place every buildable cell within :reach of the eye, lowest first (a cell
+  is buildable when its block is carried, the cell below it is not itself still owed, it is not the body's own
+  feet or head cell, and, for a want with a :facing, the body looks the way it should face, standing on the far
+  side); (2) else walk to a stand cell two blocks beside the nearest buildable cell (for a :facing want, on the
+  side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
+  finish. A cell whose place is refused (anything but placed, occupied or
+  no-item) or whose stand cell cannot be walked to :give-up times is given up. It finishes with a result {:placed n
+  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded} :wrong [{:pos :found :want}]}
+  and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
+  build.wrong (warn). The check declines, with one build.declined warn naming the plan and the reason, while the
+  plan is missing, not :active, unreadable or has no cells to build (in :part), and, before the job has begun,
+  while cells are missing but none of their blocks is carried. The stand cell is taken at the body's feet height:
+  it assumes flat ground.")
+
+(def args
+  {:plan {:doc "id of a plan of the body's world" :default nil}
+   :part {:doc "only the cells of this part" :default nil}
+   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
+   :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}})
+
+(def eye-height 1.62)
+
+;; ------------------------------------------------------------------ pure helpers
+
+(defn item-for
+  "The item to place for want: the block it names, for an :any the first choice carried (else the first); nil for
+  :clear, crops and trees."
+  [want carried]
+  (cond
+    (string? want) want
+    (vector? want) (let [names (map #(if (string? %) % (:block %)) (rest want))]
+                     (or (first (filter carried names)) (first names)))
+    (and (map? want) (:block want)) (:block want)))
+
+(def facing-step {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
+
+(defn facing-of
+  "The horizontal :facing a want asks for, as a string, or nil."
+  [want]
+  (let [f (when (map? want) (:facing want))]
+    (when (and f (facing-step (name f))) (name f))))
+
+(defn facing-ok?
+  "Whether a body at body (feet position) looks toward cell [x y z] mostly in the direction facing (nil: any)."
+  [facing [x _ z] body]
+  (if-not facing
+    true
+    (let [[sx sz] (facing-step facing)
+          dx (- (+ x 0.5) (:x body))
+          dz (- (+ z 0.5) (:z body))
+          along (+ (* sx dx) (* sz dz))
+          across (js/Math.abs (+ (* sz dx) (* sx dz)))]
+      (and (pos? along) (>= along across)))))
+
+(defn eye-dist [body [x y z]]
+  (u/dist {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}))
+
+(defn body-cells [{:keys [x y z]}]
+  (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
+    #{[fx fy fz] [fx (inc fy) fz]}))
+
+(defn stand-cells
+  "Cells one to three blocks beside cell (or diagonally off it) at height y, where a body stands to place it: for a
+  facing, only straight out on the side it faces away from; never a planned cell."
+  [[x _ z] y facing planned]
+  (let [straight (if facing [(mapv - (facing-step facing))] [[1 0] [-1 0] [0 1] [0 -1]])
+        diagonal (if facing [] [[1 1] [1 -1] [-1 1] [-1 -1]])]
+    (->> (concat (for [d [2 1 3] [sx sz] straight] [(+ x (* d sx)) y (+ z (* d sz))])
+                 (for [d [1 2] [sx sz] diagonal] [(+ x (* d sx)) y (+ z (* d sz))]))
+         (remove #(or (planned %) (planned (update % 1 inc)))))))
+
+(defn shortage
+  "{item n} of the missing cells' items beyond what is carried (carried {item n})."
+  [cells carried]
+  (into (sorted-map)
+        (keep (fn [[item need]] (let [n (- need (get carried item 0))] (when (pos? n) [item n]))))
+        (frequencies (keep :item cells))))
+
+(defn shortage-text [short]
+  (str/join ", " (map (fn [[item n]] (str item " " n)) short)))
+
+(defn plan-trouble
+  "Why a plan answer with these cells cannot be built, or nil."
+  [answer cells]
+  (cond
+    (nil? answer) "no such plan"
+    (:broken answer) (str "the plan cannot be read: " (:broken answer))
+    (not= :active (:status answer)) (str "the plan is " (pr-str (:status answer)))
+    (empty? cells) "no cells to build"))
+
+;; ------------------------------------------------------------------ reading the world
+
+(defn world-block
+  "The block at [x y z] in plan.shape's shape: nil when unloaded, else {:name n} with :state when it has properties."
+  [p pos]
+  (when-let [b (.blockAt p (clj->js (zipmap [:x :y :z] pos)))]
+    (cond-> {:name (.-name b)}
+      (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
+
+(defn carried-counts [p]
+  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
+
+(defn judged
+  "The plan's cells (of part) judged against the world, each with the :item to place it with."
+  [p answer part carried]
+  (->> (:cells answer)
+       (filter #(or (nil? part) (= part (:part %))))
+       (#(shape/plan-minus-world % (partial world-block p)))
+       (mapv #(assoc % :item (item-for (:want %) carried)))))
+
+(defn planned
+  "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
+  [c]
+  (let [{:keys [plan part]} (:args c)
+        answer (ctx/plan c plan)
+        cells (when (and answer (not (:broken answer)))
+                (judged (:primitives c) answer part (set (keys (carried-counts (:primitives c))))))
+        trouble (plan-trouble answer cells)]
+    (if-not trouble
+      {:cells cells}
+      (do (ctx/warn-once! c [plan trouble] :build.declined
+                          {:plan plan :part part :reason trouble
+                           :text (str "build declines plan " plan (when part (str " part " part)) ": " trouble)})
+          {:trouble trouble}))))
+
+(defn missing [cells] (filterv #(and (= :missing (:answer %)) (:item %)) cells))
+
+(defn unseen
+  "The cells with an item that nobody can see now (unloaded), not given up."
+  [cells given-up]
+  (filterv #(and (nil? (:found %)) (:item %) (not (contains? given-up (:pos %)))) cells))
+
+(defn owed
+  "The cells still to build: missing or unseen."
+  [cells]
+  (into (missing cells) (unseen cells {})))
+
+(defn buildable
+  "The missing cells this body can work on: item carried, not given up, the cell below not itself owed."
+  [cells carried given-up]
+  (let [owed (set (map :pos (missing cells)))]
+    (filterv #(and (pos? (get carried (:item %) 0))
+                   (not (contains? given-up (:pos %)))
+                   (not (owed (update (:pos %) 1 dec))))
+             (missing cells))))
+
+;; ------------------------------------------------------------------ check
+
+(defn check [c]
+  (let [{:keys [cells trouble]} (planned c)
+        p (:primitives c)]
+    (boolean
+     (and (not trouble)
+          (or (:begun (ctx/mem c))
+              (empty? (owed cells))
+              (seq (buildable cells (carried-counts p) {}))
+              (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
+              (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
+                                  (let [reason (str "nothing carried to build with: "
+                                                    (shortage-text (shortage (owed cells) (carried-counts p))))]
+                                    {:plan (:plan (:args c)) :part (:part (:args c)) :reason reason
+                                     :text (str "build declines plan " (:plan (:args c)) ": " reason)}))
+                  false))))))
+
+;; ------------------------------------------------------------------ steps
+
+(defn count-fail
+  "m with one more failure on pos; given up as reason at the give-up-th."
+  [m pos reason give-up]
+  (let [n (inc (get-in m [:fails pos] 0))]
+    (if (>= n give-up)
+      (-> m (update :fails dissoc pos) (assoc-in [:given-up pos] reason))
+      (assoc-in m [:fails pos] n))))
+
+(defn ^:async place-one! [c {:keys [pos item]}]
+  (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] pos) :item item})))]
+    (case (.-status r)
+      "placed" (ctx/update-mem! c update :placed (fnil inc 0))
+      ("occupied" "no-item") nil
+      (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))
+
+(defn in-reach
+  "The buildable cells the body can place from where it stands, lowest first, then nearest."
+  [c todo]
+  (let [body (u/self-pos c)
+        mine (body-cells body)]
+    (->> todo
+         (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c)))
+                       (not (mine (:pos %)))
+                       (facing-ok? (facing-of (:want %)) (:pos %) body)))
+         (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
+
+(defn ^:async walk-to!
+  "Walk to a stand cell beside cell; a cell that cannot be walked to, or is still out of reach (or unseen, as
+  :unloaded) on arrival, counts a failure."
+  [c cells cell]
+  (let [body (u/self-pos c)
+        planned (set (map :pos cells))
+        bad (set (:bad-stands (ctx/mem c)))
+        stands (remove bad (stand-cells (:pos cell) (js/Math.floor (:y body)) (facing-of (:want cell)) planned))
+        stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
+        give-up (:give-up (:args c))]
+    (if-not stand
+      (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up)
+      (let [w (await (u/walk-near! c (zipmap [:x :y :z] stand) 0))]
+        (when (= :blocked w)
+          (ctx/update-mem! c #(-> (count-fail % (:pos cell) :unreachable give-up)
+                                  (update :bad-stands (fnil conj []) stand))))
+        (when (and (= :there w) (nil? (:found cell)))
+          (ctx/update-mem! c count-fail (:pos cell) :unloaded give-up))
+        (when (and (= :there w) (:found cell) (empty? (in-reach c [cell])))
+          (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))))
+    :continue))
+
+(defn finish! [c cells]
+  (let [m (ctx/mem c)
+        p (:primitives c)
+        given-up (:given-up m {})
+        left (owed cells)
+        short (shortage left (carried-counts p))
+        wrong (mapv (fn [{:keys [pos found want]}] {:pos pos :found found :want (shape/want-text want)})
+                    (filter #(#{:wrong :extra} (:answer %)) cells))
+        result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong}
+        plan (:plan (:args c))]
+    (when (seq short)
+      (ctx/emit! c :build.short :warn {:plan plan :short short
+                                       :text (str "build of " plan " is short of " (shortage-text short))}))
+    (when (seq given-up)
+      (ctx/emit! c :build.gave-up :warn {:plan plan :cells given-up
+                                         :text (str "build of " plan " gave up " (count given-up) " cells: "
+                                                    (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))}))
+    (when (seq wrong)
+      (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
+                                       :text (str "build of " plan " left " (count wrong) " wrong blocks: "
+                                                  (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) wrong)))}))
+    (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
+                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})
+    (ctx/result! c result)
+    :done))
+
+(defn ^:async round [c]
+  (let [{:keys [cells trouble]} (planned c)]
+    (if trouble
+      :declined
+      (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
+          (let [given-up (:given-up (ctx/mem c) {})
+                todo (buildable cells (carried-counts (:primitives c)) given-up)
+                near (in-reach c todo)
+                nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
+            (cond
+              (seq near) (do (loop [left near]
+                               (when (seq left)
+                                 (await (place-one! c (first left)))
+                                 (recur (rest left))))
+                             :continue)
+              (seq todo) (await (walk-to! c cells (nearest todo)))
+              (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
+              :else (finish! c cells)))))))
