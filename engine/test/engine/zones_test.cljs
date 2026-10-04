@@ -26,8 +26,8 @@
     [(assoc farm :max [1.5 2 3])] "zone farm: :max must be [x y z] integers"
     [(assoc farm :min [0 80 0])] "zone farm: :min is above :max on y"
     [(dissoc farm :owner)] "zone farm: :owner must be a non-empty string"
-    [(assoc farm :allow [:dig])] "zone farm: :allow must be a set of :dig :place :harvest"
-    [(assoc farm :allow #{:fly})] "zone farm: :allow must be a set of :dig :place :harvest"
+    [(assoc farm :allow [:dig])] "zone farm: :allow must be a set of :dig :place :harvest :take :put"
+    [(assoc farm :allow #{:fly})] "zone farm: :allow must be a set of :dig :place :harvest :take :put"
     [(assoc farm :allows #{:dig})] "zone farm: unknown key :allows"
     [(assoc farm :note 3)] "zone farm: :note must be a string"))
 
@@ -40,3 +40,8 @@
   (is (= {:value []} (zones/parse "[]")))
   (is (re-find #"^unreadable EDN" (first (:errors (zones/parse "[{:name ")))))
   (is (= {:errors ["zone 0: not a map"]} (zones/parse "[1]"))))
+
+(deftest allow-accepts-take-and-put
+  (are [zs] (= [] (zones/zone-errors zs))
+    [(assoc farm :allow #{:take})]
+    [(assoc farm :allow #{:take :put :dig})]))

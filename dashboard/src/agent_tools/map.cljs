@@ -119,8 +119,8 @@
   (when (or (not (string? (:name v))) (str/blank? (:name v)) (not (string? (:owner v))) (str/blank? (:owner v)))
     (throw (data/fail :validation "zone needs name and owner")))
   (when-not (corners? v) (throw (data/fail :validation "zone needs ordered integer min/max corners")))
-  (when (and (contains? v :allow) (not (and (set? (:allow v)) (every? #(#{"dig" "place" "harvest"} (data/name %)) (:allow v)))))
-    (throw (data/fail :validation "allow must be a set of :dig :place :harvest")))
+  (when (and (contains? v :allow) (not (and (set? (:allow v)) (every? #(#{"dig" "place" "harvest" "take" "put"} (data/name %)) (:allow v)))))
+    (throw (data/fail :validation "allow must be a set of :dig :place :harvest :take :put")))
   (when (and (contains? v :note) (not (string? (:note v)))) (throw (data/fail :validation "note must be text"))))
 
 (defn owns! [previous actor]

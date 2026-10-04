@@ -1,11 +1,11 @@
 (ns engine.zones
   "The world's zone file (worlds/<world>/zones.edn) checked and parsed; no IO. A zone is an inclusive box
-  {:name \"farm\" :min [x y z] :max [x y z] :owner \"name\" :allow #{:dig :place :harvest} :note \"text\"} that keeps
-  every action it does not :allow out (no :allow permits nothing; :note is optional). engine.access.rules reads them."
+  {:name \"farm\" :min [x y z] :max [x y z] :owner \"name\" :allow #{:dig :place :harvest :take :put} :note \"text\"}.
+  :allow is what OTHERS may do inside it (none when absent); the owner may always act. :note is optional. engine.access.zones reads them."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]))
 
-(def actions #{:dig :place :harvest})
+(def actions #{:dig :place :harvest :take :put})
 
 (def zone-keys #{:name :min :max :owner :allow :note})
 
@@ -27,7 +27,7 @@
                   (str ":min is above :max on " axis)))
               [(when-not (text? owner) ":owner must be a non-empty string")
                (when-not (or (not (contains? zone :allow)) (and (set? allow) (every? actions allow)))
-                 ":allow must be a set of :dig :place :harvest")
+                 ":allow must be a set of :dig :place :harvest :take :put")
                (when-not (or (nil? note) (string? note)) ":note must be a string")]
               (for [k (keys zone) :when (not (zone-keys k))] (str "unknown key " k))))))
 
