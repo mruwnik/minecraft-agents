@@ -151,3 +151,59 @@ test('deadline during a read returns quiet summary; engine start notification do
     assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
   } finally { f.cleanup() }
 })
+test('explicitly watched action completion wakes with bounded result; other action events stay quiet', async () => {
+  const e = { ...event('action', 'done', { status: k('arrived'), result: { status: 'arrived', pos: { x: 1.234, y: 64, z: 2 }, distance: 1.234, drops: Array(10000).fill('wheat') } }), context: { 'action-id': 'move-1' } }
+  const opts = { ...defaults, watchActions: ['move-1'] }
+  assert.deepEqual(classify(e, opts, 'Probe'), { wake: k('action-finished'), action: 'move-1', result: { status: 'arrived', pos: [1.2, 64, 2], distance: 1.2 } })
+  assert.equal(classify({ ...e, source: k('job') }, opts, 'Probe'), null)
+  assert.equal(classify({ ...e, kind: k('started') }, opts, 'Probe'), null)
+  assert.equal(classify(e, { ...opts, watchActions: ['other'] }, 'Probe'), null)
+  assert.equal(classify(e, defaults, 'Probe'), null)
+  const summary = { counts: {}, items: [], more: false }; collect(summary, e)
+  assert.deepEqual(summary.counts, {})
+  const f = fixture()
+  try {
+    await waitObserve(f.req, f.get)
+    f.state.events.push({ ...e, seq: 1 })
+    f.req.waitOptions.watchActions = ['move-1']
+    const result = await waitObserve(f.req, f.get)
+    assert.equal(result.wake.key, 'action-finished')
+    assert.equal(result.action, 'move-1')
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+  } finally { f.cleanup() }
+})
+test('action watchers accept repeated/comma options, validate limits, require wait', () => {
+  const r = requestFor(['Probe', '--wait', '--watch-action', 'move-1,place-1', '--watch-action', 'dig-1', '--watch', 'j1,j2', '--watch', 'j3'])
+  assert.deepEqual(r.waitOptions.watchActions, ['move-1', 'place-1', 'dig-1'])
+  assert.deepEqual(r.waitOptions.watch, ['j1', 'j2', 'j3'])
+  assert.ok(requestFor(['Probe', '--watch-action', 'move-1']).error)
+  assert.ok(requestFor(['Probe', '--wait', '--watch-action', 'bad/name']).error)
+  assert.ok(requestFor(['Probe', '--wait', '--watch-action', Array(33).fill('move-1').join(',')]).error)
+})
+test('first use catches recently completed watched actions while ignoring historical chat; later results retained', async () => {
+  const f = fixture()
+  try {
+    f.state.events.push({ ...event('body', 'chat', { from: 'Dan' }, 'Probe historical chat'), seq: 1, 'generation-id': 'g' },
+      { ...event('action', 'done', { status: 'dug' }), context: { 'action-id': 'dig-1' }, seq: 2, 'generation-id': 'g' },
+      { ...event('action', 'done', { status: 'placed' }), context: { 'action-id': 'place-1' }, seq: 3, 'generation-id': 'g' })
+    f.req.waitOptions.watchActions = ['dig-1', 'place-1']
+    assert.equal((await waitObserve(f.req, f.get)).action, 'dig-1')
+    assert.equal((await waitObserve(f.req, f.get)).action, 'place-1')
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    assert.equal(readEDN(fs.readFileSync(f.file, 'utf8')).cursor.seq, 3)
+  } finally { f.cleanup() }
+})
+test('historical lookup ignores prior generations/newly started attempts and reports unavailable history', async () => {
+  const f = fixture()
+  try {
+    f.req.waitOptions.watchActions = ['move-1']
+    f.state.events.push({ ...event('action', 'done', { status: 'arrived' }), context: { 'action-id': 'move-1' }, seq: 1, 'generation-id': 'older' })
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    fs.unlinkSync(f.file)
+    f.state.events[0]['generation-id'] = 'g'
+    f.state.events.push({ ...event('action', 'started'), context: { 'action-id': 'move-1' }, seq: 2, 'generation-id': 'g' })
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    fs.unlinkSync(f.file); f.state.gap = true
+    assert.equal((await waitObserve(f.req, f.get)).reason.key, 'history-unavailable')
+  } finally { f.cleanup() }
+})

@@ -8,7 +8,7 @@ import { defaultStateDir } from './drive-lib.mjs'
 
 export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
-export const usage = `usage: observe.mjs <agent> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+export const usage = `usage: observe.mjs <agent> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
 
 export function unsupportedObserveRoute (response) {
   return response.status === 404 && /^application\/edn(?:;|$)/i.test(response.contentType ?? '') &&
@@ -35,7 +35,8 @@ export function requestFor (argv) {
         timeout: { type: 'string' },
         chatter: { type: 'string' },
         observer: { type: 'string' },
-        watch: { type: 'string' },
+        watch: { type: 'string', multiple: true },
+        'watch-action': { type: 'string', multiple: true },
         from: { type: 'string' },
         'poll-ms': { type: 'string' },
         danger: { type: 'boolean', default: false },
@@ -113,13 +114,15 @@ export function requestFor (argv) {
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(observer)) return { error: '--observer must be 1-40 letters, digits, underscores or hyphens' }
     const chatter = v.chatter ?? 'addressed'
     if (!['none', 'addressed', 'all'].includes(chatter)) return { error: '--chatter must be none, addressed, or all' }
-    const watch = v.watch ? v.watch.split(',') : []
+    const watch = (v.watch ?? []).flatMap(ids => ids.split(','))
     if (watch.some(id => !/^j[0-9]+$/.test(id)) || watch.length > 32) return { error: '--watch needs up to 32 comma-separated job IDs' }
+    const watchActions = (v['watch-action'] ?? []).flatMap(ids => ids.split(','))
+    if (watchActions.some(id => !/^[A-Za-z0-9_.:-]{1,80}$/.test(id)) || watchActions.length > 32) return { error: '--watch-action needs up to 32 comma-separated action request IDs' }
     if (v.from && !/^[A-Za-z0-9_-]{1,40}$/.test(v.from)) return { error: '--from must be a player name' }
     const pollMs = Number(v['poll-ms'] ?? 250)
     if (!Number.isInteger(pollMs) || pollMs < 50 || pollMs > 5000) return { error: '--poll-ms must be 50-5000' }
-    waitOptions = { timeoutMs, observer, chatter, watch, pollMs, from: v.from, danger: v.danger, disconnect: v.disconnect }
-  } else if (['timeout', 'chatter', 'observer', 'watch', 'from', 'poll-ms'].some(k => v[k] !== undefined) || v.danger || v.disconnect) return { error: 'wait options require --wait' }
+    waitOptions = { timeoutMs, observer, chatter, watch, watchActions, pollMs, from: v.from, danger: v.danger, disconnect: v.disconnect }
+  } else if (['timeout', 'chatter', 'observer', 'watch', 'watch-action', 'from', 'poll-ms'].some(k => v[k] !== undefined) || v.danger || v.disconnect) return { error: 'wait options require --wait' }
   if (v.verbose && (op !== 'status' || v.raw)) return { error: '--verbose is only valid for status without --raw' }
   const query = params.toString()
   return {

@@ -65,6 +65,16 @@ export function classify (e, opts, body) {
   if (kind(e.source) === 'body' && k === 'reconnect-failed') return { wake: keyword('reconnect-failed'), reason: short(d.reason) }
   if (kind(e.source) === 'body' && opts.danger && ['hurt', 'died'].includes(k)) return { wake: keyword('danger'), event: e.kind, health: d.health }
   if (kind(e.source) === 'body' && opts.disconnect && k === 'disconnected') return { wake: keyword('disconnected'), reason: short(d.reason) }
+  if (kind(e.source) === 'action' && k === 'done' && opts.watchActions?.includes(e.context?.['action-id'])) {
+    const r = d.result ?? {}
+    const pos = r.pos
+    return { wake: keyword('action-finished'), action: e.context['action-id'], result: clean({
+      status: r.status ?? d.status, reason: short(r.reason ?? d.reason ?? d.error),
+      block: short(r.block, 80), consumed: r.consumed, hurt: r.hurt, health: r.health,
+      ...(pos ? { pos: [pos.x, pos.y, pos.z].map(n => Math.round(n * 10) / 10) } : {}),
+      ...(typeof r.distance === 'number' ? { distance: Math.round(r.distance * 10) / 10 } : {})
+    }) }
+  }
   if (kind(e.source) === 'job' && ['completed', 'failed'].includes(k)) {
     const id = e.context?.['job-id']
     if (opts.watch.includes(id)) return { wake: keyword('job-finished'), job: id, result: e.kind, message: short(e.message ?? d.error) }
@@ -131,19 +141,22 @@ export async function waitObserve (request, get, signal, deliver = async () => {
     const generation = snap['generation-id']
     let cursor = saved?.cursor ?? snap.cursor
     let seen = saved?.seen ?? {}
-    if (!saved) checkpoint(file, { cursor, generation, seen })
+    let lookup = !saved || saved.lookup === true
+    let pending = saved?.pending ?? []
+    if (!saved) checkpoint(file, { cursor, generation, seen, lookup: true })
     const summary = { counts: {}, items: [], more: false }
     const finish = async result => {
       if (signal?.aborted) throw Object.assign(new Error('cancelled'), { code: 'ABORT_ERR' })
       const output = summaryResult(summary, result)
       await deliver(output)
-      checkpoint(file, { cursor, generation, seen })
+      checkpoint(file, { cursor, generation, seen, pending, ...(lookup ? { lookup: true } : {}) })
       return output
     }
     timeoutFinish = () => finish({ wake: keyword('timeout'), ...(Object.keys(summary.counts).length ? {} : { changed: false }) })
     if (saved && saved.generation !== generation) {
       cursor = snap.cursor
       seen = {}
+      pending = []; lookup = false
       return await finish({ wake: keyword('reset'), reason: keyword('engine-restarted'), status: compactStatus(await read('/status')) })
     }
     const body = snap.body ?? request.agent
@@ -151,6 +164,24 @@ export async function waitObserve (request, get, signal, deliver = async () => {
       const changes = attentionChanges(snap.outstanding, seen)
       seen = changes.seen
       if (changes.changed.length) return await finish({ wake: keyword('attention'), requests: changes.changed, ...(changes.more ? { 'more?': true } : {}) })
+      if (lookup && ((opts.watchActions?.length ?? 0) || opts.watch.length)) {
+        const query = after => `/events?stream-id=${encodeURIComponent(cursor['stream-id'])}&after=${after}&limit=1000`
+        let history = await read(query(Math.max(0, cursor.seq - 1000)))
+        if (history['gap?'] && typeof history['oldest-seq'] === 'number') history = await read(query(Math.max(0, cursor.seq - 1000, history['oldest-seq'] - 1)))
+        if (history['gap?']) { lookup = false; return await finish({ wake: keyword('reset'), reason: keyword('history-unavailable') }) }
+        const latest = new Map()
+        for (const e of history.events ?? []) {
+          if (e.seq > cursor.seq || e['generation-id'] !== generation) continue
+          const action = kind(e.source) === 'action' && opts.watchActions?.includes(e.context?.['action-id']) && ['started', 'done'].includes(kind(e.kind))
+          const job = kind(e.source) === 'job' && opts.watch.includes(e.context?.['job-id']) && ['queued', 'round_started', 'completed', 'failed'].includes(kind(e.kind))
+          if (action || job) latest.set(`${action ? 'action' : 'job'}:${e.context[action ? 'action-id' : 'job-id']}`, e)
+        }
+        pending = [...latest.values()].sort((a, b) => a.seq - b.seq).map(e => classify(e, opts, body)).filter(Boolean)
+      }
+      lookup = false
+      pending = pending.filter(e => kind(e.wake) === 'action-finished' ? opts.watchActions?.includes(e.action) : opts.watch.includes(e.job))
+      if (pending.length) return await finish(pending.shift())
+
       if (Date.now() >= deadline) return await finish({ wake: keyword('timeout'), ...(Object.keys(summary.counts).length ? {} : { changed: false }) })
       const page = await read(`/events?stream-id=${encodeURIComponent(cursor['stream-id'])}&after=${cursor.seq}&limit=256`)
       if (page['gap?']) {
