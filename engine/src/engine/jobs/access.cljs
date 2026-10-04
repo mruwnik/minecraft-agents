@@ -105,3 +105,36 @@
   "The result map of a job that gave up on refusal verdict v: {:gave-up true :reason :refused :zones [..] :claims [..]}."
   [v]
   (assoc (select-keys (refusal-fields [v]) [:zones :claims]) :gave-up true :reason :refused))
+
+;; ------------------------------------------------------------------ survival jobs: last resort
+
+(def social-reasons #{:zone :claim :footprint})
+
+(defn trespass-refusal
+  "The refusing verdict when action at pos is refused for a social reason (another's zone, claim or plan footprint),
+  else nil: physics and hazards are no business of the last-resort rule, and a missing zone list refuses nothing, so
+  a survival job is never blocked by an unread zones.edn. c-or-in as may?."
+  [c-or-in action pos]
+  (let [v (may? c-or-in action pos)]
+    (when (contains? social-reasons (:reason v)) v)))
+
+(defn choose
+  "From options, the first one whose cells (cells-of option) are all permitted for action; failing that the first
+  option, the last resort. {:option o :trespass v} with v the first refusal of the option chosen (nil when it is
+  permitted), or nil without options. Survival jobs break another's stuff only when no permitted option exists."
+  [c action options cells-of]
+  (when (seq options)
+    (let [in (rules-input c)
+          scored (map (fn [o] [o (some #(trespass-refusal in action %) (cells-of o))]) options)
+          [o v] (or (first (filter (comp nil? second) scored)) (first scored))]
+      {:option o :trespass v})))
+
+(defn trespass!
+  "The one warn <job-name>.trespass-last-resort naming the zone or claim, for a survival job that acts on a cell the
+  rules refuse because no permitted option existed. A plain job event: the engine checks nothing. A nil verdict does
+  nothing."
+  [c job-name v]
+  (when v
+    (let [fields (refusal-fields [v])]
+      (ctx/warn-once! c [:trespass job-name] (keyword (str job-name ".trespass-last-resort"))
+                      (assoc fields :text (str job-name " acted in another's area as a last resort: " (refusal-text fields)))))))

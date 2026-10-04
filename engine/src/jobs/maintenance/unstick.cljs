@@ -1,6 +1,7 @@
 (ns jobs.maintenance.unstick
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.triggers.stuck :as stuck]))
 
@@ -190,18 +191,21 @@
     (when (and (open? c beyond) (open? c (up beyond 1)))
       (seq (filter #(solid? c %) [front (up front 1)])))))
 
-(defn stair-cells
-  "{:front f :cells [...]} for the first heading (the goal's first) whose front
-  block at feet height is solid to stand on: the solid ones of H (above the
-  head), F1 and F2 (the next step's feet and head cells). nil when no heading
-  has a step."
+(defn stair-options
+  "[{:front f :cells [...]} ...] for each heading (the goal's first) whose front block at feet height is solid to
+  stand on: the solid ones of H (above the head), F1 and F2 (the next step's feet and head cells)."
   [c here dir]
-  (some (fn [d]
+  (keep (fn [d]
           (let [front (shift here d)]
             (when (solid? c front)
               {:front (up front 1)
                :cells (filter #(solid? c %) [(up here 2) (up front 1) (up front 2)])})))
         (distinct (cons dir cardinals))))
+
+(defn stair-cells
+  "The first of stair-options (the goal's heading first), or nil when no heading has a step."
+  [c here dir]
+  (first (stair-options c here dir)))
 
 (defn unsafe-reason
   "Why digging pos is unsafe (a falling block above, liquid beside), else nil."
@@ -243,19 +247,22 @@
   (let [here (cell (u/self-pos c))
         dir (or (forward c here) (first cardinals))
         door (door-cells c here dir)
-        stair (when-not door (stair-cells c here dir))
-        cells (or door (:cells stair))]
+        options (concat (when door [{:cells door}]) (stair-options c here dir))
+        {:keys [option trespass]} (access/choose c :dig options :cells)
+        {:keys [cells front]} option
+        stair (when front option)]
     (cond
-      (and (not door) (not stair)) "stair: no solid step"
+      (nil? option) "stair: no solid step"
       :else
       (if-let [unsafe (some #(unsafe-reason c %) cells)]
         unsafe
         (do
+          (access/trespass! c "unstick" trespass)
           (when-let [pick (and (seq cells) (best-pickaxe c))]
             (await (ctx/act c :equip (clj->js {:item pick :dest "hand"}))))
           (let [bad (await (dig-cells! c cells))]
             (or bad
-                (when stair (await (climb! c (:front stair)))))))))))
+                (when stair (await (climb! c front))))))))))
 
 (defn walled-at?
   "True when at least three of the four sides are solid at the height of pos."
@@ -295,10 +302,12 @@
   "Pillar up with jumpPlace, depth-many blocks of the largest stack carried.
   Returns nil when it did something useful, else the reason it did not."
   [c]
-  (let [{:keys [item count why]} (pillar-plan c (cell (u/self-pos c)))]
+  (let [here (cell (u/self-pos c))
+        {:keys [item count why]} (pillar-plan c here)]
     (if-not item
       why
-      (let [r (await (ctx/act c :jumpPlace (clj->js {:item item :count count})))
+      (let [_ (access/trespass! c "unstick" (:trespass (access/choose c :place [(mapv #(up here %) (range count))] identity)))
+            r (await (ctx/act c :jumpPlace (clj->js {:item item :count count})))
             status (.-status r)
             placed (.-placed r)]
         (cond

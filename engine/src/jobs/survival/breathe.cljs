@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.path.walk :as walk]
             [engine.triggers.suffocating :as s]))
@@ -184,6 +185,7 @@
   (let [p (:primitives c)
         head (s/eye-cell (.self p))
         above (update head :y inc)
+        _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [(cond-> [head] (solid-at? p above) (conj above))] identity)))
         dug (status (await (ctx/act c :dig (clj->js {:pos head}))))]
     (if-not (contains? #{"dug" "missing"} dug)
       false

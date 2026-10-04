@@ -140,22 +140,22 @@
 
 (defn ripe-blocks
   "The ripe blocks named in ripe-ages within radius of center, nearest to the
-  body first, minus the ones that proved undiggable."
+  body first, minus the ones that proved undiggable (a lazy seq)."
   [c ripe-ages center radius]
   (let [skipped (set (:skipped-blocks (ctx/mem c)))]
     (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names (clj->js (keys ripe-ages)) :max 64}))
          (filter #(some-> (.-age %) (>= (ripe-ages (.-name %)))))
          (map #(u/pos-of (.-pos %)))
          (filter #(<= (u/dist % center) radius))
-         (remove skipped)
-         first)))
+         (remove skipped))))
 
 (defn ^:async dig-ripe!
   "Walk to and dig the nearest ripe block, one per round: :continue, or nil
   when there is none."
   [c ripe-ages center radius]
-  (let [pos (ripe-blocks c ripe-ages center radius)]
+  (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
     (when pos
+      (access/trespass! c "get-food" trespass)
       (let [walked (await (u/walk-near! c pos reach))]
         (if (not= :there walked)
           (do (when (= :blocked walked) (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos))

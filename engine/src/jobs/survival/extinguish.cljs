@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.triggers.burning :as burning]))
 
@@ -9,7 +10,9 @@
   as :poured and, once the fire is out, scoops that water back up with the
   empty bucket so no source block is left behind (info :scoop_failed when the
   scoop is not placed; if still burning after 8 waiting rounds it stops
-  waiting and acts normally). Otherwise it makes
+  waiting and acts normally). A cell in another's zone or claim is not poured over while water or a safe cell is
+  within reach; with nothing else to do it pours there anyway, as a last resort, with one
+  extinguish.trespass-last-resort warn (a missing zone list changes nothing). Otherwise it makes
   one short walk: when in lava or no water is within :water-radius, to the
   best nearby cell (:step blocks around the body) that is passable, stands on
   something solid and is not fire, lava, magma or a campfire, scored by
@@ -150,6 +153,15 @@
                                              :status status}))
         :done))))
 
+(defn ^:async pour-last-resort!
+  "No permitted way out is left and the feet cell is refused: pour there anyway, with the warn. :continue when poured,
+  else nil."
+  [c pos refusal]
+  (access/trespass! c "extinguish" refusal)
+  (when (await (pour-water! c pos))
+    (ctx/update-mem! c assoc :poured pos)
+    :continue))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
         me (.self p)
@@ -166,11 +178,13 @@
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
             scanned (scan p scan-radius hazards 128)
-            water (when-not lava? (first (scan p water-radius ["water"] 1)))]
+            water (when-not lava? (first (scan p water-radius ["water"] 1)))
+            pour? (and (not lava?) (has-bucket? p))
+            refusal (when pour? (access/trespass-refusal c :place pos))]
         (ctx/remember! c :extinguish {:pos pos :cause (if lava? :lava :fire)} extinguish-policy)
         (remember-hazards! c scanned)
         (cond
-          (and (not lava?) (has-bucket? p) (await (pour-water! c pos)))
+          (and pour? (nil? refusal) (await (pour-water! c pos)))
           (do (ctx/update-mem! c assoc :poured pos)
               :continue)
 
@@ -179,13 +193,15 @@
               (finish c))
 
           (and (not lava?) (not (hazard-near? pos scanned)))
-          (do (ctx/emit! c :extinguish_wait :info {:text "no water near; waiting for the fire to go out"})
-              :done)
+          (or (when refusal (await (pour-last-resort! c pos refusal)))
+              (do (ctx/emit! c :extinguish_wait :info {:text "no water near; waiting for the fire to go out"})
+                  :done))
 
           :else
           (let [target (best-cell p pos step (map :pos scanned))]
             (if-not target
-              (u/fail! c :extinguish_stuck "no safe cell within reach")
+              (or (when refusal (await (pour-last-resort! c pos refusal)))
+                  (u/fail! c :extinguish_stuck "no safe cell within reach"))
               (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
                 (cond
                   (clear? c) :done

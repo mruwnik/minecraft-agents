@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]))
 
@@ -11,16 +12,18 @@
   most :max-places placements per round. Walls mode converges: every round it
   computes the open cells from the body's current feet cell, so a body that
   was moved is walled in where it now stands. With fewer blocks it digs down
-  two, but only while the block under each one is solid (never through a thin
-  floor into water, lava or air) (collecting the blocks it digs) and places one
+  two, but only while the block under each one is solid and no lateral water
+  or lava borders the descent cell (collecting the blocks it digs), and places one
   above, at the cell the body stood in, from a carried or dug block. If a dig
   drops no placeable block and none is carried it stops at once (a
   dig_in_failed warn, \"nothing to roof the pit with\") instead of leaving the
   body in a roofless pit, and remembers the column's start cell as a
   :dig-in-futile entry (cap 5, 10 minutes). Its check declines while it carries
   no placeable block and such an entry lies within 8 blocks of the body, so a
-  re-fired reflex does not dig a deeper pit every time; with blocks carried it
-  is unaffected. Dig mode keeps its :roof and :target-y, but if the
+  re-fired reflex does not dig a deeper pit every time. Fluid-adjacent sites,
+  failed descent and failed roofing are remembered with a :reason and block
+  retries even with carried blocks. Descent without vertical progress gives
+  up after three attempts. Dig mode keeps its :roof and :target-y, but if the
   body's x or z no longer matches that column it chooses again from the
   current cell. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
@@ -29,7 +32,10 @@
   In walls mode the entry also has :door, the feet-height and head-height
   cells of one side it placed itself; the pit has no :door. The entry is
   history for now: nothing reads it. A body that cannot place or dig gives up
-  after three failures with a dig_in_failed warn. Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.")
+  after three failures with a dig_in_failed warn. The mode is the first of walls (when enough blocks are carried)
+  and dig whose cells are all permitted by the zone rules; when every way is in another's zone or claim it takes the
+  first anyway, as a last resort, with one dig-in.trespass-last-resort warn (a missing zone list changes nothing).
+  Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -58,6 +64,22 @@
     (vec (for [b blocks :let [n (get have b 0)] :when (pos? n)] {:name b :count n}))))
 
 (defn pick [c blocks] (:name (first (carried c blocks))))
+
+(defn remember-failed-site! [c reason]
+  (ctx/remember! c :dig-in-futile
+                 {:pos (or (:roof (ctx/mem c)) (sh/feet (:primitives c))) :reason reason}
+                 futile-policy))
+
+(defn fail-site! [c reason text]
+  (let [result (u/fail! c :dig_in_failed text)]
+    (when (= :done result) (remember-failed-site! c reason))
+    result))
+
+(defn lateral-fluid [p {:keys [x y z]}]
+  (some (fn [[dx dz]]
+          (let [name (u/block-name p {:x (+ x dx) :y y :z (+ z dz)})]
+            (when (hazards name) name)))
+        sides))
 
 (defn open-cells
   "The cells to fill around the feet cell, in placement order: sides at feet
@@ -101,7 +123,7 @@
         p (:primitives c)
         status (await (place-all! c blocks (take max-places (open-cells p (sh/feet p)))))]
     (cond
-      (not= :ok status) (u/fail! c :dig_in_failed (str "cannot place a block: " status))
+      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status))
       (sh/roofed? p roof-height) :done
       :else :continue)))
 
@@ -124,15 +146,23 @@
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
         name (u/block-name p below)
-        under (u/block-name p {:x x :y (- y 2) :z z})]
+        under (u/block-name p {:x x :y (- y 2) :z z})
+        fluid (lateral-fluid p below)]
     (cond
+      fluid (do (remember-failed-site! c :fluid-adjacent)
+                (ctx/emit! c :dig_in_failed :warn {:text (str fluid " beside the descent cell; not opening the pit")})
+                :done)
       (hazards name) (do (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
       (and (sh/solid-at? p below) (not (sh/solid? under)))
       (do (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
           :done)
-      (not (sh/solid-at? p below)) (do (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))
-                                       :continue)
+      (not (sh/solid-at? p below))
+      (let [before (:y (sh/feet p))
+            r (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))]
+        (if (< (:y (sh/feet p)) before)
+          (do (ctx/update-mem! c dissoc :failures) :continue)
+          (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
       :else (let [r (await (ctx/act c :dig (clj->js {:pos below})))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
@@ -156,13 +186,24 @@
         (if (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
               :done)
-          (u/fail! c :dig_in_failed (str "cannot roof the pit: " (.-status r))))))))
+          (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r))))))))
+
+(defn mode-choice
+  "[mode refusal] for the shelter from start: the first of :walls (only when walls-ok?) and :dig whose cells are all
+  permitted, else the first of them with its refusal (nil when permitted)."
+  [c start walls-cells walls-ok?]
+  (let [in (access/rules-input c)
+        walls-v (some #(access/trespass-refusal in :place %) walls-cells)
+        dig-v (or (some #(access/trespass-refusal in :dig %) [(update start :y dec) (update start :y - 2)])
+                  (access/trespass-refusal (assoc in :feet nil) :place start))
+        options (cond-> [] walls-ok? (conj [:walls walls-v]) :always (conj [:dig dig-v]))]
+    (or (first (filter (comp nil? second) options)) (first options))))
 
 (defn choose-mode
   "Record in job memory how this shelter is built. Walls mode stores only
   :mode :walls (the cells are recomputed from the feet every round). Dig mode
   stores :roof, the starting cell, and :target-y. Chosen once, again only when
-  the body leaves a dig-mode column."
+  the body leaves a dig-mode column. See mode-choice for the zone rule."
   [c]
   (let [p (:primitives c)
         {:keys [mode roof]} (ctx/mem c)
@@ -170,23 +211,28 @@
         moved (and (= :dig mode) (not (and (= x (:x roof)) (= z (:z roof)))))]
     (when moved (ctx/update-mem! c dissoc :mode :roof :target-y))
     (when (or moved (not mode))
-      (let [needed (count (open-cells p start))
-            have (reduce + (map :count (carried c (:blocks (:args c)))))]
-        (if (>= have needed)
+      (let [cells (open-cells p start)
+            have (reduce + (map :count (carried c (:blocks (:args c)))))
+            [chosen refusal] (mode-choice c start cells (>= have (count cells)))]
+        (access/trespass! c "dig-in" refusal)
+        (if (= :walls chosen)
           (ctx/update-mem! c assoc :mode :walls)
           (ctx/update-mem! c assoc :mode :dig :roof start :target-y (- (:y start) 2)))))))
 
 (defn futile-nearby?
-  "Whether an unexpired :dig-in-futile entry lies within futile-radius of the body."
+  "Whether a recent failed site blocks digging here. Material-only failures
+  can be retried after collecting blocks; unsafe or inaccessible sites cannot."
   [c]
-  (let [here (u/self-pos c)]
-    (boolean (some #(<= (u/dist here (:pos (:data %))) futile-radius) (ctx/entries c :dig-in-futile)))))
+  (let [here (u/self-pos c)
+        have-blocks (seq (carried c (:blocks (:args c))))]
+    (boolean (some #(and (or (:reason (:data %)) (not have-blocks))
+                         (<= (u/dist here (:pos (:data %))) futile-radius))
+                   (ctx/entries c :dig-in-futile)))))
 
 (defn check [c]
   (and (sh/night? (:primitives c))
        (not (sh/roofed? (:primitives c) (:roof-height (:args c))))
-       (or (seq (carried c (:blocks (:args c))))
-           (not (futile-nearby? c)))))
+       (not (futile-nearby? c))))
 
 (defn ^:async step [c]
   (choose-mode c)
