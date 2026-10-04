@@ -104,6 +104,16 @@
   [agent]
   (.join (.map (.split agent "/") js/encodeURIComponent) "/"))
 
+(defn loaded-count
+  "How many columns of the Map are \"loaded\" (runs every frame: an iterator loop, no seq)."
+  [^js columns]
+  (let [it (.values columns)]
+    (loop [n 0]
+      (let [^js r (.next it)]
+        (if (.-done r)
+          n
+          (recur (if (= "loaded" (.-status ^js (.-value r))) (inc n) n)))))))
+
 (defn nearest-upload
   "The entry [key, {column, result, mtime}] of uploads whose column is nearest the eye; nil when there is none."
   [^js uploads]
@@ -369,7 +379,7 @@
                         (pos? (.-size (.-columns st)))))
 
         refresh-counts! (fn []
-                          (set! (.-loaded metrics) (count (filter #(= "loaded" (.-status ^js %)) (es6-iterator-seq (.values (.-columns st))))))
+                          (set! (.-loaded metrics) (loaded-count (.-columns st)))
                           (set! (.-wanted metrics) (.-size (.-columns st)))
                           (set! (.-ready metrics) (settled?)))
 

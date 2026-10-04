@@ -181,3 +181,10 @@
     {:kind "Animals"} [0.55 0.38 0.22]
     {:name "item"} [1 0.88 0.16]
     {:type "other"} [0.5 0.5 0.5]))
+
+(deftest loaded-count-counts-the-loaded-columns
+  (let [columns (js/Map.)]
+    (doseq [[k status] [["0.0" "loaded"] ["0.1" "pending"] ["1.0" "loaded"] ["1.1" "missing"]]]
+      (.set columns k #js {:status status}))
+    (is (= 2 (scene/loaded-count columns)))
+    (is (= 0 (scene/loaded-count (js/Map.))))))

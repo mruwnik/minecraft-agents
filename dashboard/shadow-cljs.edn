@@ -1,6 +1,6 @@
 ;; shadow-cljs builds for the dashboard. See README.md.
 {:jvm-opts ["-Xmx1G"]
- :source-paths ["src" "test" "../engine/src"]
+ :source-paths ["src" "test" "bench-src" "../engine/src"]
  :dependencies [[reagent "1.3.0"]
                 [re-frame "1.4.3"]]
  :builds
@@ -41,6 +41,15 @@
                                :jobsRequestFor agent-tools.api/jobs-request-for
                                :sayUsage agent-tools.say/usage
                                :sayRequestFor agent-tools.api/say-request-for
+                               :sayMain agent-tools.api/say-main
+                               :driveUsage agent-tools.api/drive-usage
+                               :driveDefaultStateDir agent-tools.api/drive-default-state-dir
+                               :driveMain agent-tools.api/drive-main
+                               :driveRequestFor agent-tools.api/drive-request-for
+                               :driveSocketPathFor agent-tools.api/drive-socket-path-for
+                               :worldUsage agent-tools.api/world-usage
+                               :worldMain agent-tools.api/world-main
+                               :worldRequestFor agent-tools.api/world-request-for
                                :changesOptions agent-tools.api/changes-options
                                :changesExecute agent-tools.api/changes-execute
                                :changesMain agent-tools.api/changes-main
@@ -87,6 +96,27 @@
                                         isStale view.drive/is-stale
                                         shouldDrop view.drive/should-drop}}}
            :compiler-options {:infer-externs :auto}}
+  ;; The same viewer namespaces plus the hot functions the :viewer build does not export, release-optimized, for
+  ;; tools/view/bench-cljs-vs-js.mjs: `shadow-cljs release viewer-bench`. Not shipped.
+  :viewer-bench {:target :esm
+                 :output-dir "out/viewer-bench"
+                 :modules {:viewer-bench {:output-name "viewer-bench.mjs"
+                                          :exports {poseInterpolator view.interp/pose-interpolator
+                                                    createSceneCore view.scene/create-scene
+                                                    dueScenes view.schedule/due-scenes
+                                                    nextDueAt view.schedule/next-due-at
+                                                    planFrame view.schedule/plan-frame
+                                                    streamKey view.schedule/stream-key
+                                                    eventCache view.bench/event-cache
+                                                    moveWindow view.window/move-window
+                                                    slotKey view.window/slot-key
+                                                    controlFor view.drive/control-for
+                                                    lookStepFor view.drive/look-step-for
+                                                    mouseLook view.drive/mouse-look
+                                                    mergeLook view.drive/merge-look
+                                                    bannerText view.drive/banner-text
+                                                    shouldDrop view.drive/should-drop}}}
+                 :compiler-options {:infer-externs :auto}}
   :ui {:target :browser
        :output-dir "out/public/js"
        :asset-path "/js"
