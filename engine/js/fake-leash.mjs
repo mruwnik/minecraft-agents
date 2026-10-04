@@ -13,7 +13,11 @@ export function dragLeashed (s) {
       s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...e.pos }, item: { name: 'lead', count: 1 } })
       continue
     }
-    e.pos = walkLine([e.pos, { ...s.self.pos, x: s.self.pos.x - FOLLOW_GAP }], openAir(s)).pos
+    // `trail` (a number on the spec): the animal stays where it is within that many blocks of the body, else it is
+    // dragged to that far behind it, as a slow animal on a long lead trails a fast body.
+    const gap = e.trail ?? FOLLOW_GAP
+    if (e.trail !== undefined && Math.hypot(e.pos.x - s.self.pos.x, e.pos.z - s.self.pos.z) <= gap) continue
+    e.pos = walkLine([e.pos, { ...s.self.pos, x: s.self.pos.x - gap }], openAir(s)).pos
   }
 }
 

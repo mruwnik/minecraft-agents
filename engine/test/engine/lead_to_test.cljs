@@ -50,6 +50,26 @@
           (is (= 1 (count-of s "lead")) "the lead is back in the inventory")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
+(deftest gathers-a-trailing-cow-to-the-spot-before-letting-it-go
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6})]} 20))
+              c (cow-of s 1)]
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s))))
+          (is (<= (js/Math.abs (- 30 (.-x (.-pos c)))) 4) "the body walked on until the cow was within the gather radius")
+          (is (< 1 (count (tu/walked-to (:eng s)))) "at least one pull after the walk to the spot")
+          (is (empty? (events-of s :lead-to.gave-up))))))))
+
+(deftest does-not-pull-a-cow-that-is-already-at-the-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)]} 12))]
+          (is (= :unleashed (:reason (done-event s))))
+          (is (= [goal] (tu/walked-to (:eng s))) "one walk to the spot, no pull"))))))
+
 (deftest ties-the-cow-to-the-named-fence
   (async done
     (tu/run-async done

@@ -24,6 +24,15 @@ test('a led animal follows the body when it walks', async () => {
   assert.equal(cowOf(p).leashedToMe, true)
 })
 
+test('a led animal with a trail stays put within it of the body and is dragged to that far behind it beyond', async () => {
+  const p = fake({ ...fenced, blocks: {}, entities: [cow({ trail: 6 })], self: { pos: at(0, 64, 0) } })
+  await p.interact('t', { id: 1, item: 'lead' })
+  await p.moveTo('t', { pos: at(4, 64, 0), range: 1 })
+  assert.equal(cowOf(p).pos.x, 1)
+  await p.moveTo('t', { pos: at(30, 64, 0), range: 1 })
+  assert.ok(Math.abs(cowOf(p).pos.x - (p.self().pos.x - 6)) < 1e-6, `at ${cowOf(p).pos.x}`)
+})
+
 test('a led animal is dragged in a straight line: a fence or a gate, open or shut, stops it on its side', async () => {
   for (const [label, block, state] of [['fence', 'oak_fence', {}], ['shut gate', 'oak_fence_gate', { open: false }], ['open gate', 'oak_fence_gate', { open: true }]]) {
     const p = fake({ ...fenced, blocks: { '5,64,0': block }, states: { '5,64,0': state } })

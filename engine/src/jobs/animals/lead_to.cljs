@@ -6,9 +6,10 @@
 (def doc
   "Put a lead on one animal of the mob type :mob, walk to :pos with it
   following and there either tie it to the fence post at :fence or let it go:
-  a one-shot order that starts and ends itself. Three phases, each by a child
-  job: jobs.animals.leash (radius :radius), jobs.movement.go-to (to :pos, or to
-  the :fence cell when no :pos is given, range :range) and then, with :fence,
+  a one-shot order that starts and ends itself. Phases :leash, :walk, :gather
+  and :arrive, each by a child job: jobs.animals.leash (radius :radius),
+  jobs.movement.go-to (to :pos, or to the :fence cell when no :pos is given,
+  range :range), without :fence a :gather (see below) and then, with :fence,
   a click with an empty hand on that post (useOn) after walking to within 2 of
   it, else jobs.animals.unleash for that animal (which picks the lead up
   again). Before every walking round and again on arrival the animal is looked
@@ -28,6 +29,12 @@
   jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed,
   :timeout) when no animal got on the lead, or of jobs.animals.unleash
   (:refused, :unreachable, :none, :timeout) when the lead would not come off.
+  :gather (no :fence only): a body outwalks a led animal, which trails about
+  a lead length behind it, so on arrival the animal is looked up and, when it
+  is farther than :gather-radius from :pos, the body walks on towards :pos by
+  the excess (range 1) so the lead pulls the animal that much nearer, then
+  looks again; at most :gather-tries pulls. A pull that did not arrive, or
+  running out of pulls, is no failure: the animal is let go where it is.
   The check always passes, so a cut job resumes and ends itself.")
 
 (def args
@@ -36,6 +43,8 @@
    :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :default nil}
    :range {:doc "how close to :pos counts as there" :default 2}
    :radius {:doc "animals within this many blocks are leashed from where the job starts" :default 8}
+   :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :default 3}
+   :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :default 64}
    :timeout-s {:doc "seconds from the first round before the job gives up" :default 180}})
 
@@ -88,8 +97,48 @@
     (if-not (= :done r)
       :continue
       (if (:arrived (ctx/child-result c :walk))
-        (do (set-phase! c :arrive) :continue)
+        (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :continue)
         (finish! c :unreachable)))))
+
+(defn flat-dist [a b]
+  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
+
+(defn pull-point
+  "Where the body walks to pull animal-pos nearer to pos by its excess over radius: the body's own
+  position moved along the line from the animal to pos (flat, the body's y kept), or nil when the
+  animal is close enough."
+  [body animal-pos pos radius]
+  (let [d (flat-dist animal-pos pos)
+        excess (- d radius)]
+    (when (pos? excess)
+      (let [k (/ excess d)]
+        (assoc body
+               :x (+ (:x body) (* k (- (:x pos) (:x animal-pos))))
+               :z (+ (:z body) (* k (- (:z pos) (:z animal-pos)))))))))
+
+(defn ^:async pull! [c target]
+  (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open}))]
+    (if-not (= :done r)
+      :continue
+      (do (ctx/update-mem! c dissoc :pull-target)
+          (ctx/update-mem! c update :pulls (fnil inc 0))
+          (when-not (:arrived (ctx/child-result c :pull)) (set-phase! c :arrive))
+          :continue))))
+
+(defn ^:async gather!
+  "Without :fence: let the animal catch up. A pull in progress is carried on with its stored target;
+  otherwise the animal is looked at and either is near enough (or the pulls are spent: :arrive) or
+  starts a pull."
+  [c a]
+  (let [{:keys [pos gather-radius gather-tries]} (:args c)
+        {:keys [pull-target pulls] :or {pulls 0}} (ctx/mem c)
+        target (or pull-target
+                   (when (< pulls gather-tries)
+                     (pull-point (u/self-pos c) (u/pos-of (.-pos a)) pos gather-radius)))]
+    (if-not target
+      (do (set-phase! c :arrive) :continue)
+      (do (ctx/update-mem! c assoc :pull-target target)
+          (await (pull! c target))))))
 
 (defn ^:async let-go! [c]
   (set-phase! c :release)
@@ -135,9 +184,10 @@
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c :leash) :continue)
         (= :leash phase) (await (leash! c))
-        (and (#{:walk :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
-        (and (#{:walk :arrive} phase) (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
+        (and (#{:walk :gather :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+        (and (#{:walk :gather :arrive} phase) (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
         (= :walk phase) (await (walk! c))
+        (= :gather phase) (await (gather! c a))
         (= :arrive phase) (await (arrive! c))
         (= :release phase) (await (let-go! c))
         :else (finish! c :lost)))))
