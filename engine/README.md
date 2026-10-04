@@ -481,7 +481,7 @@ The single argument of a check and a round. Use the helpers in `engine.ctx`.
 | `(ctx/result! ctx data)` | hand `data` to the parent; only the round that ends `:done` hands it over |
 | `(ctx/child-result ctx slot)` | the data the child in `slot` handed over in the round it finished, during that round of the parent; else nil |
 | `(ctx/submit! ctx spec opts)` | put a job spec at the end of the list as a peer; returns its id |
-| `(ctx/emit! ctx kind level fields)` | an event with `:source :job` |
+| `(ctx/emit! ctx kind level fields)` | an event with `:source :job`; the level is not stored, but `:warn` or `:error` without an `:attention` in `fields` stores `:attention :notice`, so a give-up shows in `observe --wait` and the dashboard notice list. An explicit `:attention` in `fields` always wins; `:info`, `:debug` and no level carry none. Use `:warn` only for a give-up or decline, never per cell or per tick |
 | `(ctx/plan ctx id)` | the body's world's plan `id`, from memory: nil (no such file), `{:id :broken text}` (never readable), else `{:id :plan :status :cells :errors}` (`:cells` `[{:pos [x y z] :want :part}]` from `plan.shape/expand`), with `:error` while the file is bad and this is its last good copy |
 | `(ctx/warn-once! ctx key kind fields)` | a warn event, only the first time this job gives `key` in this body process; checks may call it |
 

@@ -66,7 +66,7 @@
 (defn digs [p] (mapv pos-xyz (h/calls p "dig")))
 (defn places [p] (mapv #(let [a (.-args %) q (.-pos a)] [(.-x q) (.-y q) (.-z q) (.-item a)]) (h/calls p "place")))
 (defn listed? [eng] (boolean (seq (:list (core/state eng)))))
-(defn warns [seen kind] (mapv #(dissoc % :seq :t :body :source :job :cause :level :text :log :logs :round :kind :chain) (h/events-of seen kind)))
+(defn warns [seen kind] (mapv #(dissoc % :seq :t :body :source :job :cause :level :attention :text :log :logs :round :kind :chain) (h/events-of seen kind)))
 (defn set-block! [p x y z name] (.set (.-blocks (.-state (.-world p))) (k x y z) name))
 (defn give! [p name n] (.push (.-inventory (.-state (.-world p))) (clj->js (item name n))))
 

@@ -498,8 +498,10 @@
                           (check!)
                           (resolve-attention! eng request-id reason))
      :emit (fn [kind level fields]
-             (emit! eng (merge fields {:source :job :kind kind :level level :job id
-                                       :chain chain :round round :reflex reflex})))}))
+             (let [notice? (and (#{:warn :error} level) (not (contains? fields :attention)))]
+               (emit! eng (cond-> (merge fields {:source :job :kind kind :level level :job id
+                                                 :chain chain :round round :reflex reflex})
+                            notice? (assoc :attention :notice)))))}))
 
 (defn child-ctx
   "The ctx of the child in slot under parent base, with args."
