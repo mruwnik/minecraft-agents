@@ -65,6 +65,25 @@
                :output-dir "out/rcon-tools-js"
                ;; :simple keeps property names, so the node API calls need no externs
                :compiler-options {:optimizations :simple :infer-externs false}}
+  ;; The browser viewer's cljs (tools/view/web imports cljs/viewer.mjs): built with `shadow-cljs release viewer`, one file.
+  :viewer {:target :esm
+           :output-dir "../tools/view/web/cljs"
+           :modules {:viewer {:output-name "viewer.mjs" ; .mjs: the repo package is commonjs, Node tests import it too
+                              :exports {poseInterpolator view.interp/pose-interpolator
+                                        controlFor view.drive/control-for
+                                        lookStepFor view.drive/look-step-for
+                                        mouseLook view.drive/mouse-look
+                                        mergeLook view.drive/merge-look
+                                        bannerText view.drive/banner-text
+                                        serialQueue view.drive/serial-queue
+                                        whoFrom view.drive/who-from
+                                        shouldTakeOnClick view.drive/should-take-on-click
+                                        shouldReleaseOnEscape view.drive/should-release-on-escape
+                                        leaveAction view.drive/leave-action
+                                        withTimeout view.drive/with-timeout
+                                        isStale view.drive/is-stale
+                                        shouldDrop view.drive/should-drop}}}
+           :compiler-options {:infer-externs :auto}}
   :ui {:target :browser
        :output-dir "out/public/js"
        :asset-path "/js"

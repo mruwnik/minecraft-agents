@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -31,8 +31,9 @@ const killBuild = () => {
 }
 
 const runStep = (step) => new Promise((resolve) => {
-  say(`building (shadow-cljs compile ${step})`)
-  build = spawn('flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', step], { cwd: dir, stdio: 'inherit', detached: true })
+  const [command, args] = stepCommand(step)
+  say(`building ${step} (${command} ${args.join(' ')})`)
+  build = spawn(command, args, { cwd: dir, stdio: 'inherit', detached: true })
   build.on('error', (e) => { say(`build could not start: ${e.message}`); build = null; resolve(1) })
   build.on('exit', (code) => { build = null; resolve(code === null ? 1 : code) })
 })

@@ -1,5 +1,5 @@
 (ns drive.keys
-  "Pure key, look and lease-reply rules for driving a body, ported one to one from tools/view/web/drive-keys.mjs
+  "Pure key, look and lease-reply rules for driving a body, ported one to one from the former tools/view/web/drive-keys.mjs (the view page calls them through view.drive)
   (Minecraft degrees: positive dyaw turns right, negative dpitch looks up). Ctrl is not a control: Ctrl+W closes the tab.
   Controls are keywords (:forward ...); the JSON the server wants is the same names as strings.
   Replies are keywordized maps of the server's /drive reply."

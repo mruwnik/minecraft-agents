@@ -2,7 +2,7 @@
 // (fetch, decode on the shared pool, upload into its own GL world) and says where the camera is. It does not draw: the page
 // (app.mjs) or the hub (hub.mjs) calls frame(now) and draws the returned params with renderer.draw(scene.world, params).
 import { cameraBasis } from './camera.mjs'
-import { poseInterpolator } from './interp.mjs'
+import { poseInterpolator } from './cljs/viewer.mjs'
 import { skyDarken, sceneTime } from './shading.mjs'
 import { tablesFor } from './tables.mjs'
 

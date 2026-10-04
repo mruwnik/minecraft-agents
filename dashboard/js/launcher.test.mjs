@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -90,12 +90,21 @@ test('a quit during a swap stops the replacement from starting', () => {
   assert.deepEqual(onServerExit(quit.state, 0).actions, ['exit:0'])
 })
 
-test('the ui builds before the server so a failed ui build leaves the old server file', () => {
-  assert.deepEqual(buildSteps, ['ui', 'server'])
+test('the viewer and the ui build before the server so a failed build leaves the old server file', () => {
+  assert.deepEqual(buildSteps, ['viewer', 'ui', 'server'])
 })
 
 test('buildOutcome stops at the first failed step', () => {
-  assert.deepEqual(buildOutcome([0, 0]), { ok: true, failed: null })
-  assert.deepEqual(buildOutcome([1]), { ok: false, failed: 'ui' })
-  assert.deepEqual(buildOutcome([0, 2]), { ok: false, failed: 'server' })
+  assert.deepEqual(buildOutcome([0, 0, 0]), { ok: true, failed: null })
+  assert.deepEqual(buildOutcome([1]), { ok: false, failed: 'viewer' })
+  assert.deepEqual(buildOutcome([0, 1]), { ok: false, failed: 'ui' })
+  assert.deepEqual(buildOutcome([0, 0, 2]), { ok: false, failed: 'server' })
 })
+
+for (const [step, expected] of [
+  ['viewer', ['node', ['../tools/view/build-cljs.mjs']]],
+  ['ui', ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'ui']]],
+  ['server', ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'server']]]
+]) {
+  test(`stepCommand ${step}`, () => assert.deepEqual(stepCommand(step), expected))
+}

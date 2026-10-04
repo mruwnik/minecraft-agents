@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "test": "shadow-cljs compile test && node out/test.cjs && node --test js/*.test.mjs",
-    "build": "shadow-cljs compile server ui",
+    "build": "shadow-cljs compile server ui && node ../tools/view/build-cljs.mjs",
     "build-rcon-tools": "shadow-cljs release rcon-tools",
     "build-agent-tools": "shadow-cljs release agent-tools",
     "start": "node start.mjs",

@@ -76,6 +76,10 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
   `/view?agent=<world>/<body>`, `/agents`, `/pose/<world>/<body>`, `/hud/<world>/<body>`, `/drive/<world>/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
   `/blocks/`, `/textures/`.
+- The view pages' ClojureScript (`src/view/`: pose interpolation, the drive rules as `tools/view/web/drive.mjs` calls them) is the
+  `:viewer` build: `shadow-cljs release viewer` writes one ES module, `tools/view/web/cljs/viewer.mjs` (gitignored), imported by
+  `scene.mjs` and `drive.mjs` and served at `/web/cljs/viewer.mjs`. `node ../tools/view/build-cljs.mjs` builds it when a source
+  is newer; `npm run build`, the launcher's restart and the root `npm test` (pretest) run that.
 
 Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view and takeover), `/map` (places, zones,
 plans (outlined, coloured by completion; zoomed in, their elements too; a click opens the plan) and live bodies; the default view fits places and plans, "home" returns to it, "fit all" and "fit bodies" refit; a body

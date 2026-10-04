@@ -1,6 +1,6 @@
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, isStale, shouldDrop } from './drive-keys.mjs'
+import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, isStale, shouldDrop } from './cljs/viewer.mjs' // view.drive (dashboard/src/view/drive.cljs)
 
 const REQUEST_TIMEOUT_MS = 1500
 const POLL_MS = 1000

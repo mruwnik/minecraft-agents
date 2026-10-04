@@ -64,6 +64,10 @@ before(async () => {
   fs.writeFileSync(path.join(webDir, 'index.html'), '<h1>hi</h1>')
   fs.writeFileSync(path.join(webDir, 'x.mjs'), 'export const x = 1')
   fs.writeFileSync(path.join(webDir, 'secret.txt'), 'no')
+  fs.mkdirSync(path.join(webDir, 'cljs'))
+  fs.writeFileSync(path.join(webDir, 'cljs', 'viewer.js'), 'export const y = 2')
+  fs.mkdirSync(path.join(webDir, 'other'))
+  fs.writeFileSync(path.join(webDir, 'other', 'z.js'), 'export const z = 3')
   server = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 50, blockJar: null, blockSweepMs: 100, blockWriteMs: 100 })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${server.address().port}`
@@ -110,6 +114,10 @@ for (const [p, status] of [
   ['/web/..%2Fsecret.txt', 404],
   ['/web/secret.txt', 404],
   ['/web/nothere.mjs', 404],
+  ['/web/other/z.js', 404],
+  ['/web/cljs/..%2Fx.mjs', 404],
+  ['/web/cljs/a/viewer.js', 404],
+  ['/web/cljs/nothere.js', 404],
   ['/blocks/abc.json', 404],
   ['/textures/abc.bin', 404],
   ['/textures/26.1.json', 404],
@@ -134,6 +142,12 @@ test('GET / and /web/<file> serve the web dir with content types', async () => {
   assert.equal(index.headers.get('cache-control'), 'no-cache')
   const script = await get('/web/x.mjs')
   assert.equal(await script.text(), 'export const x = 1')
+  assert.match(script.headers.get('content-type'), /javascript/)
+})
+
+test('GET /web/cljs/<file> serves the cljs build output', async () => {
+  const script = await get('/web/cljs/viewer.js')
+  assert.equal(await script.text(), 'export const y = 2')
   assert.match(script.headers.get('content-type'), /javascript/)
 })
 

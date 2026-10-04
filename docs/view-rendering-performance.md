@@ -109,7 +109,7 @@ Compared with the CPU path at 720p, this is 60 fps (vsync-bound) against about 1
 The orientation was checked against the Node PNG for the same frozen pose at 640x360, front view and top-down: the
 same landmarks appear on the same side and the horizon sits at the same height.
 
-### Pose interpolation (`tools/view/web/interp.mjs`)
+### Pose interpolation (`dashboard/src/view/interp.cljs`, loaded as `tools/view/web/cljs/viewer.mjs`)
 
 Without interpolation the camera snaps to each pose. Poses come at the body's write rate and arrive 0–50 ms late
 because of the server's mtime poll, so the camera sits still most frames and then jumps. The page now plays poses back

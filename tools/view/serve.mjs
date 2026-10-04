@@ -14,6 +14,7 @@ import { bodyDir, listBodies } from '../../engine/js/bodies.mjs'
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
 const COLUMN_FILE = /^(-?\d+)\.(-?\d+)\.bin$/
+const WEB_FILE = /^(?!\.)[A-Za-z0-9_.-]+$/
 const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8' }
 const PING_MS = 15000
 const MAX_STREAM_AGENTS = 32
@@ -298,7 +299,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     if (head === 'drive' && body) return driveProxy(req, res, body)
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     if (url.pathname === '/') return serveStatic(res, 'index.html')
-    if (head === 'web' && rest.length === 1 && /^[A-Za-z0-9_.-]+$/.test(rest[0]) && !rest[0].startsWith('.')) return serveStatic(res, rest[0])
+    if (head === 'web' && rest.length === 1 && WEB_FILE.test(rest[0])) return serveStatic(res, rest[0])
+    if (head === 'web' && rest.length === 2 && rest[0] === 'cljs' && WEB_FILE.test(rest[1])) return serveStatic(res, `cljs/${rest[1]}`) // the :viewer build
     if (url.pathname === '/agents') return listAgents(res)
     if (head === 'pose' && body) {
       const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))

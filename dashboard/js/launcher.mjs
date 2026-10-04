@@ -8,8 +8,16 @@ export const minMemoryMb = 3500
 
 export const initial = { phase: 'idle', pending: false, stopping: null, quitting: false }
 
-// ui first: shadow-cljs writes out/server.cjs only when the server step runs, so a failed ui build leaves the old file.
-export const buildSteps = ['ui', 'server']
+// server last: shadow-cljs writes out/server.cjs only when the server step runs, so a failed viewer or ui build leaves the
+// old file. viewer: the view pages' cljs (tools/view/web/cljs/viewer.mjs), rebuilt only when its sources changed.
+export const buildSteps = ['viewer', 'ui', 'server']
+
+// [command, args] of a step, run in the dashboard dir. The compile JVM is shared machine-wide, hence flock (build-cljs.mjs
+// takes it itself, only when it builds).
+export const stepCommand = (step) =>
+  step === 'viewer'
+    ? ['node', ['../tools/view/build-cljs.mjs']]
+    : ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', step]]
 
 // codes: exit codes of the steps run so far, in order; the run stops at the first non-zero one.
 export const buildOutcome = (codes) => {

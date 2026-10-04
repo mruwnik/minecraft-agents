@@ -2,3 +2,5 @@ node_modules/
 textures/
 state/
 .superpowers/
+# the viewer cljs build (dashboard/shadow-cljs.edn :viewer; tools/view/build-cljs.mjs)
+tools/view/web/cljs/
