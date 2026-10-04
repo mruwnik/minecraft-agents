@@ -671,3 +671,21 @@
             (is (finished? again))
             (is (= :count (:reason (done-event again))))
             (is (= [0 65 0] (feet again)))))))))
+
+(deftest a-tunnel-never-entered-is-not-walked-out-of
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (buried-fake (update buried-world :blocks assoc "40,99,40" "stone"))
+              w (.-world p)
+              _ (.override w "steer" (fn ^:async f [token a impl]
+                                       (let [r (await (impl token a))]
+                                         (set! (.. w -state -self -pos) #js {:x 40.5 :y 100 :z 40.5})
+                                         r)))
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :buried true :mend false}) {})
+          (await (run-ticks s 80))
+          (is (finished? s))
+          (is (= [:walk-in-failed] (map :reason (events-of s :tunnel.stopped))))
+          (is (empty? (events-of s :mine.trapped)) "the body never went in")
+          (is (empty? (calls s "dig"))))))))

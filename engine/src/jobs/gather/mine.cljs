@@ -58,8 +58,9 @@
   its drops collected; then the body walks back up to the tunnel's entry over its own stair (jobs.debug.walk-plan,
   child :out) and from there to where the visit began (moveTo, as mine walks to targets; not arriving there is an
   info mine.not-home). The visit is in job memory (:visit {:target :from :entry :stage :in|:dig|:out|:home}), so a
-  cut or a restart goes on from its stage. A tunnel that stops skips the target and counts a failure (it walks back to its entry itself); a walk out
-  that does not arrive ends the job :trapped (warn mine.trapped). Tunnels are left open: info mine.tunnel {:target
+  cut or a restart goes on from its stage. A tunnel that stops skips the target and counts a failure (it walks back
+  to its entry itself; the walk up to the entry runs only when the tunnel says the body is still :inside); a walk
+  out that does not arrive ends the job :trapped (warn mine.trapped). Tunnels are left open: info mine.tunnel {:target
   :entry :dug n} per reached target, and the result carries :tunnels [{:target :entry :dug n}].")
 
 (def args
@@ -291,7 +292,7 @@
         (ctx/emit! c :mine.tunnel :info (assoc t :text (str "mine tunnelled to " (pr-str target) " from " (pr-str (:entry res)))))
         (ctx/update-mem! c #(-> % (update :tunnels (fnil conj []) t) (update :visit assoc :stage :dig :entry (:entry res)))))
       :else (do (skip-failed! c (zipmap [:x :y :z] target))
-                (ctx/update-mem! c update :visit assoc :stage :out :entry (:entry res))))
+                (ctx/update-mem! c update :visit assoc :stage :out :entry (when (:inside res) (:entry res)))))
     :continue))
 
 (defn ^:async walk-out!

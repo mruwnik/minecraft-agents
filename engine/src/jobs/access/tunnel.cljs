@@ -15,8 +15,11 @@
   line is judged from the loaded blocks before anything is walked or dug, step by step as the stair judges its own
   (engine.access.rules: zones, other plans' footprints, unloaded; a fluid in a cut; a fluid beside a cut or a
   falling block over one, taken only when named in :accept, default #{}; the next floor solid; the cell under it
-  neither air nor fluid), plus the target cell as the last opening (a fluid beside it would flood the stand). The
-  shortest valid line wins, ties to the entry nearest the body. No valid line stops before any walk or dig with the
+  neither air nor fluid), plus the target's own column as a last run step: the target and the cell over it, the
+  target's floor. At the stand the cell over the target is dug (so after the caller digs the target its cell is 2
+  high and can be walked into, to pick up a drop that landed out of reach); the target itself is left. The
+  shortest valid line wins; among equals one that leaves the floor under the body's start uncut, then the entry
+  nearest the body. No valid line stops before any walk or dig with the
   reason all judged lines share (:zone, :footprint, :hazard, :cave-below, :no-floor, :fluid-in-cut, :not-loaded,
   :no-zones), :too-far when no line fits within :max-length, else :no-approach with :headings (each heading's first
   reason). Then the body walks to the entry (jobs.debug.walk-plan; failing: :walk-in-failed), the stair child cuts
@@ -27,8 +30,8 @@
   arrived). The body's cell is the progress: on the stair line the stair child goes on, on the run line the run, at
   the stand it is done; anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
   Dug cells are left and recorded. A nil zone list declines the check (one tunnel.declined warn). Hands over
-  {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug [{:cell :block}]}
-  plus detail, also as a :tunnel.done info or :tunnel.stopped warn event.")
+  {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug [{:cell :block}]
+  :inside bool} (:inside: the body is off the entry, on the way in; false when it never got there) plus detail, also as a :tunnel.done info or :tunnel.stopped warn event.")
 
 (def args
   {:target {:doc "the buried block [x y z]" :default nil}
@@ -85,21 +88,12 @@
      :end end
      :stand (last run-feet)}))
 
-(defn target-stop
-  "Why opening the target from the stand would not do, or nil."
-  [in target stand accept]
-  (let [v (stair/cell-verdict (assoc in :cell target :feet stand) [target])]
-    (cond
-      (nil? ((:block-at in) target)) {:reason :not-loaded :cell target}
-      (not (:ok v)) (assoc (dissoc v :ok) :cell target)
-      (not-every? (comp accept stair/hazard-key) (:hazards v)) {:reason :hazard :cell target :hazards (:hazards v)})))
-
 (defn line-stop
   "The first stop on the line of plan, or nil when every step and the target may be cut."
   [in plan accept]
   (let [{:keys [steps stand]} (line plan)]
     (or (some (fn [[feet cells]] (stair/stop-of (assoc in :feet feet) cells accept)) steps)
-        (target-stop in (:target plan) stand accept))))
+        (stair/stop-of (assoc in :feet stand) (run-cells stand (:heading plan)) accept))))
 
 (defn fits
   "The plan of the line along heading whose entry is n before the target, when the stair fits in it; else nil."
@@ -123,6 +117,12 @@
       {:plan p}
       {:stop (or (second (first judged)) {:reason :too-far})})))
 
+(defn cuts-floor?
+  "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
+  [plan feet]
+  (let [floor (stair/add feet [0 -1 0])]
+    (boolean (some (fn [[_ {:keys [cut]}]] (some #{floor} cut)) (:steps (line plan))))))
+
 (defn dist2 [[x y z] [a b c]] (+ (* (- x a) (- x a)) (* (- y b) (- y b)) (* (- z c) (- z c))))
 
 (defn approach
@@ -134,7 +134,7 @@
     (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept)])) heading-order)
           plans (keep (comp :plan per) heading-order)]
       (if (seq plans)
-        (first (sort-by (juxt :length #(dist2 feet (:entry %))) plans))
+        (first (sort-by (juxt :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
               real (remove #(= :too-far (:reason %)) (vals stops))
               reasons (set (map :reason real))]
@@ -149,8 +149,9 @@
   "Hand the result over and end: :done when reached, else :stopped (warn)."
   [c reason detail]
   (let [{:keys [plan dug]} (ctx/mem c)
+        feet (feet-of c)
         result (merge {:status (if (= :reached reason) :done :stopped) :reason reason :target (:target (:args c))
-                       :at (feet-of c) :dug (or dug [])}
+                       :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))}
                       (select-keys plan [:entry :heading :stand])
                       detail)]
     (ctx/result! c result)
@@ -189,6 +190,18 @@
               (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :continue)
               :else {:reason :step-failed :cell next :walk r}))))))
 
+(defn ^:async open-over-target!
+  "At the stand: the target's step judged again and the cell over the target dug; :reached once it is open."
+  [c feet]
+  (let [accept (set (:accept (:args c)))
+        in (stair/rules-in c feet)
+        {:keys [cut] :as cells} (run-cells feet (:heading (:plan (ctx/mem c))))
+        over (first cut)]
+    (or (stair/stop-of in cells accept)
+        (if (rules/air ((:block-at in) over))
+          :reached
+          (await (stair/dig! c in over cut accept))))))
+
 (defn ^:async stair-part!
   "One round of the stair child, also its last one at the stair's end (it hands over what it dug): :continue, or a
   stop map when the stair stopped."
@@ -219,7 +232,7 @@
       j (if-let [stop (when (and (not= feet entry) (not= j checked)) (stair/way-back c entry))]
           stop
           (do (ctx/update-mem! c assoc :checked j)
-              (if (= feet stand) :reached (await (run-step! c feet)))))
+              (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
       :else (let [r (await (walk-to! c :in entry))]
               (cond
                 (= :continue r) :continue
@@ -239,7 +252,7 @@
   "After a stop: finish where the body is (outside, at the entry, or no way back), else walk out first."
   [c {:keys [reason outside] :as stop}]
   (if (or outside (= :no-way-back reason) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
-    (finish! c reason (dissoc stop :reason :outside))
+    (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
     (do (ctx/update-mem! c assoc :stop stop) :continue)))
 
 (defn bad-target? [t] (not (and (vector? t) (= 3 (count t)) (every? int? t))))

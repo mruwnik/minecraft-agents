@@ -48,9 +48,15 @@
     (is (= 6 (:length a)))
     (is (= [0 60 0] (stair-target a)) "the stand's next cell along the heading is the target")))
 
-(deftest eight-down-six-aside-starts-behind-the-body
-  (is (= {:entry [-3 65 0] :heading :east :dir :down :steps 8 :run 0 :length 9 :stand [5 57 0] :target [6 57 0]}
-         (approach {} [6 57 0]))))
+(deftest eight-down-six-aside-leaves-the-floor-under-the-body
+  (is (= {:entry [6 65 9] :heading :north :dir :down :steps 8 :run 0 :length 9 :stand [6 57 1] :target [6 57 0]}
+         (approach {} [6 57 0]))
+      "the east line from [-3 65 0] is as short and nearer, but its third step cuts the body's floor [0 64 0]"))
+
+(deftest a-line-under-the-body-is-taken-when-it-is-the-only-one
+  (let [zones [{:name "north" :min [-30 40 -30] :max [30 80 -1]} {:name "south" :min [-30 40 1] :max [30 80 30]}
+               {:name "west" :min [7 40 0] :max [30 80 0]}]]
+    (is (= [-3 65 0] (:entry (approach {} [6 57 0] :zones zones))))))
 
 (deftest a-lower-entry-runs-flat-the-rest
   (let [trench (into {} (for [x (range -12 -1) y [61 62 63 64] z (range -12 13)] [[x y z] "air"]))
@@ -72,7 +78,9 @@
   (are [named target opts reason] (= reason (:reason (apply approach named target (mapcat identity opts))))
     {} [0 60 0] {:max-length 4} :too-far
     {[0 61 0] "lava"} [0 60 0] {} :hazard
-    {[0 61 0] "water"} [0 60 0] {} :hazard
+    {[0 62 0] "water"} [0 60 0] {} :hazard
+    {[0 61 0] "stone" [0 62 0] "gravel"} [0 60 0] {} :hazard
+    {[0 59 0] "air"} [0 60 0] {} :no-floor
     {[1 60 0] "water"} [0 60 0] {} :no-approach
     {} [0 60 0] {:zones [{:name "vault" :min [0 60 0] :max [0 60 0]}]} :zone
     {} [0 60 0] {:footprints {[0 60 0] "wall"}} :footprint
@@ -147,7 +155,8 @@
           (is (= [5 57 0] (feet p)))
           (is (= [-3 65 0] (:entry @out)))
           (is (= "iron_ore" (block-at p [6 57 0])) "the tunnel leaves the target to its caller")
-          (is (= 21 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground")
+          (is (= "air" (block-at p [6 58 0])) "and opens the cell over it, so the target's cell can be walked into")
+          (is (= 22 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground, and the cell over the target")
           (is (= 1 (count (events-of s :tunnel.done)))))))))
 
 (deftest a-run-after-the-stair-cuts-two-high
@@ -159,7 +168,8 @@
                                               {:target [0 61 0]} (fn [_])))]
           (is (= :reached (:reason @out)))
           (is (= [-1 61 0] (feet p)))
-          (is (= [{:cell [-1 62 0] :block "stone"} {:cell [-1 61 0] :block "stone"}] (:dug @out))))))))
+          (is (= [{:cell [-1 62 0] :block "stone"} {:cell [-1 61 0] :block "stone"} {:cell [0 62 0] :block "stone"}]
+                 (:dug @out))))))))
 
 (deftest lava-showing-up-ahead-stops-and-walks-back-out
   (async done
@@ -225,9 +235,9 @@
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! s))
           (is (= :reached (:reason @out)))
-          (is (= 21 (count (:dug @out))))
-          (is (= 21 (count (distinct (map :cell (:dug @out))))) "each cell recorded once")
-          (is (<= (count (digs p)) 22) "only the cut dig is repeated"))))))
+          (is (= 22 (count (:dug @out))))
+          (is (= 22 (count (distinct (map :cell (:dug @out))))) "each cell recorded once")
+          (is (<= (count (digs p)) 23) "only the cut dig is repeated"))))))
 
 (deftest a-restart-resumes-from-the-body-on-the-line
   (async done
