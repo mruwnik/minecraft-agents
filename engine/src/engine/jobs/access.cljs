@@ -12,13 +12,18 @@
 (defn cell [{:keys [x y z]}] [x y z])
 
 (defn zone-input
-  "The social half of the rules' input: {:zones :footprints :claims :self :now :ignore-zones?}. opts: :except, a plan
-  id whose own footprint is left out (for a job working that plan); :ignore-zones?, the job's opt-out (default: the
+  "The social half of the rules' input: {:zones :footprints :plan-cells :claims :self :now :ignore-zones?}. opts:
+  :except, a plan id whose own footprint is left out of :footprints and its cells given as :plan-cells (a set; empty
+  without :except), for a job working that plan: the plan is the permission, so it may work over a foreign zone or
+  claim (engine.access.zones/verdict); :ignore-zones?, the job's opt-out (default: the
   job's own :ignore-zones? arg)."
   ([c] (zone-input c {}))
   ([c {:keys [except] :as opts}]
    {:zones (ctx/zones c)
     :footprints (ctx/footprints c {:except except})
+   :plan-cells (if (nil? except)
+                 #{}
+                 (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (ctx/footprints c)))
     :claims (ctx/claims c)
     :self (ctx/self-name c)
     :now (ctx/now c)
@@ -54,7 +59,7 @@
       :sow (rules/may-place? (assoc in :feet nil))
       (if (:ignore-zones? in)
         {:ok true}
-        (let [v (zones/verdict (assoc (select-keys in [:zones :footprints :claims :self :now :cell]) :action action))]
+        (let [v (zones/verdict (assoc (select-keys in [:zones :footprints :plan-cells :claims :self :now :cell]) :action action))]
           (if (:ok v) {:ok true} v))))))
 
 (defn judge

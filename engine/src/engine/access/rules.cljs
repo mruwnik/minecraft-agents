@@ -93,9 +93,10 @@
 
 (defn social-verdict
   "engine.access.zones/verdict for action over the rules input, for a nil zone list as if it were empty (the
-  no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan."
+  no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan. :plan-cells, the cells of the
+  plan the job builds, let it work over a foreign zone or claim (ok :plan, see zones/verdict)."
   [action {:keys [zones footprints cell] :as in}]
-  (let [v (zones/verdict (assoc (select-keys in [:claims :self :now]) :zones (or zones []) :footprints footprints
+  (let [v (zones/verdict (assoc (select-keys in [:claims :self :now :plan-cells]) :zones (or zones []) :footprints footprints
                                 :action action :cell cell))]
     (cond-> v
       (set? footprints) (dissoc :plan))))

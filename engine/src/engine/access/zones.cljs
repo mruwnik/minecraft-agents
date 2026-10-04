@@ -9,13 +9,16 @@
     :claims      [{:id :owner :status :active :until ms :min :max}]; only :active ones not yet past :until count
     :footprints  {cell plan-id} of the plans other than the one the caller builds (the caller leaves its own out,
                  see engine.ctx/footprints :except)
+    :plan-cells  the set of cells of the plan the caller builds (see engine.jobs.access/zone-input): with
+                 plan-footprint-beats-zone? a cell in it is permitted over a foreign zone or claim, the plan is the
+                 permission (another plan's footprint still refuses)
     :self        the body's name; owners are compared case-insensitively
     :now         ms clock, against a claim's :until
     :action      :dig :place :harvest :take :put
     :cell        [x y z]
-  Output: {:ok true :why :own-zone|:own-claim|:open} or {:ok false :reason :no-zones|:footprint|:zone|:claim
+  Output: {:ok true :why :own-zone|:own-claim|:open|:plan} or {:ok false :reason :no-zones|:footprint|:zone|:claim
   ...detail}: :footprint + :plan, :zone + :zone + :owner, :claim + :claim + :owner.
-  Order: no zones, another plan's footprint, a foreign zone not allowing the action (the most restrictive wins on
+  Order: no zones, another plan's footprint, the caller's own plan cell (ok :plan), a foreign zone not allowing the action (the most restrictive wins on
   nesting), a foreign claim (claims allow nothing), else ok.")
 
 ;; The three owner decisions still open: each is one line to change.
@@ -26,8 +29,8 @@
   false)
 
 (def plan-footprint-beats-zone?
-  "True: a plan's own builder may work over a foreign zone. This is what the caller's footprints :except already does
-  (it drops the job's own plan before asking); this flag documents the rule."
+  "True: a plan's own builder may work over a foreign zone or claim: a cell in the verdict's :plan-cells is ok :plan
+  right after the :no-zones and :footprint checks. False: the plan's cells are refused like any other."
   true)
 
 (def unknown-owner-foreign?
@@ -55,7 +58,7 @@
 
 (defn verdict
   "See the namespace docstring."
-  [{:keys [zones claims footprints self now action cell]}]
+  [{:keys [zones claims footprints plan-cells self now action cell]}]
   (let [here (filter #(in-box? cell %) zones)
         foreign-zone (first (filter #(and (foreign-owner? (:owner %) self) (not (contains? (:allow %) action))) here))
         live (filter #(and (active? now %) (in-box? cell %)) claims)
@@ -64,6 +67,7 @@
     (cond
       (nil? zones) {:ok false :reason :no-zones}
       (contains? footprints cell) (refusal :footprint {:plan (get footprints cell)})
+      (and plan-footprint-beats-zone? (contains? plan-cells cell)) {:ok true :why :plan}
       (and foreign-zone (not pass?)) (refusal :zone {:zone (:name foreign-zone) :owner (:owner foreign-zone)})
       (and foreign-claim (not pass?)) (refusal :claim {:claim (:id foreign-claim) :owner (:owner foreign-claim)})
       (some #(same-owner? (:owner %) self) here) {:ok true :why :own-zone}

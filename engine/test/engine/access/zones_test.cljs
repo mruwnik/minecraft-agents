@@ -44,7 +44,19 @@
     {:zones [] :claims [expired] :action :dig :cell [81 64 1]} {:ok true :why :open}
     {:zones [] :claims [released] :action :dig :cell [81 64 1]} {:ok true :why :open}
     {:zones [] :claims [my-claim] :action :dig :cell [61 64 1]} {:ok true :why :own-claim}
-    {:zones [] :claims [their-claim] :action :dig :cell [1 64 1]} {:ok true :why :open}))
+    {:zones [] :claims [their-claim] :action :dig :cell [1 64 1]} {:ok true :why :open}
+    ;; the job's own plan is the permission: it beats a foreign zone or claim, never another plan's footprint
+    {:zones [theirs] :plan-cells #{[21 64 1]} :action :place :cell [21 64 1]} {:ok true :why :plan}
+    {:zones [] :claims [their-claim] :plan-cells #{[81 64 1]} :action :place :cell [81 64 1]} {:ok true :why :plan}
+    {:zones [theirs] :plan-cells #{[21 64 1]} :action :place :cell [22 64 1]} {:ok false :reason :zone :zone "theirs" :owner "Miles"}
+    {:zones [theirs] :plan-cells #{[21 64 1]} :footprints {[21 64 1] "hut"} :action :place :cell [21 64 1]} {:ok false :reason :footprint :plan "hut"}
+    {:zones nil :plan-cells #{[21 64 1]} :action :place :cell [21 64 1]} {:ok false :reason :no-zones}))
+
+(deftest the-plan-rule-follows-its-flag
+  (with-redefs [zones/plan-footprint-beats-zone? false]
+    (are [in expected] (= expected (v in))
+      {:zones [theirs] :plan-cells #{[21 64 1]} :action :place :cell [21 64 1]} {:ok false :reason :zone :zone "theirs" :owner "Miles"}
+      {:zones [] :claims [their-claim] :plan-cells #{[81 64 1]} :action :place :cell [81 64 1]} {:ok false :reason :claim :claim "c2" :owner "Miles"})))
 
 (deftest the-three-open-decisions-are-named-defaults
   (is (false? zones/deposit-into-foreign-chest?))

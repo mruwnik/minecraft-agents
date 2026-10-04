@@ -210,18 +210,17 @@
 
 (def other-plan {:id "other" :parts [{:id "o" :cells [[4 64 3]] :want "stone"}]})
 
-(deftest cells-in-a-zone-are-refused-and-listed-the-rest-built
+(deftest a-plan-is-built-over-a-foreign-zone-but-not-another-plans-cells
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan)} [(zone "shrine" [4 64 2] [4 64 4] #{})])
+        (let [shrine (zone "shrine" [4 64 2] [4 64 4] #{})
+              {:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan) "other" other-plan} [shrine])
               result (await (h/child-outcome eng job {:plan "pen"} 200))]
-          (is (= 6 (:placed result)))
-          (is (= #{[4 64 2] [4 64 3] [4 64 4]} (set (map :pos (:refused result)))))
-          (is (= #{{:reason :zone :zone "shrine"}} (set (map #(dissoc % :pos) (:refused result)))))
-          (is (every? #(= "air" (block p %)) [[4 64 2] [4 64 3] [4 64 4]]))
-          (is (= "oak_fence" (block p [2 64 2])))
-          (is (= 1 (count (h/events-of seen :build.refused)))))))))
+          (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result)))
+          (is (= "air" (block p [4 64 3])))
+          (is (= "oak_fence" (block p [4 64 2])) "the pen's own cell in the shrine is built")
+          (is (= 8 (:placed result))))))))
 
 (deftest a-zone-allowing-placing-is-no-obstacle
   (async done
@@ -246,6 +245,8 @@
   (is (= [0 [{:plan "pen" :reason "no zone list has been read"}]]
          (declines {:inventory kit} {"pen" (pen-plan)} {:plan "pen"} nil))))
 
+(def late-plan {:id "other" :parts [{:id "o" :cells (conj ring [3 64 2] [2 65 2]) :want "stone"}]})
+
 (deftest the-access-is-checked-again-right-before-each-place
   (async done
     (tu/run-async done
@@ -254,13 +255,13 @@
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
-                         (world/set-zones! w [(zone "late" [2 64 2] [4 65 4] #{})])
+                         (world/set-data! w {"pen" (pen-plan) "other" late-plan} {})
                          r)))
           (let [result (await (h/child-outcome eng job {:plan "pen"} 200))]
-            (is (= 1 (count (places p))) "the first place goes through and the zone closes the rest")
+            (is (= 1 (count (places p))) "the first place goes through and the other plan closes the rest")
             (is (= 1 (:placed result)))
             (is (= 8 (count (:refused result))))
-            (is (= #{:zone} (set (map :reason (:refused result)))))))))))
+            (is (= #{:footprint} (set (map :reason (:refused result)))))))))))
 
 (defn ^:async run-beside
   "Build the pen with the fluid at 5 64 3 (beside the ring cell 4 64 3) and args: [placed, refused]."
@@ -362,16 +363,6 @@
             (is (empty? (h/calls p "dig")))
             (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
             (is (= 1 (count (h/events-of seen :build.wrong))))))))))
-
-(deftest a-zone-follows-its-owner-and-the-opt-out
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[owner extra placed] [["Fake" {} 9] ["fake" {} 9] ["Miles" {} 6] ["Miles" {:ignore-zones? true} 9]]]
-          (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)}
-                                     [(assoc (zone "shrine" [4 64 2] [4 64 4] #{}) :owner owner)])
-                result (await (h/child-outcome eng job (merge {:plan "pen"} extra) 200))]
-            (is (= placed (:placed result)) (pr-str [owner extra]))))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done
