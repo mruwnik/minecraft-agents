@@ -2,14 +2,15 @@
   "engine/js/path/planner-courses.test.mjs against the ClojureScript planner: the live tester's courses planned on their
   fixture terrain, the verdicts and the paths through tight gaps."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.courses :as courses]
             [engine.planner-fixture :as pf :refer [plan]]))
 
 (def GAP-Z 3217)
 (def POD-REACH 0.127)
 (def EPS 1e-9)
 
-(defn course [name] (.courseSnapshot ^js @pf/courses name))
-(defn lane [family cmds] (.laneSnapshot ^js @pf/courses family (clj->js cmds)))
+(defn course [name] (courses/course-snapshot name))
+(defn lane [family cmds] (courses/lane-snapshot family cmds))
 (defn plan-course [name] (pf/course-plan name))
 (defn verdict [r] (str (:status r) (some->> (:reason r) (str "/"))))
 (defn steps [r] (get-in r [:path :steps]))
@@ -25,10 +26,10 @@
 (deftest courses-found
   (doseq [name found-courses]
     (let [r (plan-course name)
-          goal (.-goal ^js (course name))
+          goal (:goal (course name))
           last (peek (steps r))]
       (is (= "found" (verdict r)) name)
-      (is (<= (js/Math.hypot (- (:x last) (.-x goal)) (- (:z last) (.-z goal))) 1.5) name))))
+      (is (<= (js/Math.hypot (- (:x last) (:x goal)) (- (:z last) (:z goal))) 1.5) name))))
 
 (deftest tunnel-stairs-has-no-way-up-under-the-2-high-ceiling
   (is (= "partial" (:status (plan-course "tunnel-stairs")))))
@@ -89,7 +90,7 @@
 (def after-wall {:kind "near" :x 2890 :y 161 :z 3217 :range 1})
 
 (deftest starting-inside-the-pod-wall-keeps-the-starts-region
-  (let [pod-wall (.-snapshot ^js (course "cocoa-a2-both-feethead"))]
+  (let [pod-wall (:snapshot (course "cocoa-a2-both-feethead"))]
     (doseq [[name from] [["the south edge of the north gap cell" (gap-start 3216 3216.95)]
                          ["the north edge of the south gap cell" (gap-start 3217 3217.05)]]]
       (let [r (plan pod-wall {:from from :goal after-wall})]
@@ -134,7 +135,7 @@
 
 (deftest planner-and-finer-flood-agree-on-whether-the-body-fits
   (are [name area start target res fits status]
-       (do (is (= fits (reachable? (.-snapshot ^js (course name)) area start target res)) name)
+       (do (is (= fits (reachable? (:snapshot (course name)) area start target res)) name)
            (is (= status (:status (plan-course name))) name))
     "fence-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 true "found"
     "wall-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 false "partial"

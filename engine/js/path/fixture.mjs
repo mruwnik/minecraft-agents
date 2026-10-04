@@ -1,3 +1,4 @@
+// Superseded for cljs tests by engine.path.fixture (test/engine/path/fixture.cljs); kept for its JS users (path/*.test.mjs, fake-steer.mjs, bench-lang). Why JavaScript: those users are JS.
 // Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set.
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'

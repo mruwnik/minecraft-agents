@@ -4,6 +4,7 @@
   and create-search in slices matching plan. The JS planner's answers are recorded in test/planner-bench.json (see
   engine.planner-bench-test)."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.courses :as courses]
             [engine.planner-bench-test :as bench :refer [recorded record disagreements]]
             [engine.planner-fixture :as pf]))
 
@@ -12,9 +13,8 @@
 (defn course-query
   "{:snapshot :query} of a named course, keyword-keyed"
   [name]
-  (let [^js c (.courseSnapshot ^js @pf/courses name)]
-    {:snapshot (.-snapshot c)
-     :query {:from (js->clj (.-from c) :keywordize-keys true) :goal (js->clj (.-goal c) :keywordize-keys true)}}))
+  (let [{:keys [snapshot from goal]} (courses/course-snapshot name)]
+    {:snapshot snapshot :query {:from from :goal goal}}))
 
 (defn plan-with [name options]
   (let [{:keys [snapshot query]} (course-query name)] (pf/plan snapshot query options)))

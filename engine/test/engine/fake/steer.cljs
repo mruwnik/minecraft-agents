@@ -11,11 +11,12 @@
   :pose p} or {:status :failed :reason s} (cljs data; the primitives' JS shapes are made when the fake is wired in),
   and rejects with cut-error when the owner changes. When a walk resolves, (after-walk world from-pos) -> world runs
   once, in place of the fake moveTo's drag of leashed animals and tempted followers (those live in the animals ns); a
-  cut walk runs nothing. path-world builds the planner's snapshot through path/fixture.mjs, path/blocks.mjs and
+  cut walk runs nothing. path-world builds the planner's snapshot through engine.path.fixture, path/blocks.mjs and
   path/space.mjs by interop.
-  Test-only; the same rules as js/fake-steer.mjs, which stays live until the fake itself moves to cljs."
+  Test-only; ported from the deleted js/fake-steer.mjs."
   (:require [engine.fake.doors :as doors]
-            [engine.test-util :as tu]))
+            [engine.path.fixture :as fx]
+            [engine.fake.node :as node]))
 
 (def max-ticks 2400)
 (def ticks-per-s 20)
@@ -135,17 +136,16 @@
          (remove #(or (body-cell? %) (contains? (:blocks w) %)))
          (map (fn [pos] [pos "stone"])))))
 
-(def fixture (delay (tu/require-here "./js/path/fixture.mjs")))
-(def blocks-mod (delay (tu/require-here "./js/path/blocks.mjs")))
-(def space (delay (tu/require-here "./js/path/space.mjs")))
+(def blocks-mod (delay (node/require-here "./js/path/blocks.mjs")))
+(def space (delay (node/require-here "./js/path/space.mjs")))
 
 (defn path-world
   "{:snapshot :table :space}: the fake's blocks as the planner reads them. The fixture joins fences, walls and panes
   to their neighbours, as the server does: a lone post is a gap a body slips through."
   [w]
   (let [entries (concat (:blocks w) (buried w))
-        blocks (map (fn [[[x y z :as pos] name]] #js [x y z name (clj->js (doors/path-props w pos))]) entries)]
-    {:snapshot (.fixtureSnapshot ^js @fixture #js {:blocks (to-array blocks)})
+        blocks (map (fn [[[x y z :as pos] name]] [x y z name (doors/path-props w pos)]) entries)]
+    {:snapshot (fx/fixture-snapshot {:blocks blocks})
      :table (.defaultStateTable ^js @blocks-mod)
      :space @space}))
 

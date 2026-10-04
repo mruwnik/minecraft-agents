@@ -8,8 +8,10 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
+            [engine.path.fixture :as fx]
             [engine.path.walk :as walk]
             [engine.planner-fixture :as pf]
+            [engine.fake :as fake]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]))
 
@@ -39,8 +41,7 @@
     (is (not (contains? cells [2 65 0])) "and its other half")))
 
 (def table @pf/table)
-(def fixture @pf/fixture)
-(defn sid [name props] (.stateId fixture name (clj->js props)))
+(defn sid [name props] (fx/state-id name props))
 
 (deftest a-state-change-the-planner-ignores-is-no-change
   (is (walk/same-for-planner? table (sid "wheat" {:age 0}) (sid "wheat" {:age 7})))
@@ -95,7 +96,7 @@
   ([p f] (on-steer p f nil))
   ([p f decide-wrap]
    (let [ticks (atom 0)
-         s (.. p -world -state)]
+         s (fake/state p)]
      (.override (.-world p) "steer"
                 (fn [token args impl]
                   (let [decide (.-decide args)
@@ -108,7 +109,7 @@
                     (impl token args'))))
      ticks)))
 
-(defn set-block! [s [x y z] name] (.set (.-blocks s) (str x "," y "," z) name))
+(defn set-block! [s pos name] (swap! s assoc-in [:blocks pos] name))
 
 (defn ^:async walk-to
   "walk/walk-to! from pos to goal over blocks (range 0); prepare gets the fake primitives before the walk. [result
@@ -178,7 +179,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result replans at] (await (walk-to {:self {:pos {:x -38 :y 64 :z 0}} :blocks near-floor} [40 64 0]
-                                                  (fn [p] (on-steer p (fn [s n _] (when (= n 20) (doseq [[k v] far-floor] (.set (.-blocks s) k v))))))))]
+                                                  (fn [p] (on-steer p (fn [s n _] (when (= n 20) (doseq [[k v] far-floor] (set-block! s (fake/parse-cell k) v))))))))]
           (is (= :arrived (:status result)))
           (is (= [40 64 0] at))
           (is (= [:refresh] (mapv :why replans)) "the refresh found the whole way before the partial end")
@@ -263,7 +264,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p eng seen]} (await (go! two-gates {:pos [10 64 0] :range 0 :doors :never}
-                                                   (fn [p] (on-steer p (fn [s n _] (when (= n 5) (.set (.-states s) "5,64,0" #js {:open false :facing "east"})))))))]
+                                                   (fn [p] (on-steer p (fn [s n _] (when (= n 5) (swap! s assoc-in [:states [5 64 0]] {:open false :facing "east"})))))))]
           (is (= {:arrived true} @out))
           (is (= 1 (count (moved eng))) "one round")
           (is (= [:changed] (mapv (comp :why) (replan-events seen))))
@@ -275,7 +276,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng seen]} (await (go! {:self {:pos {:x -38 :y 64 :z 0}} :blocks near-floor} {:pos [40 64 0] :range 0}
-                                                 (fn [p] (on-steer p (fn [s n _] (when (= n 20) (doseq [[k v] far-floor] (.set (.-blocks s) k v))))))))]
+                                                 (fn [p] (on-steer p (fn [s n _] (when (= n 20) (doseq [[k v] far-floor] (set-block! s (fake/parse-cell k) v))))))))]
           (is (= {:arrived true} @out))
           (is (= ["arrived"] (mapv :status (moved eng))) "one round, no stop at the partial end")
           (is (= [:refresh] (mapv :why (replan-events seen)))))))))
@@ -290,9 +291,9 @@
   "A decide wrap: a body within 1.2 blocks of the cow that heads toward it gets no forward control (the cow is in its
   way); walking away is free."
   [s pose out]
-  (let [cow (some #(when (= "cow" (.-name %)) %) (.-entities s))
-        dx (- (.. cow -pos -x) (.-x pose))
-        dz (- (.. cow -pos -z) (.-z pose))
+  (let [cow (some #(when (= "cow" (:name %)) %) (:entities @s))
+        dx (- (first (:pos cow)) (.-x pose))
+        dz (- (nth (:pos cow) 2) (.-z pose))
         yaw (.-yaw out)
         toward? (pos? (+ (* dx (- (js/Math.sin yaw))) (* dz (- (js/Math.cos yaw)))))
         near? (< (js/Math.hypot dx dz) 1.2)]

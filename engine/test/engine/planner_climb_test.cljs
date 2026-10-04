@@ -2,10 +2,10 @@
   "engine/js/path/planner-climb.test.mjs against the ClojureScript planner: ladders, vines, scaffolding and trapdoors
   over ladders, on the live courses and on small hand-built worlds."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.courses :as courses]
             [engine.planner-fixture :as pf :refer [world near plan]]))
 
-(defn course [name] (.courseSnapshot ^js @pf/courses name))
-(defn course-goal [name] (js->clj (.-goal ^js (course name)) :keywordize-keys true))
+(defn course-goal [name] (:goal (courses/course-snapshot name)))
 (defn plan-course
   ([name] (plan-course name {}))
   ([name options] (pf/course-plan name options)))
@@ -127,7 +127,7 @@
     (is (= "ladder-gap" (:reason r)))))
 
 (deftest lad-gap-going-down-caught-by-ladder-below
-  (let [snapshot (.-snapshot (course "lad-gap"))
+  (let [snapshot (:snapshot (courses/course-snapshot "lad-gap"))
         r (plan snapshot {:from {:x 2886 :y 171 :z 3216 :px 2886.5 :pz 3216.5} :goal (near 2860 161 3216)})
         ss (vec (steps r))]
     (is (= "found" (verdict r)))

@@ -1,13 +1,13 @@
 (ns engine.planner-fixture
-  "Shared helpers for tests of the ClojureScript planner (engine.path.planner-tuned) over the JS fixtures
-  (engine/js/path/fixture.mjs, courses.mjs): worlds from fills, plan and create-search taking and returning plain
+  "Shared helpers for tests of the ClojureScript planner (engine.path.planner-tuned) over the cljs fixtures
+  (engine.path.fixture, engine.path.courses): worlds from fills, plan and create-search taking and returning plain
   cljs data with the JS planner's result field names, and the small builders the JS planner tests use."
   (:require [clojure.string :as str]
+            [engine.path.courses :as courses]
+            [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]))
 
-(def fixture (delay (tu/require-here "./js/path/fixture.mjs")))
-(def courses (delay (tu/require-here "./js/path/courses.mjs")))
 (def blocks (delay (tu/require-here "./js/path/blocks.mjs")))
 (def space (delay (tu/require-here "./js/path/space.mjs")))
 (def table (delay (.defaultStateTable ^js @blocks)))
@@ -25,7 +25,7 @@
 (defn snapshot
   "fixtureSnapshot over cljs fills [x0 y0 z0 x1 y1 z1 name props] and single blocks [x y z name props]."
   [{:keys [fill blocks]}]
-  (.fixtureSnapshot ^js @fixture (clj->js {:fill (or fill []) :blocks (or blocks [])})))
+  (fx/fixture-snapshot {:fill (or fill []) :blocks (or blocks [])}))
 
 (def stone-floor [-2 60 -2 40 63 40 "stone"])
 
@@ -58,13 +58,11 @@
       :nearest (fn [] (js->clj (.nearest s) :keywordize-keys true))})))
 
 (defn course-plan
-  "Plan a named course (courses.mjs) from its start to its go-to goal; options as plan."
+  "Plan a named course (engine.path.courses) from its start to its go-to goal; options as plan."
   ([name] (course-plan name {}))
   ([name options]
-   (let [^js c (.courseSnapshot ^js @courses name)]
-     (plan (.-snapshot c)
-           {:from (js->clj (.-from c)) :goal (js->clj (.-goal c))}
-           options))))
+   (let [{:keys [snapshot from goal]} (courses/course-snapshot name)]
+     (plan snapshot {:from from :goal goal} options))))
 
 (defn near ([x y z] (near x y z 0)) ([x y z range] {:kind "near" :x x :y y :z z :range range}))
 (defn xz [x z range] {:kind "xz" :x x :z z :range range})

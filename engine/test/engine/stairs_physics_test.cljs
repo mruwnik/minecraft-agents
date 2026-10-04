@@ -4,6 +4,7 @@
   by physics over the same blocks (collision half-width 0.31, as every bound bot)."
   (:require [cljs.test :refer [deftest is are]]
             [engine.path.executor :as ex]
+            [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
             [engine.path.walk :as walk]))
@@ -13,7 +14,6 @@
                  :block ((tu/require-here "prismarine-block") version)
                  :physics (tu/require-here "prismarine-physics")
                  :vec3 (.-Vec3 (tu/require-here "vec3"))
-                 :fixture (tu/require-here "./js/path/fixture.mjs")
                  :blocks (tu/require-here "./js/path/blocks.mjs")
                  :space (tu/require-here "./js/path/space.mjs")}))
 
@@ -54,8 +54,8 @@
 (defn path-world
   "The planner's view of fills: {:snapshot :table :space} as walk-plan reads a pathWorld."
   [fills]
-  (let [{:keys [fixture blocks space]} @lib]
-    #js {:snapshot (.fixtureSnapshot fixture #js {:fill (clj->js fills)})
+  (let [{:keys [blocks space]} @lib]
+    #js {:snapshot (fx/fixture-snapshot {:fill fills})
          :table (.defaultStateTable blocks)
          :space space}))
 

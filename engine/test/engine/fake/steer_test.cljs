@@ -3,6 +3,7 @@
   drag of leashed and tempted animals after a walk is the animals ns's: here the after-walk hook is a recording stub."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.fake.steer :as steer]
+            [engine.path.fixture :as fx]
             [engine.test-util :as tu]))
 
 (def east (- (/ js/Math.PI 2))) ; mineflayer yaw: dx = -sin(yaw)
@@ -200,9 +201,8 @@
 ;; ---- pathWorld
 
 (defn at-state [snapshot [x y z]] (.stateAt ^js snapshot x y z))
-(def fixture (delay (tu/require-here "./js/path/fixture.mjs")))
 (def unloaded (delay (.-UNLOADED ^js (tu/require-here "./js/path/snapshot.mjs"))))
-(defn state-id [name props] (.stateId ^js @fixture name (clj->js props)))
+(defn state-id [name props] (fx/state-id name props))
 
 (deftest path-world-reads-a-placed-block-as-its-state-id-and-air-elsewhere-in-the-column
   (let [{:keys [snapshot table space]} (steer/path-world @(:state (rig {[3 64 0] "oak_planks"} [0 64 0])))]

@@ -2,6 +2,8 @@
   "engine/js/path/planner-water.test.mjs against the ClojureScript planner: portals, drops into and out of tight
   cells, water (ponds, drops, columns, breath, exits), the water courses, and magma."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.courses :as courses]
+            [engine.path.fixture :as fx]
             [engine.planner-fixture :as pf]))
 
 (def table @pf/table)
@@ -10,7 +12,7 @@
 (def MOVE pf/MOVE)
 (def costs pf/default-costs)
 
-(defn state-id [name] (.stateId ^js @pf/fixture name))
+(defn state-id [name] (fx/state-id name))
 (defn state-at [snapshot x y z] (.stateAt ^js snapshot x y z))
 (defn kind-at [snapshot x y z] (aget (.-kind ^js table) (state-at snapshot x y z)))
 (defn hazard-at [snapshot x y z] (aget (.-hazard ^js table) (state-at snapshot x y z)))
@@ -44,8 +46,7 @@
 ;; ---- portals ----
 
 (deftest course-portal-path-goes-around
-  (let [^js c (.courseSnapshot ^js @pf/courses "portal")
-        snapshot (.-snapshot c)
+  (let [snapshot (:snapshot (courses/course-snapshot "portal"))
         r (pf/course-plan "portal")]
     (is (= "found" (verdict r)))
     (is (every? (fn [s] (and (not= PORTAL (hazard-at snapshot (:x s) (:y s) (:z s)))

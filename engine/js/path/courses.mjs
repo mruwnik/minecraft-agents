@@ -1,3 +1,4 @@
+// Superseded for cljs tests by engine.path.courses (test/engine/path/courses.cljs, courses.edn); kept for bench-lang. Why JavaScript: bench-lang is a JS harness.
 // The live tester's courses as fixture snapshots: its server commands (setblock / fill) are replayed into fixture entries
 // on top of the lane as the tester prepares it, so unit tests and live runs share their terrain.
 import prismarineRegistry from 'prismarine-registry'
