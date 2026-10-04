@@ -10,7 +10,7 @@
 
 (def job 'jobs.forestry.prepare)
 
-(def zero {:cleared 0 :soiled 0 :planted 0 :short {} :wrong [] :no-soil [] :cramped [] :refused []})
+(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :cramped [] :wet [] :refused []})
 
 (defn expect [m] (merge zero m))
 
@@ -39,6 +39,19 @@
 
 (defn calls-made [p] (count (.-calls (.-world p))))
 
+(defn wet-world
+  "A world where the cells in levels {\"x,y,z\" n} hold water of that level (the fake does not flow)."
+  [levels & inventory]
+  (-> (apply world (into {} (map (fn [[cell _]] [cell "water"])) levels) inventory)
+      (assoc :states (into {} (map (fn [[cell n]] [cell {:level n}])) levels))))
+
+(defn drain!
+  "Remove the water of the cell from the world, as a receding stream does."
+  [p cell]
+  (let [st (.-state (.-world p))]
+    (.delete (.-blocks st) cell)
+    (.delete (.-states st) cell)))
+
 ;; ------------------------------------------------------------------ pure
 
 (deftest a-tree-grows-through-air-leaves-saplings-and-plants-only
@@ -58,6 +71,25 @@
   (are [name natural] (= natural (prepare/natural-ground? name))
     "stone" true "sand" true "gravel" true "cobblestone" true "deepslate" true "sandstone" true
     "oak_planks" false "oak_log" false "chest" false "white_wool" false "dirt" false "water" false))
+
+(defn levels-at [m] (fn [pos] (get m pos)))
+
+(deftest upstream-walks-a-stream-back-to-its-source
+  (are [levels start source] (= source (prepare/upstream (levels-at levels) start))
+    {[0 64 0] 0} [0 64 0] [0 64 0]
+    {[0 64 0] 0 [1 64 0] 1 [2 64 0] 2} [2 64 0] [0 64 0]
+    {[0 66 0] 0 [0 65 0] 8 [0 64 0] 8} [0 64 0] [0 66 0]
+    {[2 66 1] 0 [2 65 1] 8 [2 64 1] 8 [2 64 0] 1} [2 64 0] [2 66 1]
+    {[5 64 0] 0 [4 64 0] 1 [3 64 0] 2 [2 64 0] 1 [1 64 0] 0} [3 64 0] [5 64 0]
+    {[1 64 0] 3 [2 64 0] 2} [2 64 0] nil
+    {[1 64 0] 2 [0 64 0] 3} [1 64 0] nil
+    {[2 64 0] 2} [1 64 0] nil
+    {[2 64 0] 2} [2 64 0] nil))
+
+(deftest upstream-gives-up-after-sixteen-steps
+  (are [top source] (= source (prepare/upstream (levels-at (into {[0 top 0] 0} (map (fn [y] [[0 y 0] 8])) (range 64 top))) [0 64 0]))
+    80 [0 80 0]
+    81 nil))
 
 ;; ------------------------------------------------------------------ the cell itself
 
@@ -146,7 +178,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [found ["birch_sapling" "birch_log" "chest" "water"]]
+        (doseq [found ["birch_sapling" "birch_log" "chest"]]
           (let [{:keys [p result seen]} (await (outcome (world {"3,64,0" found "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells}))]
             (is (= [[4 64 0]] (digs p)) found)
             (is (= [[4 64 0 "oak_sapling"]] (places p)) found)
@@ -431,3 +463,100 @@
                 (recur (inc i)))))
           (is (= [[3 63 0]] (digs p)))
           (is (= [[3 63 0 "dirt"] [3 64 0 "oak_sapling"]] (places p))))))))
+
+;; ------------------------------------------------------------------ water in the cell
+
+(def sapling-and-dirt [(item "dirt" 1) (item "oak_sapling" 1)])
+
+(deftest a-source-in-the-cell-is-filled-with-dirt-dug-out-and-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result]} (await (outcome (apply wet-world {"3,64,0" 0} sapling-and-dirt) {"forest" one-cell}))]
+          (is (= [[3 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
+          (is (= [[3 64 0]] (digs p)))
+          (is (= "oak_sapling" (h/block-at p 3 64 0)))
+          (is (= (expect {:dammed 1 :cleared 1 :planted 1}) result)))))))
+
+(deftest a-source-beside-the-cell-is-dammed-and-the-flow-given-time-to-recede
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng seen]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))
+              before (calls-made p)]
+          (is (= [[2 64 0 "dirt"]] (places p)))
+          (is (= "dirt" (h/block-at p 2 64 0)))
+          (await (ticks eng 4))
+          (is (= before (calls-made p)) "the flow is waited out, nothing is placed in it")
+          (is (= [] (h/events-of seen :prepare.done)))
+          (is (listed? eng))
+          (drain! p "3,64,0")
+          (await (ticks eng 30))
+          (is (= [[2 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
+          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :prepare.done)))))))))
+
+(deftest a-stream-is-followed-to-its-source-and-only-that-is-dammed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run (assoc (apply wet-world {"0,64,0" 0 "1,64,0" 1 "2,64,0" 2 "3,64,0" 3} sapling-and-dirt) :self {:pos {:x 1 :y 64 :z 0}})
+                                      {"forest" one-cell} {:plan "forest"} 60))]
+          (is (= [[0 64 0 "dirt"]] (places p))))))))
+
+(deftest a-falling-column-is-followed-up-to-its-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run (apply wet-world {"3,64,0" 8 "3,65,0" 8 "3,66,0" 0} sapling-and-dirt)
+                                      {"forest" one-cell} {:plan "forest"} 60))]
+          (is (= [[3 66 0 "dirt"]] (places p))))))))
+
+(def stray-and-sapling {"4,64,0" "short_grass"})
+
+(deftest a-source-the-rules-refuse-leaves-the-cell-wet-with-one-note
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result seen]} (await (with-zones [{:name "vault" :min [2 64 0] :max [2 64 0] :allow #{}}]
+                                                #(outcome (-> (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt)
+                                                              (update :blocks merge stray-and-sapling))
+                                                          {"forest" two-cells})))]
+          (is (= [[4 64 0 "oak_sapling"]] (places p)) "only the dry cell is worked")
+          (is (= [[4 64 0]] (digs p)))
+          (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :zone :source [2 64 0]}]}) result))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :why :zone :water-source [2 64 0]}] (warns seen :prepare.wet)))
+          (is (= [] (warns seen :prepare.refused)))
+          (is (= [] (warns seen :prepare.wrong))))))))
+
+(deftest without-dirt-a-wet-cell-is-left-and-reported-with-its-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result seen]} (await (outcome (-> (wet-world {"3,64,0" 0} (item "oak_sapling" 1))
+                                                          (update :blocks merge stray-and-sapling))
+                                                      {"forest" two-cells}))]
+          (is (= [[4 64 0 "oak_sapling"]] (places p)) "nothing is placed in the water")
+          (is (= [[4 64 0]] (digs p)))
+          (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :no-dirt :source [3 64 0]}]}) result))
+          (is (= 1 (count (warns seen :prepare.wet)))))))))
+
+(deftest water-that-cannot-be-traced-is-left-and-reported-without-a-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label water] [["level 3 and nothing around" (wet-world {"3,64,0" 3} (item "dirt" 1) (item "oak_sapling" 1))]
+                                  ["water without a level" (assoc (world {"3,64,0" "water"} (item "dirt" 1) (item "oak_sapling" 1)) :states {})]]]
+          (let [{:keys [p result seen]} (await (outcome (update water :blocks merge stray-and-sapling) {"forest" two-cells}))]
+            (is (= [[4 64 0 "oak_sapling"]] (places p)) label)
+            (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :untraced}]}) result))
+            (is (= [{:pos {:x 3 :y 64 :z 0} :why :untraced}] (warns seen :prepare.wet)))))))))
+
+(deftest lava-in-the-cell-is-wrong-and-never-touched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result]} (await (outcome (far-world {"3,64,0" "lava" "9,64,0" "short_grass"} (item "dirt" 1) (item "oak_sapling" 2)) {"forest" (oak-plan [3 64 0] [9 64 0])}))]
+          (is (= [[9 64 0]] (digs p)))
+          (is (= [[9 64 0 "oak_sapling"]] (places p)))
+          (is (= "lava" (h/block-at p 3 64 0)))
+          (is (= (expect {:cleared 1 :planted 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))

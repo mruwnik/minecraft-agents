@@ -229,7 +229,7 @@ function defaultActs (s, emit) {
         s.blocks.delete(key(pos))
         return { status: 'placed', block: 'bucket' }
       }
-      if (blockName(pos) !== 'air' && !isReplaceable(blockName(pos))) return { status: 'occupied' }
+      if (blockName(pos) !== 'air' && blockName(pos) !== 'water' && !isReplaceable(blockName(pos))) return { status: 'occupied' }
       if (CROPS[item] && blockName({ ...pos, y: pos.y - 1 }) !== 'farmland') {
         return { status: 'failed', reason: `Server refused to place ${item} at (${pos.x}, ${pos.y}, ${pos.z}): the block is still air` }
       }

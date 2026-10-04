@@ -19,7 +19,13 @@
   (jobs.forestry.collect-drops) when the next step is on another cell or none is left, so the saplings leaves drop are
   planted too. Provisioning is another job: (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
 
-  Never dug, only reported: another species' sapling, any log but the species' own, fluid, container, bed, sign, light
+  Water in the cell is repaired: a source in the cell is filled with carried dirt (then the dirt is dug as a stray);
+  a flow is traced upstream (blockAt properties.level: 0 source, 1-7 flowing, 8+ falling; at most 16 cells) and its
+  source filled with carried dirt, after which the cell is given 10 s to recede (the check declines, the round
+  returns :declined: nothing is polled). Water that cannot be traced, no dirt carried, or a source the access rules
+  refuse leaves the cell as :wet {:pos :why :source?} (warn prepare.wet {:pos :why :water-source :text}).
+
+  Never dug, only reported: another species' sapling, any log but the species' own, lava, container, bed, sign, light
   in the cell (result :wrong); under the cell anything but natural ground (planks, logs, wool, a chest, air, fluid,
   a cell the plan names: :no-soil with :why :other-block/:kept/:hollow/:fluid/:planned) and natural ground when no
   dirt is carried (:no-dirt); nothing above the cell is ever dug: a block in the growth space a tree cannot grow
@@ -37,8 +43,9 @@
   missing, not :active, unreadable or holds no tree cells (in :part), and while no zone list is loaded. Otherwise it
   passes only while a step can be taken (or once the job has begun): a field where every cell is done, wrong,
   cramped, without soil or short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil,
-  prepare.cramped) and one per species short (prepare.short {:species :missing}); the job wakes when what it
-  lacked is carried. Ends with {:cleared :soiled :planted :short {species missing} :wrong :no-soil :cramped :refused}
+  prepare.cramped, prepare.wet) and one per species short (prepare.short {:species :missing}); the job wakes when what
+  it lacked is carried. Ends with {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :cramped
+  :wet [{:pos :why :source?}] :refused}
   and the info prepare.done.")
 
 (def args
@@ -132,20 +139,75 @@
       dirt {:state :soil-dig :block n :item dirt}
       :else no-dirt)))
 
+(def max-upstream "How many cells upstream the walk to a source goes." 16)
+
+(defn upstream-cells
+  "The water cells the cell at level l is fed from, the best first: the cell above for falling water, else the
+  neighbours on its level with a lower level (a falling one too, for level 1), lowest first."
+  [level-at [x y z] l]
+  (if (>= l 8)
+    (filter level-at [[x (inc y) z]])
+    (->> rules/neighbour-deltas
+         (filter (fn [[_ dy _]] (zero? dy)))
+         (keep (fn [[dx _ dz]]
+                 (let [q [(+ x dx) y (+ z dz)]
+                       ql (level-at q)]
+                   (when (and ql (or (< ql l) (and (= l 1) (>= ql 8)))) [ql q]))))
+         (sort-by first)
+         (map second))))
+
+(defn upstream
+  "The [x y z] of the source reached by walking upstream from start, or nil: level-at maps an [x y z] to the level of
+  the water there (0 source, 1-7 flowing, 8+ falling), nil for anything else; at most max-upstream steps, no cell twice."
+  [level-at start]
+  (loop [pos (vec start) n 0 seen #{}]
+    (let [l (level-at pos)
+          next-pos (when (and l (pos? l) (< n max-upstream) (not (seen pos))) (first (upstream-cells level-at pos l)))]
+      (cond
+        (nil? l) nil
+        (zero? l) pos
+        next-pos (recur next-pos (inc n) (conj seen pos))))))
+
+(defn water-level
+  "The level of the water at pos (a number), nil for any other block, unloaded, or water without a level."
+  [p pos]
+  (let [b (.blockAt p (clj->js pos))]
+    (when (= "water" (some-> b .-name))
+      (let [l (some-> b .-properties .-level)]
+        (when (number? l) l)))))
+
+(defn wet-state
+  "{:state ...} of a planned cell holding water: :fill (the source is in the cell), :dam (the source is at :target),
+  both with the :item to place and the :source, or :wet with :why :untraced / :no-dirt."
+  [p pos species carried]
+  (let [l (water-level p pos)
+        cell (maintain/cell-vec pos)
+        source (cond (nil? l) nil
+                     (zero? l) cell
+                     :else (upstream (fn [[x y z]] (water-level p {:x x :y y :z z})) cell))
+        dirt (soil-item carried species)]
+    (cond
+      (nil? source) {:state :wet :why :untraced}
+      (nil? dirt) {:state :wet :why :no-dirt :source source}
+      (= source cell) {:state :fill :target pos :source source :item dirt}
+      :else {:state :dam :target (zipmap [:x :y :z] source) :source source :item dirt})))
+
 (defn assess
   "{:state ...} of one planned cell: :unsupported, :unloaded, :growing, :grown, :wrong (:found), :cramped (:at :block),
-  :clear (:block: a stray to dig), :soil-dig, :soil-place, :no-soil (:why), :plant (:item) or :short."
+  :fill / :dam / :wet (:why :source) for water in the cell, :clear (:block: a stray to dig), :soil-dig, :soil-place,
+  :no-soil (:why), :plant (:item) or :short."
   [p pos species {:keys [carried over] :as world}]
   (let [n (u/block-name p pos)
         sapling (maintain/sapling-of species)]
     (or (when-not (headroom-of species over) {:state :unsupported})
+        (when (= "water" n) (wet-state p pos species carried))
         (own-cell p pos species)
         (growth-space p pos species over)
         (when-not (rules/air n) {:state :clear :block n})
         (soil-state p pos species world)
         (if (carried sapling) {:state :plant :item sapling} {:state :short}))))
 
-(def steps #{:clear :soil-dig :soil-place :plant})
+(def steps #{:fill :dam :clear :soil-dig :soil-place :plant})
 
 ;; ------------------------------------------------------------------ reading the field
 
@@ -173,6 +235,19 @@
                            :text (str "prepare declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
+(declare place-verdict)
+
+(defn settle-wet
+  "The assessed cell with a water state checked against what is known now: a :fill / :dam the access rules refuse is
+  :wet with the reason, and an untraced cell still receding from a dam is :receding."
+  [c {:keys [state why pos] :as cell}]
+  (let [v (when (#{:fill :dam} state) (place-verdict c (maintain/cell-vec (:target cell))))
+        until (get (:recede (ctx/mem c)) pos)]
+    (cond
+      (vector? v) (assoc cell :state :wet :why (second v))
+      (and (= :wet state) (= :untraced why) until (> until (ctx/now c))) (assoc cell :state :receding :until until)
+      :else cell)))
+
 (defn assessments
   "{pos {:pos :species :state ...}} of every planned tree cell, read now."
   [c {:keys [trees planned]}]
@@ -182,7 +257,7 @@
                :carried (maintain/carried-names (:primitives c))
                :over (:headroom (:args c))}]
     (into {} (map (fn [[pos species]]
-                    [pos (assoc (assess (:primitives c) pos species world) :pos pos :species species)]))
+                    [pos (settle-wet c (assoc (assess (:primitives c) pos species world) :pos pos :species species))]))
           trees)))
 
 (defn todo
@@ -205,7 +280,7 @@
 (defn note-cells!
   "Say, once each, what is wrong with a cell, and (when settled) which species are short of saplings."
   [c states settled?]
-  (doseq [{:keys [pos species state found why at block]} (sort-by (comp maintain/cell-vec :pos) (vals states))]
+  (doseq [{:keys [pos species state found why at block source]} (sort-by (comp maintain/cell-vec :pos) (vals states))]
     (case state
       :wrong (ctx/warn-once! c [:wrong pos found] :prepare.wrong
                              {:pos pos :found found :species species
@@ -213,6 +288,10 @@
       :no-soil (ctx/warn-once! c [:no-soil pos why] :prepare.no-soil
                                {:pos pos :why why
                                 :text (str "prepare cannot give " (pr-str (maintain/cell-vec pos)) " soil: " (name why))})
+      :wet (ctx/warn-once! c [:wet pos why] :prepare.wet
+                           {:pos pos :why why :water-source (some-> source vec)
+                            :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " wet: " (name why)
+                                       (when source (str ", water source " (pr-str source))))})
       :cramped (ctx/warn-once! c [:cramped pos at] :prepare.cramped
                                {:pos pos :at at :block block
                                 :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) ": " block " at " (pr-str at) " blocks the growth space")})
@@ -225,8 +304,11 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn receding? [states] (boolean (some #(= :receding (:state %)) (vals states))))
+
 (defn check
-  "Passes while a step can be taken on a planned cell, and once the job has begun (its finishing round must run)."
+  "Passes while a step can be taken on a planned cell, and once the job has begun (its finishing round must run)
+  unless a cell is still receding from a dam."
   [c]
   (let [field (planned c)]
     (boolean
@@ -234,7 +316,7 @@
           (let [states (assessments c field)
                 work (todo c states)]
             (note-cells! c states (empty? work))
-            (or (:begun (ctx/mem c)) (seq work)))))))
+            (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))))))
 
 ;; ------------------------------------------------------------------ access
 
@@ -361,6 +443,32 @@
                       (fail! c pos :failed))
                     :continue))))))))
 
+(def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
+
+(defn ^:async place-source!
+  "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
+  (:dam, after which the cell is receding for recede-ms). :continue."
+  [c {:keys [pos target item state]}]
+  (let [at (maintain/cell-vec target)
+        fill? (= :fill state)
+        v (place-verdict c at)]
+    (if (vector? v)
+      (blocked! c pos v)
+      (or (when (in-column? c target) (await (step-off! c pos)))
+          (await (ready! c pos target fill?))
+          (let [v (place-verdict c at)]
+            (if (not= :ok v)
+              (blocked! c pos v)
+              (do (await (ctx/act c :equip (clj->js {:item item})))
+                  (let [r (await (ctx/act c :place (clj->js {:pos target :item item})))
+                        dammed (fn [m] (cond-> (bump m :dammed)
+                                         (not fill?) (update :recede assoc pos (+ (ctx/now c) recede-ms))))]
+                    (case (.-status r)
+                      "placed" (ctx/update-mem! c dammed)
+                      ("no-item" "occupied") nil
+                      (fail! c pos :failed))
+                    :continue))))))))
+
 (defn ^:async plant!
   "Plant the carried sapling in the planned cell with jobs.forestry.plant-sapling as a child. :continue."
   [c {:keys [pos species item]}]
@@ -388,6 +496,7 @@
   "The step the cell is owed."
   [c {:keys [state pos block] :as cell}]
   (case state
+    (:fill :dam) (await (place-source! c cell))
     :clear (await (dig! c pos pos block false (dug-stray pos)))
     :soil-dig (let [under (maintain/down pos)]
                 (await (dig! c pos under block true (dug-ground pos under))))
@@ -416,17 +525,19 @@
   [c states]
   (let [m (ctx/mem c)
         missing (frequencies (map :species (filter #(= :short (:state %)) (vals states))))
-        result {:cleared (:cleared m 0) :soiled (:soiled m 0) :planted (:planted m 0)
+        result {:cleared (:cleared m 0) :soiled (:soiled m 0) :planted (:planted m 0) :dammed (:dammed m 0)
                 :short missing
                 :wrong (state-list states :wrong (fn [{:keys [pos found species]}] {:pos (maintain/cell-vec pos) :found found :species species}))
                 :no-soil (state-list states :no-soil (fn [{:keys [pos why]}] {:pos (maintain/cell-vec pos) :why why}))
                 :cramped (state-list states :cramped (fn [{:keys [pos at block]}] {:pos (maintain/cell-vec pos) :at at :block block}))
+                :wet (state-list states :wet (fn [{:keys [pos why source]}]
+                                               (cond-> {:pos (maintain/cell-vec pos) :why why} source (assoc :source source))))
                 :refused (refused-list c states)}]
     (ctx/emit! c :prepare.done :info
                (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
                                         ", planted " (:planted result) ", short " (reduce + (vals missing))
                                         ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:cramped result))
-                                                    (count (:refused result))))))
+                                                    (count (:wet result)) (count (:refused result))))))
     (ctx/result! c result)
     :done))
 
@@ -445,4 +556,5 @@
           (cond
             (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
             target (await (act! c target))
+            (receding? states) :declined
             :else (finish! c states)))))))

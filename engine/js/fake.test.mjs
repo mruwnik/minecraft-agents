@@ -134,6 +134,14 @@ test('place uses an inventory item on an empty cell', async () => {
   assert.equal((await p.place('t1', { pos: at(3, 64, 0), item: 'dirt' })).status, 'no-item')
 })
 
+test('place puts a block into water, and lava stays occupied', async () => {
+  const p = owned({ inventory: [{ name: 'dirt', count: 2 }], blocks: { '1,64,0': 'water', '2,64,0': 'lava' }, states: { '1,64,0': { level: 0 } } })
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'dirt' })).status, 'placed')
+  assert.equal(p.blockAt(at(1, 64, 0)).name, 'dirt')
+  assert.equal(p.blockAt(at(1, 64, 0)).properties?.level, undefined)
+  assert.equal((await p.place('t1', { pos: at(2, 64, 0), item: 'dirt' })).status, 'occupied')
+})
+
 test('containers can be inspected and transferred to and from', async () => {
   const p = owned({ inventory: [{ name: 'oak_log', count: 5 }], containers: { '1,64,1': [{ name: 'cobblestone', count: 10 }] } })
   const dep = await p.transfer('t1', { pos: at(1, 64, 1), direction: 'deposit', item: 'oak_log', count: 3 })
