@@ -2,6 +2,7 @@
 // Measures the browser view in headless Chromium over CDP.
 //   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub]
 // --beside-hub <hub url>: the url is a single view; measures its fps alone, then again with a hub page (own window, same browser) running beside it, and the hub's per-card rates.
+// --dashboard: the url is the dashboard (e.g. http://localhost:3701/#/bodies); reads the page's own hub (window.getViewHub()) with the --hub report, plus the page's requestAnimationFrame frame times (fps, p50, p95, max).
 // --hub: the url is tools/view/web/hub-demo.html (many scenes in one context); samples window.__hub every second for --seconds and prints per-scene fps (min / median over scenes),
 //   main-thread frame cost, GPU time per scene render (timer query, and a gl.finish probe), GPU memory and JS heap instead of the single-view numbers.
 // --trace S: after the warm-up, records S seconds of the drawn camera (window.__view.camTrace) and adds `smooth` (with dropped frames), `shownLatency`, `decodeMs`, `uploadMs` and `columnChange` (file mtime to drawn).
@@ -26,6 +27,7 @@ const { values, positionals } = parseArgs({
     timeout: { type: 'string', default: '90' },
     trace: { type: 'string' },
     hub: { type: 'boolean', default: false },
+    dashboard: { type: 'boolean', default: false },
     'beside-hub': { type: 'string' }
   }
 })
@@ -262,7 +264,7 @@ const main = async () => {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'view-bench-'))
   const [w, h] = windowSize()
   const flags = [
-    '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--enable-gpu', `--use-angle=${values.angle}`,
+    '--headless=new', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--enable-gpu', `--use-angle=${values.angle}`,
     '--ignore-gpu-blocklist', '--no-first-run', '--no-default-browser-check', `--window-size=${w},${h}`,
     ...(values['no-vsync'] ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : []),
     'about:blank'
@@ -281,7 +283,22 @@ const main = async () => {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: Number(w), height: Number(h), deviceScaleFactor: 1, mobile: false })
     // main-thread long tasks (> 50 ms by the browser's definition) from the start of the page, for every page version
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__longTasks = []; new PerformanceObserver(list => { for (const e of list.getEntries()) window.__longTasks.push(Math.round(e.duration * 10) / 10) }).observe({ entryTypes: ['longtask'] })` })
+    if (values.dashboard) await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__raf = []; let last = 0; const tick = t => { if (last) window.__raf.push(t - last); last = t; requestAnimationFrame(tick) }; requestAnimationFrame(tick)` })
     await cdp.send('Page.navigate', { url })
+    if (values.dashboard) {
+      const ready = await waitUntil(() => cdp.evaluate('window.getViewHub?.() != null && document.querySelectorAll("canvas").length > 0'), Number(values.timeout) * 1000, 'dashboard hub and canvases')
+      await cdp.evaluate('window.__hub = { stats: () => getViewHub().stats(), probeGpu: o => getViewHub().probeGpu ? getViewHub().probeGpu(o) : {} }; true')
+      await sleep(3000)
+      await cdp.evaluate('window.__raf.length = 0; window.__longTasks.length = 0; true')
+      const report = await hubReport(cdp)
+      const raf = await cdp.evaluate('window.__raf')
+      const total = raf.reduce((a, b) => a + b, 0)
+      const canvases = await cdp.evaluate('document.querySelectorAll("canvas").length')
+      if (values.screenshot) fs.writeFileSync(values.screenshot, Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+      console.log(JSON.stringify({ ready, canvases, page: { fps: round(raf.length / (total / 1000), 1), frameMs: { p50: round(percentile(raf, 0.5), 1), p95: round(percentile(raf, 0.95), 1), max: round(Math.max(0, ...raf), 1) } }, ...report }))
+      cdp.close()
+      return
+    }
     const ready = await waitUntil(() => cdp.evaluate(values.hub ? 'window.__hub?.ready === true' : 'window.__view?.ready === true'), Number(values.timeout) * 1000, values.hub ? 'window.__hub.ready' : 'window.__view.ready')
     await sleep(2000)
     if (values['beside-hub']) {
