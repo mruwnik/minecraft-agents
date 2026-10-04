@@ -65,10 +65,13 @@
 (defn air? [name] (or (nil? name) (= "air" name) (str/ends-with? name "_air")))
 
 (defn standing-in?
-  "Whether the body stands in the column of an openable block at cell: its feet or its head are in that cell."
-  [self {:keys [x y z]}]
-  (let [fx (js/Math.floor (:x self)) fy (js/Math.floor (:y self)) fz (js/Math.floor (:z self))]
-    (and (= x fx) (= z fz) (<= fy y (inc fy)))))
+  "Whether the body stands in the column of an openable block at cell: its feet or its head are in that cell, or in
+  either cell of a door (half is the :half property of the block, or nil for a gate or trapdoor)."
+  [self {:keys [x y z]} half]
+  (let [fx (js/Math.floor (:x self)) fy (js/Math.floor (:y self)) fz (js/Math.floor (:z self))
+        low (if (= "upper" half) (dec y) y)
+        high (if half (inc low) low)]
+    (and (= x fx) (= z fz) (<= low (inc fy)) (<= fy high))))
 
 (defn parse
   "{:pos {:x :y :z} :state kw} of the args, or {:error text}."
@@ -135,7 +138,7 @@
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (:reach (:args c))}))]
     (cond
       (not= :done r) :continue
-      (:arrived (ctx/child-result c :walk)) :continue
+      (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :continue)
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
 (defn ^:async round [c]
@@ -154,7 +157,9 @@
           (not (contains? (valid-states kind) state))
           (decline! c :bad-state pos state (str text " cannot be " (name state)) {:block block :valid (sort (valid-states kind))})
           (reached? state (props-of b)) (finish! c :already pos state (str text " is already " (name state)) {:block block :now (props-of b)})
-          (and (= :openable kind) (= :closed state) (standing-in? (u/self-pos c) pos))
+          (and (= :openable kind) (= :closed state) (standing-in? (u/self-pos c) pos (:half (props-of b))))
           (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
-          (not (<= (u/dist (u/self-pos c) pos) (:reach (:args c)))) (await (walk! c pos state block))
+          (and (not (:arrived (ctx/mem c)))
+               (not (or (u/within? (u/self-pos c) pos (:reach (:args c)))
+                        (<= (u/dist (u/self-pos c) pos) (:reach (:args c)))))) (await (walk! c pos state block))
           :else (await (click! c pos state block)))))))

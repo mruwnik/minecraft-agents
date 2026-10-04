@@ -170,6 +170,21 @@
           (is (empty? (calls (:p shut) "useOn")))
           (is (= :changed (:reason (:result open)))))))))
 
+(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-is-declined-standing-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world "oak_door" {:open true} 3 0)
+                    (update :blocks dissoc "3,64,0")
+                    (update :states dissoc "3,64,0")
+                    (assoc-in [:blocks "3,65,0"] "oak_door")
+                    (assoc-in [:states "3,65,0"] {:open true :half "lower"})
+                    (assoc-in [:blocks "3,66,0"] "oak_door")
+                    (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
+              {:keys [result p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
+          (is (= {:status :declined :reason :standing-in} (head result [:status :reason])))
+          (is (empty? (calls p "useOn"))))))))
+
 ;; ------------------------------------------------------------------ gave up after one click
 
 (deftest a-click-that-changes-nothing-is-given-up-once
@@ -221,6 +236,16 @@
           (is (= {:status :gave-up :reason :unreachable} (head result [:status :reason])))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+
+(deftest a-walk-that-arrives-out-of-reach-by-the-jobs-own-measure-still-clicks-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open false} 3 4))
+              _ (set! (.-moveTo p) (fn [_token _args] (js/Promise.resolve #js {:status "arrived" :distance 3.58})))
+              result (await (child-outcome eng job {:pos at :state :open} 40))]
+          (is (= :changed (:reason result)))
+          (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest the-job-is-registered-with-doc-and-args
   (let [j (get registry/jobs job)]
