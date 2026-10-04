@@ -1,0 +1,3 @@
+;; ProbeView takeover live test: pacing only, no reflexes, on the pad at -3500 64 3495.
+{:register []
+ :queue [(jobs.movement.pace {:a {:x -3505 :y 64 :z 3495} :b {:x -3495 :y 64 :z 3495} :laps 3 :rounds 1000})]}
