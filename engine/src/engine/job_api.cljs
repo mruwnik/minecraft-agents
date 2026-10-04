@@ -67,7 +67,7 @@
                      (if (bounded-spec? spec) (expr/problem (:jobs eng) spec) "job expression exceeds size/depth limits"))]
     (cond
       (not (map? request)) (fail :bad-request)
-      (not (contains? #{:submit :interrupt :cancel :retry} op)) (fail :bad-op)
+      (not (contains? #{:submit :interrupt :cancel :cancel-all :retry} op)) (fail :bad-op)
       (seq (remove #{:op :id :spec :request-id :generation-id :front? :hold? :backoff :by} (keys request))) (fail :unknown-field)
       (not (valid-request-id? request-id)) (fail :bad-request-id)
       (not= generation-id (:generation-id (core/state eng))) (fail :generation-mismatch)
@@ -84,6 +84,7 @@
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)
       (and (#{:cancel :retry} op) (nil? (get-in (core/state eng) [:instances id]))) (fail :job-not-found)
+      (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
       (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
       :else
       (do
@@ -97,7 +98,10 @@
                          :interrupt (let [job-id (core/do-now! eng spec)]
                                       (swap! (:state eng) assoc-in [:instances job-id :by] by)
                                       {:ok true :job (summary eng job-id)})
-                         :cancel (do (core/cancel! eng id) {:ok true :id id :status :cancelled})
+                         :cancel (do (core/cancel! eng id by) {:ok true :id id :status :cancelled})
+                         :cancel-all (let [ids (:list (core/state eng))]
+                                       (run! #(core/cancel! eng % by) ids)
+                                       {:ok true :cancelled (vec ids)})
                          :retry (if (core/retry! eng id) {:ok true :job (summary eng id)}
                                     (fail :not-failed)))
                        (catch :default e (fail :request-uncertain (ex-message e))))]

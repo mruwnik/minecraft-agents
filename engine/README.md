@@ -992,6 +992,15 @@ same validation and is loaded as puts by `:scenario`; its ids must be unique.
 `:backoff` and `:by` on `:submit`, and `:by` on `:interrupt`; `:by` is kept on
 the instance.
 
+`POST /jobs {:op :cancel-all :request-id r :generation-id g :by who}` clears the whole list: every listed job (the
+running one, queued, held (`:hold?`) and parked-failed ones) is cancelled through the same path as a single `:cancel`
+(`core/cancel!`: the running round is cut at its cut point, the job's cleanup and memory are dropped, attention
+resolved), in list order, one `job.cancelled` event each with `:by`. Reply `{:ok true :cancelled [id ...]}` (an empty
+list is not a refusal). The register is not touched: reflex entries, and a reflex job in flight, go on, so a body
+still eats and flees after a stop (mute or remove one with `POST /triggers`). It takes no `:id` (`:bad-field`) and
+the same dedupe as the other ops: the same request id replays the result with `:duplicate true`, changed fields are
+`:request-id-conflict`. A single `:cancel` also records `:by` now.
+
 ## Manual takeover
 
 For rescuing a stuck body by hand. The body listens on a unix socket,
@@ -1554,7 +1563,7 @@ The server validates names/shape before changing any job or reserving a command.
 Expressions are limited to 256 nodes/depth 24 and the CLI caps input at 12000
 bytes. `GET /jobs?limit=8&offset=0` lists at most 32 jobs per page; `show` reuses
 `GET /job` and removes bookkeeping metadata. `POST /jobs` handles only submit,
-interrupt, cancel and retry. The engine owns scheduling, interruption, native
+interrupt, cancel, cancel-all (not in the tool yet) and retry. The engine owns scheduling, interruption, native
 job/child memory and failure attention; the tool owns transport/request metadata.
 Trigger edits are `POST /triggers` (Local event API).
 

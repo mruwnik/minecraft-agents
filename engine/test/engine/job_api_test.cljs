@@ -102,3 +102,47 @@
     (is (= [] (:list (core/state eng))))
     (is (empty? (get-in (core/state eng) [:job-requests :records])))
     (core/shutdown! eng)))
+(defn cancelled-events [seen] (filterv #(= :cancelled (:kind %)) @seen))
+(deftest cancel-all-cancels-every-listed-job-held-ones-included-and-leaves-the-register
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [p (tu/fake {})
+              [seen sink] (tu/legacy-capture-sink)
+              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+                           :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}
+                    'done {:args {} :check (constantly true) :round (fn [_] :done)}
+                    'fail {:args {} :check (constantly true) :round (fn [_] (throw (js/Error. "test failure")))}}
+              eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
+                                :triggers {:probe {:name :probe :job '(done) :when (fn [_ _ _] false)}}
+                                :events (events/make {:stdout? false :sinks [sink]})})]
+          (core/register-reflex! eng {:trigger :probe})
+          (command eng "a" :submit {:spec '(wait)})
+          (command eng "b" :submit {:spec '(fail)})
+          (command eng "c" :submit {:spec '(done)})
+          (command eng "d" :submit {:spec '(done) :hold? true})
+          (command eng "e" :submit {:spec '(done)})
+          (command eng "e-cancel" :cancel {:id "j5" :by "scout"})
+          (is (= [["j5" "scout"]] (mapv (juxt :job :by) (cancelled-events seen))) "a single cancel records who asked too")
+          (reset! seen [])
+          (let [running (core/tick! eng)]
+            (is (= "j4" (:id (core/running eng))) "the held job has the body")
+            (let [r (command eng "all" :cancel-all {:by "steward"})]
+              (is (= {:ok true :cancelled ["j1" "j2" "j3" "j4"]} (select-keys r [:ok :cancelled])))
+              (is (= [] (:list (core/state eng))))
+              (is (nil? (core/running eng)))
+              (is (= 1 (count (:register (core/state eng)))) "the reflex register is untouched")
+              (is (= [["j1" "steward"] ["j2" "steward"] ["j3" "steward"] ["j4" "steward"]]
+                     (mapv (juxt :job :by) (cancelled-events seen))) "one event per job, who asked recorded")
+              (is (true? (:duplicate (command eng "all" :cancel-all {:by "steward"}))) "same request id replays")
+              (is (= 4 (count (cancelled-events seen))) "the replay changed nothing")
+              (is (= :request-id-conflict (:reason (command eng "all" :cancel-all {:by "other"})))))
+            (await running))
+          (core/shutdown! eng))))))
+(deftest cancel-all-on-an-empty-list-is-ok-and-refusals-are-data
+  (let [{:keys [eng]} (setup)]
+    (is (= {:ok true :cancelled []} (select-keys (command eng "none" :cancel-all {}) [:ok :cancelled])))
+    (is (= :unknown-field (:reason (command eng "x" :cancel-all {:id "j1" :bogus 1}))))
+    (is (= :bad-by (:reason (command eng "y" :cancel-all {:by 7}))))
+    (is (= :bad-field (:reason (command eng "z" :cancel-all {:id "j1"}))) ":cancel-all takes no id")
+    (core/shutdown! eng)))

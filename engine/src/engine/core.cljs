@@ -894,15 +894,18 @@
                 :spec (pr-str spec) :hold hold? :by by})
     id))
 
-(defn cancel! [eng id]
-  (when (= id (:id (running eng)))
-    (set-owner! eng nil)
-    (reset! (:running eng) nil))
-  (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
-  (forget-backoff! eng id)
-  (mem/delete-job! (:store eng) id)
-  (save-memory! eng)
-  (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by :agent}))
+(defn cancel!
+  "Remove listed job id (cutting its round if it is the one running). by names who asked."
+  ([eng id] (cancel! eng id :agent))
+  ([eng id by]
+    (when (= id (:id (running eng)))
+      (set-owner! eng nil)
+      (reset! (:running eng) nil))
+    (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
+    (forget-backoff! eng id)
+    (mem/delete-job! (:store eng) id)
+    (save-memory! eng)
+    (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
 
 (defn retry!
   "Clear the failed mark of listed job id so the scheduler runs it again, memory
