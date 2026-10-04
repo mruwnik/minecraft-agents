@@ -140,13 +140,16 @@ const unpackWords = (words, into) => {
   }
 }
 
-export function columnLightSection (column, s) {
+// Dimensions with no sky send no sky light at all (no data and no empty flag), which must not read as open sky.
+export const hasSkyLight = dimension => !/^(minecraft:)?(the_nether|the_end)$/.test(dimension ?? '')
+
+export function columnLightSection (column, s, hasSky = true) {
   const l = s + 1
   const sky = new Uint8Array(SECTION_VOLUME)
   const block = new Uint8Array(SECTION_VOLUME)
   const skyData = column.skyLightSections[l]
   if (skyData && column.skyLightMask.get(l)) unpackWords(skyData.data, sky)
-  else if (!column.emptySkyLightMask.get(l)) sky.fill(15)
+  else if (hasSky && !column.emptySkyLightMask.get(l)) sky.fill(15)
   const blockData = column.blockLightSections[l]
   if (blockData && column.blockLightMask.get(l)) unpackWords(blockData.data, block)
   return { sky, block }

@@ -108,3 +108,46 @@ test('stateInfo names a state with its properties', () => {
   const info = raw.stateInfo(id('oak_log'))
   assert.deepEqual([info.name, info.properties.axis], ['oak_log', 'y'])
 })
+
+test('sightTable blocks sight for lava and powder snow, which have no collision box but are opaque', () => {
+  const table = sightTable(registry)
+  assert.deepEqual(['lava', 'powder_snow'].map(n => table[id(n)]), [1, 1])
+})
+
+test('a dimension with no sky has no sky light, even when the column carries no sky data', () => {
+  const { bot } = makeBot()
+  bot.game.dimension = 'the_nether'
+  bot.world.getColumn = () => new ChunkColumn({ minY: -64, worldHeight: 384 })
+  const raw = createRawWorld({ getBot: () => bot })
+  assert.equal(raw.lightAt(3, 71, 4) >> 4, 0)
+})
+
+test('a section with no sky data in the overworld still counts as open sky', () => {
+  const { bot } = makeBot()
+  bot.world.getColumn = () => new ChunkColumn({ minY: -64, worldHeight: 384 })
+  const raw = createRawWorld({ getBot: () => bot })
+  assert.equal(raw.lightAt(3, 71, 4) >> 4, 15)
+})
+
+test('a chunk load or unload drops only that column from the caches', () => {
+  const { bot, column } = makeBot()
+  let reads = 0
+  bot.world.getColumn = (cx, cz) => { reads++; return cx === 0 && cz === 0 ? column : undefined }
+  const raw = createRawWorld({ getBot: () => bot })
+  raw.stateAt(3, 70, 4)
+  raw.stateAt(20, 70, 4)
+  bot.emit('chunkColumnUnload', new Vec3(16, 0, 0))
+  raw.stateAt(3, 70, 4)
+  raw.stateAt(20, 70, 4)
+  assert.equal(reads, 3)
+})
+
+test('the sight table is null while the bot has no registry, and real once it has one', () => {
+  const { bot } = makeBot()
+  const { registry: reg } = bot
+  bot.registry = undefined
+  const raw = createRawWorld({ getBot: () => bot })
+  const before = raw.sightTable()
+  bot.registry = reg
+  assert.deepEqual([before, raw.sightTable()?.length > 0], [null, true])
+})

@@ -15,14 +15,25 @@ test('sections round-trip through the file in order, with their dimension and la
   await saveSeen(file, {
     version: '26.1',
     sections: [
-      { dim: 'overworld', cx: -3, sy: -4, cz: 7, seen: 1000, ids: ids(5) },
-      { dim: 'the_nether', cx: 1, sy: 2, cz: -1, seen: 2000.5, ids: ids(9) }
+      { dim: 'overworld', cx: -3, sy: -4, cz: 7, seen: 1000, base: 1, ids: ids(5), times: new Uint8Array(4096) },
+      { dim: 'the_nether', cx: 1, sy: 2, cz: -1, seen: 2000.5, base: 2, ids: ids(9), times: new Uint8Array(4096) }
     ]
   })
   const back = loadSeen(file)
   const shape = back.sections.map(({ dim, cx, sy, cz, seen, ids }) => [dim, cx, sy, cz, seen, ids.length, ids[0], ids[4095]])
   fs.rmSync(dir, { recursive: true })
   assert.deepEqual([back.version, shape], ['26.1', [['overworld', -3, -4, 7, 1000, 4096, 5, 5], ['the_nether', 1, 2, -1, 2000.5, 4096, 9, 9]]])
+})
+
+test('each cell\'s seen time and the section base round-trip', async () => {
+  const dir = tmp()
+  const file = path.join(dir, 'seen.bin')
+  const times = new Uint8Array(4096)
+  times[7] = 200
+  await saveSeen(file, { version: '26.1', sections: [{ dim: 'overworld', cx: 0, sy: 0, cz: 0, seen: 5, base: 1234.5, ids: ids(1), times }] })
+  const [back] = loadSeen(file).sections
+  fs.rmSync(dir, { recursive: true })
+  assert.deepEqual([back.base, back.times.length, back.times[7], back.times[8]], [1234.5, 4096, 200, 0])
 })
 
 test('a missing file loads as null', () => {

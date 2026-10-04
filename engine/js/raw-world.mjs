@@ -4,7 +4,7 @@
 // getBot at each call, so a reconnect is followed (the block-change listener moves to the new bot on the next call).
 import prismarineBlock from 'prismarine-block'
 import { sectionIds } from './path/snapshot.mjs'
-import { columnLightSection } from './view.mjs'
+import { columnLightSection, hasSkyLight } from './view.mjs'
 
 export const UNLOADED = -1
 export const EYE_HEIGHT = 1.62
@@ -12,14 +12,17 @@ const CACHE_MAX = 2048 // section copies kept before the caches are dropped
 const LIGHT_TTL_MS = 1000 // light changes arrive without an event: a light copy is re-read after this long
 
 // Same rule as primitives.mjs canSee: a full collision box blocks sight unless it is one of these.
-export const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
+export const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$/
+// Opaque to the eye although they have no collision box: nothing is seen through a lava lake or powder snow.
+export const OPAQUE_WITHOUT_BOX = /^(lava|powder_snow)$/
 
 // Uint8Array over state ids: 1 where the state blocks sight.
 export function sightTable (registry) {
   const size = registry.blocksArray.reduce((m, b) => Math.max(m, b.maxStateId), 0) + 1
   const out = new Uint8Array(size)
   for (const block of registry.blocksArray) {
-    if (block.boundingBox !== 'block' || SEE_THROUGH.test(block.name)) continue
+    const blocks = OPAQUE_WITHOUT_BOX.test(block.name) || (block.boundingBox === 'block' && !SEE_THROUGH.test(block.name))
+    if (!blocks) continue
     out.fill(1, block.minStateId, block.maxStateId + 1)
   }
   return out
@@ -61,6 +64,19 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     lastLightKey = -1
   }
 
+  // a column's sections (world section indices 0..63) leave the caches; the arg is mineflayer's corner Vec3 in blocks
+  const forgetColumn = corner => {
+    const cx = corner.x >> 4
+    const cz = corner.z >> 4
+    for (let s = 0; s < 64; s++) {
+      const key = keyOf(cx, cz, s)
+      states.delete(key)
+      lights.delete(key)
+    }
+    lastStateKey = -1
+    lastLightKey = -1
+  }
+
   const onUpdate = (oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
@@ -85,12 +101,12 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     tables = null
     if (!bot?.on) { unhook = () => {}; return bot }
     bot.on('blockUpdate', onUpdate)
-    bot.on('chunkColumnLoad', forget)
-    bot.on('chunkColumnUnload', forget)
+    bot.on('chunkColumnLoad', forgetColumn)
+    bot.on('chunkColumnUnload', forgetColumn)
     unhook = () => {
       bot.removeListener('blockUpdate', onUpdate)
-      bot.removeListener('chunkColumnLoad', forget)
-      bot.removeListener('chunkColumnUnload', forget)
+      bot.removeListener('chunkColumnLoad', forgetColumn)
+      bot.removeListener('chunkColumnUnload', forgetColumn)
     }
     return bot
   }
@@ -124,7 +140,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const sectionLight = (bot, cx, cz, s, key) => {
     if (lights.size > CACHE_MAX) forget()
     const column = bot.world?.getColumn?.(cx, cz)
-    const light = column ? (lightOverlay(cx, cz, s) ?? columnLightSection(column, s)) : null
+    const light = column ? (lightOverlay(cx, cz, s) ?? columnLightSection(column, s, hasSkyLight(bot.game?.dimension))) : null
     const entry = light ? { sky: light.sky, block: light.block, at: now() } : null
     lights.set(key, entry)
     return entry
@@ -169,7 +185,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }
     },
     version: () => follow()?.version ?? null,
-    sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : new Uint8Array(0) },
+    // null while the bot has no registry yet (the perception waits and asks again)
+    sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : null },
     stateInfo: id => tablesOf(follow()).info(id),
     // fn(x, y, z, stateId) for every changed cell; returns the unsubscribe
     onBlockChange: fn => {

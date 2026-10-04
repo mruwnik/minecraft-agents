@@ -101,7 +101,7 @@
 (deftest a-capped-store-forgets-the-least-recently-seen-section
   (let [clock (atom 1000)
         {:keys [per]} (rig {"0,64,0" "stone" "20,64,0" "dirt" "40,64,0" "sand"}
-                           {:cap-bytes (* 2 8192) :now #(deref clock)})]
+                           {:cap-bytes (* 2 perception/section-bytes) :now #(deref clock)})]
     (perception/touch! per [0 64 0])
     (swap! clock + 10)
     (perception/touch! per [20 64 0])
@@ -154,7 +154,8 @@
   (let [{:keys [p per]} (rig (wall 5 8 [] {"0,65,8" "diamond_ore"}))
         wrapped (perception/wrap p per)]
     (perception/pass! per)
-    (is (every? #(identical? (aget p %) (aget wrapped %)) (js/Object.keys p)))
+    (is (every? #(identical? (aget p %) (aget wrapped %))
+                (remove perception/touching-primitives (js/Object.keys p))))
     (is (= "diamond_ore" (.-name (.blockAt wrapped #js {:x 0 :y 65 :z 8}))))
     (is (.-unknown (.seenBlockAt wrapped #js {:x 0 :y 65 :z 8})))
     (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))))
@@ -175,3 +176,101 @@
   (is (= [false true true true]
          [(>= (perception/seeing 0 0 1) 0.2) (>= (perception/seeing 0 3 1) 0.2)
           (>= (perception/seeing 15 0 (perception/sky-darken 18000 0 0)) 0.2) (>= (perception/seeing 0 14 1) 0.2)])))
+
+;; ---- review fixes
+
+(deftest ore-under-a-lava-lake-is-unknown
+  (let [{:keys [per]} (rig (merge (tu/box -8 60 3 8 66 3 "lava") {"0,65,6" "diamond_ore"}))]
+    (perception/pass! per)
+    (is (= ["lava" nil] (mapv #(seen-name per %) [[0 65 3] [0 65 6]])))))
+
+(deftest a-cell-keeps-its-own-seen-time-within-a-section
+  (let [clock (atom 0)
+        {:keys [per]} (rig {"0,64,0" "stone" "1,64,0" "stone"} {:now #(deref clock)})]
+    (perception/touch! per [0 64 0])
+    (swap! clock + 600000)
+    (perception/touch! per [1 64 0])
+    (is (= [600000 0] (mapv #(:age-ms (perception/seen-block per %)) [[0 64 0] [1 64 0]])))))
+
+(deftest a-cell-older-than-the-time-range-reads-as-the-oldest-it-can
+  (let [clock (atom 0)
+        {:keys [per]} (rig {"0,64,0" "stone" "1,64,0" "stone"} {:now #(deref clock)})]
+    (perception/touch! per [0 64 0])
+    (swap! clock + (* 600 60000))
+    (perception/touch! per [1 64 0])
+    (is (= [0 true] [(:age-ms (perception/seen-block per [1 64 0]))
+                     (>= (:age-ms (perception/seen-block per [0 64 0])) (* 255 60000))]))))
+
+(deftest seen-time-survives-a-save-and-load
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 0)
+              {:keys [per]} (rig {"0,64,0" "stone" "1,64,0" "stone"} {:now #(deref clock)})
+              file (path/join (tu/tmp-dir) "engine" "seen.bin")
+              _ (perception/touch! per [0 64 0])
+              _ (swap! clock + 600000)
+              _ (perception/touch! per [1 64 0])
+              _ (await (perception/save! per @seen-file file))
+              fresh (:per (rig {} {:now #(deref clock)}))
+              _ (perception/load! fresh @seen-file file)]
+          (is (= [600000 0] (mapv #(:age-ms (perception/seen-block fresh %)) [[0 64 0] [1 64 0]]))))))))
+
+(deftest seen-blocks-clamps-its-radius
+  (let [{:keys [per]} (rig {"0,64,0" "gold_block" "100,64,0" "gold_block"})]
+    (perception/touch! per [0 64 0])
+    (perception/touch! per [100 64 0])
+    (is (= [[0 64 0]] (mapv :pos (perception/seen-blocks per {:names ["gold_block"] :radius 100000}))))))
+
+(deftest seen-blocks-reports-each-cells-own-age
+  (let [clock (atom 0)
+        {:keys [per]} (rig {"0,64,1" "gold_block" "1,64,1" "gold_block"} {:now #(deref clock)})]
+    (perception/touch! per [0 64 1])
+    (swap! clock + 120000)
+    (perception/touch! per [1 64 1])
+    (is (= [[1 64 1] 0 [0 64 1] 120000]
+           (let [rows (sort-by :age-ms (perception/seen-blocks per {:names ["gold_block"]}))]
+             [(:pos (first rows)) (:age-ms (first rows)) (:pos (second rows)) (:age-ms (second rows))])))))
+
+(deftest no-pass-starts-until-the-sight-table-is-ready
+  (let [ready (atom false)
+        p (tu/fake {:blocks (wall 5 8 [] {"0,65,8" "diamond_ore"})})
+        raw (js/Object.assign #js {} (fake-raw/create p)
+                              #js {:sightTable (fn [] (if @ready (.sightTable ^js (fake-raw/create p)) (js/Uint8Array. 0)))})
+        per (perception/create raw {})]
+    (perception/pass! per)
+    (is (= [0 0] [(:rays (perception/stats per)) (:sections (perception/stats per))]))
+    (reset! ready true)
+    (perception/pass! per)
+    (is (= ["stone" nil] (mapv #(seen-name per %) [[0 65 5] [0 65 8]])))
+    (is (pos? (:rays (perception/stats per))))))
+
+(deftest the-bodys-own-dig-and-place-update-memory-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p per]} (rig {"0,65,3" "stone" "0,64,3" "stone"})
+              _ (.setOwner p "t1")
+              wrapped (perception/wrap p per)
+              _ (light! p {:light-default [0 0]})
+              _ (perception/pass! per)
+              before (seen-name per [0 65 3])
+              _ (await (.dig wrapped "t1" #js {:pos #js {:x 0 :y 65 :z 3}}))
+              dug (seen-name per [0 65 3])]
+          (is (= [nil "air"] [before dug])))))))
+
+(deftest place-jump-place-and-use-on-touch-the-cell-even-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p per]} (rig {})
+              change (fn [block] (fn [_token a] (fake/set-block! p [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))] block)
+                                   (js/Promise.resolve #js {:status "ok"})))
+              stub (js/Object.assign #js {} p #js {:place (change "stone") :jumpPlace (change "dirt") :useOn (change "sand")})
+              wrapped (perception/wrap stub per)
+              _ (light! p {:light-default [0 0]})
+              at (fn [x] #js {:pos #js {:x x :y 65 :z 4}})
+              _ (await (.place wrapped "t" (at 0)))
+              _ (await (.jumpPlace wrapped "t" (at 1)))
+              _ (await (.useOn wrapped "t" (at 2)))]
+          (is (= ["stone" "dirt" "sand"] (mapv #(seen-name per [% 65 4]) [0 1 2]))))))))

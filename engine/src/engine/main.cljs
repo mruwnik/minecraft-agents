@@ -160,8 +160,13 @@
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
               control (await (start-control! root eng cfg lease-opts))
               stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
-          {:engine eng :stop (fn [] ((:stop seen)) (stop-perception) (stop-ticks) (takeover/close! eng) (some-> control .close)
-                               ((:close event-socket)) (core/shutdown! eng) (.close p) (release))})
+          {:engine eng :stop (fn ^:async stop []
+                               ((:stop seen))
+                               (let [saved (stop-perception)]
+                                 (stop-ticks) (takeover/close! eng) (some-> control .close)
+                                 ((:close event-socket)) (core/shutdown! eng)
+                                 (await saved)
+                                 (.close p) (release)))})
         (catch :default e
           ((:stop seen))
           (stop-perception)
@@ -169,6 +174,21 @@
           (core/shutdown! eng)
           (await (.close p))
           (throw e))))))
+
+(def shutdown-limit-ms 5000)
+
+(defn shutdown-handler
+  "The signal handler: stops the body, then exits once stop has finished (memory saved) or after limit-ms, whichever
+  comes first, and also when stop fails."
+  ([stop exit!] (shutdown-handler stop exit! shutdown-limit-ms))
+  ([stop exit! limit-ms]
+   (fn []
+     (let [timer (atom nil)
+           limit (js/Promise. (fn [resolve _] (reset! timer (js/setTimeout resolve limit-ms))))
+           stopped (-> (js/Promise.resolve) (.then stop))]
+       (-> (js/Promise.race #js [stopped limit])
+           (.catch (fn [_]))
+           (.then (fn [] (js/clearTimeout @timer) (exit!))))))))
 
 (defn ^:async run
   "Start a body. Resolves to {:engine eng :stop f}, or {:error text}; :exit-code 3 when the body already runs.
@@ -198,7 +218,7 @@
   (-> (run (parse-args args))
       (.then (fn [{:keys [error stop exit-code]}]
                (when error (fail! error (or exit-code 2)))
-               (let [shutdown (fn [] (stop) (js/setTimeout #(js/process.exit 0) 200))]
+               (let [shutdown (shutdown-handler stop #(js/process.exit 0))]
                  (.on js/process "SIGINT" shutdown)
                  (.on js/process "SIGTERM" shutdown))))
       (.catch (fn [e] (fail! (str "engine: " (.-stack e)))))))

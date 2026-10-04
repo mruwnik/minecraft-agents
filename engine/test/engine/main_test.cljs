@@ -53,3 +53,16 @@
         (is (re-find #"js/primitives.mjs.*refusing"
                      (:error (await (main/run {:agent "Bob" :world "w" :state-dir (agent-state-dir)
                                                :engine-root (tu/tmp-dir)})))))))))
+
+(deftest shutdown-exits-after-stop-finishes-or-the-time-limit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [log (atom [])
+              slow-stop (fn [] (js/Promise. (fn [resolve _] (js/setTimeout (fn [] (swap! log conj :stopped) (resolve)) 40))))
+              hung-stop (fn [] (js/Promise. (fn [_ _])))
+              failing-stop (fn [] (js/Promise.reject (js/Error. "boom")))]
+          (await ((main/shutdown-handler slow-stop #(swap! log conj :exit) 1000)))
+          (await ((main/shutdown-handler hung-stop #(swap! log conj :exit-hung) 60)))
+          (await ((main/shutdown-handler failing-stop #(swap! log conj :exit-failed) 1000)))
+          (is (= [:stopped :exit :exit-hung :exit-failed] @log)))))))
