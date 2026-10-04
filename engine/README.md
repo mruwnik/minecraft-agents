@@ -1353,14 +1353,15 @@ operation emits its action completion event. Both watcher flags accept repeated
 options or comma-separated IDs (maximum 32 per kind):
 
 ```bash
-node engine/tools/observe.mjs Bob --wait --timeout 100ms # initialize once per observer
 node engine/tools/world.mjs Bob submit move-to 10 64 20 --request-id move-home
 node engine/tools/observe.mjs Bob --wait --watch-action move-home
 ```
 
-The named observer must have been initialized before submission to retain an
-operation that finishes between these commands; a first-ever observer starts at
-the current event cursor. Action completion returns
+On a first-ever observer, explicitly watched job/action IDs are checked against
+up to the last 1000 retained events in the current generation. Already completed
+work returns immediately; unrelated historical chat stays quiet. If retention
+prevents this lookup, the tool returns an explicit `:history-unavailable` reset.
+Subsequent waits use the saved cursor. Action completion returns
 `{:wake :action-finished :action "move-home" :result {...}}` with compact status,
 reason and movement/outcome fields. Unwatched action events stay quiet. Addressed
 chat and required attention retain their normal wake behavior while tracking an

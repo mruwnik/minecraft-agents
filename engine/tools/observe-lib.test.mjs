@@ -180,3 +180,30 @@ test('action watchers accept repeated/comma options, validate limits, require wa
   assert.ok(requestFor(['Probe', '--wait', '--watch-action', 'bad/name']).error)
   assert.ok(requestFor(['Probe', '--wait', '--watch-action', Array(33).fill('move-1').join(',')]).error)
 })
+test('first use catches recently completed watched actions while ignoring historical chat; later results retained', async () => {
+  const f = fixture()
+  try {
+    f.state.events.push({ ...event('body', 'chat', { from: 'Dan' }, 'Probe historical chat'), seq: 1, 'generation-id': 'g' },
+      { ...event('action', 'done', { status: 'dug' }), context: { 'action-id': 'dig-1' }, seq: 2, 'generation-id': 'g' },
+      { ...event('action', 'done', { status: 'placed' }), context: { 'action-id': 'place-1' }, seq: 3, 'generation-id': 'g' })
+    f.req.waitOptions.watchActions = ['dig-1', 'place-1']
+    assert.equal((await waitObserve(f.req, f.get)).action, 'dig-1')
+    assert.equal((await waitObserve(f.req, f.get)).action, 'place-1')
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    assert.equal(readEDN(fs.readFileSync(f.file, 'utf8')).cursor.seq, 3)
+  } finally { f.cleanup() }
+})
+test('historical lookup ignores prior generations/newly started attempts and reports unavailable history', async () => {
+  const f = fixture()
+  try {
+    f.req.waitOptions.watchActions = ['move-1']
+    f.state.events.push({ ...event('action', 'done', { status: 'arrived' }), context: { 'action-id': 'move-1' }, seq: 1, 'generation-id': 'older' })
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    fs.unlinkSync(f.file)
+    f.state.events[0]['generation-id'] = 'g'
+    f.state.events.push({ ...event('action', 'started'), context: { 'action-id': 'move-1' }, seq: 2, 'generation-id': 'g' })
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+    fs.unlinkSync(f.file); f.state.gap = true
+    assert.equal((await waitObserve(f.req, f.get)).reason.key, 'history-unavailable')
+  } finally { f.cleanup() }
+})
