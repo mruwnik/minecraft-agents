@@ -1,7 +1,11 @@
 (ns agent-tools.jobs
   "Job command validation and native EDN requests; HTTP remains a Node boundary."
   (:require [engine.bodies :as bodies]
+            [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
+            [agent-tools.world-data :as data]
+            [clojure.string :as str]
+            ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:crypto" :as crypto]))
 
@@ -82,3 +86,114 @@
                                   (contains? values :hold) (assoc :hold? (:hold values))
                                   (contains? values :front) (assoc :front? (:front values)))))))))))
     (catch :default error {:error (.-message error)})))
+
+;; Transport
+
+(def request-timeout-ms 3000)
+(def max-get-bytes 262144)
+(def max-post-bytes 65536)
+(def max-generation-records 128)
+(def private-dir-mode 448)  ; 0700
+(def private-file-mode 384) ; 0600
+
+(defn get! [socket-path path {:keys [request-fn]}]
+  (http/request (cond-> {:socket-path socket-path :path path :label "jobs" :timeout-ms request-timeout-ms :max-bytes max-get-bytes}
+                  request-fn (assoc :request-fn request-fn))))
+
+(defn post!
+  "POST an EDN body (default path /jobs): a promise of {:status :content-type :text}; options :path :timeout-ms :request-fn."
+  [socket-path body {:keys [path timeout-ms request-fn] :or {path "/jobs" timeout-ms request-timeout-ms}}]
+  (http/request (cond-> {:socket-path socket-path :method "POST" :path path :label "jobs" :timeout-ms timeout-ms
+                         :max-bytes max-post-bytes :headers {"content-type" "application/edn"} :body (data/write-edn body)}
+                  request-fn (assoc :request-fn request-fn))))
+
+(defn read-generation [file] (:generation-id (data/read-edn (.readFileSync fs file "utf8"))))
+
+(defn prune-generations! [meta-dir]
+  (let [files (->> (array-seq (.readdirSync fs meta-dir))
+                   (filter #(str/ends-with? % ".edn"))
+                   (map (fn [f] (let [file (.join path meta-dir f)] {:file file :at (.-mtimeMs (.statSync fs file))})))
+                   (sort-by :at >))]
+    (doseq [{:keys [file]} (drop max-generation-records files)]
+      (.rmSync fs file #js {:force true}))))
+
+(defn record-generation!
+  "The generation a request ID is bound to, so a retry with the same ID reuses it. The first writer wins."
+  [meta-file meta-dir generation]
+  (let [written (try (.writeFileSync fs meta-file (data/write-edn {:generation-id generation})
+                                     #js {:mode private-file-mode :flag "wx"})
+                     generation
+                     (catch :default error
+                       (when-not (= "EEXIST" (.-code error)) (throw error))
+                       (read-generation meta-file)))]
+    (prune-generations! meta-dir)
+    written))
+
+(defn generation-for!
+  "Bind the request to a generation: the one recorded for its ID, else the snapshot's."
+  [r snapshot]
+  (let [meta-dir (.join path (.dirname path (.dirname path (:socketPath r))) ".commands" "jobs")
+        meta-file (.join path meta-dir (str (get-in r [:request :request-id]) ".edn"))
+        _ (.mkdirSync fs meta-dir #js {:recursive true :mode private-dir-mode})
+        cached (when (.existsSync fs meta-file) (read-generation meta-file))
+        generation (or cached (:generation-id (data/read-edn (:text snapshot))))]
+    (when-not (string? generation) (throw (js/Error. "generation unavailable")))
+    (if cached generation (record-generation! meta-file meta-dir generation))))
+
+(defn exchange! [r opts]
+  (cond
+    (:resolve r) (post! (:socketPath r) (:request r) (assoc opts :path (:path r)))
+    (:mutating r)
+    (.then (get! (:socketPath r) "/snapshot" opts)
+           (fn [snapshot]
+             (when-not (and (= 200 (:status snapshot)) (http/edn-response? (:content-type snapshot)))
+               (throw (js/Error. "snapshot unavailable")))
+             (post! (:socketPath r) (assoc (:request r) :generation-id (generation-for! r snapshot)) (assoc opts :path (:path r)))))
+    :else (get! (:socketPath r) (:path r) opts)))
+
+(defn job-detail [value]
+  (cond-> (into {} (filter (comp some? val)) (select-keys value [:id :name :status :round :spec]))
+    (:failure value) (assoc :failure (:failure value))
+    (pos? (or (get-in value [:attention :total]) 0)) (assoc :attention (:attention value))))
+
+(defn print-text! [text] (.write (.-stdout js/process) text))
+
+(defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
+
+(defn deliver! [r output {:keys [status content-type text]}]
+  (when-not (http/edn-response? content-type) (throw (js/Error. "unexpected response format")))
+  (let [value (data/read-edn text)
+        print! #(output (str (data/write-edn %) "\n"))]
+    (cond
+      (and (= 404 status) (= :not-found (:reason value)))
+      (do (print! {:ok false :reason :jobs-unavailable :action :restart-with-current-build}) 2)
+
+      (and (not (:mutating r)) (str/starts-with? (:path r) "/job?") (= 200 status))
+      (do (print! (job-detail value)) 0)
+
+      (and (:mutating r) (= :request-uncertain (:reason value)))
+      (do (print! (assoc value :request-id (get-in r [:request :request-id]))) 1)
+
+      :else (do (output (line text)) (if (= 200 status) 0 1)))))
+
+(defn failure-for [r error]
+  (let [request-id (get-in r [:request :request-id])]
+    (cond-> {:ok false :reason (if (#{"ENOENT" "ECONNREFUSED"} (aget error "code")) :no-running-body :transport-error)}
+      (:resolve r) (assoc :request-id request-id :confirmation :unknown
+                          :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
+      (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown
+                                                    :message "Query/retry with the same request ID; do not submit a new ID."))))
+
+(defn main!
+  ([] (main! (vec (.slice (.-argv js/process) 2))))
+  ([argv] (main! argv {}))
+  ([argv {:keys [output] :or {output print-text!} :as opts}]
+   (let [r (request-for argv)]
+     (if (:error r)
+       (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
+       (-> (js/Promise.resolve nil)
+           (.then #(exchange! r opts))
+           (.then #(deliver! r output %))
+           (.catch (fn [error]
+                     (output (str (data/write-edn (failure-for r error)) "\n"))
+                     2)))))))

@@ -11,6 +11,7 @@
             [agent-tools.plans :as plans]
             [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
+            [agent-tools.triggers :as triggers]
             [agent-tools.world :as world]
             [agent-tools.storage-compat :as compat]))
 
@@ -67,28 +68,18 @@
   (.then (time-tool/execute! (compat/from-js request)) compat/to-js))
 (defn time-main [argv] (time-tool/main! (vec argv)))
 
-(defn- edn-value-js [value]
-  ;; edn-data requires nested maps in expression lists to stay EDN maps,
-  ;; rather than the plain objects used by ordinary compatibility results.
-  (cond
-    (map? value) #js {:map (into-array (map (fn [[k v]] #js [(edn-value-js k) (edn-value-js v)]) value))}
-    (vector? value) (into-array (map edn-value-js value))
-    (seq? value) #js {:list (into-array (map edn-value-js value))}
-    (set? value) #js {:set (into-array (map edn-value-js value))}
-    :else (compat/to-js value)))
+(def jobs-usage jobs/usage)
+(defn jobs-request-for [argv] (compat/to-js (jobs/request-for (vec argv))))
+(defn jobs-main [argv] (jobs/main! (vec argv)))
 
-(defn jobs-spec-for [text] (edn-value-js (jobs/spec-for text)))
-(defn jobs-request-for [argv]
-  (let [request (jobs/request-for (vec argv)) converted (compat/to-js request)]
-    (when-let [spec (get-in request [:request :spec])]
-      (aset (.-request converted) "spec" (edn-value-js spec)))
-    converted))
+(def triggers-usage triggers/usage)
+(defn triggers-request-for [argv] (compat/to-js (triggers/request-for (vec argv))))
+(defn triggers-main [argv] (triggers/main! (vec argv)))
 
 (def entities-usage entities/usage)
 (defn entities-options [argv]
   (compat/to-js (entities/options (vec argv))))
-(defn entities-project [request snapshot]
-  (compat/to-js (entities/project (compat/from-js request) (compat/from-js snapshot))))
+(defn entities-main [argv] (entities/main! (vec argv)))
 (def say-usage (clj->js say/usage))
 (defn say-request-for [argv] (compat/to-js (say/request-for (vec argv))))
 (defn say-main [argv] (say/main! (vec argv)))

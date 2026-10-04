@@ -1,6 +1,7 @@
 (ns agent-tools.entities
   "A bounded, read-only projection of a body's short-lived entity cache."
   (:require [clojure.string :as str]
+            [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
             ["node:fs" :as fs]
@@ -175,3 +176,89 @@
             (false? (:online? snapshot)) (assoc :online? false)
             more? (assoc :more? true)
             (and (< next-offset (count matches)) (seq selected)) (assoc :next-offset next-offset)))))))
+
+(def max-response-bytes (+ (* 4 1024 1024) 4096))
+(def max-output-bytes 65536)
+(def request-timeout-ms 3000)
+
+(defn failure [reason message] {:ok false :reason (keyword reason) :message message})
+
+(defn socket-for [request]
+  (.join path (:world-dir (:ctx request)) "agents" (:body request) "engine" "control.sock"))
+
+(defn get-over-socket
+  "The default get function: (socket-path url {:max-bytes}) -> promise of {:status :content-type :text}."
+  [socket-path url {:keys [max-bytes]}]
+  (http/request {:socket-path socket-path :path url :label "entities" :timeout-ms request-timeout-ms :max-bytes max-bytes}))
+
+(defn message-of [error limit]
+  (let [text (str (or (some-> error .-message) error))]
+    (subs text 0 (min limit (count text)))))
+
+(defn error-result [error]
+  (let [reason (or (aget error "reason") (some-> (ex-data error) :reason) "invalid-request")]
+    (failure (if (string? reason) reason "invalid-request") (message-of error 500))))
+
+(defn drop-nils [result]
+  (into {} (filter (comp some? val)) result))
+
+(defn read-snapshot [text]
+  (try (data/read-edn text) (catch :default _ ::invalid)))
+
+(defn project-response
+  "Turn the body's answer into the tool result: a failure map or the projection."
+  [request {:keys [status content-type text]}]
+  (if-not (http/edn-response? content-type)
+    (failure "bad-response" "the body returned a non-EDN entity response")
+    (let [snapshot (read-snapshot text)]
+      (cond
+        (= ::invalid snapshot)
+        (failure "bad-response" "the body returned invalid EDN for its entity cache")
+
+        (and (= 404 status) (= :not-found (:reason snapshot)))
+        (failure "entities-unavailable" "this body build has no /entities endpoint; restart it with the current engine")
+
+        (and (not= 200 status) (not (false? (:ok snapshot))))
+        (failure "entities-unavailable" (str "the body entity endpoint returned HTTP " status))
+
+        :else
+        (try (drop-nils (project request snapshot)) (catch :default error (error-result error)))))))
+
+(defn execute
+  "A promise of the tool result for a validated request. get-fn is the seam tests replace."
+  ([request] (execute request get-over-socket))
+  ([request get-fn]
+   (.then (get-fn (socket-for request) "/entities" {:max-bytes max-response-bytes})
+          #(project-response request %))))
+
+(defn transport-failure [error]
+  (let [code (aget error "code")
+        reason (or (aget error "reason") (some-> (ex-data error) :reason)
+                   (cond (#{"ECONNREFUSED" "ENOENT"} code) "no-running-body"
+                         (= "ETIMEDOUT" code) "timeout"
+                         (= "ERESPONSETOOLARGE" code) "response-too-large"
+                         (= "EACCES" code) "socket-access-denied"
+                         :else "transport-error"))]
+    (failure reason (message-of error 240))))
+
+(defn print-line! [text] (.write (.-stdout js/process) (str text "\n")))
+
+(defn byte-length [text] (.byteLength js/Buffer text "utf8"))
+
+(defn main!
+  ([] (main! (vec (.slice (.-argv js/process) 2))))
+  ([argv] (main! argv print-line! get-over-socket))
+  ([argv output get-fn]
+   (if (or (some #{"--help" "-h"} argv))
+     (do (output usage) (js/Promise.resolve 0))
+     (let [request (try (options argv) (catch :default error error))]
+       (if (instance? js/Error request)
+         (do (output (data/write-edn (error-result request))) (js/Promise.resolve 2))
+         (-> (execute request get-fn)
+             (.then (fn [result]
+                      (let [text (data/write-edn result)]
+                        (if (> (byte-length text) max-output-bytes)
+                          (do (output (data/write-edn (failure "output-too-large" "entity output exceeds 65536 bytes; lower --limit or omit --raw")))
+                              1)
+                          (do (output text) (if (:ok result) 0 1))))))
+             (.catch (fn [error] (output (data/write-edn (transport-failure error))) 1))))))))

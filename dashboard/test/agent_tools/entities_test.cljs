@@ -1,6 +1,7 @@
 (ns agent-tools.entities-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [deftest is testing async]]
             [agent-tools.entities :as entities]
+            [agent-tools.fake-socket :as fake]
             [agent-tools.world-data :as data]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -128,3 +129,89 @@
       (is (= :origin-unavailable
              (error-reason #(entities/project request (snapshot now rows)))))
       (finally (close)))))
+
+;; The transport: execute and main! take the get function (socket path, url, {:max-bytes}) as a seam.
+(defn fake-get [reply]
+  (let [calls (atom [])]
+    [(fn [socket url {:keys [max-bytes]}]
+       (swap! calls conj [socket url max-bytes])
+       (js/Promise.resolve reply))
+     calls]))
+
+(defn edn-reply [value] {:status 200 :content-type "application/edn" :text (data/write-edn value)})
+
+(deftest execute-reads-only-entities-over-the-body-control-socket
+  (let [{:keys [state close]} (fixture)
+        now (.now js/Date)
+        rows [(entity "self" "player" "overworld" {:x 0.45 :y 64 :z 0.52} now 100 119900 {:self? true :username "ProbeMove"})
+              (entity "cow" "cow" "overworld" {:x 3.24 :y 64 :z 0.54} now 1234 118766)]
+        [get-fn calls] (fake-get (edn-reply (snapshot now rows)))
+        request (entities/options ["ProbeMove" "--world" "w" "--state" state])]
+    (async done
+      (-> (entities/execute request get-fn)
+          (.then (fn [result]
+                   (is (= [[(.join path state "worlds" "w" "agents" "ProbeMove" "engine" "control.sock") "/entities" (+ (* 4 1024 1024) 4096)]]
+                          @calls))
+                   (is (= true (:ok result)))
+                   (is (= ["uuid-cow"] (mapv :uuid (:items result))))))
+          (.then (fn [_] (close) (done)))))))
+
+(deftest execute-turns-bad-answers-into-failures
+  (let [{:keys [state close]} (fixture)
+        request (entities/options ["ProbeMove" "--world" "w" "--state" state])]
+    (async done
+      (-> (js/Promise.all
+           (clj->js
+            (for [[reply reason] [[{:status 200 :content-type "text/plain" :text "x"} :bad-response]
+                                  [{:status 200 :content-type "application/edn" :text "{:ok"} :bad-response]
+                                  [{:status 404 :content-type "application/edn" :text "{:ok false :reason :not-found}"} :entities-unavailable]
+                                  [{:status 500 :content-type "application/edn" :text "{:x 1}"} :entities-unavailable]]]
+              (let [[get-fn] (fake-get reply)]
+                (-> (entities/execute request get-fn) (.then (fn [result] [reply reason result])))))))
+          (.then (fn [results]
+                   (doseq [[reply reason result] (js->clj results)]
+                     (is (false? (:ok result)) (pr-str reply))
+                     (is (= reason (:reason result)) (pr-str reply)))))
+          (.then (fn [_] (close) (done)))))))
+
+(defn run-main! [argv get-fn]
+  (let [lines (atom [])]
+    (-> (entities/main! argv #(swap! lines conj %) get-fn)
+        (.then (fn [code] {:code code :out (apply str @lines)})))))
+
+(deftest main-validates-arguments-compactly-and-maps-transport-errors
+  (let [{:keys [state close]} (fixture)
+        now (.now js/Date)
+        failing (fn [code] (fn [_ _ _] (js/Promise.reject (doto (js/Error. "boom") (aset "code" code)))))
+        [get-fn] (fake-get (edn-reply (snapshot now [(entity "cow" "cow" "overworld" {:x 0 :y 64 :z 0} now 5 119995)])))]
+    (async done
+      (-> (run-main! ["ProbeMove"] get-fn)
+          (.then (fn [{:keys [code out]}]
+                   (is (= 2 code))
+                   (is (= false (:ok (data/read-edn out))))))
+          (.then (fn [_] (run-main! ["--help"] get-fn)))
+          (.then (fn [{:keys [code out]}] (is (= 0 code)) (is (= entities/usage out))))
+          (.then (fn [_] (run-main! ["ProbeMove" "--world" "w" "--state" state] get-fn)))
+          (.then (fn [{:keys [code out]}]
+                   (is (= 1 code))
+                   (is (= :origin-unavailable (:reason (data/read-edn out))))))
+          (.then (fn [_] (js/Promise.all (clj->js (for [code ["ECONNREFUSED" "ENOENT" "ETIMEDOUT" "ERESPONSETOOLARGE" "EACCES" "EOTHER"]]
+                                                    (run-main! ["ProbeMove" "--world" "w" "--state" state] (failing code)))))))
+          (.then (fn [results]
+                   (is (= [:no-running-body :no-running-body :timeout :response-too-large :socket-access-denied :transport-error]
+                          (mapv #(:reason (data/read-edn (:out %))) (js->clj results :keywordize-keys true))))))
+          (.then (fn [_] (close) (done)))))))
+
+(deftest main-refuses-output-over-the-byte-cap
+  (let [{:keys [state close]} (fixture)
+        now (.now js/Date)
+        rows (into [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 1 119999 {:self? true})]
+                   (map #(entity (str "cow-" %) "cow" "overworld" {:x 1 :y 64 :z 0} now 5 119995
+                                 {:note (apply str (repeat 2000 "x"))}) (range 60)))
+        [get-fn] (fake-get (edn-reply (snapshot now rows)))]
+    (async done
+      (-> (run-main! ["ProbeMove" "--world" "w" "--state" state "--raw" "--limit" "50"] get-fn)
+          (.then (fn [{:keys [code out]}]
+                   (is (= 1 code))
+                   (is (= :output-too-large (:reason (data/read-edn out))))))
+          (.then (fn [_] (close) (done)))))))
