@@ -177,6 +177,25 @@
           {:form '(daytime) :value true}]
          (c/explain (node '(and (< (health) 7) (daytime))) f-env {}))))
 
+(deftest explain-reports-active-held-for-time-and-clears-it-when-reset
+  (let [n (node '(held-for 5 (< (health) 7)))
+        hurt (tu/fake {:self {:health 5}})
+        well (tu/fake {:self {:health 20}})
+        step (fn [state p now] (c/evaluate n (env p (view now)) state))
+        first-step (step {} hurt 1000)
+        explain-at (fn [state p now] (c/explain n (env p (view now)) state))
+        active (explain-at (:state first-step) hurt 3000)
+        elapsed (explain-at (:state first-step) hurt 6000)
+        reset-step (step (:state first-step) well 6500)
+        reset (explain-at (:state reset-step) well 6500)
+        restarted (step (:state reset-step) hurt 7000)
+        restart-explain (explain-at (:state restarted) hurt 7001)]
+    (is (= 3000 (:remaining-ms (first active))))
+    (is (= 0 (:remaining-ms (first elapsed))))
+    (is (= false (:value (first reset))))
+    (is (nil? (:remaining-ms (first reset))))
+    (is (= 4999 (:remaining-ms (first restart-explain))))))
+
 (deftest a-scanning-fact-is-served-from-the-cache-until-its-refresh
   (let [calls (atom 0)
         p (tu/fake {:blocks {"1,64,0" "oak_log" "2,64,0" "oak_log"}})

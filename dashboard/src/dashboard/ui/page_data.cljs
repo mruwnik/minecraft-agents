@@ -3,10 +3,11 @@
   (:require [clojure.string :as str]
             [re-frame.core :as rf]
             [dashboard.ui.api]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.blueprint-draft :as draft]))
 
 (def villages-ms 15000)
-(def villagers-ms 10000)
+(def villagers-ms 2000)
 
 (defn clock-now [] (.toLocaleTimeString (js/Date.)))
 
@@ -21,7 +22,7 @@
  :villages/fetch
  (fn [{:keys [db]} _]
    (let [world (:world db)]
-     {:fetch-json {:key :villages :url (logic/api-url "/api/villages" world {})
+     {:fetch-edn {:key :villages :url (logic/api-url "/api/villages" world {})
                    :on-ok [:villages/ok world] :on-err [:villages/err world]}})))
 
 (rf/reg-event-db
@@ -40,7 +41,7 @@
 
 (rf/reg-sub :villages (fn [db _] (:villages db)))
 
-;; ---------------------------------------------------------------- villagers (global)
+;; ---------------------------------------------------------------- villagers (per world)
 (rf/reg-event-fx
  :villagers/start
  (fn [{:keys [db]} _]
@@ -50,17 +51,22 @@
 
 (rf/reg-event-fx
  :villagers/fetch
- (fn [_ _]
-   {:fetch-json {:key :villagers :url "/api/villagers" :on-ok [:villagers/ok] :on-err [:villagers/err]}}))
+ (fn [{:keys [db]} _]
+   (let [world (:world db)]
+     {:fetch-edn {:key :villagers :url (logic/api-url "/api/villagers" world {})
+                  :on-ok [:villagers/ok world] :on-err [:villagers/err world]}})))
 
 (rf/reg-event-db
  :villagers/ok
- (fn [db [_ data]]
-   (if (:error data)
-     (assoc-in db [:villagers :failed] (:error data))
-     (update db :villagers assoc :roster data :clock (clock-now) :failed nil))))
+ (fn [db [_ world data]]
+   (cond
+     (not= world (:world db)) db
+     (:error data) (assoc-in db [:villagers :failed] (:error data))
+     :else (update db :villagers assoc :roster data :clock (clock-now) :failed nil))))
 
-(rf/reg-event-db :villagers/err (fn [db [_ message]] (assoc-in db [:villagers :failed] message)))
+(rf/reg-event-db :villagers/err
+                 (fn [db [_ world message]]
+                   (if (not= world (:world db)) db (assoc-in db [:villagers :failed] message))))
 (rf/reg-event-db :villagers/filter (fn [db [_ text]] (assoc-in db [:villagers :filter] text)))
 
 (rf/reg-sub :villagers (fn [db _] (:villagers db)))
@@ -87,15 +93,16 @@
 (rf/reg-event-fx
  :blueprints/fetch
  (fn [_ _]
-   {:fetch-json {:key :blueprints :url "/api/blueprints" :on-ok [:blueprints/ok] :on-err [:blueprints/err]}}))
+   {:fetch-edn {:key :blueprints :url "/api/blueprints" :on-ok [:blueprints/ok] :on-err [:blueprints/err]}}))
 
 (rf/reg-event-fx
  :blueprints/ok
  (fn [{:keys [db]} [_ data]]
    (let [first-name (:name (first (:blueprints data)))
          pick? (and (nil? (get-in db [:blueprints :selected])) first-name)]
-     (cond-> {:db (update db :blueprints assoc :library data :clock (clock-now) :failed nil)}
-       pick? (assoc :dispatch [:blueprints/select first-name])))))
+     (cond-> {:db (cond-> (update db :blueprints assoc :library data :clock (clock-now) :failed nil)
+                   pick? (assoc-in [:blueprints :selected] first-name))}
+       pick? (assoc :replace-url (url-with-name first-name))))))
 
 (rf/reg-event-db :blueprints/err (fn [db [_ message]] (assoc-in db [:blueprints :failed] message)))
 
@@ -113,26 +120,17 @@
  (fn [db _]
    (let [{:keys [library selected draft]} (:blueprints db)
          detail (if (= selected draft-name) draft (first (filter #(= selected (:name %)) (:blueprints library))))]
-     (if-let [document (:document detail)]
-       (update db :blueprints assoc
-               :draft-plan (js/JSON.stringify (clj->js document) nil 2)
-               :draft-status "Editable copy. Saved build manifests remain unchanged.")
-       (assoc-in db [:blueprints :draft-status] "No editable v2 source selected")))))
-
-(defn parse-json [text] (js/JSON.parse text))
+     (if-let [source (draft/editable-source detail)]
+       (update db :blueprints assoc :draft-plan source
+               :draft-status "Editable EDN copy. Validate to update the preview.")
+       (assoc-in db [:blueprints :draft-status] "No EDN source selected")))))
 
 (rf/reg-event-fx
  :blueprints/preview-draft
  (fn [{:keys [db]} _]
    (let [{:keys [draft-plan draft-stock]} (:blueprints db)]
-     (try
-       (let [plan (parse-json draft-plan)
-             stock (when-not (str/blank? draft-stock) (parse-json draft-stock))]
-         {:post-json {:url "/api/blueprint-preview" :body #js {:plan plan :stock stock}
-                      :on-ok [:blueprints/draft-ok] :on-err [:blueprints/draft-err]
-                      :on-unsupported [:blueprints/draft-unsupported]}})
-       (catch :default e
-         {:db (assoc-in db [:blueprints :draft-status] (ex-message e))})))))
+     {:post-edn {:url "/api/blueprint-preview" :body (draft/preview-body draft-plan draft-stock)
+                 :on-ok [:blueprints/draft-ok] :on-err [:blueprints/draft-err]}})))
 
 (rf/reg-event-db
  :blueprints/draft-ok
@@ -141,7 +139,7 @@
            :draft-status (if (seq (:errors detail))
                            (str/join " · " (:errors detail))
                            (str "Validated " (:hash detail) "; "
-                                (if (= "representative" (:palette detail)) "illustrative palette" "declared stock allocation")
+                                "exact EDN block palette"
                                 ". No build started.")))))
 
 (rf/reg-event-db :blueprints/draft-err (fn [db [_ message]] (assoc-in db [:blueprints :draft-status] message)))
@@ -156,10 +154,7 @@
  :blueprints/download-draft
  (fn [{:keys [db]} _]
    (try
-     (let [plan (parse-json (get-in db [:blueprints :draft-plan]))
-           id (.-id plan)]
-       {:download-json {:filename (str (if (and (string? id) (re-matches #"[a-z0-9-]+" id)) id "draft") ".blueprint.json")
-                        :text (str (js/JSON.stringify plan nil 2) "\n")}})
+     {:download-edn (draft/download (get-in db [:blueprints :draft-plan]))}
      (catch :default e
        {:db (assoc-in db [:blueprints :draft-status] (ex-message e))}))))
 

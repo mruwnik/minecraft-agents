@@ -478,6 +478,16 @@
           (is (= "oak_sapling" (h/block-at p 3 64 0)))
           (is (= (expect {:dammed 1 :cleared 1 :planted 1}) result)))))))
 
+(deftest a-source-cell-with-source-neighbours-dams-them-before-it-is-filled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng seen]} (await (run (assoc (update (wet-world {"3,64,0" 0 "2,64,0" 0 "4,64,0" 0} (item "dirt" 3) (item "oak_sapling" 1)) :blocks merge (ground [[1 0] [2 0] [5 0]])) :self {:pos {:x 1 :y 64 :z 0}})
+                                               {"forest" one-cell} {:plan "forest"} 60))]
+          (is (= [[4 64 0 "dirt"] [2 64 0 "dirt"] [3 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
+          (is (= [[3 64 0]] (digs p)))
+          (is (= [{:dammed 3 :cleared 1 :planted 1}] (mapv #(select-keys % [:dammed :cleared :planted]) (h/events-of seen :prepare.done)))))))))
+
 (deftest a-source-beside-the-cell-is-dammed-and-the-flow-given-time-to-recede
   (async done
     (tu/run-async done

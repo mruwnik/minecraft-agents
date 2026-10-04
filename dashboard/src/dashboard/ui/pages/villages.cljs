@@ -2,7 +2,8 @@
   (:require [reagent.core :as r]
             [re-frame.core :as rf]
             [dashboard.ui.page-data]
-            [dashboard.villages-view :as vv]))
+            [dashboard.villages-view :as vv]
+            [dashboard.ui.logic :as logic]))
 
 (defn labelled [{:keys [text muted cls]}]
   [:div {:class (cond muted "muted" cls cls)} text])
@@ -40,17 +41,21 @@
    [:div.head
     [:span.name (:name v)]
     [:span.muted (str (:x v) ", " (:y v) ", " (:z v))]
+    (when-let [status (:planStatus v)] [:span.state (name status)])
     [:span.state (vv/population-text v)]
     [:span {:class (str "state " (:state v))} (vv/state-text v)]]
    [:div.detail
+    (when (= :incomplete (:geometry v)) [:div.muted "Geometry is incomplete; this marker does not prove construction or occupancy."])
     [:div.grid [housing-box v] [roles-box v] [workspaces-box v] [evidence-box now v]]
     [:div.links
-     [:a {:href "/"} (vv/map-link-text v)]
+     (when-let [id (:planId v)]
+       [:a {:href (logic/api-url "/plans" (:world v) {:plan id})} "village plan"])
+     [:a {:href (logic/api-url "/" (:world v) {})} (vv/map-link-text v)]
      (when-let [id (get-in v [:population :blueprintId])]
        [:a {:href (str "/blueprints?name=" (js/encodeURIComponent id))} "blueprint"])
      (for [m (:members v)]
        ^{:key (:uuid m)}
-       [:a {:href (str "/villagers?uuid=" (js/encodeURIComponent (:uuid m)))} (vv/member-text now m)])]]])
+       [:a {:href (logic/api-url "/villagers" (:world v) {:uuid (:uuid m)})} (vv/member-text now m)])]]])
 
 (defn page []
   (r/create-class
@@ -65,7 +70,7 @@
           [:input {:type "search" :placeholder "filter village, profession or role" :value (or filter "")
                    :on-change #(rf/dispatch [:villages/filter (.. % -target -value)])}]
           [:button {:on-click #(rf/dispatch [:villages/fetch])} "refresh"]
-          [:small.muted "Read-only saved observations. This page does not query or move agents."]
+          [:small.muted "Village plans and saved observations. This page does not query or move agents."]
           [:span.spacer]
           [:span.muted (or failed (if clock (vv/status-text (count items) clock error) "loading…"))]]
          (if (empty? shown)

@@ -20,7 +20,7 @@ const loadBuild = file => {
 }
 
 // what two planners must agree on: everything but the timings
-export const view = ({ status, reason, expanded, path, stats: { maskMs, ...stats } }) => ({ status, reason, expanded, path, stats })
+export const view = ({ status, reason, expanded, path, oneWay, stats: { maskMs, ...stats } }) => ({ status, reason, expanded, path, oneWay, stats })
 
 // [{ name, plan(snapshot, query, extraOptions), createSearch(snapshot, query, extraOptions), view(result) }]: the views of two
 // versions' results must be deeply equal

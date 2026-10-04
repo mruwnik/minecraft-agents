@@ -1,5 +1,6 @@
 (ns dashboard.villagers-view-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [clojure.string :as str]
+            [cljs.test :refer [deftest is]]
             [dashboard.villagers-view :as vv]))
 
 (def now (js/Date.parse "2026-01-10T12:00:00Z"))
@@ -56,3 +57,8 @@
 
 (deftest status-text
   (is (= "3 UUIDs · refreshed 10:00:00" (vv/status-text 3 "10:00:00"))))
+
+(deftest expired-observations-are-hidden-and-old-engines-identified
+  (is (= [] (vv/live-records {:villagers {"u" {:uuid "u" :t 10 :until 20}}} 20)))
+  (is (= 1 (count (vv/live-records {:villagers {"u" {:uuid "u" :t 10 :until 20}}} 19))))
+  (is (str/includes? (first (vv/capability-text [{:body {:name "Bob"} :status :unsupported}])) "restart")))

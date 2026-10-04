@@ -1,6 +1,7 @@
 (ns dashboard.ui.mapmodel
   "Pure rules of the map: where a body is, colours, hit tests, label thresholds."
   (:require [dashboard.ui.logic :as logic]
+            [dashboard.entity-observations :as entities]
             [dashboard.ui.plansmodel :as pm]))
 
 (def place-color "#d9b25f")
@@ -26,8 +27,8 @@
 (defn status-color [status] (get status-colors status (:idle status-colors)))
 (defn show-place-labels? [scale] (>= scale place-label-scale))
 
-(def villager-label-scale 1.5)
-(defn show-villager-labels? [scale] (>= scale villager-label-scale))
+(def entity-label-scale 1.5)
+(defn show-entity-labels? [scale] (>= scale entity-label-scale))
 
 (defn coords? [p] (and (number? (:x p)) (number? (:z p))))
 
@@ -74,9 +75,11 @@
           :wx (/ (+ x1 x2 1) 2) :wz (/ (+ z1 z2 1) 2) :cells cells})))
 
 (defn plan-box
-  "The block rectangle of a plan, nil for a plan with no cells."
-  [{:keys [region]}]
-  (when region (bounds-box region)))
+  "The geometry's rectangle or the anchor point of a plan with no geometry."
+  [{:keys [region at]}]
+  (cond
+    region (bounds-box region)
+    at (let [[x _ z] at] {:x1 x :z1 z :x2 x :z2 z})))
 
 (defn edge-marker
   "Where an arrow for an off-screen point sits: on the viewport's edge (inset pixels in), on the line from the centre to
@@ -134,32 +137,27 @@
                          :when (and (<= cx1 cx cx2) (<= cz1 cz cz2))]
                      (tile-item view k mtime)))})))
 
-;; ---------------------------------------------------------------- villagers
-;; A villager is placed where a body's last pose saw it (the pose lists every entity within 48 blocks and is rewritten at
-;; least every 2 s while the body is up). The sighting is live while a body that is up wrote that pose a moment ago;
-;; otherwise it is old (drawn faded, with its age), and it goes once it is older than villager-drop-ms.
-(def villager-live-ms 10000)
-(def villager-drop-ms 1800000)
+(defn entity-sightings
+  "One transient layer; agent players already have body markers."
+  [observations bodies now]
+  (let [names (set (filter string? (mapcat (juxt :name :username) bodies)))]
+    (vec (for [e observations
+               :when (and (entities/alive? e now) (not (:self? e))
+                          (not (and (= "player" (:type e)) (contains? names (:username e))))) ]
+           (merge e (:pos e) {:name (or (:username e) (:type e))
+                             :age-ms (max 0 (- now (:observed-at e)))})))))
 
-(defn body-sightings [now {:keys [name up view]}]
-  (let [t (:poseT view)]
-    (when (and (number? t) (contains? #{nil "overworld"} (:dimension view)))
-      (let [age (max 0 (- now t))]
-        (for [{:keys [id x z] :as v} (:villagers view)
-              :when (and id (number? x) (number? z) (<= age villager-drop-ms))]
-          (assoc v :seen-by name :t t :age-ms age :old? (not (and up (<= age villager-live-ms)))))))))
+(defn entity-color [type]
+  (case type "player" "#f08ad0" "villager" villager-color "item" "#d9b25f" "#70b9b2"))
 
-(defn villager-sightings
-  "One sighting per villager, the freshest, from the bodies' poses."
-  [bodies now]
-  (->> (mapcat #(body-sightings now %) bodies)
-       (sort-by :t >)
-       (reduce (fn [seen v] (if (contains? seen (:id v)) seen (assoc seen (:id v) v))) {})
-       vals
-       vec))
+(defn entity-tip [{:keys [type username uuid key seen-by age-ms expires-at]} now]
+  (str type (when username (str " " username)) " · " (or uuid key)
+       " · seen by " seen-by " " (logic/time-ago-text age-ms)
+       " · expires in " (js/Math.ceil (/ (max 0 (- expires-at now)) 1000)) "s"))
 
-(defn villager-tip [{:keys [seen-by age-ms old?]}]
-  (str "villager, seen by " seen-by " " (logic/time-ago-text age-ms) (when old? " (old: nobody watching now)")))
+(defn human-sightings [observations]
+  (mapv #(merge (:pos %) {:name (:username %) :seenBy (:seen-by %)})
+        (filter #(= "player" (:type %)) observations)))
 
 ;; ---------------------------------------------------------------- name labels
 (defn pick-label

@@ -4,7 +4,8 @@
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
-            ["module" :refer [createRequire]]))
+            ["module" :refer [createRequire]]
+            [engine.memory :as mem]))
 
 (def require-here (createRequire (str (js/process.cwd) "/")))
 
@@ -21,10 +22,40 @@
     (swap! made-dirs conj dir)
     dir))
 
+(defn box
+  "Blocks named name filling x0..x1, y0..y1, z0..z1, as a fake world's :blocks map."
+  [x0 y0 z0 x1 y1 z1 name]
+  (into {} (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [(str x "," y "," z) name])))
+
+(defn floor
+  "Stone one block thick under the body's usual feet height (y 63 unless given first), x0..x1, z0..z1: the ground a
+  walk over the path planner needs (the planner reads blocks; the old moveTo teleported)."
+  ([x0 z0 x1 z1] (floor 63 x0 z0 x1 z1))
+  ([y x0 z0 x1 z1] (box x0 y z0 x1 y z1 "stone")))
+
 (defn fake
-  "A fake primitives object from js/fake.mjs built from a cljs spec map."
+  "A fake primitives object from js/fake.mjs built from a cljs spec map. The spec's :floor, [x0 z0 x1 z1], is stone at
+  y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
-  ([spec] ((.-createFake (require-here "./js/fake.mjs")) (clj->js spec))))
+  ([spec]
+   (let [spec (if-let [rect (:floor spec)]
+                (-> spec (dissoc :floor) (update :blocks #(merge (apply floor rect) %)))
+                spec)]
+     ((.-createFake (require-here "./js/fake.mjs")) (clj->js spec)))))
+
+(def walk-floor
+  "The :floor rectangle most go-to callers' tests use: every spot they walk between."
+  [-30 -10 40 10])
+
+(defn walk-calls
+  "The calls the fake's world recorded that walk the body: the old moveTo and the planner's steer."
+  [p]
+  (filterv #(#{"moveTo" "steer"} (.-name %)) (.-calls (.-world p))))
+
+(defn walked-to
+  "The targets go-to walked to, in order (it writes a :moved entry per walk), over engine eng."
+  [eng]
+  (mapv (comp :target :data) (mem/entries (mem/view (:store eng)) :moved)))
 
 (defn pos [x y z] #js {:x x :y y :z z})
 

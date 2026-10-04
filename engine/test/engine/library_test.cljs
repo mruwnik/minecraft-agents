@@ -244,22 +244,23 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:arrived true}
-               (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))))
+               (await (child-outcome (:eng (setup {:floor tu/walk-floor})) 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))))
         (is (= {:arrived true}
                (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 0 :y 64 :z 0}} 3)))
             "already there")
         (is (= {:arrived false :reason :unreachable}
-               (await (child-outcome (:eng (setup {:unreachable ["9,64,9"]}))
-                                     'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
+               (select-keys (await (child-outcome (:eng (setup {:floor tu/walk-floor :unreachable ["9,64,9"]}))
+                                                  'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
+                            [:arrived :reason])))))))
 
 (defn ^:async go-to-with
   "Run go-to with args; {:outcome :refusals :walks}."
   [args]
-  (let [{:keys [eng p seen]} (setup {})
+  (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor})
         outcome (await (child-outcome eng 'jobs.movement.go-to args 3))]
     {:outcome outcome
      :refusals (->> @seen (filter #(= :refused (:kind %))) (mapv #(select-keys % [:reason])))
-     :walks (count (calls p "moveTo"))}))
+     :walks (count (tu/walk-calls p))}))
 
 (deftest go-to-refuses-a-bad-pos-as-data-without-walking
   (async done
@@ -281,71 +282,15 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:arrived false :reason :unreachable}
-               (await (child-outcome (:eng (setup {:noPath ["9,64,9"]}))
-                                     'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))))))))
-
-(defn stub-move-to!
-  "Make p's moveTo answer the walks in order (then arrived): a status string, or
-  {:status :distance :hop}; \"stalled\" is the reason of the blocked ones.
-  Returns an atom counting the calls."
-  [p walks]
-  (let [left (atom walks)
-        n (atom 0)]
-    (set! (.-moveTo p)
-          (fn [_token _args]
-            (let [w (or (first @left) "arrived")
-                  {:keys [status distance hop]} (if (string? w) {:status w} w)]
-              (swap! left rest)
-              (swap! n inc)
-              (js/Promise.resolve #js {:status status :distance distance :hop hop
-                                       :reason (when (= "blocked" status) "stalled")}))))
-    n))
-
-(defn walk-to-9
-  "Run go-to toward 9,64,9 (12.7 away) with the stubbed walks; {:outcome :calls :seen}."
-  [walks]
-  (let [{:keys [eng p seen]} (setup {})
-        n (stub-move-to! p walks)]
-    (-> (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 20)
-        (.then (fn [outcome] {:outcome outcome :calls @n :seen @seen})))))
-
-(def part (fn [d] {:status "partial" :distance d}))
-
-(deftest go-to-counts-consecutive-walks-without-a-new-best
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [outcome calls seen]} (await (walk-to-9 [(part 12.7) "blocked" (part 12.6) "blocked"]))]
-          (is (= {:arrived false :reason :unreachable} outcome))
-          (is (= 3 calls) "partials that do not beat the best by more than 1 count as fruitless")
-          (is (= [{:status "partial" :tries 3}]
-                 (->> seen (filter #(= :unreachable (:kind %)))
-                      (mapv #(select-keys % [:status :reason :tries]))))))))))
-
-(deftest go-to-partial-with-a-new-best-resets-the-count
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [outcome calls]} (await (walk-to-9 [(part 10) "blocked" (part 8) "blocked" (part 6) "blocked" (part 4) "blocked"
-                                                          "blocked" "blocked"]))]
-          (is (= {:arrived false :reason :unreachable} outcome))
-          (is (= 10 calls) "improving partials never give up; the three blocked at the end do"))))))
-
-(deftest go-to-says-when-the-far-hop-fell-back-to-the-xz-point
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [seen]} (await (walk-to-9 [{:status "partial" :distance 5 :hop "xz"}]))]
-          (is (= [{:target {:x 9 :y 64 :z 9}
-                   :text "far hop: no surface reachable from underground, walking to the XZ point"}]
-                 (->> seen (filter #(= :hop-fallback (:kind %)))
-                      (mapv #(select-keys % [:target :text]))))))))))
+               (select-keys (await (child-outcome (:eng (setup {:floor tu/walk-floor :noPath ["9,64,9"]}))
+                                                  'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
+                            [:arrived :reason])))))))
 
 (deftest go-to-emits-its-result-as-an-event
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:unreachable ["9,64,9"]})
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :unreachable ["9,64,9"]})
               results #(->> @seen (filter (fn [e] (= :result (:kind e))))
                             (mapv (fn [e] (select-keys e [:arrived :reason]))))]
           (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))
@@ -600,7 +545,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time 14000 :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 4))
@@ -632,7 +577,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time 14000 :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-and-bed-known}]}"))
           (await (run-until-empty eng 1))

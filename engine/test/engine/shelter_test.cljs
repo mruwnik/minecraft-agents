@@ -17,7 +17,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001} world))
+        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -165,7 +165,7 @@
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 6))
           (is (= [{:x 6 :y 64 :z 0}] (mapv arg-pos (calls p "sleep"))))
-          (is (= ["moveTo" "sleep"] (mapv #(.-name %) (.-calls (.-world p)))) "walked first, then slept")
+          (is (= ["steer" "sleep"] (mapv #(.-name %) (.-calls (.-world p)))) "walked first, then slept")
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :slept)))
           (is (= {:cap 10 :ttl (* 7 day-ms)} (mem/policy (mem/view (:store eng)) :slept))))))))
 
@@ -213,7 +213,7 @@
           (core/submit! eng '(jobs.survival.sleep) {})
           (is (< (await (run-until-empty eng 20)) 20))
           (is (= [] (calls p "sleep")))
-          (is (= 9 (count (calls p "moveTo"))) "each of the three tries walks go-to afresh, three blocked walks each")
+          (is (= 9 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh, three blocked walks each")
           (is (= 1 (count (emitted seen :bed_unreachable)))))))))
 
 (def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})
@@ -222,19 +222,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup unreachable-world)]
+        (let [{:keys [eng clock seen]} (setup unreachable-world)]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 20))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)))
           (is (= {:cap 5 :ttl 600000} (mem/policy (mem/view (:store eng)) :bed-unreachable)))
-          (let [walks (count (calls p "moveTo"))]
+          (let [gave-up (count (emitted seen :unreachable))]
             (core/submit! eng '(jobs.survival.sleep) {})
             (is (nil? (core/tick! eng)) "declines while the entry is fresh")
-            (is (= walks (count (calls p "moveTo"))))
+            (is (= gave-up (count (emitted seen :unreachable))))
             (swap! clock + 600001)
-            (await (tick-n eng 1))
-            (is (< walks (count (calls p "moveTo"))) "tries the bed again once the entry expired")))))))
+            (await (tick-n eng 3))
+            (is (< gave-up (count (emitted seen :unreachable))) "tries the bed again once the entry expired: three more fruitless go-to rounds")))))))
 
 (deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
   (async done
@@ -488,8 +488,8 @@
           (is (= [] (declined-events seen :always-shelter)))
           (is (zero? (count (.-calls (.-world p))))))))))
 
-(defn walks-to-bed [p]
-  (count (filter #(= {:x 6 :y 64 :z 0} (arg-pos %)) (calls p "moveTo"))))
+(defn walks-to-bed [eng]
+  (count (filter #(= {:x 6 :y 64 :z 0} %) (tu/walked-to eng))))
 
 (deftest shelter-does-not-retry-a-sleep-that-already-failed
   (async done
@@ -504,16 +504,16 @@
               (await (core/tick! eng))
               (recur (inc i))))
           (is (= 1 (count (emitted seen :bed_unreachable))))
-          (let [walks (walks-to-bed p)]
+          (let [walks (walks-to-bed eng)]
             (await (tick-n eng 12))
-            (is (= walks (walks-to-bed p)) "no more walking at the unreachable bed")
+            (is (= walks (walks-to-bed eng)) "no more walking at the unreachable bed")
             (is (= 10 (count (calls p "place"))) "dig-in finished the walls")))))))
 
 (deftest shelter-treats-a-long-awake-body-as-needing-a-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :blocks {"80,64,0" "red_bed"}})]
+        (let [{:keys [eng p seen clock]} (setup {:floor [-30 -10 90 10] :time night :blocks {"80,64,0" "red_bed"}})]
           (know-bed! eng {:x 80 :y 64 :z 0})
           (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 7 day-ms)})
           (reset! clock (+ 1000000 (* 4 day-ms)))

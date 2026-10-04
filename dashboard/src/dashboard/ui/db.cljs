@@ -73,7 +73,9 @@
   "A view fitted to everything: bodies, places, zones, humans and plans."
   [db]
   (let [world (world-of db)]
-    (fit-points (mv/map-points (all-bodies db) (:places world) (:zones world) (:humans world) (plan-boxes db))
+    (fit-points (mv/map-points (all-bodies db) (:places world) (:zones world)
+                               (mm/entity-sightings (:entities world) (all-bodies db) (or (:entity-clock db) (get-in db [:state :at]) 0))
+                               (plan-boxes db))
                 (:canvas db))))
 
 (def home-trim 0.1)

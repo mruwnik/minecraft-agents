@@ -3,8 +3,12 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.events :as events]
             [engine.hostile-test :as h]
-            [engine.test-util :as tu]))
+            [engine.registry :as registry]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [engine.world :as ew]))
 
 (defn spec [args] (list 'jobs.gather.get-seeds args))
 
@@ -203,3 +207,281 @@
                                  {:blocks cells :drops seed-drops :unreachable (vec (remove #{far} (keys cells)))} 200))]
           (is (= 1 (dig-count s)) "the one reachable cell, beyond 64 skipped ones, is dug")
           (is (= :count (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------------------ worlds with zones and plans
+
+(defn start
+  "An engine over primitives p on dir, sharing the engine.world w."
+  [{:keys [p dir shared]}]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
+                          :now #(deref clock) :world shared
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen :clock clock}))
+
+(defn ^:async in-world
+  "Submit the job with args over a fake of world sharing w; run n ticks; the setup map."
+  [args world w n]
+  (let [s (start {:p (tu/fake world) :shared w})]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n 700))
+    s))
+
+(defn dug-cells [{:keys [p]}] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (h/calls p "dig")))
+(defn block-at [{:keys [p]} x y z] (.-name (.blockAt p (tu/pos x y z))))
+(defn gave-up-fields [s] (map #(select-keys % [:reason :zones :plans]) (events-of s :get-seeds.gave-up)))
+(defn declined-reasons [s] (mapv :reason (events-of s :get-seeds.declined)))
+
+(defn stand
+  "{\"x,y,z\" block} for a stand of height h of block on x z, base at y 64."
+  [block x z h]
+  (into {} (for [y (range 64 (+ 64 h))] [(str x "," y "," z) block])))
+
+(def farm-zone {:name "farm" :min [2 60 -2] :max [4 70 2] :owner "Miles"})
+(defn plan-over [id [x y z] want] {:id id :status :active :parts [{:id "p" :box [[x y z] [x y z]] :want want}]})
+
+;; ------------------------------------------------------------------ stalks: cut above the base
+
+(deftest a-stand-is-cut-at-its-second-segment-and-the-base-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[item height] [["sugar_cane" 3] ["bamboo" 3] ["sugar_cane" 2]]]
+          (let [s (await (scenario {:item item :count 1} {:blocks (stand item 3 0 height)} 20))]
+            (is (= [[3 65 0]] (dug-cells s)) (str item " " height))
+            (is (= item (block-at s 3 64 0)) "the base stands")
+            (is (= :count (:reason (done-event s))))
+            (is (<= 1 (get (inv s) item)))
+            (is (finished? s))))))))
+
+(deftest a-tall-stand-is-found-beyond-many-single-canes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "sugar_cane" :count 1}
+                                 {:blocks (merge (patch "sugar_cane" (range 2 12) (range 1 8)) (stand "sugar_cane" 14 0 3))} 20))]
+          (is (= [[14 65 0]] (dug-cells s)))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-stand-of-one-is-never-cut-and-the-job-declines-once-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "sugar_cane"} {:blocks (stand "sugar_cane" 3 0 1)} 6))]
+          (is (zero? (dig-count s)))
+          (is (not (finished? s)))
+          (is (= [:too-short] (declined-reasons s))))))))
+
+(deftest two-stands-and-a-goal-of-more-end-none-with-what-was-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "sugar_cane" :count 64}
+                                 {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3))} 40))]
+          (is (= #{[3 65 0] [5 65 2]} (set (dug-cells s))))
+          (is (= :none (:reason (done-event s))))
+          (is (= 2 (:got (done-event s))))
+          (is (finished? s)))))))
+
+(deftest no-stand-in-radius-declines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args world] [[{:item "bamboo"} {}]
+                              [{:item "bamboo"} {:blocks (stand "sugar_cane" 3 0 3)}]
+                              [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 9 0 3)}]]]
+          (let [{:keys [eng p]} (h/setup world)]
+            (core/submit! eng (spec args) {})
+            (is (nil? (core/tick! eng)))
+            (is (zero? (dig-count {:p p})))))))))
+
+(deftest a-cut-in-a-zone-or-a-plan-is-refused-and-reported
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[w expected] [[(ew/of-data {} {} [(assoc farm-zone :min [8 60 -2] :max [10 70 2])]) {:zones ["farm"] :plans []}]
+                              [(ew/of-data {"pad" (plan-over "pad" [9 65 0] "sugar_cane")} {} []) {:zones [] :plans ["pad"]}]]]
+          (let [s (await (in-world {:item "sugar_cane"} {:blocks (stand "sugar_cane" 9 0 3)} w 20))]
+            (is (empty? (dug-cells s)))
+            (is (zero? (count (h/calls (:p s) "moveTo"))) "no walk to a refused cell")
+            (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
+            (is (= :refused (:reason (done-event s))))
+            (is (= 0 (:got (done-event s))))
+            (is (finished? s))))))))
+
+(deftest the-free-stand-is-cut-and-the-refused-one-ends-the-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (in-world {:item "sugar_cane" :count 64}
+                                 {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 9 0 3))}
+                                 (ew/of-data {} {} [farm-zone]) 40))]
+          (is (= [[9 65 0]] (dug-cells s)))
+          (is (= :refused (:reason (done-event s))))
+          (is (= 1 (:got (done-event s))))
+          (is (= [{:reason :refused :zones ["farm"] :plans []}] (gave-up-fields s))))))))
+
+(deftest a-zone-that-allows-digging-is-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (in-world {:item "sugar_cane" :count 1} {:blocks (stand "sugar_cane" 3 0 3)}
+                                 (ew/of-data {} {} [(assoc farm-zone :allow #{:dig})]) 20))]
+          (is (= [[3 65 0]] (dug-cells s)))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest no-zone-list-declines-a-dig-source-with-one-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [{:item "sugar_cane"} {}]]
+          (let [s (await (in-world args {:blocks (merge (stand "sugar_cane" 3 0 3) (patch "short_grass" [4] [0]))}
+                                   (ew/of-data {} {} nil) 5))]
+            (is (empty? (dug-cells s)))
+            (is (not (finished? s)))
+            (is (= [:no-zones] (declined-reasons s)))))))))
+
+(deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args world] [[{:item "sugar_cane" :count 1} {:blocks (stand "sugar_cane" 6 0 3)}]
+                              [{:count 1} {:blocks (patch "short_grass" [6] [0])}]]]
+          (let [w (ew/of-data {} {} [])
+                p (tu/fake world)
+                _ (.override (.-world p) "moveTo"
+                             (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
+                               (impl token a)))
+                s (start {:p p :shared w})]
+            (core/submit! (:eng s) (spec args) {})
+            (await (run-ticks s 20 700))
+            (is (empty? (dug-cells s)))
+            (is (= :refused (:reason (done-event s))))))))))
+
+(deftest a-stalk-cut-resumes-after-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              p (tu/fake {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))})
+              s (start {:p p :dir dir})]
+          (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3}) {})
+          (await (run-ticks s 3 700))
+          (is (not (finished? s)))
+          (is (= 3 (:goal (job-mem s))))
+          (let [again (start {:p p :dir dir})]
+            (is (= 3 (:goal (job-mem again))))
+            (await (run-ticks again 60 700))
+            (is (finished? again))
+            (is (= #{[3 65 0] [5 65 2] [7 65 4]} (set (dug-cells again))))
+            (is (= 3 (get (inv again) "sugar_cane")))))))))
+
+;; ------------------------------------------------------------------ grass is judged by the rules too
+
+(deftest grass-in-a-zone-or-a-plan-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[w expected] [[(ew/of-data {} {} [farm-zone]) {:zones ["farm"] :plans []}]
+                              [(ew/of-data {"pad" (plan-over "pad" [3 64 0] "short_grass")} {} []) {:zones [] :plans ["pad"]}]]]
+          (let [s (await (in-world {:count 1} {:blocks {"3,64,0" "short_grass"} :drops seed-drops} w 20))]
+            (is (empty? (dug-cells s)))
+            (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
+            (is (= :refused (:reason (done-event s))))))))))
+
+(deftest grass-beside-lava-is-left-unless-the-hazard-is-accepted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args expected walks?] [[{:count 1} [] zero?]
+                                        [{:count 1 :accept #{:fluid-adjacent}} [[9 64 0]] pos?]]]
+          (let [s (await (scenario args {:blocks {"9,64,0" "short_grass" "9,64,1" "lava"} :drops seed-drops} 20))]
+            (is (= expected (dug-cells s)))
+            (is (walks? (count (h/calls (:p s) "moveTo"))))))))))
+
+;; ------------------------------------------------------------------ roots: from a chest only
+
+(def chest-world (fn [stock] {:containers {"10,64,0" stock}}))
+
+(deftest roots-come-out-of-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[item] [["carrot"] ["potato"] ["beetroot_seeds"]]]
+          (let [s (await (scenario {:item item :count 4 :chest {:x 10 :y 64 :z 0}}
+                                   (chest-world [{:name item :count 10}]) 20))]
+            (is (= :count (:reason (done-event s))) item)
+            (is (= 4 (get (inv s) item)))
+            (is (zero? (dig-count s)))
+            (is (finished? s))))))))
+
+(deftest a-chest-with-less-ends-short-with-what-it-gave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "carrot" :count 8 :chest {:x 10 :y 64 :z 0}}
+                                 (chest-world [{:name "carrot" :count 3}]) 20))]
+          (is (= :short (:reason (done-event s))))
+          (is (= 3 (:got (done-event s))))
+          (is (= 3 (get (inv s) "carrot")))
+          (is (finished? s)))))))
+
+(deftest roots-are-never-dug-from-the-field
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [item ["carrot" "potato" "beetroot_seeds"]]
+          (let [{:keys [eng p]} (h/setup {:blocks (merge (patch "short_grass" [3] [0]) (patch "carrots" [4] [0]))})]
+            (core/submit! eng (spec {:item item}) {})
+            (is (nil? (core/tick! eng)) item)
+            (is (zero? (dig-count {:p p})))))))))
+
+(deftest roots-without-a-chest-decline-with-one-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {})]
+          (core/submit! (:eng s) (spec {:item "carrot"}) {})
+          (await (run-ticks s 5 700))
+          (is (= [:no-chest] (declined-reasons s)))
+          (is (not (finished? s))))))))
+
+(def farm-plan
+  {:id "farm" :status :active
+   :parts [{:id "beds" :box [[2 64 0] [4 64 0]] :want {:crop "carrots"}}
+           {:id "store" :box [[10 64 0] [10 64 0]] :want "chest"}]})
+
+(deftest the-chest-of-a-plan-is-the-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (in-world {:item "carrot" :count 2 :plan "farm"}
+                                 (chest-world [{:name "carrot" :count 5}])
+                                 (ew/of-data {"farm" farm-plan} {} []) 20))]
+          (is (= :count (:reason (done-event s))))
+          (is (= 2 (get (inv s) "carrot")))
+          (is (zero? (dig-count s))))))))
+
+(deftest an-unusable-plan-declines-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[plans reason] [[{} :plan-missing]
+                                [{"farm" (assoc farm-plan :status :draft)} :plan-inactive]
+                                [{"farm" (update farm-plan :parts subvec 0 1)} :no-chest-cell]]]
+          (let [s (await (in-world {:item "carrot" :plan "farm"} (chest-world [{:name "carrot" :count 5}])
+                                   (ew/of-data plans {} []) 5))]
+            (is (= [reason] (declined-reasons s)))
+            (is (zero? (count (h/calls (:p s) "transfer"))))
+            (is (not (finished? s)))))))))
+
+(deftest a-material-nobody-gathers-this-way-declines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:blocks (patch "short_grass" [3] [0])})]
+          (core/submit! (:eng s) (spec {:item "coffee"}) {})
+          (await (run-ticks s 5 700))
+          (is (= [:no-source] (declined-reasons s)))
+          (is (zero? (dig-count s))))))))

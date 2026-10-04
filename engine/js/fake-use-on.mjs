@@ -2,6 +2,7 @@
 // Mirrors the result shape of use-on.mjs: { status, before, after, consumed }, `missing` carrying only the status.
 
 import { tieToPost } from './fake-leash.mjs'
+import { flipOpen } from './fake-doors.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const REACH = 4.5
@@ -52,7 +53,7 @@ export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
   // A block with `locked: true` models a protected area: the click is lost.
   if (item === undefined && s.states.get(k)?.locked) return result('unchanged')
   if (item === undefined && /_(fence_gate|door|trapdoor)$/.test(here) && !/^iron_/.test(here)) {
-    s.states.set(k, { ...s.states.get(k), open: !s.states.get(k)?.open })
+    flipOpen(s, pos)
     return result('used')
   }
   if (item === undefined && here === 'lever') {

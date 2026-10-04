@@ -5,6 +5,7 @@
             ["path" :as path]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.memory :as mem]
             [engine.notes :as notes]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -13,9 +14,9 @@
             [jobs.explore.search :as search]))
 
 (def ground
-  "Grass at y 63 under every column whose x and z are multiples of 4 within 100 of the origin: every leg the
-  patterns choose from the origin stands there."
-  (into {} (for [x (range -100 101 4) z (range -100 101 4)] [(str x ",63," z) "grass_block"])))
+  "Grass at y 63 under every column within 100 of the origin: every leg the patterns choose from the origin stands
+  there, and the planner has a floor to walk over between them."
+  (tu/box -100 63 -100 100 63 100 "grass_block"))
 
 (defn setup
   "An engine over the fake world spec (ground added) with a notes store for body Fake in a temp world folder."
@@ -50,8 +51,10 @@
     (await (run-until-done s (or n 400)))))
 
 (defn event-of [{:keys [seen]} kind] (first (filter #(= kind (:kind %)) @seen)))
-(defn walks [{:keys [p]}] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
-                                (filter #(= "moveTo" (.-name %)) (.-calls (.-world p)))))
+(defn walks
+  "The targets of the walks go-to made, in order (each walk writes a :moved entry)."
+  [{:keys [eng]}]
+  (mapv (comp :target :data) (mem/entries (mem/view (:store eng)) :moved)))
 (defn file-notes [{:keys [dir]}]
   (:value (notes/parse-file (fs/readFileSync (path/join dir "notes" "Fake.edn") "utf8"))))
 (defn write-other! [{:keys [dir]} body ns]
@@ -131,7 +134,7 @@
           (is (= :distance (:why e)))
           (is (= 4 (get-in e [:coverage :legs])))
           (is (= 5 (get-in e [:coverage :scans])))
-          (is (= 16 (get-in e [:coverage :farthest])))
+          (is (= 14 (get-in e [:coverage :farthest])) "the body stops within 2 of the leg 16 out")
           (is (= [] (:found e))))))))
 
 (deftest the-leg-and-time-bounds-end-it
@@ -226,7 +229,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :pattern :outward :heading :east :max-distance 40} {}))]
-          (is (= [16 32] (take 2 (map :x (walks s)))))
+          (is (= [16 30] (take 2 (map :x (walks s)))) "the second leg is 16 further than where the body stopped, 2 short of the first")
           (is (every? #(<= (js/Math.hypot (:x %) (:z %)) 40) (walks s)) "no leg beyond :max-distance")
           (is (= :distance (:why (event-of s :search.not-found)))))))))
 

@@ -84,7 +84,7 @@
               :continue))))))
 
 (defn ^:async walk! [c]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (destination c) :range (:range (:args c))}))]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (destination c) :range (:range (:args c)) :doors :leave-open}))]
     (if-not (= :done r)
       :continue
       (if (:arrived (ctx/child-result c :walk))

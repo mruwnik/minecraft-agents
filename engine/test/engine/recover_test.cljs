@@ -15,7 +15,7 @@
 (defn setup [world]
   (let [clock (atom t0)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake (merge {:floor tu/walk-floor} world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -86,7 +86,7 @@
           (know-place! eng :bed {:x 30 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.recover) {})
           (await (core/tick! eng))
-          (is (= {:x 30 :y 64 :z 0} (core/self-pos p))))))))
+          (is (= {:x 28 :y 64 :z 0} (core/self-pos p)) "stops at range 2 of the bed"))))))
 
 (deftest without-a-bed-it-walks-home
   (async done
@@ -96,7 +96,7 @@
           (know-place! eng :home {:x -20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.recover) {})
           (await (core/tick! eng))
-          (is (= {:x -20 :y 64 :z 0} (core/self-pos p))))))))
+          (is (= {:x -18 :y 64 :z 0} (core/self-pos p)) "stops at range 2 of home"))))))
 
 (deftest without-a-place-it-stays-put
   (async done
@@ -105,7 +105,7 @@
         (let [{:keys [eng p]} (setup {:self {:health 5}})]
           (core/submit! eng '(jobs.survival.recover) {})
           (await (core/tick! eng))
-          (is (= [] (calls p "moveTo"))))))))
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest at-safety-it-eats-when-hungry-and-carrying-food
   (async done

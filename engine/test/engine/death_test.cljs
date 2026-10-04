@@ -143,12 +143,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities drops})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory junk})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
           (is (= [] (:list (core/state eng))))
-          (is (= [] (calls p "moveTo")))
+          (is (= [] (tu/walk-calls p)))
           (is (= [] (calls p "collect")))
           (is (= :skip (:decision (recovered eng))))
           (is (= 0 (:value (recovered eng)))))))))
@@ -157,11 +157,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities drops})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds :cause "lava"})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= [] (calls p "moveTo")))
+          (is (= [] (tu/walk-calls p)))
           (is (= :skip (:decision (recovered eng))))
           (is (= :infinite (:cost (recovered eng)))))))))
 
@@ -169,12 +169,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities drops})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (is (< (await (run-until-empty eng 10)) 10))
           (is (= [] (:list (core/state eng))))
-          (is (= [death-pos] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo"))))
+          (is (= [death-pos] (tu/walked-to eng)))
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
           (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items])))
           (is (pos? (:value (recovered eng))))
@@ -184,7 +184,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities drops :unreachable ["20,64,0"]})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (is (< (await (run-until-empty eng 10)) 10))
@@ -196,7 +196,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:entities drops})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (swap! clock + 300000)
           (core/submit! eng job {})
@@ -209,7 +209,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {})]
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
@@ -220,12 +220,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng p]} (setup {:entities (conj drops zombie)})]
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj drops zombie)})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (is (= [] (calls p "moveTo")) "no acting while a hostile is within the danger radius")
+          (is (= [] (tu/walk-calls p)) "no acting while a hostile is within the danger radius")
           (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
           (let [st (.-state (.-world p))]
             (set! (.-entities st) (.filter (.-entities st) (fn [e] (not= "hostile" (.-kind e))))))
@@ -245,16 +245,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:entities (into drops second-drops)})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (into drops second-drops)})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (is (= [death-pos] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo"))))
+          (is (= [death-pos] (tu/walked-to eng)))
           (swap! clock + 10)
           (die! eng {:pos second-death-pos :inventory diamonds})
           (await (run-until-empty eng 15))
-          (is (= second-death-pos (last (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo")))))
+          (is (= second-death-pos (last (tu/walked-to eng))))
           (is (= :collected (:decision (recovered eng))))
           (is (= 2 (:items (recovered eng))) "the second death got its own :collected, not a stale :abandoned"))))))
 
@@ -262,7 +262,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:entities drops})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (swap! clock + 100)
           (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}})
@@ -271,7 +271,7 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (nil? (:decided (job-memory eng))) "500 ms after the respawn: not yet")
-          (is (= [] (calls p "moveTo")))
+          (is (= [] (tu/walk-calls p)))
           (swap! clock + 2000)
           (await (core/tick! eng))
           (is (some? (:decided (job-memory eng))) "2500 ms after the respawn: decided")
@@ -293,7 +293,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:entities drops})]
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 10))

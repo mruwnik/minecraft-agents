@@ -18,7 +18,7 @@
 (defn summary [eng id]
   (when-let [inst (get-in (core/state eng) [:instances id])]
     {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
-     :round (:round inst)}))
+     :round (:round inst) :hold? (boolean (:hold? inst))}))
 (defn list-jobs [eng offset limit]
   (let [ids (:list (core/state eng))
         items (mapv #(summary eng %) (take limit (drop offset ids)))
@@ -75,7 +75,8 @@
               (if-let [result (:result prior)]
                 (cond-> (assoc result :duplicate true)
                   (get-in result [:job :id]) (assoc :job (or (summary eng (get-in result [:job :id]))
-                                                          {:id (get-in result [:job :id]) :status :absent})))
+                                                          (merge {:id (get-in result [:job :id]) :status :absent}
+                                                                 (select-keys (:job result) [:hold?])))))
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)

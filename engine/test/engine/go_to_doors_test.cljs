@@ -1,0 +1,244 @@
+(ns engine.go-to-doors-test
+  "jobs.movement.go-to through shut gates, doors and trapdoors against the fake world: opened by hand, passed, shut again by
+  the :doors policy, and what it leaves in memory."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.registry :as registry]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.memory :as mem]
+            [engine.test-util :as tu :refer [box floor]]
+            [engine.triggers :as triggers]
+            [engine.world :as world]))
+
+(defn setup [world zones]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake world)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(defn ^:async tick-out!
+  "Tick until the list is empty, at most n ticks."
+  [eng n]
+  (loop [i 0]
+    (when (and (< i n) (seq (:list (core/state eng))))
+      (await (core/tick! eng))
+      (recur (inc i)))))
+
+(defn ^:async go!
+  "Run go-to with args as the child of a recording parent over world (with zones); {:eng :p :seen :out}, out the child's result."
+  ([world args] (go! world args []))
+  ([world args zones]
+   (let [{:keys [eng] :as s} (setup world zones)
+         out (atom :not-done)
+         parent {:check (constantly true)
+                 :round (fn ^:async recording-round [c]
+                          (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
+                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                            r))}
+         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+     (core/submit! eng '(recording-parent) {})
+     (await (tick-out! eng 40))
+     (assoc s :eng eng :out out))))
+
+(defn at [p] (let [pos (.-pos (.self p))] [(.-x pos) (.-y pos) (.-z pos)]))
+(defn clicks [p] (count (filterv #(= "useOn" (.-name %)) (.-calls (.-world p)))))
+(defn open? [p [x y z]] (:open (js->clj (.-properties (.blockAt p #js {:x x :y y :z z})) :keywordize-keys true)))
+(defn opened [eng] (mapv :data (mem/entries (mem/view (:store eng)) :opened)))
+(defn events-of [{:keys [seen]} kind] (filter #(= kind (:kind %)) @seen))
+
+(def flat (floor -2 -3 40 3))
+(def gate-cell {:x 5 :y 64 :z 0})
+(def gate-wall (assoc (box 5 64 -6 5 64 6 "oak_fence") "5,64,0" "oak_fence_gate")) ; longer than the floor: no free end to slip by
+
+(defn gate-world
+  "A fence across the lane at x 5 with a gate at z 0, open or not; the body at x z."
+  ([open] (gate-world open {:x 0 :y 64 :z 0}))
+  ([open pos]
+   {:self {:pos pos} :blocks (merge flat gate-wall) :states {"5,64,0" {:open open :facing "east"}}}))
+
+(deftest through-a-shut-gate-the-walker-opens-passes-and-shuts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [10 64 0] (at p)))
+          (is (false? (open? p [5 64 0])) "shut again behind the body")
+          (is (= 2 (clicks p)) "one click to open, one to shut")
+          (is (= [] (opened eng)) "the :opened entry is cleared once the gate is shut"))))))
+
+(deftest leave-open-leaves-the-gate-open-and-an-opened-entry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :leave-open}))]
+          (is (= {:arrived true} @out))
+          (is (true? (open? p [5 64 0])))
+          (is (= 1 (clicks p)))
+          (is (= [gate-cell] (mapv :cell (opened eng))))
+          (is (every? some? (mapv (juxt :by :t) (opened eng)))))))))
+
+(deftest never-treats-a-shut-gate-as-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :never}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (< (first (at p)) 5) "the body stays on its side")
+          (is (zero? (clicks p)))
+          (is (= [] (opened eng))))))))
+
+(deftest a-gate-that-was-open-is-walked-through-and-not-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (gate-world true) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (true? (open? p [5 64 0])))
+          (is (zero? (clicks p)))
+          (is (= [] (opened eng))))))))
+
+(deftest a-gate-that-will-not-open-gives-door-stuck-after-one-replan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc-in (gate-world false) [:states "5,64,0" :locked] true)
+              {:keys [out p eng] :as s} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived false :reason :unreachable :why :door-stuck} (select-keys @out [:arrived :reason :why])))
+          (is (< (first (at p)) 5) "the body ends on its own side")
+          (is (false? (open? p [5 64 0])))
+          (is (= [] (opened eng)) "nothing is left recorded")
+          (is (= [:door-stuck] (mapv :why (events-of s :unreachable)))))))))
+
+;; ------------------------------------------------------------------ a door in a hut wall
+
+(def hut-wall (box 5 64 -3 5 66 3 "stone"))
+
+(defn hut-world [pos]
+  {:self {:pos pos}
+   :blocks (merge flat hut-wall {"5,64,0" "oak_door" "5,65,0" "oak_door"})
+   :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}})
+
+(deftest a-door-is-passed-both-ways-and-shut-behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[from to] [[{:x 0 :y 64 :z 0} [10 64 0]] [{:x 10 :y 64 :z 0} [0 64 0]]]]
+          (let [{:keys [out p eng]} (await (go! (hut-world from) {:pos to :range 0}))]
+            (is (= {:arrived true} @out) (str from))
+            (is (= to (at p)))
+            (is (= [false false] (mapv #(open? p %) [[5 64 0] [5 65 0]])) "both halves shut")
+            (is (= 2 (clicks p)) "a door is one click to open and one to shut")
+            (is (= [] (opened eng)))))))))
+
+;; ------------------------------------------------------------------ an airlock of two gates
+
+(def airlock-blocks
+  (merge (box 4 64 -6 4 64 6 "oak_fence") (box 8 64 -6 8 64 6 "oak_fence")
+         (box 5 64 -1 7 64 -1 "oak_fence") (box 5 64 1 7 64 1 "oak_fence")
+         {"4,64,0" "oak_fence_gate" "8,64,0" "oak_fence_gate"}))
+
+(deftest an-airlock-of-two-gates-is-passed-and-both-gates-are-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat airlock-blocks)
+                 :states {"4,64,0" {:open false :facing "east"} "8,64,0" {:open false :facing "east"}}}
+              {:keys [out p eng]} (await (go! w {:pos [12 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [12 64 0] (at p)))
+          (is (= [false false] (mapv #(open? p %) [[4 64 0] [8 64 0]])))
+          (is (= 4 (clicks p)))
+          (is (= [] (opened eng))))))))
+
+;; ------------------------------------------------------------------ a hatch over a ladder
+
+(deftest a-trapdoor-over-a-ladder-is-opened-climbed-through-and-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deck (assoc (box 2 66 -1 8 66 1 "stone") "3,66,0" "oak_trapdoor")
+              w {:self {:pos {:x 0 :y 64 :z 0}}
+                 :blocks (merge flat deck {"3,64,0" "ladder" "3,65,0" "ladder"} (box 3 64 -1 3 65 -1 "stone"))
+                 :states {"3,64,0" {:facing "south"} "3,65,0" {:facing "south"} "3,66,0" {:open false :half "bottom" :facing "south"}}}
+              {:keys [out p eng]} (await (go! w {:pos [6 67 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [6 67 0] (at p)))
+          (is (false? (open? p [3 66 0])))
+          (is (= 2 (clicks p)))
+          (is (= [] (opened eng))))))))
+
+;; ------------------------------------------------------------------ iron
+
+(deftest an-iron-door-is-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0 :y 64 :z 0}}
+                 :blocks (merge flat hut-wall {"5,64,0" "iron_door" "5,65,0" "iron_door"})
+                 :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}}
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (< (first (at p)) 5) "the body stays on its side")
+          (is (zero? (clicks p))))))))
+
+(deftest an-iron-door-with-a-button-beside-it-is-still-a-wall-for-now
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0 :y 64 :z 0}}
+                 :blocks (merge flat hut-wall {"5,64,0" "iron_door" "5,65,0" "iron_door" "4,65,-1" "stone_button"})
+                 :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}
+                          "4,65,-1" {:face "wall" :facing "west" :powered false}}}
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (< (first (at p)) 5) "the body stays on its side")
+          (is (zero? (clicks p))))))))
+
+;; ------------------------------------------------------------------ zones
+
+(def foreign-zone {:name "pen" :min [4 63 -3] :max [6 66 3] :owner "Other" :allow #{}})
+(def own-zone (assoc foreign-zone :owner "Fake"))
+
+(deftest a-gate-in-a-foreign-zone-is-shut-even-with-leave-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :leave-open} [foreign-zone]))]
+          (is (= {:arrived true} @out))
+          (is (false? (open? p [5 64 0])))
+          (is (= [] (opened eng))))))))
+
+(deftest a-gate-in-the-bodys-own-zone-is-left-open-by-leave-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :leave-open} [own-zone]))]
+          (is (= {:arrived true} @out))
+          (is (true? (open? p [5 64 0]))))))))
+
+(deftest a-gate-next-to-a-foreign-zone-counts-as-on-its-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [edge (assoc foreign-zone :min [6 63 -3] :max [9 66 3])
+              {:keys [p]} (await (go! (gate-world false) {:pos [10 64 0] :range 0 :doors :leave-open} [edge]))]
+          (is (false? (open? p [5 64 0]))))))))
+
+;; ------------------------------------------------------------------ an animal in the gate cell
+
+(deftest an-animal-in-the-gate-cell-keeps-the-gate-open-with-a-hazard-notice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0}}
+              {:keys [out p eng] :as s} (await (go! (assoc (gate-world false) :entities [cow]) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (true? (open? p [5 64 0])) "the animal is not pushed: the gate stays open")
+          (is (= 1 (clicks p)))
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for the trigger")
+          (is (= [[5 64 0]] (mapv :cell (events-of s :door-left-open)))))))))

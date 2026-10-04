@@ -147,3 +147,103 @@ test('pathWorld leaves untouched columns unloaded', () => {
   assert.equal(snapshot.stateAt(1000, 64, 1000), UNLOADED)
   assert.equal(snapshot.hasColumn(62, 62), false)
 })
+
+// ---- what the fake moveTo did around a walk, now done by steer: leads, food, targets the old walker gave up on, rails
+
+const cowAt = (id, x, extra = {}) => ({ id, name: 'cow', kind: 'passive', pos: at(x, 64, 0), ...extra })
+const cowOf = (p, id) => p.world.state.entities.find(e => e.id === id)
+const walked = async p => p.steer('t', decideOf(walkTo(5.5)))
+
+test('a led animal is dragged behind the body when the walk is over', async () => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: floor(), entities: [cowAt(1, -1, { leashedToMe: true })] })
+  p.setOwner('t')
+  await walked(p)
+  assert.equal(Math.round(cowOf(p, 1).pos.x), 3)
+})
+
+test('a lead that snaps breaks on the walk and drops as an item', async () => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: floor(), entities: [cowAt(1, -1, { leashedToMe: true, snaps: true })] })
+  p.setOwner('t')
+  await walked(p)
+  assert.equal(cowOf(p, 1).leashedToMe, false)
+  assert.ok(p.world.state.entities.some(e => e.name === 'item'))
+})
+
+test('an animal drawn by the food in hand follows when the walk is over', async () => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: floor(), entities: [cowAt(1, 9)], inventory: [{ name: 'wheat', count: 1 }] })
+  p.setOwner('t')
+  await p.equip('t', { item: 'wheat' })
+  await walked(p)
+  assert.ok(cowOf(p, 1).pos.x < 9)
+})
+
+test('a cut walk drags nothing', async () => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: floor(), entities: [cowAt(1, -1, { leashedToMe: true })] })
+  p.setOwner('t')
+  const result = p.steer('t', decideOf(() => ({ controls: { forward: true }, yaw: EAST })))
+  await later()
+  p.setOwner('other')
+  await assert.rejects(result, CutError)
+  assert.equal(cowOf(p, 1).pos.x, -1)
+})
+
+test('cells near an unreachable or no-path target are stone to the planner, the body\'s own cells are not', () => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: floor(63, -8, 12), unreachable: ['8,64,0'], noPath: ['0,64,6'] })
+  const { snapshot } = p.pathWorld()
+  const stone = stateId('stone')
+  assert.deepEqual([[8, 64, 0], [5, 66, 3], [11, 62, 0], [0, 64, 6]].map(c => snapshot.stateAt(...c)), [stone, stone, stone, stone])
+  assert.deepEqual([[0, 64, 0], [0, 65, 0], [12, 64, 0]].map(c => snapshot.stateAt(...c)), [AIR, AIR, AIR])
+})
+
+test('a body walks along rails', async () => {
+  const rails = Object.fromEntries([1, 2, 3, 4, 5].map(x => [`${x},64,0`, 'powered_rail']))
+  const p = rig(rails)
+  const r = await p.steer('t', decideOf(walkTo(5.5)))
+  assert.equal(r.status, 'done')
+  assert.equal(p.world.state.self.pos.x, 5)
+})
+
+// ---- doors, gates and trapdoors: open ones let the body through, shut ones are walls
+
+const gateAt = (open, extra = {}) => ({ blocks: { '3,64,0': 'oak_fence_gate' }, states: { '3,64,0': { open, facing: 'east' } }, ...extra })
+const doorRig = ({ blocks, states }) => {
+  const p = createFake({ self: { pos: at(0, 64, 0) }, blocks: { ...floor(), ...blocks }, states })
+  p.setOwner('t')
+  return p
+}
+
+test('a body walks through an open gate and stops at a shut one', async () => {
+  const through = await doorRig(gateAt(true)).steer('t', decideOf(walkTo(5.5)))
+  const shut = await doorRig(gateAt(false)).steer('t', decideOf(walkTo(5.5)), { timeoutS: 1 })
+  assert.deepEqual([through.status, shut.status], ['done', 'timeout'])
+  assert.ok(shut.pose.x < 3)
+})
+
+test('a body walks through the open halves of a door', async () => {
+  const blocks = { '3,64,0': 'oak_door', '3,65,0': 'oak_door' }
+  const states = open => ({ '3,64,0': { half: 'lower', open }, '3,65,0': { half: 'upper', open } })
+  const through = await doorRig({ blocks, states: states(true) }).steer('t', decideOf(walkTo(5.5)))
+  const shut = await doorRig({ blocks, states: states(false) }).steer('t', decideOf(walkTo(5.5)), { timeoutS: 1 })
+  assert.deepEqual([through.status, shut.status], ['done', 'timeout'])
+})
+
+test('a body climbs a ladder up through an open trapdoor and not through a shut one', async () => {
+  const hatch = open => ({
+    blocks: { '3,64,0': 'ladder', '3,65,0': 'ladder', '3,66,0': 'oak_trapdoor', '2,66,0': 'stone', '4,66,0': 'stone', '3,63,1': 'stone' },
+    states: { '3,66,0': { open } }
+  })
+  const climb = pose => (pose.y >= 67 ? { done: { status: 'arrived' } } : { controls: { forward: false, jump: true }, yaw: 0 })
+  const start = { x: 3, y: 64, z: 0 }
+  const run = async open => {
+    const p = createFake({ self: { pos: start }, blocks: { ...floor(), ...hatch(open).blocks }, states: hatch(open).states })
+    p.setOwner('t')
+    return p.steer('t', decideOf(climb), { timeoutS: 2 })
+  }
+  assert.deepEqual([(await run(true)).status, (await run(false)).status], ['done', 'timeout'])
+})
+
+test('pathWorld reads the open state of a gate', () => {
+  const [open, shut] = [true, false].map(o => doorRig(gateAt(o)).pathWorld().snapshot.stateAt(3, 64, 0))
+  assert.equal(open, stateId('oak_fence_gate', { open: true, facing: 'east' }))
+  assert.equal(shut, stateId('oak_fence_gate', { open: false, facing: 'east' }))
+})

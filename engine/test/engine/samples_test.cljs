@@ -42,11 +42,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time 14000 :inventory [{:name "bread" :count 2}]})
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :time 14000 :inventory [{:name "bread" :count 2}]})
               world (.-world p)]
           (core/load-scenario! eng (scenario/parse scenario-text))
           (await (core/tick! eng))
-          (is (= {:x 30 :y 64 :z 0} (core/self-pos p)) "go-to walked")
+          (is (= {:x 29 :y 64 :z 0} (core/self-pos p)) "go-to walked, to range 1 of the target")
           (await (core/tick! eng))
           (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-day declines at night")
           (is (nil? (core/tick! eng)) "night: nothing ready")
@@ -68,7 +68,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:unreachable ["9,64,9"]})]
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :unreachable ["9,64,9"]})]
           (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}}) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [] (:list (core/state eng))))
@@ -78,9 +78,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {})]
-          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 100 :y 64 :z 0}}) {})
+        ;; the floor ends at x 40 and the goal's chunk is not loaded: the first round walks to the edge and is not done
+        (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})
+              blocks (.. p -world -state -blocks)]
+          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 60 :y 64 :z 0}}) {})
           (await (core/tick! eng))
           (is (= ["j1"] (:list (core/state eng))))
+          (doseq [[k v] (tu/floor 41 -10 60 10)] (.set blocks k v))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))

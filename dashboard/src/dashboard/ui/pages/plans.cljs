@@ -1,7 +1,8 @@
 (ns dashboard.ui.pages.plans
   "The Plans page: the plans of the world as a tree with their completion, and one plan's elements and layers drawn
   cell by cell."
-  (:require [reagent.core :as r]
+  (:require [clojure.string :as str]
+            [reagent.core :as r]
             [re-frame.core :as rf]
             [dashboard.ui.plans-events]
             [dashboard.ui.plansmodel :as pm]))
@@ -210,7 +211,7 @@
       detail-failed [:main.plan-detail [:div.err detail-failed]]
       (nil? detail) [:main.plan-detail [:div.dim.pempty "loading..."]]
       :else
-      (let [{:keys [name kind status owner note region counts layers grid errors spots assign checked conflicts]} detail
+      (let [{:keys [name kind status owner note region at counts layers grid errors spots assign checked conflicts]} detail
             layer (first (filter #(= current (:y %)) layers))
             rows (if (= :bird view) (pm/bird-rows layers mode) (:rows layer))]
         [:main.plan-detail
@@ -221,8 +222,11 @@
          [completion-bar counts]
          [:div.pfacts [:span.dim (pm/counts-text counts)]]
          (when note [:div.pnote note])
-         [:div.pfacts [:span.dim "region"] [:span.mono (pm/region-text region)]
-          [:span.dim (str "(" (pm/region-size region) ")")]]
+         (when at [:div.pfacts [:span.dim "anchor"] [:span.mono (str/join ", " at)]])
+         (if region
+           [:div.pfacts [:span.dim "region"] [:span.mono (pm/region-text region)]
+            [:span.dim (str "(" (pm/region-size region) ")")]]
+           [:div.pfacts [:span.dim "No geometry is defined. This plan does not prove construction or occupancy."]])
          [plan-errors errors]
          [conflicts-section conflicts]
          [:div.plan-body

@@ -211,6 +211,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   let owner = null
   const inflight = new Set()
   const listeners = new Set()
+  const entityDeathListeners = new Set()
   // Offline is body state: set from the moment `offline` quits the bot until the fresh bot is adopted (or the
   // reconnect gave up); resolves then. Sensing answers 'offline' meanwhile and acting calls wait for it.
   let away = null
@@ -1134,6 +1135,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const emit = event => listeners.forEach(fn => fn(event))
   const inventoryNow = () => inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
 
+  const relayEntityDeath = entity => entityDeathListeners.forEach(fn => fn({ entity, source: bot, dimension: bot.game?.dimension }))
+
   // Wires one bot's events to the listeners; returns the function that unwires them.
   let lastTick = Date.now() // of the current bot's physics; the watchdog below reads it
   let stalled = false
@@ -1173,6 +1176,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         if (moved > TELEPORT_BLOCKS) settleFromNow()
       },
       chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
+      whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
       wake: () => emit({ kind: 'woke' }),
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return
@@ -1183,7 +1187,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         emit({ kind: 'spawned' })
         if (!respawning) return
         respawning = false
-      whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
         settleFromNow()
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },
@@ -1193,7 +1196,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       error: err => emit({ kind: 'error', reason: String(err?.message ?? err) })
     }
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
-    return () => Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
+    if (entityDeathListeners.size) target.on('entityDead', relayEntityDeath)
+    return () => {
+      Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
+      target.removeListener('entityDead', relayEntityDeath)
+    }
   }
   let down = false
   let unbind = bindEvents(bot)
@@ -1214,6 +1221,23 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     listeners.add(listener)
     pending.splice(0).forEach(e => listener(e)) // events from before anyone listened (createPrimitives' wait)
     return () => listeners.delete(listener)
+  }
+
+  // Raw Mineflayer boundary for the CLJS observation cache: no radius/default32 filtering,
+  // no sensing packets, and no stale quit/stalled connection exposed as a fresh observation.
+  const entityObservation = () => ({
+    source: bot,
+    online: !closed && !down && !stalled && !isOffline() && Date.now() - lastTick <= 10000,
+    dimension: bot.game?.dimension,
+    entities: Object.values(bot.entities ?? {})
+  })
+  const onEntityDeath = listener => {
+    if (!entityDeathListeners.size) bot.on('entityDead', relayEntityDeath)
+    entityDeathListeners.add(listener)
+    return () => {
+      entityDeathListeners.delete(listener)
+      if (!entityDeathListeners.size) bot.removeListener('entityDead', relayEntityDeath)
+    }
   }
 
   // ---- offline ----
@@ -1314,6 +1338,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const close = async () => {
     closed = true
     clearInterval(watchdog)
+    unbind()
+    entityDeathListeners.clear()
+    bot.on('error', () => {}) // a quitting socket may still report a late error after lifecycle cleanup
     setOwner(null)
     await view?.detach()
     view?.stop()
@@ -1325,7 +1352,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

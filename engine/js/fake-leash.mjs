@@ -1,5 +1,9 @@
 // The fake's leads: animals on the body's lead follow it when it walks, unless the entity spec says `snaps: true`,
 // which breaks the lead on the first walk (it drops as an item). A tie to a fence post is `knot` on the entity.
+// A led animal is dragged in a straight line and does not path: anything at its feet but open air (a fence, a gate
+// open or shut: a cow jams in a 1-wide gateway, measured live) stops it on its side.
+import { walkLine, openAir } from './fake-walkline.mjs'
+
 const FOLLOW_GAP = 2
 
 export function dragLeashed (s) {
@@ -9,7 +13,7 @@ export function dragLeashed (s) {
       s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...e.pos }, item: { name: 'lead', count: 1 } })
       continue
     }
-    e.pos = { ...s.self.pos, x: s.self.pos.x - FOLLOW_GAP }
+    e.pos = walkLine([e.pos, { ...s.self.pos, x: s.self.pos.x - FOLLOW_GAP }], openAir(s)).pos
   }
 }
 

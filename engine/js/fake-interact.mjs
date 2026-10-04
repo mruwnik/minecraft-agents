@@ -40,6 +40,12 @@ export function fakeInteract (s) {
     s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...pos }, item: { name, count: 1 } })
   }
 
+  const addLead = () => {
+    const have = s.inventory.find(i => i.name === 'lead')
+    if (have) have.count += 1
+    else s.inventory.push({ name: 'lead', count: 1 })
+  }
+
   const feed = (e, item) => {
     if (e.baby) return { ...none, consumed: takeOne(item) }
     if (e.inLove || e.cooldown) return none
@@ -62,9 +68,11 @@ export function fakeInteract (s) {
     return { ...none, consumed, leash: 'attached' }
   }
 
+  // `pickup: true` on the entity: the body stands close enough to pick the dropped lead up at once (live, leads came back with nothing left to collect)
   const unleash = (e) => {
     Object.assign(e, { leashed: false, leashedToMe: false })
-    spawnItem(e.pos, 'lead')
+    if (e.pickup) addLead()
+    else spawnItem(e.pos, 'lead')
     return { ...none, leash: 'detached' }
   }
 

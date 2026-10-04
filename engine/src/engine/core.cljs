@@ -36,6 +36,7 @@
             [engine.expr :as expr]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [engine.triggers.stuck :as stuck]
             [engine.world :as world]
             ["crypto" :as crypto]
             ["path" :as path]))
@@ -409,10 +410,6 @@
 
 (declare submit! call-child self-pos)
 
-(def moved-policy
-  "Policy of the :moved entries act writes after each moveTo (read by the stuck trigger)."
-  {:cap 20 :ttl (* 10 60 1000)})
-
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
 
@@ -436,7 +433,7 @@
         (when (= :moveTo k)
           (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)
                                            :target (js->clj (.-pos args) :keywordize-keys true)}
-                      moved-policy))
+                      stuck/moved-policy))
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})

@@ -293,3 +293,13 @@ test('a block marked locked (a protected area) does not change', async () => {
   assert.equal(r.status, 'unchanged')
   assert.equal(r.after.properties.open, false)
 })
+
+test('a hand click on a door flips both of its halves, whichever half is clicked', async () => {
+  const door = () => owned({ blocks: { '1,64,0': 'oak_door', '1,65,0': 'oak_door' }, states: { '1,64,0': { half: 'lower', open: false }, '1,65,0': { half: 'upper', open: false } } })
+  const opens = await Promise.all([64, 65].map(async y => {
+    const p = door()
+    await p.useOn('t', { pos: { x: 1, y, z: 0 } })
+    return [p.blockAt({ x: 1, y: 64, z: 0 }).properties.open, p.blockAt({ x: 1, y: 65, z: 0 }).properties.open]
+  }))
+  assert.deepEqual(opens, [[true, true], [true, true]])
+})

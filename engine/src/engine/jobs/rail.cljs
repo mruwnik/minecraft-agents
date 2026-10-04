@@ -1,0 +1,193 @@
+(ns engine.jobs.rail
+  "The head-first builder of jobs.build.rail-line. A rail takes its shape from the rails beside it when it is placed, so
+  a line with corners and slopes is built in line order, standing on the line:
+    1. the work is ordered station by station along the chain (plan.rail/line) from the end the build starts at
+       (nearer to the body when it begins); at each station the cells below the rail come first (the bed, a redstone
+       block under), then the rail, then what stands beside it (a torch or lever, with its own bed);
+    2. each round places the cells in that order while they are within reach, and walks on when the next one is not,
+       to the rail behind it (the line carries the body over hills, bridges and tunnels, and needs no scaffold), else
+       to a cell beside it as jobs.build.from-plan does;
+    3. a rail has settled once every neighbour it has in the chain is a rail in the world; a settled rail holding the
+       wrong shape is dug and placed again (:fix times), then given up as :shape.
+  Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's own functions over this job's
+  memory. Every dig and place asks engine.access.rules right before it acts."
+  (:require [engine.access.rules :as rules]
+            [engine.ctx :as ctx]
+            [engine.jobs.util :as u]
+            [jobs.build.from-plan :as build]
+            [plan.rail :as rail]))
+
+;; ------------------------------------------------------------------ order
+
+(defn column-index
+  "{[x z] chain index} of a chain of positions."
+  [ps]
+  (into {} (map-indexed (fn [i [x _ z]] [[x z] i])) ps))
+
+(defn station
+  "The chain index of the rail cell at or nearest in plan view to pos."
+  [ps by-column [x _ z]]
+  (or (by-column [x z])
+      (some->> [[1 0] [-1 0] [0 1] [0 -1]]
+               (keep (fn [[dx dz]] (by-column [(+ x dx) (+ z dz)])))
+               seq
+               (apply min))
+      (apply min-key (fn [i] (let [[px _ pz] (ps i)] (+ (abs (- x px)) (abs (- z pz))))) (range (count ps)))))
+
+(defn work-order
+  "The cells in the order they are built: station by station from the end `from` (:first or :last), lower cells first,
+  at the same height the rail before what stands beside it."
+  [ps from cells]
+  (let [by-column (column-index ps)
+        n (count ps)]
+    (sort-by (fn [{:keys [pos] :as cell}]
+               (let [i (station ps by-column pos)]
+                 [(if (= :first from) i (- n i)) (second pos) (if (rail/rail-cell? cell) 0 1)]))
+             cells)))
+
+(defn nearer-end
+  "The end of the chain ps the body is nearer to: :first or :last."
+  [c ps]
+  (let [body (u/self-pos c)
+        d (fn [[x y z]] (u/dist body {:x x :y y :z z}))]
+    (if (<= (d (first ps)) (d (peek ps))) :first :last)))
+
+;; ------------------------------------------------------------------ shapes
+
+(defn wrong-shapes
+  "The positions of rails that have settled (every neighbour in the chain is a rail in the world) and hold another shape
+  than the chain gives them."
+  [c ps]
+  (let [at (partial build/world-block (:primitives c))
+        rail? #(rail/rail-name? (:name (at %)))]
+    (vec (for [i (range (count ps))
+               :let [pos (ps i)
+                     block (at pos)
+                     joins (keep #(get ps %) [(dec i) (inc i)])]
+               :when (and (rail? pos) (every? rail? joins) (rail/state block :shape)
+                          (not= (rail/shape-joining pos joins) (rail/state block :shape)))]
+           pos))))
+
+(defn fix-budget
+  "How many times a wrong rail may be dug and placed again: the :fix argument (a number, true for 1, else 0)."
+  [c]
+  (let [f (:fix (:args c))]
+    (cond (number? f) f f 1 :else 0)))
+
+(defn idle?
+  "Whether the builder has nothing to do: nothing it could place with what is carried, nothing unseen to go to with an
+  item carried for it, no settled wrong shape."
+  [c cells]
+  (let [carried (build/carried-counts (:primitives c))
+        ps (mapv :pos (rail/line cells))]
+    (and (empty? (build/buildable cells carried {}))
+         (not-any? #(pos? (get carried (:item %) 0)) (build/unseen cells {}))
+         (empty? (wrong-shapes c ps)))))
+
+;; ------------------------------------------------------------------ steps
+
+(defn stand-behind
+  "The rail behind cell (up to 3 back, on the side the build comes from) that is placed in the world and not a bad stand,
+  or nil."
+  [c ps from cell]
+  (let [by-column (column-index ps)
+        i (station ps by-column (:pos cell))
+        step (if (= :first from) -1 1)
+        bad (set (:bad-stands (ctx/mem c)))]
+    (->> [1 2 3]
+         (keep #(get ps (+ i (* step %))))
+         (remove #(or (bad %) (= % (:pos cell))))
+         (filter #(rail/rail-name? (:name (build/world-block (:primitives c) %))))
+         first)))
+
+(defn ^:async walk-to!
+  "Walk to a stand for cell: the rail behind it, else a cell beside it. A cell that cannot be walked to, or is still out
+  of reach (or unseen, as :unloaded) on arrival, counts a failure."
+  [c ps from cells cell]
+  (let [body (u/self-pos c)
+        planned (set (map :pos cells))
+        bad (set (:bad-stands (ctx/mem c)))
+        beside (first (sort-by #(u/dist body (zipmap [:x :y :z] %))
+                               (remove bad (build/stand-cells (:pos cell) (js/Math.floor (:y body)) nil planned))))
+        stand (or (stand-behind c ps from cell) beside)
+        give-up (:give-up (:args c))]
+    (if-not stand
+      (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
+      (let [w (await (u/walk-near! c (zipmap [:x :y :z] stand) 0))]
+        (when (= :blocked w)
+          (ctx/update-mem! c #(-> (build/count-fail % (:pos cell) :unreachable give-up)
+                                  (update :bad-stands (fnil conj []) stand))))
+        (when (and (= :there w) (nil? (:found cell)))
+          (ctx/update-mem! c build/count-fail (:pos cell) :unloaded give-up))
+        (when (and (= :there w) (:found cell) (empty? (build/in-reach c [cell])))
+          (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up))))
+    :continue))
+
+(defn ^:async place-run!
+  "Place the cells in order from the head while each is within reach: {:placed n :next cell} with the cell out of reach."
+  [c ordered]
+  (loop [left ordered n 0]
+    (if-let [cell (first left)]
+      (if (seq (build/in-reach c [cell]))
+        (do (await (build/place-one! c cell))
+            (recur (rest left) (inc n)))
+        {:placed n :next cell})
+      {:placed n})))
+
+(defn ^:async dig-away!
+  "Dig the rail at pos (after the rules agree) and pick up what drops; one more fix is booked."
+  [c pos]
+  (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
+        [x y z] pos]
+    (if-not (:ok v)
+      (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan]))
+      (let [r (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}}))]
+        (if-not (= "dug" (.-status r))
+          (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c)))
+          (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
+              (loop [drops (array-seq (or (.-drops r) #js []))]
+                (when-let [d (first drops)]
+                  (await (ctx/act c :collect #js {:id (.-id d)}))
+                  (recur (rest drops))))))))))
+
+(defn ^:async fix-step!
+  "Deal with the settled wrong rail at pos: given up as :shape once the fixes are spent, else dig it (walking into reach
+  first); it is placed again in its turn."
+  [c ps from cells pos]
+  (let [cell (first (filter #(= pos (:pos %)) cells))]
+    (cond
+      (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget c)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
+                                                                   :continue)
+      (empty? (build/in-reach c [cell])) (await (walk-to! c ps from cells cell))
+      :else (do (await (dig-away! c pos))
+                :continue))))
+
+(defn finish!
+  "The build is over: its result is kept, its events are emitted and the job moves on to switching levers."
+  [c cells]
+  (let [result (build/summary c cells (ctx/mem c) true)]
+    (build/announce! c result)
+    (ctx/update-mem! c assoc :phase :switch :built result)
+    :continue))
+
+(defn ^:async step!
+  "One round of the builder over the judged cells of the plan: fix a settled wrong rail, else place from the head of the
+  work in reach, else walk on, else go toward cells nobody can see, else finish. Always :continue."
+  [c cells]
+  (let [p (:primitives c)
+        ps (mapv :pos (rail/line cells))
+        _ (when-not (:from (ctx/mem c)) (ctx/update-mem! c assoc :from (nearer-end c ps)))
+        from (:from (ctx/mem c))
+        closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        bad (remove #(contains? closed %) (wrong-shapes c ps))
+        buildable (build/buildable cells (build/carried-counts p) closed)
+        todo (build/placeable c (build/permitted c buildable))
+        underfoot (filter #((build/body-cells (u/self-pos c)) (:pos %)) buildable)
+        unseen (build/unseen cells closed)]
+    (cond
+      (seq bad) (await (fix-step! c ps from cells (first bad)))
+      (seq todo) (let [{:keys [placed next]} (await (place-run! c (work-order ps from todo)))]
+                   (if (and (zero? placed) next) (await (walk-to! c ps from cells next)) :continue))
+      (seq underfoot) (await (walk-to! c ps from cells (first (work-order ps from underfoot))))
+      (seq unseen) (await (walk-to! c ps from cells (first (work-order ps from unseen))))
+      :else (finish! c cells))))

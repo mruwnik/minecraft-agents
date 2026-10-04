@@ -1,0 +1,3 @@
+;; ProbeFight live cases for ad hoc triggers (POST /triggers with a :when condition): idle; one scenario trigger to see it come back after a restart
+{:register [{:id :scn-gold :when (> (inventory "gold_ingot") 50) :job (jobs.memory.remember {:kind :scn-fired :ttl-s 600})}]
+ :queue []}

@@ -106,7 +106,7 @@
           (await (core/tick! eng))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
           (await (core/tick! eng))
-          (is (= [] (:list (core/state eng))) "done once no shore is near"))))))
+          (is (= 1 (count (:list (core/state eng)))) "still listed: afloat, no shore in reach"))))))
 
 (defn call-names [p] (mapv #(.-name %) (array-seq (.. p -world -calls))))
 
@@ -119,8 +119,8 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)))
-          (is (= [] (:list (core/state eng))))
-          (is (= ["swim"] (call-names p))))))))
+          (is (= 1 (count (:list (core/state eng)))) "afloat, not done")
+          (is (= ["swim" "steer"] (call-names p)) "the swim surfaces, a steer hold keeps it up, no walk"))))))
 
 (deftest drowning-with-a-failing-swim-gives-up-with-one-warning
   (async done
@@ -265,32 +265,89 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))
 
-(deftest surfaced-in-open-water-with-no-shore-declines-without-a-warning
+(deftest surfaced-in-open-water-with-no-shore-stays-afloat-and-reports-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
           (core/submit! eng (list breathe defaults) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [] (:list (core/state eng))))
-          (is (= 1 (count (filter #(= :no_shore_near (:kind %)) @seen))))
-          (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen))
-          (is (= ["swim"] (call-names p))))))))
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= 1 (count (:list (core/state eng)))) "the job does not end while the body is in water")
+          (is (= 1 (count (filter #(= :afloat (:kind %)) @seen))) "one notice, however many rounds")
+          (is (= ["swim"] (distinct (take 1 (call-names p)))))
+          (is (= ["steer"] (distinct (rest (call-names p)))) "after the surfacing swim every act is a hold")
+          (is (= 5 (count (rest (call-names p)))) "one hold per round, no second swim"))))))
 
-(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds
+(def far-args (assoc defaults :shore-radius 2 :far-radius 10))
+
+(defn pond
+  "Water y 62..65 over a stone floor at y 61, for x and z within r of the origin; air above."
+  [r]
+  (into {} (for [x (range (- r) (inc r)) z (range (- r) (inc r))
+                 [y n] (cons [61 "stone"] (map (fn [y] [y "water"]) (range 62 66)))]
+             [(str x "," y "," z) n])))
+
+(defn bank
+  "Stone at y 61..64 for x from x0 to x1, z within r: land level with the water surface."
+  [x0 x1 r]
+  (into {} (for [x (range x0 (inc x1)) z (range (- r) (inc r)) y (range 61 65)] [(str x "," y "," z) "stone"])))
+
+(defn swim-to-bank!
+  "A steer that does what a working walk does, since the fake's walker cannot swim: the body ends on the bank cell
+  (7 65 0) and the act's decide function is asked at that pose until it is done."
+  [p args]
+  (let [self (.-self (.-state (.-world p)))
+        pose #js {:x 7.5 :y 65 :z 0.5 :vy 0 :onGround true :onClimbable false :inWater false :collided false :yaw 0 :t 0}
+        done (->> (repeatedly #((.-decide args) pose)) (take 200) (some #(.-done %)))]
+    (set! (.-pos self) #js {:x 7 :y 65 :z 0})
+    (set! (.-inWater self) false)
+    (if done #js {:status "done" :result done} #js {:status "timeout" :pose pose})))
+
+(deftest surfaced-with-a-bank-beyond-the-shore-radius-walks-out-with-the-walk-driver
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (pond 6) (bank 7 9 6))})]
+          (.override (.-world p) "steer" (fn [_ args _] (js/Promise.resolve (swim-to-bank! p args))))
+          (core/submit! eng (list breathe far-args) {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= [] (:list (core/state eng))) "done once out of the water")
+          (is (>= (:x (core/self-pos p)) 7) "stands on the bank")
+          (is (not (.-inWater (.self p))))
+          (is (= ["steer"] (distinct (rest (call-names p)))) "walked with steer, no moveTo")
+          (is (empty? (filter #(= :afloat (:kind %)) @seen))))))))
+
+(deftest surfaced-with-a-wall-all-round-stays-afloat-and-reports-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [x (range -7 8) z (range -7 8) y [65 66]
+                                  :when (= 7 (max (js/Math.abs x) (js/Math.abs z)))]
+                              [(str x "," y "," z) "stone"]))
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (pond 6) (bank 7 7 6) (bank -7 -7 6) wall)})]
+          (core/submit! eng (list breathe far-args) {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= 1 (count (:list (core/state eng)))))
+          (is (< (:x (core/self-pos p)) 7) "never left the pond")
+          (is (= 1 (count (filter #(= :afloat (:kind %)) @seen)))))))))
+
+(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds-and-stays-afloat
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                           :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})
-              ]
+                                           :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})]
           (.override (.-world p) "swim"
                      (fn ^:async f [_ args impl]
                        (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
           (core/submit! eng (list breathe defaults) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= [] (:list (core/state eng))))
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= 1 (count (:list (core/state eng)))) "afloat, not done: it would sink and fire again")
           (is (= 1 (count (filter #(= :no_shore (:kind %)) @seen))))
+          (is (empty? (filter #(= :afloat (:kind %)) @seen)) "the no_shore warn is the one notice")
+          (is (= "steer" (last (call-names p))))
           (is (not (some #{"moveTo"} (call-names p)))))))))
 
 (deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging

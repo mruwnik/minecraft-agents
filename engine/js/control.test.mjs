@@ -134,3 +134,20 @@ test('a socket path of 108 bytes rejects listen', async () => {
 test('close without listen is a no-op', async () => {
   await rig().control.close()
 })
+
+test('GET entities passes through an empty EDN body without a manual drive operation', async () => {
+  const socketPath = tmpSock()
+  const calls = []
+  const control = createControl({ socketPath, handle: (method, route, body) => {
+    calls.push([method, route, body])
+    return { status: 200, contentType: 'application/edn', text: '{:ok true :entities [] :ttl-ms 120000}\n' }
+  } })
+  await control.listen()
+  try {
+    const response = await request(socketPath, 'GET', '/entities')
+    assert.equal(response.status, 200)
+    assert.match(response.type, /application\/edn/)
+    assert.equal(response.text, '{:ok true :entities [] :ttl-ms 120000}\n')
+    assert.deepEqual(calls, [['GET', '/entities', null]])
+  } finally { await control.close() }
+})

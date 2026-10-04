@@ -77,6 +77,12 @@ const rangesOf = sorted => sorted.reduce((ranges, entry) => {
   return [...ranges, { lo: entry.id, hi: entry.id, entries: [entry] }]
 }, [])
 
+// The keys of `known` (a Map) that are not in `names`: one Set per call, so a sweep over n files stays linear
+export const missingFrom = (known, names) => {
+  const present = new Set(names)
+  return [...known.keys()].filter(name => !present.has(name))
+}
+
 // Per-column contributions, so a rewritten column replaces its counts: contributions Map(file -> { agent, counts, unknown }).
 // seen() is Map(name -> { count, first: { world, x, y, z, agent }, firsts? }); unknown ids are 'state:<lo>-<hi>' per contiguous range
 export function createTotals (world) {

@@ -1,9 +1,8 @@
 (ns dashboard.blueprint
-  "The blueprint library page's pure half: list rows, the cells of one layer, the legend, the bill, lint lines,
-  material role cards, and the isometric preview's faces. Ported from tools/dashboard/blueprint.mjs.
-  Input is the JSON /api/blueprints serves, keywordized: a detail has :name :hash :bp :bill :lint :errors :builds."
+  "Pure display of canonical EDN blueprints: cells, legend, quantities and schematic isometric faces."
   (:require [clojure.string :as str]
-            [dashboard.blockcolour :as bc]))
+            [dashboard.blockcolour :as bc]
+            [plan.shape :as shape]))
 
 (defn kname [k] (if (keyword? k) (subs (str k) 1) (str k)))
 
@@ -25,16 +24,39 @@
 (defn row-tokens [row] (vec (js/Array.from row)))
 
 ;; every cell of layer y that is part of the blueprint (a _ cell is not), west to east then north to south
+(defn native? [bp] (contains? bp :key))
+
+(defn layer-ys [bp]
+  (if (native? bp) (range (count (:layers bp))) (map :y (:layers bp))))
+
+(defn dimensions [bp]
+  (if (native? bp) (let [[width depth] (shape/layer-size bp)] {:width width :depth depth})
+      (select-keys bp [:width :depth])))
+
+(defn native-want [bp token]
+  (or (get (:key bp) token) (get (:key bp) (keyword token))))
+
+(defn native-cell [bp y dx dz token]
+  (let [want (native-want bp token)
+        block (shape/want-block want)
+        states (into {} (map (fn [[k v]] [k (shape/state-text v)])) (when (map? want) (dissoc want :block)))
+        air (or (#{:clear "clear"} want) (shape/air? block))]
+    {:dx dx :dz dz :y y :token token :name block :label (if air "clear" (shape/want-text want))
+     :want want :colour (when-not air (bc/alt-colour {:name block :states states})) :air (boolean air)}))
+
 (defn layer-cells [bp y]
-  (if-let [layer (first (filter #(= y (:y %)) (:layers bp)))]
-    (vec (for [[dz row] (map-indexed vector (:grid layer))
-               [dx token] (map-indexed vector (row-tokens row))
-               :when (not= "_" token)
-               :let [spec (spec-for bp token)
-                     alt (primary spec)]]
-           {:dx dx :dz dz :y y :token token :name (:name alt) :label (cell-label spec)
-            :colour (bc/alt-colour alt) :air (bc/air? (:name alt))}))
-    []))
+  (if (native? bp)
+    (vec (for [[dz row] (map-indexed vector (get (:layers bp) y []))
+               [dx token] (map-indexed vector (row-tokens row))]
+           (native-cell bp y dx dz token)))
+    (if-let [layer (first (filter #(= y (:y %)) (:layers bp)))]
+      (vec (for [[dz row] (map-indexed vector (:grid layer))
+                 [dx token] (map-indexed vector (row-tokens row))
+                 :when (not= "_" token)
+                 :let [spec (spec-for bp token) alt (primary spec)]]
+             {:dx dx :dz dz :y y :token token :name (:name alt) :label (cell-label spec)
+              :colour (bc/alt-colour alt) :air (bc/air? (:name alt))}))
+      [])))
 
 ;; what the page says under the cursor: the cell's offset from the anchor (x east, z south), then the block
 (defn hover-text [{:keys [dx y dz label token]}]
@@ -42,7 +64,7 @@
 
 ;; the tokens the layers actually use, first met from the lowest layer up, with how many cells each fills
 (defn legend-rows [bp]
-  (let [cells (mapcat #(layer-cells bp (:y %)) (sort-by :y (:layers bp)))
+  (let [cells (mapcat #(layer-cells bp %) (layer-ys bp))
         step (fn [{:keys [order rows]} {:keys [token name label colour air]}]
                (if air
                  {:order order :rows rows}
@@ -64,9 +86,10 @@
 
 (defn block-count [bill] (reduce + 0 (vals (:total bill))))
 
-(defn layer-height [bp] (inc (- (:y (last (:layers bp))) (:y (first (:layers bp))))))
+(defn layer-height [bp] (if (native? bp) (count (:layers bp))
+                          (inc (- (:y (last (:layers bp))) (:y (first (:layers bp)))))))
 
-(defn footprint [bp] (str (:width bp) "x" (:depth bp) "x" (layer-height bp)))
+(defn footprint [bp] (let [{:keys [width depth]} (dimensions bp)] (str width "x" depth "x" (layer-height bp))))
 
 (defn status-of [{:keys [bp lint]}]
   (let [n (count (:warnings lint))]
@@ -88,15 +111,15 @@
   (let [n (count builds)]
     (if-not bp
       {:name name :title "" :kind "" :footprint "" :layers 0 :blocks 0 :status "does not parse" :builds n}
-      {:name name :title (:title bp) :kind (str/join ", " (:tags bp)) :footprint (footprint bp)
+      {:name name :title (or (:title bp) (:id bp)) :kind (str/join ", " (:tags bp)) :footprint (footprint bp)
        :layers (count (:layers bp)) :blocks (block-count bill) :status (status-of detail) :builds n})))
 
-(defn bill-note [{:keys [bill]}]
+(defn bill-note [{:keys [bill bp]}]
   (let [per (str/join " · " (for [l (:layers bill)] (str "y" (:y l) ": " (reduce + 0 (vals (:items l))))))
         extras (concat (when (seq (:tools bill)) [(str "tools: " (str/join ", " (:tools bill)))])
                        (when (seq (:scaffold bill))
                          [(str "scaffold: " (str/join ", " (for [[k v] (:scaffold bill)] (str v " " (kname k)))))]))]
-    (str/join " · " (concat [(str (block-count bill) " items in all") (str "per layer " per)] extras))))
+    (str/join " · " (concat [(str (block-count bill) (if (native? bp) " block cells in all" " items in all")) (str "per layer " per)] extras))))
 
 ;; what the parser and lint said, as lines with a level; one ok line when there is nothing to say
 (defn lint-lines [{:keys [bp errors lint]}]
@@ -110,12 +133,15 @@
   (str/join " " (for [[k v] params] (str (kname k) "=" v))))
 
 (defn meta-facts [{:keys [bp hash]}]
-  (let [clearance (:clearance bp)]
+  (if (native? bp)
+    (vec (remove #(nil? (second %)) [["front" (kname (:front bp))] ["hash" hash] ["note" (:note bp)]
+                                    ["spots" (when (seq (:spots bp)) (str/join ", " (map kname (keys (:spots bp)))))]]))
+    (let [clearance (:clearance bp)]
     (vec (filter (fn [[_ v]] (not (str/blank? (str v))))
                  [["tags" (str/join ", " (:tags bp))] ["front" (:front bp)] ["foundation" (:foundation bp)]
                   ["clearance" (when (some? clearance) (str clearance " air layer" (when-not (= 1 clearance) "s")))]
                   ["difficulty" (:difficulty bp)] ["params" (params-text (:params bp))] ["by" (:by bp)]
-                  ["hash" hash] ["notes" (:notes bp)]]))))
+                  ["hash" hash] ["notes" (:notes bp)]])))))
 
 (defn build-text [{:keys [place x y z facing params by]}]
   (str place " (" x "," y "," z
@@ -226,7 +252,7 @@
           (recur (inc i) i (if crosses (not inside) inside)))))))
 
 (defn layer-range [bp]
-  (let [ys (map :y (:layers bp))] {:min (apply min ys) :max (apply max ys)}))
+  (let [ys (layer-ys bp)] {:min (apply min ys) :max (apply max ys)}))
 
 (defn preview-layer-text [max-y top]
   (if (= max-y top) (str " y" max-y " (whole building)") (str " y" max-y)))
@@ -235,6 +261,8 @@
   (str "x+" (:x cell) " y" (:y cell) " z+" (:z cell) " · " (:name cell)))
 
 (defn palette-label [{:keys [palette]}]
-  (if (= palette "resolved-declared-stock")
+  (if (= palette "native-edn")
+    "drag to rotate · exact EDN block palette; schematic block geometry"
+    (if (= palette "resolved-declared-stock")
     "drag to rotate · allocated from declared stock; site/scaffolds not checked"
-    "drag to rotate · illustrative material palette, not inventory selection"))
+    "drag to rotate · illustrative material palette, not inventory selection")))

@@ -1,6 +1,7 @@
 (ns jobs.survival.breathe
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
+            [engine.path.walk :as walk]
             [engine.triggers.suffocating :as s]))
 
 (def doc
@@ -23,17 +24,27 @@
   bobbing: it swims toward the nearest land cell within :shore-radius (feet y
   from one below to two above the own; feet and head cells air, the cell below solid,
   i.e. not air, water, lava, fire or magma); done when it stands out of the
-  water, a failed round (:no_shore warn after three) when the swim does not
-  get it out, and a clean decline (info :no_shore_near, no warn) when no land
-  is in reach. Gives up (:no_air or :no_way_out warn) after three failed
-  rounds; the suffocating trigger then fires it again.")
+  water. With no land in :shore-radius it looks within :far-radius and walks there with the
+  walk driver (engine.path.walk, which swims within its air limits). A body that cannot get out
+  (no land in reach, the driver finds no way, three failed shore swims) stays afloat instead of
+  ending, because a body with no job sinks and the trigger would fire again for ever: each round
+  holds jump for a few seconds (a steer act), one :afloat warn (:no_shore after three failed
+  swims) says so once, and the job ends when the body is out of the water. Gives up (:no_air or
+  :no_way_out warn) after three failed rounds when drowning with no air in reach; the
+  suffocating trigger then fires it again.")
 
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
                 :default s/default-min-oxygen}
    :radius {:doc "columns this far sideways are searched for air" :default 2}
    :reach {:doc "blocks above the feet the search climbs" :default 10}
-   :shore-radius {:doc "after surfacing, land this many blocks sideways is walked to" :default 6}})
+   :shore-radius {:doc "after surfacing, land this many blocks sideways is swum to" :default 6}
+   :far-radius {:doc "after surfacing, land beyond :shore-radius up to this many blocks sideways is walked to with the walk driver"
+                :default 24}})
+
+(def hold-ticks "Physics ticks (20 per second) one afloat hold keeps jump pressed." 100)
+(def hold-timeout-s "Bound of one hold's steer act, a little over its ticks." 8)
+(def far-timeout-s "Bound of one walk to far land." 60)
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
@@ -171,22 +182,59 @@
             (await (ctx/act c :dig (clj->js {:pos above}))))
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
-(defn ^:async head-for-land!
-  "Surfaced and still in water: swim toward the nearest land cell within
-  :shore-radius (the swim primitive with toward climbs out onto a rim the
-  pathfinder cannot path to). :done when out of the water or when no land is in reach
-  (info :no_shore_near); a failed round otherwise."
+(defn ^:async hold-afloat!
+  "Keep jump pressed for hold-ticks physics ticks (one steer act), which holds a body at the surface: with no input
+  it sinks, and the drowning trigger would fire again. Returns :continue."
+  [c]
+  (let [ticks (volatile! 0)
+        decide (fn [_pose]
+                 (if (>= (vswap! ticks inc) hold-ticks)
+                   #js {:done #js {}}
+                   #js {:controls #js {:jump true}}))]
+    (await (ctx/act c :steer (walk/steer-args hold-timeout-s decide)))
+    :continue))
+
+(defn afloat!
+  "The body cannot get out of the water: remember it (later rounds only hold) and, when why is given, warn once."
+  [c why]
+  (ctx/update-mem! c assoc :afloat true)
+  (when why
+    (ctx/emit! c :afloat :warn {:why why :text (str "afloat in water, no way out: " (name why))})))
+
+(defn ^:async walk-to-far-land!
+  "Walk to the nearest land within :far-radius with the walk driver. :done when it arrived out of the water, else
+  :continue after marking the body afloat (no land, no pathWorld, or the driver found no way)."
   [c]
   (let [p (:primitives c)
-        radius (:shore-radius (:args c))
-        target (nearest-land p (u/self-pos c) radius)]
+        target (when (walk/path-world p) (nearest-land p (u/self-pos c) (:far-radius (:args c))))]
     (if-not target
-      (do (ctx/emit! c :no_shore_near :info {:radius radius :text "no land within reach of the surfaced body"})
-          :done)
+      (do (afloat! c :no-land-in-reach) :continue)
+      (let [{:keys [result]} (await (walk/walk-to! c {:to [(:x target) (:y target) (:z target)] :range 0
+                                                      :weight walk/default-weight :timeout-s far-timeout-s}))]
+        (cond
+          (not (.-inWater (.self p))) :done
+          (= :arrived (:status result)) :continue
+          :else (do (afloat! c (or (:reason result) (:status result))) :continue))))))
+
+(defn ^:async head-for-land!
+  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius (the
+  swim primitive with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within
+  :far-radius; a body that cannot get out stays afloat. :done when out of the water."
+  [c]
+  (let [p (:primitives c)
+        target (nearest-land p (u/self-pos c) (:shore-radius (:args c)))]
+    (cond
+      (:afloat (ctx/mem c)) (await (hold-afloat! c))
+      (not target) (let [r (await (walk-to-far-land! c))]
+                     (if (= :continue r) (await (hold-afloat! c)) r))
+      :else
       (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
         (if (or (= "landed" (status r)) (not (.-inWater (.self p))))
           :done
-          (u/fail! c :no_shore "could not reach the nearest shore"))))))
+          (let [outcome (u/fail! c :no_shore "could not reach the nearest shore")]
+            (if (= :done outcome)
+              (do (afloat! c nil) (await (hold-afloat! c)))
+              outcome)))))))
 
 (defn note!
   "Write the :breathe entry once per job instance."

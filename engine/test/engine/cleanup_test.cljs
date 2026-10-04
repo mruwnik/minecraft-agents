@@ -157,11 +157,11 @@
 (defn setup
   "An engine over the fake world with the ledger written into body memory; a recording parent (j1) runs cleanup with
   args as its child and keeps its result in :out. :make starts another engine on the same body."
-  [{:keys [self blocks entries zones args] :or {zones []}}]
+  [{:keys [self blocks entries zones args drops] :or {zones []}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake {:self {:pos self} :blocks blocks :inventory []})
+        p (tu/fake (cond-> {:self {:pos self} :blocks blocks :inventory []} drops (assoc :drops drops)))
         out (atom :not-done)
         w (world/of-data {} {} zones)
         parent {:check (constantly true)
@@ -208,6 +208,20 @@
           (is (= [] (:open @out)))
           (is (= 6 (:collected @out)))
           (is (= 1 (count (of-kind seen :cleanup.done)))))))))
+
+(deftest a-removed-wall-torch-is-collected-as-the-torch-it-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "wall_torch"})
+                                                :drops {"wall_torch" "torch"}
+                                                :entries [(entry [0 64 0] :item "wall_torch")]})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 30))
+          (is (nil? (block p [0 64 0])))
+          (is (= [{:cell [0 64 0] :item "wall_torch"}] (:removed @out)))
+          (is (= 1 (:collected @out)) "the torch drop, not a wall_torch, is what the collect looks for")
+          (is (= [] (the-ledger eng))))))))
 
 (deftest side-blocks-are-dug-from-the-ground-and-a-far-one-after-a-walk
   (async done

@@ -5,6 +5,7 @@
   take! cuts the holder like a reflex and gives the ownership token to the driver; the scheduler
   stands still (core/paused?) until the lease ends. The manual state never reaches engine.edn."
   (:require [engine.core :as core]
+            [engine.entity-observations :as entity-observations]
             [engine.lease :as lease]
             [cljs.reader :as reader]
             [clojure.string :as str]
@@ -279,8 +280,10 @@
 (defn handle
   "Drive requests retain their JSON wire format. /world passes EDN to the owner-token action API."
   [eng opts method path body content-type]
-  (if (= path "/world")
-    (world-request eng method body content-type)
+  (cond
+    (= path "/entities") (entity-observations/request (:seen-entities eng) method)
+    (= path "/world") (world-request eng method body content-type)
+    :else
     (let [body-map (js->clj body :keywordize-keys true)]
       (if (and (= path "/drive") (= method "POST") (:active @(:world-ops eng))
                (contains? #{"set" "stop"} (:op body-map)))

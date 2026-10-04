@@ -2,6 +2,7 @@
   "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--state-dir <dir>]"
   (:require [engine.bodies :as bodies]
             [engine.core :as core]
+            [engine.entity-observations :as entity-observations]
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
             [engine.notes :as notes]
@@ -133,20 +134,24 @@
                                                     :onEvent on-view-event}}))
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
-        eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
-                          :body (:username cfg) :max-event-bytes events-max-bytes :world world})
+        base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
+                               :body (:username cfg) :max-event-bytes events-max-bytes :world world})
+        _ (reset! eng-ref base-eng)
+        _ (trigger-api/restore-conditions! base-eng)
+        _ (when (and plan (not restoring?)) (trigger-api/load-scenario! base-eng plan))
+        seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
+        eng (assoc base-eng :seen-entities seen)
         _ (reset! eng-ref eng)]
-    (trigger-api/restore-conditions! eng)
-    (when (and plan (not restoring?)) (trigger-api/load-scenario! eng plan))
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
       (try
         (await ((:listen event-socket)))
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
               control (await (start-control! root eng cfg lease-opts))
               stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
-          {:engine eng :stop (fn [] (stop-ticks) (takeover/close! eng) (some-> control .close)
+          {:engine eng :stop (fn [] ((:stop seen)) (stop-ticks) (takeover/close! eng) (some-> control .close)
                                ((:close event-socket)) (core/shutdown! eng) (.close p) (release))})
         (catch :default e
+          ((:stop seen))
           ((:close event-socket))
           (core/shutdown! eng)
           (await (.close p))

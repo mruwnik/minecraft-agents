@@ -9,12 +9,20 @@
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :collided}, feet position.
   State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving.
-  Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.")
+  Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.
+
+  What it can walk is stated once, in policy (:moves and the gap rules); planner-limits tells the planner the same, so a
+  search never plans a step the refusal below would turn away."
+  (:require [engine.path.planner-tuned :as planner]))
 
 (def policy
-  "Every number the executor uses."
-  {:max-replans 5          ; re-plans before giving up
+  "Every number the executor uses, and the step kinds it walks."
+  {:moves #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb
+            :swim :swim-up :swim-down :exit}
+   :max-replans 5          ; re-plans before giving up
    :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
+   :swim-no-progress-ticks 120  ; the same for a step in water: a body that plunged in comes up at ~1.2 blocks/s
+   :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
    :arrive-xz 0.35         ; final step: horizontal distance to px/pz
    :arrive-y 0.5           ; |feet y - stand-y| that counts as at a step's height
    :off-plan-xz 1.5        ; horizontal distance from the current leg that counts as off the plan
@@ -23,6 +31,9 @@
    :lookahead 3            ; later steps checked for an overshoot
    :jump-xz 1.3            ; a rise is jumped once within this of the aim point
    :rise 0.6               ; a rise above this (vanilla step height) needs a jump
+   :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
+                           ; by the client physics, which lifts the body by the step height first)
+   :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
@@ -35,14 +46,23 @@
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :sprint true})
 
+(def door-policy
+  "policy plus the steps that open a door, gate or trapdoor by hand: the walk driver that cuts a plan at them
+  (engine.path.pass) does the opening, the tick never sees one."
+  (update policy :moves conj :open))
+
 (def move-names
   [:start :walk :diagonal :jump :drop :gap :corner :climb-up :climb-down :jump-climb :open :swim :swim-up
    :swim-down :exit])
 
-(def supported-moves
-  #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb})
-
 (def sprint-moves #{:walk :diagonal})
+(def swim-moves #{:swim :swim-up :swim-down :exit})
+(def climb-moves #{:climb-up :climb-down :jump-climb})
+
+(defn water-step?
+  "A step in a water cell, or a swimming move (an exit ends on the bank)."
+  [{:keys [move swim]}]
+  (boolean (or swim (contains? swim-moves move))))
 
 ;; ---------------------------------------------------------------- steps
 
@@ -64,13 +84,13 @@
 
 (defn unsupported-kind
   "The kind of a step the executor cannot walk, or nil."
-  [{:keys [move opens swim]}]
+  [policy {:keys [move opens swim]}]
   (cond
-    (not (contains? supported-moves move)) move
-    (some? opens) :open
-    swim :swim))
+    (not (contains? (:moves policy) move)) move
+    (and (some? opens) (not (contains? (:moves policy) :open))) :open
+    (and swim (not (contains? (:moves policy) :swim))) :swim))
 
-(def takeoff-blockers #{:climb-up :climb-down :jump-climb})
+(def takeoff-blockers climb-moves)
 
 (defn gap-cells
   "[n dx dz] of a gap: the empty cells between takeoff and landing, and the step's direction; n is nil
@@ -101,16 +121,24 @@
       (refuse :gap-low-ceiling (str "gap jump at " (pr-str at) " under a ceiling lower than "
                                     (:gap-headroom policy) " blocks")))))
 
+(defn corner-refused
+  "The refusal for a :jump step that slides along a corner and has a :high-corner mark, or nil."
+  [{:keys [x y z high-corner]}]
+  (when high-corner
+    {:status :refused :kind :corner-jump :at [x y z]
+     :reason (str "corner jump at " (pr-str [x y z]) " past a block as high as the landing")}))
+
 (defn step-refusal
   "The refusal for step s (after prev), or nil: an unsupported step kind, else a :gap step that cannot
-  be jumped from prev."
+  be jumped from prev, else a corner jump that cannot slide clear."
   [policy prev s]
   (let [{:keys [x y z]} s]
-    (or (when-let [kind (unsupported-kind s)]
+    (or (when-let [kind (unsupported-kind policy s)]
           {:status :refused :kind kind :at [x y z]
            :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))})
         (when (and (= :gap (:move s)) (some? prev))
-          (gap-refused policy prev s)))))
+          (gap-refused policy prev s))
+        (corner-refused s))))
 
 (defn refusal
   "nil when every step can be walked, else the refusal for the first one that cannot."
@@ -119,23 +147,71 @@
        (map-indexed (fn [i s] (step-refusal policy (get steps (dec i)) s)))
        (some identity)))
 
+(defn low-ceiling?
+  "The gap step s from prev has a solid block within :gap-headroom of the takeoff's stand height over its
+  takeoff or gap cells. solid? is a fn [x y z] -> bool."
+  [policy prev s solid?]
+  (let [[n dx dz] (gap-cells prev s)
+        cells (map (fn [k] [(+ (:x prev) (* k (Math/sign dx))) (+ (:z prev) (* k (Math/sign dz)))])
+                   (range 0 (inc (or n 0))))
+        top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
+    (boolean (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells))))
+
+(defn high-corner?
+  "A diagonal jump to the landing cell lx ly lz (stand height lh in 1/16) from the cell x z slides out of the corner's
+  column while it is in the air: that works only when the blocks beside the diagonal are lower than the landing floor.
+  True when a side cell holds collision at the landing's feet or head height. solid? is a fn [x y z] -> bool."
+  [policy x z lx ly lz lh solid?]
+  (let [top (dec (Math/ceil (+ ly (/ lh 16) (:body-height policy))))]
+    (boolean (some (fn [[sx sz]] (some #(solid? sx % sz) (range ly (inc top))))
+                   [[lx z] [x lz]]))))
+
+(defn with-high-corners
+  "Add :high-corner to each :corner :jump step whose corner is too high to slide past (high-corner?). solid? is a fn
+  [x y z] -> bool."
+  [policy steps solid?]
+  (vec (map-indexed
+        (fn [i s]
+          (cond-> s
+            (and (pos? i) (= :jump (:move s)) (:corner s)
+                 (let [prev (nth steps (dec i))]
+                   (high-corner? policy (:x prev) (:z prev) (:x s) (:y s) (:z s) (:h s) solid?)))
+            (assoc :high-corner true)))
+        steps)))
+
 (defn with-gap-ceilings
   "Add :low-ceiling to each gap step whose takeoff or gap cells have a solid block within :gap-headroom
   of the takeoff's stand height. solid? is a fn [x y z] -> bool."
   [policy steps solid?]
   (vec (map-indexed
         (fn [i s]
-          (if-not (and (pos? i) (= :gap (:move s)))
-            s
-            (let [prev (nth steps (dec i))
-                  [n dx dz] (gap-cells prev s)
-                  cells (map (fn [k] [(+ (:x prev) (* k (Math/sign dx))) (+ (:z prev) (* k (Math/sign dz)))])
-                             (range 0 (inc (or n 0))))
-                  top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
-              (if (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells)
-                (assoc s :low-ceiling true)
-                s))))
+          (cond-> s
+            (and (pos? i) (= :gap (:move s)) (low-ceiling? policy (nth steps (dec i)) s solid?))
+            (assoc :low-ceiling true)))
         steps)))
+
+;; ---------------------------------------------------------------- what the planner may plan
+
+(def planner-kinds
+  "Planner move kinds (planner-tuned's AVOID bits) and the steps they plan."
+  [[planner/AVOID-CLIMB #{:climb-up :climb-down :jump-climb}]
+   [planner/AVOID-WATER #{:swim :swim-up :swim-down :exit}]
+   [planner/AVOID-OPEN #{:open}]])
+
+(defn planner-limits
+  "The planner's options.limits for this policy: kinds, the planner kinds with a step the policy cannot walk; gap, a
+  test of each gap jump (takeoff cell x y z, stand h in 1/16, reached by move code; landing lx ly lz lh) by gap-refused
+  with the takeoff's ceiling; corner, a test of each jump that slides along a corner (takeoff x y z h, landing lx ly lz lh)
+  by high-corner?. solid? is a fn [x y z] -> bool."
+  [policy solid?]
+  #js {:kinds (reduce + 0 (keep (fn [[bit moves]] (when-not (every? (:moves policy) moves) bit)) planner-kinds))
+       :gap (fn [x y z h move lx ly lz lh]
+              (let [prev {:x x :y y :z z :h h :move (nth move-names move)}
+                    step {:x lx :y ly :z lz :h lh :move :gap}]
+                (nil? (gap-refused policy prev (cond-> step
+                                                 (low-ceiling? policy prev step solid?) (assoc :low-ceiling true))))))
+       :corner (fn [x _y z _h lx ly lz lh]
+                 (not (high-corner? policy x z lx ly lz lh solid?)))})
 
 ;; ---------------------------------------------------------------- corner slides
 
@@ -225,26 +301,40 @@
 ;; ---------------------------------------------------------------- tick
 
 (defn off-plan?
-  "Too far from the leg (previous step's point to the aim), or too far below or above it."
-  [policy prev step [ax az] {:keys [x y z]}]
+  "Too far from the leg (previous step's point to the aim), or too far below or above it. A body in water that is
+  below the leg sank or plunged in; it comes up again, so only the land counts that as falling off."
+  [policy prev step [ax az] {:keys [x y z in-water]}]
   (let [y1 (stand-y prev) y2 (stand-y step)]
     (or (> (dist-to-segment x z (:px prev) (:pz prev) ax az) (:off-plan-xz policy))
-        (< y (- (min y1 y2) (:off-plan-below policy)))
+        (and (not in-water) (< y (- (min y1 y2) (:off-plan-below policy))))
         (> y (+ (max y1 y2) (:off-plan-above policy))))))
+
+(defn no-progress-ticks [policy step]
+  (if (water-step? step) (:swim-no-progress-ticks policy) (:no-progress-ticks policy)))
 
 (defn stuck-why [{:keys [i tick since steps]}]
   (let [s (nth steps i)]
     (str "no progress on step " i " (" (pr-str (:move s)) " to " (pr-str [(:x s) (:y s) (:z s)]) ") for "
          (.toFixed (/ (- tick since) 20) 1) " s")))
 
-(defn jump? [policy {:keys [move] :as step} {:keys [y on-ground on-climbable]} dist]
-  (let [sy (stand-y step)]
+(defn jump? [policy {:keys [move] :as step} {:keys [y on-ground on-climbable collided]} dist]
+  (let [sy (stand-y step)
+        rise (- sy y)]
     (case move
       (:climb-up :jump-climb) (< y (+ sy (:climb-over policy)))
       :climb-down false
-      (boolean (and (> (- sy y) (:rise policy))
+      (boolean (and (or (> rise (:rise policy))
+                        (and collided (> rise (:pressed-rise policy))))
                     (<= dist (:jump-xz policy))
                     (or on-ground on-climbable))))))
+
+(defn swim-jump?
+  "In water, jump (swim up) while the feet are below the step's height plus :swim-float: at the surface that keeps the
+  head out, under it the body at the step's level; onto a bank the water's lift and the push at its edge carry the body
+  out. On a :swim-down the body sinks."
+  [policy {:keys [move] :as step} {:keys [y]}]
+  (and (not= :swim-down move)
+       (< y (+ (stand-y step) (:swim-float policy)))))
 
 (defn gap-rule
   "The :gap-jump entry for the gap step i of steps; for a gap down, its :gap-jump-down entry when there is one."
@@ -268,12 +358,15 @@
                       (< past (:gap-past policy))))
         (jump? policy step pose dist))))
 
-(defn sprint? [policy steps i {:keys [on-ground]}]
+(defn sprint?
+  "Never in water: sprinting there is the server's swimming pose, a body one block high."
+  [policy steps i {:keys [on-ground in-water]}]
   (let [window (take 3 (drop i steps))]
     (boolean (if (= :gap (:move (first window)))
                (and (:sprint policy) (:sprint (gap-rule policy steps i)))
                (and (:sprint policy)
                     on-ground
+                    (not in-water)
                     (= 3 (count window))
                     (every? #(contains? sprint-moves (:move %)) window)
                     (not-any? #(some? (:cx %)) window))))))
@@ -291,9 +384,10 @@
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward moving? :back false :left false :right false
-                :jump (if (= :gap (:move step))
-                         (gap-jump? policy steps i pose dist)
-                         (jump? policy step pose dist))
+                :jump (cond
+                        (= :gap (:move step)) (gap-jump? policy steps i pose dist)
+                        (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)
+                        :else (jump? policy step pose dist))
                 :sneak false
                 :sprint (sprint? policy steps i pose)}
      :yaw yaw' :pitch 0}))
@@ -303,12 +397,15 @@
   [steps _now-tick]
   {:steps steps :i (min 1 (max 0 (dec (count steps)))) :since 0 :tick 0 :yaw nil})
 
-(defn arrived? [policy steps i {:keys [x z on-ground on-climbable] :as pose}]
+(defn arrived?
+  "At the final step: reached, close to its point, and held there: on the ground, on a climbable, or (a final step in a
+  water cell) floating."
+  [policy steps i {:keys [x z on-ground on-climbable in-water] :as pose}]
   (let [final (nth steps i)]
     (and (= i (dec (count steps)))
          (reached? policy final pose)
          (<= (dist-xz x z (:px final) (:pz final)) (:arrive-xz policy))
-         (boolean (or on-ground on-climbable)))))
+         (boolean (or on-ground on-climbable (and in-water (:swim final)))))))
 
 (defn tick
   "One physics tick: the controls for this pose, or :done."
@@ -328,7 +425,7 @@
       (and (pos? i) (off-plan? policy (nth steps (dec i)) step aim pose))
       {:state state' :done {:status :off-plan :at at :step i}}
 
-      (> (- n since) (:no-progress-ticks policy))
+      (> (- n since) (no-progress-ticks policy step))
       {:state state'
        :done {:status :stuck :at at :step i :move (:move step) :target [(:x step) (:y step) (:z step)]
               :why (stuck-why state')}}

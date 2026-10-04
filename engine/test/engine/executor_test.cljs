@@ -1,7 +1,8 @@
 (ns engine.executor-test
   "engine.path.executor: the pure decision half of walking a planned path."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.path.executor :as ex]))
+            [engine.path.executor :as ex]
+            [engine.path.planner-tuned :as planner]))
 
 (def p ex/policy)
 
@@ -64,13 +65,43 @@
                          (step 2 63 1 :climb-up) (step 2 64 1 :jump-climb) (step 2 63 1 :climb-down)
                          (step 3 63 2 :corner) (step 3 63 3 :diagonal)]))))
 
+(def swim-plan
+  "Drop into a pond, swim along, dive, come up, exit onto the far bank."
+  [(step 0 63 0 :start) (step 1 62 0 :drop {:swim true}) (step 2 62 0 :swim {:swim true})
+   (step 2 61 0 :swim-down {:swim true}) (step 2 62 0 :swim-up {:swim true})
+   (step 3 62 1 :corner {:swim true :corner true}) (step 4 63 1 :exit)])
+
+(deftest refusal-swimming-is-walked
+  (is (nil? (ex/refusal p swim-plan)))
+  (is (nil? (ex/refusal p [(step 5 62 0 :start {:swim true}) (step 6 63 0 :jump)]))))
+
 (deftest refusal-unsupported-kinds
   (are [steps kind reason at]
        (= {:status :refused :kind kind :at at :reason reason} (ex/refusal p steps))
     [(step 0 64 0 :start) (step 1 64 0 :open)] :open "unsupported step kind :open at [1 64 0]" [1 64 0]
-    [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1}]})] :open "unsupported step kind :open at [1 64 0]" [1 64 0]
-    [(step 0 64 0 :start) (step 1 64 0 :walk {:swim true})] :swim "unsupported step kind :swim at [1 64 0]" [1 64 0]
-    [(step 0 64 0 :start) (step 1 64 0 :swim-up)] :swim-up "unsupported step kind :swim-up at [1 64 0]" [1 64 0]))
+    [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1}]})] :open "unsupported step kind :open at [1 64 0]" [1 64 0]))
+
+(deftest refusal-the-door-policy-walks-steps-that-open-something
+  (are [steps] (nil? (ex/refusal ex/door-policy steps))
+    [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1 :y 64 :z 0}]})]
+    [(step 0 64 0 :start) (step 1 65 0 :open {:opens [{:x 1 :y 65 :z 0}]})])
+  (is (= (conj (:moves p) :open) (:moves ex/door-policy)))
+  (is (= (dissoc ex/door-policy :moves) (dissoc p :moves))))
+
+(deftest planner-limits-do-not-avoid-opening-under-the-door-policy
+  (are [policy kinds] (= kinds (.-kinds (ex/planner-limits policy (constantly false))))
+    p 4
+    ex/door-policy 0))
+
+(def dry-moves (apply disj (:moves p) [:swim :swim-up :swim-down :exit]))
+
+(deftest refusal-a-policy-that-cannot-swim
+  (are [steps kind at]
+       (= {:status :refused :kind kind :at at :reason (str "unsupported step kind " kind " at " (pr-str at))}
+          (ex/refusal (assoc p :moves dry-moves) steps))
+    [(step 0 64 0 :start) (step 1 64 0 :walk {:swim true})] :swim [1 64 0]
+    [(step 0 64 0 :start {:swim true}) (step 1 64 0 :walk)] :swim [0 64 0]
+    [(step 0 64 0 :start) (step 1 64 0 :swim-up)] :swim-up [1 64 0]))
 
 (deftest refusal-names-the-first
   (is (= :open (:kind (ex/refusal p [(step 0 64 0 :start) (step 1 64 0 :open) (step 2 64 0 :swim)])))))
@@ -375,6 +406,43 @@
     (is (= :gap-low-ceiling (:kind (ex/refusal p steps))))
     (is (nil? (ex/refusal p (ex/with-gap-ceilings p (gap-steps 2) (solid-set #{[14 66 0]})))))))
 
+;; planner limits
+
+(def swim-moves [:swim :swim-up :swim-down :exit])
+
+(deftest planner-limits-kinds-are-the-moves-the-policy-lacks
+  (are [moves kinds] (= kinds (.-kinds (ex/planner-limits (assoc p :moves moves) (constantly false))))
+    (:moves p) planner/AVOID-OPEN
+    (conj (:moves p) :open) 0
+    dry-moves (+ planner/AVOID-WATER planner/AVOID-OPEN)
+    (disj (:moves p) :swim-down) (+ planner/AVOID-WATER planner/AVOID-OPEN)
+    (into dry-moves (conj swim-moves :open)) 0
+    (disj (:moves p) :climb-down) (+ planner/AVOID-CLIMB planner/AVOID-OPEN)))
+
+(defn gap-allowed?
+  "The planner-limits gap test for a jump from (10 64 0), stand h, reached by move code, to n cells along +x."
+  [n & {:keys [landing-y move h solid] :or {landing-y 64 move 1 h 0 solid #{}}}]
+  ((.-gap (ex/planner-limits p (solid-set solid))) 10 64 0 h move (+ 11 n) landing-y 0 0))
+
+(deftest planner-limits-gap-test-is-the-refusal
+  (are [args allowed?] (= allowed? (apply gap-allowed? args))
+    [1] true
+    [2] true
+    [3] true
+    [1 :landing-y 63] true
+    [2 :landing-y 63] true
+    [3 :landing-y 63] true
+    [4] false
+    [1 :landing-y 65] false
+    [2 :move 7] false
+    [2 :move 8] false
+    [2 :move 9] false
+    [2 :solid #{[10 66 0]}] false
+    [2 :solid #{[12 66 0]}] false
+    [2 :solid #{[13 66 0]}] true
+    [2 :h 8 :solid #{[10 67 0]}] false
+    [2 :solid #{[10 67 0]}] true))
+
 (deftest past-edge-in-all-directions
   (are [landing x z expected] (approx= expected (ex/past-edge (step 10 64 0 :walk) landing (pose x 64 z)))
     (step 12 64 0 :gap) 10.5 0.5 -0.5
@@ -462,6 +530,106 @@
   (let [r (ex/tick p (state-at (gap-steps 1) 2) (pose 13.0 64 0.5 {:on-ground false}))]
     (is (yaw-eq? (:yaw r) (/ Math/PI 2)))))
 
+;; swimming
+
+(defn wet
+  "A pose floating in water at feet height y."
+  [x y z & {:as extra}]
+  (pose x y z (merge {:on-ground false :in-water true} extra)))
+
+(def pond
+  "Start on the bank, drop into water at (1 62 0), swim to (3 62 0), exit onto the bank at (4 63 0)."
+  [(step 0 63 0 :start) (step 1 62 0 :drop {:swim true}) (step 2 62 0 :swim {:swim true})
+   (step 3 62 0 :swim {:swim true}) (step 4 63 0 :exit) (step 5 63 0 :walk)])
+
+(defn swim-controls
+  "The controls on step i of steps at a pose."
+  [steps i ps]
+  (controls-of (ex/tick p (state-at steps i) ps)))
+
+(deftest swimming-holds-the-feet-near-the-step-height
+  (are [y jump?] (= jump? (:jump (swim-controls pond 2 (wet 1.6 y 0.5))))
+    61.5 true
+    62.0 true
+    62.15 true
+    62.25 false
+    62.6 false))
+
+(deftest swimming-moves-forward-towards-the-step
+  (let [r (ex/tick p (state-at pond 2) (wet 1.6 62 0.5))]
+    (is (true? (:forward (controls-of r))))
+    (is (yaw-eq? (:yaw r) (- (/ Math/PI 2))))))
+
+(deftest swim-down-lets-the-body-sink
+  (let [steps [(step 2 62 0 :start {:swim true}) (step 2 61 0 :swim-down {:swim true})]]
+    (are [y] (false? (:jump (swim-controls steps 1 (wet 2.5 y 0.5))))
+      62.0
+      61.8
+      61.6)))
+
+(deftest swim-up-rises
+  (let [steps [(step 2 60 0 :start {:swim true}) (step 2 61 0 :swim-up {:swim true})]]
+    (is (true? (:jump (swim-controls steps 1 (wet 2.5 60.2 0.5)))))))
+
+(deftest exit-holds-jump-while-in-the-water
+  (are [ps jump?] (= jump? (:jump (swim-controls pond 4 ps)))
+    (wet 3.6 62.2 0.5) true
+    (wet 3.9 62.7 0.5) true
+    (pose 4.1 63.0 0.5) false))
+
+(deftest wading-out-jumps-in-the-water-without-ground
+  (let [steps [(step 5 62 0 :start {:swim true}) (step 6 63 0 :jump)]]
+    (are [ps jump?] (= jump? (:jump (swim-controls steps 1 ps)))
+      (wet 5.3 62.4 0.5) true
+      (wet 5.3 62.0 0.5 :on-ground true) true
+      (pose 5.3 62.4 0.5 {:on-ground false}) false)))
+
+(deftest no-sprint-in-water
+  (let [steps (vec (cons (step 0 62 0 :start {:swim true}) (map #(step % 62 0 :walk {:swim true}) (range 1 6))))]
+    (is (false? (:sprint (swim-controls steps 1 (wet 0.6 62 0.5 :on-ground true)))))
+    (is (false? (:sprint (swim-controls straight 1 (pose 0.6 64 3.5 {:in-water true})))))))
+
+(deftest a-climb-in-water-keeps-the-climb-rules
+  (let [steps [(step 0 64 3 :start) (step 0 62 3 :climb-down {:px 0.5 :pz 3.5})]]
+    (is (false? (:jump (swim-controls steps 1 (wet -0.2 61.9 3.5 :on-climbable true)))))))
+
+(deftest swim-steps-are-reached-while-floating
+  (are [s ps reached?] (= reached? (ex/reached? p s ps))
+    (step 2 62 0 :swim {:swim true}) (wet 2.5 62.3 0.5) true
+    (step 2 62 0 :swim {:swim true}) (wet 2.5 61.6 0.5) true
+    (step 2 62 0 :swim {:swim true}) (wet 2.5 62.6 0.5) false
+    (step 2 61 0 :swim-up {:swim true}) (wet 2.5 60.6 0.5) true))
+
+(deftest a-floating-body-arrives-at-a-final-swim-step
+  (let [steps [(step 0 62 0 :start {:swim true}) (step 1 62 0 :swim {:swim true})]]
+    (are [ps status] (= status (:status (:done (ex/tick p (state-at steps 1) ps))))
+      (wet 1.5 62.2 0.5) :arrived
+      (pose 1.5 62.2 0.5 {:on-ground false}) nil
+      (wet 1.5 62.7 0.5) nil)))
+
+(deftest a-final-land-step-needs-the-ground-even-from-the-water
+  (is (nil? (:done (ex/tick p (state-at pond 5) (wet 5.5 63.0 0.5))))))
+
+(deftest sinking-in-water-is-not-falling-off-the-plan
+  (are [ps status] (= status (:status (:done (ex/tick p (state-at pond 2) ps))))
+    (wet 1.7 59.0 0.5) nil
+    (pose 1.7 59.0 0.5 {:on-ground false}) :off-plan
+    (wet 1.7 62.0 2.5) :off-plan
+    (wet 1.7 66.0 0.5) :off-plan))
+
+(deftest a-swim-step-gets-longer-before-stuck
+  (let [ticks (:swim-no-progress-ticks p)
+        ps (wet 1.6 59.0 0.5)
+        stuck? (fn [tick] (= :stuck (:status (:done (ex/tick p (state-at pond 2 :tick tick) ps)))))]
+    (is (> ticks (:no-progress-ticks p)))
+    (is (false? (stuck? (dec ticks))))
+    (is (true? (stuck? ticks)))))
+
+(deftest a-land-step-out-of-the-water-keeps-the-land-limit
+  (let [steps [(step 5 62 0 :start {:swim true}) (step 6 63 0 :jump)]
+        stuck? (fn [tick] (= :stuck (:status (:done (ex/tick p (state-at steps 1 :tick tick) (wet 5.3 62.4 0.5))))))]
+    (is (true? (stuck? (:no-progress-ticks p))))))
+
 ;; re-plan bookkeeping
 
 (deftest after-walk-branches
@@ -472,3 +640,47 @@
     4 {:status :off-plan :at [1 2 3] :step 4} {:replan 5}
     5 {:status :off-plan :at [1 2 3] :step 4} {:finish {:status :gave-up :reason :replan-limit :replans 5 :at [1 2 3]}}
     3 {:status :stuck :at [1 2 3] :step 4 :why "w"} {:finish {:status :stuck :at [1 2 3] :step 4 :why "w" :replans 3}}))
+
+;; a small step under a low ceiling: pressed on the block ahead, any rise is jumped
+
+(def small-rise-steps [(step 0 64 3 :start) (step 3 64 3 :walk {:h 1 :px 3.5 :pz 3.5})])
+
+(deftest jump-for-a-small-rise-only-when-pressed-on-the-block
+  (are [ps jump?] (= jump? (:jump (controls-of (ex/tick p (state-at small-rise-steps 1) ps))))
+    (pose 2.4 64 3.5) false
+    (pose 2.4 64 3.5 {:collided true}) true
+    (pose 2.4 64 3.5 {:collided true :on-ground false}) false
+    (pose 2.4 64.0625 3.5 {:collided true}) false))
+
+;; corner jumps: a diagonal jump that slides along a corner needs the side cells clear at the landing's level
+
+(defn corner-allowed?
+  "The planner-limits corner test for a jump from (10 64 0) to (11 65 1) with solid cells."
+  [solid]
+  ((.-corner (ex/planner-limits p (solid-set solid))) 10 64 0 0 11 65 1 0))
+
+(deftest planner-limits-corner-test-is-the-high-corner-rule
+  (are [solid allowed?] (= allowed? (corner-allowed? solid))
+    #{} true
+    #{[11 64 0]} true      ; a corner block no higher than the landing's floor
+    #{[11 65 0]} false     ; collision at the landing's feet level
+    #{[10 66 1]} false     ; ... or at its head level
+    #{[11 67 0]} true      ; above the body
+    #{[10 65 1]} false))
+
+(def corner-jump-steps [(step 10 64 0 :start) (step 11 65 1 :jump {:corner true})])
+
+(deftest with-high-corners-marks-corner-jumps-with-a-high-side
+  (are [solid marked?] (= marked? (boolean (:high-corner (nth (ex/with-high-corners p corner-jump-steps (solid-set solid)) 1))))
+    #{[11 64 0]} false
+    #{[11 65 0]} true
+    #{[11 66 0]} true))
+
+(deftest with-high-corners-leaves-other-steps-alone
+  (let [steps [(step 10 64 0 :start) (step 11 65 1 :jump) (step 12 65 1 :walk {:corner true})]]
+    (is (= steps (ex/with-high-corners p steps (solid-set #{[11 65 0] [12 65 0]}))))))
+
+(deftest refusal-names-a-high-corner-jump
+  (let [steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]}))]
+    (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal p steps) [:status :kind :at])))
+    (is (nil? (ex/refusal p corner-jump-steps)))))
