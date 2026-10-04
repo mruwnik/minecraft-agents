@@ -85,6 +85,3 @@
   (compat/to-js (entities/options (vec argv))))
 (defn entities-project [request snapshot]
   (compat/to-js (entities/project (compat/from-js request) (compat/from-js snapshot))))
-
-(defn inventory-summary [inventory]
-  (compat/to-js (inventory/summary (compat/from-js inventory))))
