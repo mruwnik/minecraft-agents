@@ -11,7 +11,7 @@
 (def body-tools (set (take 7 commands)))
 (def format-id :minecraft-agent-workspace/v1)
 (def wrapper-marker "// Generated Minecraft agent workspace tool v1\n")
-(def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/. --update-tools refreshes generated wrappers only; bindings cannot change.")
+(def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools] [--adopt-existing]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/. --update-tools refreshes generated wrappers only; bindings cannot change.\n--adopt-existing requires a canonical body folder and matching config.json; it preserves existing documents and runtime files.")
 (defn fail! [message] (throw (js/Error. message)))
 (defn file-exists? [file] (try (.lstatSync fs file) true (catch :default e (if (= "ENOENT" (.-code e)) false (throw e)))))
 (defn regular! [file directory?]
@@ -55,6 +55,7 @@
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"
        "You operate body `" body "` in world `" world "`. Read `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"
+       "Prefer the bound `bin/` tools even when older briefings mention `mc`. Read any existing `BRIEFING.md` and `journal.md` for mission history. Legacy `mc` and `start` launchers are obsolete; use `bin/` for agent commands. Body lifecycle is separate; workspace generation does not start or restart a body.\n\n"
        "Run `./bin/<tool>` here, or use its absolute path from elsewhere. Body/world/worlds/repository are bound; do not supply them. Each tool has `--help`. Bindings guide routing, not a security sandbox.\n\n"
        "Start with `./bin/observe`, then `./bin/observe inventory` or `./bin/entities` as needed. Discover jobs and triggers with `./bin/observe catalog jobs` and `./bin/observe catalog triggers`; inspect exact catalog entries before submitting unfamiliar work.\n\n"
        "Use `./bin/jobs` for managed work and `./bin/triggers` for event rules. Follow completion with `./bin/observe --wait --watch j12`. Use `./bin/say 'message'` to communicate.\n\n"
@@ -62,12 +63,24 @@
        "Shared memory: `./bin/map`, `./bin/plans`, `./bin/blueprints`, and `./bin/world-changes`. Read records before edits and use their revisions and an explicit author. `./bin/time clock` reads world time; `./bin/time dawn` waits for daylight.\n\n"
        "Observe before acting, protect existing builds and starter stock, and record task constraints in briefing.md. The repository's AGENTS.md governs code changes.\n"))
 
+(defn adoption! [dir {:keys [worlds world body]}]
+  (let [expected (.resolve path worlds world "agents" body)
+        config (.join path dir "config.json")]
+    (when-not (= dir expected)
+      (fail! "--adopt-existing requires the canonical worlds/<world>/agents/<body> directory"))
+    (when-not (and (file-exists? dir) (= dir (.realpathSync fs dir)))
+      (fail! "--adopt-existing requires an existing directory without symlinked parents"))
+    (regular! config false)
+    (when-not (file-exists? config) (fail! "--adopt-existing requires config.json"))
+    (when-not (= body (.-username (js/JSON.parse (.readFileSync fs config "utf8"))))
+      (fail! "config.json username differs from workspace body"))))
+
 (defn generate! [argv repo]
   (let [{:keys [positionals values]} (map-tool/parse-options (vec argv)
          {:body {:type "string"} :world {:type "string"} :worlds {:type "string"} :state {:type "string"}
-          :update-tools {:type "boolean"}})
+          :update-tools {:type "boolean"} :adopt-existing {:type "boolean"}})
         [destination & extra] positionals
-        {:keys [body world worlds state update-tools]} values
+        {:keys [body world worlds state update-tools adopt-existing]} values
         repo (.resolve path repo)]
     (when (and worlds state) (fail! "choose --worlds or legacy --state"))
     (when-not (and destination (empty? extra)
@@ -79,13 +92,14 @@
           contents (into {} (map (fn [command] [(.join path bin command) (wrapper repo command)]) commands))
           had-context? (file-exists? context-file)]
       (regular! dir true)
-      (when (and (file-exists? dir) (not had-context?) (seq (array-seq (.readdirSync fs dir))))
+      (when adopt-existing (adoption! dir ctx))
+      (when (and (not adopt-existing) (file-exists? dir) (not had-context?) (seq (array-seq (.readdirSync fs dir))))
         (fail! "destination is not an empty directory or an existing generated workspace"))
       (when (and had-context? (not= ctx (context! context-file)))
         (fail! "workspace bindings differ; choose a new directory"))
       ;; Preflight every destination; never follow symlinks or replace unknown files.
       (doseq [directory [bin (.join path dir "notes")]] (regular! directory true))
-      (doseq [file [(.join path dir "AGENTS.md") (.join path dir "briefing.md")]] (regular! file false))
+      (doseq [file [(.join path dir "AGENTS.md") (.join path dir "WORKSPACE.md") (.join path dir "briefing.md") (.join path dir "BRIEFING.md")]] (regular! file false))
       (doseq [[file content] contents]
         (regular! file false)
         (when (file-exists? file)
@@ -97,10 +111,14 @@
       (.mkdirSync fs bin #js {:recursive true})
       (.mkdirSync fs (.join path dir "notes") #js {:recursive true})
       (when-not had-context? (.writeFileSync fs context-file (str (pr-str ctx) "\n") #js {:flag "wx"}))
-      (doseq [[file text] [[(.join path dir "AGENTS.md") (agents-text ctx)]
-                         [(.join path dir "briefing.md") "# Briefing\n\nRecord the mission, constraints, current priorities, and handoff here.\n"]]]
+      (doseq [[file text] [[(.join path dir "AGENTS.md") "# Agent workspace\n\nRead WORKSPACE.md for your body/world bindings and tool instructions, then briefing.md and relevant notes/ before acting. The repository AGENTS.md governs code changes.\n"]
+                         [(.join path dir "WORKSPACE.md") (agents-text ctx)]
+                         [(.join path dir "briefing.md")
+                          (if (file-exists? (.join path dir "BRIEFING.md"))
+                            "# Briefing\n\nRead [the existing mission briefing](BRIEFING.md) and any journal.md before acting. Record new observations and handoffs in notes/. Workspace tool instructions are in WORKSPACE.md.\n"
+                            "# Briefing\n\nRecord the mission, constraints, current priorities, and handoff here.\n")]]]
         (when-not (file-exists? file) (.writeFileSync fs file text #js {:flag "wx"})))
       (doseq [[file content] contents]
         (when (or (not (file-exists? file)) update-tools) (.writeFileSync fs file content #js {:mode 493}))
         (.chmodSync fs file 493))
-      (clj->js {:ok true :directory dir :body body :world world :updated-tools (boolean update-tools)}))))
+      (clj->js {:ok true :directory dir :body body :world world :updated-tools (boolean update-tools) :adopted-existing (boolean adopt-existing)}))))

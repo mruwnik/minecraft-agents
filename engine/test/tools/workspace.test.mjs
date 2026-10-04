@@ -212,3 +212,44 @@ test('generated AOT tools stay within the approximately 500 ms startup budget', 
     assert.ok(samples[2] < 500, `${command} median startup ${samples[2]} ms exceeds budget`)
   }
 })
+
+test('explicit adoption preserves existing body documents and runtime files', t => {
+  const f = fixture(t)
+  const body = path.join(f.worlds, 'w/agents/B')
+  fs.mkdirSync(path.join(body, 'notes'), { recursive: true })
+  const originals = { 'config.json': JSON.stringify({ username: 'B', apiPort: 42 }),
+    'AGENTS.md': 'existing instructions', 'BRIEFING.md': 'mission', 'journal.md': 'history',
+    'notes/handoff.md': 'handoff', 'bot.log': 'runtime log' }
+  for (const [file, text] of Object.entries(originals)) fs.writeFileSync(path.join(body, file), text)
+  const args = [body, '--body', 'B', '--world', 'w', '--worlds', f.worlds]
+  assert.throws(() => tools.workspaceGenerate(args, repo), /not an empty directory/)
+  assert.equal(tools.workspaceGenerate([...args, '--adopt-existing'], repo).ok, true)
+  assert.match(fs.readFileSync(path.join(body, 'briefing.md'), 'utf8'), /BRIEFING.md/)
+  assert.match(fs.readFileSync(path.join(body, 'WORKSPACE.md'), 'utf8'), /Prefer the bound/)
+  assert.equal(tools.workspaceGenerate([...args, '--update-tools'], repo).ok, true)
+  for (const [file, text] of Object.entries(originals)) assert.equal(fs.readFileSync(path.join(body, file), 'utf8'), text)
+})
+
+test('adoption rejects mismatches, symlinks and conflicting tools before writing', t => {
+  const f = fixture(t)
+  const body = path.join(f.worlds, 'w/agents/B')
+  fs.mkdirSync(body, { recursive: true })
+  const args = [body, '--body', 'B', '--world', 'w', '--worlds', f.worlds, '--adopt-existing']
+  fs.writeFileSync(path.join(body, 'config.json'), JSON.stringify({ username: 'Other' }))
+  assert.throws(() => tools.workspaceGenerate(args, repo), /username differs/)
+  assert.throws(() => tools.workspaceGenerate([f.workspace, ...args.slice(1)], repo), /canonical/)
+  fs.writeFileSync(path.join(body, 'config.json'), JSON.stringify({ username: 'B' }))
+  fs.mkdirSync(path.join(body, 'bin'))
+  fs.writeFileSync(path.join(body, 'bin/observe'), 'custom')
+  assert.throws(() => tools.workspaceGenerate(args, repo), /unrecognized wrapper/)
+  assert.equal(fs.existsSync(path.join(body, 'context.edn')), false)
+  fs.unlinkSync(path.join(body, 'bin/observe'))
+  fs.symlinkSync(path.join(f.workspace, 'AGENTS.md'), path.join(body, 'AGENTS.md'))
+  assert.throws(() => tools.workspaceGenerate(args, repo), /non-file/)
+  assert.equal(fs.existsSync(path.join(body, 'context.edn')), false)
+  fs.unlinkSync(path.join(body, 'AGENTS.md'))
+  const alias = path.join(f.dir, 'alias-worlds')
+  fs.symlinkSync(f.worlds, alias)
+  assert.throws(() => tools.workspaceGenerate([path.join(alias, 'w/agents/B'), '--body', 'B', '--world', 'w', '--worlds', alias, '--adopt-existing'], repo), /symlinked parents/)
+  assert.equal(fs.existsSync(path.join(body, 'context.edn')), false)
+})
