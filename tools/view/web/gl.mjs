@@ -2,6 +2,7 @@
 // WebGL2 side of the browser view: the block window as a 3D texture, a two-level DDA ray marcher in a full-screen
 // fragment shader, entity boxes. Coordinates in the shader are relative to the window origin (a chunk-aligned corner).
 import { SHADING_GLSL } from './shading.mjs'
+import { LABEL_MARGIN, MAX_LABELS, SEEING_MIN, SEE_NEAR, labelWidth, placeLabels, projectorFor } from './mobs.mjs'
 
 export const MAX_ENTITIES = 64
 export const KINDS = { cube: 0, box: 1, cross: 2, water: 3, lava: 4, model: 5 }
@@ -54,6 +55,12 @@ uniform int uEntCount;
 uniform vec3 uEntMin[${MAX_ENTITIES}];
 uniform vec3 uEntMax[${MAX_ENTITIES}];
 uniform vec3 uEntCol[${MAX_ENTITIES}];
+uniform int uLabelCount;
+uniform vec4 uLabelRect[${MAX_LABELS}]; // x0, y0, x1, y1 in framebuffer pixels from the bottom left
+uniform float uLabelDepth[${MAX_LABELS}]; // a label shows where the terrain and mobs are farther than this
+uniform vec3 uLabelAt[${MAX_LABELS}]; // the mob's middle: a label is drawn only where the mob is lit enough to be seen or close
+uniform float uLabelDist[${MAX_LABELS}]; // eye to the mob's middle
+uniform sampler2D uLabels; // one row of text per label, white where there is ink (alpha)
 out vec4 outColor;
 
 const int MAX_STEPS = 2048;
@@ -503,6 +510,16 @@ void main () {
     float fog = clamp((te / uDist - 0.6) / 0.4, 0.0, 1.0);
     color = mix(uEntCol[i] * shadeOf(eax, d[eax]) * cellColor(ivec3(floor(o + dd * max(te - 0.01, 0.0)))), sky, fog);
   }
+  for (int i = 0; i < ${MAX_LABELS}; i++) {
+    if (i >= uLabelCount) break;
+    vec4 r = uLabelRect[i];
+    if (gl_FragCoord.x < r.x || gl_FragCoord.x >= r.z || gl_FragCoord.y < r.y || gl_FragCoord.y >= r.w || uLabelDepth[i] >= bestT) continue;
+    vec3 seen = cellColor(ivec3(floor(uLabelAt[i])));
+    if (uLabelDist[i] > ${SEE_NEAR}.0 && max(seen.r, max(seen.g, seen.b)) < ${SEEING_MIN}) continue;
+    vec2 uv = (gl_FragCoord.xy - r.xy) / (r.zw - r.xy);
+    vec4 ink = textureLod(uLabels, vec2(uv.x, (float(i) + 1.0 - uv.y) / ${MAX_LABELS}.0), 0.0);
+    color = mix(mix(color, vec3(0.0), 0.6), ink.rgb, ink.a);
+  }
   outColor = vec4(acc + trans * color, 1.0);
 }`
 
@@ -566,6 +583,61 @@ export const textureLevels = (bytes, layers, size, levels) => {
   return sizes.map((n, l) => bytes.subarray(sizes.slice(0, l).reduce((a, b) => a + b, 0), sizes.slice(0, l + 1).reduce((a, b) => a + b, 0)))
 }
 
+// ---- name labels over mobs (the shader draws the plate; the text comes from a small atlas, one row per label)
+const LABEL_ATLAS_WIDTH = 256
+const LABEL_ATLAS_ROW = 32
+
+// The entity boxes {min, max, name, label?, kind?} (relative to the window origin, like eye) as the labels placeLabels gives for them.
+export const boxLabels = ({ boxes, eye, basis, width, height, dist }) => placeLabels({
+  eye,
+  project: projectorFor(basis, width, height),
+  width,
+  height,
+  entities: boxes
+    .filter(b => b.name !== undefined || b.label !== undefined)
+    .map(b => ({ name: b.name, label: b.label, kind: b.kind, x: (b.min[0] + b.max[0]) / 2, y: b.min[1], z: (b.min[2] + b.max[2]) / 2, width: b.max[0] - b.min[0], height: b.max[1] - b.min[1] }))
+    .filter(e => Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z) <= dist)
+})
+
+// The shader's label uniforms for placeLabels' labels in a picture `height` pixels tall: rects as x0, y0, x1, y1 from the bottom
+// left, and depths, both padded to MAX_LABELS.
+export const labelUniforms = (labels, height) => {
+  const rects = new Float32Array(MAX_LABELS * 4)
+  const depths = new Float32Array(MAX_LABELS)
+  const ats = new Float32Array(MAX_LABELS * 3)
+  const dists = new Float32Array(MAX_LABELS)
+  labels.slice(0, MAX_LABELS).forEach((l, i) => {
+    const w = labelWidth(l.text, l.h)
+    rects.set([l.px - w / 2, height - l.py, l.px + w / 2, height - l.py + l.h], i * 4)
+    depths[i] = l.depth
+    ats.set(l.at, i * 3)
+    dists[i] = l.dist
+  })
+  return { count: Math.min(labels.length, MAX_LABELS), rects, depths, ats, dists }
+}
+
+// RGBA text for the shader: row i holds label i's text in white (alpha is the ink), drawn so that the row, stretched over the
+// label's plate, shows the letters in their natural shape. Needs a 2D canvas, so browser only.
+const labelAtlas = labels => {
+  const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(LABEL_ATLAS_WIDTH, LABEL_ATLAS_ROW * MAX_LABELS) : Object.assign(document.createElement('canvas'), { width: LABEL_ATLAS_WIDTH, height: LABEL_ATLAS_ROW * MAX_LABELS })
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#fff'
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'center'
+  ctx.font = `bold ${Math.round(LABEL_ATLAS_ROW * 0.72)}px monospace`
+  labels.slice(0, MAX_LABELS).forEach((l, i) => {
+    // the row is stretched over the plate, so the text is squeezed here to fill the plate's text cells and come out in natural shape
+    const text = l.text.toUpperCase()
+    const cells = text.length * 6 - 1
+    ctx.save()
+    ctx.translate(LABEL_ATLAS_WIDTH / 2, (i + 0.5) * LABEL_ATLAS_ROW)
+    ctx.scale(LABEL_ATLAS_WIDTH * cells / (cells + 2 * LABEL_MARGIN) / ctx.measureText(text).width, 1)
+    ctx.fillText(text, 0, 1)
+    ctx.restore()
+  })
+  return ctx.getImageData(0, 0, LABEL_ATLAS_WIDTH, LABEL_ATLAS_ROW * MAX_LABELS)
+}
+
 const TABLE_ROW_BYTES = MATERIAL_COLUMNS * 4 + INFO_TEXELS * 8 // RGBA8 colours + RGBA16UI info per material
 
 // One renderer owns the GL context, the program and the tables every world shares (materials, textures, elements, tints,
@@ -580,7 +652,7 @@ export function createRenderer (canvasOrGl) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol', 'uLabelCount', 'uLabelRect', 'uLabelDepth', 'uLabelAt', 'uLabelDist', 'uLabels']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -590,6 +662,10 @@ export function createRenderer (canvasOrGl) {
   const info = nearestTexture(gl, gl.TEXTURE_2D, 3)
   const tex = nearestTexture(gl, gl.TEXTURE_2D_ARRAY, 4)
   const elems = nearestTexture(gl, gl.TEXTURE_2D, 6)
+  const labelTexture = nearestTexture(gl, gl.TEXTURE_2D, 9)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  let labelAtlasKey = null // the texts the atlas holds, so it is redrawn and uploaded only when they change
   let elemBase = 0
   let tintGroups = new Float32Array(6 * 3).fill(1)
   let tintConst = new Float32Array(32 * 3).fill(1)
@@ -767,6 +843,16 @@ export function createRenderer (canvasOrGl) {
   // are the viewport drawn at the framebuffer's bottom-left
   const draw = (world, { eye, basis, dist, darken, slotOff, entities, width = canvas.width, height = canvas.height }) => {
     const size = world.size()
+    const labels = boxLabels({ boxes: entities, eye, basis, width, height, dist })
+    const labelKey = labels.map(l => l.text).join('\n')
+    if (labelKey !== labelAtlasKey) {
+      labelAtlasKey = labelKey
+      gl.activeTexture(gl.TEXTURE9)
+      gl.bindTexture(gl.TEXTURE_2D, labelTexture)
+      const atlas = labelAtlas(labels)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, atlas.width, atlas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas)
+    }
+    const shown = labelUniforms(labels, height)
     const count = Math.min(entities.length, MAX_ENTITIES)
     const flat = key => new Float32Array(MAX_ENTITIES * 3).map((_, i) => (entities[Math.floor(i / 3)]?.[key]?.[i % 3]) ?? 0)
     world.bind()
@@ -800,6 +886,12 @@ export function createRenderer (canvasOrGl) {
     gl.uniform3fv(uniform.uEntMin, flat('min'))
     gl.uniform3fv(uniform.uEntMax, flat('max'))
     gl.uniform3fv(uniform.uEntCol, flat('color'))
+    gl.uniform1i(uniform.uLabels, 9)
+    gl.uniform1i(uniform.uLabelCount, shown.count)
+    gl.uniform4fv(uniform.uLabelRect, shown.rects)
+    gl.uniform1fv(uniform.uLabelDepth, shown.depths)
+    gl.uniform3fv(uniform.uLabelAt, shown.ats)
+    gl.uniform1fv(uniform.uLabelDist, shown.dists)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
 

@@ -179,6 +179,16 @@
     (is (= 64 (alength boxes)))
     (is (= [[-0.3 64 -0.3] [0.3 65.8 0.3] [0.88 0.14 0.14]] (mapv vec [(.-min first-box) (.-max first-box) (.-color first-box)])))))
 
+(deftest entity-boxes-carry-the-name-label-and-kind-the-views-write-and-colour-by
+  (are [e expected] (= expected (let [^js box (aget (scene/entity-boxes (into-array [(clj->js (assoc e :pos {:x 1 :y 2 :z 3}))]) #js {:x 0 :y 0 :z 0} #js {:x 0 :y 0 :z 0}) 0)]
+                                  [(.-name box) (.-label box) (.-kind box)]))
+    {:name "zombie" :type "hostile"} ["zombie" nil "hostile"]
+    {:name "player" :type "player" :username "Bob_2"} ["player" "Bob_2" "player"]
+    {:name "cow" :type "animal"} ["cow" nil "animal"]
+    {:name "item" :kind "Drops"} ["item" nil "item"]
+    {:name "bat" :kind "Hostile mobs"} ["bat" nil "hostile"]
+    {:name "pig" :kind "Passive mobs"} ["pig" nil nil]))
+
 (deftest entity-colors
   (are [e expected] (= expected (vec (scene/entity-color (clj->js e))))
     {:type "player"} [0.2 0.4 0.95]

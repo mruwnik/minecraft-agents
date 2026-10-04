@@ -3,7 +3,9 @@
 // main thread: renderBand() is render()'s per-pixel terrain work for a range of rows, drawEntities() its mob work on a
 // picture already drawn. Copied from src/vision/renderer.mjs because its render() cannot draw a band; keep it in step.
 // Every floating-point expression below is the original's, in the original's order: the output is byte-identical.
-import { castRay, colorOf, directionFor, hitLight, entityLight, lightTable, lightReport } from './renderer.mjs'
+import { paletteFor, placeLabels } from './web/mobs.mjs'
+import { drawLabels } from './labels.mjs'
+import { castRay, colorOf, directionFor, visibleMobs, hitLight, entityLight, lightTable, lightReport } from './renderer.mjs'
 
 const ENTRY_FACE = { x: ['east', 'west'], y: ['top', 'bottom'], z: ['south', 'north'] } // [moving negative, moving positive]
 // Nearest intersection of a ray with an axis-aligned box, into `out` ({t, face}); false when it misses. Scalars only:
@@ -83,52 +85,12 @@ function cameraFor ({ panorama, yaw = 0, pitch = 0, fov = 90, width, height }) {
 const clamp01 = v => Math.min(1, Math.max(0, v))
 
 const FACE_SHADE = { top: 1, bottom: 0.5, north: 0.8, south: 0.8, east: 0.62, west: 0.62, cross: 0.95 }
-const HOSTILE = [225, 35, 35]
 const boxHit = { t: 0, face: '' }
 const hashColor = name => {
   let h = 0
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return [90 + h % 130, 90 + (h >> 8) % 130, 90 + (h >> 16) % 130]
 }
-// [body, head, limbs, face] in the game's colours; the face is the front of the head, so it shows which way a mob looks
-const plain = (c, face = c.map(v => v * 0.55)) => [c, c, c, face]
-const PALETTES = {
-  player: [[235, 60, 235], [215, 160, 125], [235, 60, 235], [120, 80, 60]],
-  zombie: [[40, 150, 155], [95, 150, 80], [65, 60, 160], [40, 70, 40]],
-  zombie_villager: [[110, 80, 60], [95, 150, 80], [90, 65, 50], [40, 70, 40]],
-  husk: [[150, 125, 85], [185, 160, 110], [110, 90, 65], [90, 75, 50]],
-  drowned: [[60, 140, 130], [85, 165, 150], [70, 110, 140], [35, 80, 75]],
-  skeleton: [[205, 205, 195], [215, 215, 205], [190, 190, 180], [70, 70, 70]],
-  stray: [[165, 185, 190], [205, 210, 210], [150, 170, 175], [70, 80, 85]],
-  bogged: [[150, 165, 120], [190, 195, 170], [130, 140, 105], [60, 70, 50]],
-  wither_skeleton: [[45, 45, 45], [55, 55, 55], [35, 35, 35], [20, 20, 20]],
-  creeper: [[85, 175, 65], [95, 185, 75], [70, 150, 55], [25, 35, 25]],
-  spider: [[45, 38, 35], [55, 48, 45], [35, 30, 28], [150, 25, 25]],
-  cave_spider: [[25, 60, 70], [30, 70, 80], [20, 45, 55], [150, 25, 25]],
-  enderman: [[25, 20, 30], [30, 25, 35], [20, 15, 25], [200, 90, 235]],
-  witch: [[80, 45, 100], [145, 170, 105], [60, 35, 75], [70, 90, 50]],
-  pillager: [[85, 90, 95], [150, 155, 145], [55, 55, 60], [80, 85, 80]],
-  vindicator: [[60, 70, 75], [150, 155, 145], [45, 45, 50], [80, 85, 80]],
-  evoker: [[40, 40, 45], [150, 155, 145], [130, 110, 50], [80, 85, 80]],
-  piglin: [[200, 150, 90], [230, 160, 140], [110, 75, 50], [160, 100, 90]],
-  zombified_piglin: [[225, 150, 140], [225, 150, 140], [110, 140, 80], [120, 80, 75]],
-  blaze: plain([250, 190, 40], [120, 70, 20]),
-  slime: plain([110, 190, 90], [40, 80, 35]),
-  cow: [[95, 65, 45], [95, 65, 45], [225, 220, 210], [230, 225, 215]],
-  mooshroom: [[170, 30, 30], [170, 30, 30], [225, 220, 210], [230, 225, 215]],
-  pig: [[240, 160, 165], [240, 160, 165], [225, 140, 145], [250, 190, 190]],
-  sheep: [[235, 235, 230], [215, 185, 160], [215, 185, 160], [150, 120, 100]],
-  chicken: [[250, 250, 250], [250, 250, 250], [235, 165, 50], [235, 165, 50]],
-  horse: [[150, 110, 70], [150, 110, 70], [120, 85, 55], [60, 45, 30]],
-  wolf: [[215, 210, 210], [215, 210, 210], [200, 195, 195], [60, 55, 55]],
-  cat: [[200, 150, 80], [200, 150, 80], [180, 130, 70], [90, 70, 40]],
-  fox: [[225, 120, 45], [225, 120, 45], [60, 40, 30], [240, 235, 225]],
-  villager: [[120, 85, 60], [200, 150, 120], [100, 70, 50], [150, 105, 85]],
-  wandering_trader: [[50, 80, 150], [200, 150, 120], [40, 60, 115], [150, 105, 85]],
-  iron_golem: [[205, 200, 190], [215, 210, 200], [185, 180, 170], [110, 90, 70]],
-  item: plain([255, 225, 40], [255, 225, 40])
-}
-const paletteFor = e => PALETTES[e.name] ?? PALETTES[e.kind] ?? plain(e.kind === 'hostile' ? HOSTILE : hashColor(e.name))
 // brightness of the day, 0.3 (midnight) .. 1 (day); timeOfDay 0 is sunrise, 6000 noon, 18000 midnight
 const daylight = time => 0.3 + 0.7 * clamp01(0.5 + 1.6 * Math.sin(((time ?? 6000) % 24000) / 24000 * 2 * Math.PI))
 const mix = (a, b, k) => a + (b - a) * k
@@ -324,6 +286,7 @@ export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, w
         }
       }
       if (!nearest) continue
+      depth[py * width + px] = nearestT // a mob hides the labels behind it too; drawLabels is the depth's only reader after this
       nearest.pixels++
       nearest.sumX += px
       nearest.sumY += py
@@ -340,7 +303,7 @@ export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, w
       rgba[at + 2] = base[2] * FACE_SHADE[nearestFace] * lit[2]
     }
   }
-  return mobs.filter(m => m.pixels > 0).map(({ e, light: byte, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
+  const seen = mobs.filter(m => m.pixels > 0).map(({ e, light: byte, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
     name: e.label ?? e.name,
     kind: e.kind,
     px: Math.round(sumX / pixels),
@@ -349,4 +312,6 @@ export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, w
     box: [x1, y1, x2, y2],
     light: lightReport(table, byte)
   }))
+  if (cam.project) drawLabels({ rgba, width, height, depth, labels: placeLabels({ eye, project: cam.project, width, height, entities: visibleMobs(mobs, table, eye) }) })
+  return seen
 }

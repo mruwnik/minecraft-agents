@@ -62,12 +62,24 @@
       (or (= type "item") (= (.-name e) "item") (= kind "Drops")) #js [1 0.88 0.16]
       :else #js [0.5 0.5 0.5])))
 
+(defn entity-kind
+  "What the views write and colour a mob by: \"player\", \"hostile\", \"item\", else its type (nil when it has none)."
+  [^js e]
+  (let [type (.-type e)
+        kind (.-kind e)]
+    (cond
+      (or (= type "player") (= kind "player") (.-username e)) "player"
+      (or (= type "hostile") (= kind "Hostile mobs")) "hostile"
+      (or (= type "item") (= (.-name e) "item") (= kind "Drops")) "item"
+      :else type)))
+
 (defn or-default [v fallback] (if (nil? v) fallback v))
 
 (defn by-d ^number [^js a ^js b] (- (.-d a) (.-d b)))
 
 (defn entity-boxes
-  "The nearest 64 entities to the eye as {min, max, color} boxes relative to origin."
+  "The nearest 64 entities to the eye as {min, max, color, name, label, kind} boxes relative to origin (name, label and kind are what
+   the browser view's species colours and name labels go by)."
   [^js entities ^js origin ^js eye]
   (if (nil? entities)
     #js []
@@ -85,7 +97,10 @@
                     z (- (.-z p) (.-z origin))]
                 #js {:min #js [(- x half) y (- z half)]
                      :max #js [(+ x half) (+ y (or-default (.-height e) 1.8)) (+ z half)]
-                     :color (entity-color e)}))))))
+                     :color (entity-color e)
+                     :name (.-name e)
+                     :label (.-username e)
+                     :kind (entity-kind e)}))))))
 
 (defn new-metrics []
   #js {:fps 0 :frames 0 :latencies #js [] :shownLatencies #js [] :camTrace #js [] :underruns 0 :decodeMs #js [] :lightMs #js []

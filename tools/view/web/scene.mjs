@@ -9,18 +9,28 @@
 import { cameraBasis } from './camera.mjs'
 import { createSceneCore, decodePriority } from './cljs/viewer.mjs'
 import { skyDarken, sceneTime } from './shading.mjs'
+import { paletteFor } from './mobs.mjs'
 import { tablesFor } from './tables.mjs'
 
 export { decodePriority }
 
-export const createScene = ({ renderer, decoder, baseUrl = '', debugLevel = 0, ...options }) => createSceneCore({
-  ...options,
-  baseUrl,
-  decoder,
-  world: renderer.createWorld(),
-  tables: tablesFor(renderer, { decoder, baseUrl, debugLevel }),
-  finish: () => renderer.finish(),
-  cameraBasis,
-  sceneTime,
-  skyDarken
-})
+// each mob box takes its species' colour (the software renderers' palettes, tools/view/web/mobs.mjs); the box carries name and kind
+const speciesColored = boxes => boxes.map(box => ({ ...box, color: paletteFor(box)[0].map(v => v / 255) }))
+
+export const createScene = ({ renderer, decoder, baseUrl = '', debugLevel = 0, ...options }) => {
+  const core = createSceneCore({
+    ...options,
+    baseUrl,
+    decoder,
+    world: renderer.createWorld(),
+    tables: tablesFor(renderer, { decoder, baseUrl, debugLevel }),
+    finish: () => renderer.finish(),
+    cameraBasis,
+    sceneTime,
+    skyDarken
+  })
+  return { ...core, frame: (now, params) => {
+    const drawn = core.frame(now, params)
+    return drawn && { ...drawn, entities: speciesColored(drawn.entities) }
+  } }
+}
