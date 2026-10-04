@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 
-const MAX_SOCKET_PATH = 100
+const MAX_SOCKET_PATH = 107
 const MAX_BODY = 16 * 1024
 
 const reply = (json, status) => ({ status, json })

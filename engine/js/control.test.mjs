@@ -101,9 +101,34 @@ test('rejects bodies over 16 KB', async () => {
   assert.equal(calls.length, 0)
 })
 
-test('a socket path over 100 bytes rejects listen', async () => {
+test('a socket path over 107 bytes rejects listen', async () => {
   const { control } = rig(path.join(os.tmpdir(), 'x'.repeat(120), 'control.sock'))
   await assert.rejects(control.listen(), /too long for a unix socket/)
+})
+
+const sockOfBytes = (bytes) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs1-'))
+  const prefix = path.join(dir, 'c')
+  const sock = prefix + 'x'.repeat(bytes - Buffer.byteLength(prefix) - '.sock'.length) + '.sock'
+  assert.equal(Buffer.byteLength(sock), bytes)
+  return sock
+}
+
+test('a socket path of exactly 107 bytes listens and answers', async () => {
+  const socketPath = sockOfBytes(107)
+  const { control } = rig(socketPath)
+  await control.listen()
+  try {
+    const r = await request(socketPath, 'POST', '/drive', JSON.stringify({ op: 'take', who: 'a', why: 'x' }))
+    assert.notEqual(r.status, undefined)
+  } finally {
+    await control.close()
+  }
+})
+
+test('a socket path of 108 bytes rejects listen', async () => {
+  const { control } = rig(sockOfBytes(108))
+  await assert.rejects(control.listen(), /too long for a unix socket \(over 107 bytes\)/)
 })
 
 test('close without listen is a no-op', async () => {
