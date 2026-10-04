@@ -21,6 +21,7 @@
         good '(done)
         response (command eng "request-1" :submit {:spec good})]
     (is (= "j1" (get-in response [:job :id])))
+    (is (false? (get-in response [:job :hold?])) "ordinary submissions echo their effective hold state")
     (is (= true (:duplicate (command eng "request-1" :submit {:spec good}))))
     (is (= ["j1"] (:list (core/state eng))))
     (is (= :request-id-conflict (:reason (command eng "request-1" :submit {:spec '(wait)}))))
@@ -85,12 +86,19 @@
     (let [r (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"})
           id (get-in r [:job :id])]
       (is (true? (:ok r)))
+      (is (true? (get-in r [:job :hold?])) "held submissions echo their effective hold state")
       (is (= [id "j1"] (:list (core/state eng))))
       (is (= {:hold? true :backoff {:after 5} :by "steward"}
-             (select-keys (get-in (core/state eng) [:instances id]) [:hold? :backoff :by]))))
+             (select-keys (get-in (core/state eng) [:instances id]) [:hold? :backoff :by])))
     (is (= :agent (get-in (core/state eng) [:instances "j1" :by])) "who defaults to :agent")
-    (is (true? (:duplicate (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"}))))
+    (let [duplicate (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"})]
+      (is (true? (:duplicate duplicate)))
+      (is (true? (get-in duplicate [:job :hold?])) "idempotent replay re-reads effective hold state from the created instance"))
     (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done)}))) "the options are part of the request")
+    (command eng "cancel-second" :cancel {:id id})
+    (let [replay (command eng "second" :submit {:spec '(done) :front? true :hold? true :backoff {:after 5} :by "steward"})]
+      (is (= :absent (get-in replay [:job :status])))
+      (is (true? (get-in replay [:job :hold?])) "replay keeps the created job's hold value after it leaves the active instance map")))
     (core/shutdown! eng)))
 (deftest bad-submit-options-are-refused-before-anything-changes
   (let [{:keys [eng]} (setup)]

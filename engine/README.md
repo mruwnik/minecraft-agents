@@ -1025,8 +1025,10 @@ compiles is dropped with one `system.dropped` warn. Each entry has its own
 compiled condition (its own `held-for` timers and scan cache, in memory only: a
 restart starts them over). To see why a condition does not fire, `GET
 /triggers?id=bread-low` adds `:explain {:id :bread-low :terms [{:form f :value
-v} ...]}`, every sub-term with its value now, root first, read without
-advancing the timers (`:engine.condition.facts/unknown` while offline).
+v :remaining-ms n} ...]}`, every sub-term with its value now, root first. An
+active `held-for` term includes `:remaining-ms` (zero once elapsed); a false or
+unknown inner condition has no active timer and omits it. The explanation reads
+without advancing timers (`:engine.condition.facts/unknown` while offline).
 
 `:ttl-s` on a put removes the entry after that long (`reflex.expired`); without
 it the entry stays. An entry put over the socket whose job keeps failing while

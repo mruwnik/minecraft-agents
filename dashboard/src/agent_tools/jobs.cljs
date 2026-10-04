@@ -4,7 +4,7 @@
             ["node:path" :as path]
             ["node:crypto" :as crypto]))
 
-(def usage "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] | interrupt <EDN-spec> | cancel <jID> | cancel-all | retry <jID> [--state DIR] [--request-id ID]\nMutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion.")
+(def usage "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold --front] | interrupt <EDN-spec> | cancel <jID> | cancel-all | retry <jID> [--state DIR] [--request-id ID]\nMutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion.")
 
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))
@@ -19,7 +19,7 @@
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string" :default map-tool/default-state-dir} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
-           :hold {:type "boolean"}})
+           :hold {:type "boolean"} :front {:type "boolean"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
           no-argument? (#{:list :cancel-all} op)
@@ -41,6 +41,8 @@
         (throw (js/Error. "--limit and --offset require list")))
       (when (and (contains? values :hold) (not spec-op?))
         (throw (js/Error. "--hold requires submit or interrupt")))
+      (when (and (contains? values :front) (not= op :submit))
+        (throw (js/Error. "--front requires submit")))
       (let [state (.resolve path (:state values))
             base {:body body :state state
                   :socketPath (.join path state "worlds" (:world values) "agents" body "engine" "events.sock")
@@ -65,5 +67,6 @@
                        :request (cond-> {:op op :request-id id}
                                   spec-op? (assoc :spec (spec-for arg))
                                   (#{:cancel :retry} op) (assoc :id arg)
-                                  (contains? values :hold) (assoc :hold? (:hold values))))))))))
+                                  (contains? values :hold) (assoc :hold? (:hold values))
+                                  (contains? values :front) (assoc :front? (:front values))))))))))
     (catch :default error {:error (.-message error)})))

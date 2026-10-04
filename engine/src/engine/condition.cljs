@@ -265,7 +265,10 @@
                   (cond
                     (unknown? inner) (done unknown st)
                     (false? inner) (done false st)
-                    :else (done (>= (- now since) (:ms node)) (assoc-in st [:since (:path node)] since))))
+                    :else (let [remaining-ms (max 0 (- (+ since (:ms node)) now))
+                                value (zero? remaining-ms)]
+                            [{:form (:form node) :value value :children kids :remaining-ms remaining-ms}
+                             (assoc-in st [:since (:path node)] since)])))
       :known? (done (not (unknown? (first vs))) st)
       (done (combine (:op node) vs) st))))
 
@@ -282,10 +285,11 @@
 
 (defn explain
   "Every sub-term of node with its value now, depth first, root first:
-  [{:form f :value v} ...]. It reads state but does not advance it."
+  [{:form f :value v} ...]. Active held-for terms also include :remaining-ms.
+  It reads state but does not advance it."
   [node env state]
   (->> (tree-seq (comp seq :children) :children (first (run node env state)))
-       (mapv #(select-keys % [:form :value]))))
+       (mapv #(select-keys % [:form :value :remaining-ms]))))
 
 (defn when-fn
   "A register :when, (fn [world memory args & _]) -> boolean, for a compiled

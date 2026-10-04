@@ -97,7 +97,7 @@ export function compact (r,value) {
   if(r.command==='list') {
     const all=value.items??[],selected=all.slice(r.offset,r.offset+r.limit)
     const ranks=new Map((value.order??[]).map((id,index)=>[id.key,index+1]))
-    return {total:value.total??all.length,items:selected.map(e=>({id:e.id,trigger:e.trigger,...(ranks.has(e.id?.key)?{priority:ranks.get(e.id.key)}:{}),
+    return {total:value.total??all.length,items:selected.map(e=>({id:e.id,trigger:e.trigger,...(e.when!==undefined?{when:bounded(e.when)}:{}),...(ranks.has(e.id?.key)?{priority:ranks.get(e.id.key)}:{}),
       ...(e.job?.list?.[0]?.sym?{job:e.job.list[0].sym}:{}),...(e['builtin?']?{'builtin?':true}:{}),
       ...(e.muted?{muted:true}:{}),...(e['stopped?']?{'stopped?':true}:{}),...(e['cooling-until']?{cooling:true}:{}),...(e['backing-off']?{'backing-off':true}:{})})),
       ...((r.offset+selected.length)<all.length?{'next-offset':r.offset+selected.length}:{})}

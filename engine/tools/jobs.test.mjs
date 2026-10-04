@@ -55,10 +55,17 @@ test('cancel-all has no job argument; hold is a native submission option', () =>
   assert.equal(held.request['hold?'], true)
   assert.match(writeEDN(held.request), /:hold\? true/)
   assert.equal('hold?' in requestFor(['Bob', '--world', 'w', 'submit', '(jobs.time.wait-for-day)']).request, false)
+  const front = requestFor(['Bob', '--world', 'w', 'submit', '(jobs.time.wait-for-day)', '--front'])
+  assert.equal(front.request['front?'], true)
+  assert.match(writeEDN(front.request), /:front\? true/)
+  assert.equal('front?' in requestFor(['Bob', '--world', 'w', 'submit', '(jobs.time.wait-for-day)']).request, false)
   for (const args of [['cancel-all','j1'], ['cancel-all','--hold'], ['list','--hold'], ['show','j1','--hold'], ['retry','j1','--hold']]) assert.ok(requestFor(['Bob','--world','w',...args]).error)
+  for (const args of [['list','--front'], ['show','j1','--front'], ['interrupt','(jobs.time.wait-for-day)','--front'], ['cancel-all','--front'], ['cancel','j1','--front'], ['retry','j1','--front']]) {
+    assert.match(requestFor(['Bob','--world','w',...args]).error, /--front requires submit/)
+  }
 })
 
-test('compiled CLI sends hold and cancel-all through the existing generation-aware EDN API', async t => {
+test('compiled CLI sends submit options and cancel-all through the existing generation-aware EDN API', async t => {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), 'jobs-cli-'))
   const dir = path.join(state, 'worlds', 'w', 'agents', 'Bob', 'engine')
   fs.mkdirSync(dir, { recursive: true })
@@ -83,10 +90,11 @@ test('compiled CLI sends hold and cancel-all through the existing generation-awa
     child.once('error', reject)
     child.once('close', code => { try { assert.equal(code, 0, out+err); assert.deepEqual(readEDN(out), {ok:true}); resolve() } catch(error) { reject(error) } })
   })
-  await run(['submit', '(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))', '--hold', '--request-id', 'held'])
+  await run(['submit', '(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))', '--hold', '--front', '--request-id', 'held'])
   await run(['cancel-all', '--request-id', 'clear'])
   assert.equal(seen.length, 2)
   assert.equal(seen[0]['hold?'], true)
+  assert.equal(seen[0]['front?'], true)
   assert.equal(seen[0].spec.list[0].sym, 'seq')
   assert.equal(seen[0].spec.list[2].list[1].map[0][0].key, 'pos')
   assert.equal(seen[0].spec.list[2].list[1].map[0][1].map[0][1], -1)
