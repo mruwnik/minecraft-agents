@@ -104,6 +104,17 @@
           (is (= [:plan] announced) "the island part was walked, no replan")
           (is (<= (first at) 5) "the body never went down the drop"))))))
 
+;; walk-to! (walk-plan's driver) never takes a one-way step, even when the land below runs on into unloaded land (go-to
+;; does, engine.path.near)
+(deftest walk-to-stops-at-a-one-way-step-even-toward-unloaded-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cliff (merge (floor (range 11)) (box 11 60 0 47 60 2 "stone"))
+              [{:keys [result]} _ at] (await (walk-to cliff [120 61 1] start))]
+          (is (= {:status :no-path :reason :one-way} (select-keys result [:status :reason])))
+          (is (< (first at) 11) "the body never went down the drop"))))))
+
 ;; a gap of 4 empty cells (x 5..8) is wider than any jump: no ability would help, so the answer is :exhausted, not :abilities, and the
 ;; walk goes to the edge
 (deftest a-gap-wider-than-any-jump-ends-exhausted-at-the-edge

@@ -14,7 +14,9 @@
 
   One round is one plan and one walk (engine.path.walk: plan within the executor's abilities from where the body
   stands, follow the plan once, at most 60 s). A plan that only gets part of the way (the goal unloaded or far) is
-  walked as far as its steps can be undone, and the next round plans on from there. A round that ends more than 1
+  walked as far as its steps can be undone, or past a step that cannot be undone (a drop of 2 or 3, a gap jump down) when
+  the land past it runs on into unloaded land (engine.path.near; a pit whose cells are all loaded is never entered), and
+  the next round plans on from there. A round that ends more than 1
   closer than any before (:best) is progress and resets the count; any other round that does not arrive (a partial
   walk without a new best, no path, stuck) counts, and three in a row give up with an unreachable warn (the last
   status and :why and :kind). Hands over {:arrived true}, or {:arrived false :reason :unreachable}

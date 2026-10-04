@@ -102,6 +102,7 @@
 (def ^:const SPAN 4096) ; nodes further than 2048 blocks from the start in x or z are not searched
 (def ^:const HALF 2048)
 (def ^:const MIN-CLOSER 2) ; an exhausted search is a partial result only when it got this many blocks closer
+(def ^:const OPEN-REACH 2) ; a node this many columns or fewer from unloaded land stands at the loaded edge (oneWay.open)
 (def ^:const WHOLE 16) ; a full block in 1/16
 (def ^:const BODY-BLOCKS 1.8)
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
@@ -2219,6 +2220,17 @@
       -1
       (.firstOneWay s best-node)))
 
+  ;; Does the node stand within OPEN-REACH columns of unloaded land (at its feet height)? Then the land it is on runs on past what
+  ;; is loaded; a node with loaded land all round it is a dead end as far as the world is known.
+  (atLoadedEdge [s node]
+    (let [x (aget xs node) y (aget ys node) z (aget zs node)]
+      (loop [dx (- OPEN-REACH) dz (- OPEN-REACH)]
+        (cond
+          (> dx OPEN-REACH) false
+          (> dz OPEN-REACH) (recur (inc dx) (- OPEN-REACH))
+          (== (.stateAt snapshot (+ x dx) y (+ z dz)) UNLOADED) true
+          :else (recur dx (inc dz))))))
+
   (nearest [s]
     #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
 
@@ -2234,7 +2246,7 @@
             end-distance (cond clean (.-distance clean-end) (== best-node -1) js/Infinity :else best-distance)
             one-way (when (and clean (< best-distance end-distance))
                       #js {:move (aget moves one-way-node) :x (aget xs one-way-node) :y (aget ys one-way-node) :z (aget zs one-way-node)
-                           :distance best-distance})]
+                           :distance best-distance :path (.pathTo s best-node) :open (.atLoadedEdge s best-node)})]
         (cond
           (identical? reason "budget") (.outcome s "partial" "budget" end-path one-way)
           goal-unloaded (.outcome s "partial" "goal-unloaded" end-path one-way)

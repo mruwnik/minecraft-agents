@@ -123,6 +123,28 @@
               "a round that gets closer is progress and resets the count"))))))
 
 (deftest go-to-accepts-doors
+(deftest go-to-goes-down-a-cliff-whose-foot-runs-into-unloaded-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the plateau (feet 64) ends at x 10 in a 3-drop to a floor (feet 61) that runs to the loaded edge at x 47; the goal is
+        ;; far east in unloaded land
+        (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
+              {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0]}))]
+          (is (= 61 (js/Math.floor (second (at p)))) "down the drop")
+          (is (> (first (at p)) 40) "on to the loaded edge"))))))
+
+(deftest go-to-never-drops-into-a-closed-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the same plateau, but below the drop is a pit (x 11..14) in front of a wall too high to climb out over
+        (let [pit (merge (floor -2 -3 10 3) (floor 60 11 -3 14 3) (box 15 60 -3 16 64 3 "stone"))
+              {:keys [p out]} (await (go! {:blocks pit} {:pos [120 64 0]}))]
+          (is (= {:arrived false :reason :unreachable :why :one-way} (select-keys @out [:arrived :reason :why])))
+          (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau")
+          (is (< (first (at p)) 11)))))))
+
   (async done
     (tu/run-async done
       (fn ^:async t []

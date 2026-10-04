@@ -89,17 +89,22 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
-(defn plan-steps
-  "The executor's steps for a found plan r over pw: corner free sides, high corners and gap ceilings marked."
-  [pw r]
+(defn path-steps
+  "The executor's steps for a planner path over pw: corner free sides, high corners and gap ceilings marked."
+  [pw ^js path]
   (let [solid? (solid-fn pw)]
     (executor/with-gap-ceilings
       executor/policy
       (executor/with-high-corners
         executor/policy
-        (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
+        (executor/with-free-sides (executor/steps-of (.-steps path)) solid?)
         solid?)
       solid?)))
+
+(defn plan-steps
+  "The executor's steps for a found plan r over pw (path-steps of its path)."
+  [pw r]
+  (path-steps pw (.-path r)))
 
 (defn plan-within
   "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
@@ -147,21 +152,34 @@
   (let [pos (.-pos (.self (:primitives c)))]
     {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))
 
+(defn open-path
+  "The planner's path past r's one-way step when the land there runs on into unloaded land (oneWay.open: its end stands at the
+  edge of what is loaded), nil otherwise: a region below that is all loaded and gets no nearer (a pit) has no open path."
+  [r]
+  (when-let [^js ow (.-oneWay r)]
+    (when (true? (.-open ow)) (.-path ow))))
+
 (defn plan-walk
   "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last dry step
-  (dry-end). The planner ends a partial plan at the nearest node the body can come back from; {:r :steps :beyond :status :stop}:
-  stop is the no-path result for a plan with a nearer end behind a step that cannot be undone (the planner's oneWay,
-  stopped-one-way), nil otherwise. opts {:policy :walls}: the executor policy the plan must fit (default executor/policy) and
-  the cells {:x :y :z} to read as walls."
+  (dry-end). The planner ends a partial plan at the nearest node the body can come back from; {:r :steps :beyond :status :stop
+  :one-way-taken}: stop is the no-path result for a plan with a nearer end behind a step that cannot be undone (the planner's
+  oneWay, stopped-one-way), nil otherwise. opts {:policy :walls :one-way}: the executor policy the plan must fit (default
+  executor/policy), the cells {:x :y :z} to read as walls, and :one-way :open to take that step when the land past it runs
+  on into unloaded land (open-path; a far goal past a cliff): the plan is then the partial path past it, with no stop and
+  :one-way-taken the step {:kind :at}. The default never takes one."
   ([c pw to range weight] (plan-walk c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls] :or {policy executor/policy}}]
-   (let [{:keys [r steps beyond]} (plan-within c (with-walls pw walls) to range weight policy)
-         status (.-status r)
+  ([c pw to range weight {:keys [policy walls one-way] :or {policy executor/policy}}]
+   (let [walled (with-walls pw walls)
+         {:keys [r steps beyond]} (plan-within c walled to range weight policy)
+         past (when (= :open one-way) (open-path r))
+         steps (if past (path-steps walled past) steps)
+         status (if past "partial" (.-status r))
          walked (if (= "partial" status) (dry-end steps) steps)
-         one-way (one-way-of r)]
+         step (one-way-of r)]
      {:r r :steps walked :beyond beyond :status status :pw pw
       :ms (or (some-> r .-ms) 0)
-      :stop (when one-way (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to one-way))})))
+      :one-way-taken (when past step)
+      :stop (when (and step (not past)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))})))
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a plan cut at a one-way step

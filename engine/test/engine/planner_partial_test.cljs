@@ -99,7 +99,29 @@
     (is (nil? (:path r)))
     (is (= {:move DROP :x 4 :y 65 :z 2} (one-way-of r)))))
 
-(defn gap-of [cells] [(stone -2 -2 5 6 70) (stone (+ 6 cells) -2 20 6 70)])
+;; a plateau (feet 70) with a 3-drop to a lower floor (feet 67) that runs to the edge of the loaded chunks (x 47; x 48 on is
+;; unloaded), the goal far east in unloaded land: the land below leads on into land not yet loaded
+(def cliff [(stone -2 -2 10 6 70) (stone 11 -2 47 6 67)])
+
+(deftest a-one-way-step-to-land-that-runs-into-unloaded-land-is-open-with-its-path
+  (let [r (run cliff plateau (near 100 67 2))
+        beyond (:oneWay r)]
+    (is (= [10 70 2] (last-cell r)) "the plan itself still ends before the drop")
+    (is (= {:move DROP :x 11 :y 67 :z 2} (one-way-of r)))
+    (is (true? (:open beyond)))
+    (is (= 47 (first (peek (mapv (juxt :x :y :z) (get-in beyond [:path :steps]))))) "the path beyond ends at the loaded edge")
+    (is (some #(= DROP %) (mapv :move (get-in beyond [:path :steps]))))))
+
+;; the same plateau with a closed pit (floor feet 67, x 11..14) in front of a wall too high to climb (feet 71): every cell
+;; round it is loaded, so the pit leads nowhere
+(def pit-in-front [(stone -2 -2 10 6 70) (stone 11 -2 14 6 67) (stone 15 -2 16 6 71)])
+
+(deftest a-one-way-step-into-a-closed-pit-is-not-open
+  (let [r (run pit-in-front plateau (near 100 70 2))]
+    (is (= {:move DROP :x 11 :y 67 :z 2} (one-way-of r)))
+    (is (false? (get-in r [:oneWay :open])))))
+
+(defn gap-of [cells][(stone -2 -2 5 6 70) (stone (+ 6 cells) -2 20 6 70)])
 
 (deftest a-gap-wider-than-any-jump-is-exhausted
   (are [cells status reason end]
