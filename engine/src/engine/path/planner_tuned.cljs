@@ -1350,7 +1350,8 @@
                     (let [delta (- (+ (* ly 16) h1) h0)]
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))
                                     (and (some? limit-gap)
-                                         (not (true? (limit-gap x y z (- h0 (* y 16)) (aget moves i) lx ly lz h1)))))
+                                         ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
+                                         (not (true? (limit-gap x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget moves i)) lx ly lz h1)))))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) enter-extra)
                                (+ enter-risk hole) enter-slow 0 0))))

@@ -103,3 +103,19 @@
     1 -1
     2 -1
     3 -1))
+
+(defn flooded-plan-status
+  "The planner's status with the limits and the goal flood run at once (floodAfter 0): the flood expands cells that
+  nothing reached, so it has no move to tell the gap test."
+  [blocks [x y z]]
+  (let [pw (.pathWorld (tu/fake {:blocks blocks}))]
+    (.-status (planner/plan (.-snapshot pw)
+                            #js {:from #js {:x 0 :y 64 :z 1 :px 0.5 :pz 1.5} :goal #js {:kind "near" :x x :y y :z z :range 0}}
+                            #js {:table (.-table pw) :space (.-space pw) :weight 1.2 :floodAfter 0
+                                 :limits (ex/planner-limits ex/policy (walk-plan/solid-fn pw))}))))
+
+(deftest the-goal-flood-tests-gap-jumps-without-a-move-into-the-takeoff
+  (are [blocks goal] (= "found" (flooded-plan-status blocks goal))
+    gap-up-around [10 65 1]
+    swim-around [12 64 1]
+    four-wide-around [12 64 1]))
