@@ -1,5 +1,5 @@
 (ns engine.core-test
-  (:require [cljs.test :refer [deftest is async testing]]
+  (:require [cljs.test :refer [deftest is are async testing]]
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -727,21 +727,128 @@
           (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
           (is (some #(= :cancelled (:kind %)) @seen)))))))
 
-(deftest front-without-hold-only-reorders-the-list-the-scan-starts-after-the-running-job
+(deftest insert-front-puts-the-job-directly-after-the-current-one
+  (are [state expected] (= expected (:list (core/insert-front (merge {:list [] :cursor 0} state) "X")))
+    {:list ["A" "B" "C" "D"] :current "C"} ["A" "B" "C" "X" "D"]
+    {:list ["A" "B" "C" "D"] :cursor 3} ["A" "B" "C" "X" "D"]
+    {:list ["A" "B" "C" "D"] :current "D" :cursor 0} ["A" "B" "C" "D" "X"]
+    {:list [] :cursor 0} ["X"]
+    {:list ["A" "B"] :cursor 0} ["X" "A" "B"]
+    {:list ["A" "B"] :cursor 9} ["A" "B" "X"]
+    {:list ["A" "B" "C"] :current "gone" :cursor 1} ["A" "X" "B" "C"]
+    {:list ["A" "B" "C"] :resume "B" :cursor 0} ["A" "B" "X" "C"]))
+
+(deftest two-front-jobs-in-one-round-each-go-directly-after-the-current-one
+  (let [s {:list ["A" "B" "C" "D"] :current "C" :cursor 0}]
+    (is (= ["A" "B" "C" "Y" "X" "D"] (:list (core/insert-front (core/insert-front s "X") "Y"))))))
+
+(deftest a-front-job-submitted-during-a-round-runs-in-the-very-next-round
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup)
+        (let [{:keys [eng p seen]} (setup)
               release (do (core/submit! eng '(walk {:pos {:x 5 :y 64 :z 0}}) {})
+                          (.hold (.-world p) "moveTo"))
+              walking (core/tick! eng)
+              plain (core/submit! eng '(count) {})
+              front (core/submit! eng '(count) {:front? true})]
+          (is (= ["j1" front plain] (listed eng)) "the front job sits directly after the running one, a plain submit appends")
+          (is (= "j1" (:id (core/running eng))) "the running round is not cut")
+          (release)
+          (await walking)
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= ["j1" front plain] (ran seen))))))))
+
+(deftest a-front-job-submitted-between-rounds-runs-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (dotimes [_ 3] (core/submit! eng '(count) {}))
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (let [front (core/submit! eng '(count) {:front? true})]
+            (is (= ["j1" "j2" front "j3"] (listed eng)))
+            (dotimes [_ 3] (await (core/tick! eng)))
+            (is (= ["j1" "j2" front "j3" "j1"] (ran seen)))))))))
+
+(deftest two-front-submits-in-one-round-run-the-later-one-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup)
+              release (do (core/submit! eng '(walk {:pos {:x 5 :y 64 :z 0}}) {})
+                          (core/submit! eng '(count) {})
+                          (.hold (.-world p) "moveTo"))
+              walking (core/tick! eng)
+              x (core/submit! eng '(count) {:front? true})
+              y (core/submit! eng '(count) {:front? true})]
+          (is (= ["j1" y x "j2"] (listed eng)))
+          (release)
+          (await walking)
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j1" y x "j2"] (ran seen))))))))
+
+(deftest a-front-job-waits-behind-a-held-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng '(count) {:hold? true})
+          (await (core/tick! eng))
+          (let [front (core/submit! eng '(count) {:front? true})]
+            (is (= ["j1" front] (listed eng)))
+            (dotimes [_ 3] (await (core/tick! eng)))
+            (is (= ["j1" "j1" "j1" "j1"] (ran seen)) "the held job keeps the body")))))))
+
+(deftest a-front-job-whose-check-is-false-is-skipped-like-any-other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (reset! flag false)
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(count) {})
+          (await (core/tick! eng))
+          (let [gated (core/submit! eng '(gated) {:front? true})]
+            (is (= ["j1" gated "j2"] (listed eng)))
+            (await (core/tick! eng))
+            (is (= ["j1" "j2"] (ran seen)) "the round goes to the job after the gated one")))))))
+
+(deftest a-restart-keeps-the-front-order
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng p]} (setup {} dir)
+              release (do (core/submit! eng '(walk {:pos {:x 5 :y 64 :z 0}}) {})
+                          (core/submit! eng '(count) {})
                           (.hold (.-world p) "moveTo"))]
-          (let [walking (core/tick! eng)
-                plain (core/submit! eng '(count) {})
-                front (core/submit! eng '(count) {:front? true})]
-            (is (= [front "j1" plain] (listed eng)) "the front job heads the list")
-            (release)
-            (await walking)
-            (is (= [front plain] (listed eng)) "the walk is done")
-            (is (= plain (core/choose-listed eng)) "round-robin goes on after the finished job, so the front job waits its turn")))))))
+          (core/tick! eng)
+          (let [front (core/submit! eng '(count) {:front? true})
+                {again :eng seen :seen} (setup {} dir)]
+            (is (= ["j1" front "j2"] (listed again)))
+            (is (= "j1" (:resume (core/state again))) "the in-flight job resumes first, then the front job")
+            (await (core/tick! again))
+            (await (core/tick! again))
+            (is (= ["j1" front] (ran seen)))
+            (release)))))))
+
+(deftest a-restart-between-rounds-keeps-the-front-job-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng]} (setup {} dir)]
+          (dotimes [_ 3] (core/submit! eng '(count) {}))
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (let [front (core/submit! eng '(count) {:front? true})
+                {again :eng seen :seen} (setup {} dir)]
+            (is (= ["j1" "j2" front "j3"] (listed again)))
+            (await (core/tick! again))
+            (is (= [front] (ran seen)))))))))
 
 ;; ---------------------------------------------------------------- body events and restart
 

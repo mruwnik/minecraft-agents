@@ -872,22 +872,46 @@
 
 ;; ------------------------------------------------------------------ list edits (agents, and submit from rounds)
 
+(defn front-position
+  "Index in the list right after the current job: the one running (or cut and
+  waiting to resume), else where the next scan starts, which is just after the
+  job that ran last."
+  [{:keys [list current resume cursor]}]
+  (let [idx (.indexOf list (or current resume))]
+    (if (neg? idx)
+      (min cursor (count list))
+      (inc idx))))
+
+(defn insert-front
+  "State with id listed directly after the current job, so it gets the next round."
+  [state id]
+  (let [pos (front-position state)]
+    (update state :list #(into (conj (subvec % 0 pos) id) (subvec % pos)))))
+
+(defn insert-head
+  "State with id first in the list; the scan keeps its place."
+  [state id]
+  (cond-> (update state :list #(into [id] %))
+    (pos? (count (:list state))) (update :cursor inc)))
+
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list; (hold e) or
   opts :hold? make it hold the body; (backoff cfg e) or opts :backoff (a map or
-  false, which wins) set its backoff config. opts: :hold? :backoff :front? :by.
-  Throws on a bad spec. Returns the instance id."
-  [eng spec {:keys [front? by] :as opts}]
+  false, which wins) set its backoff config. opts: :hold? :backoff :front? :head? :by.
+  :front? lists the job directly after the current one (it gets the next round);
+  :head? lists it first (do-now!). Throws on a bad spec. Returns the instance id."
+  [eng spec {:keys [front? head? by] :as opts}]
   (let [{:keys [node hold?] :as parsed} (expr/parse-spec (:jobs eng) spec)
         hold? (boolean (or hold? (:hold? opts)))
         bo (if (contains? opts :backoff) (:backoff opts) (:backoff parsed))
         _ (backoff/validate! bo)
         args (second (job-of eng {:spec node}))
         id (new-id! eng)]
-    (swap! (:state eng) #(cond-> (-> %
-                                     (add-instance id node (cond-> {:hold? hold?} (some? bo) (assoc :backoff bo)))
-                                     (update :list (fn [l] (if front? (into [id] l) (conj l id)))))
-                           (and front? (pos? (count (:list %)))) (update :cursor inc)))
+    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} (some? bo) (assoc :backoff bo)))]
+                           (cond
+                             head? (insert-head s id)
+                             front? (insert-front s id)
+                             :else (update s :list conj id))))
     (mem/create-job! (:store eng) id args)
     (save-memory! eng)
     (emit! eng {:source :job :kind :queued :level :info :job id :chain [id] :name (expr/label node)
@@ -924,7 +948,7 @@
   (let [r (running eng)]
     (when (and r (not (:reflex r)))
       (cut! eng r :do-now nil))
-    (submit! eng spec {:hold? true :front? true :by :agent})))
+    (submit! eng spec {:hold? true :head? true :by :agent})))
 
 ;; ------------------------------------------------------------------ register edits (agents only)
 

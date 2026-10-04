@@ -791,10 +791,22 @@ never evaluated. Not wired into the register or any command yet.
 `submit!` and `cancel!` (agent) edit the list; `retry!` (agent, `(core/retry!
 eng id)`, true when `id` was marked failed) clears a failed mark and emits
 `job.retried`; `do-now!` (agent) cuts the
-running listed job and submits at the front with `:hold? true`.
+running listed job and submits first in the list with `:hold? true`.
 `submit!` opts: `:hold?`, `:backoff` (a config map or `false`, over any
-`(backoff cfg e)` wrapper), `:front?` (puts the job first in the list; without `:hold?` the round-robin still
-continues after the job that ran last, so a front job runs after the jobs behind the running one, not next), `:by`.
+`(backoff cfg e)` wrapper), `:front?`, `:by`. `:front?` lists the job directly
+after the current job, so it gets the very next round; round-robin then goes on
+in list order (`[A B C D]`, C current, front X: `[A B C X D]`, rounds X, D, A,
+B, C, X...). There is no front other than the current job. Details: the
+current job is the one running its round, or the cut one waiting to resume,
+or, between rounds, the one that ran last; with none (nothing ran yet, or it
+is gone) the job goes where the next scan starts. Two front submits in one
+round each go directly after the current job, so the later one runs first.
+A front submit never cuts the running round, and a held job keeps the body
+until it ends (the front job waits directly behind it). A front job whose
+check declines is skipped like any other. Every submit makes a new job (there
+is no re-submit of an id), so nothing is moved or deduplicated. The order and
+the scan position are in `engine.edn`; after a restart the in-flight job
+resumes first, then the front job after it.
 
 The list, register and changes are written to `engine.edn` on every change;
 memory as above. On boot both are reloaded, reflex instances are dropped, the
