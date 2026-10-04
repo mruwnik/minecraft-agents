@@ -362,3 +362,21 @@
             (is (empty? (h/calls p "dig")))
             (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
             (is (= 1 (count (h/events-of seen :build.wrong))))))))))
+
+(deftest a-zone-follows-its-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra placed] [["Fake" {} 9] ["fake" {} 9] ["Miles" {} 6] ["Miles" {:ignore-zones? true} 9]]]
+          (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)}
+                                     [(assoc (zone "shrine" [4 64 2] [4 64 4] #{}) :owner owner)])
+                result (await (h/child-outcome eng job (merge {:plan "pen"} extra) 200))]
+            (is (= placed (:placed result)) (pr-str [owner extra]))))))))
+
+(deftest the-opt-out-needs-no-zone-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)} nil)
+              result (await (h/child-outcome eng job {:plan "pen" :ignore-zones? true} 200))]
+          (is (= 9 (:placed result))))))))

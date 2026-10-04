@@ -270,3 +270,12 @@
           (is (empty? (calls (:p strict) "dig")))
           (is (= 1 (:dug (await (child-outcome (:eng default) job one 8)))))
           (is (= #{:fluid-adjacent :falling-block} (:default (:accept clear-box/args)))))))))
+
+(deftest a-box-in-a-zone-follows-its-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra dug] [["Fake" {} 8] ["fake" {} 8] ["Miles" {} 4] ["Miles" {:ignore-zones? true} 8]]]
+          (let [{:keys [eng]} (setup {:blocks eight} (ew/of-data {} {} [(assoc farm-zone :owner owner)]))
+                result (await (child-outcome eng job (merge box extra) 30))]
+            (is (= dug (:dug result)) (pr-str [owner extra]))))))))

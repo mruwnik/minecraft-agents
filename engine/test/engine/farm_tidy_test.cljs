@@ -448,3 +448,21 @@
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
             (is (= 1 (count (of-kind (:seen b) :tidy.done))))
             (is (= 5 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the count keeps what the first run dug")))))))
+
+(deftest a-zone-follows-its-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra refused] [["Fake" {} 0] ["fake" {} 0] ["Miles" {} 1] ["Miles" {:ignore-zones? true} 0]]]
+          (let [{:keys [eng]} (start tidy-spec {"field" field-plan}
+                                     [(assoc (zone "shrine" [3 64 2] #{}) :owner owner)])
+                result (await (outcome eng (merge {:plan "field"} extra) 200))]
+            (is (= refused (count (:refused result))) (pr-str [owner extra]))))))))
+
+(deftest the-opt-out-needs-no-zone-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start tidy-spec {"field" field-plan} nil)
+              result (await (outcome eng {:plan "field" :ignore-zones? true} 200))]
+          (is (= (count strays) (:dug result))))))))

@@ -2,6 +2,7 @@
   (:require [engine.access.ledger :as ledger]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.placement :as placement]
@@ -34,6 +35,7 @@
   {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :default #{:fluid-adjacent}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :default 4.5}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :default 2}})
 
@@ -67,10 +69,10 @@
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
       {:reason :no-floor-below :block (block-at below)}
       :else
-      (let [v (rules/may-dig? (assoc (select-keys in [:block-at :feet :zones :footprints :ledger]) :cell cell))
+      (let [v (rules/may-dig? (assoc (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger]) :cell cell))
             hazards (mapv hazard-reason (:hazards v))]
         (cond
-          (not (:ok v)) (select-keys v [:reason :zone :plan :block])
+          (not (:ok v)) (select-keys v [:reason :zone :claim :plan :block])
           (not-every? accept hazards) {:reason :hazard :hazards hazards})))))
 
 (defn next-step
@@ -105,9 +107,10 @@
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
   (let [{:keys [accept reach]} (:args c)]
-    {:feet (feet-of c) :eye (eye-of c) :block-at (block-at-of (:primitives c)) :entries entries
-     :ledger (ledger/cells l) :zones zones :footprints (ctx/footprints c) :accept (set accept) :reach reach
-     :held (:held (ctx/mem c) {})}))
+    (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
+           {:feet (feet-of c) :eye (eye-of c) :block-at (block-at-of (:primitives c)) :entries entries
+            :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
+            :held (:held (ctx/mem c) {})})))
 
 (defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
 
@@ -115,7 +118,7 @@
 
 (defn check [c]
   (cond
-    (nil? (ctx/zones c))
+    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
     (do (ctx/warn-once! c :no-zones :cleanup.declined
                         {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
         false)
@@ -239,7 +242,7 @@
         {:keys [job]} (:args c)]
     (cond
       (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)
-      (nil? zones) :declined
+      (and (nil? zones) (not (:ignore-zones? (:args c)))) :declined
       (and (not (:started (ctx/mem c)))
            (empty? (ledger/offered (ctx/view c) (block-at-of (:primitives c)) job))) :declined
       :else (do (ctx/update-mem! c assoc :started true)

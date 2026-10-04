@@ -6,12 +6,14 @@
     :block-at    fn [x y z] -> block name string, or nil when the cell is not loaded
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
-    :zones       nil (no zone list loaded) or a vector of zones. Assumed zone shape, to be adapted when the zone file
-                 format is decided: {:name \"farm\" :min [x y z] :max [x y z] :allow #{:dig :place}}. The box is
-                 inclusive. :allow is the set of actions the zone permits inside it; a zone without :allow permits
-                 none. A zone is a keep-out box for every action it does not allow.
+    :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}; the social part
+                 (zones, claims, footprints, no zone list) is engine.access.zones/verdict, see there: the owner may
+                 always act, others only as :allow says
     :footprints  the [x y z] cells that other plans claim (may be empty): a set, or a map {cell plan-id} (what
                  engine.ctx/footprints gives), whose :footprint refusal then names the :plan
+    :claims      the active area claims (engine.ctx/claims); :self the body's name; :now the clock in ms
+    :ignore-zones?  true skips every zone, claim, footprint and no-zone-list check (a job's opt-out; the physics
+                 below still apply)
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
   Output: {:ok false :reason kw ...detail} for a refusal, else {:ok true}, and for a dig that has hazards
   {:ok true :hazards [{:reason kw ...detail} ...]} (:hazards is absent when empty).
@@ -19,7 +21,8 @@
   The rules say what is impossible or not permitted and only report what is dangerous; the job decides which
   danger it accepts (see accepts?).
   Refused, impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block).
-  Refused, not permitted: :footprint (+ :plan id, for a footprint map), :zone (+ :zone name), :no-zones.
+  Refused, not permitted (engine.access.zones): :footprint (+ :plan id, for a footprint map), :zone (+ :zone name
+  :owner), :claim (+ :claim id :owner), :no-zones.
   Hazards of a dig, all that apply, in this order: one :fluid-adjacent (+ :fluid :at) per neighbouring fluid cell, :falling-block (+ :block :at),
   :under-feet.
   Refusals run in this order and the first is the verdict, so the most specific reason wins and :no-zones, the
@@ -28,7 +31,8 @@
     dig:   :not-loaded, :footprint, :zone, :no-zones, then the hazards
     place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
   A cell holding air, water, lava or a bubble column is placeable."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [engine.access.zones :as zones]))
 
 (def air #{"air" "cave_air" "void_air"})
 
@@ -61,11 +65,6 @@
 (defn in-box? [[x y z] {[x0 y0 z0] :min [x1 y1 z1] :max}]
   (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1)))
 
-(defn blocking-zone
-  "The first zone holding cell that does not allow action, or nil."
-  [zones cell action]
-  (first (filter #(and (in-box? cell %) (not (contains? (:allow %) action))) zones)))
-
 (defn refuse [reason & {:as detail}]
   (assoc detail :ok false :reason reason))
 
@@ -92,14 +91,23 @@
   [checks]
   (or (some #(%) checks) {:ok true}))
 
-(defn common-checks [action {:keys [block-at cell footprints zones]}]
-  [#(when (nil? (block-at cell)) (refuse :not-loaded))
-   #(when (contains? footprints cell)
-      (cond-> (refuse :footprint) (map? footprints) (assoc :plan (get footprints cell))))
-   #(when-let [z (blocking-zone zones cell action)] (refuse :zone :zone (:name z)))])
+(defn social-verdict
+  "engine.access.zones/verdict for action over the rules input, for a nil zone list as if it were empty (the
+  no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan."
+  [action {:keys [zones footprints cell] :as in}]
+  (let [v (zones/verdict (assoc (select-keys in [:claims :self :now]) :zones (or zones []) :footprints footprints
+                                :action action :cell cell))]
+    (cond-> v
+      (set? footprints) (dissoc :plan))))
 
-(defn no-zones-check [{:keys [zones]}]
-  #(when (nil? zones) (refuse :no-zones)))
+(defn common-checks [action {:keys [block-at cell ignore-zones?] :as in}]
+  [#(when (nil? (block-at cell)) (refuse :not-loaded))
+   #(when-not ignore-zones?
+      (let [v (social-verdict action in)]
+        (when-not (:ok v) v)))])
+
+(defn no-zones-check [{:keys [zones ignore-zones?]}]
+  #(when (and (nil? zones) (not ignore-zones?)) (refuse :no-zones)))
 
 (defn dig-hazards
   "Every hazard of digging :cell, as maps {:reason kw ...detail}, in check order. Hazards are reported, never refused:
@@ -118,7 +126,7 @@
 
 (defn may-dig?
   "Verdict for digging the block at :cell. See the namespace docstring for the input and the output. Refusals are
-  :not-loaded, :footprint, :zone and :no-zones; hazards come back in :hazards on an {:ok true} verdict."
+  :not-loaded, :footprint, :zone, :claim and :no-zones; hazards come back in :hazards on an {:ok true} verdict."
   [in]
   (let [refusal (verdict (concat (common-checks :dig in) [(no-zones-check in)]))]
     (if-not (:ok refusal)

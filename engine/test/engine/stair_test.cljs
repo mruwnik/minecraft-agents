@@ -427,3 +427,17 @@
         blocks (merge (at 63 (range 5) (range -8 11)) (at 63 (range 7 13) (range -8 11)) (at 63 [5 6] [9 10])
                       (at 66 (range 4 7) (range -8 9)))]
     (is (nil? (way-back-of blocks [10 64 1])))))
+
+(def around-the-cut {:name "plot" :min [1 60 -1] :max [3 70 1]})
+
+(deftest a-stair-in-a-zone-follows-its-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra status] [["Fake" {} :done]
+                                      ["fake" {} :done]
+                                      ["Miles" {} :stopped]
+                                      ["Miles" {:ignore-zones? true} :done]]]
+          (let [{:keys [out]} (await (stair! {:blocks ground :zones [(assoc around-the-cut :owner owner)]}
+                                             (merge east extra) (fn [_])))]
+            (is (= status (:status @out)) (pr-str [owner extra]))))))))

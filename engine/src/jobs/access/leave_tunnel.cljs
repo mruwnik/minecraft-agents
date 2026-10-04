@@ -34,10 +34,11 @@
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :default []}
-   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default 4.5}})
+   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default 4.5}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn check [c]
-  (if (nil? (ctx/zones c))
+  (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :leave-tunnel.declined "leave-tunnel" {:reason :no-zones})
     true))
 

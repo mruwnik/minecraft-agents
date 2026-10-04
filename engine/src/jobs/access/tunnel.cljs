@@ -57,12 +57,13 @@
   {:target {:doc "the buried block [x y z]" :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target" :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}})
 
 (def heading-order [:north :east :south :west])
 
 (defn check [c]
-  (if (nil? (ctx/zones c))
+  (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
     true))
 
@@ -181,7 +182,7 @@
   "The line to cut to target (the plan map, see fits) from rules input in (without :cell and :feet), the body at
   feet; else {:reason ...} (see the doc), with :headings when the headings fail for different reasons."
   [in target feet max-length accept]
-  (if (nil? (:zones in))
+  (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
     (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept)])) heading-order)
           plans (keep (comp :plan per) heading-order)]
@@ -291,7 +292,7 @@
   (let [cells (line-cells plan)
         r (await (ctx/call-child c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :y ((cells (segment-end plan k)) 1)
-                                  :accept (set (:accept (:args c)))}))]
+                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
       :continue
       (let [res (ctx/child-result c :stair)
@@ -300,7 +301,7 @@
                                 (assoc :stair-done (and done? (= (cells (:steps plan)) (feet-of c))))))
         (if done?
           :continue
-          (assoc (select-keys res [:cell :hazards :zone :plan :fluid :block :tool :walk :why]) :reason (:reason res)
+          (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why]) :reason (:reason res)
                  :in :stair))))))
 
 (defn segment-start?
@@ -427,7 +428,8 @@
         keep? (:keep (:args c))
         r (if keep?
             (await (walk-to! c :out (:entry plan)))
-            (if (= :done (await (ctx/call-child c :out 'jobs.access.leave-tunnel {:tunnel way-out})))
+            (if (= :done (await (ctx/call-child c :out 'jobs.access.leave-tunnel
+                                           {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
               (ctx/child-result c :out)
               :continue))]
     (cond

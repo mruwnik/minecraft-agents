@@ -20,6 +20,7 @@
   {:from {:doc "box corner (inclusive); any order" :default nil}
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :default nil}
    :keep {:doc "extra block names to leave alone" :default []}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
             :default #{:fluid-adjacent :falling-block}}})
 
@@ -92,7 +93,7 @@
   "Declines without a zone list, and before the first round when every pending cell is refused."
   [c]
   (cond
-    (nil? (ctx/zones c)) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
+    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
     (or (started? c) (box-error (:args c))) true
     :else (let [{:keys [allowed refused]} (sort-out c (pending c))]
             (if (and (empty? allowed) (seq refused))

@@ -140,7 +140,7 @@
   (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
         [x y z] pos]
     (if-not (:ok v)
-      (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan]))
+      (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan :claim]))
       (let [r (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}}))]
         (if-not (= "dug" (.-status r))
           (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c)))

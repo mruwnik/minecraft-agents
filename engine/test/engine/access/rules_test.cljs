@@ -4,7 +4,7 @@
             [engine.access.rules :as rules]))
 
 (def feet [0 64 0])
-(def farm {:name "farm" :min [4 60 4] :max [6 70 6]})
+(def farm {:name "farm" :min [4 60 4] :max [6 70 6] :owner "Miles"})
 
 (defn world
   "A lookup over the cells given as alternating cell and name; everything else is not loaded (nil)."
@@ -89,7 +89,7 @@
     (world [5 64 5] "stone" [6 64 5] "lava") [5 64 5] {:zones nil} {:ok false :reason :no-zones}))
 
 (deftest dig-details
-  (is (= {:ok false :reason :zone :zone "farm"} (dig plain [5 64 5] :zones [farm])))
+  (is (= {:ok false :reason :zone :zone "farm" :owner "Miles"} (dig plain [5 64 5] :zones [farm] :self "Bot")))
   (is (= {:ok true :hazards [{:reason :fluid-adjacent :fluid "lava" :at [6 64 5]}]}
          (dig (world [5 64 5] "stone" [6 64 5] "lava") [5 64 5])))
   (is (= {:ok true :hazards [{:reason :falling-block :block "gravel" :at [0 67 0]}]}
@@ -149,7 +149,7 @@
     plain [5 64 5] {:zones nil} {:ok false :reason :not-replaceable}))
 
 (deftest place-details
-  (is (= {:ok false :reason :zone :zone "farm"} (place air-spot [5 64 5] :zones [farm])))
+  (is (= {:ok false :reason :zone :zone "farm" :owner "Miles"} (place air-spot [5 64 5] :zones [farm])))
   (is (= {:ok false :reason :not-replaceable :block "stone"} (place plain [5 64 5])))
   (is (= {:ok true} (place air-spot [5 64 5]))))
 
@@ -175,3 +175,22 @@
   (is (= {:ok false :reason :footprint :plan "pad"} (dig plain [5 64 5] :footprints {[5 64 5] "pad"})))
   (is (= {:ok false :reason :footprint :plan "pad"} (place (world [5 64 5] "air") [5 64 5] :footprints {[5 64 5] "pad"})))
   (is (= {:ok true} (dig plain [5 64 5] :footprints {[5 64 6] "pad"}))))
+
+(deftest the-social-checks-follow-owner-claims-and-the-opt-out
+  (are [w cell f extra expected] (= expected (verdict (apply f w cell (mapcat identity extra))))
+    plain [5 64 5] dig {:zones [farm] :self "Miles"} {:ok true}
+    plain [5 64 5] dig {:zones [farm] :self "miles"} {:ok true}
+    plain [5 64 5] dig {:zones [farm] :self "Bot"} {:ok false :reason :zone}
+    air-spot [5 64 5] place {:zones [farm] :self "Miles"} {:ok true}
+    air-spot [5 64 5] place {:zones [farm] :self "Bot"} {:ok false :reason :zone}
+    plain [5 64 5] dig {:zones [farm] :self "Bot" :ignore-zones? true} {:ok true}
+    air-spot [5 64 5] place {:zones [farm] :self "Bot" :ignore-zones? true} {:ok true}
+    plain [5 64 5] dig {:zones nil :ignore-zones? true} {:ok true}
+    plain [5 64 5] dig {:footprints #{[5 64 5]} :ignore-zones? true} {:ok true}
+    plain [5 64 5] dig {:zones [] :self "Bot" :now 10
+                         :claims [{:id "c" :owner "Miles" :status :active :until 99 :min [4 60 4] :max [6 70 6]}]} {:ok false :reason :claim}
+    plain [5 64 5] dig {:zones [] :self "Bot" :now 10 :ignore-zones? true
+                         :claims [{:id "c" :owner "Miles" :status :active :until 99 :min [4 60 4] :max [6 70 6]}]} {:ok true}
+    ;; physics still refuses under the opt-out
+    plain [5 64 5] place {:ignore-zones? true :zones nil} {:ok false :reason :not-replaceable}
+    plain [9 9 9] dig {:ignore-zones? true} {:ok false :reason :not-loaded}))

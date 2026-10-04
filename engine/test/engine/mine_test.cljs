@@ -761,3 +761,20 @@
           (is (= :count (:reason (done-event s))))
           (is (= 1 (count (events-of s :mine.tunnel))))
           (is (>= (second (feet s)) 65) "standing on the surface, not at the bottom of the tunnel"))))))
+
+(deftest a-zone-follows-its-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra dug] [["Fake" {} 4] ["FAKE" {} 4] ["Miles" {} 2] ["Miles" {:ignore-zones? true} 4]]]
+          (let [s (await (zoned (merge {:block "sand" :count 4 :mend false} extra) {:blocks two-in-two-out}
+                                (ew/of-data {} {} [(assoc farm-zone :owner owner)]) 40))]
+            (is (= dug (count (dug-cells s))) (pr-str [owner extra]))))))))
+
+(deftest the-opt-out-needs-no-zone-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "sand" :count 2 :mend false :ignore-zones? true} {:blocks two-in-two-out}
+                              (ew/of-data {} {} nil) 40))]
+          (is (= 2 (count (dug-cells s)))))))))

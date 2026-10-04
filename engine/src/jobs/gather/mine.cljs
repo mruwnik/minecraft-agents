@@ -73,6 +73,7 @@
    :count {:doc "how many more to carry than at the start" :default 8}
    :radius {:doc "blocks within this many blocks of the body count" :default 16}
    :wet {:doc "dig blocks that touch water" :default false}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :mend {:doc "fill the ground under the start again afterwards" :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
    :max-failures {:doc "failures in a row before giving up" :default 3}
@@ -161,7 +162,7 @@
 
 (defn check [c]
   (cond
-    (nil? (ctx/zones c)) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) false
     :else (let [{:keys [targets buried refused hidden?]} (scan c)]

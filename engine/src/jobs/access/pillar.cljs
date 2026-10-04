@@ -2,6 +2,7 @@
   (:require [engine.access.ledger :as ledger]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -21,7 +22,8 @@
 
 (def args
   {:height {:doc "blocks to rise, 1 to 64" :default 1}
-   :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :default nil}})
+   :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-height 64)
 
@@ -32,9 +34,12 @@
 (def max-failures 3)
 
 (defn access-inputs
-  "The zone list (nil: none loaded) and the active plans' footprints {cell plan-id}, as engine.access.rules takes them."
+  "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as engine.access.rules
+  takes them (engine.jobs.access/zone-input)."
   [c]
-  {:zones (ctx/zones c) :footprints (ctx/footprints c)})
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
+
+(def zone-keys [:zones :footprints :claims :self :now :ignore-zones?])
 
 (defn up [[x y z] n] [x (+ y n) z])
 
@@ -52,10 +57,10 @@
 
 (defn permission-refusal
   "The first refusal among cells for permission alone (zone, footprint, no zone list), as the rules' refusal with :at."
-  [cells {:keys [zones footprints ledger]}]
+  [cells {:keys [ledger] :as in}]
   (some (fn [cell]
-          (let [v (rules/may-place? {:block-at (constantly "air") :cell cell :feet (up cell 1)
-                                     :zones zones :footprints footprints :ledger ledger})]
+          (let [v (rules/may-place? (merge (select-keys in zone-keys)
+                                           {:block-at (constantly "air") :cell cell :feet (up cell 1) :ledger ledger}))]
             (when-not (:ok v) (assoc v :at cell))))
         cells))
 

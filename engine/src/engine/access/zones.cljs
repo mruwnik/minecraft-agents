@@ -48,6 +48,11 @@
 (defn active? [now {:keys [status until]}]
   (and (= "active" (some-> status name)) (> until now)))
 
+(defn refusal
+  "{:ok false :reason reason ...detail}, a detail without a value left out."
+  [reason detail]
+  (into {:ok false :reason reason} (remove (comp nil? val)) detail))
+
 (defn verdict
   "See the namespace docstring."
   [{:keys [zones claims footprints self now action cell]}]
@@ -58,9 +63,9 @@
         pass? (and (= :put action) deposit-into-foreign-chest?)]
     (cond
       (nil? zones) {:ok false :reason :no-zones}
-      (contains? footprints cell) {:ok false :reason :footprint :plan (get footprints cell)}
-      (and foreign-zone (not pass?)) {:ok false :reason :zone :zone (:name foreign-zone) :owner (:owner foreign-zone)}
-      (and foreign-claim (not pass?)) {:ok false :reason :claim :claim (:id foreign-claim) :owner (:owner foreign-claim)}
+      (contains? footprints cell) (refusal :footprint {:plan (get footprints cell)})
+      (and foreign-zone (not pass?)) (refusal :zone {:zone (:name foreign-zone) :owner (:owner foreign-zone)})
+      (and foreign-claim (not pass?)) (refusal :claim {:claim (:id foreign-claim) :owner (:owner foreign-claim)})
       (some #(same-owner? (:owner %) self) here) {:ok true :why :own-zone}
       (some #(same-owner? (:owner %) self) live) {:ok true :why :own-claim}
       :else {:ok true :why :open})))

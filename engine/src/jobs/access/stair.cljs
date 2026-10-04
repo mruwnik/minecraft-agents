@@ -1,6 +1,7 @@
 (ns jobs.access.stair
   (:require [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.executor :as executor]
@@ -16,9 +17,10 @@
   whole and walkable by the executor (no gap, door or swim), else the stair stops :no-way-back.
   Each step is judged when chosen and every cell again right before its dig: the next floor must be a solid floor
   (else :no-floor: this slice places nothing), the cell under it neither air nor fluid (:cave-below) and loaded;
-  a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :footprint,
-  :not-loaded, :no-zones). Hazards are engine.access.rules' (one per fluid beside) plus one the stair adds for its
-  geometry: a falling block over the top cut of the next column, the column the body walks into. Accepted hazards
+  a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :claim, :footprint,
+  :not-loaded, :no-zones; :ignore-zones? skips all of them but :not-loaded). Hazards are engine.access.rules' (one per
+  fluid beside) plus one the stair adds for its geometry: a falling block over the top cut of the next column, the
+  column the body walks into. Accepted hazards
   (:accept, a set of :water :lava :falling-block :under-feet) default to #{}: water beside the cut is not taken
   (live, it flowed into the cut and onto the body's cell, which the walker cannot leave: no swimming; named, the
   stair digs and stops :fluid-in-cut a round later), lava never is, a falling block would land on the body or refill
@@ -34,7 +36,8 @@
    :heading {:doc ":north :east :south or :west" :default nil}
    :steps {:doc "steps to cut; or give :y" :default nil}
    :y {:doc "feet height to end at, instead of :steps" :default nil}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}})
+   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
@@ -124,9 +127,10 @@
        (not-any? #(re-find #"_pickaxe$" (:name %)) (u/inventory p))))
 
 (defn access-world
-  "{:zones :footprints} for the rules: the world's zone list (nil: never read) and every active plan's cells."
+  "The social half of the rules' input (engine.jobs.access/zone-input): zones, claims, footprints, the body's name and
+  the clock, and the job's :ignore-zones? arg."
   [c]
-  {:zones (ctx/zones c) :footprints (ctx/footprints c)})
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
 
 (defn feet-of [c]
   (let [{:keys [x y z]} (u/self-pos c)]

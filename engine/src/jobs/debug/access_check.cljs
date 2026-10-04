@@ -8,8 +8,9 @@
   (engine.access.rules), without digging or placing anything. One round ends :done with the result
   {:verdicts [{:cell [x y z] :block name-or-nil :dig verdict :place verdict} ...]}, also emitted as one
   :access-check.result event (counts of ok and refused digs and places). The cells come from :cells or from
-  the box :from/:to (inclusive, at most 400 cells). :zones, :footprints and :ledger are the rules' inputs
-  and default to empty; pass :zones nil to see the no-zone-list refusal. An ok dig verdict may carry :hazards. Bad arguments end with
+  the box :from/:to (inclusive, at most 400 cells). :zones, :footprints, :claims and :ledger are the rules' inputs
+  and default to empty; pass :zones nil to see the no-zone-list refusal; :self (default the body's name) is who
+  the zones and claims are judged for, :ignore-zones? the opt-out. An ok dig verdict may carry :hazards. Bad arguments end with
   {:status :bad-args :reason text}.")
 
 (def args
@@ -18,7 +19,11 @@
    :to {:doc "opposite box corner [x y z]; at most 400 cells in all" :default nil}
    :zones {:doc "zone boxes [{:name :min [x y z] :max [x y z] :allow #{:dig :place}}], nil = no zone list loaded" :default []}
    :footprints {:doc "cells [[x y z] ...] other plans claim" :default []}
-   :ledger {:doc "cells [[x y z] ...] holding this body's own scaffold blocks" :default []}})
+   :ledger {:doc "cells [[x y z] ...] holding this body's own scaffold blocks" :default []}
+   :claims {:doc "area claims [{:id :owner :status :active :until ms :min :max}] to judge against" :default []}
+   :self {:doc "the name zones and claims are judged for; nil: this body's name" :default nil}
+   :now {:doc "the clock in ms for the claims; nil: the body's clock" :default nil}
+   :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-cells 400)
 
@@ -47,8 +52,9 @@
 
 (defn verdicts
   "The dig and place verdict of every cell."
-  [block-at feet {:keys [zones footprints ledger]} cells]
-  (let [in {:block-at block-at :feet feet :zones zones :footprints (set footprints) :ledger (set ledger)}]
+  [block-at feet {:keys [zones footprints ledger claims self now ignore-zones?]} cells]
+  (let [in {:block-at block-at :feet feet :zones zones :footprints (set footprints) :ledger (set ledger)
+            :claims claims :self self :now now :ignore-zones? (boolean ignore-zones?)}]
     (mapv (fn [cell]
             (let [in (assoc in :cell cell)]
               {:cell cell :block (block-at cell) :dig (rules/may-dig? in) :place (rules/may-place? in)}))
@@ -65,7 +71,10 @@
       (do (ctx/result! c {:status :bad-args :reason (:error cells)})
           :done)
       (let [block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
-            vs (verdicts block-at (feet-cell c) (:args c) cells)
+            args (:args c)
+            vs (verdicts block-at (feet-cell c)
+                         (assoc args :self (or (:self args) (ctx/self-name c)) :now (or (:now args) (ctx/now c)))
+                         cells)
             dig (tally vs :dig)
             place (tally vs :place)]
         (ctx/result! c {:verdicts vs})
