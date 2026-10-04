@@ -372,6 +372,7 @@
                                            "{:op :put :id :x :when (nope 1) :job (quick)}"))
                   unreadable (await (http-request socket-path "POST" "/triggers" "{:op"))
                   listed (await (http-request socket-path "GET" "/triggers" nil))
+                  one (await (http-request socket-path "GET" "/triggers?id=bread-low" nil))
                   job (await (http-request socket-path "POST" "/jobs"
                                            (pr-str {:op :submit :request-id "r1" :generation-id gen
                                                     :spec '(quick) :front? true :by "steward"})))]
@@ -380,6 +381,53 @@
               (is (= 400 (:status unreadable)))
               (is (= [:bread-low] (mapv :id (get-in listed [:value :items]))))
               (is (= '(flag :low) (get-in listed [:value :items 0 :when])))
+              (is (= :bread-low (get-in one [:value :explain :id])))
               (is (= [200 "j1"] [(:status job) (get-in job [:value :job :id])]))
               (is (= "steward" (get-in (core/state eng) [:instances "j1" :by]))))
             (finally ((:close server)))))))))
+
+;; ---------------------------------------------------------------- the condition language through the seam
+
+(deftest the-condition-language-compiles-and-refuses-through-the-seam
+  (is (true? (:ok (api/compile-condition '(< (health) 10)))))
+  (is (true? (:ok (api/compile-condition "(< (health) 10)"))) "text from a command line too")
+  (are [form reason] (= reason (:reason (api/compile-condition form)))
+    '(nope) :unknown-symbol
+    ''(< (health) 10) :quoted
+    '(health) :not-boolean))
+
+(deftest real-conditions-keep-their-own-held-for-timers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as r} (setup {:compile api/compile-condition})
+              fired-ids #(mapv :reflex (of-kind seen :reflex :fired))]
+          (api/request! eng (assoc adhoc :id :a :when '(held-for 2 (< (health) 30))))
+          (await (tick-at r t0))
+          (await (tick-at r (+ t0 1000)))
+          (api/request! eng (assoc adhoc :id :b :when '(held-for 2 (< (health) 30))))
+          (await (tick-at r (+ t0 2000)))
+          (is (= [:a] (fired-ids)) "a has held 2 s; b only started")
+          (await (tick-at r (+ t0 3000)))
+          (is (= [:a] (fired-ids)))
+          (await (tick-at r (+ t0 4000)))
+          (is (= [:a :b] (fired-ids))))))))
+
+(deftest a-false-real-condition-never-fires
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as r} (setup {:compile api/compile-condition})]
+          (api/request! eng (assoc adhoc :when '(> (health) 30)))
+          (await (tick-at r t0))
+          (is (= 0 (fired seen))))))))
+
+(deftest one-entry-explains-its-condition
+  (let [{:keys [eng]} (setup {:compile api/compile-condition})]
+    (api/request! eng (assoc adhoc :when '(< (health) 10)))
+    (api/request! eng {:op :put :trigger :high})
+    (is (= [['(< (health) 10) false] ['(health) 20] [10 10]]
+           (mapv (juxt :form :value) (get-in (api/triggers-view eng "bread-low") [:explain :terms]))))
+    (is (= :bread-low (get-in (api/triggers-view eng :bread-low) [:explain :id])))
+    (is (string? (get-in (api/triggers-view eng "high") [:explain :message])) "a built-in has no condition to explain")
+    (is (nil? (:explain (api/triggers-view eng))))))

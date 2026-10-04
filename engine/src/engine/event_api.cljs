@@ -257,7 +257,7 @@
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/triggers"))
-                        (respond! res 200 (trigger-api/triggers-view eng))
+                        (respond! res 200 (trigger-api/triggers-view eng (.get (.-searchParams url) "id")))
 
                         (and (= method "POST") (contains? #{"/jobs" "/triggers"} pathname))
                         (if-not (.startsWith (or (aget (.-headers req) "content-type") "") "application/edn")

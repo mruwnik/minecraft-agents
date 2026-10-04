@@ -873,7 +873,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /catalog?kind=triggers&prefix=health&limit=20&offset=0` | bounded page of exact trigger names (names only) |
 | `GET /catalog?kind=job&name=jobs.<namespace>.<name>` | one job's description and argument defaults |
 | `GET /catalog?kind=trigger&name=<name>` | one trigger's default job, args, persistence and cooldown |
-| `GET /triggers` | the register in its own order, each entry with its live `:muted`, `:moved`, `:cooling-until`, `:stopped?` and `:backing-off`, and `:order`, the ids in firing order now |
+| `GET /triggers` | the register in its own order, each entry with its live `:muted`, `:moved`, `:cooling-until`, `:stopped?` and `:backing-off`, and `:order`, the ids in firing order now; `?id=<id>` adds `:explain` for that entry |
 | `POST /triggers` | one register edit (below): 200 with the result, 409 with a refusal |
 
 For example, read a snapshot without taking control of the body:
@@ -959,8 +959,11 @@ condition has been false. The condition is compiled at the request (a refusal
 carries the language's own `:at`, `:message` and `:allowed` under `:condition`);
 `engine.edn` keeps the form, boot compiles it again, and an entry that no longer
 compiles is dropped with one `system.dropped` warn. Each entry has its own
-compiled condition (its own `held-for` timers). Until `engine.condition` is in
-the build every `:when` is refused (`:conditions-unavailable`).
+compiled condition (its own `held-for` timers and scan cache, in memory only: a
+restart starts them over). To see why a condition does not fire, `GET
+/triggers?id=bread-low` adds `:explain {:id :bread-low :terms [{:form f :value
+v} ...]}`, every sub-term with its value now, root first, read without
+advancing the timers (`:engine.condition.facts/unknown` while offline).
 
 `:ttl-s` on a put removes the entry after that long (`reflex.expired`); without
 it the entry stays. An entry put over the socket whose job keeps failing while

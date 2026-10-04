@@ -9,9 +9,11 @@
   such entry by its id; the form is what engine.edn keeps, and
   restore-conditions! compiles it again on boot. See README.md, Local event API."
   (:require [engine.backoff :as backoff]
+            [engine.condition :as condition]
             [engine.core :as core]
             [engine.expr :as expr]
-            [engine.job-api :as job-api]))
+            [engine.job-api :as job-api]
+            [engine.memory :as mem]))
 
 (def persistences #{:retry :cooldown :stop})
 
@@ -45,24 +47,39 @@
 ;; ------------------------------------------------------------------ the :condition trigger (the seam)
 
 (defn compile-condition
-  "The condition compiler the body uses: form -> {:ok true :when f} or a refusal
-  {:ok false :reason :at :message :allowed}; f is (fn [world memory args & _])
-  and true only on a definite true. Each call makes a fresh f (its own
-  held-for timers). Not wired yet: engine.condition is not in HEAD."
+  "The condition compiler the body uses (engine.condition): form (data, or text
+  from a command line) -> {:ok true :when f :explain g} or the language's
+  refusal {:ok false :reason :at :message :allowed}. f is (fn [world memory
+  & _]), true only on a definite true; g is (fn [world memory]) -> [{:form
+  :value}], reading f's state without advancing it. Each call makes fresh
+  state (held-for timers, scan cache), kept in this process only."
   [form]
-  {:ok false :reason :conditions-unavailable :at form
-   :message "this build has no condition language yet" :allowed []})
+  (let [read (condition/read-condition form)
+        compiled (when (:ok read) (condition/compile (:form read)))]
+    (cond
+      (not (:ok read)) read
+      (not (:ok compiled)) compiled
+      :else
+      (let [node (:node compiled)
+            state (atom {})]
+        {:ok true
+         :when (fn [world memory & _]
+                 (let [{:keys [value] :as r} (condition/evaluate node {:world world :memory memory} @state)]
+                   (reset! state (:state r))
+                   (true? value)))
+         :explain (fn [world memory] (condition/explain node {:world world :memory memory} @state))}))))
 
 (defn condition-trigger
   "The trigger behind every ad hoc entry: it holds when that entry's own
   compiled condition does (args carry the entry's :id). compile is the
-  condition compiler (see compile-condition); :fns {id f} the compiled ones."
+  condition compiler (see compile-condition); :fns {id compiled} the compiled
+  ones ({:when f :explain g?})."
   [compile]
   (let [fns (atom {})]
     {:name :condition
      :doc "An ad hoc trigger: holds when the entry's :when condition does."
      :when (fn [world view args & more]
-             (if-let [f (get @fns (:id args))]
+             (if-let [f (get-in @fns [(:id args) :when])]
                (boolean (apply f world view args more))
                false))
      :job nil
@@ -80,9 +97,19 @@
 (defn compile-with [triggers form]
   ((get-in triggers [:condition :compile]) form))
 
-(defn set-condition! [eng id f]
+(defn set-condition!
+  "Keep compiled (a compile result, or nil to forget) for entry id."
+  [eng id compiled]
   (when-let [fns (get-in eng [:triggers :condition :fns])]
-    (if f (swap! fns assoc id f) (swap! fns dissoc id))))
+    (if compiled (swap! fns assoc id compiled) (swap! fns dissoc id))))
+
+(defn explain
+  "{:id id :terms [{:form :value} ...]}: every sub-term of entry id's condition
+  with its value now, root first; {:id id :message text} when it has none."
+  [eng id]
+  (if-let [g (get-in @(get-in eng [:triggers :condition :fns] (atom {})) [id :explain])]
+    {:id id :terms (g (:primitives eng) (mem/view (:store eng)))}
+    {:id id :message (str id " has no condition to explain (not an ad hoc entry, or not in the register)")}))
 
 ;; ------------------------------------------------------------------ validation
 
@@ -196,14 +223,17 @@
 
 (defn triggers-view
   "GET /triggers: the register in its own order with each entry's state, and
-  :order, the ids in firing order now (moves applied, muted ones left out)."
-  [eng]
-  (let [s (core/state eng)]
-    {:ok true
-     :generation-id (:generation-id s)
-     :total (count (:register s))
-     :order (mapv :id (core/effective-register s (core/now eng)))
-     :items (mapv #(entry-view eng %) (:register s))}))
+  :order, the ids in firing order now (moves applied, muted ones left out).
+  With id (keyword or name, GET /triggers?id=), also :explain for that entry."
+  ([eng] (triggers-view eng nil))
+  ([eng id]
+   (let [s (core/state eng)]
+     (cond-> {:ok true
+              :generation-id (:generation-id s)
+              :total (count (:register s))
+              :order (mapv :id (core/effective-register s (core/now eng)))
+              :items (mapv #(entry-view eng %) (:register s))}
+       (some? id) (assoc :explain (explain eng (keyword id)))))))
 
 ;; ------------------------------------------------------------------ applying
 
@@ -244,7 +274,7 @@
                                                          (conj % entry)))
                                     (update :reflex-state dissoc id))))
     (when (:when entry)
-      (set-condition! eng id (:when (compile-with (:triggers eng) (:when entry)))))
+      (set-condition! eng id (compile-with (:triggers eng) (:when entry))))
     (core/emit! eng {:source :reflex :kind :changed :level :info :reflex id :property :registered
                      :value (pr-str (:job entry)) :when (some-> (:when entry) pr-str)
                      :replaced (some? old) :by (:by entry)
@@ -304,7 +334,7 @@
           :when (= :condition (:trigger e))]
     (let [r (compile-with (:triggers eng) (:when e))]
       (if (:ok r)
-        (set-condition! eng (:id e) (:when r))
+        (set-condition! eng (:id e) r)
         (drop-entry! eng e (:message r))))))
 
 (defn expire-entries!
