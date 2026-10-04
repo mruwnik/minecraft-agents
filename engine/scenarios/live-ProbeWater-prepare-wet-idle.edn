@@ -1,0 +1,2 @@
+;; ProbeWater live cases for jobs.forestry.prepare wet cells: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
