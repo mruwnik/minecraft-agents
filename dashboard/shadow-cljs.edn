@@ -28,6 +28,14 @@
                                :mapMain agent-tools.api/map-main
                                :mapTtl agent-tools.map/ttl
                                :mapUsage agent-tools.map/usage
+                               :timeUsage agent-tools.time/usage
+                               :timeOptions agent-tools.api/time-options
+                               :timeClock agent-tools.api/time-clock
+                               :timeExecute agent-tools.api/time-execute
+                               :timeMain agent-tools.api/time-main
+                               :jobsUsage agent-tools.jobs/usage
+                               :jobsSpecFor agent-tools.api/jobs-spec-for
+                               :jobsRequestFor agent-tools.api/jobs-request-for
                                :changesOptions agent-tools.api/changes-options
                                :changesExecute agent-tools.api/changes-execute
                                :changesMain agent-tools.api/changes-main

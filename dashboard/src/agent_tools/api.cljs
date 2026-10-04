@@ -2,8 +2,10 @@
   "Compatibility boundary for the existing Node entry points and black-box tests.
    Tool implementations use native ClojureScript values internally."
   (:require [agent-tools.changes :as changes]
+            [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
+            [agent-tools.time :as time-tool]
             [agent-tools.storage-compat :as compat]))
 
 (defn map-filters [ctx values]
@@ -49,3 +51,26 @@
 
 (defn changes-main [argv]
   (changes/main! (vec argv)))
+
+(defn time-options [argv] (compat/to-js (time-tool/options (vec argv))))
+(defn time-clock [ctx now] (compat/to-js (time-tool/clock (compat/from-js ctx) now)))
+(defn time-execute [request]
+  (.then (time-tool/execute! (compat/from-js request)) compat/to-js))
+(defn time-main [argv] (time-tool/main! (vec argv)))
+
+(defn- edn-value-js [value]
+  ;; edn-data requires nested maps in expression lists to stay EDN maps,
+  ;; rather than the plain objects used by ordinary compatibility results.
+  (cond
+    (map? value) #js {:map (into-array (map (fn [[k v]] #js [(edn-value-js k) (edn-value-js v)]) value))}
+    (vector? value) (into-array (map edn-value-js value))
+    (seq? value) #js {:list (into-array (map edn-value-js value))}
+    (set? value) #js {:set (into-array (map edn-value-js value))}
+    :else (compat/to-js value)))
+
+(defn jobs-spec-for [text] (edn-value-js (jobs/spec-for text)))
+(defn jobs-request-for [argv]
+  (let [request (jobs/request-for (vec argv)) converted (compat/to-js request)]
+    (when-let [spec (get-in request [:request :spec])]
+      (aset (.-request converted) "spec" (edn-value-js spec)))
+    converted))

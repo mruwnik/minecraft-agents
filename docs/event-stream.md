@@ -115,6 +115,9 @@ names; former flat payload fields move into `:data`, correlation fields into
 
 `:attention` is optional; omission means `:none`.
 
+Job warning/error emissions default to `:attention :notice` unless the job
+explicitly supplies attention; this makes them visible without opening a required request.
+
 | Value | Contract |
 |---|---|
 | `:none` | Routine observation. Do not notify an agent. |
