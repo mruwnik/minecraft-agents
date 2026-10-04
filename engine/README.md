@@ -1777,6 +1777,27 @@ reason and movement/outcome fields. Unwatched action events stay quiet. Addresse
 chat and required attention retain their normal wake behavior while tracking an
 action. Classification by a model remains deferred.
 
+Completed job outcomes can be read back without reading engine files:
+
+```bash
+node engine/tools/observe.mjs Bob --world claude result j17
+node engine/tools/observe.mjs Bob --world claude job j17
+```
+
+`result` reads the latest 1000 retained events of the current engine generation in
+pages of at most 128 (halved when a page exceeds the response byte cap) under one
+three-second deadline. `job` falls back to this read when the scheduler no longer
+holds the job. The answer has the terminal `:status` and up to eight domain events
+of the job and its children (internal scheduler events left out), such as
+`search.done` with found coordinates and coverage; a watched `:job-finished` wake
+carries the same `:events` and `:history`. This is recorded event evidence, not
+every child's `result!` value; a job that emits no domain events returns its status
+alone. `:history :partial`, `:events-truncated?` and `:job-history-unavailable`
+make the retention and projection limits explicit. A first-ever watch of a job
+found neither in that history nor in the scheduler returns
+`{:wake :reset :reason :history-unavailable :jobs [...] :history-window 1000}` at once.
+Waiting state and observer cursors stay in the tool.
+
 World time can be read without choosing or starting a body:
 
 ```bash
