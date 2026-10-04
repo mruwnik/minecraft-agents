@@ -2,6 +2,9 @@
   "jobs.animals.lead-to against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
+            [engine.path.walk :as walk]
+            [jobs.animals.lead-to :as lead-to]
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
@@ -35,7 +38,7 @@
 (defn calls-of [{:keys [p]} name] (h/calls p name))
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
-(defn cow-of [{:keys [p]} id] (first (filter #(= id (.-id %)) (.. p -world -state -entities))))
+(defn cow-of [{:keys [p]} id] (first (filter #(= id (:id %)) (fake/entities p))))
 
 (deftest leads-the-cow-to-the-spot-and-lets-it-go
   (async done
@@ -46,8 +49,8 @@
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
-          (is (<= (js/Math.abs (- 30 (.-x (.-pos c)))) 4) "the cow stands at the spot: the body stops within 2 and the cow is led 2 behind it")
-          (is (not (true? (.-leashed c))))
+          (is (<= (js/Math.abs (- 30 (first (:pos c)))) 4) "the cow stands at the spot: the body stops within 2 and the cow is led 2 behind it")
+          (is (not (true? (:leashed c))))
           (is (= 1 (count-of s "lead")) "the lead is back in the inventory")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
@@ -59,7 +62,7 @@
               c (cow-of s 1)]
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
-          (is (<= (js/Math.abs (- 30 (.-x (.-pos c)))) 4) "the body walked on until the cow was within the gather radius")
+          (is (<= (js/Math.abs (- 30 (first (:pos c)))) 4) "the body walked on until the cow was within the gather radius")
           (is (< 1 (count (tu/walked-to (:eng s)))) "at least one pull after the walk to the spot")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
@@ -100,7 +103,7 @@
           (is (= :unleashed (:reason (done-event s))) "no snap: the body did not walk on")
           (is (<= 8 (:distance short)) "the warn names the distance the animal was left at")
           (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no walk past the spot: no pull was started")
-          (is (not (true? (.-leashed c)))))))))
+          (is (not (true? (:leashed c)))))))))
 
 (def wall-32
   "A wall at x 32 from z -8 to 8, two high: a body going from 30 to 33 detours round its end at z 9."
@@ -157,10 +160,10 @@
               pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
           (.override (.-world p) "steer"
                      (fn [token args impl]
-                       (if (< (.. p -world -state -self -pos -x) 27)
+                       (if (< (first (:pos (fake/self p))) 27)
                          (impl token args)
                          (do (swap! steers inc)
-                             (set! (.. p -world -state -self -pos -x) (+ 0.5 (.. p -world -state -self -pos -x)))
+                             (fake/swap-self! p update-in [:pos 0] + 0.5)
                              (js/Promise.resolve #js {:status "timeout" :pose #js {}})))))
           (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
           (await (run-ticks s 6 700))
@@ -183,8 +186,8 @@
           (.override (.-world p) "steer"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (when (< 29.5 (.. p -world -state -self -pos -x))
-                           (.splice (.. p -world -state -entities) 0 1))
+                         (when (< 29.5 (first (:pos (fake/self p))))
+                           (swap! (fake/state p) update :entities subvec 1))
                          r)))
           (await (submit s {} 40))
           (is (finished? s))
@@ -198,8 +201,8 @@
               c (cow-of s 1)]
           (is (finished? s))
           (is (= :tied (:reason (done-event s))))
-          (is (true? (.-leashed c)))
-          (is (not (true? (.-leashedToMe c))) "held by the post, not by the body")
+          (is (true? (:leashed c)))
+          (is (not (true? (:leashed-to-me c))) "held by the post, not by the body")
           (is (= 0 (count-of s "lead")) "the lead stays on the cow")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
@@ -227,7 +230,7 @@
           (is (finished? s))
           (is (= :lead-broke (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
-          (is (not (true? (.-leashed c))))
+          (is (not (true? (:leashed c))))
           (is (empty? (calls-of s "useOn")) "no tie was tried")
           (is (= [:lead-to.gave-up] (mapv :kind (events-of s :lead-to.gave-up)))))))))
 
@@ -239,7 +242,7 @@
           (.override (.-world p) "steer"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (.splice (.. p -world -state -entities) 0 1)
+                         (swap! (fake/state p) update :entities subvec 1)
                          r)))
           (await (submit s {} 12))
           (is (finished? s))
@@ -253,5 +256,30 @@
               c (cow-of s 1)]
           (is (finished? s))
           (is (= :unreachable (:reason (done-event s))))
-          (is (true? (.-leashedToMe c)))
+          (is (true? (:leashed-to-me c)))
           (is (true? (:still-led (done-event s)))))))))
+
+(def animal-at-3 {:x 3 :y 64 :z 0})
+
+(deftest the-reach-check-takes-a-fractional-pull-target-without-throwing
+  (let [s (h/setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+        c {:primitives (:p s)}]
+    (is (boolean? (lead-to/path-leaves-reach? c {:x 33.4 :y 64 :z 0.6} animal-at-3)))))
+
+(deftest the-reach-check-judges-a-fractional-target-by-its-walk
+  (let [far (h/setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+        near (h/setup {:floor tu/walk-floor :inventory lead})]
+    (is (true? (lead-to/path-leaves-reach? {:primitives (:p far)} {:x 33.4 :y 64 :z 0.6} animal-at-3)) "detour past the wall end")
+    (is (false? (lead-to/path-leaves-reach? {:primitives (:p near)} {:x 9.4 :y 64 :z 0.6} animal-at-3)) "open floor")))
+
+(deftest the-reach-check-plans-to-the-floored-cell
+  (let [s (h/setup {:floor tu/walk-floor :inventory lead})
+        asked (atom nil)]
+    (with-redefs [walk/plan-walk (fn ([_ _ to _ _] (reset! asked to) nil) ([_ _ to _ _ _] (reset! asked to) nil))]
+      (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 9794.82 :y 64 :z -3.5} animal-at-3))
+    (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it")))
+
+(deftest the-reach-check-is-false-when-planning-throws
+  (let [s (h/setup {:floor tu/walk-floor :inventory lead})]
+    (with-redefs [walk/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
+      (is (false? (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 33.4 :y 64 :z 0.6} animal-at-3))))))

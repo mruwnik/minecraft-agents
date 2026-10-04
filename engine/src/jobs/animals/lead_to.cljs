@@ -3,7 +3,8 @@
             [engine.jobs.animals :as animals]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
-            [engine.path.walk :as walk]))
+            [engine.path.walk :as walk]
+            [engine.places :as places]))
 
 (def doc
   "Put a lead on one animal of the mob type :mob, walk to :pos with it
@@ -154,12 +155,20 @@
   and a pull's own target lies up to 10 + 1 out."
   11)
 
+(defn plan-or-nil
+  "The walk plan to the cell of target (floored by places/parse-pos, as go-to does), nil when there is none or
+  planning throws: the check never fails the job."
+  [c pw target]
+  (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
+    (try (walk/plan-walk c pw [x y z] 1 walk/default-weight)
+         (catch :default _ nil))))
+
 (defn path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
-  that cannot plan (no path sensing, no path) is not judged here: go-to deals with that."
+  that cannot plan (no path sensing, no path, a planner that throws) is not judged here: go-to deals with that."
   [c target animal-pos]
   (let [pw (walk/path-world (:primitives c))
-        plan (when pw (walk/plan-walk c pw [(:x target) (:y target) (:z target)] 1 walk/default-weight))]
+        plan (when pw (plan-or-nil c pw target))]
     (boolean
      (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
            (:steps plan)))))
