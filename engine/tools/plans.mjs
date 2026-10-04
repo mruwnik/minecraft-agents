@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Why JavaScript: Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { execute } from './plan-tools-lib.mjs'

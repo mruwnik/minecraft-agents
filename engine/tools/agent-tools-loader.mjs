@@ -1,5 +1,4 @@
-// Stable Node entry point for the ahead-of-time compiled ClojureScript tools.
-// Compilation is an explicit build step, never part of command startup.
+// Why JavaScript: Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)

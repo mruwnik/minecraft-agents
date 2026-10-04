@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stable Node launcher for the ahead-of-time ClojureScript world clock.
+// Why JavaScript: Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tools from './agent-tools-loader.mjs'

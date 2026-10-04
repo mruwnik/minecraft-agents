@@ -1,4 +1,4 @@
-// Compatibility entry point; the implementation is ahead-of-time compiled CLJS.
+// Why JavaScript: Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import tools from './agent-tools-loader.mjs'
 
 export const RAW_BYTES = 65536
