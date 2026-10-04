@@ -1,0 +1,2 @@
+;; ClaudeProbe live cases for place clicks and build access: idle, jobs submitted with tools/jobs.mjs
+{:register [] :queue []}
