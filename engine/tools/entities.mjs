@@ -12,7 +12,7 @@ export const project = tools.entitiesProject
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024 + 4096
 const MAX_OUTPUT_BYTES = 65536
-const socketFor = request => path.join(request.ctx['world-dir'], 'agents', request.body, 'engine', 'events.sock')
+const socketFor = request => path.join(request.ctx['world-dir'], 'agents', request.body, 'engine', 'control.sock')
 const failure = (reason, message) => ({ ok: false, reason: keyword(reason), message })
 
 export async function execute (request, getImpl = get) {

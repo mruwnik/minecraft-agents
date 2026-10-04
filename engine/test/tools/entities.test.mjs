@@ -9,13 +9,13 @@ import { readEDN, writeEDN } from '../../tools/observe-lib.mjs'
 function fixture (t) {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), 'entities-cli-'))
   const worldDir = path.join(state, 'worlds', 'w')
-  const socketPath = path.join(worldDir, 'agents', 'Probe', 'engine', 'events.sock')
+  const socketPath = path.join(worldDir, 'agents', 'Probe', 'engine', 'control.sock')
   fs.mkdirSync(path.dirname(socketPath), { recursive: true })
   fs.writeFileSync(path.join(worldDir, 'world.json'), '{}\n')
   t.after(() => fs.rmSync(state, { recursive: true, force: true }))
   const paths = []
-  const getImpl = async (socket, url) => {
-    paths.push([socket, url])
+  const getImpl = async (socket, url, options = {}) => {
+    paths.push([socket, url, options.maxBytes])
     return { status: 200, contentType: 'application/edn', text: writeEDN(fx.value) }
   }
   const fx = { state, socketPath, worldDir, paths, getImpl, value: null }
@@ -56,7 +56,9 @@ test('reads only /entities over the body socket and compactly reports cached age
   const fx = fixture(t)
   fx.value = body
   const result = await execute(options(['Probe', '--world', 'w', '--state', fx.state]), fx.getImpl)
-  assert.deepEqual(fx.paths, [[fx.socketPath, '/entities']])
+  assert.deepEqual(fx.paths, [[fx.socketPath, '/entities', 4 * 1024 * 1024 + 4096]])
+  assert.ok(fx.paths[0][0].endsWith(path.join('engine', 'control.sock')))
+  assert.equal(result.ok, true)
   assert.equal(result.online, undefined)
   assert.equal(result['online?'], false)
   assert.equal(result.dimension, 'overworld')
