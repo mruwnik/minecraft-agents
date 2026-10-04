@@ -52,7 +52,33 @@
    ["head in tall grass"
     {:blocks {"0,65,0" "tall_grass"}} false]
    ["head in air"
-    {} false]])
+    {} false]
+   ;; feet y is not an integer on farmland, slabs, paths: the eyes are 1.62 above the feet
+   ["on farmland inside ripe wheat"
+    {:self {:pos {:x 0 :y 64.9375 :z 0}} :blocks {"0,64,0" "farmland" "0,65,0" "wheat"}} false]
+   ["on farmland inside freshly seeded wheat"
+    {:self {:pos {:x 0 :y 64.9375 :z 0}} :blocks {"0,64,0" "farmland" "0,65,0" "wheat"}
+     :ages {"0,65,0" 0}} false]
+   ["on a bottom slab"
+    {:self {:pos {:x 0 :y 64.5 :z 0}} :blocks {"0,64,0" "oak_slab"}} false]
+   ["on a dirt path"
+    {:self {:pos {:x 0 :y 64.9375 :z 0}} :blocks {"0,64,0" "dirt_path"}} false]
+   ["in tall grass"
+    {:blocks {"0,64,0" "tall_grass" "0,65,0" "tall_grass"}} false]
+   ["in water one deep"
+    {:self {:inWater true :oxygen 20} :blocks {"0,64,0" "water"}} false]
+   ["wheat at the eyes"
+    {:blocks {"0,65,0" "wheat"}} false]
+   ["a bottom slab at the eyes"
+    {:blocks {"0,65,0" "oak_slab"}} false]
+   ["a flower the list never heard of at the eyes"
+    {:blocks {"0,65,0" "wither_rose"}} false]
+   ["stone on a body standing on farmland"
+    {:self {:pos {:x 0 :y 64.9375 :z 0}} :blocks {"0,64,0" "farmland" "0,66,0" "stone"}} true]
+   ["sand fallen on the head"
+    {:blocks {"0,65,0" "sand"}} true]
+   ["sunk into a solid block"
+    {:blocks {"0,64,0" "dirt" "0,65,0" "dirt"}} true]])
 
 (deftest trigger-and-check-agree-on-every-branch
   (doseq [[label world expected] cases]
@@ -290,3 +316,14 @@
           (is (= 1 (count (:list (core/state eng)))) "still listed, no failure counted")
           (await (core/tick! eng))
           (is (= ["moveTo" "dig" "moveTo"] (call-names p)) "second round digs"))))))
+
+(deftest breathe-never-digs-a-block-that-cannot-suffocate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 0 :y 64.9375 :z 0}}
+                                      :blocks {"0,64,0" "farmland" "0,65,0" "wheat" "0,66,0" "wheat"}})]
+          (core/submit! eng (list breathe defaults) {})
+          (await (core/tick! eng))
+          (is (= [] (call-names p)) "no dig, no move")
+          (is (= "wheat" (.-name (.blockAt p (tu/pos 0 65 0)))) "the crop is still there"))))))

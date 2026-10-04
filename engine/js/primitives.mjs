@@ -504,11 +504,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       }))
   }
 
-  // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any
+  // a collision shape that fills the whole cell: what a head can be stuck in (slabs, farmland, crops, carpets are not)
+  const fullCube = block => block.boundingBox === 'block' && (block.shapes ?? []).some(([x0, y0, z0, x1, y1, z1]) => x0 <= 0 && y0 <= 0 && z0 <= 0 && x1 >= 1 && y1 >= 1 && z1 >= 1)
+
+  // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any,
+  // plus `fullCube: true` when its collision shape fills the cell
   const blockInfo = (block, withProps = true) => {
     const properties = stateProperties(block)
     const age = properties.age
-    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }) }
+    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }), ...(fullCube(block) && { fullCube: true }) }
   }
 
   const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64, properties = false } = {}) => {

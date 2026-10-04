@@ -84,9 +84,7 @@
     (some (fn [[dx dz]] (surface-in-column p (+ fx dx) (+ fz dz) fy reach))
           (columns radius))))
 
-(defn solid-at? [p cell]
-  (let [n (u/block-name p cell)]
-    (and (some? n) (not (s/passable? n)))))
+(defn solid-at? [p cell] (s/suffocates? p cell))
 
 (defn status [r] (.-status r))
 
@@ -152,7 +150,7 @@
                       head (u/block-name p (update cell :y inc))
                       below (u/block-name p (update cell :y dec))]
                   (and feet head below
-                       (s/passable? feet) (s/passable? head)
+                       (not (s/suffocates? p cell)) (not (s/suffocates? p (update cell :y inc)))
                        (not (s/air? below)) (not (contains? #{"water" "lava"} below)))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
@@ -164,7 +162,7 @@
   when the dig worked; false when it did not (nothing moved)."
   [c]
   (let [p (:primitives c)
-        head (s/head-cell (.self p))
+        head (s/eye-cell (.self p))
         above (update head :y inc)
         dug (status (await (ctx/act c :dig (clj->js {:pos head}))))]
     (if-not (contains? #{"dug" "missing"} dug)

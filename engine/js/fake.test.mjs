@@ -673,3 +673,9 @@ test('fake chat applies the real rules: command, bad name, prototype names', asy
   assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'constructor' }), { status: 'gone', to: 'constructor' })
   assert.deepEqual(p.world.state.chat, [])
 })
+
+test('blockAt marks full cubes only', () => {
+  const p = createFake({ blocks: { '1,64,0': 'stone', '2,64,0': 'farmland', '3,64,0': 'wheat', '4,64,0': 'oak_slab' } })
+  assert.equal(p.blockAt(at(1, 64, 0)).fullCube, true)
+  for (const x of [2, 3, 4, 9]) assert.equal('fullCube' in p.blockAt(at(x, 64, 0)), false)
+})

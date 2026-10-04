@@ -4,52 +4,41 @@
   Two situations, both read from sensing only:
   - :drowning: in water, oxygen below :min-oxygen, and the head cell is not
     air (a swimmer at the surface breathes and is not drowning).
-  - :enclosed: the head cell, one block above the feet, holds a block that
-    suffocates. Every block does except the ones in passable: air, water,
-    lava, plants, torches, signs, rails, carpets, buttons, ladders, vines,
-    cobweb, snow layers and the like. An unloaded cell (blockAt null) is
-    read as not enclosed, never as a reason to dig."
+  - :enclosed: the cell holding the eyes (feet y + 1.62) holds a block whose
+    collision shape fills the cell (blockAt's :fullCube), as in Minecraft.
+    Air, fluids, plants, slabs and the like never do. An unloaded cell
+    (blockAt null) is read as not enclosed, never as a reason to dig."
   (:require [engine.jobs.util :as u]))
 
 (def default-min-oxygen 12)
 
-(def passable-names
-  #{"air" "cave_air" "void_air" "torch" "rail" "water" "lava" "bubble_column" "fire" "soul_fire"
-    "grass" "short_grass" "tall_grass" "fern" "large_fern" "seagrass" "tall_seagrass" "kelp" "kelp_plant"
-    "dead_bush" "vine" "glow_lichen" "cobweb" "ladder" "snow" "lever" "redstone_wire" "tripwire"
-    "tripwire_hook" "light" "structure_void" "sugar_cane" "sweet_berry_bush"})
-
-(def passable-suffixes
-  ["_torch" "_sign" "_hanging_sign" "_button" "_pressure_plate" "_carpet" "_rail" "_banner"
-   "_sapling" "_flower" "_tulip" "_mushroom" "_fungus" "_roots" "_vines"])
-
-(def passable-flowers
-  #{"dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "oxeye_daisy" "cornflower"
-    "lily_of_the_valley" "sunflower" "lilac" "rose_bush" "peony"})
-
-(defn passable?
-  "Whether a block of this name lets a head through without suffocating."
-  [block-name]
-  (or (contains? passable-names block-name)
-      (contains? passable-flowers block-name)
-      (boolean (some #(.endsWith block-name %) passable-suffixes))))
-
 (defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
 
+(def eye-height 1.62)
 
-(defn head-cell [self]
+(defn eye-cell
+  "The cell holding the eyes of a body whose feet are at self's pos. The feet
+  are not at an integer y on farmland, slabs, paths or soul sand."
+  [self]
   {:x (js/Math.floor (.. self -pos -x))
-   :y (inc (js/Math.floor (.. self -pos -y)))
+   :y (js/Math.floor (+ (.. self -pos -y) eye-height))
    :z (js/Math.floor (.. self -pos -z))})
+
+(defn suffocates?
+  "Whether the block at cell makes a head inside it suffocate: sensing reports
+  its collision shape as filling the cell (:fullCube). Plants, slabs, fluids
+  and air do not. An unloaded cell does not."
+  [p cell]
+  (boolean (some-> (.blockAt p (clj->js cell)) .-fullCube)))
 
 (defn situation
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."
   [p min-oxygen]
   (let [self (.self p)
-        head (u/block-name p (head-cell self))]
+        head (u/block-name p (eye-cell self))]
     (cond
       (and (.-inWater self) (< (.-oxygen self) min-oxygen) (not (air? (or head "water")))) :drowning
-      (and (some? head) (not (passable? head))) :enclosed
+      (suffocates? p (eye-cell self)) :enclosed
       :else nil)))
 
 (def suffocating

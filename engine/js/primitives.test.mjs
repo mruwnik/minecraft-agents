@@ -350,7 +350,7 @@ test('blocks matches by name, predicate and max, sorted by distance', () => {
 
 test('blockAt gives a name and a plain position', () => {
   const { p } = rig(world)
-  assert.deepEqual(p.blockAt(at(2, 64, 0)), { name: 'oak_log', pos: at(2, 64, 0) })
+  assert.deepEqual(p.blockAt(at(2, 64, 0)), { name: 'oak_log', pos: at(2, 64, 0), fullCube: true })
 })
 
 test('body events: health drop is hurt, death and respawn are forwarded, unsubscribe works', () => {
@@ -2273,4 +2273,12 @@ test('furnace reads a furnace within reach and reports a refusal as data when it
   assert.deepEqual(await p.furnace('t1', { pos: at(9, 64, 0), op: 'read' }), { status: 'unreachable', reason: 'too-far', distance: 9.58 })
   assert.deepEqual(await p.furnace('t1', { pos: at(1, 64, 0), op: 'read' }), { status: 'cannot', reason: 'not-a-furnace' })
   assert.deepEqual(await p.furnace('t1', { pos: at(5, 64, 5), op: 'read' }), { status: 'missing' })
+})
+
+test('blockAt marks a block fullCube only when its collision shape fills the cell', () => {
+  const { p } = rig({ blocks: { '1,64,0': 'stone', '2,64,0': 'farmland', '3,64,0': 'wheat', '4,64,0': 'oak_slab' },
+    shapes: { '2,64,0': [[0, 0, 0, 1, 0.9375, 1]], '3,64,0': [], '4,64,0': [[0, 0, 0, 1, 0.5, 1]] } })
+  assert.equal(p.blockAt(at(1, 64, 0)).fullCube, true)
+  for (const x of [2, 3, 4]) assert.equal('fullCube' in p.blockAt(at(x, 64, 0)), false)
+  assert.equal('fullCube' in p.blockAt(at(9, 64, 0)), false)
 })

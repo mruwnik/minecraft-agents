@@ -9,7 +9,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null, moveCap = Infinity, onClick = () => {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, shapes = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null, moveCap = Infinity, onClick = () => {} } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -25,7 +25,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], entities = {}, 
     if (notLoaded) return null
     const name = blocks[key(v.x, v.y, v.z)]
     if (name === undefined) return { name: 'air', position: new Vec3(v.x, v.y, v.z), boundingBox: 'empty', diggable: false, getProperties: () => ({}) }
-    return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
+    return { name, position: new Vec3(v.x, v.y, v.z), boundingBox: 'block', shapes: shapes[key(v.x, v.y, v.z)] ?? [[0, 0, 0, 1, 1, 1]], diggable: name !== 'bedrock', getProperties: () => props[key(v.x, v.y, v.z)] ?? {} }
   }
   const ownColumn = v => { const p = bot.entity.position; return v.x === p.x && v.y === p.y && v.z === p.z }
   // A window moves items in the stub's container (at most moveCap of them), then calls onClick(window) so a test can
