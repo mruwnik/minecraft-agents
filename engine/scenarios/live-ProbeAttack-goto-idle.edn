@@ -1,0 +1,4 @@
+;; ProbeAttack live cases for the jobs that call jobs.movement.go-to (search, lead-to, toggle, sleep, the stuck cases): idle, jobs are submitted with tools/jobs.mjs; the stuck trigger is registered for the unstick case
+{:register [{:trigger :stuck :persistence :cooldown :cooldown-s 60
+             :job (jobs.maintenance.unstick)}]
+ :queue []}
