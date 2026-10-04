@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -22,18 +22,36 @@ const availableMb = () => {
   try { return parseMemAvailableMb(readFileSync('/proc/meminfo', 'utf8')) } catch { return null }
 }
 
-// Resolves true on a good build. The compile JVM is shared machine-wide, hence flock.
-const runBuild = () => new Promise((resolve) => {
+// Detached, so the whole group (flock, npx, the shadow-cljs JVM) can be killed with one signal.
+const killBuild = () => {
+  if (!build) return
+  try { process.kill(-build.pid, 'SIGTERM') } catch { /* already gone */ }
+}
+
+const runStep = (step) => new Promise((resolve) => {
+  say(`building (shadow-cljs compile ${step})`)
+  build = spawn('flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', step], { cwd: dir, stdio: 'inherit', detached: true })
+  build.on('error', (e) => { say(`build could not start: ${e.message}`); build = null; resolve(1) })
+  build.on('exit', (code) => { build = null; resolve(code === null ? 1 : code) })
+})
+
+// Resolves true on a good build. The compile JVM is shared machine-wide, hence flock. Steps run in buildSteps order and
+// stop at the first failure, so a failed ui build leaves out/server.cjs as it was.
+const runBuild = async () => {
   const mb = availableMb()
   if (!enoughMemory(mb)) {
     say(`refusing to build: ${mb} MB available, ${minMemoryMb} MB needed`)
-    return resolve(false)
+    return false
   }
-  say('building (shadow-cljs compile server ui)')
-  build = spawn('flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'server', 'ui'], { cwd: dir, stdio: 'inherit' })
-  build.on('error', (e) => { say(`build could not start: ${e.message}`); build = null; resolve(false) })
-  build.on('exit', (code) => { build = null; resolve(code === 0) })
-})
+  const codes = []
+  for (const step of buildSteps) {
+    codes.push(await runStep(step))
+    if (state.quitting || codes[codes.length - 1] !== 0) break
+  }
+  const { ok, failed } = buildOutcome(codes)
+  if (!ok) say(`build failed at the ${failed} step`)
+  return ok
+}
 
 const startServer = () => {
   server = spawn('node', ['--max-old-space-size=256', '--max-semi-space-size=4', 'out/server.cjs'],
@@ -46,8 +64,9 @@ const startServer = () => {
 }
 
 const stopServer = (why) => {
-  state = { ...state, stopping: why }
   const s = server
+  if (!s) return
+  state = { ...state, stopping: why }
   s.kill('SIGTERM')
   setTimeout(() => { if (server === s) s.kill('SIGKILL') }, killAfterMs).unref()
 }
@@ -59,11 +78,13 @@ const run = ({ state: next, actions }) => {
 
 const perform = (action) => {
   if (action === 'build') runBuild().then((ok) => run(onBuildDone(state, ok)))
-  else if (action === 'swap') { say('build ok, replacing the server'); stopServer('swap') }
+  else if (action === 'swap') { say('build ok, replacing the server'); if (server) stopServer('swap'); else startServer() }
   else if (action === 'report-failure') say('build failed: the old server keeps running')
   else if (action === 'start') startServer()
+  else if (action === 'kill-build') killBuild()
+  else if (action === 'stop-server') stopServer('quit')
   else if (action.startsWith('exit:')) {
-    if (build) build.kill('SIGTERM')
+    killBuild()
     process.exit(Number(action.slice(5)))
   }
 }
@@ -73,11 +94,7 @@ const request = () => {
   run(onRestartRequest(state))
 }
 
-const quit = () => {
-  if (build) build.kill('SIGTERM')
-  if (!server) process.exit(0)
-  stopServer('quit')
-}
+const quit = () => run(onQuit(state, server !== null))
 process.on('SIGINT', quit)
 process.on('SIGTERM', quit)
 
@@ -85,6 +102,7 @@ process.on('SIGTERM', quit)
 state = { ...state, phase: 'building' }
 runBuild().then((ok) => {
   if (!ok) { say('first build failed'); process.exit(1) }
+  if (state.quitting) return
   state = { ...state, phase: 'idle' }
   startServer()
 })

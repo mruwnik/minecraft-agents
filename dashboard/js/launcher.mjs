@@ -4,20 +4,37 @@
 
 export const minMemoryMb = 3500
 
-export const initial = { phase: 'idle', pending: false, stopping: null }
+export const initial = { phase: 'idle', pending: false, stopping: null, quitting: false }
+
+// ui first: shadow-cljs writes out/server.cjs only when the server step runs, so a failed ui build leaves the old file.
+export const buildSteps = ['ui', 'server']
+
+// codes: exit codes of the steps run so far, in order; the run stops at the first non-zero one.
+export const buildOutcome = (codes) => {
+  const i = codes.findIndex((c) => c !== 0)
+  return i < 0 ? { ok: true, failed: null } : { ok: false, failed: buildSteps[i] }
+}
 
 export const onRestartRequest = (state) =>
+  state.quitting ? { state, actions: [] } :
   state.phase === 'building'
     ? { state: { ...state, pending: true }, actions: [] }
     : { state: { ...state, phase: 'building' }, actions: ['build'] }
 
 // A good build swaps the server; a pending request starts the next build after that.
 export const onBuildDone = (state, ok) => {
+  if (state.quitting) return { state: { ...state, phase: 'idle', pending: false }, actions: [] }
   const first = ok ? ['swap'] : ['report-failure']
   return state.pending
     ? { state: { ...state, phase: 'building', pending: false }, actions: [...first, 'build'] }
     : { state: { ...state, phase: 'idle' }, actions: first }
 }
+
+// A quit drops pending work, kills the build, and stops the server (or exits when there is none).
+export const onQuit = (state, serverRunning) => ({
+  state: { ...state, quitting: true, pending: false, stopping: serverRunning ? 'quit' : state.stopping },
+  actions: ['kill-build', serverRunning ? 'stop-server' : 'exit:0'],
+})
 
 // An exit nobody asked for ends the launcher with the server's code (no restart loops).
 export const onServerExit = (state, code, signal) => {

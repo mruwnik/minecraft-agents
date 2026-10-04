@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -64,4 +64,38 @@ test('enoughMemory needs at least the minimum available', () => {
   assert.equal(enoughMemory(3500), true)
   assert.equal(enoughMemory(3499), false)
   assert.equal(enoughMemory(null), false)
+})
+
+test('a quit during a build with a pending request starts no further build and does not swap', () => {
+  const pending = onRestartRequest(onRestartRequest(initial).state).state
+  const quit = onQuit(pending, true)
+  assert.deepEqual(quit.actions, ['kill-build', 'stop-server'])
+  assert.equal(quit.state.stopping, 'quit')
+  const done = onBuildDone(quit.state, false)
+  assert.deepEqual(done.actions, [])
+  assert.deepEqual(onBuildDone(quit.state, true).actions, [])
+})
+
+test('requests after a quit are ignored', () => {
+  const quit = onQuit(initial, true)
+  assert.deepEqual(onRestartRequest(quit.state).actions, [])
+})
+
+test('a quit without a server exits at once', () => {
+  assert.deepEqual(onQuit(initial, false).actions, ['kill-build', 'exit:0'])
+})
+
+test('a quit during a swap stops the replacement from starting', () => {
+  const quit = onQuit({ ...initial, stopping: 'swap' }, true)
+  assert.deepEqual(onServerExit(quit.state, 0).actions, ['exit:0'])
+})
+
+test('the ui builds before the server so a failed ui build leaves the old server file', () => {
+  assert.deepEqual(buildSteps, ['ui', 'server'])
+})
+
+test('buildOutcome stops at the first failed step', () => {
+  assert.deepEqual(buildOutcome([0, 0]), { ok: true, failed: null })
+  assert.deepEqual(buildOutcome([1]), { ok: false, failed: 'ui' })
+  assert.deepEqual(buildOutcome([0, 2]), { ok: false, failed: 'server' })
 })

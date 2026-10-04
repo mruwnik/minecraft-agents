@@ -836,7 +836,7 @@
      req res guard/max-body-bytes
      (fn [_]
        (if (restart/ask-launcher!)
-         (send-json! res 202 {:ok true :message "restart requested; the launcher builds first and keeps this server if the build fails"})
+         (send-json! res 202 {:ok true :build-id restart/build-id :message "restart requested; the launcher builds first and keeps this server if the build fails"})
          (send-json! res 409 {:error "no launcher: this server was not started by npm start"}))))))
 
 (defn preview! [req res]
@@ -1018,6 +1018,7 @@
         :chat-send (send-chat! req res)
         :whisper-send (send-whisper! req res (body-key route))
         :restart (request-restart! req res)
+        :build-id (send-json! res 200 {:build-id restart/build-id})
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
         :tile (send-tile! res (:world route) (:cx route) (:cz route))
