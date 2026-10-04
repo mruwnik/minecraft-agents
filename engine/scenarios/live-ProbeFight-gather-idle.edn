@@ -1,0 +1,4 @@
+;; ProbeFight live cases for lead-to gather (idle, jobs submitted with tools/jobs.mjs)
+{:register [{:trigger :stuck :persistence :cooldown :cooldown-s 60
+             :job (jobs.maintenance.unstick)}]
+ :queue []}
