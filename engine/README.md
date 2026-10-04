@@ -291,7 +291,7 @@ emitted at the moment health reaches 0: `pos` is where the body died and `invent
 it carried. An instant death (`/kill`, void, damage) has the server clear the slots before the event is read, so when the live inventory is empty `inventory` is the last snapshot of the living body (taken on each health event above 0 and about once a second of physics ticks); `experience` is `{level, points}` at death. mineflayer emits `death` from
 the health packet and only overwrites `bot.experience` on a later `experience` packet, so the values are the pre-death
 ones. `respawned` is emitted at the first `spawned` after the library's respawn
-signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). `offline`
+signal, so `pos` is the new position (and `dimension` the new dimension; a portal also counts as a respawn). A death drops every job: each listed job (queued, held, cut or running) is cancelled with `:by :death` and each reflex job ends `:dropped`; register entries stay, so a trigger that still holds after the respawn (`died` starts recover-drops) runs its job again. `offline`
 and `online` are the two ends of the `offline` primitive; after `online` the `bot` underneath is a new one. The engine
 turns each into an entry of that kind in body memory (see Memory). `picked-up` is emitted at level `debug` and its `:picked-up {:item :count}`
 entries are what make-room reads as "newer" (a stack picked up recently is tossed last).

@@ -1051,10 +1051,27 @@
         (contains? debug-kinds kind) :debug
         :else :info))
 
+(defn drop-jobs-on-death!
+  "A job does not survive its body's death: cancel every listed job (queued, held,
+  cut or running) and drop every reflex job. Register entries stay, so a trigger
+  that still holds after the respawn starts its job again."
+  [eng]
+  (doseq [id (:list (state eng))]
+    (cancel! eng id :death))
+  (doseq [[id inst] (:instances (state eng))
+          :when (:reflex inst)]
+    (when (= id (:id (running eng)))
+      (set-owner! eng nil)
+      (reset! (:running eng) nil))
+    (drop-reflex-job! eng id (:reflex inst) :dropped {:how :dropped :by :death})))
+
 (defn record-body-event!
-  "A momentary body event becomes an entry of its kind (:hurt, :died, ...)."
+  "A momentary body event becomes an entry of its kind (:hurt, :died, ...).
+  A death also drops every job."
   [eng e]
   (let [m (js->clj e :keywordize-keys true)]
+    (when (= "died" (:kind m))
+      (drop-jobs-on-death! eng))
     (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))
     (save-memory! eng)
     (emit! eng (merge (dissoc m :kind)

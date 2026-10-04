@@ -872,6 +872,21 @@
           (is (= {} (:instances (core/state eng))))
           (is (nil? (core/tick! eng)) "nothing is left to start"))))))
 
+(deftest a-death-drops-a-reflex-job-between-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 5}})]
+          (core/register-reflex! eng {:trigger :hurt :job '(count)})
+          (await (core/tick! eng))
+          (is (= "j1" (:pending-reflex (core/state eng))))
+          (.emit (.-world p) #js {:kind "died" :pos #js {:x 0 :y 64 :z 0} :inventory #js []})
+          (is (= {} (:instances (core/state eng))))
+          (is (nil? (:pending-reflex (core/state eng))))
+          (is (= [["j1" :dropped :death]]
+                 (->> @seen (filter #(= [:reflex :ended] [(:source %) (:kind %)]))
+                      (mapv (juxt :job :outcome :by))))))))))
+
 (deftest the-tick-loop-parks-a-failed-round-and-keeps-ticking
   (async done
     (tu/run-async done

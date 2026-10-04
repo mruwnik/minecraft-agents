@@ -310,3 +310,35 @@
           (await (run-until-empty eng 5))
           (is (= [:abandoned] (map :decision (decided-events seen))))
           (is (seq (:text (first (decided-events seen))))))))))
+
+;; ------------------------------------------- a job does not survive a death
+
+(defn die-event [p] (.emit (.-world p) #js {:kind "died" :pos #js {:x 5 :y 64 :z 7} :inventory #js []}))
+
+(defn cancelled-by [seen]
+  (->> @seen (filter #(= [:job :cancelled] [(:source %) (:kind %)])) (mapv (juxt :job :by))))
+
+(deftest a-death-drops-every-queued-and-held-job
+  (let [{:keys [eng p seen]} (setup {})
+        a (core/submit! eng job {})
+        b (core/submit! eng job {:hold? true})
+        c (core/submit! eng job {:front? true})]
+    (die-event p)
+    (is (= [] (:list (core/state eng))))
+    (is (= {} (:instances (core/state eng))))
+    (is (= #{[a :death] [b :death] [c :death]} (set (cancelled-by seen))))))
+
+(deftest a-job-queued-after-the-death-survives
+  (let [{:keys [eng p]} (setup {})]
+    (core/submit! eng job {})
+    (die-event p)
+    (let [after (core/submit! eng job {})]
+      (is (= [after] (:list (core/state eng)))))))
+
+(deftest other-body-events-drop-nothing
+  (doseq [event [#js {:kind "hurt" :health 5}
+                 #js {:kind "respawned" :pos #js {:x 0 :y 64 :z 0} :dimension "overworld"}]]
+    (let [{:keys [eng p]} (setup {})
+          id (core/submit! eng job {})]
+      (.emit (.-world p) event)
+      (is (= [id] (:list (core/state eng))) (.-kind event)))))
