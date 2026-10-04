@@ -796,5 +796,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     while (running.size) await Promise.all([...running])
   }
 
-  return { attach, detach, stop, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats }
+  // the relit light of world section s of column (cx, cz), {sky, block} one byte per cell, or undefined (engine.perception reads light through it)
+  const lightOverlay = (cx, cz, s) => overlays.get(`${cx},${cz}`)?.get(s)
+  return { attach, detach, stop, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
 }

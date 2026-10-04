@@ -1,0 +1,509 @@
+(ns engine.perception
+  "What the body has seen: the perception layer between the raw world and everything above the body (card 37ac4545).
+  It wraps the primitives object once (main.cljs, and the same wrapper over the test fake) and holds the rules and the
+  seen-block memory. The raw world comes from a rawWorld reader (engine/js/raw-world.mjs for the body,
+  engine.fake.raw-world for tests): stateAt, lightAt, eye, sky, version, sightTable, stateInfo, onBlockChange.
+
+  Seen: a sight pass casts rays from the eye through a vanilla-like view cone (70 degrees vertical, 16:9) along the
+  body's real yaw and pitch, out to `:radius` (48). A ray records every cell it enters that the light rule lets the
+  body make out, and stops at the first cell that blocks sight (recorded under the same rule) or that is not loaded.
+  Light rule (the same as the picture's, light-sight): vanilla's lightmap brightness `seeing` of the cell's light is at
+  least 0.2, or the cell is within 2 blocks. A sight-blocking cell is lit by the brighter of itself and the cell the ray
+  came from (its face). A dark cell is not recorded; the ray goes on (a lit room is seen across a dark gap). Each pass
+  is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick); a new pass starts when the eye moved or
+  turned, or every `:idle-ms`. What is behind the body is seen only once it turns.
+
+  Memory: per dimension, per 16^3 section, a Uint16Array of stateId + 1 (0 = unknown), with the section's last-seen
+  time; capped at `:cap-bytes` (32 MB, 4096 sections) by forgetting the least recently seen section; saved to and
+  loaded from a file (engine/js/seen-file.mjs). A block change in view (cone, line of sight, light) updates memory at
+  once; one out of view leaves the old state, a true memory error.
+
+  S1 changes nothing jobs see: blocks, blockAt and entities stay raw; seenBlockAt and seenBlocks are added for S2.")
+
+(def defaults
+  {:radius 48
+   :fov 70                ; vertical field of view, degrees (vanilla's default)
+   :aspect (/ 16 9)
+   :ray-deg 1             ; ray spacing at the centre of the view
+   :pass-ms 1500
+   :step-ms 50
+   :idle-ms 3000          ; a still body looks again this often
+   :move-blocks 0.5
+   :turn-deg 2
+   :seeing-min 0.2
+   :near 2
+   :cap-bytes (* 32 1024 1024)
+   :save-ms 60000
+   :stats-ms 60000
+   :error-every-ms 60000})
+
+(def section-bytes 8192)
+(def eye-height 1.62)
+
+;; ---- the light curve: tools/view/web/shading.mjs (vanilla's lightmap at default brightness), max channel
+
+(defn clamp [v lo hi] (min hi (max lo v)))
+(defn mix [a b t] (+ a (* (- b a) t)))
+(defn fract [v] (- v (js/Math.floor v)))
+
+(defn celestial-angle [t]
+  (let [d (fract (- (/ t 24000) 0.25))
+        e (- 0.5 (/ (js/Math.cos (* d js/Math.PI)) 2))]
+    (/ (+ (* 2 d) e) 3)))
+
+(defn sky-darken [t rain thunder]
+  (let [f (celestial-angle t)
+        g (- 1 (clamp (- 1 (+ (* (js/Math.cos (* f 2 js/Math.PI)) 2) 0.2)) 0 1))
+        g (* g (- 1 (/ (* rain 5) 16)) (- 1 (/ (* thunder 5) 16)))]
+    (+ (* g 0.8) 0.2)))
+
+(defn brightness [level] (let [f (/ level 15)] (/ f (- 4 (* 3 f)))))
+
+(defn channel [v sky-v s]
+  (let [c (clamp (mix (+ v (* sky-v s)) 0.75 0.04) 0 1)
+        c (mix c (- 1 (js/Math.pow (- 1 c) 4)) 0.5)]
+    (clamp (mix c 0.75 0.04) 0 1)))
+
+(defn seeing
+  "How bright a cell with sky and block light (0..15) looks: the brightest channel of the lightmap, 0.099..0.99."
+  [sky block darken]
+  (let [s (* (brightness sky) (+ (* darken 0.95) 0.05))
+        b (* (brightness block) 1.5)
+        sv (mix darken 1 0.35)]
+    (max (channel b sv s)
+         (channel (* b (+ (* (+ (* b 0.6) 0.4) 0.6) 0.4)) sv s)
+         (channel (* b (+ (* b b 0.6) 0.4)) 1 s))))
+
+(defn visible-table
+  "Uint8Array over packed light (sky << 4 | block): 1 where the cell is bright enough to make out."
+  [darken seeing-min]
+  (let [out (js/Uint8Array. 256)]
+    (dotimes [i 256]
+      (when (>= (seeing (bit-shift-right i 4) (bit-and i 15) darken) seeing-min) (aset out i 1)))
+    out))
+
+(defn table-now [raw seeing-min]
+  (let [sky (.sky ^js raw)]
+    (visible-table (sky-darken (.-timeOfDay sky) (.-rain sky) (.-thunder sky)) seeing-min)))
+
+(defn max-light
+  "Per channel, the brighter of two packed lights."
+  [a b]
+  (bit-or (max (bit-and a 0xF0) (bit-and b 0xF0)) (max (bit-and a 15) (bit-and b 15))))
+
+;; ---- the view cone
+
+(defn grid
+  "{:cols :rows :hx :hy}: the ray grid over the view plane, tangent half-extents hx (horizontal) and hy."
+  [{:keys [fov aspect ray-deg]}]
+  (let [hy (js/Math.tan (/ (* fov js/Math.PI) 360))
+        hx (* hy aspect)
+        spacing (js/Math.tan (/ (* ray-deg js/Math.PI) 180))]
+    {:hx hx :hy hy :cols (js/Math.ceil (/ (* 2 hx) spacing)) :rows (js/Math.ceil (/ (* 2 hy) spacing))}))
+
+(defn basis
+  "Forward, right and up of a mineflayer look (yaw 0 faces -z, pitch up positive), as a flat array of 9."
+  [yaw pitch]
+  (let [cp (js/Math.cos pitch) sp (js/Math.sin pitch) cy (js/Math.cos yaw) sy (js/Math.sin yaw)
+        fx (- (* sy cp)) fy sp fz (- (* cy cp))]
+    #js [fx fy fz
+         cy 0 (- sy)
+         (* sy fy) (- (- (* sy fx)) (* cy fz)) (* cy fy)]))
+
+(defn in-cone? [^js b hx hy vx vy vz]
+  (let [f (+ (* vx (aget b 0)) (* vy (aget b 1)) (* vz (aget b 2)))]
+    (and (> f 0)
+         (<= (js/Math.abs (+ (* vx (aget b 3)) (* vz (aget b 5)))) (* hx f))
+         (<= (js/Math.abs (+ (* vx (aget b 6)) (* vy (aget b 7)) (* vz (aget b 8)))) (* hy f)))))
+
+;; ---- the store
+
+(defn section-key [cx sy cz]
+  (+ (* (+ (* (+ cx 2097152) 4194304) (+ cz 2097152)) 256) (+ sy 128)))
+
+(defn cell-index [x y z]
+  (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)))
+
+(defn store-of
+  "The section map of a dimension, made when first asked for."
+  [^js st dim]
+  (or (.get (.-stores st) dim)
+      (let [m (js/Map.)] (.set (.-stores st) dim m) m)))
+
+(defn evict-oldest! [^js st]
+  (let [oldest (reduce (fn [best ^js m]
+                         (let [e (.next (.entries m))]
+                           (if (or (.-done e) (and best (<= (.-seen ^js (aget (:entry best) 1)) (.-seen ^js (aget (.-value e) 1)))))
+                             best
+                             {:map m :entry (.-value e)})))
+                       nil (es6-iterator-seq (.values (.-stores st))))]
+    (when oldest
+      (.delete ^js (:map oldest) (aget (:entry oldest) 0))
+      (set! (.-count st) (dec (.-count st)))
+      (set! (.-lastKey st) -1))))
+
+(defn section-for!
+  "The section holding key in store, made (forgetting the least recently seen one past the cap) and moved to the
+  newest end once per stamp."
+  [^js st ^js store key cx sy cz now]
+  (let [found (.get store key)
+        ^js sec (or found
+                    (do (while (>= (.-count st) (.-cap st)) (evict-oldest! st))
+                        (set! (.-count st) (inc (.-count st)))
+                        #js {:ids (js/Uint16Array. 4096) :seen now :stamp -1 :cx cx :sy sy :cz cz}))]
+    (when (not= (.-stamp sec) (.-stamp st))
+      (.delete store key)
+      (.set store key sec)
+      (set! (.-seen sec) now)
+      (set! (.-stamp sec) (.-stamp st)))
+    (set! (.-lastKey st) key)
+    (set! (.-lastSec st) sec)
+    sec))
+
+(defn record! [^js st store x y z id now]
+  (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+        key (section-key cx sy cz)
+        ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))]
+    (aset (.-ids sec) (cell-index x y z) (inc id))))
+
+(defn new-stamp!
+  "A new write round: sections written from now on are moved to the newest end again."
+  [^js st]
+  (set! (.-stamp st) (inc (.-stamp st)))
+  (set! (.-lastKey st) -1))
+
+;; ---- create
+
+(defn create
+  "A perception over a rawWorld reader. opts override `defaults` (plus :now, a clock in ms)."
+  [raw opts]
+  (let [o (merge defaults {:now #(js/Date.now)} opts)
+        g (grid o)]
+    {:raw raw
+     :opts o
+     :grid g
+     :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) section-bytes)))
+              :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
+              :pass nil :lastStart nil :unsubscribe nil
+              :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
+
+(defn steps-per-pass [{:keys [opts]}] (max 1 (js/Math.round (/ (:pass-ms opts) (:step-ms opts)))))
+(defn rays-per-pass [{:keys [grid]}] (* (:cols grid) (:rows grid)))
+
+(defn sight-of [{:keys [raw]} ^js st]
+  (or (.-sight st) (set! (.-sight st) (.sightTable ^js raw))))
+
+;; ---- the sight pass
+
+(defn cast!
+  "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered."
+  [{:keys [raw opts]} ^js st store ox oy oz dx dy dz now]
+  (let [radius (:radius opts) near (:near opts)
+        ^js sight (.-sight st) ^js visible (.-visible st)
+        sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
+        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
+        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
+        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
+        x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
+        first-id (.stateAt ^js raw x0 y0 z0)
+        first-light (.lightAt ^js raw x0 y0 z0)]
+    (when (>= first-id 0) (record! st store x0 y0 z0 first-id now))
+    (if (or (< first-id 0) (== 1 (aget sight first-id)))
+      1
+      (loop [x x0 y y0 z z0
+             tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
+             tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
+             tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
+             prev first-light
+             n 1]
+        (let [t (min tmx tmy tmz)]
+          (if (> t radius)
+            n
+            (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
+                  x (if ax (+ x sx) x) y (if ay (+ y sy) y) z (if az (+ z sz) z)
+                  id (.stateAt ^js raw x y z)]
+              (if (< id 0)
+                n
+                (let [light (.lightAt ^js raw x y z)
+                      blocks? (== 1 (aget sight id))
+                      shown (if blocks? (max-light light prev) light)]
+                  (when (or (== 1 (aget visible shown)) (<= t near)) (record! st store x y z id now))
+                  (if blocks?
+                    (inc n)
+                    (recur x y z
+                           (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                           light (inc n))))))))))))
+
+(defn moved? [{:keys [opts]} ^js last ^js eye]
+  (or (nil? last)
+      (not= (.-dimension last) (.-dimension eye))
+      (>= (js/Math.hypot (- (.-x eye) (.-x last)) (- (.-y eye) (.-y last)) (- (.-z eye) (.-z last))) (:move-blocks opts))
+      (>= (* (/ 180 js/Math.PI) (max (js/Math.abs (- (.-yaw eye) (.-yaw last))) (js/Math.abs (- (.-pitch eye) (.-pitch last)))))
+          (:turn-deg opts))))
+
+(defn start-pass! [{:keys [raw opts] :as per} ^js st ^js eye now]
+  (sight-of per st)
+  (set! (.-visible st) (table-now raw (:seeing-min opts)))
+  (set! (.-lastStart st) #js {:at now :eye eye})
+  (set! (.-pass st) #js {:next 0 :jx (js/Math.random) :jy (js/Math.random)}))
+
+(defn cast-slice!
+  "Casts rays [from, to) of the pass from the eye's current place and look."
+  [{:keys [grid] :as per} ^js st ^js pass ^js eye from to now]
+  (let [{:keys [cols rows hx hy]} grid
+        b (basis (.-yaw eye) (.-pitch eye))
+        store (store-of st (.-dimension eye))
+        ox (.-x eye) oy (.-y eye) oz (.-z eye)
+        du (/ (* 2 hx) cols) dv (/ (* 2 hy) rows)]
+    (loop [k from cells 0]
+      (if (>= k to)
+        cells
+        (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
+              v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))
+              dx (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
+              dy (+ (aget b 1) (* v (aget b 7)))
+              dz (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))
+              len (js/Math.hypot dx dy dz)]
+          (recur (inc k) (+ cells (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now))))))))
+
+(defn step!
+  "One slice of the sight pass (one game tick's share). Starts a new pass when none runs and the eye moved, turned or
+  idled long enough. Nothing while offline."
+  ([per] (step! per false))
+  ([{:keys [raw opts st] :as per} force?]
+   (let [^js st st
+         ^js eye (.eye ^js raw)
+         now ((:now opts))
+         started (js/performance.now)]
+     (when eye
+       (set! (.-dim st) (.-dimension eye))
+       (new-stamp! st)
+       (when (and (nil? (.-pass st))
+                  (or force?
+                      (nil? (.-lastStart st))
+                      (>= (- now (.-at (.-lastStart st))) (:idle-ms opts))
+                      (moved? per (.-eye (.-lastStart st)) eye)))
+         (start-pass! per st eye now))
+       (when-let [^js pass (.-pass st)]
+         (let [total (rays-per-pass per)
+               from (.-next pass)
+               to (min total (+ from (js/Math.ceil (/ total (steps-per-pass per)))))
+               cells (cast-slice! per st pass eye from to now)]
+           (set! (.-next pass) to)
+           (set! (.-rays st) (+ (.-rays st) (- to from)))
+           (set! (.-cells st) (+ (.-cells st) cells))
+           (when (>= to total)
+             (set! (.-pass st) nil)
+             (set! (.-passes st) (inc (.-passes st))))))
+       (let [ms (- (js/performance.now) started)]
+         (set! (.-steps st) (inc (.-steps st)))
+         (set! (.-stepMs st) (+ (.-stepMs st) ms))
+         (set! (.-stepMsMax st) (max (.-stepMsMax st) ms)))))))
+
+(defn pass!
+  "A whole sight pass at once (tests, and a forced look): finishes any pass in flight, then runs a fresh one."
+  [{:keys [st] :as per}]
+  (let [^js st st]
+    (while (.-pass st) (step! per))
+    (when (.eye ^js (:raw per))
+      (step! per true)
+      (while (.-pass st) (step! per)))))
+
+;; ---- block changes and touch
+
+(defn visible-now?
+  "Whether the cell (x y z), now holding state id, is in view: inside the cone and the radius, nothing blocking sight on
+  the way from the eye to its centre, and lit (or within near)."
+  [{:keys [raw opts grid] :as per} ^js st ^js eye x y z id]
+  (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
+        vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)
+        dist (js/Math.hypot vx vy vz)
+        ^js sight (sight-of per st)
+        ^js visible (or (.-visible st) (set! (.-visible st) (table-now raw (:seeing-min opts))))]
+    (and (<= dist (:radius opts))
+         (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
+         (let [dx (/ vx dist) dy (/ vy dist) dz (/ vz dist)
+               sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
+               tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
+               tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
+               tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
+               x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)]
+           (loop [cx x0 cy y0 cz z0
+                  tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
+                  tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
+                  tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
+                  prev (.lightAt ^js raw x0 y0 z0)
+                  budget (+ 3 (js/Math.abs (- x x0)) (js/Math.abs (- y y0)) (js/Math.abs (- z z0)))]
+             (if (and (== cx x) (== cy y) (== cz z))
+               (let [light (.lightAt ^js raw x y z)
+                     shown (if (== 1 (aget sight id)) (max-light light prev) light)]
+                 (or (== 1 (aget visible shown)) (<= dist (:near opts))))
+               (let [t (min tmx tmy tmz)
+                     ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
+                     nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
+                     here (.stateAt ^js raw nx ny nz)
+                     target? (and (== nx x) (== ny y) (== nz z))]
+                 (cond
+                   (<= budget 0) false
+                   (and (not target?) (or (< here 0) (== 1 (aget sight here)))) false
+                   :else (recur nx ny nz
+                                (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                                (if target? prev (.lightAt ^js raw nx ny nz)) (dec budget))))))))))
+
+(defn on-change!
+  "A block changed in the raw world: memory takes the new state only if the body sees the cell now."
+  [{:keys [raw opts st] :as per} x y z id]
+  (let [^js st st ^js eye (.eye ^js raw)]
+    (when (and eye (visible-now? per st eye x y z id))
+      (new-stamp! st)
+      (record! st (store-of st (.-dimension eye)) x y z id ((:now opts))))))
+
+(defn start-listening!
+  "Follow the raw world's block changes (on-change!). Returns the unsubscribe."
+  [{:keys [raw st] :as per}]
+  (let [off (.onBlockChange ^js raw (fn [x y z id] (on-change! per x y z id)))]
+    (set! (.-unsubscribe ^js st) off)
+    off))
+
+(defn touch!
+  "The body touched the cell (dug, placed, clicked, stood in it): memory takes its true state."
+  [{:keys [raw opts st]} [x y z]]
+  (let [^js st st
+        id (.stateAt ^js raw x y z)]
+    (when (>= id 0)
+      (new-stamp! st)
+      (record! st (store-of st (.-dim st)) x y z id ((:now opts))))))
+
+;; ---- reading memory
+
+(defn remembered
+  "The remembered state id at (x y z) in the current dimension and its section, or nil when never seen."
+  [^js st x y z]
+  (when-let [^js sec (.get (store-of st (.-dim st))
+                           (section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
+    (let [v (aget (.-ids sec) (cell-index x y z))]
+      (when (pos? v) [(dec v) sec]))))
+
+(defn properties-of [^js info]
+  (let [props (js->clj (.-properties info) :keywordize-keys true)]
+    (when (seq props) props)))
+
+(defn seen-block
+  "{:name :pos :properties :age-ms} as last seen, or {:unknown true :pos} for a cell the body never saw."
+  [{:keys [raw opts st]} [x y z :as pos]]
+  (if-let [[id ^js sec] (remembered st x y z)]
+    (let [^js info (.stateInfo ^js raw id)]
+      (cond-> {:name (.-name info) :pos pos :age-ms (- ((:now opts)) (.-seen sec))}
+        (properties-of info) (assoc :properties (properties-of info))))
+    {:unknown true :pos pos}))
+
+(defn seen-blocks
+  "Remembered blocks within radius of the body's feet, nearest first: [{:name :pos :distance :age-ms}]. names (a coll)
+  or match (name -> truthy) filters; max caps the list."
+  [{:keys [raw opts st]} {:keys [radius names match max] :or {radius 16 max 64}}]
+  (let [^js st st ^js eye (.eye ^js raw)]
+    (if-not eye
+      []
+      (let [fx (.-x eye) fy (- (.-y eye) eye-height) fz (.-z eye)
+            wanted? (cond names (set names) match match :else (constantly true))
+            by-id (js/Map.)
+            ok? (fn [id] (if (.has by-id id)
+                           (.get by-id id)
+                           (let [name (.-name ^js (.stateInfo ^js raw id))
+                                 hit (when (wanted? name) name)]
+                             (.set by-id id hit)
+                             hit)))
+            now ((:now opts))
+            found (for [^js sec (es6-iterator-seq (.values (store-of st (.-dim st))))
+                        :let [bx (* 16 (.-cx sec)) by (* 16 (.-sy sec)) bz (* 16 (.-cz sec))]
+                        :when (<= (js/Math.hypot (- (+ bx 8) fx) (- (+ by 8) fy) (- (+ bz 8) fz)) (+ radius 14))
+                        i (range 4096)
+                        :let [v (aget (.-ids sec) i)]
+                        :when (pos? v)
+                        :let [name (ok? (dec v))]
+                        :when name
+                        :let [x (+ bx (bit-and i 15)) y (+ by (bit-shift-right i 8)) z (+ bz (bit-and (bit-shift-right i 4) 15))
+                              d (js/Math.hypot (- (+ x 0.5) fx) (- (+ y 0.5) fy) (- (+ z 0.5) fz))]
+                        :when (<= d radius)]
+                    {:name name :pos [x y z] :distance d :age-ms (- now (.-seen sec))})]
+        (into [] (take max) (sort-by :distance found))))))
+
+(defn stats [{:keys [st] :as per}]
+  (let [^js st st]
+    {:passes (.-passes st) :rays (.-rays st) :cells (.-cells st) :steps (.-steps st)
+     :step-ms-mean (if (pos? (.-steps st)) (/ (.-stepMs st) (.-steps st)) 0) :step-ms-max (.-stepMsMax st)
+     :sections (.-count st) :bytes (* section-bytes (.-count st))
+     :steps-per-pass (steps-per-pass per) :rays-per-pass (rays-per-pass per)}))
+
+;; ---- persistence (io: engine/js/seen-file.mjs)
+
+(defn all-sections
+  "Every remembered section, least recently seen first, as the file module takes them."
+  [^js st]
+  (->> (for [[dim ^js m] (es6-iterator-seq (.entries (.-stores st)))
+             ^js sec (es6-iterator-seq (.values m))]
+         #js {:dim dim :cx (.-cx sec) :sy (.-sy sec) :cz (.-cz sec) :seen (.-seen sec) :ids (.-ids sec)})
+       (sort-by #(.-seen ^js %))
+       to-array))
+
+(defn save!
+  "Writes memory to file. Returns a promise."
+  [{:keys [raw st]} ^js io file]
+  (.saveSeen io file #js {:version (.version ^js raw) :sections (all-sections st)}))
+
+(defn load!
+  "Reads memory from file, unless it is missing, damaged or from another game version. Returns the sections loaded."
+  [{:keys [raw st]} ^js io file]
+  (let [^js st st ^js data (.loadSeen io file)]
+    (if-not (and data (= (.-version data) (.version ^js raw)))
+      0
+      (do (doseq [^js s (.-sections data)]
+            (while (>= (.-count st) (.-cap st)) (evict-oldest! st))
+            (let [store (store-of st (.-dim s))
+                  key (section-key (.-cx s) (.-sy s) (.-cz s))]
+              (when-not (.has store key) (set! (.-count st) (inc (.-count st))))
+              (.set store key #js {:ids (.-ids s) :seen (.-seen s) :stamp -1 :cx (.-cx s) :sy (.-sy s) :cz (.-cz s)})))
+          (set! (.-lastKey st) -1)
+          (count (.-sections data))))))
+
+;; ---- running in the body
+
+(defn start!
+  "Runs the perception in the body: loads file, follows block changes, one sight step every step-ms, saves every
+  save-ms and on stop, and reports perception.stats (every stats-ms) and perception.error (at most once a minute)
+  through on-event. Returns stop, which resolves once memory is saved."
+  [{:keys [opts st] :as per} {:keys [file io on-event] :or {on-event (fn [_])}}]
+  (let [^js st st
+        last-error (atom (- js/Infinity))
+        report! (fn [e]
+                  (let [now ((:now opts))]
+                    (when (>= (- now @last-error) (:error-every-ms opts))
+                      (reset! last-error now)
+                      (on-event {:kind :perception.error :source :body :level :warn :error (str (or (.-message e) e))}))))
+        save (fn [] (-> (save! per io file) (.catch report!)))
+        _ (try (load! per io file) (catch :default e (report! e)))
+        off (start-listening! per)
+        timer (fn [ms f] (doto (js/setInterval (fn [] (try (f) (catch :default e (report! e)))) ms) (.unref)))
+        timers [(timer (:step-ms opts) #(step! per))
+                (timer (:save-ms opts) save)
+                (timer (:stats-ms opts) #(on-event (merge {:kind :perception.stats :source :body :level :info}
+                                                          (stats per))))]]
+    (fn []
+      (run! js/clearInterval timers)
+      (off)
+      (save))))
+
+(defn wrap
+  "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw in S1), plus
+  seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, and the perception itself."
+  [p per]
+  (let [out (js/Object.assign #js {} p)
+        pos-js (fn [[x y z]] #js {:x x :y y :z z})]
+    (aset out "perception" per)
+    (aset out "seenBlockAt" (fn [^js a]
+                              (let [b (seen-block per [(.-x a) (.-y a) (.-z a)])]
+                                (clj->js (update b :pos pos-js)))))
+    (aset out "seenBlocks" (fn [^js a]
+                             (let [q (js->clj (or a #js {}) :keywordize-keys true)]
+                               (clj->js (mapv #(update % :pos pos-js) (seen-blocks per q))))))
+    out))

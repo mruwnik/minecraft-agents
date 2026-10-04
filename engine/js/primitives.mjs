@@ -7,11 +7,9 @@ import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { connectBot } from './connect.mjs'
 import { createView } from './view.mjs'
+import { createRawWorld } from './raw-world.mjs'
 import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
-import { craftItem } from './craft.mjs'
-import { tradeWith } from './trade.mjs'
-import { say } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
@@ -21,8 +19,11 @@ import { trackVehicles, vehicleFields, selfVehicle, mountVehicle, dismountVehicl
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
+import { craftItem } from './craft.mjs'
+import { tradeWith } from './trade.mjs'
 import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
+import { say } from './chat.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -69,17 +70,19 @@ export const REACH = 4.5
 export const ATTACK_REACH = 3.5
 const MONSTER_RANGE = 8
 const DROP_RADIUS = 2
+const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
+const THUNDER_LEVEL = 0.9
 const DROP_WAIT_S = 1
 const POLL_MS = 50
 const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
-const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
-const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
 const SETTLE_CAP_MS = 1500 // ...or this long in all
+const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
+const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
+const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
-const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
 const JUMP_PLACE_MAX = 8
@@ -120,8 +123,6 @@ const LOOK_TICK_MS = 100 // a look waits for the next physics tick (the rotation
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
-const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
-const THUNDER_LEVEL = 0.9
 
 const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -1030,6 +1031,28 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  const interact = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isNum(a.id), 'interact needs an entity id')
+    need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
+    return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
+  const trade = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
+    need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
+    need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
+    need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
+    return act(token, { boundS: 8 }, ctx => tradeWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
+  const unequip = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
+    return act(token, { boundS: 2 }, ctx => emptyHand(bot, ctx))
+  }
+
   const attack = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'attack needs an entity id')
@@ -1060,28 +1083,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const killed = deadSeen || !now || (health !== undefined && health <= 0)
       return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }), hurt: hurtSeen || killed }
     })
-  }
-
-  const interact = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(isNum(a.id), 'interact needs an entity id')
-    need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
-    return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
-  }
-
-  const trade = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
-    need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
-    need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
-    need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
-    return act(token, { boundS: 8 }, ctx => tradeWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
-  }
-
-  const unequip = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
-    return act(token, { boundS: 2 }, ctx => emptyHand(bot, ctx))
   }
 
   const sleep = async (token, a = {}) => {
@@ -1388,11 +1389,14 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
+
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
   const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer: onFoot(steer), mount, dismount })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, close }
+  // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
+  const rawWorld = createRawWorld({ getBot: () => bot, isOffline, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

@@ -6,6 +6,7 @@
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
             [engine.notes :as notes]
+            [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.single :as single]
@@ -131,9 +132,13 @@
                         (when-let [eng @eng-ref]
                           (core/emit! eng (-> (js->clj e :keywordize-keys true)
                                               (update :kind keyword) (update :source keyword) (update :level keyword)))))
-        p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
-                                         :view #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
-                                                    :onEvent on-view-event}}))
+        raw-p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
+                                             :view #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
+                                                        :onEvent on-view-event}}))
+        ;; what the body has seen (engine.perception); BODY_PERCEPTION=0 runs without it
+        per (when (and (.-rawWorld raw-p) (not= "0" (.. js/process -env -BODY_PERCEPTION)))
+              (perception/create (.-rawWorld raw-p) {}))
+        p (if per (perception/wrap raw-p per) raw-p)
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
         base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
@@ -143,17 +148,23 @@
         _ (when (and plan (not restoring?)) (trigger-api/load-scenario! base-eng plan))
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
         eng (assoc base-eng :seen-entities seen)
-        _ (reset! eng-ref eng)]
+        _ (reset! eng-ref eng)
+        stop-perception (if per
+                          (perception/start! per {:file (path/join (:engine-dir cfg) "seen.bin")
+                                                  :io ((createRequire (str root "/")) "./js/seen-file.mjs")
+                                                  :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
+                          (fn []))]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
       (try
         (await ((:listen event-socket)))
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
               control (await (start-control! root eng cfg lease-opts))
               stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
-          {:engine eng :stop (fn [] ((:stop seen)) (stop-ticks) (takeover/close! eng) (some-> control .close)
+          {:engine eng :stop (fn [] ((:stop seen)) (stop-perception) (stop-ticks) (takeover/close! eng) (some-> control .close)
                                ((:close event-socket)) (core/shutdown! eng) (.close p) (release))})
         (catch :default e
           ((:stop seen))
+          (stop-perception)
           ((:close event-socket))
           (core/shutdown! eng)
           (await (.close p))
