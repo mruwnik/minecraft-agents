@@ -14,6 +14,7 @@
   (are [plan] (= [] (errors-of plan))
     wheat-plan
     (assoc wheat-plan :status :proposed :note "a note")
+    (assoc wheat-plan :status :completed)
     (assoc wheat-plan :status :retired)
     (with-part {:id "fence" :outline [[0 64 0] [5 64 5]] :want "oak_fence"})
     (with-part {:id "gate" :cells [[1 64 0] [2 64 0]] :want {:block "oak_fence_gate" :facing :north}})

@@ -15,7 +15,7 @@
   ascending_east, south_east ...), orientation (jigsaw, crafter), and any other state naming a side in its value."
   (:require [clojure.string :as str]))
 
-(def statuses #{:proposed :active :retired})
+(def statuses #{:proposed :active :completed :retired})
 (def turns #{0 90 180 270})
 (def sides [:north :east :south :west])
 (def max-cells 200000)
