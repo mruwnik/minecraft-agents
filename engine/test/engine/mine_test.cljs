@@ -741,3 +741,23 @@
           (is (empty? (events-of s :mine.trapped)))
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= [0 65 0] (feet s))))))))
+
+(def covered-world
+  "Dirt over x -9..9, y 58..64 and stone under it down to y 50, z -9..9: every stone within 8 blocks is buried until a tunnel opens it."
+  (assoc buried-world
+         :blocks (merge (cells "stone" (range -9 10) (range 50 58) (range -9 10))
+                        (cells "dirt" (range -9 10) (range 58 65) (range -9 10)))
+         :drops {"stone" "cobblestone" "dirt" "dirt"}))
+
+(deftest a-job-that-dug-a-tunnel-ends-back-where-it-started
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground {:name "ground" :min [-9 64 -9] :max [9 64 9] :allow #{:dig}}
+              s (start {:p (buried-fake covered-world) :shared (ew/of-data {} {} [ground])})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 3 :mend false}) {})
+          (await (run-ticks s 900))
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (= 1 (count (events-of s :mine.tunnel))))
+          (is (>= (second (feet s)) 65) "standing on the surface, not at the bottom of the tunnel"))))))

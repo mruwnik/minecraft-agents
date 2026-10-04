@@ -43,7 +43,8 @@
   in :radius; otherwise it ends :spent-on-mend, keeping the earlier reason in
   :dig-reason. Hands over {:got n :reason r} (plus :dig-reason and :resumes when
   set; info mine.done with :mended, the cells filled); :got is how many more are carried
-  than at the start, at least 0.
+  than at the start, at least 0. A job that dug tunnels ends, after the mend, by walking back to the cell it
+  started on (info mine.not-home when the walk does not arrive): its later digs may have led it down a tunnel.
   Zones and plans (engine.access.rules, through engine.jobs.access): a target must also be a dig the rules permit,
   with only :accept hazards, when it is chosen and again right before the dig. A cell inside a zone that does not
   allow :dig, or in an active plan's footprint, is never a target; one refused right before the dig is skipped
@@ -195,13 +196,20 @@
     (ctx/result! c (merge {:got got :reason reason} why))
     :done))
 
+(defn wrap-up!
+  "The normal end: when the job dug tunnels the body walks back to where it started first (phase :home), else finish."
+  [c]
+  (if (seq (:tunnels (ctx/mem c)))
+    (do (ctx/update-mem! c assoc :phase :home) :continue)
+    (finish! c)))
+
 (defn to-mend!
-  "End the dig phase with a reason: mend next, or finish when there is nothing to mend."
+  "End the dig phase with a reason: mend next, or wrap up when there is nothing to mend."
   [c reason]
   (ctx/update-mem! c assoc :phase :mend :reason reason :at-mend (carried c))
   (if (:mend (:args c))
     :continue
-    (finish! c)))
+    (wrap-up! c)))
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
@@ -442,14 +450,14 @@
   (let [{:keys [resumes reason]} (ctx/mem c)
         more? (some #(off-ground? c %) (:targets (scan c)))]
     (cond
-      (not (spent-on-mend? c)) (finish! c)
+      (not (spent-on-mend? c)) (wrap-up! c)
       (and more? (< (or resumes 0) max-resumes))
       (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
                                   (dissoc :collecting :partials :partial-pos)
                                   (update :resumes (fnil inc 0))))
           :continue)
       :else (do (ctx/update-mem! c assoc :reason :spent-on-mend :dig-reason reason)
-                (finish! c)))))
+                (wrap-up! c)))))
 
 (defn ^:async mend-round! [c]
   (let [cells (owed c)
@@ -459,12 +467,22 @@
       (empty? cells) (mended! c)
       (>= (:mend-failures (ctx/mem c) 0) max-mend-failures)
       (do (ctx/emit! c :mine.mend-failed :warn {:owed (mapv :pos cells) :text (str "mine could not mend: " (cells-text cells))})
-          (finish! c))
+          (wrap-up! c))
       (nil? item)
       (do (ctx/emit! c :mine.mend-short :warn {:owed (mapv :pos cells) :text (str "mine has nothing to mend with: " (cells-text cells))})
-          (finish! c))
+          (wrap-up! c))
       (some? pos) (await (place! c pos item))
       :else (await (raise! c item)))))
+
+(defn ^:async home-round!
+  "The last step of a job that dug tunnels: back to where it started, on the surface, whatever the digging left
+  open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
+  [c]
+  (let [{:keys [start]} (ctx/mem c)
+        walked (await (u/walk-near! c start 0))]
+    (when (not= :there walked)
+      (ctx/emit! c :mine.not-home :info {:to (access/cell start) :walk walked :text (str "mine did not get back to " (pr-str (access/cell start)) ": " (name walked))}))
+    (finish! c)))
 
 (defn no-tool?
   "Whether the block needs a pickaxe and none is carried (shovel and axe blocks drop by hand)."
@@ -494,6 +512,7 @@
                          :phase :dig)
         :continue)
 
+      (= :home (:phase m)) (await (home-round! c))
       (= :mend (:phase m)) (await (mend-round! c))
       (:collecting m) (await (collect! c))
       (:visit m) (await (visit-round! c (:visit m)))
