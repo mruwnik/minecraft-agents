@@ -1,5 +1,6 @@
 (ns jobs.items.craft
-  (:require [engine.ctx :as ctx]
+  (:require [engine.craft :as craft]
+            [engine.ctx :as ctx]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -74,12 +75,12 @@
 
 (defn short!
   "A craft ran out of an ingredient: emit the info and finish with what is
-  missing, and the alternatives (name [cousins]) when the primitive offers some."
+  missing, and the alternatives (name [cousins]) when other recipes use different ingredients.
+  The primitive hands back every candidate recipe and the counts carried; engine.craft chooses."
   [c item r made]
-  (let [short (js->clj (.-short r))
-        alternatives (some-> (.-alternatives r) js->clj)]
+  (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))]
     (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
-    (finish! c made (cond-> {:short short} alternatives (assoc :alternatives alternatives)))))
+    (finish! c made shortage)))
 
 (defn ^:async round
   "One bounded step: stop when the target is carried, else craft the rest and

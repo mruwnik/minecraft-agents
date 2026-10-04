@@ -632,8 +632,8 @@ test('fake craft cases', async () => {
     ['unknown item', crafting, { item: 'nothing' }, { status: 'cannot', reason: 'no-recipe' }],
     ['planks', crafting, { item: 'oak_planks' }, { status: 'crafted', item: 'oak_planks', made: 4, used: { oak_log: 1 } }],
     ['rounds up to whole batches', crafting, { item: 'oak_planks', count: 5 }, { status: 'crafted', item: 'oak_planks', made: 8, used: { oak_log: 2 } }],
-    ['runs out midway', crafting, { item: 'oak_planks', count: 12 }, { status: 'partial', item: 'oak_planks', made: 8, used: { oak_log: 2 }, reason: 'no-item', short: { oak_log: 1 } }],
-    ['missing ingredients', crafting, { item: 'stick' }, { status: 'no-item', short: { oak_planks: 2 } }],
+    ['runs out midway', crafting, { item: 'oak_planks', count: 12 }, { status: 'partial', item: 'oak_planks', made: 8, used: { oak_log: 2 }, reason: 'no-item', recipes: [{ oak_log: 1 }], have: { oak_planks: 8 } }],
+    ['missing ingredients', crafting, { item: 'stick' }, { status: 'no-item', recipes: [{ oak_planks: 2 }], have: { oak_log: 2 } }],
     ['no table near', { inventory: [{ name: 'wheat', count: 3 }] }, { item: 'bread' }, { status: 'unreachable', reason: 'no-table' }],
     ['table given but not a table', { inventory: [{ name: 'wheat', count: 3 }], blocks: table }, { item: 'bread', table: at(2, 64, 0) }, { status: 'unreachable', reason: 'not-a-table' }],
     ['table given but far', { inventory: [{ name: 'wheat', count: 3 }], blocks: { '9,64,0': 'crafting_table' } }, { item: 'bread', table: at(9, 64, 0) }, { status: 'out-of-reach', reason: 'too-far', table: at(9, 64, 0) }],
@@ -675,7 +675,7 @@ test('fake chat to a player who is not there is gone and records nothing', async
 
 test('fake chat applies the real rules: command, bad name, prototype names', async () => {
   const p = owned({ entities: [{ id: 1, name: 'Steve', kind: 'player', pos: at(1, 64, 0) }] })
-  assert.deepEqual(await p.chat('t1', { message: ' /op me' }), { status: 'cannot', reason: 'command' })
+  assert.deepEqual(await p.chat('t1', { message: '/op me' }), { status: 'cannot', reason: 'command' })
   assert.deepEqual(await p.chat('t1', { message: 'hi', to: '@a' }), { status: 'cannot', reason: 'bad-name' })
   assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'ab' }), { status: 'cannot', reason: 'bad-name' })
   assert.deepEqual(await p.chat('t1', { message: 'hi', to: 'constructor' }), { status: 'gone', to: 'constructor' })

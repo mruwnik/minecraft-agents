@@ -3,7 +3,7 @@
 
 import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
-import { cleanMessage, PLAYER_NAME } from './chat.mjs'
+import { PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeTrade } from './fake-trade.mjs'
@@ -330,11 +330,12 @@ function defaultActs (s, emit) {
         made += recipe.count
       }
       if (made >= count) return { status: 'crafted', item, made, used }
-      return made > 0 ? { status: 'partial', item, made, used, reason: 'no-item', short: shortOf() } : { status: 'no-item', short: shortOf() }
+      const shortage = { recipes: [recipe.needs], have: Object.fromEntries(s.inventory.map(i => [i.name, carried(i.name)])) }
+      return made > 0 ? { status: 'partial', item, made, used, reason: 'no-item', ...shortage } : { status: 'no-item', ...shortage }
     },
 
     async chat (token, { message, to }) {
-      if (cleanMessage(message).startsWith('/')) return { status: 'cannot', reason: 'command' }
+      if (message.startsWith('/')) return { status: 'cannot', reason: 'command' }
       if (to && !PLAYER_NAME.test(to)) return { status: 'cannot', reason: 'bad-name' }
       if (to && !s.entities.some(e => e.kind === 'player' && (e.username === to || e.name === to))) return { status: 'gone', to }
       s.chat.push({ message, to })

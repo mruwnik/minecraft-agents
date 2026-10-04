@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { stubBot } from './stub-bot.mjs'
-import { chatRefusal, say, cleanMessage } from './chat.mjs'
+import { chatRefusal, say } from './chat.mjs'
 
 const OPTS = () => ({ timeScale: 0.01 })
 const ctx = () => ({ alive: () => {}, onAbort: () => {} })
@@ -35,7 +35,7 @@ test('chatRefusal cases', () => {
 
 test('say to all, one part', async () => {
   const bot = chatBot()
-  assert.deepEqual(await say(bot, ctx(), { message: '  hi all ' }, OPTS()), { status: 'sent', parts: 1 })
+  assert.deepEqual(await say(bot, ctx(), { message: 'hi all' }, OPTS()), { status: 'sent', parts: 1 })
   assert.deepEqual(bot.sent, [{ kind: 'chat', args: ['hi all'] }])
 })
 
@@ -79,23 +79,12 @@ test('a cut rejects and removes the listener', async () => {
   assert.equal(bot.listenerCount('messagestr'), before)
 })
 
-test('cleanMessage strips control characters and the section sign', () => {
-  const cases = [['a\nb', 'a b'], ['  hi\x00there\x7f ', 'hi there'], ['§cred', 'cred'], ['\n\n', ''], ['/say x', '/say x']]
-  for (const [text, want] of cases) assert.equal(cleanMessage(text), want, JSON.stringify(text))
-})
-
 test('a message that starts with a slash is a command and is never sent', async () => {
-  for (const [message, to] of [['/op me', undefined], ['/op me', 'Steve'], ['\n/stop', undefined], ['§/stop', 'Steve']]) {
+  for (const [message, to] of [['/op me', undefined], ['/op me', 'Steve']]) {
     const bot = chatBot()
     assert.deepEqual(await say(bot, ctx(), { message, to }, OPTS()), { status: 'cannot', reason: 'command' }, message)
     assert.deepEqual(bot.sent, [])
   }
-})
-
-test('newlines in the message are sent as spaces', async () => {
-  const bot = chatBot()
-  await say(bot, ctx(), { message: 'a\n/b' }, OPTS())
-  assert.deepEqual(bot.sent, [{ kind: 'chat', args: ['a /b'] }])
 })
 
 test('say refuses bad whisper targets and prototype names', async () => {

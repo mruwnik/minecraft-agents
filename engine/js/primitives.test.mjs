@@ -2180,8 +2180,8 @@ test('drive on a sleeping body writes leave_bed', () => {
 test('craft and chat with bad args reject with bad-args', async () => {
   const { p } = rig()
   const bad = [['craft', {}], ['craft', { item: '' }], ['craft', { item: 'stick', count: 0 }], ['craft', { item: 'stick', count: 1.5 }], ['craft', { item: 'stick', table: { x: 1 } }],
-    ['chat', {}], ['chat', { message: '   ' }], ['chat', { message: 'hi', to: '' }], ['chat', { message: 'hi', to: 'ab' }], ['chat', { message: 'hi', to: 'a b c' }], ['chat', { message: 'hi', to: 'x'.repeat(17) }],
-    ['chat', { message: ' \n\x00 ' }], ['chat', { message: '§' }],
+    ['chat', {}], ['chat', { message: 'hi', to: '' }], ['chat', { message: 'hi', to: 'ab' }], ['chat', { message: 'hi', to: 'a b c' }], ['chat', { message: 'hi', to: 'x'.repeat(17) }],
+    ['chat', { message: '' }],
     ['chat', { message: 'x'.repeat(257) }], ['chat', { message: 'x'.repeat(245), to: 'Steve' }]]
   for (const [name, args] of bad) await assert.rejects(p[name]('t1', args), err => err.code === 'bad-args', name)
 })
@@ -2209,7 +2209,7 @@ test('craft through the wrapper crafts and chat through the wrapper sends', asyn
   assert.deepEqual(await p.craft('t1', { item: 'oak_planks' }), { status: 'crafted', item: 'oak_planks', made: 4, used: { oak_log: 1 } })
   const sent = []
   bot.chat = m => sent.push(m)
-  assert.deepEqual(await p.chat('t1', { message: ' hello ' }), { status: 'sent', parts: 1 })
+  assert.deepEqual(await p.chat('t1', { message: 'hello' }), { status: 'sent', parts: 1 })
   assert.deepEqual(sent, ['hello'])
 })
 
@@ -2217,7 +2217,7 @@ test('chat through the wrapper refuses a command and sends nothing', async () =>
   const { bot, p } = rig()
   const sent = []
   Object.assign(bot, { chat: m => sent.push(m), whisper: (...a) => sent.push(a), players: { Steve: {} } })
-  assert.deepEqual(await p.chat('t1', { message: '\n/op me' }), { status: 'cannot', reason: 'command' })
+  assert.deepEqual(await p.chat('t1', { message: '/op me' }), { status: 'cannot', reason: 'command' })
   assert.deepEqual(await p.chat('t1', { message: '/op me', to: 'Steve' }), { status: 'cannot', reason: 'command' })
   assert.deepEqual(sent, [])
 })

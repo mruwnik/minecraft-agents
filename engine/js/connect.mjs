@@ -1,33 +1,15 @@
-// Makes the mineflayer bot for an agent: reads state/worlds/<world>/agents/<name>/config.json and the world's world.json, creates the
-// client, loads the pathfinder, resolves once spawned. Nothing here runs on import: no connection is made until
-// connectBot or connectAgent is called.
-import fs from 'node:fs'
-import path from 'node:path'
+// Makes the mineflayer bot for a body: creates the client, loads the pathfinder, resolves once spawned. engine.main
+// reads config.json and world.json itself and hands the connection settings to createPrimitives. Nothing here runs on
+// import: no connection is made until connectBot is called.
 import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
-import { bodyDir } from './bodies.mjs'
 
 const { pathfinder } = pf
 
 // same defaults as src/config.mjs: the newest protocol mineflayer speaks, offline auth
 export const DEFAULTS = { version: '26.1', auth: 'offline' }
-export const AUTH_MODES = ['offline', 'microsoft']
 export const SPAWN_TIMEOUT_MS = 60000
-
-const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'))
-
-// the merged connection settings for an agent in a world: defaults, then its config.json, then the world's {host, port}
-export function readAgentConfig ({ stateDir, world, agent }) {
-  const file = path.join(bodyDir(stateDir, world, agent), 'config.json')
-  if (!fs.existsSync(file)) throw new Error(`no ${file}: the agent has no config in world "${world}"`)
-  const worldFile = path.join(stateDir, 'worlds', world, 'world.json')
-  if (!fs.existsSync(worldFile)) throw new Error(`no ${worldFile}: world "${world}" has no server`)
-  const cfg = { ...DEFAULTS, ...readJson(file), ...readJson(worldFile), world }
-  if (!cfg.username) throw new Error(`${file} names no username`)
-  if (!AUTH_MODES.includes(cfg.auth)) throw new Error(`${file}: auth "${cfg.auth}" is not one of ${AUTH_MODES.join(', ')}`)
-  return cfg
-}
 
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
 // steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
@@ -60,10 +42,4 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
       resolve(bot)
     })
   })
-}
-
-// the whole thing from a world and an agent name: { bot, disconnect }
-export async function connectAgent ({ stateDir, world, agent }) {
-  const bot = await connectBot(readAgentConfig({ stateDir, world, agent }))
-  return { bot, disconnect: () => bot.quit() }
 }

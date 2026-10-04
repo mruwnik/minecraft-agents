@@ -4,8 +4,7 @@
 export const CHAT_MAX = 256
 export const PLAYER_NAME = /^[A-Za-z0-9_]{3,16}$/
 
-// control characters become spaces, the section sign (formatting code) is dropped; never lets a newline or a leading slash through
-export const cleanMessage = text => String(text ?? '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/§/g, '').trim()
+// the message arrives cleaned (engine.chat/clean: control characters and § gone, trimmed); this layer only refuses a slash
 
 const REFUSALS = [/^Command had invalid signature/, /^No player was found/, /^Unknown or incomplete command/, /^An unexpected error occurred trying to execute that command/, /^That player cannot be found/i]
 
@@ -30,7 +29,7 @@ export const sendPublic = (bot, part) => {
 }
 
 export async function say (bot, ctx, a, { timeScale = 1, listenMs = 1000 } = {}) {
-  const message = cleanMessage(a.message)
+  const message = a.message
   const to = a.to
   if (message.startsWith('/')) return { status: 'cannot', reason: 'command' }
   if (to && !PLAYER_NAME.test(to)) return { status: 'cannot', reason: 'bad-name' }

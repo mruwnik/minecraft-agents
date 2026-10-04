@@ -6,40 +6,6 @@ import vec3 from 'vec3'
 
 const { Vec3 } = vec3
 
-const total = counts => Object.values(counts).reduce((s, n) => s + n, 0)
-
-const missingFor = (recipe, have) => Object.fromEntries(
-  Object.entries(recipe).map(([name, n]) => [name, n - (have[name] ?? 0)]).filter(([, n]) => n > 0)
-)
-
-// the common base items, earliest first: when recipes tie on what is missing, the one asking for these wins
-export const PREFERRED = ['cobblestone', 'oak_planks', 'oak_log', 'stick', 'iron_ingot', 'string', 'coal', 'wheat', 'diamond', 'gold_ingot', 'redstone', 'leather', 'sand', 'dirt']
-
-const rankOf = missing => Math.min(...Object.keys(missing).map(n => {
-  const i = PREFERRED.indexOf(n)
-  return i < 0 ? Infinity : i
-}))
-
-const closer = (a, b) => total(a.missing) < total(b.missing) || (total(a.missing) === total(b.missing) && rankOf(a.missing) < rankOf(b.missing))
-
-// the recipe closest to being satisfied, with what it is missing
-const closest = (recipes, have) => recipes
-  .map(recipe => ({ recipe, missing: missingFor(recipe, have) }))
-  .reduce((best, c) => (best === null || closer(c, best) ? c : best), null)
-
-export const craftShortfall = (recipes, have) => closest(recipes, have)?.missing ?? {}
-
-// for each missing name of the chosen recipe, the names the other recipes use instead of it
-export const craftAlternatives = (recipes, have) => {
-  const chosen = closest(recipes, have)
-  if (!chosen) return {}
-  const others = recipes.filter(r => r !== chosen.recipe)
-  const cousins = name => [...new Set(others
-    .filter(r => !(name in r))
-    .flatMap(r => Object.keys(r).filter(n => !(n in chosen.recipe))))]
-  return Object.fromEntries(Object.keys(chosen.missing).map(n => [n, cousins(n)]).filter(([, c]) => c.length > 0))
-}
-
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const carriedCounts = bot => bot.inventory.items().reduce((acc, i) => ({ ...acc, [i.name]: (acc[i.name] ?? 0) + i.count }), {})
@@ -79,12 +45,11 @@ const missingTable = bot => {
     : { status: 'unreachable', reason: 'no-table' }
 }
 
-const shortOf = (bot, id, table) => {
-  const recipes = bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r))
-  const have = carriedCounts(bot)
-  const alternatives = craftAlternatives(recipes, have)
-  return { short: craftShortfall(recipes, have), ...(Object.keys(alternatives).length > 0 && { alternatives }) }
-}
+// every candidate recipe ({name: n} of ingredients) and what is carried: engine.craft chooses what to report as missing
+const shortOf = (bot, id, table) => ({
+  recipes: bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r)),
+  have: carriedCounts(bot)
+})
 
 // The result goes into an empty slot (mineflayer does not join it to a stack), then gets merged. At a table that means
 // two empty slots for a result with no stack of its own yet (one for the result, one the new stack keeps) and one when it

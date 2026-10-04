@@ -155,9 +155,18 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
-              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "no-item" :short #js {"birch_log" 1} :alternatives #js {"birch_log" #js ["oak_log" "spruce_log"]}}))
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "no-item" :have #js {} :recipes #js [#js {"birch_log" 1} #js {"oak_log" 1} #js {"spruce_log" 1}]}))
               result (await (child-outcome eng job {:item "birch_planks"} 8))]
-          (is (= {:made 0 :short {"birch_log" 1} :alternatives {"birch_log" ["oak_log" "spruce_log"]}} result)))))))
+          (is (= {:made 0 :short {"oak_log" 1} :alternatives {"oak_log" ["birch_log" "spruce_log"]}} result)))))))
+
+(deftest craft-a-partial-batch-short-of-an-ingredient-hands-over-the-shortfall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "partial" :reason "no-item" :made 4 :used #js {} :have #js {"stick" 1} :recipes #js [#js {"oak_planks" 2 "stick" 1}]}))
+              result (await (child-outcome eng job {:item "wooden_pickaxe" :count 8} 8))]
+          (is (= {"oak_planks" 2} (:short result))))))))
 
 (deftest craft-an-arrival-is-not-a-failure
   (async done

@@ -107,9 +107,11 @@
 (defn ^:async gate!
   "The act-boundary check for one :chat line; args is the JS object handed to the
   act. Blocked lines never reach the primitive. Waits for the gap, calls the
-  primitive, records the time only when it was sent. Returns the primitive's result."
+  primitive, records the time only when it was sent. Returns the primitive's result.
+  The primitive is handed the cleaned message: it does no cleaning of its own."
   [eng p token args]
-  (await (enqueue! eng #(send-gated! eng (fn [t a] (.call (aget p "chat") p t a)) token args))))
+  (let [cleaned (js/Object.assign #js {} args #js {:message (clean (.-message args))})]
+    (await (enqueue! eng #(send-gated! eng (fn [t a] (.call (aget p "chat") p t a)) token cleaned)))))
 
 (defn ^:async send-gated!
   "One serialized, rate-limited send through `send-line`, shared by jobs and the direct chat API."

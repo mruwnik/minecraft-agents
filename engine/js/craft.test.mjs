@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import { EventEmitter } from 'node:events'
 import assert from 'node:assert/strict'
 import { stubBot } from './stub-bot.mjs'
-import { craftItem, craftShortfall, craftAlternatives } from './craft.mjs'
+import { craftItem } from './craft.mjs'
 
 const REG = {
   1: { id: 1, name: 'wheat', stackSize: 64 },
@@ -149,15 +149,14 @@ for (const [name, a, blocks, expected] of tableCases) {
 }
 
 const shortCases = [
-  ['missing ingredients', [['wheat', 1]], { item: 'bread' }, { wheat: 2 }, undefined],
-  ['closest recipe wins (oak planks held)', [['oak_planks', 1]], { item: 'stick' }, { oak_planks: 1 }, { oak_planks: ['cherry_planks'] }],
-  ['closest recipe wins (cherry planks held)', [['cherry_planks', 1]], { item: 'stick' }, { cherry_planks: 1 }, { cherry_planks: ['oak_planks'] }],
-  ['nothing held', [], { item: 'stick' }, { oak_planks: 2 }, { oak_planks: ['cherry_planks'] }]
+  ['missing ingredients', [['wheat', 1]], { item: 'bread' }, [{ wheat: 3 }], { wheat: 1 }],
+  ['every candidate recipe and the carried counts', [['oak_planks', 1]], { item: 'stick' }, [{ oak_planks: 2 }, { cherry_planks: 2 }], { oak_planks: 1 }],
+  ['nothing held', [], { item: 'stick' }, [{ oak_planks: 2 }, { cherry_planks: 2 }], {}]
 ]
-for (const [name, held, a, short, alternatives] of shortCases) {
+for (const [name, held, a, recipes, have] of shortCases) {
   test(`craftItem: no-item, ${name}`, async () => {
     const { bot } = setup({ items: inv(...held), blocks: tableBlocks })
-    assert.deepEqual(await craftItem(bot, ctx, a, opts), { status: 'no-item', short, ...(alternatives && { alternatives }) })
+    assert.deepEqual(await craftItem(bot, ctx, a, opts), { status: 'no-item', recipes, have })
   })
 }
 
@@ -208,7 +207,7 @@ test('craftItem: craft rejection is reported as reason', async () => {
 test('craftItem: partial when ingredients run out', async () => {
   const { bot } = setup({ items: inv(['oak_log', 1]) })
   const r = await craftItem(bot, ctx, { item: 'oak_planks', count: 8 }, opts)
-  assert.deepEqual(r, { status: 'partial', item: 'oak_planks', made: 4, used: { oak_log: 1 }, reason: 'no-item', short: { oak_log: 1 } })
+  assert.deepEqual(r, { status: 'partial', item: 'oak_planks', made: 4, used: { oak_log: 1 }, reason: 'no-item', recipes: [{ oak_log: 1 }], have: { oak_planks: 4 } })
 })
 
 test('craftItem: 2x2 leftovers in the grid close the window', async () => {
@@ -236,18 +235,6 @@ test('craftItem: a cut propagates and an abort hook is registered', async () => 
   assert.deepEqual(closed, [bot.currentWindow])
 })
 
-const shortfallCases = [
-  ['empty recipes', [], { a: 1 }, {}],
-  ['satisfied', [{ a: 2 }], { a: 2 }, {}],
-  ['single missing', [{ a: 3, b: 1 }], { a: 1, b: 1 }, { a: 2 }],
-  ['closest recipe', [{ oak: 2 }, { cherry: 2 }], { oak: 1 }, { oak: 1 }],
-  ['closest recipe, other side', [{ oak: 2 }, { cherry: 2 }], { cherry: 1 }, { cherry: 1 }],
-  ['nothing held', [{ a: 1, b: 2 }], {}, { a: 1, b: 2 }]
-]
-for (const [name, recipes, have, expected] of shortfallCases) {
-  test(`craftShortfall: ${name}`, () => assert.deepEqual(craftShortfall(recipes, have), expected))
-}
-
 test('craftItem: count is items wanted, rounded up to whole batches', async () => {
   const { bot } = setup({ items: inv(['oak_log', 1]) })
   const r = await craftItem(bot, ctx, { item: 'oak_planks', count: 1 }, opts)
@@ -257,26 +244,7 @@ test('craftItem: count is items wanted, rounded up to whole batches', async () =
 test('craftItem: never chains recipes', async () => {
   const { bot } = setup({ items: inv(['oak_log', 1]) })
   const r = await craftItem(bot, ctx, { item: 'stick' }, opts)
-  assert.deepEqual(r, { status: 'no-item', short: { oak_planks: 2 }, alternatives: { oak_planks: ['cherry_planks'] } })
-})
-
-const pickaxe = [{ deepslate: 3, stick: 2 }, { blackstone: 3, stick: 2 }, { cobblestone: 3, stick: 2 }]
-
-const preferenceCases = [
-  ['deepslate, blackstone, cobblestone order', pickaxe, { stick: 2 }, { cobblestone: 3 }],
-  ['held stick still prefers cobblestone', pickaxe, { stick: 2 }, { cobblestone: 3 }],
-  ['a closer recipe beats preference', pickaxe, { stick: 2, blackstone: 1 }, { blackstone: 2 }]
-]
-for (const [name, recipes, have, expected] of preferenceCases) {
-  test(`craftShortfall: ${name}`, () => assert.deepEqual(craftShortfall(recipes, have), expected))
-}
-
-test('craftAlternatives: the cousins of the missing name', () => {
-  assert.deepEqual(craftAlternatives(pickaxe, { stick: 2 }), { cobblestone: ['deepslate', 'blackstone'] })
-})
-
-test('craftAlternatives: none when the recipes agree', () => {
-  assert.deepEqual(craftAlternatives([{ a: 1 }], {}), {})
+  assert.deepEqual(r, { status: 'no-item', recipes: [{ oak_planks: 2 }, { cherry_planks: 2 }], have: { oak_log: 1 } })
 })
 
 const clickStub = (items, bot) => {

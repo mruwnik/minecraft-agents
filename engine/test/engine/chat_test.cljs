@@ -132,6 +132,15 @@
           (is (= 5 (count (chat-lines p))))
           (is (= 5 (count @(:said eng)))))))))
 
+(deftest gate-hands-the-primitive-the-cleaned-message
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup no-gap)
+              _ (.setOwner p 1)
+              _ (await (chat/gate! eng p 1 #js {:message "  a\nb §c\u0000d "}))]
+          (is (= ["a b c d"] (chat-lines p))))))))
+
 (deftest gate-does-not-record-a-line-that-was-not-sent
   (async done
     (tu/run-async done

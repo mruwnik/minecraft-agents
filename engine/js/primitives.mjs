@@ -10,7 +10,7 @@ import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { craftItem } from './craft.mjs'
 import { tradeWith } from './trade.mjs'
-import { say, cleanMessage, PLAYER_NAME, CHAT_MAX } from './chat.mjs'
+import { say, PLAYER_NAME, CHAT_MAX } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
@@ -986,11 +986,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: 15 }, ctx => enchantVisit(bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), timeScale }))
   }
 
+  // the message arrives cleaned by engine.chat (gate!, direct!)
+  const validateChat = a => {
+    need(typeof a.message === 'string' && a.message !== '', 'chat needs message, a non-empty string')
+    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && PLAYER_NAME.test(a.to)), 'chat to must be a player name (3-16 letters, digits or _)')
+    need(a.message.length <= (a.to ? CHAT_MAX - `/tell ${a.to} `.length : CHAT_MAX), `chat message must be at most ${CHAT_MAX} characters (a whisper less the /tell header); split it`)
+  }
+
   const chat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
-    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && PLAYER_NAME.test(a.to)), 'chat to must be a player name (3-16 letters, digits or _)')
-    need(cleanMessage(a.message).length <= (a.to ? CHAT_MAX - `/tell ${a.to} `.length : CHAT_MAX), `chat message must be at most ${CHAT_MAX} characters (a whisper less the /tell header); split it`)
+    validateChat(a)
     return act(token, { boundS: 3 }, ctx => say(bot, ctx, a, { timeScale }))
   }
 
@@ -999,9 +1004,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // It is deliberately online-only, so requests are never deferred until reconnect.
   const chatDirect = async (a = {}) => {
     if (closed || away || down || !bot.player) return { status: 'disconnected' }
-    need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
-    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && PLAYER_NAME.test(a.to)), 'chat to must be a player name (3-16 letters, digits or _)')
-    need(cleanMessage(a.message).length <= (a.to ? CHAT_MAX - `/tell ${a.to} `.length : CHAT_MAX), `chat message must be at most ${CHAT_MAX} characters (a whisper less the /tell header); split it`)
+    validateChat(a)
     const cleanups = []
     const ctx = {
       alive: () => { if (closed || away || down || !bot.player) throw new Error('chat body disconnected') },
