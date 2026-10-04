@@ -20,6 +20,11 @@
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :no-craft :notify :bed-unreachable :chest-unusable
     :scaffold})
 
+(def owned-kinds
+  "Every unnamespaced memory kind the engine or a job writes for itself, and the place names: jobs.memory.remember
+  may not write these. (Namespaced kinds, :job/*, :bred/*, :forestry/*, belong to the engine and its jobs by shape.)"
+  (into reserved #{:bed :chest :home :food-source :scaffold-held}))
+
 (def name-pattern #"[a-z][a-z0-9-]{0,31}")
 
 (def min-y -64)

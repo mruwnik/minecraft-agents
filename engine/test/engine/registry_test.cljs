@@ -24,7 +24,7 @@
      jobs.time.wait-for-day jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
      jobs.access.stair jobs.farm.tidy
      jobs.access.cleanup
-     jobs.memory.set-place jobs.memory.forget-place})
+     jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
 
 (deftest the-registry-holds-every-job-namespace
   (is (= migrated (set (keys registry/jobs)))))
