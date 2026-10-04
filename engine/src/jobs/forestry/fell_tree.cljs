@@ -1,6 +1,6 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
-            [engine.jobs.forestry :refer [scan-logs tree-near unreachable-set debts replant-kind
+            [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius logs-per-round max-partials]]
             [engine.jobs.util :as u]))
 
@@ -10,7 +10,8 @@
 
 (def args
   {:species {:doc "log species such as \"oak\"; any when nil" :default nil}
-   :radius {:doc "search radius in blocks" :default default-radius}})
+   :radius {:doc "search radius in blocks" :default default-radius}
+   :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :default nil}})
 
 (defn column-logs
   "Logs standing in the chosen column, lowest first."
@@ -54,11 +55,28 @@
               (recur more)
               (keyword (.-status r)))))))))
 
-(defn choose-tree!
-  "Commit the column, species and base of the nearest tree not marked
-  unreachable; nil when no candidate is in sight."
+(defn candidate
+  "The tree to fell: the one at :at (nil once marked unreachable), else the nearest of species within radius."
   [c radius species]
-  (when-let [t (tree-near (:primitives c) radius species (unreachable-set (ctx/mem c)))]
+  (let [p (:primitives c)
+        excluded (unreachable-set (ctx/mem c))]
+    (if-let [at (:at (:args c))]
+      (when-let [t (tree-at p at)]
+        (when-not (excluded [(:x at) (:z at)]) t))
+      (tree-near p radius species excluded))))
+
+(defn tree-logs
+  "The logs of the chosen column: read from :at up when the job was given one, else those in radius."
+  [c radius]
+  (let [m (ctx/mem c)]
+    (if-let [at (:at (:args c))]
+      (logs-at (:primitives c) at (:species m))
+      (column-logs (:primitives c) radius m))))
+
+(defn choose-tree!
+  "Commit the column, species and base of the tree to fell (see candidate); nil when no candidate is in sight."
+  [c radius species]
+  (when-let [t (candidate c radius species)]
     (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
     t))
 
@@ -98,7 +116,7 @@
       (not chosen) :continue
 
       :else
-      (let [logs (column-logs (:primitives c) radius (ctx/mem c))]
+      (let [logs (tree-logs c radius)]
         (if (empty? logs)
           :done
           (let [r (await (dig-up! c (take logs-per-round logs)))]
@@ -116,4 +134,4 @@
         {:keys [radius species]} (:args c)]
     (boolean (or (:column m)
                  (seq (:unreachable m))
-                 (tree-near (:primitives c) radius species)))))
+                 (candidate c radius species)))))

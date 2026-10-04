@@ -49,6 +49,28 @@
   ([p radius species excluded]
    (find-tree (scan-logs p radius species) (scan p (+ radius 4) leaves-name?) excluded)))
 
+(def max-column
+  "How far up a column logs-at looks, in blocks."
+  40)
+
+(defn logs-at
+  "The logs of species standing in the column over pos, lowest first, read cell by cell (no radius): the cells
+  from pos up, skipping the air where the lowest logs were dug, ending at the first other block above the first log."
+  [p {:keys [x y z]} species]
+  (let [log (str species "_log")]
+    (->> (range max-column)
+         (map (fn [dy] (let [pos {:x x :y (+ y dy) :z z}] {:name (u/block-name p pos) :pos pos})))
+         (drop-while #(not= log (:name %)))
+         (take-while #(= log (:name %)))
+         vec)))
+
+(defn tree-at
+  "The tree whose base log is at pos, as find-tree gives it, or nil when pos holds no log. Leaves are not asked for."
+  [p pos]
+  (let [n (u/block-name p pos)]
+    (when (some-> n log-name?)
+      {:column {:x (:x pos) :z (:z pos)} :base pos :species (species-of n)})))
+
 (defn unreachable-set [memory]
   (set (map vec (:unreachable memory))))
 
