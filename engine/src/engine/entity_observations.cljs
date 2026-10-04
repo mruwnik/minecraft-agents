@@ -88,11 +88,12 @@
   (let [e (.-entity sample) source (.-source sample)
         dim (dimension (.-dimension sample))
         known? (when e (or (entity-uuid source e) (.get (:objects store) e)))]
-    (when (and e source dim known?)
-      (do (.add (:dead store) e)
-          (let [key (:key (entity-identity store source e))]
-            (when (= dim (get-in @(:state store) [:entities key :dimension]))
-              (swap! (:state store) update :entities dissoc key))))))
+    (when (and e source dim)
+      (.add (:dead store) e)
+      (when known?
+        (let [key (:key (entity-identity store source e))]
+          (when (= dim (get-in @(:state store) [:entities key :dimension]))
+            (swap! (:state store) update :entities dissoc key))))))
   nil)
 
 (defn bounded-entities [entities]

@@ -89,6 +89,12 @@
     (seen/observe! c (sample bot [(entity 99 "cow" "cow" 1)]) 2)
     (is (= 1 (:count (seen/snapshot c 2))))))
 
+(deftest death-before-first-observation-suppresses-anonymous-corpses
+  (let [c (cache) bot (js-obj) e (entity 1 "cow" nil 0)]
+    (seen/dead! c #js {:source bot :entity e :dimension "overworld"})
+    (seen/observe! c (sample bot [e]) 1)
+    (is (= 0 (:count (seen/snapshot c 1))))))
+
 (deftest snapshots-and-input-are-bounded-and-truncation-is-explicit
   (let [c (cache {:cap 2}) bot (js-obj)
         entities (mapv #(entity % "cow" (str %) %) (range 4))]
