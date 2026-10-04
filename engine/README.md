@@ -1828,6 +1828,27 @@ the timeout (default 1200 seconds, maximum 3600). Day uses the engine's exact
 boundaries: before tick 12542 or after 23460. `--state DIR` selects another state
 directory; `--poll-ms` controls dawn polling (default 1000). Both commands run
 the ahead-of-time CLJS tools bundle directly in Node; build it once with
+A picture of what a body sees, without the dashboard and without touching the body:
+
+```bash
+node engine/tools/snapshot.mjs Bob --world claude
+node engine/tools/snapshot.mjs Bob --world claude --yaw 90 --pitch -20 --width 960 --height 540
+node engine/tools/snapshot.mjs Bob --world claude --look-at 10,64,20
+```
+
+It draws the body's view with the software renderer (`tools/view/render.mjs`) from
+the body's `view/pose.json` and the world's chunk dumps, writes
+`<workspace>/snapshots/snap-<UTC time>.png` (the newest 20 are kept; standalone the
+workspace is the body folder, in a generated workspace `bin/snapshot` binds its own
+directory) and prints EDN with `:png` (relative to the workspace), `:facing`,
+`:crosshair` (block, cell, face and distance of what the view's centre hits),
+`:entities` (in the picture, nearest first, left/centre/right) and a one-line
+`:text`. `--yaw`/`--pitch` (degrees; 0 north, 90 west, pitch up positive) and
+`--look-at X,Y,Z` turn only the picture. A body that is offline or whose pose is
+older than 10 s is refused with `:body-offline` (exit 1); bad options give
+`:invalid-option` (exit 2). Logic is `agent-tools.snapshot` (cljs); the launcher
+imports the renderer only when it draws.
+
 `cd dashboard && npm run build-agent-tools`.
 
 Agent job management uses the existing engine scheduler through an EDN API;

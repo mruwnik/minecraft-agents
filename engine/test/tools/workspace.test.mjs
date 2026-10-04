@@ -12,7 +12,8 @@ import { readEDN } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')
-const commands = ['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time']
+const commands = ['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot']
+const bodyTools = new Set(['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot'])
 function fixture (t) {
   const dir = fs.mkdtempSync('/tmp/ws-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
@@ -75,13 +76,14 @@ test('generator refuses unrelated destinations, unknown wrappers and symlinks wi
 
 test('all tool routing preserves arguments and binds shared tools without a body', t => {
   const f = fixture(t)
-  for (const [index, command] of commands.entries()) {
+  for (const command of commands) {
     const input = ['literal with spaces', '{:note "--world is text"}', '-10']
-    const expected = [...(index < 7 ? ['B'] : []), '--world', 'w', '--worlds', f.worlds]
+    const expected = [...(bodyTools.has(command) ? ['B'] : []), '--world', 'w', '--worlds', f.worlds]
     if (['plans', 'blueprints'].includes(command)) expected.push('--repo', path.resolve(repo))
     if (['map', 'world-changes'].includes(command)) expected.push('--repo-root', path.resolve(repo))
+    if (command === 'snapshot') expected.push('--workspace', f.workspace)
     assert.deepEqual(tools.workspaceRoute(f.context, command, input), [...expected, ...input])
-    for (const override of ['--world', '--worlds=/other', '--state', '--body=B', '--agent', '--repo', '--repo-root=/other']) {
+    for (const override of ['--world', '--worlds=/other', '--state', '--body=B', '--agent', '--repo', '--repo-root=/other', '--workspace=/other']) {
       assert.throws(() => tools.workspaceRoute(f.context, command, [override]), /cannot override/)
     }
   }

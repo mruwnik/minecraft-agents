@@ -36,6 +36,8 @@ export const launcherExports = Object.freeze([
   'sayMain',
   'sayRequestFor',
   'sayUsage',
+  'snapshotMain',
+  'snapshotUsage',
   'storage',
   'timeClock',
   'timeExecute',

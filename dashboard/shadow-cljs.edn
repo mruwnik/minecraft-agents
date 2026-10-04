@@ -36,6 +36,8 @@
                                :timeClock agent-tools.api/time-clock
                                :timeExecute agent-tools.api/time-execute
                                :timeMain agent-tools.api/time-main
+                               :snapshotUsage agent-tools.snapshot/usage
+                               :snapshotMain agent-tools.snapshot/main!
                                :jobsUsage agent-tools.api/jobs-usage
                                :jobsRequestFor agent-tools.api/jobs-request-for
                                :jobsMain agent-tools.api/jobs-main
