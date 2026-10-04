@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [engine.ctx :as ctx]
+  (:require [engine.jobs.tidy :as tidy]
+            [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]))
@@ -111,7 +112,7 @@
       (cond
         (empty? cells) :ok
         (nil? item) "no-item"
-        :else (let [r (await (ctx/act c :place (clj->js {:pos (first cells) :item item})))
+        :else (let [r (await (tidy/place! c (first cells) item true))
                     status (.-status r)]
                 (if (#{"placed" "occupied"} status)
                   (do (when (= "placed" status) (ctx/update-mem! c update :placed (fnil conj #{}) (first cells)))
@@ -163,7 +164,7 @@
         (if (< (:y (sh/feet p)) before)
           (do (ctx/update-mem! c dissoc :failures) :continue)
           (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
-      :else (let [r (await (ctx/act c :dig (clj->js {:pos below})))]
+      :else (let [r (await (tidy/dig! c below true))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
                   (await (collect-drops! c blocks (.-drops r)))
@@ -182,7 +183,7 @@
         roof (:roof (ctx/mem c))]
     (if (nil? item)
       :done
-      (let [r (await (ctx/act c :place (clj->js {:pos roof :item item})))]
+      (let [r (await (tidy/place! c roof item true))]
         (if (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
               :done)

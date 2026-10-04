@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [clojure.string :as str]
+  (:require [engine.jobs.tidy :as tidy]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.gate :as gate]
@@ -252,7 +253,7 @@
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
       (refused! c pos v verdict)
-      (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
+      (let [status (.-status (await (tidy/dig! c pos)))]
         (cond
           (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true)
           (= "missing" status) nil

@@ -1,5 +1,6 @@
 (ns jobs.build.clear-box
-  (:require [engine.ctx :as ctx]
+  (:require [engine.jobs.tidy :as tidy]
+            [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
@@ -184,7 +185,7 @@
       (await (ctx/act c :equip #js {:item tool :dest "hand"})))
     (let [[judged v] (verdict c pos)]
       (case judged
-        :ok (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
+        :ok (let [status (.-status (await (tidy/dig! c pos)))]
               (case status
                 ("dug" "missing") (ctx/update-mem! c #(cond-> (update % :tries dissoc pos)
                                                         (= "dug" status) (update :dug (fnil inc 0))))

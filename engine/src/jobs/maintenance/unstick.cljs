@@ -1,5 +1,6 @@
 (ns jobs.maintenance.unstick
-  (:require [clojure.string :as str]
+  (:require [engine.jobs.tidy :as tidy]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
@@ -163,7 +164,7 @@
 
 (defn ^:async dig!
   [c pos]
-  (await (ctx/act c :dig (clj->js {:pos pos}))))
+  (await (tidy/dig! c pos true)))
 
 (defn best-pickaxe [c]
   (let [have (set (map :name (u/inventory (:primitives c))))]

@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [engine.ctx :as ctx]
+  (:require [engine.jobs.tidy :as tidy]
+            [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.path.walk :as walk]
@@ -186,11 +187,11 @@
         head (s/eye-cell (.self p))
         above (update head :y inc)
         _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [(cond-> [head] (solid-at? p above) (conj above))] identity)))
-        dug (status (await (ctx/act c :dig (clj->js {:pos head}))))]
+        dug (status (await (tidy/dig! c head true)))]
     (if-not (contains? #{"dug" "missing"} dug)
       false
       (do (when (solid-at? p above)
-            (await (ctx/act c :dig (clj->js {:pos above}))))
+            (await (tidy/dig! c above true)))
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
 (defn hold-decider
