@@ -28,7 +28,9 @@ ClojureScript.
 ## Build and test
 
 Install the root dependencies with `npm install`, then follow the engine and
-dashboard READMEs for their dependencies and launch commands.
+dashboard READMEs for their dependencies and launch commands. To use the archived
+JavaScript implementation, install its additional plugins with
+`npm install --prefix legacy`.
 
 ## Local ViaProxy
 

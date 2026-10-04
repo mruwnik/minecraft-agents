@@ -7,7 +7,8 @@ tests are archived here. Current implementations live in `../engine/` and
 Code and guides below use this folder as the archive root. Live `state/`,
 `textures/`, `blueprints/` and installed dependencies remain at the repository
 root. Explicit archived launchers use those shared data locations; no live data
-was moved. Run archived tests from the repository root with `npm run test:legacy`.
+was moved. Install the archive-only plugins with `npm install --prefix legacy`
+before running archived tests from the repository root with `npm run test:legacy`.
 The original documentation follows; its historical paths describe the previous
 layout unless a launcher example explicitly includes `legacy/`.
 
