@@ -7,8 +7,8 @@ import path from 'node:path'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { requestFor, specFor, post } from './jobs.mjs'
-import { readEDN, writeEDN } from './observe-lib.mjs'
+import { requestFor, specFor, post } from '../../tools/jobs.mjs'
+import { readEDN, writeEDN } from '../../tools/observe-lib.mjs'
 test('native expressions preserve lists/symbols/keyword arguments through EDN transport', () => {
   const r = requestFor(['--world', 'w', 'Bob', 'submit', '(jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}})', '--request-id', 'move-home'])
   assert.equal(r.request['request-id'], 'move-home')
@@ -83,7 +83,7 @@ test('compiled CLI sends submit options and cancel-all through the existing gene
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve) })
   t.after(async () => { await new Promise(resolve => server.close(resolve)); fs.rmSync(state, {recursive:true,force:true}) })
   const run = args => new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [fileURLToPath(new URL('./jobs.mjs', import.meta.url)), 'Bob', '--world', 'w', '--state', state, ...args])
+    const child = spawn(process.execPath, [fileURLToPath(new URL('../../tools/jobs.mjs', import.meta.url)), 'Bob', '--world', 'w', '--state', state, ...args])
     let out = '', err = ''
     child.stdout.on('data', chunk => { out += chunk })
     child.stderr.on('data', chunk => { err += chunk })

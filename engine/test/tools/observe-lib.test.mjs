@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { keyword as k, readEDN, writeEDN, compactStatus, classify, collect, attentionChanges, waitObserve } from './observe-lib.mjs'
-import { requestFor } from './observe.mjs'
+import { keyword as k, readEDN, writeEDN, compactStatus, classify, collect, attentionChanges, waitObserve } from '../../tools/observe-lib.mjs'
+import { requestFor } from '../../tools/observe.mjs'
 const defaults = { chatter: 'addressed', watch: [], danger: false, disconnect: false }
 const event = (source, kind, data = {}, message) => ({ source: k(source), kind: k(kind), data, message })
 test('compact status omits metadata, empty collections, rounds position, retains EDN keywords', () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { requestFor } from './world.mjs'
+import { requestFor } from '../../tools/world.mjs'
 
 test('builds a bounded move-to submission with a stable request id field', () => {
   const request = requestFor(['--world', 'w', 'Probe', 'submit', 'move-to', '1', '64', '-2', '--timeout-s', '4', '--who', 'claude'])

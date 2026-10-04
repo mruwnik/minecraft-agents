@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { requestFor, compact, duration, oneForm, post } from './triggers.mjs'
-import { readEDN, writeEDN, keyword as k } from './observe-lib.mjs'
+import { requestFor, compact, duration, oneForm, post } from '../../tools/triggers.mjs'
+import { readEDN, writeEDN, keyword as k } from '../../tools/observe-lib.mjs'
 const request = args => requestFor(['Probe','--world','test',...args])
 test('ad hoc and predefined upserts preserve native EDN list/map values',()=>{
   const a=request(['add','near-home','--when','(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))','--job','(jobs.movement.look-around)','--for','10m'])

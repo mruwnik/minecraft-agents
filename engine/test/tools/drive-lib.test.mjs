@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { requestFor, exitCodeFor, socketPathFor, defaultStateDir } from './drive-lib.mjs'
+import { requestFor, exitCodeFor, socketPathFor, defaultStateDir } from '../../tools/drive-lib.mjs'
 
 const post = (body) => ({ method: 'POST', path: '/drive', body })
 

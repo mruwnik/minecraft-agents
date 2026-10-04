@@ -5,10 +5,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createControl } from '../js/control.mjs'
-import { socketPathFor } from './drive-lib.mjs'
+import { createControl } from '../../js/control.mjs'
+import { socketPathFor } from '../../tools/drive-lib.mjs'
 
-const cli = path.join(path.dirname(fileURLToPath(import.meta.url)), 'drive.mjs')
+const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../tools/drive.mjs')
 const run = (args) => new Promise((resolve) => {
   execFile('node', [cli, ...args], (err, stdout, stderr) => resolve({ code: err ? err.code : 0, stdout, stderr }))
 })

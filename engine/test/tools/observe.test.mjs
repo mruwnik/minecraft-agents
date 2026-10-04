@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
-import { get, legacyEngineNotice, requestFor, unsupportedObserveRoute } from './observe.mjs'
+import { get, legacyEngineNotice, requestFor, unsupportedObserveRoute } from '../../tools/observe.mjs'
 
 test('observe distinguishes an older engine missing the projection routes', () => {
   assert.equal(unsupportedObserveRoute({

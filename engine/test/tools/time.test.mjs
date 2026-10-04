@@ -5,10 +5,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { clock, options, execute } from './time.mjs'
-import { readEDN } from './observe-lib.mjs'
+import { clock, options, execute } from '../../tools/time.mjs'
+import { readEDN } from '../../tools/observe-lib.mjs'
 
-const cli = fileURLToPath(new URL('./time.mjs', import.meta.url))
+const cli = fileURLToPath(new URL('../../tools/time.mjs', import.meta.url))
 function fixture(t) {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), 'world-time-'))
   t.after(() => fs.rmSync(state, { recursive: true, force: true }))
