@@ -9,6 +9,14 @@
            :output-to "out/server.cjs"
            :output-dir "out/server-js"
            :compiler-options {:infer-externs false}}
+  :agent-plan-tools {:target :node-library
+                     :exports {:prepare dashboard.agent-plan-tools/prepare
+                               :score dashboard.agent-plan-tools/score
+                               :validatePlan dashboard.agent-plan-tools/validate-plan
+                               :validateBlueprint dashboard.agent-plan-tools/validate-blueprint}
+                     :output-to "out/agent-plan-tools.cjs"
+                     :output-dir "out/agent-plan-tools-js"
+                     :compiler-options {:infer-externs false}}
   :ui {:target :browser
        :output-dir "out/public/js"
        :asset-path "/js"

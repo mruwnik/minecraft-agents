@@ -1687,3 +1687,49 @@ active round, unmute resumed it, and mute expiry resumed it automatically.
 Ordering, reset, temporary order expiry, built-in removal protection, missing
 home explanations, invalid-condition refusal, and custom removal were verified.
 The owned body stopped and its temporary whitelist entry was removed.
+
+## Plan and blueprint tools
+
+`plans.mjs` manages one world's EDN plans and `blueprints.mjs` manages the shared
+EDN blueprint library. Build their shared ClojureScript validator once with
+`cd dashboard && npm run build-agent-tools`; calls do not compile on demand.
+Both tools require `--world`, return EDN, and cap ordinary pages at ten records
+(up to 100 with `--limit`; use `--offset` for the next page). `--raw` includes
+the exact stored EDN document and is capped at 64 KiB unless `--large` is
+explicitly supplied. Geometry is omitted by default; `--geometry --large`
+allows inspection up to the model's 200,000-cell limit.
+
+```bash
+node engine/tools/plans.mjs --world claude list --status active
+node engine/tools/plans.mjs --world claude find home
+node engine/tools/plans.mjs --world claude show home --raw
+node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :status :proposed :parts []}'
+node engine/tools/plans.mjs --world claude check home --inventory '{:stone 24 :oak_planks 16}'
+node engine/tools/plans.mjs --world claude status home --status completed --by builder --revision <digest>
+node engine/tools/plans.mjs --world claude edit home --edn '{:id "home" :status :active :parts []}' --by builder --revision <digest>
+node engine/tools/blueprints.mjs --world claude find hut
+node engine/tools/blueprints.mjs --world claude show starter-hut --raw
+node engine/tools/blueprints.mjs --world claude validate hut --edn '{:id "hut" :front :north :key {"S" "stone" "." :clear} :layers [["S."]]}'
+node engine/tools/blueprints.mjs --world claude save hut --edn '<blueprint-map>' --by builder
+```
+
+Plan mutations are atomic compare-and-swap writes. `add` is create-only;
+`edit`, `status`, and `remove` require the digest shown by `list` or `show`, so
+the tool refuses to apply an intent based on stale observed data. Updating an
+existing blueprint also requires its shown digest; the first save creates it.
+`--dry-run` validates and previews without writing. Blueprint files are global across
+worlds, so every result marks `:scope :global`; plans mark `:scope :world`.
+`:completed` is separate from `:retired` and, like proposed/retired plans, does
+not participate in active-plan conflicts or engine footprints.
+
+`validate` checks EDN structure and blueprint references without saving.
+`check` compares a saved plan with previously dumped chunk columns. Its results
+are evidence from those saved dumps, not from live loaded chunks; `:checked`
+reports the dump coverage and ages. Undumped cells remain `:unknown`. Material
+requirements count block names; `--inventory` supplies optional name counts so
+the tool can report shortages. It does not infer crafting recipes, conversion
+between non-block items and placed blocks, path reachability, or build safety.
+The check also reports active-plan conflicts, overlapping zones, and explicit
+social-claim overlaps. Social claims are independent annotations; they do not
+change engine access rules. Dashboard plan summaries can remain cached for up
+to ten seconds after a write.
