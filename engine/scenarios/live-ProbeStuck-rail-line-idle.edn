@@ -1,0 +1,2 @@
+;; ProbeStuck live cases for jobs.build.rail-line: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
