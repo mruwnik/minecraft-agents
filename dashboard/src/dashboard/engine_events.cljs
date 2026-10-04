@@ -47,8 +47,10 @@
        :attention (field-name (or (:attention e) :none))
        :request-id (:request-id e)})))
 
+;; "restored" is a non-fresh restart: the saved queue comes back as queued jobs and the register of reflexes, so nothing
+;; is running yet and the old current job / reflex / signals belong to the previous run, as after "started".
 (defn system-started? [e]
-  (and (= "system" (:source e)) (contains? #{"started" "run_started"} (:kind e))))
+  (and (= "system" (:source e)) (contains? #{"started" "run_started" "restored"} (:kind e))))
 
 (defn kind-name [e] (str/replace (:kind e) "_" "-"))
 (defn kind-is? [e & kinds] (contains? (set kinds) (kind-name e)))

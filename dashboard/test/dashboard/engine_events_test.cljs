@@ -384,3 +384,25 @@
     "engine event service unavailable: ECONNREFUSED"
     (js/Error. "engine event API timed out") "engine event service unavailable: engine event API timed out"
     (js/Error. "engine event API HTTP 500") "engine event service unavailable: engine event API HTTP 500"))
+
+;; BaseMiner 2026-10-05: a non-fresh restart wrote system.stopping then system.restored and nothing else (events.edn seq 7567-7568)
+(def restart-events
+  [{:seq 7567 :time-ms 1791151607738 :source :system :kind :stopping :data {:pos {:x 12.4 :y 63 :z 11.5}}}
+   {:seq 7568 :time-ms 1791151610849 :source :system :kind :restored
+    :data {:list [] :register [:stuck :died] :pos {:x 12.4 :y 63 :z 11.5}} :run-id "c4a9f57c"}])
+
+(deftest restored-after-stopping-is-up
+  (is (:up (view restart-events (+ 1791151610849 1000))))
+  (is (not (:offline? (:signals (view restart-events (+ 1791151610849 1000))))) "offline signal cleared"))
+
+(deftest stopping-alone-is-offline
+  (is (= "disconnected" (:error (view (take 1 restart-events) (+ 1791151607738 1000))))))
+
+(deftest restored-resets-job-and-reflex
+  (let [events [(ev 1 {:kind "started" :name "mine"})
+                (reflex-ev 2 "fired" "hungry" {})
+                (ev 3 {:source "system" :kind "stopping" :job nil :chain nil})
+                (ev 4 {:source "system" :kind "restored" :job nil :chain nil})]
+        v (view events (+ t0 5000))]
+    (is (nil? (:job v)))
+    (is (nil? (:reflex v)))))
