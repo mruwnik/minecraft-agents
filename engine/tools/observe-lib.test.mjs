@@ -151,3 +151,32 @@ test('deadline during a read returns quiet summary; engine start notification do
     assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
   } finally { f.cleanup() }
 })
+test('explicitly watched action completion wakes with bounded result; other action events stay quiet', async () => {
+  const e = { ...event('action', 'done', { status: k('arrived'), result: { status: 'arrived', pos: { x: 1.234, y: 64, z: 2 }, distance: 1.234, drops: Array(10000).fill('wheat') } }), context: { 'action-id': 'move-1' } }
+  const opts = { ...defaults, watchActions: ['move-1'] }
+  assert.deepEqual(classify(e, opts, 'Probe'), { wake: k('action-finished'), action: 'move-1', result: { status: 'arrived', pos: [1.2, 64, 2], distance: 1.2 } })
+  assert.equal(classify({ ...e, source: k('job') }, opts, 'Probe'), null)
+  assert.equal(classify({ ...e, kind: k('started') }, opts, 'Probe'), null)
+  assert.equal(classify(e, { ...opts, watchActions: ['other'] }, 'Probe'), null)
+  assert.equal(classify(e, defaults, 'Probe'), null)
+  const summary = { counts: {}, items: [], more: false }; collect(summary, e)
+  assert.deepEqual(summary.counts, {})
+  const f = fixture()
+  try {
+    await waitObserve(f.req, f.get)
+    f.state.events.push({ ...e, seq: 1 })
+    f.req.waitOptions.watchActions = ['move-1']
+    const result = await waitObserve(f.req, f.get)
+    assert.equal(result.wake.key, 'action-finished')
+    assert.equal(result.action, 'move-1')
+    assert.equal((await waitObserve(f.req, f.get)).wake.key, 'timeout')
+  } finally { f.cleanup() }
+})
+test('action watchers accept repeated/comma options, validate limits, require wait', () => {
+  const r = requestFor(['Probe', '--wait', '--watch-action', 'move-1,place-1', '--watch-action', 'dig-1', '--watch', 'j1,j2', '--watch', 'j3'])
+  assert.deepEqual(r.waitOptions.watchActions, ['move-1', 'place-1', 'dig-1'])
+  assert.deepEqual(r.waitOptions.watch, ['j1', 'j2', 'j3'])
+  assert.ok(requestFor(['Probe', '--watch-action', 'move-1']).error)
+  assert.ok(requestFor(['Probe', '--wait', '--watch-action', 'bad/name']).error)
+  assert.ok(requestFor(['Probe', '--wait', '--watch-action', Array(33).fill('move-1').join(',')]).error)
+})

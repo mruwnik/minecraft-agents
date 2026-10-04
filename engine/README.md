@@ -1347,3 +1347,21 @@ The temporary body stopped and its added whitelist entry was removed. Durable
 attention lifecycle, cancellation/replay, bounds and reset behavior are covered
 by simulated API tests; a live failure injection did not create required attention
 because the existing wait primitive normalized the malformed argument.
+
+Use `--watch-action <request-id>` to wake when an explicitly tracked manual world
+operation emits its action completion event. Both watcher flags accept repeated
+options or comma-separated IDs (maximum 32 per kind):
+
+```bash
+node engine/tools/observe.mjs Bob --wait --timeout 100ms # initialize once per observer
+node engine/tools/world.mjs Bob submit move-to 10 64 20 --request-id move-home
+node engine/tools/observe.mjs Bob --wait --watch-action move-home
+```
+
+The named observer must have been initialized before submission to retain an
+operation that finishes between these commands; a first-ever observer starts at
+the current event cursor. Action completion returns
+`{:wake :action-finished :action "move-home" :result {...}}` with compact status,
+reason and movement/outcome fields. Unwatched action events stay quiet. Addressed
+chat and required attention retain their normal wake behavior while tracking an
+action. Classification by a model remains deferred.

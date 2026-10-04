@@ -65,6 +65,16 @@ export function classify (e, opts, body) {
   if (kind(e.source) === 'body' && k === 'reconnect-failed') return { wake: keyword('reconnect-failed'), reason: short(d.reason) }
   if (kind(e.source) === 'body' && opts.danger && ['hurt', 'died'].includes(k)) return { wake: keyword('danger'), event: e.kind, health: d.health }
   if (kind(e.source) === 'body' && opts.disconnect && k === 'disconnected') return { wake: keyword('disconnected'), reason: short(d.reason) }
+  if (kind(e.source) === 'action' && k === 'done' && opts.watchActions?.includes(e.context?.['action-id'])) {
+    const r = d.result ?? {}
+    const pos = r.pos
+    return { wake: keyword('action-finished'), action: e.context['action-id'], result: clean({
+      status: r.status ?? d.status, reason: short(r.reason ?? d.reason ?? d.error),
+      block: short(r.block, 80), consumed: r.consumed, hurt: r.hurt, health: r.health,
+      ...(pos ? { pos: [pos.x, pos.y, pos.z].map(n => Math.round(n * 10) / 10) } : {}),
+      ...(typeof r.distance === 'number' ? { distance: Math.round(r.distance * 10) / 10 } : {})
+    }) }
+  }
   if (kind(e.source) === 'job' && ['completed', 'failed'].includes(k)) {
     const id = e.context?.['job-id']
     if (opts.watch.includes(id)) return { wake: keyword('job-finished'), job: id, result: e.kind, message: short(e.message ?? d.error) }
