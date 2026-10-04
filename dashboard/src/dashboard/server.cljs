@@ -776,6 +776,8 @@
         (swap! blocks-by-world assoc world-name blocks)
         blocks)))
 
+(declare column-mtime)
+
 (defn plan-opts [module world-name]
   (let [blocks (blocks-for module world-name)]
     {:dir (.join path worlds-dir world-name "plans")
@@ -795,8 +797,6 @@
   (-> @worldblocks-loaded
       (.then (fn [module]
                (if-not plan-id
-(declare column-mtime)
-
                  (send-json! res 200 (plan-list module world-name))
                  (if-let [found (plan-api/detail (plan-opts module world-name) plan-id)]
                    (send-json! res 200 found)
