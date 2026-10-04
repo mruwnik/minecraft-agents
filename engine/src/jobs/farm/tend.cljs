@@ -1,10 +1,14 @@
 (ns jobs.farm.tend
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.access.permit :as permit]
+            [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
-            [jobs.farm.till :as till]))
+            [jobs.farm.tidy :as tidy]
+            [jobs.farm.till :as till]
+            [plan.shape :as shape]))
 
 (def doc
   "Keep one field of crops in order. The field is the :box (inclusive; its lowest
@@ -42,10 +46,29 @@
   fertilize work in a sphere around the box centre, so crops just outside the box
   may be cut or fertilized; a dirt lane inside the box is a bed unless :till is
   false; a ripe crop that cannot be reached makes the check pass on every run
-  (harvest gives up on it, the run still ends).")
+  (harvest gives up on it, the run still ends).
+
+  With :plan (and optionally :part) the field is the :active plan's crop cells instead of the :box (wants {:crop c} of
+  a crop harvest knows: wheat, carrots, potatoes, beetroots; the plan's other cells are never touched). The same six
+  steps, each per cell with the crop the plan names there: harvest cuts the ripe planned crop (a ripe crop of another
+  kind in a crop cell stands: tend never digs a wrong crop, it lists it as :wrong {:pos :found :want}, warn
+  farm-tend.wrong); till hoes the ground under a crop cell (the farmland of the plan: the cell below, unless the
+  plan names it as something else, which it then leaves alone) while a hoe is carried, the seed of that cell's crop
+  outruns the bare farmland waiting for it and the access rules allow it; plant sows every bare crop cell with its own
+  crop's seed when that seed is carried (a bare cell whose seed is not carried stays bare, one farm-tend.short-seed
+  warn per missing seed, even when nothing else runs); fertilize, compost and deposit as before, the seed reserve being
+  twice the planned cells of each crop. Tilling is checked with may-dig? on the ground cell and sowing with may-place?
+  on the crop cell, with the zones and the footprints of the OTHER active plans, when the cell is chosen and again
+  right before the act (in jobs.farm.till and jobs.farm.plant, called with the plan). The check declines, with one
+  farm-tend.declined warn naming the plan and the reason, while the plan is missing, not :active, unreadable, holds no
+  crop cells (in :part) or no zone list has been read; a started run declines in its next round when the plan stopped
+  being workable. The :field of the result then also holds :wrong, and the explicit farmland the plan wants without a
+  crop over it is not tilled (it would revert).")
 
 (def args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required (without it the check declines)" :default nil}
+  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :default nil}
+   :plan {:doc "id of an :active plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :default nil}
+   :part {:doc "with :plan, only the cells of this part" :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :default true}
    :fertilize {:doc "use bone meal on unripe crops" :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :default nil}
@@ -159,8 +182,8 @@
        (filter #(in-box? box %))
        vec))
 
-(defn facts
-  "What the decisions are made from, read live."
+(defn box-facts
+  "What the decisions are made from for a box, read live."
   [c]
   (let [p (:primitives c)
         {:keys [box fertilize keep]} (:args c)
@@ -191,7 +214,7 @@
      :waste (surplus inventory (merge-with max res keep) waste-seeds)
      :stored (surplus inventory (merge-with max res keep) farm-goods)}))
 
-(defn census
+(defn box-census
   "The live {:crops :bare :untilled} of the box."
   [c]
   (let [p (:primitives c)
@@ -203,29 +226,159 @@
      :bare (count (plant/bare-cells p box []))
      :untilled (count (filter untilled? (ground-layer p box)))}))
 
+;; ------------------------------------------------------------------ plan mode
+
+(defn farmland-want?
+  "Whether a plan want accepts farmland: the block, a block map of it, or an :any naming it."
+  [want]
+  (cond
+    (string? want) (= "farmland" want)
+    (map? want) (= "farmland" (:block want))
+    (vector? want) (boolean (some farmland-want? (rest want)))
+    :else false))
+
+(defn ground-cells
+  "{ground-pos crop}: the plan's farmland under the crop cells crops {pos crop}, the cell below each unless the plan
+  (answer) names it with a want that is not farmland."
+  [answer crops]
+  (let [wants (into {} (map (fn [{:keys [pos want]}] [(harvest/cell-pos pos) want])) (:cells answer))]
+    (into {} (keep (fn [[pos crop]]
+                     (let [g (update pos :y dec)]
+                       (when (or (not (contains? wants g)) (farmland-want? (wants g)))
+                         [g crop]))))
+          crops)))
+
+(defn planned
+  "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text} (warned once per reason);
+  nil without :plan."
+  [c]
+  (when-let [id (:plan (:args c))]
+    (let [part (:part (:args c))
+          answer (ctx/plan c id)
+          crops (harvest/crop-cells answer part)
+          trouble (or (harvest/plan-trouble answer crops)
+                      (when (nil? (ctx/zones c)) "no zone list has been read"))]
+      (if-not trouble
+        {:answer answer :crops crops}
+        (do (ctx/warn-once! c [id trouble] :farm-tend.declined
+                            {:plan id :part part :reason trouble
+                             :text (str "tend declines plan " id (when part (str " part " part)) ": " trouble)})
+            {:trouble trouble})))))
+
+(defn ground-cell
+  "{:pos :name :above} of a ground cell."
+  [p pos]
+  {:pos pos :name (u/block-name p pos) :above (u/block-name p (update pos :y inc))})
+
+(defn unripe-planned
+  "The planned cells holding their crop, not yet ripe."
+  [p crops]
+  (filterv (fn [[pos crop]]
+             (let [b (.blockAt p (clj->js pos))]
+               (and b (= crop (.-name b)) (some-> (.-age b) (< (harvest/ripe-age crop))))))
+           crops))
+
+(defn wrong-crops
+  "[{:pos :found :want}] of the crop cells that hold a crop of another kind."
+  [p crops]
+  (vec (keep (fn [[{:keys [x y z]} crop]]
+               (let [found (u/block-name p {:x x :y y :z z})]
+                 (when (and found (tidy/crop-blocks found) (not (contains? (shape/crop-names crop) found)))
+                   {:pos [x y z] :found found :want (shape/want-text {:crop crop})})))
+             crops)))
+
+(defn seed-reserve
+  "{seed count}: twice the planned cells of each crop."
+  [crops]
+  (into {} (for [[crop n] (frequencies (vals crops))] [(harvest/seed-of crop) (* 2 n)])))
+
+(defn plan-facts
+  "What the decisions are made from for a plan, read live."
+  [c]
+  (let [p (:primitives c)
+        {:keys [plan fertilize keep]} (:args c)
+        {:keys [answer crops]} (planned c)
+        inventory (u/inventory p)
+        have (carried inventory)
+        me (u/self-pos c)
+        tried (:till-tried (ctx/mem c) #{})
+        bare (harvest/planned-bare p crops)
+        bare-of (frequencies (map :seed bare))
+        sowing (plant/sowing c crops)
+        [mid R] (harvest/plan-field crops)
+        keep (merge-with max (seed-reserve crops) keep)
+        tillable (->> (ground-cells answer crops)
+                      (remove (fn [[pos _]] (tried pos)))
+                      (filter (fn [[pos _]] (untilled? (ground-cell p pos))))
+                      (filter (fn [[pos _]] (permit/ok? c plan :dig pos))))
+        seeded (filter (fn [[_ crop]] (let [seed (harvest/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)]
+    {:mid mid
+     :radius R
+     :ripe (count (harvest/planned-ripe p {} crops []))
+     :hoe (some? (till/hoe-of p))
+     :untilled (->> seeded (map key) (sort-by #(u/dist me %)) vec)
+     :till-short (- (count tillable) (count seeded))
+     :bare (- (count bare) (count (:refused sowing)))
+     :seed (boolean (seq (:ready sowing)))
+     :short (:short sowing)
+     :meal (boolean (fertilize/has-meal? p))
+     :unripe (if fertilize (count (unripe-planned p crops)) 0)
+     :keep keep
+     :waste (surplus inventory keep waste-seeds)
+     :stored (surplus inventory keep farm-goods)}))
+
+(defn note-short!
+  "One farm-tend.short-seed warn per seed the plan wants sown that is not carried (once per job and seed)."
+  [c seeds]
+  (doseq [seed (sort seeds)]
+    (ctx/warn-once! c [(:plan (:args c)) :short seed] :farm-tend.short-seed
+                    {:plan (:plan (:args c)) :seed seed
+                     :text (str "tend of " (:plan (:args c)) ": no " seed " carried for the bare cells that want it")})))
+
+(defn plan-census
+  "The live {:crops :bare :untilled :wrong} of the plan's field, and the seeds short for its bare cells as :short."
+  [c]
+  (let [p (:primitives c)
+        {:keys [answer crops]} (planned c)
+        crops (or crops {})
+        have (set (map :name (u/inventory p)))]
+    {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/block-name p pos))) crops))
+     :bare (count (harvest/planned-bare p crops))
+     :untilled (count (filter #(untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
+     :wrong (wrong-crops p crops)
+     :short (into #{} (comp (map :seed) (remove have)) (harvest/planned-bare p crops))}))
+
+(defn facts [c] (if (:plan (:args c)) (plan-facts c) (box-facts c)))
+
+(defn census [c] (if (:plan (:args c)) (plan-census c) (box-census c)))
+
 ;; ------------------------------------------------------------------ decisions
 
 (defn decide-harvest
-  [_args {:keys [ripe mid radius]}]
+  [{:keys [plan part]} {:keys [ripe mid radius]}]
   (if (zero? ripe)
     {:skip :no-ripe}
-    {:call {:slot :harvest :job (jobs :harvest) :args {:center mid :radius radius :replant true}}}))
+    {:call {:slot :harvest :job (jobs :harvest)
+            :args (if plan
+                    {:plan plan :part part :replant false}
+                    {:center mid :radius radius :replant true})}}))
 
 (defn decide-till
-  [{:keys [till]} {:keys [hoe untilled bare seeds]}]
+  [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short]}]
   (cond
     (not till) {:skip :till-off}
     (not hoe) {:skip :no-hoe}
-    (empty? untilled) {:skip :nothing-to-till}
-    (<= seeds bare) {:skip :no-seed}
-    :else {:call {:slot :till :job (jobs :till) :args {:from (first untilled) :to (first untilled)}}}))
+    (empty? untilled) {:skip (if (pos? (or till-short 0)) :no-seed :nothing-to-till)}
+    (and (not plan) (<= seeds bare)) {:skip :no-seed}
+    :else {:call {:slot :till :job (jobs :till)
+                  :args (cond-> {:from (first untilled) :to (first untilled)} plan (assoc :for-plan plan))}}))
 
 (defn decide-plant
-  [{:keys [box]} {:keys [bare seed]}]
+  [{:keys [box plan part]} {:keys [bare seed]}]
   (cond
     (zero? bare) {:skip :no-bare}
     (not seed) {:skip :no-seed}
-    :else {:call {:slot :plant :job (jobs :plant) :args {:box box}}}))
+    :else {:call {:slot :plant :job (jobs :plant) :args (if plan {:plan plan :part part} {:box box})}}))
 
 (defn decide-fertilize
   [{:keys [fertilize]} {:keys [meal unripe mid radius]}]
@@ -273,12 +426,19 @@
           (recur (rest todo) (if (contains? report step) report (assoc report step {:skipped skip})))
           {:todo (vec todo) :report report :call call})))))
 
+(defn would-run?
+  "Whether a run is under way, or some step would call a child over the facts read now."
+  [c]
+  (boolean (or (:todo (ctx/mem c))
+               (let [f (facts c)]
+                 (when (:plan (:args c)) (note-short! c (:short f)))
+                 (some #(:call (decide % (:args c) f)) steps)))))
+
 (defn check [c]
-  (let [{:keys [box]} (:args c)]
-    (boolean (and (usable-box? box)
-                  (or (:todo (ctx/mem c))
-                      (let [f (facts c)]
-                        (some #(:call (decide % (:args c) f)) steps)))))))
+  (boolean
+   (if (:plan (:args c))
+     (and (not (:trouble (planned c))) (would-run? c))
+     (and (usable-box? (:box (:args c))) (would-run? c)))))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -288,15 +448,23 @@
   (case step
     :harvest (select-keys r [:cut :replanted :bare :gave-up])
     :till {:tilled (:tilled r 0)}
-    :plant (select-keys r [:planted :reason :skipped])
+    :plant (select-keys r [:planted :reason :skipped :refused :short])
     :fertilize (select-keys r [:used])
     :compost (select-keys r [:fed :bone-meal :reason])
     :deposit (select-keys r [:gave-up :reason])))
 
 (defn finish!
   [c report]
-  (let [field (census c)
+  (let [{:keys [short] :as seen} (census c)
+        field (dissoc seen :short)
         out {:steps report :field field}]
+    (when (:plan (:args c))
+      (note-short! c short)
+      (when (seq (:wrong field))
+        (ctx/emit! c :farm-tend.wrong :warn
+                   {:plan (:plan (:args c)) :cells (:wrong field)
+                    :text (str "tend of " (:plan (:args c)) " left " (count (:wrong field)) " wrong crops standing: "
+                               (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong field))))})))
     (ctx/emit! c :farm-tend.done :info
                (assoc out :text (str "farm tend done: " (:crops field) " crops, " (:bare field) " bare, " (:untilled field) " untilled")))
     (ctx/result! c out)
@@ -340,7 +508,7 @@
         (dissoc :call-args)
         (assoc-in [:report step] (if (= :done outcome) (summary step r) {:skipped :declined})))))
 
-(defn ^:async round [c]
+(defn ^:async work [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {} :till-tried #{} :tilled 0))
   (let [{:keys [call] :as p} (next-plan c)]
@@ -353,3 +521,8 @@
         (when (#{:done :declined} outcome)
           (ctx/update-mem! c after-child step (:args call) outcome (when (= :done outcome) (ctx/child-result c step))))
         :continue))))
+
+(defn ^:async round [c]
+  (if (and (:plan (:args c)) (:trouble (planned c)))
+    :declined
+    (await (work c))))

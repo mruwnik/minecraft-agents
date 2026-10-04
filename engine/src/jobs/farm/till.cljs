@@ -1,5 +1,6 @@
 (ns jobs.farm.till
-  (:require [engine.ctx :as ctx]
+  (:require [engine.access.permit :as permit]
+            [engine.ctx :as ctx]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -7,13 +8,17 @@
   given as the box :from/:to or the square :center/:radius (at most 256 cells).
   Water nearby is not its concern. A cell that is not tillable, is covered,
   cannot be reached or refuses the hoe twice is skipped with a reason. Ends with
-  a result {:tilled n :skipped {pos reason}}.")
+  a result {:tilled n :skipped {pos reason}}. With :for-plan (the id of the plan the cells belong to) every cell is
+  asked of engine.access.rules/may-dig? with the zones and the footprints of the OTHER active plans, when the round
+  looks at it and again right before the hoe or the cover dig; a refused cell is skipped :not-permitted, and the
+  check declines while no zone list has been read.")
 
 (def args
   {:from {:doc "box corner (inclusive); with :to, any order" :default nil}
    :to {:doc "opposite box corner (inclusive)" :default nil}
    :center {:doc "centre of a square of cells at its y; with :radius" :default nil}
-   :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}})
+   :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its cells are checked against zones and the other active plans' footprints; nil: no check" :default nil}})
 
 (def max-cells 256)
 (def tillable #{"dirt" "grass_block" "dirt_path"})
@@ -57,17 +62,24 @@
          (remove (fn [[_ n]] (= "farmland" n)))
          vec)))
 
+(defn permitted?
+  "Whether action at pos passes the access rules for the plan the job works; always without :for-plan."
+  [c action pos]
+  (let [plan (:for-plan (:args c))]
+    (or (nil? plan) (nil? (permit/refusal c plan action pos)))))
+
 (defn check
-  "True when nothing is pending (the round can finish), false without a hoe.
-  Bad args pass, so the round throws them. Walks the cells lazily and stops at
-  the first one that needs work, reading each cell at most once."
+  "True when nothing is pending (the round can finish), false without a hoe, and with :for-plan false while no zone
+  list has been read. Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
+  that needs work, reading each cell at most once."
   [c]
   (let [skipped (:skipped (ctx/mem c) {})
         p (:primitives c)
         todo? (try (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %))))
                          (cells (:args c)))
                    (catch :default _ nil))]
-    (or (nil? todo?) (some? (hoe-of p)))))
+    (and (or (nil? (:for-plan (:args c))) (some? (ctx/zones c)))
+         (or (nil? todo?) (some? (hoe-of p))))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."
@@ -99,7 +111,9 @@
         todo (pending c)
         bad (into [] (comp (filter (fn [[_ n]] (and (some? n) (not (tillable n))))) (map first)) todo)]
     (when (seq bad) (skip! c bad :not-tillable))
-    (let [bad? (set bad)
+    (let [unpermitted (into [] (comp (map first) (remove (set bad)) (remove #(permitted? c :dig %))) todo)
+          _ (when (seq unpermitted) (skip! c unpermitted :not-permitted))
+          bad? (into (set bad) unpermitted)
           cands (remove (fn [[pos _]] (bad? pos)) todo)
           hoe (hoe-of p)]
       (cond
@@ -123,6 +137,12 @@
             (let [above-pos (update target :y inc)
                   above (u/block-name p above-pos)]
               (cond
+                (not (permitted? c :dig target))
+                (do (skip! c [target] :not-permitted) :continue)
+
+                (and (ground-cover above) (not (permitted? c :dig above-pos)))
+                (do (skip! c [target] :not-permitted) :continue)
+
                 (ground-cover above)
                 (let [d (await (ctx/act c :dig (clj->js {:pos above-pos})))]
                   (when (not= "dug" (.-status d)) (bump! c target :cover-stuck))
