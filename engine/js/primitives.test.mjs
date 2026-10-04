@@ -257,7 +257,7 @@ test('trade with an unknown villager uuid resolves gone', async () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username', 'vehicle'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })

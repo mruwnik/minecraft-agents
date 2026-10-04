@@ -15,6 +15,7 @@ import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 import { fakeEnchant } from './fake-enchant.mjs'
 import { placedBlocks } from './placing.mjs'
+import { fakeMount, fakeDismount, fakeVehicleOf } from './fake-vehicle.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -110,6 +111,8 @@ function initialState (spec) {
     unreachable: new Set(spec.unreachable ?? []),
     noPath: new Set(spec.noPath ?? []), // moveTo targets the pathfinder resolves on with no path
     swimFails: spec.swimFails ?? false,
+    mountFails: spec.mountFails ?? false, // fake-vehicle.mjs
+    dismountFails: spec.dismountFails ?? false,
     nextEntityId: 1000,
     offline: false,
     controls: {},
@@ -461,6 +464,8 @@ export function createFake (spec = {}) {
   acts.interact = fakeInteract(s)
   acts.trade = fakeTrade(s)
   acts.unequip = fakeUnequip(s)
+  acts.mount = fakeMount(s)
+  acts.dismount = fakeDismount(s)
   acts.steer = fakeSteer(s, () => owner, CutError)
   acts.furnace = fakeFurnace(s, spec)
   acts.enchant = fakeEnchant(s, spec)
@@ -492,6 +497,7 @@ export function createFake (spec = {}) {
     const forced = await waitHold(name, token)
     checkOwner(token)
     if (forced !== undefined) return forced
+    if ((name === 'moveTo' || name === 'steer') && s.self.vehicle != null) return { status: 'mounted' } // no walking aboard
     if (name !== 'sleep') s.self.isSleeping = false // acting leaves the bed first, as the real primitives do
     const impl = acts[name]
     const override = overrides.get(name)
@@ -543,6 +549,7 @@ export function createFake (spec = {}) {
         onGround: s.self.onGround,
         settling: s.settling,
         isSleeping: s.self.isSleeping,
+        vehicle: fakeVehicleOf(s),
         effects: s.self.effects.map(e => ({ ...e })),
         experience: { ...s.self.experience },
         dimension: s.self.dimension,

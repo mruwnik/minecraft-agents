@@ -16,6 +16,7 @@ import { createUseOn, stateProperties } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { leashFields, trackLeashes } from './leash.mjs'
+import { trackVehicles, vehicleFields, selfVehicle, mountVehicle, dismountVehicle } from './vehicle.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
@@ -206,6 +207,7 @@ const gained = (before, after) => Object.entries(after)
 export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, pending = [] } = {}) {
   let bot = initialBot
   trackLeashes(bot)
+  trackVehicles(bot)
   view?.attach(bot)
   let closed = false
   let owner = null
@@ -463,6 +465,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       chunkLoaded: columnLoaded(),
       settling: isSettling(),
       isSleeping: Boolean(bot.isSleeping),
+      vehicle: selfVehicle(bot),
       effects: effects(),
       experience: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
       dimension: bot.game?.dimension,
@@ -510,6 +513,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         distance,
         ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
         ...(k !== 'item' && k !== 'player' && leashFields(bot, e)),
+        ...(k !== 'item' && vehicleFields(bot, e)),
         ...(k === 'hostile' && { visible: canSee(e) }),
         ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
@@ -1284,6 +1288,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     unbind()
     bot = fresh
     trackLeashes(bot)
+    trackVehicles(bot)
     unbind = bindEvents(bot)
     view?.attach(bot)
     down = false
@@ -1359,10 +1364,30 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     bot.quit()
   }
 
+  // Boats, rafts, minecarts and rideable mobs (vehicle.mjs). Every wait is wall time: no physics tick runs mounted.
+  const mount = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isNum(a.id), 'mount needs an entity id')
+    return act(token, { boundS: 2 }, ctx => mountVehicle(bot, ctx, a, { timeScale }))
+  }
+
+  const dismount = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.yaw == null || isNum(a.yaw), 'dismount yaw must be a number of degrees (0 south, 90 west)')
+    need(a.pitch == null || isNum(a.pitch), 'dismount pitch must be a number of degrees')
+    return act(token, { boundS: 2 }, ctx => dismountVehicle(bot, ctx, a, { timeScale }))
+  }
+
+  // the walking primitives do nothing aboard (no physics tick runs), so they refuse at once
+  const onFoot = fn => async (token, a) => {
+    if (!isOwner(token)) throw cutError()
+    return bot.vehicle ? { status: 'mounted' } : fn(token, a)
+  }
+
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
+  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer: onFoot(steer), mount, dismount })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, close }
 }
