@@ -91,6 +91,7 @@
 (def ^:const JUMP-S 0.35) ; a jump up costs this much more than the walk it replaces
 (def ^:const GAP-S 0.5) ; a gap jump's run-up and landing, on top of the sprint over its length
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one
+(def ^:const GAP-PIT-RISK 0.5) ; hp of risk for a jump over 3 above a pit it cannot jump out of: a short jump traps the body
 (def ^:const TIGHT-S 0.1) ; careful walking: each tight cell entered costs this much more than a plain step
 (def ^:const CORNER-S 0.15) ; a diagonal slid along a blocked corner: slower than a straight one
 (def ^:const SLOW-EXTRA 0.75) ; walking time grows by this much of itself per slow end of a move
@@ -443,6 +444,12 @@
             (== (aget tbl-kind id) LAVA) 1
             (or (pos? (aget tbl-top id)) (== (aget tbl-kind id) WATER)) 0
             :else (recur (inc k)))))))
+
+  ;; A body that falls into the cell under a gap cell x y z cannot jump back out: the cell two below is open too (no
+  ;; collision, not water), so the floor is two or more blocks down
+  (pitBelow [s x y z]
+    (let [id (.stateAt s x (- y 2) z)]
+      (and (not= id UNLOADED) (zero? (aget tbl-top id)) (not= (aget tbl-kind id) WATER))))
 
   ;; A body standing level with a magma bubble column (or at the surface cell beside it, when it stands on the bank above)
   ;; can slip into it. Costs risk. `quiet` says no section near the cell holds such a column.
@@ -1348,12 +1355,15 @@
     (.landing s lx (dec y) lz))
 
   ;; sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block
-  ;; higher
+  ;; higher. A jump over 3 above a pit (pitBelow) has GAP-PIT-RISK: one that falls short traps the body, so a short way round
+  ;; is taken instead
   (expandGap [s i x y z c h0]
     (let [dx (aget adx c)
           dz (aget adz c)]
       (loop [n 1
              hole 0
+             ;; some gap cell so far is over a pit (pitBelow): a jump over 3 then carries GAP-PIT-RISK
+             pit false
              ;; a jump up needs the higher arc over the start and every gap cell
              up-arc ^boolean (.clear s x z h0 (+ h0 ARC-UP))]
         (when (<= n 3)
@@ -1363,6 +1373,8 @@
               (when ^boolean (.clear s gx gz h0 (+ h0 ARC))
                 (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)))
                       hole (js/Math.max hole (.holeRisk s gx y gz))
+                      pit (or pit ^boolean (.pitBelow s gx y gz))
+                      risk (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole)
                       lx (+ gx dx)
                       lz (+ gz dz)
                       up (and (<= n 2) up-arc)
@@ -1376,8 +1388,8 @@
                                          (not (true? (limit-gap x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget moves i)) lx ly lz h1)))))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) enter-extra)
-                               (+ enter-risk hole) enter-slow 0 0))))
-                  (recur (inc n) hole up-arc)))))))))
+                               (+ enter-risk risk) enter-slow 0 0))))
+                  (recur (inc n) hole pit up-arc)))))))))
 
   (expandCardinal [s x y z h slow-from i region c h0 ^boolean tight-src ^boolean climbing]
     (let [x2 (+ x (aget adx c))

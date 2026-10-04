@@ -104,6 +104,21 @@
     2 -1
     3 -1))
 
+;; floor x 0..12, z -2..4, with a pit at x 5..7, z 0..2 (floor at depth) between start and goal: a 3-wide gap jump over it
+;; along z 1, or a walk round it along z -1
+(defn pit-course [depth]
+  (merge (box 0 63 -2 4 63 4 "stone") (box 8 63 -2 12 63 4 "stone") (box 5 63 -2 7 63 -1 "stone") (box 5 63 3 7 63 4 "stone")
+         (box 5 (- 63 depth) 0 7 (- 63 depth) 2 "stone")))
+
+(deftest a-3-wide-gap-over-a-pit-it-cannot-climb-out-of-is-walked-round
+  ;; a sprint jump over 3 that falls short lands in the pit (live: a body trapped in a crater, soak walk j92); where the
+  ;; jump is the only way it is still planned (the-gap-jumps-the-executor-walks-are-still-planned)
+  (are [depth gap?] (= {:status "found" :gap gap?}
+                       (let [r (plan-over (pit-course depth) [10 64 1] true)]
+                         {:status (:status r) :gap (contains? (:moves r) :gap)}))
+    3 false
+    2 false))
+
 (defn flooded-plan-status
   "The planner's status with the limits and the goal flood run at once (floodAfter 0): the flood expands cells that
   nothing reached, so it has no move to tell the gap test."

@@ -79,6 +79,24 @@
           (is (= :arrived (:status result)))
           (is (> (first at) 9)))))))
 
+;; two walkways x 0 and x 6 (stone at y 63, z 0..100) with no floor between them (5 cells, wider than any jump), joined
+;; only at z 100: the way round runs past the planner's default box (64 blocks round start and goal)
+(defn walkways [joined?]
+  (merge (box 0 63 0 0 63 100 "stone") (box 6 63 0 6 63 100 "stone")
+         (when joined? (box 1 63 100 5 63 100 "stone"))))
+
+(defn plan-within-status
+  "The planner status and reason of walk/plan-within from (0 64 0) to goal over blocks."
+  [blocks goal]
+  (let [p (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        {:keys [r]} (walk/plan-within {:primitives p} (.pathWorld p) goal 0 walk/default-weight)]
+    [(.-status r) (.-reason r)]))
+
+(deftest a-way-round-past-the-default-box-is-found-by-a-wider-one
+  (are [joined? answer] (= answer (plan-within-status (walkways joined?) [6 64 0]))
+    true ["found" nil]
+    false ["none" "exhausted"]))
+
 (deftest a-goal-sealed-in-stone-is-no-path
   (async done
     (tu/run-async done

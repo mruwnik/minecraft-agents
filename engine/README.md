@@ -1580,6 +1580,9 @@ queries and the live tester's courses) and checks the answers recorded in `test/
 `PLANNER_BENCH_DIR` to it, or `PLANNER_BENCH_SKIP_WORLD=1` on a machine without one, e.g. CI, else that test fails;
 after an intended planner change `npm run record:planner-bench` re-records the file and prints which answers changed). Bench: `npx
 shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release`, then `node bench-lang/bench.mjs`
+A gap jump over 3 cells above a pit the body cannot jump out of (the floor 2 or more blocks down) carries 0.5 risk
+(`GAP-PIT-RISK`): one that falls short traps the body (live: a crater whose only way out was a corner jump), so a short way round
+is taken instead; where the jump is the only way it is still planned.
 (dev against :advanced build, see its header). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
 
@@ -1651,6 +1654,9 @@ the result is `{:status :no-path :reason :abilities :kind :at}`, the kind and ce
 abilities; the body does not move). Otherwise `:reason` is the planner's: `:exhausted` (no `:kind`) means every cell the body can
 reach was searched and none is the goal even with every ability, as with a gap of 4 or more cells (wider than any jump), a wall or
 a drop too deep; the walk first goes to the reachable cell nearest the goal (live: 6 blocks to the edge of a 4-wide gap). A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
+Either search that finds no whole path and ran into the planner's search box (reason `box`: 64 blocks round start and goal, 48
+up and down) is run once more in `walk/wide-box` (256 and 96): a way round can run far past the default box (live: a walled
+walkway whose way down lay 200 blocks along).
 before the body moves (a backstop). In the `:walk-plan.result` event `:kind` is `:refused-kind` (an event's `:kind`
 is its own). `jobs.access.stair`'s way-back check plans the same way (`walk-plan/plan-within`).
 Swimming (steps in water cells: `:swim :swim-up :swim-down :exit`, a drop into water, wading in water 1 deep, a start in water) is a

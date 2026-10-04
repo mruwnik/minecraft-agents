@@ -72,16 +72,28 @@
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
       #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))
 
+(def wide-box
+  "The planner's search box (options margin and yMargin, blocks round start and goal) of a second search when the first,
+  in the planner's default box (64 and 48), ended against it: a way round can run past it (live: a walled walkway whose
+  way down lay 200 blocks along)."
+  {:margin 256 :yMargin 96})
+
 (defn plan-from
   "Plan from the body's cell to the goal, within limits (the planner's options.limits, nil for none); the planner's JS
-  result."
+  result. A search that finds no whole path and ran into its box (reason \"box\") is run again in wide-box."
   [c pw to range weight limits]
   (let [pos (.-pos (.self (:primitives c)))
         [gx gy gz] to
         query #js {:from #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))
                               :px (.-x pos) :pz (.-z pos)}
-                   :goal #js {:kind "near" :x gx :y gy :z gz :range range}}]
-    (planner/plan (.-snapshot pw) query #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits})))
+                   :goal #js {:kind "near" :x gx :y gy :z gz :range range}}
+        plan (fn [box] (planner/plan (.-snapshot pw) query
+                                     (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits}
+                                                       (clj->js box))))
+        r (plan nil)]
+    (if (and (not= "found" (.-status r)) (= "box" (.-reason r)))
+      (plan wide-box)
+      r)))
 
 (defn solid-fn
   "solid? for executor/with-free-sides over a pathWorld."
