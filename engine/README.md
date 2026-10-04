@@ -1198,6 +1198,7 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   given), walks within 3, equips, places. `occupied` counts as planted.
 - `:harvest-wood` is phase-driven: each round calls the current phase's child
   once by symbol (`jobs.forestry.fell-tree`, then `collect-drops` with the
+| `jobs.combat.hunt` | `{:mob "cow" :count 1 :radius 24 :keep nil :collect-radius 8 :weapons :drops nil :max-skips 3}` | more than `:keep` adults of `:mob` within `:radius`, or started | `:started :target :collecting :killed :skipped :skips :misses :keep`, children `:attack`, `:collect` | none; kills `:count` adults, collects the kind's drops. The pair rule is the default: `:keep nil` is 2 for an animal kind and 0 for a hostile one (a kind any of whose entities reports kind hostile), so a plain hunt stops while two adults remain in `:radius`; `:keep 0` turns it off, any number wins. Babies are never targets and never counted. Hands over `{:killed :reason :spared :remaining}`, reason `:count`, `:keep`, `:none` or `:gave-up` (`:spared` = kills asked for and withheld by the pair rule); info `hunt.done`, warn `hunt.gave-up` |
   species' log, sapling, stick and apple, then `plant-sapling`) and advances the phase when the
   child is done. Its check is the current child's check, so it declines
   (rather than spinning) while no tree is in sight or no sapling is carried.
