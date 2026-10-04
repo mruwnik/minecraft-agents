@@ -315,7 +315,7 @@
          (c/explain (node '(known? (health))) f-env {}))))
 
 (deftest facts-read-the-fake-world
-  (let [p (tu/fake {:self {:health 12 :food 9 :pos {:x 3 :y 64 :z 4} :inWater true}
+  (let [p (tu/fake {:self {:held "iron_sword" :health 12 :food 9 :pos {:x 3 :y 64 :z 4} :inWater true}
                     :time 13000
                     :inventory [{:name "bread" :count 5} {:name "bread" :count 2} {:name "stick" :count 1}]
                     :equipment {:head {:name "iron_helmet"} :offHand {:name "shield"}}
