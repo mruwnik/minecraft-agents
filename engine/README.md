@@ -26,6 +26,7 @@ npm run body -- --agent <name> --scenario <file.edn>
 Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
 `out/test.cjs`, picking up every namespace ending in `-test`; `:body` is a
 `:node-script` build to `out/body.cjs` with `engine.main/main`.
+The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because one compile must fit beside the game server on a 31 GB machine; uncapped it grew past 2 GB.
 
 Layout:
 

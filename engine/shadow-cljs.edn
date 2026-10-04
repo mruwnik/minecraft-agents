@@ -1,6 +1,7 @@
 ;; shadow-cljs builds for the body engine. See README.md.
 ;; Both builds run from `compile` (never :advanced), so externs inference is off.
-{:source-paths ["src" "test"]
+{:jvm-opts ["-Xmx1G"]
+ :source-paths ["src" "test"]
  :dependencies []
  :builds
  {:body {:target :node-script
