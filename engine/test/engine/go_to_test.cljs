@@ -8,7 +8,8 @@
             [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.movement.go-to :as go-to]))
 
 (def start {:x 0 :y 64 :z 0})
 
@@ -163,3 +164,15 @@
           (is (= {:arrived true} @out))
           (is (= [10 64 0] (at p)))
           (is (= 1 (count (moved eng))) "the cut walk wrote nothing; the replanned one wrote its entry"))))))
+
+(deftest give-up-fields-explain-every-kind-of-fruitless-round
+  (doseq [[result expected]
+          [[{:status :no-path :reason :abilities :kind :gap-up} {:why :abilities :kind :gap-up}]
+           [{:status :no-path :reason :door-stuck :cells []} {:why :door-stuck}]
+           [{:status :stuck :step 3 :move :jump :target [4 65 0] :why "no progress on step 3 for 3.0 s"}
+            {:why :stuck :kind :jump :detail "no progress on step 3 for 3.0 s"}]
+           [{:status :stuck :why "walk timed out after 60 s"} {:why :stuck :detail "walk timed out after 60 s"}]
+           [{:status :off-plan :at [1 64 0] :step 2} {:why :off-plan :detail "left the plan at step 2"}]
+           [{:status :failed :reason "cut"} {:why :cut}]
+           [{:status :arrived :at [1 64 0]} {:why :no-progress}]]]
+    (is (= expected (go-to/give-up-fields result)) (pr-str result))))
