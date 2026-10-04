@@ -582,3 +582,92 @@
               s (await (scenario {:block "sand" :count 2 :wet true :accept #{}} world 30))]
           (is (= [[3 64 0]] (dug-cells s)))
           (is (= #{:fluid-adjacent :falling-block :under-feet} (:default (:accept mine/args)))))))))
+
+;; ------------------------------------------------------------------ buried targets
+
+(def stone-slab
+  "Stone over x -12..12, y 50..64, z -3..3 with iron ore at 0,60,0 under four blocks of stone."
+  (assoc (cells "stone" (range -12 13) (range 50 65) (range -3 4)) "0,60,0" "iron_ore"))
+
+(def buried-world {:blocks stone-slab :self {:pos {:x 0 :y 65 :z 0}}
+                   :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}
+                   :inventory [{:name "iron_pickaxe" :count 1}]})
+
+(defn buried-fake
+  "The fake over world whose collect leaves the body where it stands, as the real one does for an item in pickup
+  reach (the fake's walks onto the item's cell, here the 1-high cell the ore left)."
+  [world]
+  (let [p (tu/fake world)
+        w (.-world p)]
+    (.override w "collect" (fn ^:async f [token a impl]
+                             (let [at (.. w -state -self -pos)
+                                   r (await (impl token a))]
+                               (set! (.. w -state -self -pos) at)
+                               r)))
+    p))
+
+(defn ^:async buried-scenario [args world n]
+  (let [s (start {:p (buried-fake world)})]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n))
+    s))
+
+(defn feet [{:keys [p]}] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
+
+(deftest a-buried-ore-is-tunnelled-to-mined-and-the-body-walks-back-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :buried true :mend false} buried-world 300))]
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (= 1 (:got (done-event s))))
+          (is (= "air" (block-at s 0 60 0)))
+          (is (= [0 65 0] (feet s)) "back where it started")
+          (is (= 1 (count (events-of s :mine.tunnel))))
+          (is (= 1 (count (:tunnels (done-event s))))))))))
+
+(deftest buried-targets-wait-for-the-buried-arg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world buried-world})]
+          (core/submit! eng (spec {:block "iron_ore" :count 1}) {})
+          (is (nil? (core/tick! eng)))
+          (is (zero? (count (.-calls (.-world p))))))))))
+
+(deftest a-buried-target-the-tunnel-declines-is-skipped-and-nothing-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :buried true :mend false}
+                                 (update buried-world :blocks assoc "0,61,0" "water") 60))]
+          (is (finished? s))
+          (is (empty? (calls s "dig")))
+          (is (= [0 65 0] (feet s)))
+          (is (= 1 (count (events-of s :tunnel.stopped)))))))))
+
+(deftest a-buried-target-in-a-zone-declines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "iron_ore" :count 1 :buried true} buried-world
+                              (ew/of-data {} {} [{:name "vault" :min [0 60 0] :max [0 60 0]}]) 5))]
+          (is (empty? (calls s "dig")))
+          (is (= [{:reason :refused :zones ["vault"] :plans []}]
+                 (map #(select-keys % [:reason :zones :plans]) (events-of s :mine.declined)))))))))
+
+(deftest a-restart-underground-finishes-and-walks-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              s (start {:p (buried-fake buried-world) :dir dir})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :buried true :mend false}) {})
+          (await (run-ticks s 14))
+          (is (< (second (feet s)) 65) "underground when stopped")
+          (let [again (start {:p (:p s) :dir dir})]
+            (await (run-ticks again 300))
+            (is (finished? again))
+            (is (= :count (:reason (done-event again))))
+            (is (= [0 65 0] (feet again)))))))))

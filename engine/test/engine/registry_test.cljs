@@ -22,7 +22,7 @@
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow
      jobs.time.wait-for-day jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
-     jobs.access.stair jobs.farm.tidy
+     jobs.access.stair jobs.access.tunnel jobs.farm.tidy
      jobs.access.cleanup
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
 

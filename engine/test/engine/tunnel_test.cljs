@@ -1,0 +1,281 @@
+(ns engine.tunnel-test
+  "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.registry :as registry]
+            [engine.takeover :as takeover]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [engine.world :as world]
+            [jobs.access.tunnel :as tunnel]))
+
+(def job 'jobs.access.tunnel)
+
+;; ---------------------------------------------------------------- pure
+
+(defn world-fn
+  "A block-at over a map {[x y z] name}: stone everywhere below y 65 unless named, air above, nil for :unloaded."
+  [named]
+  (fn [[_ y _ :as cell]]
+    (let [n (get named cell (if (< y 65) "stone" "air"))]
+      (when-not (= :unloaded n) n))))
+
+(defn approach [named target & {:keys [zones footprints max-length accept] :or {zones [] footprints #{} max-length 24 accept #{}}}]
+  (tunnel/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{}}
+                   target [0 65 0] max-length accept))
+
+(defn stair-target [{:keys [stand heading]}]
+  (let [[dx dz] ({:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]} heading)
+        [x y z] stand]
+    [(+ x dx) y (+ z dz)]))
+
+(deftest the-surface-of-a-column
+  (are [named y] (= y (tunnel/surface (world-fn named) [3 5] 50 80))
+    {} 65
+    {[3 65 5] "short_grass"} 65
+    {[3 65 5] "stone" [3 66 5] "dirt"} 67
+    {[3 64 5] "water"} nil
+    {[3 64 5] "lava"} nil
+    {[3 70 5] :unloaded} nil))
+
+(deftest a-target-straight-below-gets-a-straight-stair
+  (let [a (approach {} [0 60 0])]
+    (is (= :down (:dir a)))
+    (is (= 5 (:steps a)))
+    (is (= 0 (:run a)))
+    (is (= 6 (:length a)))
+    (is (= [0 60 0] (stair-target a)) "the stand's next cell along the heading is the target")))
+
+(deftest eight-down-six-aside-starts-behind-the-body
+  (is (= {:entry [-3 65 0] :heading :east :dir :down :steps 8 :run 0 :length 9 :stand [5 57 0] :target [6 57 0]}
+         (approach {} [6 57 0]))))
+
+(deftest a-lower-entry-runs-flat-the-rest
+  (let [trench (into {} (for [x (range -12 -1) y [61 62 63 64] z (range -12 13)] [[x y z] "air"]))
+        a (approach trench [0 61 0])]
+    (is (= {:entry [-2 61 0] :heading :east :dir :down :steps 0 :run 1 :length 2 :stand [-1 61 0] :target [0 61 0]} a))))
+
+(deftest a-hazard-on-one-line-takes-another-heading
+  (let [a (approach {[-1 63 1] "lava"} [6 57 0])]
+    (is (:entry a))
+    (is (not= :east (:heading a)))))
+
+(deftest a-zone-or-a-plan-on-one-line-takes-another-heading
+  (are [opts] (let [a (apply approach {} [6 57 0] (mapcat identity opts))]
+                (and (:entry a) (not= :east (:heading a))))
+    {:zones [{:name "cellar" :min [-1 63 0] :max [-1 63 0]}]}
+    {:footprints {[-1 63 0] "wall"}}))
+
+(deftest declines-name-the-reason
+  (are [named target opts reason] (= reason (:reason (apply approach named target (mapcat identity opts))))
+    {} [0 60 0] {:max-length 4} :too-far
+    {[0 61 0] "lava"} [0 60 0] {} :hazard
+    {[0 61 0] "water"} [0 60 0] {} :hazard
+    {[1 60 0] "water"} [0 60 0] {} :no-approach
+    {} [0 60 0] {:zones [{:name "vault" :min [0 60 0] :max [0 60 0]}]} :zone
+    {} [0 60 0] {:footprints {[0 60 0] "wall"}} :footprint
+    {} [0 60 0] {:zones nil} :no-zones))
+
+(deftest a-cave-under-every-line-declines
+  (let [cave (into {} (for [x (range -12 13) z (range -12 13)] [[x 58 z] "cave_air"]))]
+    (is (= :cave-below (:reason (approach cave [0 60 0]))))))
+
+(deftest gravel-over-the-run-is-a-hazard
+  (let [trench (into {} (for [x (range -12 -1) y [61 62 63 64] z (range -12 13)] [[x y z] "air"]))
+        a (approach (assoc trench [-1 63 0] "gravel") [0 61 0])]
+    (is (not= :east (:heading a)) "the run under gravel is not taken")))
+
+;; ---------------------------------------------------------------- the fake world
+
+(defn stone
+  "Stone over x0..x1, y0..y1, z0..z1, as fake blocks."
+  [x0 x1 y0 y1 z0 z1]
+  (into {} (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [(str x "," y "," z) "stone"])))
+
+(def ground (stone -12 12 50 64 -3 3))
+(def pick [{:name "iron_pickaxe" :count 1}])
+
+(defn setup
+  "An engine over the fake world; a recording parent runs the tunnel as its child and keeps its result in :out.
+  opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then)."
+  [spec args prep & {:keys [dir] :as opts}]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
+        out (atom :not-done)
+        w (world/of-data (:plans spec {}) {} (get spec :zones []))
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+                          :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (prep p)
+    (when-not (:p opts) (core/submit! eng '(recording-parent) {}))
+    {:eng eng :p p :clock clock :seen seen :out out}))
+
+(defn ^:async tick-out! [{:keys [eng clock] :as s}]
+  (loop [i 0]
+    (when (and (< i 400) (seq (:list (core/state eng))))
+      (swap! clock + 500)
+      (await (core/tick! eng))
+      (recur (inc i))))
+  s)
+
+(defn ^:async tunnel! [spec args prep]
+  (await (tick-out! (setup spec args prep))))
+
+(defn digs [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
+                     (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
+(defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
+(defn feet [p] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
+(defn events-of [{:keys [seen]} kind] (filter #(= kind (:kind %)) @seen))
+(defn set-block! [p k n] (.set (.. (.-world p) -state -blocks) k n))
+
+(deftest reaches-a-stand-beside-a-target-eight-down-six-aside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")}
+                                                    {:target [6 57 0]} (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (= :reached (:reason @out)))
+          (is (= [5 57 0] (feet p)))
+          (is (= [-3 65 0] (:entry @out)))
+          (is (= "iron_ore" (block-at p [6 57 0])) "the tunnel leaves the target to its caller")
+          (is (= 21 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground")
+          (is (= 1 (count (events-of s :tunnel.done)))))))))
+
+(deftest a-run-after-the-stair-cuts-two-high
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trench (apply dissoc ground (for [x (range -12 -1) y [61 62 63 64] z (range -3 4)] (str x "," y "," z)))
+              {:keys [out p]} (await (tunnel! {:blocks trench :self {:pos {:x -5 :y 61 :z 0}}}
+                                              {:target [0 61 0]} (fn [_])))]
+          (is (= :reached (:reason @out)))
+          (is (= [-1 61 0] (feet p)))
+          (is (= [{:cell [-1 62 0] :block "stone"} {:cell [-1 61 0] :block "stone"}] (:dug @out))))))))
+
+(deftest lava-showing-up-ahead-stops-and-walks-back-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)
+                           n (atom 0)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (when (= 4 (swap! n inc)) (set-block! p "3,61,1" "lava"))
+                                    (await (impl token a))))))
+              {:keys [out p] :as s} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")}
+                                                    {:target [6 57 0]} prep))]
+          (is (= :stopped (:status @out)))
+          (is (= :hazard (:reason @out)))
+          (is (= [-3 65 0] (feet p)) "back at the entry")
+          (is (true? (:out @out)))
+          (is (not-any? #(= {:x 3 :y 61 :z 0} %) (digs p)))
+          (is (= 1 (count (events-of s :tunnel.stopped)))))))))
+
+(deftest a-declined-approach-digs-nothing-and-does-not-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[spec args reason]
+                [[{:blocks (assoc ground "6,57,0" "iron_ore") :zones [{:name "test-zone" :min [6 57 0] :max [6 57 0]}]}
+                  {:target [6 57 0]} :zone]
+                 [{:blocks (assoc ground "6,57,0" "iron_ore")
+                   :plans {"wall" {:id "wall" :status :active :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}
+                  {:target [6 57 0]} :footprint]
+                 [{:blocks ground} {:target [6 57 0] :max-length 6} :too-far]
+                 [{:blocks (merge ground (into {} (for [x (range -12 13) z (range -3 4)] [(str x ",55," z) "air"])))}
+                  {:target [6 57 0]} :cave-below]
+                 [{:blocks ground} {:target [6 57]} :bad-args]]]
+          (let [{:keys [out p]} (await (tunnel! spec args (fn [_])))]
+            (is (= reason (:reason @out)) (str reason))
+            (is (= :stopped (:status @out)) (str reason))
+            (is (empty? (digs p)) (str reason))
+            (is (= [0 65 0] (feet p)) (str reason))))))))
+
+(deftest no-zone-list-declines-with-one-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:blocks ground :zones nil} {:target [6 57 0]} (fn [_]))]
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (empty? (digs p)))
+          (is (= 1 (count (events-of s :tunnel.declined)))))))))
+
+(deftest a-cut-mid-dig-resumes-without-digging-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} (fn [_]))
+              world (.-world p)]
+          (dotimes [_ 12] (await (core/tick! eng)))
+          (.hold world "dig")
+          (let [running (core/tick! eng)]
+            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+            (takeover/take! eng {:who "claude" :why "cut"})
+            (await running))
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (await (tick-out! s))
+          (is (= :reached (:reason @out)))
+          (is (= 21 (count (:dug @out))))
+          (is (= 21 (count (distinct (map :cell (:dug @out))))) "each cell recorded once")
+          (is (<= (count (digs p)) 22) "only the cut dig is repeated"))))))
+
+(deftest a-restart-resumes-from-the-body-on-the-line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              spec {:blocks (assoc ground "6,57,0" "iron_ore")}
+              {:keys [eng p]} (setup spec {:target [6 57 0]} (fn [_]) :dir dir)]
+          (dotimes [_ 20] (await (core/tick! eng)))
+          (let [mid (feet p)
+                again (await (tick-out! (setup spec {:target [6 57 0]} (fn [_]) :dir dir :p p)))]
+            (is (not= [-3 65 0] mid) "the first engine had entered")
+            (is (not= [5 57 0] mid) "and not finished")
+            (is (= :reached (:reason @(:out again))))
+            (is (= [5 57 0] (feet p)))
+            (is (= (count (digs p)) (count (distinct (digs p)))) "no cell dug twice")))))))
+
+(deftest a-blocked-way-back-stops-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)
+                           n (atom 0)]
+                       (.override world "steer"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= 3 (swap! n inc)) (set-block! p "-2,65,0" "stone") (set-block! p "-2,66,0" "stone"))
+                                      r)))))
+              {:keys [out p]} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
+          (is (= :stopped (:status @out)))
+          (is (= :no-way-back (:reason @out)))
+          (is (not= [-3 65 0] (feet p)) "no retreat over a blocked way"))))))
+
+(deftest a-way-back-blocked-on-the-run-stops-at-the-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trench (apply dissoc ground (for [x (range -12 -1) y [61 62 63 64] z (range -3 4)] (str x "," y "," z)))
+              prep (fn [p]
+                     (let [world (.-world p)
+                           n (atom 0)]
+                       (.override world "steer"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= 2 (swap! n inc))
+                                        (doseq [z (range -3 4) y [61 62]] (set-block! p (str "-2," y "," z) "stone")))
+                                      r)))))
+              {:keys [out p]} (await (tunnel! {:blocks trench :self {:pos {:x -5 :y 61 :z 0}}} {:target [0 61 0]} prep))]
+          (is (= :no-way-back (:reason @out)))
+          (is (= [-1 61 0] (feet p))))))))
