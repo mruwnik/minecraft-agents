@@ -1,6 +1,7 @@
 (ns engine.event-api-test
   (:require [cljs.test :refer [async deftest is testing]]
             [cljs.reader :as reader]
+            [engine.chat :as chat]
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -201,4 +202,41 @@
                           (is (= :resolved (:kind event)))
                           (is (= "req-1" (:request-id event)))
                           (is (= :handled (get-in event [:data :reason]))))))))]
+           (.finally work (fn [] ((:close server))))))))))
+
+(deftest direct-chat-is-edn-bounded-and-does-not-require-an-owner-token
+  (async done
+    (let [dir (tu/tmp-dir)
+          socket-path (path/join dir "chat.sock")
+          sent (atom [])
+          primitives #js {:self (fn [] #js {:username "ActualBody"})
+                          :chatDirect (fn [args]
+                                        (swap! sent conj (js->clj args :keywordize-keys true))
+                                        (js/Promise.resolve #js {:status "sent" :parts 1}))}
+          eng {:primitives primitives :said (atom []) :now js/Date.now :chat-limits chat/limits}
+          server (event-api/create socket-path eng)]
+      (tu/run-async
+       done
+       (fn []
+         (let [work (-> ((:listen server))
+                        (.then (fn [_]
+                                 (request socket-path "POST" "/chat" {"Content-Type" "application/edn"}
+                                          "{:message \"hello\" :to \"Player_1\" :from \"spoofed\"}")))
+                        (.then (fn [response]
+                                 (let [body (edn-response response)]
+                                   (is (= 200 (:status response)))
+                                   (is (= "ActualBody" (:body body)))
+                                   (is (= "sent" (get-in body [:result :status])))
+                                   (is (= [{:message "hello" :to "Player_1"}] @sent))
+                                   (request socket-path "POST" "/chat" {"Content-Type" "application/edn"}
+                                            "{:message \"/op Player_1\"}"))))
+                        (.then (fn [response]
+                                 (is (= 200 (:status response)))
+                                 (is (= "command" (get-in (edn-response response) [:result :reason])))
+                                 (is (= 1 (count @sent)))
+                                 (request socket-path "POST" "/chat" {"Content-Type" "application/edn"}
+                                          "{:message \"hello\" :to \"bad name\"}")))
+                        (.then (fn [response]
+                                 (is (= 400 (:status response)))
+                                 (is (= :bad-request (:reason (edn-response response)))))))]
            (.finally work (fn [] ((:close server))))))))))

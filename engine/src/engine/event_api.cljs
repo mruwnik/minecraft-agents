@@ -3,6 +3,7 @@
   The wire format is EDN so keyword event fields survive unchanged."
   (:require [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.chat :as chat]
             [engine.expr :as expr]
             [engine.events :as events]
             [engine.job-api :as job-api]
@@ -385,6 +386,32 @@
                                        (respond! res 200 {:ok true :request-id (:request-id value)
                                                           :resolved (= result :resolved)
                                                           :already-resolved (= result :already-resolved)}))))))
+                              (.catch (fn [e]
+                                        (bad! res (if (= "body too large" (.-message e)) 413 400)
+                                              (if (= "body too large" (.-message e)) :too-large :bad-edn))))))
+
+                        (and (= method "POST") (= pathname "/chat"))
+                        (if-not (and (aget (.-headers req) "content-type")
+                                     (.startsWith (aget (.-headers req) "content-type") "application/edn"))
+                          (bad! res 415 :content-type-must-be-application-edn)
+                          (-> (read-body req)
+                              (.then
+                               (fn [text]
+                                 (let [{:keys [value error]} (parse-edn text)
+                                       message (:message value)
+                                       to (:to value)
+                                       to-valid? (or (nil? to)
+                                                     (and (string? to) (re-matches #"[A-Za-z0-9_]{3,16}" to)))]
+                                   (cond
+                                     error (bad! res 400 error)
+                                     (not (and (map? value) (string? message) (<= 1 (count message) 256) to-valid?))
+                                     (bad! res 400 :bad-request)
+                                     :else
+                                     (.then (chat/direct! eng message to)
+                                            (fn [result]
+                                              (respond! res 200 {:ok true :body (.-username (.self (:primitives eng)))
+                                                                 :result (if (map? result) result
+                                                                           (js->clj result :keywordize-keys true))})))))))
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))

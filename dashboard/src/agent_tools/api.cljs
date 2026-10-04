@@ -6,6 +6,7 @@
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
+            [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
             [agent-tools.storage-compat :as compat]))
 
@@ -78,3 +79,6 @@
     (when-let [spec (get-in request [:request :spec])]
       (aset (.-request converted) "spec" (edn-value-js spec)))
     converted))
+
+(def say-usage (clj->js say/usage))
+(defn say-request-for [argv] (compat/to-js (say/request-for (vec argv))))

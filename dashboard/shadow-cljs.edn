@@ -36,6 +36,8 @@
                                :jobsUsage agent-tools.jobs/usage
                                :jobsSpecFor agent-tools.api/jobs-spec-for
                                :jobsRequestFor agent-tools.api/jobs-request-for
+                               :sayUsage agent-tools.say/usage
+                               :sayRequestFor agent-tools.api/say-request-for
                                :changesOptions agent-tools.api/changes-options
                                :changesExecute agent-tools.api/changes-execute
                                :changesMain agent-tools.api/changes-main
