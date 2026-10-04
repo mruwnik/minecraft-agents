@@ -3,8 +3,7 @@
   {:blocks {pos name} :states {pos props} :self {:pos} :inventory [stack] :furnaces {pos furnace}}, with the real rates
   (a furnace takes 200 ticks an item, the other two 100), fuel that burns for its real time and one stack of input,
   fuel and output. Time passes only when (advance w ticks) says so. (furnace w args) answers [world' result], the result
-  in the shape of js/furnace.mjs. Test-only; the same rules as js/fake-furnace.mjs, which stays live until the fake
-  itself moves to cljs."
+  in the shape of js/furnace.mjs. Test-only; ported from the deleted js/fake-furnace.mjs."
   (:require [engine.fake.pockets :as pockets]))
 
 (def kinds #{"furnace" "blast_furnace" "smoker"})

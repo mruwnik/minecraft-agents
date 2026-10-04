@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.jobs.combat :as combat]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.combat.attack :as attack]))
 
@@ -98,7 +99,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (scenario {:targets ["Alex"]} {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 4))]
           (is (= [9 9 9 9] (attacked s)))
-          (is (empty? (.-entities (.-state (.-world p)))) "the player is dead"))))))
+          (is (empty? (fake/entities p)) "the player is dead"))))))
 
 (deftest a-mob-type-takes-every-mob-of-it-and-no-cows
   (async done
@@ -107,7 +108,7 @@
         (let [{:keys [p] :as s} (await (scenario {:targets ["zombie"]}
                                                  {:inventory h/sword :entities [(zed 7 3) (zed 8 2) (ent 9 "cow" "passive" 1)]} 9))]
           (is (= (set [7 8]) (set (attacked s))))
-          (is (= [9] (mapv #(.-id %) (.-entities (.-state (.-world p))))) "the cow lives"))))))
+          (is (= [9] (mapv :id (fake/entities p))) "the cow lives"))))))
 
 (deftest a-mixed-list-takes-nearest-first-and-moves-on-when-one-dies
   (async done
@@ -235,8 +236,7 @@
       (fn ^:async t []
         (let [{:keys [p clock eng] :as s} (await (scenario {:targets ["Alex"]}
                                                            {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 4))]
-          (.push (.-entities (.-state (.-world p)))
-                 #js {:id 20 :name "Alex" :username "Alex" :kind "player" :health 20 :pos (tu/pos 2 64 0)})
+          (fake/add-entity! p {:id 20 :name "Alex" :username "Alex" :kind "player" :health 20 :pos [2 64 0]})
           (await (run-ticks s 2 700))
           (is (= [9 9 9 9] (attacked s)))
           (swap! clock + 6000)
@@ -273,7 +273,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock p] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (set! (.. p -world -state -entities) #js [])
+          (swap! (fake/state p) assoc :entities [])
           (await (run-ticks s 2 700))
           (is (= ["j1"] (:list (core/state eng))) "nothing to attack, still started")
           (swap! clock + 6000)
@@ -286,7 +286,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (set! (.. p -world -state -entities) #js [])
+          (swap! (fake/state p) assoc :entities [])
           (swap! clock + 700)
           (await (core/tick! eng))
           (swap! clock + 6000)
@@ -329,7 +329,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p clock eng seen] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (set! (.. p -world -state -entities) #js [])
+          (swap! (fake/state p) assoc :entities [])
           (await (run-ticks s 12 250))
           (is (pos? (count (h/calls p "wait"))))
           (is (= [1000] (distinct (mapv #(.. % -args -ms) (h/calls p "wait")))))
@@ -361,8 +361,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (h/first-round (spec {:targets ["zombie"]}) {:inventory h/sword}))]
-          (.push (.-entities (.-state (.-world p)))
-                 #js {:id 7 :name "zombie" :kind "hostile" :health 20 :pos (tu/pos 2 64 0)})
+          (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
           (await (run-ticks s 1 1000))
           (is (= [7] (attacked s)))
           (is (not (finished? s)))
@@ -376,8 +375,7 @@
           (core/submit! eng (spec {:targets ["zombie"] :absent :wait}) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (events-of s :attack.done))))
-          (.push (.-entities (.-state (.-world p)))
-                 #js {:id 7 :name "zombie" :kind "hostile" :health 20 :pos (tu/pos 2 64 0)})
+          (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
           (swap! clock + 700)
           (await (core/tick! eng))
           (is (= [7] (attacked s))))))))
@@ -387,7 +385,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7 8]} {:inventory h/sword :entities [(zed 7 2) (zed 8 3)]} 4))]
-          (aset (aget (.. p -world -state -entities) 0) "pos" (tu/pos 0 64 40))
+          (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40])
           (swap! clock + 6000)
           (await (core/tick! eng))
           (is (= :lost (:reason (done-event s))))
@@ -400,7 +398,7 @@
         (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]}
                                                            {:inventory h/sword
                                                             :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 4))]
-          (aset (aget (.. p -world -state -entities) 0) "pos" (tu/pos 0 64 40))
+          (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40])
           (swap! clock + 6000)
           (await (core/tick! eng))
           (is (= :gave-up (:reason (done-event s))))

@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.jobs.tools :as tools]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -14,12 +15,16 @@
 
 (defn spec [args] (list 'jobs.gather.mine args))
 
+(def floor-block
+  "The ground under the walks: a block no test here mines, so the floor never counts as a target (stone would)."
+  "andesite")
+
 (defn start
-  "An engine over primitives p (made from world when not given) on dir."
+  "An engine over primitives p (made from world, on a floor-block floor, when not given) on dir."
   [{:keys [world p dir clock shared]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake-on-floor world))
+        p (or p (tu/fake-on-floor (assoc world :floor-block floor-block)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -259,8 +264,7 @@
 
 ;; ------------------------------------------------------------------ mend branches
 
-(defn world-state [{:keys [p]}] (.-state (.-world p)))
-(defn set-pos! [s x y z] (set! (.-pos (.-self (world-state s))) #js {:x x :y y :z z}))
+(defn set-pos! [{:keys [p]} x y z] (fake/swap-self! p assoc :pos [x y z]))
 
 (deftest only-the-feet-cell-owed-is-raised-with-jump-place
   (async done
@@ -286,8 +290,8 @@
                      (fn [token args impl]
                        (.then (impl token args)
                               (fn [r]
-                                (.push (.-inventory (world-state s)) #js {:name "dirt" :count 1})
-                                (.splice (.-entities (world-state s)) 0) ; nothing left to collect
+                                (fake/add-item! (:p s) "dirt" 1)
+                                (swap! (fake/state (:p s)) assoc :entities []) ; nothing left to collect
                                 (set-pos! s 3 64 0)
                                 r))))
           (core/submit! (:eng s) (spec {:block "dirt" :count 1}) {})
@@ -325,7 +329,7 @@
                      (fn [token args impl]
                        (.then (impl token args)
                               (fn [r]
-                                (.push (.-inventory (world-state s)) #js {:name "dirt" :count 1})
+                                (fake/add-item! (:p s) "dirt" 1)
                                 (set-pos! s 10 64 0)
                                 r))))
           ;; how many walks to the owed cell (y 63) were made when the first place came
@@ -618,9 +622,9 @@
   (let [p (tu/fake-on-floor world)
         w (.-world p)]
     (.override w "collect" (fn ^:async f [token a impl]
-                             (let [at (.. w -state -self -pos)
+                             (let [at (:pos (fake/self p))
                                    r (await (impl token a))]
-                               (set! (.. w -state -self -pos) at)
+                               (fake/swap-self! p assoc :pos at)
                                r)))
     p))
 
@@ -706,7 +710,7 @@
               w (.-world p)
               _ (.override w "steer" (fn ^:async f [token a impl]
                                        (let [r (await (impl token a))]
-                                         (set! (.. w -state -self -pos) #js {:x 40.5 :y 100 :z 40.5})
+                                         (fake/swap-self! p assoc :pos [40.5 100 40.5])
                                          r)))
               s (start {:p p})]
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :buried true :mend false}) {})

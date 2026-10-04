@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (defn sheep [id x & [more]]
@@ -31,7 +32,7 @@
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
 (defn world-sheared [{:keys [p]}]
-  (mapv #(boolean (.-sheared %)) (filter #(= "sheep" (.-name %)) (.. p -world -state -entities))))
+  (mapv #(boolean (:sheared %)) (filter #(= "sheep" (:name %)) (fake/entities p))))
 
 (deftest shears-all-and-collects-the-wool
   (async done
@@ -102,10 +103,8 @@
         (let [{:keys [eng p] :as s} (h/setup {:inventory shears :entities [(sheep 1 2) (sheep 2 3)]})]
           (.override (.-world p) "interact"
                      (fn [token args impl]
-                       (let [r (impl token args)
-                             es (.. p -world -state -entities)]
-                         (when-let [i (some (fn [[i e]] (when (= "u2" (.-uuid e)) i)) (map-indexed vector es))]
-                           (.splice es i 1))
+                       (let [r (impl token args)]
+                         (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "u2" (:uuid e))) %))
                          r)))
           (core/submit! eng '(jobs.animals.shear {}) {})
           (await (run-ticks s 8 700))
@@ -121,7 +120,7 @@
           (.override (.-world p) "interact"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (.splice (.. p -world -state -inventory) 0)
+                         (swap! (fake/state p) assoc :inventory [])
                          r)))
           (core/submit! eng '(jobs.animals.shear {}) {})
           (await (run-ticks s 8 700))

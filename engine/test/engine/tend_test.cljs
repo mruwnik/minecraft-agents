@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.animals.tend :as tend]))
 
@@ -117,7 +118,7 @@
         (let [s (await (scenario {:target 4} {:entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5) (drop-at 90 "leather" 4) (drop-at 91 "beef" 7) (drop-at 92 "dirt" 12)]} 20))]
           (is (= {"leather" 1 "beef" 1} (inv s)))
           (is (= 2 (get-in (done-event s) [:steps :collect :collected])))
-          (is (= #{92} (set (map #(.-id %) (filter #(= "item" (.-kind %)) (.-entities (.-state (.-world (:p s))))))))))))))
+          (is (= #{92} (set (map :id (filter #(= "item" (:kind %)) (fake/entities (:p s))))))))))))
 
 (defn sheep [id x] (animal id "sheep" x 0 {}))
 
@@ -151,7 +152,7 @@
 (def carried [{:name "beef" :count 3} {:name "leather" :count 2} (wheat 5) {:name "iron_sword" :count 1}])
 
 (defn chest-items [{:keys [p]}]
-  (into {} (map (juxt :name :count)) (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true)))
+  (into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]])))
 
 (deftest produce-goes-to-the-chest-and-food-and-tools-stay
   (async done

@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.takeover :as takeover]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as ew]
@@ -169,7 +170,7 @@
           (is (= :not-done @out) "unloaded cells are not an empty box")
           (is (pos? (count (tu/walk-calls p))))
           (is (empty? (calls p "dig")))
-          (.clear (.. p -world -state -unloaded))
+          (swap! (fake/state p) assoc :unloaded #{})
           (await (run-until-empty eng 12))
           (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} @out)))))))
 

@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]))
 
@@ -35,7 +36,7 @@
 (defn done-event [s] (first (events-of s :cull.done)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
-(defn world-ids [{:keys [p]}] (set (map #(.-id %) (.-entities (.-state (.-world p))))))
+(defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 
 (defn declines?
   "True when the job is submitted, the first tick does nothing and no attack or walk is called."

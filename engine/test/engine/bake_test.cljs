@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.bake :as bake]))
@@ -42,7 +43,7 @@
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn chest-items [p]
   (into {} (map (juxt :name :count))
-        (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true)))
+        (get-in @(fake/state p) [:containers [10 64 0]])))
 
 (def job 'jobs.items.bake)
 (def chest {:x 10 :y 64 :z 0})
@@ -173,7 +174,7 @@
                                         (.override (.-world p) "transfer"
                                                    (fn ^:async f [_ args impl]
                                                      (let [r (await (impl _ args))]
-                                                       (.delete (.. p -world -state -containers) "10,64,0")
+                                                       (swap! (fake/state p) update :containers dissoc [10 64 0])
                                                        r))))))]
           (is (string? (:reason result)))
           (is (empty? (calls p "toss")))

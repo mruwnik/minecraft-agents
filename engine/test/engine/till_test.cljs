@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.takeover :as takeover]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as ew]
@@ -198,7 +199,7 @@
                        (let [r (await (impl token a))]
                          (when @first?
                            (reset! first? false)
-                           (.set (.. p -world -state -blocks) "1,63,1" "dirt"))
+                           (fake/set-block! p [1 63 1] "dirt"))
                          r)))
           (is (= {:tilled 1 :skipped {}} (await (child-outcome eng job args 10))))
           (is (= 2 (count (calls p "useOn")))))))))

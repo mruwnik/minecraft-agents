@@ -2,6 +2,7 @@
   "jobs.gather.get-seeds against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.hostile-test :as h]
@@ -155,8 +156,8 @@
         (let [s (h/setup {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops})]
           (core/submit! (:eng s) (spec {:count 1}) {})
           (await (run-ticks s 1 700))
-          (.push (.-entities (.-state (.-world (:p s)))) #js {:id 50 :kind "item" :name "item" :item #js {:name "dirt" :count 1}
-                                                              :pos (tu/pos 3 64 1)})
+          (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
+                                    :pos [3 64 1]})
           (await (run-ticks s 40 700))
           (is (>= (get (inv s) "wheat_seeds") 1))
           (is (nil? (get (inv s) "dirt")) "dirt stays on the ground")

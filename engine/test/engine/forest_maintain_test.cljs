@@ -2,6 +2,7 @@
   "jobs.forestry.maintain (a forest plan's tree cells) and fell-tree's :at, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.events :as events]
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
@@ -68,8 +69,8 @@
 (defn places [p] (mapv #(let [a (.-args %) q (.-pos a)] [(.-x q) (.-y q) (.-z q) (.-item a)]) (h/calls p "place")))
 (defn listed? [eng] (boolean (seq (:list (core/state eng)))))
 (defn warns [seen kind] (mapv #(dissoc % :seq :t :body :source :job :cause :level :attention :text :log :logs :round :kind :chain) (h/events-of seen kind)))
-(defn set-block! [p x y z name] (.set (.-blocks (.-state (.-world p))) (k x y z) name))
-(defn give! [p name n] (.push (.-inventory (.-state (.-world p))) (clj->js (item name n))))
+(defn set-block! [p x y z name] (fake/set-block! p [x y z] name))
+(defn give! [p name n] (fake/add-item! p name n))
 
 (def oak-world
   "An oak at x 3 (4 logs) on a planned cell, an oak at x 9 outside the plan, one sapling carried."

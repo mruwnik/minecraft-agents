@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.scaffold-left :as scaffold-left]
@@ -129,8 +130,7 @@
   [x0 x1]
   (into {} (for [x (range x0 (inc x1)) z (range -2 3)] [(cell-key [x 63 z]) "stone"])))
 
-(defn state-of [p] (.. p -world -state))
-(defn block [p cell] (.get (.-blocks (state-of p)) (cell-key cell)))
+(defn block [p cell] (get (:blocks @(fake/state p)) (vec cell)))
 (defn feet [p] (let [pos (.-pos (.self p))] [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]))
 (defn the-ledger [eng] (ledger/open-entries (mem/view (:store eng))))
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
@@ -138,21 +138,22 @@
 (defn fall!
   "The fake has no gravity: drop the body onto the next block below."
   [p]
-  (let [self (.-self (state-of p))
-        pos (.-pos self)]
-    (loop [y (.-y pos)]
-      (if (or (<= y 0) (some? (block p [(js/Math.floor (.-x pos)) (dec y) (js/Math.floor (.-z pos))])))
-        (set! (.-pos self) #js {:x (.-x pos) :y y :z (.-z pos)})
+  (let [[x _ z :as pos] (:pos (fake/self p))]
+    (loop [y (nth pos 1)]
+      (if (or (<= y 0) (some? (block p [(js/Math.floor x) (dec y) (js/Math.floor z)])))
+        (fake/swap-self! p assoc :pos [x y z])
         (recur (dec y))))))
 
 (defn record-digs!
   "Every dig records [cell feet-before] in digs and lets the body fall after it."
   [p digs]
   (.override (.-world p) "dig"
-             (fn [token args impl]
+             (fn ^:async f [token args impl]
                (let [pos (.-pos args)]
                  (swap! digs conj [[(.-x pos) (.-y pos) (.-z pos)] (feet p)])
-                 (.then (impl token args) (fn [r] (fall! p) r))))))
+                 (let [r (await (impl token args))]
+                   (fall! p)
+                   r)))))
 
 (defn setup
   "An engine over the fake world with the ledger written into body memory; a recording parent (j1) runs cleanup with
@@ -178,9 +179,11 @@
     (record-digs! p digs)
     ;; the fake's collect puts the body where the drop was spawned, mid-air for a pillar's; keep it where it stood
     (.override (.-world p) "collect"
-               (fn [token args impl]
-                 (let [pos (.-pos (.-self (state-of p)))]
-                   (.then (impl token args) (fn [r] (set! (.-pos (.-self (state-of p))) pos) r)))))
+               (fn ^:async f [token args impl]
+                 (let [pos (:pos (fake/self p))
+                       r (await (impl token args))]
+                   (fake/swap-self! p assoc :pos pos)
+                   r)))
     {:eng eng :make make :p p :clock clock :seen seen :out out :digs digs}))
 
 (defn ^:async ticks [{:keys [clock]} eng n]

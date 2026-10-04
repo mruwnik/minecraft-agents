@@ -49,9 +49,9 @@
 (defn drain!
   "Remove the water of the cell from the world, as a receding stream does."
   [p cell]
-  (let [st (.-state (.-world p))]
-    (.delete (.-blocks st) cell)
-    (.delete (.-states st) cell)))
+  (let [pos (fake/parse-cell cell)]
+    (fake/remove-block! p pos)
+    (swap! (fake/state p) update :states dissoc pos)))
 
 ;; ------------------------------------------------------------------ pure
 

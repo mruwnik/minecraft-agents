@@ -4,6 +4,7 @@
             ["fs" :as fs]
             ["path" :as path]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.notes :as notes]
@@ -199,7 +200,7 @@
           (dotimes [_ 20] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
-          (.clear (.. (:p s) -world -state -unloaded))
+          (swap! (fake/state (:p s)) assoc :unloaded #{})
           (await (run-until-done s 400))
           (is (= 4 (count (walks s))))
           (is (= :distance (:why (event-of s :search.not-found)))))))))

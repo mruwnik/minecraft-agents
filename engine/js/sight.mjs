@@ -1,5 +1,5 @@
 // Line of sight over a block grid: Amanatides-Woo traversal of the cells a segment passes through.
-// Shared by primitives.mjs (real blocks) and fake.mjs (fake cells) so both agree on what blocks sight.
+// Shared by primitives.mjs (real blocks) and engine.fake (fake cells) so both agree on what blocks sight.
 
 // Blocks the segment from `from` to `to` ({x, y, z}, world coordinates) crosses are asked of `solidAt({x, y, z})`
 // with integer cell coordinates. The start and end cells never count (the body's own cell, the target's cell).

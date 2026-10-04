@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as world]
@@ -103,7 +104,7 @@
       (recur (inc i)))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn block [p cell] (.get (.. p -world -state -blocks) (apply str (interpose "," cell))))
+(defn block [p cell] (get (:blocks @(fake/state p)) (vec cell)))
 (defn blocks-at [p cells] (mapv #(block p %) cells))
 (defn feet [p] (let [pos (.-pos (.self p))] [(.-x pos) (.-y pos) (.-z pos)]))
 (defn the-ledger [eng] (ledger/open-entries (mem/view (:store eng))))

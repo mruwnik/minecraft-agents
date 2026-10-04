@@ -6,6 +6,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [jobs.survival.breathe :as b]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -282,8 +283,7 @@
 (defn set-self!
   "Set fields of the fake body's self sensing (a bob above the surface, standing on the ground)."
   [p fields]
-  (doseq [[k v] fields]
-    (aset (.-self (.-state (.-world p))) k v)))
+  (fake/swap-self! p into (map (fn [[k v]] [(keyword k) v]) fields)))
 
 (deftest an-afloat-body-that-bobs-out-of-the-water-is-still-afloat
   (async done
@@ -359,11 +359,9 @@
   "A steer that does what a working walk does, since the fake's walker cannot swim: the body ends on the bank cell
   (7 65 0) and the act's decide function is asked at that pose until it is done."
   [p args]
-  (let [self (.-self (.-state (.-world p)))
-        pose #js {:x 7.5 :y 65 :z 0.5 :vy 0 :onGround true :onClimbable false :inWater false :collided false :yaw 0 :t 0}
+  (let [pose #js {:x 7.5 :y 65 :z 0.5 :vy 0 :onGround true :onClimbable false :inWater false :collided false :yaw 0 :t 0}
         done (->> (repeatedly #((.-decide args) pose)) (take 200) (some #(.-done %)))]
-    (set! (.-pos self) #js {:x 7 :y 65 :z 0})
-    (set! (.-inWater self) false)
+    (fake/swap-self! p assoc :pos [7 65 0] :inWater false)
     (if done #js {:status "done" :result done} #js {:status "timeout" :pose pose})))
 
 (deftest surfaced-with-a-bank-beyond-the-shore-radius-walks-out-with-the-walk-driver

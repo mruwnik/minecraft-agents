@@ -155,6 +155,8 @@
          :raining (:raining spec false)
          :thundering (:thundering spec false)
          :blocks (cells (:blocks spec) identity)
+         :rank (into {} (map-indexed (fn [i [k _]] [(parse-cell k) i])) (:blocks spec))
+         :rank-next (count (:blocks spec))
          :unloaded (cell-set (:unloaded spec))
          :ages (cells (:ages spec) identity)
          :states (cells (:states spec) identity)
@@ -183,6 +185,16 @@
          :furnaces (cells (:furnaces spec) #(rekey kebab %))
          :enchant-tables (cells (:enchantTables spec) identity)}
         furnace/start)))
+
+;; ---- blocks keep the order they were put in (as the old Map did): the nearest-first lists break ties by it
+
+(defn put-block
+  "World with block at pos; a new cell goes last in the order."
+  [w pos block]
+  (cond-> (assoc-in w [:blocks pos] block)
+    (not (contains? (:blocks w) pos)) (-> (assoc-in [:rank pos] (:rank-next w)) (update :rank-next inc))))
+
+(defn drop-block [w pos] (-> w (update :blocks dissoc pos) (update :rank dissoc pos)))
 
 ;; ---- item lists
 
@@ -265,7 +277,7 @@
       (not (near? w pos)) [w {:status "unreachable"}]
       (= block "bedrock") [w {:status "cannot"}]
       :else
-      (let [w (-> w (update :blocks dissoc pos) (update :ages dissoc pos) (update :states dissoc pos))
+      (let [w (-> w (drop-block pos) (update :ages dissoc pos) (update :states dissoc pos))
             ids (map #(+ (:next-entity-id w) %) (range (count names)))
             w' (reduce #(spawn %1 pos %2 1) w names)]
         [w' {:status "dug" :block block :drops (mapv (fn [id item] {:id id :name item :count 1 :pos pos}) ids names)}]))))
@@ -293,7 +305,7 @@
     (if (:refused r)
       [w {:status "failed" :reason (str "Server refused to place " item " at (" (str/join ", " pos) "): " (:refused r))}]
       (let [w (reduce (fn [w {:keys [pos name properties]}]
-                        (-> w (assoc-in [:blocks pos] name)
+                        (-> w (put-block pos name)
                             (update :states #(if (seq properties) (assoc % pos properties) (dissoc % pos)))))
                       (take-one w item) (:blocks r))
             w (rail/rails-placed w (:blocks r))]
@@ -311,7 +323,7 @@
       (cond
         (not= here "water") [w {:status "missing"}]
         (zero? (carried (:inventory w) "bucket")) [w {:status "no-item"}]
-        :else [(-> w (take-one "bucket") (give "water_bucket" 1) (update :blocks dissoc pos)) {:status "placed" :block "bucket"}])
+        :else [(-> w (take-one "bucket") (give "water_bucket" 1) (drop-block pos)) {:status "placed" :block "bucket"}])
 
       (and (not (#{"air" "water"} here)) (not (replaceable? here))) [w {:status "occupied"}]
       (and (crops item) (not= "farmland" (block-name w (update pos 1 dec)))) (failed)
@@ -319,14 +331,14 @@
       (and click (no-shape (block-name w (:against click)))) [w {:status "no-support"}]
 
       (crops item)                      ; a seed or tuber becomes the young crop
-      [(-> w (take-one item) (assoc-in [:blocks pos] (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
+      [(-> w (take-one item) (put-block pos (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
 
       (= item "water_bucket")           ; pours water and leaves the empty bucket
-      (let [w (-> w (take-one item) (give "bucket" 1) (assoc-in [:blocks pos] "water"))]
+      (let [w (-> w (take-one item) (give "bucket" 1) (put-block pos "water"))]
         [(cond-> w (= pos (body-pos w)) settle) {:status "placed" :block "water"}])
 
       (str/ends-with? item "campfire")
-      [(-> w (take-one item) (assoc-in [:states pos] {:lit true}) (assoc-in [:blocks pos] item))
+      [(-> w (take-one item) (assoc-in [:states pos] {:lit true}) (put-block pos item))
        {:status "placed" :block item :placed {:name item :properties {:lit true}}}]
 
       :else (place-block w pos item click))))
@@ -347,7 +359,7 @@
           (zero? (carried (:inventory w) item)) (outcome w placed "no-item")
           (#{"air" "water" "lava"} under) (outcome w placed "no-support")
           (not= "air" (block-name w [x (+ y 2) z])) (outcome w placed "no-headroom")
-          :else (recur (-> w (take-one item) (assoc-in [:blocks at] item) (assoc-in [:self :pos] [x (inc y) z])) (inc placed)))))))
+          :else (recur (-> w (take-one item) (put-block at item) (assoc-in [:self :pos] [x (inc y) z])) (inc placed)))))))
 
 (defn collect [w {:keys [id]}]
   (let [e (find-entity w id)]
@@ -589,8 +601,8 @@
 (defn entities "The fake's entities, as cljs maps." [p] (:entities @(state p)))
 (defn self "The fake body's :self map." [p] (:self @(state p)))
 (defn swap-self! [p f & args] (apply swap! (state p) update :self f args))
-(defn set-block! [p pos block] (swap! (state p) assoc-in [:blocks (vec-pos pos)] block))
-(defn remove-block! [p pos] (swap! (state p) update :blocks dissoc (vec-pos pos)))
+(defn set-block! [p pos block] (swap! (state p) put-block (vec-pos pos) block))
+(defn remove-block! [p pos] (swap! (state p) drop-block (vec-pos pos)))
 (defn add-entity!
   "Adds an entity (a spec entity: camelCase keys, {:x :y :z} or vector pos) to the fake."
   [p e]
@@ -673,7 +685,7 @@
          acts (assoc acts "offline"
                      (fn ^:async offline-act [token a]
                                (let [ms (.-ms a)
-                                     wanted (js/Math.floor (min (or ms offline-default-ms) offline-max-ms))
+                                     wanted (js/Math.floor (min (if (nil? ms) offline-default-ms ms) offline-max-ms))
                                      released (atom nil)]
                                  (reset! away (js/Promise. (fn [resolve] (reset! released resolve))))
                                  (swap! state assoc :offline true)
@@ -704,8 +716,8 @@
                                            (swap! holds update name (fn [q] (filterv #(not (identical? armed %)) q)))
                                            (resolve result)))
                                   (when (:released @armed) ((:release @armed) (:result @armed))))))))))
-         call! (fn ^:async call [name token a]
-                         (let [a (or a #js {})]
+         call-async (fn ^:async call-async [name token a]
+                         (let [a a]
                            (.push calls (call-record name token a))
                            (check-owner token)
                            (when-some [p @away] (await p))
@@ -719,7 +731,9 @@
                                (let [_ (when (not= name "sleep") (swap! state assoc-in [:self :isSleeping] false))
                                      impl (acts name)
                                      override (@overrides name)]
-                                 (await (if override (override token a impl) (impl token a))))))))
+                                 (let [impl' (fn [t x] (js/Promise. (fn [resolve] (resolve (impl t x)))))]
+                                   (await (if override (override token a impl') (impl' token a)))))))))
+         call! (fn [name token a] (call-async name token (if (some? a) a #js {})))
          world #js {:state state
                     :calls calls
                     ;; The next call to `name` waits until release(result?) is called or the owner changes.
@@ -803,7 +817,7 @@
                     (->> (:blocks w)
                          (map (fn [[pos block]] {:name block :pos pos :distance (dist (body-pos w) pos)}))
                          (filter #(and (<= (:distance %) radius) (ok? (:name %))))
-                         (sort-by :distance)
+                         (sort-by (juxt :distance #(get (:rank w) (:pos %) js/Infinity) :pos))
                          (take max)
                          (map (fn [b]
                                 (let [pos (:pos b)

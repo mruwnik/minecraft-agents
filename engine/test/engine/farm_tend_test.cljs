@@ -2,6 +2,7 @@
   "jobs.farm.tend against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -71,7 +72,7 @@
 (def chest {:x 10 :y 64 :z 0})
 
 (defn chest-items [{:keys [p]}]
-  (into {} (map (juxt :name :count)) (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true)))
+  (into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]])))
 
 (defn declines?
   "True when the job is submitted, the first tick does nothing and the body is never asked to do anything."

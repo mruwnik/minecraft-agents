@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
             [jobs.combat.hunt :as hunt]))
@@ -37,7 +38,7 @@
 (defn done-event [s] (first (events-of s :hunt.done)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
-(defn world-ids [{:keys [p]}] (set (map #(.-id %) (.-entities (.-state (.-world p))))))
+(defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 
 ;; ------------------------------------------------------------------ the job
@@ -99,8 +100,8 @@
         (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]})]
           (core/submit! (:eng s) (spec {:keep 0}) {})
           (await (run-ticks s 1 700))
-          (.push (.-entities (.-state (.-world (:p s)))) #js {:id 50 :kind "item" :name "item" :item #js {:name "dirt" :count 1}
-                                                              :pos (tu/pos 3 64 0)})
+          (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
+                                    :pos [3 64 0]})
           (await (run-ticks s 29 700))
           (is (= 1 (get (inv s) "beef")))
           (is (nil? (get (inv s) "dirt")) "dirt stays on the ground")
@@ -146,7 +147,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:keep 0 :count 1} {:inventory h/sword :entities [(cow 1 4)]} 1))]
           (is (= 1 (:target (job-mem s))) "the target is remembered")
-          (.push (.-entities (.-state (.-world (:p s)))) #js {:id 2 :kind "passive" :name "cow" :health 20 :pos (tu/pos 1 64 0)})
+          (fake/add-entity! (:p s) {:id 2 :kind "passive" :name "cow" :health 20 :pos [1 64 0]})
           (await (run-ticks s 5 700))
           (is (= #{1} (set (attacked s))) "only the original cow is hit")
           (is (not (contains? (world-ids s) 1)))
@@ -226,7 +227,7 @@
           (core/submit! eng (spec {}) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (h/calls p "attack"))))
-          (is (= 5 (count (.-entities (.-state (.-world p)))))))))))
+          (is (= 5 (count (fake/entities p)))))))))
 
 (deftest default-keep-never-takes-a-baby
   (async done

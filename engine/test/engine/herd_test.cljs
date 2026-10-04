@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -40,7 +41,7 @@
           :inventory (or inventory (leads 2))
           :entities (or entities [])
           :blocks (merge ground fence-ring {gate-key "oak_fence_gate"} blocks)
-          :states (merge {gate-key {:open false}} states)}))
+          :states (merge {gate-key {:open false :facing "east"}} states)}))
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n]
@@ -61,10 +62,15 @@
 (defn done-event [s] (first (events-of s :herd.done)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn calls-of [{:keys [p]} name] (h/calls p name))
-(defn entities-of [{:keys [p]}] (.. p -world -state -entities))
-(defn cow-of [s id] (first (filter #(= id (.-id %)) (entities-of s))))
-(defn in-pen? [c] (let [{:keys [x z]} (js->clj (.-pos c) :keywordize-keys true)] (and (<= 11 x 15) (<= 1 z 5))))
-(defn on-lead [s] (mapv #(.-id %) (filter #(true? (.-leashedToMe %)) (entities-of s))))
+(defn entities-of [{:keys [p]}] (fake/entities p))
+(defn cow-of [s id] (first (filter #(= id (:id %)) (entities-of s))))
+(defn in-pen? [c] (let [[x _ z] (:pos c)] (and (<= 11 x 15) (<= 1 z 5))))
+(defn on-lead [s] (mapv :id (filter #(true? (:leashed-to-me %)) (entities-of s))))
+(defn update-entity!
+  "Apply f to the fake's entity with the id."
+  [{:keys [p]} id f & args]
+  (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= id (:id %)) (apply f % args) %) es))))
+(defn set-x! [s id x] (update-entity! s id update :pos assoc 0 x))
 (defn gate-open? [{:keys [p]}] (true? (some-> (.blockAt p (clj->js gate)) .-properties .-open)))
 (defn self-x [{:keys [p]}] (.. p self -pos -x))
 (defn count-of [{:keys [p]} item]
@@ -72,7 +78,7 @@
 (defn clicked-ids [s] (set (map #(.. % -args -id) (calls-of s "interact"))))
 (defn held [{:keys [p]}] (.-held (.self p)))
 
-(defn pos-map [c] (js->clj (.-pos c) :keywordize-keys true))
+(defn pos-map [c] (let [[x y z] (:pos c)] {:x x :y y :z z}))
 
 (defn watch-gate!
   "Record every gate click of the fake as {:was-open :overlapping :held}: the gate state before it, the cows whose box
@@ -168,7 +174,7 @@
           (loop [n 0 seen #{}]
             (when (< n 500)
               (await (run-ticks s 1))
-              (let [now (set (map #(.-id %) (filter #(and (= "cow" (.-name %)) (in-pen? %)) (entities-of s))))]
+              (let [now (set (map :id (filter #(and (= "cow" (:name %)) (in-pen? %)) (entities-of s))))]
                 (when-not (every? now seen) (reset! stayed false))
                 (recur (inc n) now))))
           (is (finished? s))
@@ -224,7 +230,7 @@
           (is (= 2 (count (filter #{6} trail))) "out-4 at the approach and again at the retry")
           (is (= 6 (count (filter #{10} trail))) "the gate cell: three tries, two back-steps between them, twice over")
           (is (empty? (on-lead s)) "the cow is let go")
-          (is (< (.-x (.-pos (cow-of s 1))) 10) "outside")
+          (is (< (first (:pos (cow-of s 1))) 10) "outside")
           (is (not (gate-open? s)))
           (is (every? zero? (map :overlapping (filter :was-open @log))))
           (is (= 1 (count (events-of s :herd.gave-up)))))))))
@@ -246,8 +252,8 @@
           (loop [n 0]
             (when (< n 500)
               (await (run-ticks s 1))
-              (when (and (>= (self-x s) 14) (< (.-x (.-pos (cow-of s 8))) 11.5))
-                (set! (.-x (.-pos (cow-of s 8))) 13.5))
+              (when (and (>= (self-x s) 14) (< (first (:pos (cow-of s 8))) 11.5))
+                (set-x! s 8 13.5))
               (recur (inc n))))
           (is (finished? s))
           (is (= :brought (:reason (done-event s))))
@@ -436,11 +442,10 @@
           (await (run-until s #(= 1 (count (on-lead %))) 20))
           (is (= 1 (count (on-lead s))) "on the lead before the cut")
           ;; what a log-out does: the lead comes off and lies on the ground
-          (doseq [c (filter #(true? (.-leashedToMe %)) (entities-of s))]
-            (set! (.-leashed c) false)
-            (set! (.-leashedToMe c) false)
-            (.push (entities-of s) (clj->js {:id (+ 100 (.-id c)) :name "item" :kind "item" :pos (js->clj (.-pos c) :keywordize-keys true)
-                                             :item {:name "lead" :count 1}})))
+          (doseq [c (filter #(true? (:leashed-to-me %)) (entities-of s))]
+            (update-entity! s (:id c) assoc :leashed false :leashed-to-me false)
+            (fake/add-entity! (:p s) {:id (+ 100 (:id c)) :name "item" :kind "item" :pos (:pos c)
+                                      :item {:name "lead" :count 1}}))
           (await (run-ticks s 200))
           (is (finished? s))
           (is (= :brought (:reason (done-event s))))

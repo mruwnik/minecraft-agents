@@ -6,6 +6,7 @@
             [engine.jobs.util :as u]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as ew]
@@ -198,7 +199,7 @@
                        (let [r (await (impl token args))
                              pos (.-pos args)]
                          (when (= 3 (.-z pos))
-                           (.set (.-blocks (.-state (.-world p))) (cell-key (.-x pos) 63 (.-z pos)) "dirt"))
+                           (fake/set-block! p [(.-x pos) 63 (.-z pos)] "dirt"))
                          r)))
           (let [result (await (child-outcome eng job {} 100))]
             (is (= {:cut 2 :replanted 1 :bare [{:x 2 :y 64 :z 3}] :lost [] :gave-up false} result))))))))
@@ -300,9 +301,8 @@
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))
-                             blocks (.-blocks (.-state (.-world p)))]
-                         (.delete blocks (cell-key 3 64 0))
-                         (.set blocks (cell-key 3 63 0) "dirt")
+                             _ (fake/remove-block! p [3 64 0])
+                             _ (fake/set-block! p [3 63 0] "dirt")]
                          r)))
           (let [result (await (child-outcome eng job {} 100))]
             (is (= {:cut 1 :replanted 1 :bare [cell] :lost [cell] :gave-up false} result))))))))
@@ -328,7 +328,7 @@
   (.override (.-world p) "dig"
              (fn ^:async f [token args impl]
                (let [r (await (impl token args))]
-                 (set! (.-pos (.-self (.-state (.-world p)))) #js {:x 60 :y 64 :z 0})
+                 (fake/swap-self! p assoc :pos [60 64 0])
                  r))))
 
 (deftest a-body-far-from-its-field-walks-back-and-replants

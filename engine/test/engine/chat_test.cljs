@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -22,7 +23,7 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng (assoc eng :chat-limits limits) :p p :seen seen :clock clock}))
 
-(defn chat-lines [p] (mapv #(.-message %) (.. p -world -state -chat)))
+(defn chat-lines [p] (mapv :message (:chat @(fake/state p))))
 
 (defn ^:async run-job
   "Run job-def as a one-round top-level job; the value its round returns."

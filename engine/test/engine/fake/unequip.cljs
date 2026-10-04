@@ -1,6 +1,6 @@
 (ns engine.fake.unequip
   "Unequip in the fake world: empty the main hand into the pockets, over world data {:self {:held} :inventory}.
-  Test-only; the same rules as js/fake-unequip.mjs."
+  Test-only; ported from the deleted js/fake-unequip.mjs."
   (:require [engine.fake.pockets :as pockets]))
 
 (defn unequip

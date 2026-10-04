@@ -2,6 +2,7 @@
   "jobs.survival.extinguish and the burning trigger against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.events :as events]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
@@ -193,7 +194,7 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= 1 (count (:list (core/state eng)))) "still listed after the pour")
-          (.delete (.-blocks (.-state (.-world p))) "0,64,0")
+          (fake/remove-block! p [0 64 0])
           (await (run-until-empty eng 3))
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (calls p "place")))))))))

@@ -7,13 +7,14 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
 
 (def t0 1000000)
 
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
-(def sleeper-js (clj->js (assoc sleeper :username "Alex")))
+(def sleeper-js (assoc sleeper :username "Alex"))
 (def pest {:id 6 :name "pest" :kind "hostile" :pos {:x 2 :y 64 :z 0}})
 
 (def probes (atom 0))
@@ -23,7 +24,7 @@
 ;; a reflex job that ends by respawning: the pest is not sensed yet when it ends
 (defn ^:async respawn-round [c]
   (let [world (.-world (:primitives c))]
-    (set! (.-entities (.-state world)) #js [])
+    (swap! (.-state world) assoc :entities [])
     (.respawn world)
     :done))
 
@@ -63,13 +64,13 @@
           (let [round (core/tick! eng)]
             (await (pause 5))
             (is (true? (.isOffline p)) "the log-out took the body away")
-            (set! (.-entities state) #js [])
+            (swap! state assoc :entities [])
             (await round))
           (is (true? (.isSettling p)) "back, but not yet sensing")
           (is (= [] (kinds-of seen :ended)) "no judgement while settling")
           (await (tick-at r (+ t0 100)))
           (is (= 1 (fired seen)) "no re-fire while settling")
-          (set! (.-entities state) #js [sleeper-js])
+          (swap! state assoc :entities [(fake/entity-in sleeper-js)])
           (.settle (.-world p) false)
           (await (tick-at r (+ t0 300)))
           (is (= [:completed_not_cleared] (mapv :how (kinds-of seen :ended))) "judged on the first ready tick")
@@ -91,7 +92,7 @@
           (await (tick-at r t0))
           (is (true? (.isSettling p)))
           (is (= [] (kinds-of seen :ended)))
-          (set! (.-entities state) #js [(clj->js pest)])
+          (swap! state assoc :entities [(fake/entity-in pest)])
           (await (tick-at r (+ t0 200)))
           (is (= 1 (fired seen)) "still settling: nothing fires")
           (.settle world false)
@@ -111,7 +112,7 @@
           (await (tick-at r (+ t0 100)))
           (is (= [:cleared] (mapv :how (kinds-of seen :ended))))
           (is (= [100] (mapv :deferred-ms (kinds-of seen :ended))))
-          (set! (.-entities state) #js [(clj->js pest)])
+          (swap! state assoc :entities [(fake/entity-in pest)])
           (await (tick-at r (+ t0 150)))
           (is (= 2 (fired seen)) "no cooldown was applied"))))))
 

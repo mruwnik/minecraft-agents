@@ -7,6 +7,7 @@
             [engine.jobs.animals :as animals]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (defn ent
@@ -291,7 +292,7 @@
           (.override (.-world p) "interact"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (doseq [e (.. p -world -state -entities)] (set! (.-id e) (+ 100 (.-id e))))
+                         (swap! (fake/state p) update :entities (partial mapv #(update % :id + 100)))
                          r)))
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (await (run-ticks s 4 700))

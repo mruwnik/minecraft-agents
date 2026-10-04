@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -50,11 +51,10 @@
           (await (core/tick! eng))
           (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-day declines at night")
           (is (nil? (core/tick! eng)) "night: nothing ready")
-          (set! (.. world -state -self -health) 6)
-          (set! (.. world -state -self -food) 10)
+          (fake/swap-self! p assoc :health 6 :food 10)
           (await (core/tick! eng))
           (is (= 15 (.-food (.self p))) "health-low ran recover, which ate")
-          (set! (.. world -state -self -health) 18)
+          (fake/swap-self! p assoc :health 18)
           (await (core/tick! eng))
           (is (= ["j2"] (:list (core/state eng))) "healed: recover is done")
           (is (nil? (core/tick! eng)) "cooling down, and still night")
@@ -79,11 +79,10 @@
     (tu/run-async done
       (fn ^:async t []
         ;; the floor ends at x 40 and the goal's chunk is not loaded: the first round walks to the edge and is not done
-        (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})
-              blocks (.. p -world -state -blocks)]
+        (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})]
           (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 60 :y 64 :z 0}}) {})
           (await (core/tick! eng))
           (is (= ["j1"] (:list (core/state eng))))
-          (doseq [[k v] (tu/floor 41 -10 60 10)] (.set blocks k v))
+          (doseq [[k v] (tu/floor 41 -10 60 10)] (fake/set-block! p (fake/parse-cell k) v))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))

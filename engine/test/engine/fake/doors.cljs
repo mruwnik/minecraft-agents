@@ -2,7 +2,7 @@
   "Doors, gates and trapdoors in the fake world, over world data {:blocks {[x y z] name} :states {[x y z] props}}: the
   block's :open state decides whether a body passes. An open one has no collision for the fake steer, a shut one is a
   wall; the planner's snapshot reads the state; a click on a door flips both of its halves, as the server does.
-  Test-only; the same rules as js/fake-doors.mjs (a trapdoor is climbed only over a ladder of its own facing).")
+  Test-only; ported from the deleted js/fake-doors.mjs (a trapdoor is climbed only over a ladder of its own facing).")
 
 (def openable-re #"_(fence_gate|door|trapdoor)$")
 ;; the block properties the planner's state ids carry

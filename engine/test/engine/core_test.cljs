@@ -6,6 +6,7 @@
             [engine.memory :as mem]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             ["fs" :as fs]
@@ -593,7 +594,7 @@
           (core/submit! eng '(count) {})
           (.hold world "moveTo")
           (let [walking (core/tick! eng)]
-            (set! (.. world -state -self -health) 6)
+            (swap! (.. world -state) assoc-in [:self :health] 6)
             (let [reflex-round (core/tick! eng)]
               (await walking)
               (await reflex-round)))
@@ -603,7 +604,7 @@
                 cut (first (filter #(= :cut (:kind %)) @seen))]
             (is (= (:seq fired) (:cause cut)))
             (is (= "j1" (:interrupted fired))))
-          (set! (.. world -state -self -health) 20)
+          (swap! (.. world -state) assoc-in [:self :health] 20)
           (await (core/tick! eng))
           (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job runs before j2")
           (is (= ["j2"] (listed eng))))))))
@@ -679,9 +680,9 @@
             (core/register-reflex! eng {:trigger :near})
             (await (core/tick! eng))
             (is (nil? (core/tick! eng)))
-            (set! (.-entities state) #js [])
+            (swap! state assoc :entities [])
             (core/tick! eng)
-            (set! (.-entities state) #js [#js {:id 2 :name "zombie" :kind "hostile" :pos (tu/pos 3 64 0) :health 20}])
+            (swap! state assoc :entities [{:id 2 :name "zombie" :kind "hostile" :pos [3 64 0] :health 20}])
             (await (core/tick! eng))
             (is (= 2 (count (ran seen))))))))))
 
@@ -866,7 +867,7 @@
           (core/register-reflex! eng {:trigger :hurt :job '(count)})
           (await (core/tick! eng))
           (is (= "j1" (:pending-reflex (core/state eng))) "the reflex job holds the body between rounds")
-          (set! (.. p -world -state -self -health) 20)
+          (swap! (.. p -world -state) assoc-in [:self :health] 20)
           (core/cancel! eng "j1")
           (is (nil? (:pending-reflex (core/state eng))))
           (is (= {} (:instances (core/state eng))))
@@ -1447,7 +1448,7 @@
           (core/submit! eng '(repeat (jobs.movement.look-around)) {})
           (.hold world "wait")
           (let [looking (core/tick! eng)]
-            (set! (.. world -state -self -health) 6)
+            (swap! (.. world -state) assoc-in [:self :health] 6)
             (let [reflex-round (core/tick! eng)]
               (await looking)
               (await reflex-round)))

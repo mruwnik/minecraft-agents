@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -75,7 +76,7 @@
           (await (core/tick! eng))
           (is (= 1 (count (notify-events seen)))))))))
 
-(defn chat-lines [p] (mapv #(.-message %) (.. p -world -state -chat)))
+(defn chat-lines [p] (mapv :message (:chat @(fake/state p))))
 
 (defn ^:async notify-chat
   "Run notify with args on a fake world, with prep called on the primitives first; [p seen eng]."
@@ -130,10 +131,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[p] (await (notify-chat {:text "psst" :chat? true :to "Steve"} identity))
-              lines (.. p -world -state -chat)]
+              lines (:chat @(fake/state p))]
           (is (= 1 (count lines)))
-          (is (= "psst" (.-message (first lines))))
-          (is (= "Steve" (.-to (first lines)))))))))
+          (is (= "psst" (:message (first lines))))
+          (is (= "Steve" (:to (first lines)))))))))
 
 (deftest to-defaults-to-nil
   (is (nil? (get-in (:args (get registry/jobs 'jobs.debug.notify)) [:to :default]))))

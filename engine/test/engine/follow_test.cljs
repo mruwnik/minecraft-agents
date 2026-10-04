@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -49,7 +50,7 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn move-targets [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo")))
 (defn self-x [p] (.-x (.-pos (.self p))))
-(defn entities [p] (.-entities (.-state (.-world p))))
+(defn entities [p] (fake/entities p))
 (defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
 
 (defn ^:async follow
@@ -91,7 +92,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [move (fn [s i] (when (= 2 i) (set! (.-x (.-pos (first (entities (:p s))))) 20)))
+        (let [move (fn [s i] (when (= 2 i) (swap! (fake/state (:p s)) assoc-in [:entities 0 :pos 0] 20)))
               {:keys [p]} (await (follow {:entities [(steve 2)]} {:player "Steve"} 4 500 move))]
           (is (= [{:x 20 :y 64 :z 0}] (move-targets p)))
           (is (= 20 (self-x p))))))))
@@ -100,7 +101,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [vanish (fn [s i] (when (= 1 i) (.splice (entities (:p s)) 0 1)))
+        (let [vanish (fn [s i] (when (= 1 i) (swap! (fake/state (:p s)) update :entities subvec 1)))
               {:keys [p out] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
           (is (= {:reason "lost" :last-seen {:x 10 :y 64 :z 0}} @out))
           (is (= 1 (count (move-targets p))) "the last-seen cell is walked to once")

@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -46,7 +47,7 @@
 
 (defn pos-of [p] (js->clj (.-pos (.self p)) :keywordize-keys true))
 
-(defn teleport! [p x y z] (set! (.-pos (.-self (.-state (.-world p)))) (tu/pos x y z)))
+(defn teleport! [p x y z] (fake/swap-self! p assoc :pos [x y z]))
 
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
 

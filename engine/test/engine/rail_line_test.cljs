@@ -7,6 +7,7 @@
             [engine.jobs.rail :as builder]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [plan.rail :as rail]
             [plan.shape :as shape]))
@@ -217,7 +218,7 @@
   [args]
   (let [{:keys [eng p seen]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])]
     (await (h/child-outcome eng job {:plan "line"} 400))
-    (.delete (.-blocks (.-state (.-world p))) "7,64,0")
+    (fake/remove-block! p [7 64 0])
     (core/submit! eng (list job (merge {:plan "line"} args)) {})
     (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
     [seen p]))
@@ -417,7 +418,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
           (await (h/child-outcome eng job {:plan "line"} 900))
-          (.delete (.-blocks (.-state (.-world p))) "19,64,0")
+          (fake/remove-block! p [19 64 0])
           (core/submit! eng (list job {:plan "line" :all-carried false}) {})
           (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (= [{:pos [19 64 0] :why :gap}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))

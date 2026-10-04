@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
@@ -57,7 +58,7 @@
   (->> (array-seq (.-inventory (.self p))) (filter #(= name (.-name %))) (map #(.-count %)) (reduce + 0)))
 (defn chest-items [{:keys [p]}]
   (into {} (map (juxt :name :count))
-        (js->clj (.get (.. p -world -state -containers) "8,64,0") :keywordize-keys true)))
+        (get-in @(fake/state p) [:containers [8 64 0]])))
 (defn block-name [{:keys [p]} x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
 (defn honey [{:keys [p]}] (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 66 :z 0}))))
 

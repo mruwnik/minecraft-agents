@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -37,18 +38,16 @@
     {:eng eng :p p :clock clock :seen seen :out out}))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn entities [p] (.-entities (.-state (.-world p))))
+(defn entities [p] (fake/entities p))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
 
 (defn take-drops!
   "The player picks up every item entity lying in the world."
   [p]
-  (let [es (entities p)]
-    (doseq [i (reverse (range (.-length es)))]
-      (when (= "item" (.-kind (aget es i))) (.splice es i 1)))))
+  (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "item" (:kind e))) %)))
 
-(defn item-count [p] (count (filter #(= "item" (.-kind %)) (array-seq (entities p)))))
+(defn item-count [p] (count (filter #(= "item" (:kind %)) (entities p))))
 
 (defn ^:async run-ticks
   "Tick up to n times, the clock moving step ms before each, until the job is gone.
@@ -81,7 +80,8 @@
   (.override (.-world p) "toss"
              (fn ^:async f [token a impl]
                (let [r (await (impl token a))]
-                 (reset! held (.pop (entities p)))
+                 (reset! held (last (entities p)))
+                 (swap! (fake/state p) update :entities pop)
                  r))))
 
 (defn appear-two-ticks-after-toss
@@ -91,7 +91,7 @@
     (fn [p _]
       (when (seq (calls p "toss"))
         (when (and @held (= 2 (swap! waited inc)))
-          (.push (entities p) @held)
+          (swap! (fake/state p) update :entities conj @held)
           (reset! held nil))))))
 
 (deftest give-check-wants-strings
@@ -166,7 +166,7 @@
                      (when (and (not @done?) (seq (calls p "toss")))
                        (reset! done? true)
                        (take-drops! p)
-                       (.push (.-inventory (.-state (.-world p))) #js {:name "bread" :count 2})))
+                       (fake/add-item! p "bread" 2)))
               {:keys [out]} (await (give (assoc bread :entities [(steve 10)])
                                          {:player "Steve" :item "bread" :count 5} 40 false nil hook))]
           (is (= {:given 3 :reason "not-taken" :returned 2} @out)))))))

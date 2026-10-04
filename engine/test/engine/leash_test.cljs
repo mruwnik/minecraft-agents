@@ -2,6 +2,7 @@
   "jobs.animals.leash against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.test-util :as tu]))
 
@@ -31,7 +32,7 @@
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
 (defn on-lead [{:keys [p]}]
-  (mapv #(.-id %) (filter #(true? (.-leashedToMe %)) (.. p -world -state -entities))))
+  (mapv :id (filter #(true? (:leashed-to-me %)) (fake/entities p))))
 
 (deftest leashes-the-nearest-cow
   (async done
@@ -108,7 +109,7 @@
           (.override (.-world p) "interact"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (doseq [e (.. p -world -state -entities)] (set! (.-leashedToMe e) false))
+                         (swap! (fake/state p) update :entities (partial mapv #(assoc % :leashed-to-me false)))
                          r)))
           (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 6 700))
@@ -122,10 +123,9 @@
         (let [{:keys [eng p] :as s} (h/setup {:inventory lead :entities [(cow 1 2) (cow 2 4)]})]
           (.override (.-world p) "interact"
                      (fn [token args impl]
-                       (let [es (.. p -world -state -entities)]
-                         (when (= 1 (.-id args))
-                           (.splice es 0 1))
-                         (impl token args))))
+                       (when (= 1 (.-id args))
+                         (swap! (fake/state p) update :entities subvec 1))
+                       (impl token args)))
           (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (finished? s))

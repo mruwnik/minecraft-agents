@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.stuck :as stuck]
@@ -552,8 +553,7 @@
               state (.-state (.-world p))]
           (.override (.-world p) "wait"
                      (fn ^:async f [_ _ _]
-                       (set! (.-onGround (.-self state)) true)
-                       (set! (.-pos (.-self state)) #js {:x 5 :y 64 :z 0})
+                       (swap! state update :self assoc :onGround true :pos [5 64 0])
                        #js {:status "ok"}))
           (await (run-attempts! eng p 1 :free))
           (is (pos? (count (calls p "wait"))) "waits for the body to land first")
@@ -713,8 +713,8 @@
                        lift? (zero? (.-range args))
                        out? (>= y top)]
                    (cond
-                     lift? (set! (.-pos (.-self state)) #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
-                     out? (set! (.-pos (.-self state)) #js {:x 30 :y y :z 0}))
+                     lift? (swap! state assoc-in [:self :pos] [(.-x pos) (.-y pos) (.-z pos)])
+                     out? (swap! state assoc-in [:self :pos] [30 y 0]))
                    #js {:status (if (or lift? out?) "arrived" "blocked") :pos (.-pos (.self p)) :distance 5})))))
 
 (def climb-pit (climb-box (for [y (range 60 68)] (str "5," y ",0"))))

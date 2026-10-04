@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
 
@@ -32,7 +33,7 @@
 
 (deftest the-fake-offline-self-is-exactly-the-status
   (let [p (tu/fake {:offlineScale 0.01})]
-    (set! (.-offline (.-state (.-world p))) true)
+    (swap! (fake/state p) assoc :offline true)
     (is (= {"status" "offline"} (js->clj (.self p))))))
 
 (deftest an-event-emitted-while-offline-has-no-pos

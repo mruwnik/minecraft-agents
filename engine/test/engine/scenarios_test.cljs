@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -89,8 +90,7 @@
                                                {:time 1000
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
                                                 :inventory [{:name "bread" :count 4}]})
-              state (.. p -world -state)
-              self (.-self state)]
+              food #(:food (fake/self p))]
           (is (= [:suffocating :burning :hostile-near :health-low :hungry :night-unsafe :player-sleeping-nearby :stuck :died
                   :inventory-nearly-full]
                  (mapv :id (:register (core/state eng)))))
@@ -98,20 +98,19 @@
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
           (is (= #{"(repeat jobs.movement.look-around)"} (names-started seen)) "it idles looking around")
 
-          (set! (.-health self) 5)
-          (set! (.-food self) 10)
+          (fake/swap-self! p assoc :health 5 :food 10)
           (await (run-ticks eng clock 3 1000))
           (is (= [:health-low] (fired seen)) "low health fires recover")
-          (is (< 10 (.-food self)) "recover ate at the safe point")
-          (set! (.-health self) 20)
+          (is (< 10 (food)) "recover ate at the safe point")
+          (fake/swap-self! p assoc :health 20)
           (await (run-ticks eng clock 3 1000))
           (is (some #(= [:reflex :ended :health-low] [(:source %) (:kind %) (:reflex %)]) @seen)
               "healed, recover ends")
 
-          (set! (.-entities state) #js [#js {:id 50 :name "zombie" :kind "hostile" :pos (tu/pos 4 64 0) :health 20}])
+          (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [4 64 0] :health 20})
           (await (run-ticks eng clock 3 1000))
           (is (= [:health-low :hostile-near] (fired seen)) "a hostile fires respond-to-hostile")
-          (set! (.-entities state) #js [])
+          (swap! (fake/state p) assoc :entities [])
           (await (run-ticks eng clock 10 1000))
           (is (some #(= [:reflex :ended :hostile-near] [(:source %) (:kind %) (:reflex %)]) @seen)
               "with the hostile gone the reflex ends")

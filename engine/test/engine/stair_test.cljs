@@ -213,7 +213,7 @@
                                   (fn ^:async f [token a impl]
                                     (let [r (await (impl token a))
                                           {:keys [x y z]} (js->clj (.-pos a) :keywordize-keys true)]
-                                      (.set (.. world -state -blocks) (str x "," y "," z) "water")
+                                      (swap! (.. world -state) assoc-in [:blocks [x y z]] "water")
                                       r)))))
               {:keys [out]} (await (stair! {:blocks ground} (assoc east :accept #{:water}) prep))]
           (is (= :fluid-in-cut (:reason @out)))
@@ -336,7 +336,7 @@
                        (.override world "steer"
                                   (fn ^:async f [token a impl]
                                     (let [r (await (impl token a))]
-                                      (.set (.. world -state -blocks) "0,66,0" "stone")
+                                      (swap! (.. world -state) assoc-in [:blocks [0 66 0]] "stone")
                                       r)))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :no-way-back (:reason @out)))
@@ -353,7 +353,7 @@
                        (.override world "steer"
                                   (fn ^:async f [token a impl]
                                     (let [r (await (impl token a))]
-                                      (set! (.. world -state -self -pos) #js {:x 1 :y 64 :z 1})
+                                      (swap! (.. world -state) assoc-in [:self :pos] [1 64 1])
                                       r)))))
               {:keys [out]} (await (stair! {:blocks (dissoc ground "1,64,1")} east prep))]
           (is (= :step-failed (:reason @out)))
@@ -367,7 +367,7 @@
                      (let [world (.-world p)]
                        (.override world "equip"
                                   (fn ^:async f [token a impl]
-                                    (.set (.. world -state -blocks) "1,64,1" "lava")
+                                    (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "lava")
                                     (await (impl token a))))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :hazard (:reason @out)))
@@ -383,7 +383,7 @@
                        (.override world "dig"
                                   (fn ^:async f [token a impl]
                                     (let [r (await (impl token a))]
-                                      (.set (.. world -state -blocks) "1,64,0" "gravel")
+                                      (swap! (.. world -state) assoc-in [:blocks [1 64 0]] "gravel")
                                       r)))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :refills (:reason @out)))

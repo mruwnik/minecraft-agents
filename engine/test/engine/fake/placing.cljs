@@ -3,7 +3,7 @@
   world: the face of the clicked neighbour, the cursor height on it, the look (yaw for a horizontal facing, yaw and
   pitch for torches and ladders) and nothing else, over world data {:blocks {[x y z] name} :states {[x y z] props}}.
   engine.placement runs the rule backwards to choose a click; this is the forward rule written on its own, so a job
-  test through the fake checks the two against each other. Test-only; the same rules as js/placing.mjs.
+  test through the fake checks the two against each other. Test-only; ported from the deleted js/placing.mjs.
   Directions are mineflayer's: yaw 0 looks north (-z), pi/2 west; pitch -pi/2 looks down.
   A result is {:blocks [{:pos :name :properties}]} (a door or bed is two blocks) or {:refused reason}."
   (:require [clojure.string :as str]))

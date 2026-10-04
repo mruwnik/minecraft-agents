@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
@@ -180,7 +181,7 @@
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (takeover/take! eng {:who "claude" :why "cut"})
             (await running))
-          (is (= {} (js->clj (.-controls (.-state world)))) "no control is left pressed")
+          (is (= {} (:controls @(fake/state p))) "no control is left pressed")
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! eng 10))
           (is (= {:arrived true} @out))

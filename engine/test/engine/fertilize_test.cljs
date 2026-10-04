@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -39,7 +40,7 @@
     @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn age [p k] (.get (.. p -world -state -ages) k))
+(defn age [p k] (get (:ages @(fake/state p)) (fake/parse-cell k)))
 
 (def job 'jobs.farm.fertilize)
 (def meal [{:name "bone_meal" :count 20}])

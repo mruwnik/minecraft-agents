@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (defn animal [id x & [more]]
@@ -33,9 +34,9 @@
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
 (defn still-leashed [{:keys [p]}]
-  (mapv #(.-id %) (filter #(true? (.-leashed %)) (.. p -world -state -entities))))
+  (mapv :id (filter #(true? (:leashed %)) (fake/entities p))))
 (defn lead-items [{:keys [p]}]
-  (count (filter #(and (= "item" (.-name %)) (= "lead" (some-> (.-item %) .-name))) (.. p -world -state -entities))))
+  (count (filter #(and (= "item" (:name %)) (= "lead" (get-in % [:item :name]))) (fake/entities p))))
 
 (deftest takes-the-lead-off-and-picks-it-up
   (async done
@@ -103,7 +104,7 @@
           (is (empty? (still-leashed s)))
           (is (= 1 (count-of s "lead")))
           (is (= [50 1] (mapv #(.-id (.-args %)) (calls-of s "interact"))) "the knot is clicked first, then the animal it handed over")
-          (is (empty? (filter #(= 50 (.-id %)) (.. (:p s) -world -state -entities))) "and it is gone afterwards"))))))
+          (is (empty? (filter #(= 50 (:id %)) (fake/entities (:p s)))) "and it is gone afterwards"))))))
 
 (deftest ends-without-freeing-anything
   (async done
@@ -171,7 +172,7 @@
           (.override (.-world p) "wait"
                      (fn [token args impl]
                        (when (= 2 (swap! waits inc))
-                         (doseq [e (.. p -world -state -entities)] (set! (.-leashed e) false) (set! (.-leashedToMe e) false)))
+                         (swap! (fake/state p) update :entities (partial mapv #(assoc % :leashed false :leashed-to-me false))))
                        (impl token args)))
           (core/submit! eng '(jobs.animals.unleash {}) {})
           (await (run-ticks s 8 700))

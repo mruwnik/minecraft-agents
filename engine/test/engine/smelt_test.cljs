@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]))
@@ -216,7 +217,7 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn ops [p] (mapv #(.-op (.-args %)) (calls p "furnace")))
 (defn inv-of [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
-(defn furnace-of [p] (js->clj (.get (.. p -world -state -furnaces) pos-key) :keywordize-keys true))
+(defn furnace-of [p] (get (:furnaces @(fake/state p)) (fake/parse-cell pos-key)))
 (defn advance! [p ticks] (.advance (.-world p) ticks))
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
 (def iron-job '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))
@@ -329,7 +330,7 @@
           (await (ticks eng 2))
           (is (seq (tu/walk-calls p)))
           (is (= {"raw_iron" 0 "coal" 1} (select-keys (merge {"raw_iron" 0} (inv-of p)) ["raw_iron" "coal"])))
-          (is (= 3 (:count (:input (js->clj (.get (.. p -world -state -furnaces) "20,64,0") :keywordize-keys true))))))))))
+          (is (= 3 (:count (:input (get (:furnaces @(fake/state p)) [20 64 0]))))))))))
 
 (deftest a-full-inventory-at-take-time-gives-up-and-leaves-the-output
   (async done
@@ -380,7 +381,7 @@
         (let [{:keys [eng p seen clock]} (setup base-world)
               _ (core/submit! eng iron-job {})
               _ (await (ticks eng 1))
-              _ (.delete (.. p -world -state -blocks) pos-key)
+              _ (fake/remove-block! p (fake/parse-cell pos-key))
               _ (swap! clock + 40000)
               _ (await (ticks eng 5))
               n (count (calls p "furnace"))]
@@ -392,10 +393,10 @@
 (defn put-out!
   "The fire in the fake furnace at pos-key goes out and its fuel slot is empty."
   [p]
-  (let [f (.get (.. p -world -state -furnaces) pos-key)]
-    (set! (.-burn f) 0)
-    (set! (.-fuel f) nil)
-    (.set (.. p -world -state -states) pos-key #js {:lit false})))
+  (let [cell (fake/parse-cell pos-key)]
+    (swap! (fake/state p) #(-> %
+                               (update-in [:furnaces cell] assoc :burn 0 :fuel nil)
+                               (assoc-in [:states cell] {:lit false})))))
 
 (deftest an-out-fire-is-fed-again-from-the-pockets
   (async done
@@ -473,8 +474,7 @@
         (let [{:keys [eng p seen clock]} (setup base-world)
               _ (core/submit! eng iron-job {})
               _ (await (ticks eng 1))
-              f (.get (.. p -world -state -furnaces) pos-key)
-              _ (set! (.-input f) nil)
+              _ (swap! (fake/state p) assoc-in [:furnaces (fake/parse-cell pos-key) :input] nil)
               _ (swap! clock + 40000)
               _ (await (ticks eng 2))]
           (is (= "output-gone" (:reason (first (of-kind seen :smelt.gave-up)))))
@@ -487,7 +487,7 @@
         (let [{:keys [eng p seen clock]} (setup base-world)
               _ (core/submit! eng iron-job {})
               _ (await (ticks eng 1))
-              _ (.set (.. p -world -state -blocks) pos-key "chest")
+              _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
               _ (swap! clock + 40000)
               _ (await (ticks eng 2))]
           (is (= "furnace-gone" (:reason (first (of-kind seen :smelt.gave-up))))))))))

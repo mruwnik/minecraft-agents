@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as world]
@@ -192,7 +193,7 @@
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
 (defn feet [p] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
 (defn events-of [{:keys [seen]} kind] (filter #(= kind (:kind %)) @seen))
-(defn set-block! [p k n] (.set (.. (.-world p) -state -blocks) k n))
+(defn set-block! [p k n] (fake/set-block! p (fake/parse-cell k) n))
 
 (deftest reaches-a-stand-beside-a-target-eight-down-six-aside
   (async done
@@ -474,9 +475,9 @@
                  (await (impl token a))))
     (.override world "collect"
                (fn ^:async f [token a impl]
-                 (let [at (.. world -state -self -pos)
+                 (let [at (get-in @(.-state world) [:self :pos])
                        r (await (impl token a))]
-                   (set! (.. world -state -self -pos) at)
+                   (swap! (.-state world) assoc-in [:self :pos] at)
                    r)))))
 
 (deftest a-stop-in-a-dead-end-takes-the-torches-back-and-seals-the-mouth

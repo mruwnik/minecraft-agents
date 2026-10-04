@@ -6,9 +6,16 @@
             [engine.core :as core]
             [engine.jobs.combat :as combat]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
+
+(defn set-entities!
+  "Replace the fake's entities with the spec-style entity maps."
+  [p es]
+  (swap! (fake/state p) assoc :entities [])
+  (doseq [e es] (fake/add-entity! p e)))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -76,11 +83,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(zombie 100 3 0)]}))]
-          (set! (.. p -world -state -self -health) 10)
+          (fake/swap-self! p assoc :health 10)
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "10 is below fight-health 12 but above min-health 8: still fighting")
-          (set! (.. p -world -state -self -health) 6)
+          (fake/swap-self! p assoc :health 6)
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "below min-health: no more attacks")
@@ -167,11 +174,11 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
           (swap! clock + 4000)
-          (set! (.. p -world -state -entities) #js [(clj->js (assoc (zombie 5 0) :pos {:x -6 :y 64 :z 3}))])
+          (set-entities! p [(assoc (zombie 5 0) :pos {:x -6 :y 64 :z 3})])
           (await (core/tick! eng))
           (is (= 2 (count (calls p "moveTo"))) "seen again after 4 s: walks again")
           (swap! clock + 4000)
-          (set! (.. p -world -state -entities) #js [])
+          (set-entities! p [])
           (await (core/tick! eng))
           (is (= ["j1"] (:list (core/state eng))) "only 4 s since it was last seen")
           (swap! clock + 1500)
@@ -307,7 +314,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
-          (set! (.. p -world -state -entities) #js [(clj->js (zombie 6 0))])
+          (set-entities! p [(zombie 6 0)])
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "moveTo"))) "12 blocks behind is out of radius 8 but within 24: walk on")
@@ -393,18 +400,18 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(assoc (zombie 100 3 0) :health 10)]}))]
           (is (= 1 (count (calls p "attack"))) "one hit of the fake's 5: the zombie is at 5")
-          (set! (.. p -world -state -self -health) 6)
+          (fake/swap-self! p assoc :health 6)
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "below min-health, but one more hit kills it: it swings")
-          (is (empty? (.. p -world -state -entities))))))))
+          (is (empty? (fake/entities p))))))))
 
 (deftest respond-still-flees-below-min-health-from-a-healthy-hostile
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(assoc (zombie 100 3 0) :health 20)]}))]
-          (set! (.. p -world -state -self -health) 6)
+          (fake/swap-self! p assoc :health 6)
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "15 left is not nearly dead"))))))
@@ -416,7 +423,7 @@
         (let [{:keys [eng p clock]} (await (first-round retreat {:self {:food 10} :inventory [{:name "bread" :count 3}]
                                                                  :entities [(zombie 5 0)]}))]
           (is (zero? (count (calls p "eat"))) "the zombie is 5 away: no time to eat")
-          (set! (.. p -world -state -entities) #js [(clj->js (zombie 8 0))])
+          (set-entities! p [(zombie 8 0)])
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 1 (count (calls p "eat"))) "14 blocks of gap: it eats")
@@ -433,7 +440,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round retreat {:inventory sword :blocks box :entities [(assoc (zombie 2 0) :health 20)]}))]
           (is (= 1 (count (calls p "attack"))))
-          (set! (.. p -world -state -blocks) (js/Map.))
+          (swap! (fake/state p) assoc :blocks {})
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "the pen opened up, but the zombie is still at 2: keep fighting")

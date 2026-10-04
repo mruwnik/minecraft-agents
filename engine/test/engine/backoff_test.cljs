@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (def blocked {:act :moveTo :status "blocked" :reason "no path"})
@@ -54,6 +55,14 @@
     :moveTo "blocked" nil 1 1
     :moveTo "arrived" 0 1 0
     :moveTo "arrived" 3 1 0
+    :steer "done" 0 0 0
+    :steer "timeout" 0 0 0
+    :walk "partial" 3 0 0
+    :walk "blocked" 50 0 0
+    :walk "blocked" 8 0 0
+    :walk "blocked" 7.9 1 1
+    :walk "blocked" 0 1 1
+    :walk "arrived" 0 1 0
     :dig "timeout" 5 1 1)
   (is (not (backoff/fruitless-round? (-> backoff/empty-round
                                          (backoff/note-act :look "ok" nil nil)
@@ -179,8 +188,7 @@
      (.override (.-world p) "moveTo"
                 (fn [_ args _]
                   (when-let [m (.-move args)]
-                    (let [pos (.-pos (.-self (.-state (.-world p))))]
-                      (set! (.-x pos) (+ (.-x pos) m))))
+                    (fake/swap-self! p update-in [:pos 0] + m))
                   (js/Promise. (fn [resolve] (js/setTimeout #(resolve #js {:status (.-status args) :reason "no path"}) 0)))))
      {:eng eng :p p :seen seen :clock clock})))
 

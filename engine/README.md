@@ -32,7 +32,7 @@ Layout:
 
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub bot for the primitive tests.
 - `js/view.mjs` the view dump (chunk columns, pose, hud files for an external renderer; `BODY_VIEW=0` disables), format in `docs/view-format.md`.
-- `js/fake.mjs` a scriptable fake world with the same interface, for tests.
+- `test/engine/fake.cljs` (`engine.fake`, with `engine.fake.*` for its mechanics) a scriptable fake world with the same interface, for the cljs tests.
 - `src/engine/` `core` (list, register, scheduler, act wrapper,
   call-child), `memory` (the body store), `events`, `ctx` (helpers checks and
   rounds call), `expr` (job expressions), `composite` (combinators as jobs),
@@ -48,7 +48,7 @@ Layout:
 
 The cljs side loads JS modules at runtime with `js/require` (Node 24 can
 `require` an ES module without top-level await). From a compiled file in
-`out/`, `(js/require "../js/fake.mjs")` resolves to `engine/js/fake.mjs`.
+`out/`, `(js/require "../js/sight.mjs")` resolves to `engine/js/sight.mjs`.
 
 ## Primitives
 
@@ -57,8 +57,6 @@ The JS layer exports one factory per module:
 ```js
 // js/primitives.mjs
 export async function createPrimitives ({ host, port, username, auth }) // resolves once spawned and the column under the body is loaded (waits up to 10 s)
-// js/fake.mjs
-export function createFake (worldSpec)
 ```
 
 Both return a `primitives` object. The cljs side calls its methods through
@@ -141,7 +139,7 @@ hostile mobs; creepers additionally carry `creeper: true` (their `name` is `cree
 (registry metadataKeys index `baby`, 16 on 26.1; absent counts as adult, the server only sends true) and sheep `sheared`
 (`wool` byte bit 0x10, index 18), verified against `data get entity` (Age, Sheared, UUID). Villager profession is not
 exposed: villager_data carries a numeric profession id, which needs a hand table.
-A mob on a lead carries `leashed: true`, `leashedToMe` (the holder is this body) and `leashHolder` (the holder's entity id; a fence knot is a `leash_knot` entity), read from the attach_entity packets tracked per bot (`js/leash.mjs`; 26.1 sends holder 0 on release, and the keys are absent when nothing was seen). On 26.1 an empty hand on a `leash_knot` removes it and hands its animals to the body's own lead; a second empty-hand click on the animal drops the lead as an item; a click on a fence post (empty hand or a lead) ties every animal the body leads to a knot there. The fake (`js/fake-leash.mjs`) models this: led animals follow the body's `moveTo` (spec `snaps: true` breaks the lead on the first walk), `useOn` on an `_fence` block ties, `interact` on the knot hands over.
+A mob on a lead carries `leashed: true`, `leashedToMe` (the holder is this body) and `leashHolder` (the holder's entity id; a fence knot is a `leash_knot` entity), read from the attach_entity packets tracked per bot (`js/leash.mjs`; 26.1 sends holder 0 on release, and the keys are absent when nothing was seen). On 26.1 an empty hand on a `leash_knot` removes it and hands its animals to the body's own lead; a second empty-hand click on the animal drops the lead as an item; a click on a fence post (empty hand or a lead) ties every animal the body leads to a knot there. The fake (`engine.fake.animals`) models this: led animals follow the body's `moveTo` (spec `snaps: true` breaks the lead on the first walk), `useOn` on an `_fence` block ties, `interact` on the knot hands over.
 Any entity but an item carries `passengers` (the ids riding it, the body's own id among them) when someone rides it and `vehicle` (the id it rides) when it rides something, from the same tracked `set_passengers` lists (`js/vehicle.mjs`); absent otherwise. The fake passes `passengers` and `vehicle` from the entity spec.
 
 `blocks()` and `blockAt()` carry `age` (a number) when the block has an `age` state: the crop growth stage of wheat,
@@ -306,14 +304,14 @@ entries are what make-room reads as "newer" (a stack picked up recently is tosse
 
 ### The fake
 
-`createFake(spec)` in `js/fake.mjs` returns the primitives plus a `world`
-handle for tests. It has the same sensing fields as above (`spec.self` may set `oxygen`, `effects` (default `[]`), `onFire`, `inWater`,
+`(engine.fake/create spec)` in `test/engine/fake.cljs` (spec as a cljs map) returns the primitives plus a `world`
+handle for tests; `world.state` is an atom of cljs data (shape in the namespace docstring; `fake/state`, `set-block!`, `add-entity!`, `entities` and `swap-self!` read and change it). It has the same sensing fields as above (`spec.self` may set `oxygen`, `effects` (default `[]`), `onFire`, `inWater`,
 `inLava`, `isSleeping`, `foodSaturation`, `experience`, `dimension`; player entities default to `sleeping: false` and
 `username` equal to `name`). Its `offline` flips `world.state.offline` (what `isOffline()` reads), emits `offline` and `online`, and waits
 `ms * spec.offlineScale` (default 0.001, so 5 minutes is 0.3 s) before resolving the same results; a cut ends the wait early. The handle:
 
 ```js
-const p = createFake({
+const p = fake.create({
   self: { pos: { x: 0, y: 64, z: 0 }, health: 20, food: 20, username: 'Fake' },
   time: 1000,                                   // timeOfDay
   blocks: { '3,64,0': 'oak_log' },              // "x,y,z" -> name; anything else is air
@@ -327,7 +325,7 @@ const p = createFake({
   ages: { '5,64,0': 7 },                        // "x,y,z" -> crop age, reported as `age`
   states: { '6,64,0': { level: 3 } },           // "x,y,z" -> block states, reported as `properties` (with `age`)
 })
-p.world.state            // the mutable world (self, time, blocks, entities, inventory, containers)
+p.world.state            // atom of the world (self, time, blocks, entities, inventory, containers)
 p.world.calls            // [{ name, token, args }] for every acting call, in order
 p.world.hold('moveTo')   // the next moveTo call waits; returns release(result?)
 p.world.override('dig', async (token, args, defaultImpl) => ({ status: 'cannot' }))
@@ -336,10 +334,10 @@ p.world.setTime(13000)
 p.world.die()            // emits died (pos, inventory, experience), drops the inventory as items, zeroes experience
 ```
 
-Fake semantics: `place` of a block item sets the state the game would (`js/placing.mjs`: stairs, slabs, logs and pillars, gates, doors with their upper half, beds with their head, chests and furnaces facing the placer, trapdoors, floor and wall torches, ladders; any other block gets no state) from the `click`, or without one from the first non-empty neighbour (below first) looked at from the eye; a click on air or a fluid is `no-support`; a door or bed without room (or a door without a floor) is `failed` with the item kept. `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
+Fake semantics: `place` of a block item sets the state the game would (`engine.fake.placing`: stairs, slabs, logs and pillars, gates, doors with their upper half, beds with their head, chests and furnaces facing the placer, trapdoors, floor and wall torches, ladders; any other block gets no state) from the `click`, or without one from the first non-empty neighbour (below first) looked at from the eye; a click on air or a fluid is `no-support`; a door or bed without room (or a door without a floor) is `failed` with the item kept. `jumpPlace` raises the body one block per placement and consumes the item, with the same stop reasons as the real one (`no-item`, `no-support`, `no-headroom`); `swim` lifts the body to the top water cell of its column and refills oxygen to 20. `moveTo` jumps to the target if within `maxDistance`, else
 moves `maxDistance` toward it and returns `partial`. `dig` removes the block
 and adds an item entity at its cell. `collect` moves the item entity into the
-inventory and emits one `picked-up` per gained item. `place` of `wheat_seeds`, `carrot`, `potato` or `beetroot_seeds` needs `farmland` below (else `failed`, nothing consumed), consumes the item and sets the crop block at age 0, resolving `{status: 'placed', block: item}`. A `drops` value may be an array of item names, one item entity each. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `craft` (`out-of-reach` with `table` when a table is within 32 blocks, else `no-table`) uses a built-in recipe table (bread, oak_planks, stick, crafting_table, torch, wooden_pickaxe, stone_pickaxe; extend with `spec.recipes` `{name: {count, needs, table?}}`) and has the real statuses; an unknown item is `no-recipe`. `chat` appends `{message, to}` to `world.state.chat` and resolves `sent` (`gone` when `to` names no player entity, nothing recorded). The failure statuses of `craft` and `chat` were chosen from the backoff failure list, so backoff needs no change. `interact` (`js/fake-interact.mjs`): breeding food on a ready adult consumes 1 and sets `inLove`; `inLove` or `cooldown` gives no-effect; a baby consumes without love; shears on an unsheared sheep give sheared plus a white_wool item, worn 1; lead and empty-hand unleash work; an entity spec may set `accepts: false`, `mounts` (failed `mounted`) or `opens` (failed `opened-window`); refused kinds are `cannot`. Spec fields `raining`/`thundering` set the weather, `world.setRaining(on, thunder)` changes it. `trade` (`js/fake-trade.mjs`): a `villager` entity spec may set `profession` (default `unemployed`), `level` (default 1), `baby`, `offers` (`[{cost: [{item, count}], gives: {item, count}, maxUses: 12, uses: 0}]`, `uses` kept up to date after a buy) and `busy` (the window never opens); `entities` never reports `offers` or `busy`. `unequip` (`js/fake-unequip.mjs`): `empty` when nothing is held, `full` at 36 stacks, else clears the hand and resolves `ok` with `item`. `attack` takes 5 health per swing and reports `hurt: true`; an entity with `invulnerable: true` takes none (`hit`, health unchanged, `hurt: false`). `useOn` (`js/fake-use-on.mjs`): a hoe tills dirt, grass_block or dirt_path into farmland (not from below, air above); bone meal adds 2 to a crop's age up to ripe (consumed; ripe is `unchanged`) and is consumed on a sapling or grass_block; a compostable item raises a composter's `level` by 1 every time (7 jumps to 8), and at 8 any hand empties it to 0 and drops a `bone_meal` item entity above it; a door, trapdoor or fence gate (not iron) flips `open` and a lever flips `powered` with an empty hand, a button sets `powered` once (it never falls back), a state `locked: true` swallows the click (`unchanged`; a protected area); anything else is `unchanged`. `sleep` succeeds at night on a
+inventory and emits one `picked-up` per gained item. `place` of `wheat_seeds`, `carrot`, `potato` or `beetroot_seeds` needs `farmland` below (else `failed`, nothing consumed), consumes the item and sets the crop block at age 0, resolving `{status: 'placed', block: item}`. A `drops` value may be an array of item names, one item entity each. `toss` takes the items from the inventory and adds one item entity 3 blocks along +x of the body. `craft` (`out-of-reach` with `table` when a table is within 32 blocks, else `no-table`) uses a built-in recipe table (bread, oak_planks, stick, crafting_table, torch, wooden_pickaxe, stone_pickaxe; extend with `spec.recipes` `{name: {count, needs, table?}}`) and has the real statuses; an unknown item is `no-recipe`. `chat` appends `{message, to}` to `world.state.chat` and resolves `sent` (`gone` when `to` names no player entity, nothing recorded). The failure statuses of `craft` and `chat` were chosen from the backoff failure list, so backoff needs no change. `interact` (`engine.fake.animals`): breeding food on a ready adult consumes 1 and sets `inLove`; `inLove` or `cooldown` gives no-effect; a baby consumes without love; shears on an unsheared sheep give sheared plus a white_wool item, worn 1; lead and empty-hand unleash work; an entity spec may set `accepts: false`, `mounts` (failed `mounted`) or `opens` (failed `opened-window`); refused kinds are `cannot`. Spec fields `raining`/`thundering` set the weather, `world.setRaining(on, thunder)` changes it. `trade` (`engine.fake.trade`): a `villager` entity spec may set `profession` (default `unemployed`), `level` (default 1), `baby`, `offers` (`[{cost: [{item, count}], gives: {item, count}, maxUses: 12, uses: 0}]`, `uses` kept up to date after a buy) and `busy` (the window never opens); `entities` never reports `offers` or `busy`. `unequip` (`engine.fake.unequip`): `empty` when nothing is held, `full` at 36 stacks, else clears the hand and resolves `ok` with `item`. `attack` takes 5 health per swing and reports `hurt: true`; an entity with `invulnerable: true` takes none (`hit`, health unchanged, `hurt: false`). `useOn` (`engine.fake.use-on`): a hoe tills dirt, grass_block or dirt_path into farmland (not from below, air above); bone meal adds 2 to a crop's age up to ripe (consumed; ripe is `unchanged`) and is consumed on a sapling or grass_block; a compostable item raises a composter's `level` by 1 every time (7 jumps to 8), and at 8 any hand empties it to 0 and drops a `bone_meal` item entity above it; a door, trapdoor or fence gate (not iron) flips `open` and a lever flips `powered` with an empty hand, a button sets `powered` once (it never falls back), a state `locked: true` swallows the click (`unchanged`; a protected area); anything else is `unchanged`. `sleep` succeeds at night on a
 cell whose block name ends in `_bed`, and sets the time to 0. `eat` raises
 `food` by 5 and consumes one item. A held call rejects with `cut` when the
 owner changes, exactly as the real layer must. Where the body stands decides
@@ -347,7 +345,7 @@ owner changes, exactly as the real layer must. Where the body stands decides
 fire. Placing a `water_bucket` pours water into the cell and leaves an empty
 `bucket`. An entity killed by `attack` spawns its `drops` (`[{name, count}]`)
 as items. A `creeper` entity carries `creeper: true` unless the spec says
-otherwise. `dig` clears a cell's crop age. `furnace` (`js/fake-furnace.mjs`): furnace, blast furnace and smoker with the real rates (200 ticks an item, 100 for the other two), fuel burn times, one stack per slot, the `lit` block property; nothing cooks until `world.advance(ticks)`; a spec may start a furnace with stacks: `furnaces: {"x,y,z": {input, fuel, output}}` (the cell must be a furnace block). The input slot takes anything, as on the server; what the kind cannot smelt never cooks. `enchant` (`js/fake-enchant.mjs`): a table's offers come from its bookshelves (none: levels 2, 3, 5; fifteen: 10, 20, 30) unless the spec gives them: `enchantTables: {"x,y,z": {shelves, offers: [l, l, l], hints: [[name, level] | null, ...], busy}}`; the body's levels are `self.experience.level`; an enchanted item in `inventory` is `{name, count, enchants: [{name, level}]}`; an enchanted item gets sharpness, efficiency, protection or power by kind and, from level cost 15, unbreaking.
+otherwise. `dig` clears a cell's crop age. `furnace` (`engine.fake.furnace`): furnace, blast furnace and smoker with the real rates (200 ticks an item, 100 for the other two), fuel burn times, one stack per slot, the `lit` block property; nothing cooks until `world.advance(ticks)`; a spec may start a furnace with stacks: `furnaces: {"x,y,z": {input, fuel, output}}` (the cell must be a furnace block). The input slot takes anything, as on the server; what the kind cannot smelt never cooks. `enchant` (`engine.fake.enchant`): a table's offers come from its bookshelves (none: levels 2, 3, 5; fifteen: 10, 20, 30) unless the spec gives them: `enchantTables: {"x,y,z": {shelves, offers: [l, l, l], hints: [[name, level] | null, ...], busy}}`; the body's levels are `self.experience.level`; an enchanted item in `inventory` is `{name, count, enchants: [{name, level}]}`; an enchanted item gets sharpness, efficiency, protection or power by kind and, from level cost 15, unbreaking.
 
 ## Jobs
 

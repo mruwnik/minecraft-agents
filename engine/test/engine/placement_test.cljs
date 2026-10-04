@@ -192,7 +192,7 @@
 ;; ---------------------------------------------------------------- the click against the fake's forward rule
 
 (def round-trip
-  "[want cells]: the click engine.placement chooses, placed in the fake (js/placing.mjs, the rule written forwards),
+  "[want cells]: the click engine.placement chooses, placed in the fake (engine.fake.placing, the rule written forwards),
   must come out as wanted."
   [[{:block "oak_stairs" :facing :east :half :bottom} floor]
    [{:block "oak_stairs" :facing :north :half :top} {[1 64 0] "stone"}]

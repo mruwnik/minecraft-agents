@@ -4,10 +4,11 @@
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
-            ["module" :refer [createRequire]]
+            [engine.fake :as fake-world]
+            [engine.fake.node :as node]
             [engine.memory :as mem]))
 
-(def require-here (createRequire (str (js/process.cwd) "/")))
+(def require-here node/require-here)
 
 (defonce made-dirs (atom []))
 
@@ -34,14 +35,14 @@
   ([y x0 z0 x1 z1] (box x0 y z0 x1 y z1 "stone")))
 
 (defn fake
-  "A fake primitives object from js/fake.mjs built from a cljs spec map. The spec's :floor, [x0 z0 x1 z1], is stone at
+  "A fake primitives object (engine.fake/create) built from a cljs spec map. The spec's :floor, [x0 z0 x1 z1], is stone at
   y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
   ([spec]
    (let [spec (if-let [rect (:floor spec)]
                 (-> spec (dissoc :floor) (update :blocks #(merge (apply floor rect) %)))
                 spec)]
-     ((.-createFake (require-here "./js/fake.mjs")) (clj->js spec)))))
+     (fake-world/create spec))))
 
 (def walk-floor
   "The :floor rectangle most go-to callers' tests use: every spot they walk between."

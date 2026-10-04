@@ -59,6 +59,8 @@
           (core/submit! eng '(walk) {})
           (.hold world "moveTo")
           (let [walking (core/tick! eng)]
+            ;; the fake records a call one microtask after it is made, so let the walk's moveTo reach its hold first
+            (await (js/Promise. #(js/setTimeout % 0)))
             (is (= {:ok true} (takeover/take! eng me)))
             (await walking))
           (is (= [:takeover] (mapv :by (kinds-of seen :cut))) "job.cut by :takeover")
@@ -75,7 +77,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen world state]} (setup {:inventory [{:name "bread" :count 3}]})]
           (core/register-reflex! eng {:trigger :hurt})
-          (set! (.. state -self -health) 6)
+          (swap! state assoc-in [:self :health] 6)
           (.hold world "eat")
           (let [round (core/tick! eng)]
             (is (= 1 (fired seen)))
@@ -90,7 +92,7 @@
         (let [{:keys [eng seen state]} (setup {})]
           (core/register-reflex! eng {:trigger :probe})
           (core/register-reflex! eng {:trigger :hurt})
-          (set! (.. state -self -health) 6)
+          (swap! state assoc-in [:self :health] 6)
           (takeover/take! eng me)
           (reset! probes 0)
           (await (core/tick! eng))
@@ -103,9 +105,9 @@
 
 (deftest take-is-refused-when-offline-settling-or-held
   (let [{:keys [eng world state]} (setup {})]
-    (set! (.-offline state) true)
+    (swap! state assoc :offline true)
     (is (= {:ok false :reason "offline"} (takeover/take! eng me)))
-    (set! (.-offline state) false)
+    (swap! state assoc :offline false)
     (.settle world true)
     (is (= {:ok false :reason "settling"} (takeover/take! eng me)))
     (.settle world false)
@@ -117,9 +119,9 @@
     (takeover/take! eng me)
     (let [r (takeover/drive! eng #js {:controls #js {:forward true} :look #js {:yaw 90 :pitch 10}})]
       (is (= 90 (.-yaw r))))
-    (is (= {:forward true} (js->clj (.-controls state) :keywordize-keys true)))
+    (is (= {:forward true} (:controls @state)))
     (takeover/release! eng {:who "claude" :reason "idle" :held-ms 1})
-    (is (= {} (js->clj (.-controls state))))))
+    (is (= {} (:controls @state)))))
 
 (deftest events-carry-who-why-and-reason
   (let [{:keys [eng seen]} (setup {})]
@@ -163,15 +165,15 @@
     (is (= 1 (count (kinds-of seen :takeover_started))))
     (let [set-r (post eng {:op "set" :who "claude" :controls {:forward true} :look {:yaw 30}})]
       (is (= 30 (get-in set-r [:json :manual :yaw])))
-      (is (= {:forward true} (js->clj (.-controls state) :keywordize-keys true))))
+      (is (= {:forward true} (:controls @state))))
     (is (= {:ok true :manual nil} (:json (post eng {:op "release" :who "claude"}))))
     (is (false? (core/manual? eng)))
-    (is (= {} (js->clj (.-controls state))))
+    (is (= {} (:controls @state)))
     (is (= ["claude" "released"] ((juxt :who :reason) (first (kinds-of seen :takeover_ended)))))))
 
 (deftest handle-refuses-a-take-the-engine-refuses
   (let [{:keys [eng state]} (setup {})]
-    (set! (.-offline state) true)
+    (swap! state assoc :offline true)
     (is (= {:ok false :reason "offline"} (:json (post eng {:op "take" :who "claude" :why "x"}))))
     (is (false? (core/manual? eng)))))
 
@@ -206,7 +208,7 @@
 (defn run-contract-step [{:keys [eng clock world state]} name {:keys [at status tick req expect]}]
   (reset! clock (+ t0 at))
   (cond
-    status (do (set! (.-offline state) (:offline status))
+    status (do (swap! state assoc :offline (:offline status))
                (.settle world (:settling status)))
     tick (takeover/tick! eng opts)
     :else (is (= expect (call eng (:method req) (:path req) (:body req))) (str name " at " at " " (pr-str req)))))
@@ -282,7 +284,7 @@
           (.hold world "moveTo")
           (world-call eng {:op :submit :who "claude" :request-id "after-drive" :action :move-to
                            :args {:pos {:x 10 :y 64 :z 0} :timeoutS 1}})
-          (is (= {} (js->clj (.-controls state) :keywordize-keys true)))
+          (is (= {} (:controls @state)))
           (swap! clock + 1100)
           (takeover/tick! eng opts)
           (is (empty? (kinds-of seen :drive_deadman)))

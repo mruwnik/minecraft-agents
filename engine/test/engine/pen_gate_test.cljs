@@ -5,6 +5,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.pen-gate :as pg]
@@ -153,7 +154,7 @@
 (deftest a-job-that-comes-back-to-the-gate-restarts-the-clock
   (let [p (fake-at true 2 5)
         kn (knowledge pen-a)
-        at-z (fn [z] (set! (.. p -world -state -self -pos) #js {:x 2 :y 64 :z z}))
+        at-z (fn [z] (fake/swap-self! p assoc :pos [2 64 z]))
         ask (fn [t] (boolean (when-gate p {:data mem/empty-data :now t} (:args pg/trigger) kn)))]
     (is (= [false false false false] (mapv ask [0 1000 2000 3000])) "away for 3 s")
     (at-z 1)
@@ -225,6 +226,16 @@
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (empty? (:list (core/state (:eng s)))))
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
+
+(deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 30))]
+          (is (seq (mem/entries (mem/view (:store (:eng s))) :moved)) "it walked")
+          (is (not (gate-open? (:p s) 2 64 0)))
+          (is (= 1 (:shut (first (events-of s :shut-gate.done)))))
+          (is (empty? (events-of s :shut-gate.gave-up))))))))
 
 (deftest a-gate-already-shut-is-done-at-once-without-a-click
   (async done

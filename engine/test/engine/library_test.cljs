@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
@@ -352,7 +353,7 @@
         (let [{:keys [eng p]} (setup {})]
           (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5}}) {})
           (is (nil? (core/tick! eng)) "no sapling in the inventory: not yet")
-          (set! (.. p -world -state -inventory) #js [#js {:name "birch_sapling" :count 1}])
+          (swap! (fake/state p) assoc :inventory [{:name "birch_sapling" :count 1}])
           (await (run-until-empty eng 4))
           (is (= "birch_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5})))))))))
 
@@ -387,7 +388,7 @@
           (.override (.-world p) "useOn"
                      (fn ^:async f [token a impl]
                        (let [r (await (impl token a))]
-                         (.set (.. p -world -state -blocks) "5,64,5" "oak_log")
+                         (fake/set-block! p [5 64 5] "oak_log")
                          r)))
           (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :bone-meal 3}) {})
           (await (run-until-empty eng 10))
@@ -422,7 +423,7 @@
           (await (run-until-empty eng 6))
           (is (= {"stone_axe" 1} (inv p)))
           (is (= [{:name "oak_log" :count 5} {:name "bread" :count 2}]
-                 (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true))))))))
+                 (get-in @(fake/state p) [:containers [10 64 0]]))))))))
 
 (deftest deposit-item-filter-and-chest-from-places
   (async done
@@ -466,7 +467,7 @@
           (await (run-until-empty eng 8))
           (is (= {"oak_log" 16 "bread" 2} (inv p)))
           (is (= [{:name "oak_log" :count 54}]
-                 (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true))))))))
+                 (get-in @(fake/state p) [:containers [10 64 0]]))))))))
 
 (deftest deposit-keep-at-or-above-the-carried-total-puts-nothing-away
   (async done

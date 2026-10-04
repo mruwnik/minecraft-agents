@@ -12,7 +12,7 @@
   A powered rail is lit when a source touches it (a redstone block, a redstone torch, a lever switched on; below
   counts) or touches one of the powered rails up to 8 further along its own unbroken run of powered rails, slopes
   included (measured live). Not modelled: detector and activator rails, the redstone signal a corner rail may take.
-  Test-only; the same rules as js/fake-rail.mjs, which stays live until the fake itself moves to cljs.")
+  Test-only; ported from the deleted js/fake-rail.mjs.")
 
 (def reach 8)
 (def sides [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])

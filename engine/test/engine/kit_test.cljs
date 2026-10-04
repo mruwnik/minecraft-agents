@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -41,7 +42,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
-(defn chest-items [p] (js->clj (.get (.. p -world -state -containers) "10,64,0") :keywordize-keys true))
+(defn chest-items [p] (get-in @(fake/state p) [:containers [10 64 0]]))
 
 (def chest {:x 10 :y 64 :z 0})
 (def job 'jobs.storage.kit)

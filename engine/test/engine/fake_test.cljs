@@ -959,7 +959,7 @@
            (:equipment (self-of dressed))))
     (is (= [] (:inventory (self-of dressed))) "worn items are not carried items")))
 
-;; ---- place with a click: the state comes from face, cursor and look (js/placing.mjs) ----
+;; ---- place with a click: the state comes from face, cursor and look (engine.fake.placing) ----
 
 (defn builder [blocks inventory]
   (owned {:blocks blocks :inventory (mapv (fn [name] {:name name :count 2}) inventory)}))

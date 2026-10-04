@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -22,7 +23,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
-(defn set-self! [p k v] (aset (.. p -world -state -self) k v))
+(defn set-self! [p k v] (fake/swap-self! p assoc (keyword k) v))
 
 (defn hurt-entries [eng] (mem/entries (mem/view (:store eng)) :hurt))
 

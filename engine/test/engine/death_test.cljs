@@ -3,6 +3,7 @@
   trigger and the recover-drops job against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.library-test :refer [setup run-until-empty calls inv]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -227,8 +228,7 @@
           (await (core/tick! eng))
           (is (= [] (tu/walk-calls p)) "no acting while a hostile is within the danger radius")
           (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
-          (let [st (.-state (.-world p))]
-            (set! (.-entities st) (.filter (.-entities st) (fn [e] (not= "hostile" (.-kind e))))))
+          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
 

@@ -3,7 +3,7 @@
   rely on, over world data {:blocks :states :ages {[x y z] n} :inventory [{:name :count}] :entities :next-entity-id
   :self {:pos [x y z] :held}}. (use-on world {:pos :item :face}) -> [world' result], the result
   {:status :before :after :consumed} with :reason and :distance on a refusal, and only {:status \"missing\"} for air.
-  Test-only; the same rules as js/fake-use-on.mjs."
+  Test-only; ported from the deleted js/fake-use-on.mjs."
   (:require [engine.fake.doors :as doors]))
 
 (def reach 4.5)
