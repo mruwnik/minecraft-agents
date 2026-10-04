@@ -1,7 +1,9 @@
 (ns jobs.animals.lead-to
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]
+            [engine.path.walk :as walk]))
 
 (def doc
   "Put a lead on one animal of the mob type :mob, walk to :pos with it
@@ -35,7 +37,8 @@
   1) so the lead pulls the animal within :gather-radius, waiting for the animal
   to settle between pulls; at most :gather-tries pulls. A pull goes no farther past :pos
   than keeps the body within 11 blocks of the animal (the lead breaks past 12), and is given up
-  after 20 s (its child go-to is dropped). A cow 10 or more blocks out is never pulled: it is let go
+  after 20 s (its child go-to is dropped) or before it starts when the planned walk to its target passes more than 11
+  blocks from the animal (a wall it is jammed at: the detour would break the lead). A cow 10 or more blocks out is never pulled: it is let go
   where it is, :gathered false. A pull that did not arrive, a pull given up, an animal too far out for a pull
   or running out of pulls is no failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false in the result (:gathered
@@ -145,6 +148,22 @@
              :x (+ (:x pos) (* k (- (:x pos) (:x animal-pos))))
              :z (+ (:z pos) (* k (- (:z pos) (:z animal-pos))))))))
 
+(def path-reach
+  "How far from the animal any point of a pull's walk may lie. The animal does not move away while pulled, so a
+  path that strays farther than this (a detour round a wall it is jammed at) would break the lead: 12 breaks it,
+  and a pull's own target lies up to 10 + 1 out."
+  11)
+
+(defn path-leaves-reach?
+  "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
+  that cannot plan (no path sensing, no path) is not judged here: go-to deals with that."
+  [c target animal-pos]
+  (let [pw (walk/path-world (:primitives c))
+        plan (when pw (walk/plan-walk c pw [(:x target) (:y target) (:z target)] 1 walk/default-weight))]
+    (boolean
+     (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
+           (:steps plan)))))
+
 (defn stop-gathering!
   "Give up pulling: the animal is let go where it is, :gathered false at distance d from the spot."
   [c d]
@@ -154,19 +173,22 @@
   (set-phase! c :arrive)
   :continue)
 
-(defn ^:async pull! [c target]
+(defn ^:async pull! [c target animal-pos]
   (let [now (ctx/now c)
-        started (:pull-started (ctx/mem c) now)]
+        started (:pull-started (ctx/mem c) now)
+        d (flat-dist animal-pos (:pos (:args c)))]
     (ctx/update-mem! c assoc :pull-started started)
-    (if (>= (- now started) (* 1000 pull-timeout-s))
-      (stop-gathering! c (:gather-dist (ctx/mem c)))
+    (cond
+      (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
+      (path-leaves-reach? c target animal-pos) (stop-gathering! c d)
+      :else
       (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open}))]
         (if-not (= :done r)
           :continue
           (let [arrived (:arrived (ctx/child-result c :pull))]
             (ctx/update-mem! c dissoc :pull-target :pull-started)
             (ctx/update-mem! c update :pulls (fnil inc 0))
-            (if arrived :continue (stop-gathering! c (:gather-dist (ctx/mem c))))))))))
+            (if arrived :continue (stop-gathering! c d))))))))
 
 (defn ^:async gather!
   "Without :fence: let the animal catch up. A pull in progress is carried on with its stored target;
@@ -178,7 +200,7 @@
         animal-pos (u/pos-of (.-pos a))
         d (flat-dist animal-pos pos)]
     (cond
-      pull-target (await (pull! c pull-target))
+      pull-target (await (pull! c pull-target animal-pos))
       (<= d gather-radius) (do (ctx/update-mem! c assoc :gathered true) (set-phase! c :arrive) :continue)
       (>= pulls gather-tries) (stop-gathering! c d)
       (and (< settles max-settles) (or (nil? gather-seen) (> (flat-dist gather-seen animal-pos) moved-eps)))
@@ -188,7 +210,7 @@
               (if-not target
                 (stop-gathering! c d)
                 (do (ctx/update-mem! c assoc :pull-target target :settles 0 :gather-dist d)
-                    (await (pull! c target))))))))
+                    (await (pull! c target animal-pos))))))))
 
 (defn ^:async let-go! [c]
   (set-phase! c :release)
@@ -208,7 +230,7 @@
 
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
-        near (await (u/walk-near! c fence 2))]
+        near (await (near/walk-near! c fence 2 {:doors :never}))]
     (if-not (= :there near)
       :continue
       (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))
@@ -221,13 +243,15 @@
                     :continue))))))
 
 (defn ^:async arrive! [c]
-  (let [{:keys [gathered gather-dist]} (ctx/mem c)]
+  (let [{:keys [gathered gather-dist]} (ctx/mem c)
+        a (animal-now c)
+        distance (if a (flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) gather-dist)]
     (cond
       (:fence (:args c)) (await (tie! c))
       gathered (await (let-go! c))
       :else (do (ctx/emit! c :lead-to.gather-short :warn
-                           {:distance gather-dist
-                            :text (str "the animal is let go " (some-> gather-dist js/Math.round) " blocks from the spot, not gathered")})
+                           {:distance distance
+                            :text (str "the animal is let go " (some-> distance js/Math.round) " blocks from the spot, not gathered")})
                 (await (let-go! c))))))
 
 (defn ^:async round [c]

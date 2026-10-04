@@ -102,6 +102,22 @@
           (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no walk past the spot: no pull was started")
           (is (not (true? (.-leashed c)))))))))
 
+(def wall-32
+  "A wall at x 32 from z -8 to 8, two high: a body going from 30 to 33 detours round its end at z 9."
+  (into {} (for [z (range -8 9) y [64 65]] [(str "32," y "," z) "stone"])))
+
+(deftest a-pull-whose-path-leaves-the-lead-range-is-not-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :blocks wall-32 :entities [(cow 1 3 {:trail 6 :breakAt 12})]} 30))
+              [short] (events-of s :lead-to.gather-short)]
+          (is (= :unleashed (:reason (done-event s))) "the lead did not break")
+          (is (false? (:gathered (done-event s))))
+          (is (every? #(<= (:x %) 30) (take 1 (tu/walked-to (:eng s)))))
+          (is (not-any? #(= 33 (:x %)) (tu/walked-to (:eng s))) "no walk to the pull target behind the wall")
+          (is (<= 5 (:distance short)) "the distance is the cow's at the time of giving up"))))))
+
 (deftest stops-after-the-pull-limit-and-says-the-cow-was-not-gathered
   (async done
     (tu/run-async done
