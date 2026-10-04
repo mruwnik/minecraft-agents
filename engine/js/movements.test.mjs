@@ -135,3 +135,36 @@ test('a 3-block drop onto stone is taken', () => {
   const cells = [...rect(0, 1, 0, 0, 66, 'stone'), ...rect(2, 9, 0, 0, 63, 'stone')]
   assert.equal(plan(cells, [0, 67, 0], [5, 64, 0]).status, 'success')
 })
+
+// farmland turns to dirt when landed on from over half a block up: parkour and drops never land on it
+const farmlane = rect(0, 8, 1, 1, 63, 'farmland').filter(([x]) => x !== 4)
+const waterCell = [[4, 63, 1, 'water'], [4, 62, 1, 'stone']]
+
+test('a farmland lane cut by water is crossed without a parkour landing', () => {
+  const from = [0, 64, 1]
+  const result = plan([...farmlane, ...waterCell], from, [8, 64, 1])
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.path.at(-1).toArray(), [8, 64, 1])
+  assert.ok(!jumps(result, from))
+})
+
+test('a drop onto farmland is not taken when a level way round exists', () => {
+  const cells = [...rect(0, 2, 0, 1, 64, 'stone'), ...rect(3, 9, 0, 0, 63, 'stone'), ...rect(3, 9, 1, 1, 63, 'farmland')]
+  const result = plan(cells, [0, 65, 1], [8, 64, 1])
+  assert.equal(result.status, 'success')
+  assert.ok(!visits(result, n => n.x === 3 && n.y === 64 && n.z === 1))
+})
+
+test('a jump up onto farmland stays allowed', () => {
+  const cells = [...rect(0, 1, 1, 1, 63, 'stone'), ...rect(2, 3, 1, 1, 64, 'farmland')]
+  const result = plan(cells, [0, 64, 1], [3, 65, 1])
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.path.at(-1).toArray(), [3, 65, 1])
+})
+
+test('parkour over a 1-block gap onto stone is unchanged', () => {
+  const from = [0, 64, 1]
+  const result = plan(rect(0, 8, 1, 1, 63, 'stone').filter(([x]) => x !== 4), from, [8, 64, 1])
+  assert.equal(result.status, 'success')
+  assert.ok(jumps(result, from))
+})

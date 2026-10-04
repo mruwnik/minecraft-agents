@@ -26,6 +26,11 @@ const jumpsOverHazard = (bot, node, move) => {
   return range(1, steps - 1).some(d => [1, 2, 3].some(down => JUMP_HAZARDS.has(nameAt(bot, node.x + dx * d, node.y - down, node.z + dz * d))))
 }
 
+// farmland turns to dirt when landed on from over half a block up: parkour and drops
+const tramplesFarmland = (bot, node, move) => (
+  (move.parkour || move.y < node.y) && nameAt(bot, move.x, move.y - 1, move.z) === 'farmland'
+)
+
 const range = (from, to) => Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
 
 export class SafeMovements extends Movements {
@@ -43,6 +48,7 @@ export class SafeMovements extends Movements {
   getNeighbors (node) {
     return super.getNeighbors(node)
       .filter(move => !move.parkour || !jumpsOverHazard(this.bot, node, move))
+      .filter(move => !tramplesFarmland(this.bot, node, move))
       .map(move => {
         move.cost += hazardCost(this.bot, move)
         return move
