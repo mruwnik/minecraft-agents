@@ -4,13 +4,14 @@
 //   node engine/js/path/bench.mjs run --planner baseline [--dir dir] [--out results.json]
 import fs from 'node:fs'
 import path from 'node:path'
+import { worldsDir } from '../bodies.mjs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import prismarineRegistry from 'prismarine-registry'
 import { createSnapshot, loadRecordedWorld, UNLOADED } from './snapshot.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const DEFAULT_DIR = path.join(ROOT, 'state/bench/pathfinding/claude-1')
+const DEFAULT_DIR = path.join(ROOT, 'engine/test/fixtures/pathfinding/claude-1')
 const TOP_Y = 300 // surface scans start here, as the original baseline did
 const AIR_LIFT = 40
 const MARGIN = 96 // blocks of world kept around each query area, so searches have room to wander
@@ -111,8 +112,8 @@ const rangeColumns = ({ cxMin, cxMax, czMin, czMax }) =>
   Array.from({ length: cxMax - cxMin + 1 }, (_, i) => cxMin + i).flatMap(cx =>
     Array.from({ length: czMax - czMin + 1 }, (_, j) => [cx, czMin + j]))
 
-export function freeze ({ world, out = DEFAULT_DIR, sets = SETS, seed = 20260101, stateDir = path.join(ROOT, 'state') }) {
-  const source = path.join(stateDir, 'worlds', world, 'chunks')
+export function freeze ({ world, out = DEFAULT_DIR, sets = SETS, seed = 20260101, stateDir = ROOT }) {
+  const source = path.join(worldsDir(stateDir), world, 'chunks')
   const wanted = new Map(sets.flatMap(s => rangeColumns(columnRange(s))).map(([cx, cz]) => [`${cx}.${cz}.bin`, true]))
   const names = [...wanted.keys()].filter(name => fs.existsSync(path.join(source, name)))
   fs.mkdirSync(path.join(out, 'chunks'), { recursive: true })

@@ -1,8 +1,8 @@
 (ns engine.migrate-cli
   "Command line for engine.migrate: node out/migrate.cjs --world <world> [--dry-run]
-  [--state-dir <dir>] Name...
+  [--worlds <dir>] [--state-dir <legacy-parent>] Name...
 
-  Reads state/worlds/<world>/agents/<Name>/config.json and events.jsonl and the world's
+  Reads worlds/<world>/agents/<Name>/config.json and events.jsonl and the world's
   places.json, converts, and prints one line per body (--dry-run) or writes
   engine/memory.edn and view/pose.json. It writes only where engine/ is
   absent, never overwrites a file, never moves or deletes, and refuses a body
@@ -29,6 +29,9 @@
       (= a "--world") (if (empty? more)
                         {:error (bodies/missing-world-error "--world")}
                         (recur (rest more) (assoc opts :world (first more))))
+      (= a "--worlds") (if (empty? more)
+                         {:error "--worlds needs a directory"}
+                         (recur (rest more) (assoc opts :worlds (first more))))
       (= a "--state-dir") (if (empty? more)
                             {:error "--state-dir needs a directory"}
                             (recur (rest more) (assoc opts :state-dir (first more))))
@@ -173,11 +176,11 @@
           names))
 
 (defn main [& args]
-  (let [{:keys [error dry-run state-dir world names]} (parse-args args)]
+  (let [{:keys [error dry-run state-dir worlds world names]} (parse-args args)]
     (when error
-      (.write js/process.stderr (str "migrate: " error "\nusage: node out/migrate.cjs --world <world> [--dry-run] [--state-dir <dir>] Name...\n"))
+      (.write js/process.stderr (str "migrate: " error "\nusage: node out/migrate.cjs --world <world> [--dry-run] [--worlds <dir>] [--state-dir <legacy-parent>] Name...\n"))
       (js/process.exit 2))
-    (let [state-dir (path/resolve (or state-dir (path/join js/__dirname ".." ".." "state")))
+    (let [state-dir (bodies/storage-root {:state state-dir :worlds worlds} (path/resolve js/__dirname ".." ".."))
           names (if (seq names) names (default-names state-dir world))]
       (-> (migrate-all state-dir world names dry-run)
           (.then (fn [lines] (doseq [l lines] (println l))))

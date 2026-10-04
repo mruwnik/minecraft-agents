@@ -12,6 +12,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { storageRoot, worldsDir } from '../engine/js/bodies.mjs'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { bodyDir } from '../engine/js/bodies.mjs'
@@ -150,7 +151,7 @@ const main = () => {
       hz: { type: 'string' },
       synthetic: { type: 'string' },
       'touch-ms': { type: 'string' },
-      state: { type: 'string', default: path.join(repo, 'state') },
+      state: { type: 'string' }, worlds: { type: 'string' },
       seconds: { type: 'string' },
       dir: { type: 'string' }
     },
@@ -164,7 +165,7 @@ const main = () => {
   const world = recorded[0].world
   const dir = values.dir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'view-replay-'))
   const chunksDir = path.join(dir, 'worlds', world, 'chunks')
-  const sourceChunks = path.join(values.state, 'worlds', world, 'chunks')
+  const sourceChunks = path.join(worldsDir(storageRoot(values, repo)), world, 'chunks')
   const hz = Number(values.hz ?? 10)
   const mode = values.synthetic
   const copying = mode === 'teleport' || mode === 'sprint'
@@ -189,7 +190,7 @@ const main = () => {
   } else {
     // only the chunks and biomes are linked: the body folder lives inside the world folder, and nothing here may write into --state
     fs.symlinkSync(sourceChunks, chunksDir)
-    const biomes = path.join(values.state, 'worlds', world, 'biomes.json')
+    const biomes = path.join(worldsDir(storageRoot(values, repo)), world, 'biomes.json')
     if (fs.existsSync(biomes)) fs.symlinkSync(biomes, path.join(dir, 'worlds', world, 'biomes.json'))
   }
   console.log(`replay state dir: ${dir}`)

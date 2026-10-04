@@ -2,6 +2,7 @@
 //   node tools/view-pose-record.mjs --agent ProbeMove --world claude --seconds 45 --out poses.jsonl [--state state] [--poll 10]
 import fs from 'node:fs'
 import path from 'node:path'
+import { storageRoot, worldsDir } from '../engine/js/bodies.mjs'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { bodyDir } from '../engine/js/bodies.mjs'
@@ -13,7 +14,7 @@ const { values } = parseArgs({
     world: { type: 'string' },
     seconds: { type: 'string', default: '45' },
     out: { type: 'string' },
-    state: { type: 'string', default: path.join(repo, 'state') },
+    state: { type: 'string' }, worlds: { type: 'string' },
     poll: { type: 'string', default: '10' }
   }
 })
@@ -22,7 +23,7 @@ if (!values.agent || !values.world || !values.out) {
   process.exit(2)
 }
 
-const file = path.join(bodyDir(values.state, values.world, values.agent), 'view', 'pose.json')
+const file = path.join(bodyDir(storageRoot(values, repo), values.world, values.agent), 'view', 'pose.json')
 const mtimeOf = () => {
   try {
     return fs.statSync(file).mtimeMs

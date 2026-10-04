@@ -1,15 +1,16 @@
 (ns agent-tools.say
   "Fast control-adjacent public chat and whisper command validation."
-  (:require [agent-tools.map :as map-tool]
+  (:require [engine.bodies :as bodies]
+            [agent-tools.map :as map-tool]
             [clojure.string :as str]
             ["node:path" :as path]))
 
-(def usage "usage: say.mjs <body> --world <world> <message> [--to <player>] [--state <dir>]")
+(def usage "usage: say.mjs <body> --world <world> <message> [--to <player>] [--worlds <dir> --state <legacy-parent>]")
 
 (defn request-for [argv]
   (try
     (let [{:keys [positionals values]} (map-tool/parse-options (vec argv)
-          {:state {:type "string" :default map-tool/default-state-dir}
+          {:state {:type "string"} :worlds {:type "string"}
            :world {:type "string"} :to {:type "string"}})
           [body message & extra] positionals
           world (:world values)
@@ -27,7 +28,7 @@
         (throw (js/Error. "--to must be a Minecraft player name (3-16 letters, digits, or _)")))
       (when (> (count cleaned) limit)
         (throw (js/Error. (str "message is longer than " limit " characters"))))
-      (let [state (.resolve path (:state values))]
+      (let [state (bodies/storage-root values map-tool/default-state-dir)]
         {:body body :world world :message cleaned :to to :state state
-         :socketPath (.join path state "worlds" world "agents" body "engine" "events.sock")}))
+         :socketPath (.join path (bodies/worlds-dir state) world "agents" body "engine" "events.sock")}))
     (catch :default error {:error (.-message error)})))

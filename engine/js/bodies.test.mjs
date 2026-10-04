@@ -3,9 +3,18 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { bodyDir, accountDir, listBodies, worldOfBodyDir, missingWorldError } from './bodies.mjs'
+import { bodyDir, accountDir, listBodies, worldOfBodyDir, missingWorldError, storageRoot } from './bodies.mjs'
 
-test('bodyDir is state/worlds/<world>/agents/<name>', () => {
+test('canonical worlds roots can have any basename and legacy state keeps its parent semantics', () => {
+  const canonical = storageRoot({}, '/repo')
+  assert.equal(bodyDir(canonical, 'w', 'Bob'), '/repo/worlds/w/agents/Bob')
+  assert.equal(accountDir(canonical, 'Bob'), '/repo/worlds/.accounts/Bob')
+  assert.equal(bodyDir(storageRoot({ worlds: '/data/custom-name' }, '/repo'), 'w', 'Bob'), '/data/custom-name/w/agents/Bob')
+  assert.equal(bodyDir(storageRoot({ state: '/legacy' }, '/repo'), 'w', 'Bob'), '/legacy/worlds/w/agents/Bob')
+  assert.throws(() => storageRoot({ worlds: '/data', state: '/legacy' }, '/repo'), /choose/)
+})
+
+test('bodyDir is worlds/<world>/agents/<name>', () => {
   assert.equal(bodyDir('/s', 'claude', 'Bob'), path.join('/s', 'worlds', 'claude', 'agents', 'Bob'))
 })
 
@@ -26,7 +35,7 @@ for (const [label, world, name, pattern] of [
   })
 }
 
-test('accountDir is state/accounts/<name>, outside every world', () => {
+test('accountDir is worlds/.accounts/<name>, outside every world', () => {
   assert.equal(accountDir('/s', 'Bob'), path.join('/s', 'accounts', 'Bob'))
   assert.throws(() => accountDir('/s', '../x'), /name/)
 })

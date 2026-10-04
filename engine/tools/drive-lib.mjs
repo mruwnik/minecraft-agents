@@ -1,13 +1,13 @@
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
+import { NAME, bodyDir, missingWorldError, storageRoot } from '../js/bodies.mjs'
 
 const CONTROLS = ['forward', 'back', 'left', 'right', 'jump', 'sneak', 'sprint']
 
-export const defaultStateDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'state')
+export const defaultStateDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export const usage = `usage: drive.mjs <agent> <op> [args] --world <world> [--who claude] [--state <dir>]
+export const usage = `usage: drive.mjs <agent> <op> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]
   take --why "<text>" [--idle-s <n>] | hold <control>[,<control>...] <ms> | look <yaw> <pitch>
   turn <dyaw> [dpitch] | jump | stop | ping | state | release [--force]
   controls: ${CONTROLS.join(' ')}`
@@ -16,7 +16,7 @@ export const socketPathFor = ({ state, world, agent }) => path.join(bodyDir(stat
 
 const options = {
   who: { type: 'string', default: 'claude' },
-  state: { type: 'string', default: defaultStateDir },
+  state: { type: 'string' }, worlds: { type: 'string' },
   world: { type: 'string' },
   why: { type: 'string', default: '' },
   force: { type: 'boolean', default: false },
@@ -80,7 +80,8 @@ export function requestFor (argv) {
   if (!Object.hasOwn(builders, op)) return { error: `unknown op ${op}` }
   const req = builders[op]({ ...parsed.values, args })
   if (req.error) return req
-  return { agent, world: parsed.values.world, state: parsed.values.state, ...req }
+  try { return { agent, world: parsed.values.world, state: storageRoot(parsed.values, defaultStateDir), ...req } }
+  catch (error) { return { error: error.message } }
 }
 
 export const exitCodeFor = ({ status, json }) => (status >= 200 && status < 300 && json?.ok === true ? 0 : 1)

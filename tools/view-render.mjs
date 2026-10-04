@@ -1,8 +1,9 @@
 // Draws what a body sees from the files it dumps, no server and no GPU:
 //   node tools/view-render.mjs <AgentName> --world <world> [--out file.png] [--width 320] [--height 180] [--fov 70] [--dist 64] [--watch ms] [--state dir] [--bench seconds [--no-png]]
-// Default out: state/worlds/<world>/agents/<Name>/view/frame.png. --bench <seconds> renders flat out and prints one JSON timing line (--no-png skips PNG encoding). --watch redraws whenever pose.json changes, writing atomically.
+// Default out: worlds/<world>/agents/<Name>/view/frame.png. --bench <seconds> renders flat out and prints one JSON timing line (--no-png skips PNG encoding). --watch redraws whenever pose.json changes, writing atomically.
 import fs from 'node:fs'
 import path from 'node:path'
+import { storageRoot, worldsDir } from '../engine/js/bodies.mjs'
 import { parseArgs } from 'node:util'
 import { runBench } from './view/bench.mjs'
 import { DEFAULT_STATE_DIR, readPose, renderView, viewDir } from './view/render.mjs'
@@ -17,7 +18,7 @@ const { values, positionals } = parseArgs({
     fov: { type: 'string', default: '70' },
     dist: { type: 'string', default: '64' },
     watch: { type: 'string' },
-    state: { type: 'string' },
+    state: { type: 'string' }, worlds: { type: 'string' },
     world: { type: 'string' },
     bench: { type: 'string' },
     'no-png': { type: 'boolean', default: false }
@@ -33,7 +34,7 @@ if (!world) {
   console.error(missingWorldError('--world'))
   process.exit(1)
 }
-const stateDir = values.state ?? DEFAULT_STATE_DIR
+const stateDir = storageRoot(values, path.resolve(import.meta.dirname, ".."))
 const out = values.out ?? path.join(viewDir(world, agentName, stateDir), 'frame.png')
 const poseFile = path.join(viewDir(world, agentName, stateDir), 'pose.json')
 

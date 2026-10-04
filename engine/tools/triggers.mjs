@@ -4,7 +4,7 @@ import http from 'node:http'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import edn from 'edn-data'
-import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
+import { NAME, bodyDir, missingWorldError, storageRoot } from '../js/bodies.mjs'
 import { defaultStateDir } from './drive-lib.mjs'
 import { get, unsupportedObserveRoute } from './observe.mjs'
 import { readEDN, writeEDN, keyword } from './observe-lib.mjs'
@@ -17,7 +17,7 @@ export const usage = `usage: triggers.mjs <body> --world <world> <command> [id] 
   remove <id> | mute <id> [--for 10m] | unmute <id>
   move <id> --before <anchor>|--after <anchor> [--for 10m]
   reset <id> --property position|mute
-  [--by agent] [--state DIR]
+  [--by agent] [--worlds DIR] [--state LEGACY_PARENT]
 Add and put both create or replace a custom entry; built-in entries cannot be replaced or removed.`
 export function identifier (s) {
   const name = typeof s === 'string' ? s.replace(/^:/, '') : ''
@@ -39,7 +39,7 @@ export function duration (text) {
 export function requestFor (argv) {
   try {
     const p = parseArgs({args: argv, allowPositionals: true, options: {
-      state: {type:'string', default:defaultStateDir}, world:{type:'string'}, by:{type:'string',default:'agent'},
+      state: {type:'string'}, worlds: {type:'string'}, world:{type:'string'}, by:{type:'string',default:'agent'},
       limit:{type:'string'}, offset:{type:'string'}, trigger:{type:'string'}, when:{type:'string'}, job:{type:'string'}, args:{type:'string'},
       persistence:{type:'string'}, 'cooldown-s':{type:'string'}, for:{type:'string'}, backoff:{type:'string'}, before:{type:'string'}, after:{type:'string'}, property:{type:'string'}
     }})
@@ -51,9 +51,9 @@ export function requestFor (argv) {
     if (extra.length || (command==='list' ? name!==undefined : name===undefined)) throw new Error(`${command} ${command==='list'?'takes no ID':'needs exactly one ID'}`)
     const allowed = {list:['limit','offset'], show:[], add:['trigger','when','job','args','persistence','cooldown-s','for','backoff'], put:['trigger','when','job','args','persistence','cooldown-s','for','backoff'],
       remove:[], mute:['for'], unmute:[], move:['before','after','for'], reset:['property']}[command]
-    for (const k of Object.keys(v)) if (!['state','world','by',...allowed].includes(k)) throw new Error(`--${k} is not valid for ${command}`)
+    for (const k of Object.keys(v)) if (!['state','worlds','world','by',...allowed].includes(k)) throw new Error(`--${k} is not valid for ${command}`)
     if (!v.by || v.by.length>40) throw new Error('--by must be 1..40 characters')
-    const state=path.resolve(v.state), socketPath=path.join(bodyDir(state,v.world,body),'engine','events.sock')
+    const state=storageRoot(v,defaultStateDir), socketPath=path.join(bodyDir(state,v.world,body),'engine','events.sock')
     const base={body,world:v.world,state,socketPath,command}
     if (command==='list') {
       const limit=Number(v.limit??8),offset=Number(v.offset??0)

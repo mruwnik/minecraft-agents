@@ -73,7 +73,7 @@ test('no jar falls back to tints.json and plains defaults', () => {
   })
 })
 
-const registry = JSON.parse(fs.readFileSync(new URL('../state/worlds/claude/biomes.json', import.meta.url), 'utf8')).biomes
+const registry = JSON.parse(fs.readFileSync(new URL('../worlds/claude/biomes.json', import.meta.url), 'utf8')).biomes
 const registryNames = registry.map(b => b.name)
 const rowOf = (table, name, group) => {
   const at = (table.names.indexOf(name) * 4 + GROUP[group]) * 3

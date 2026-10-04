@@ -16,8 +16,23 @@ and JavaScript dashboard are archived in [legacy/](legacy/README.md).
 - `tools/dependency-patches/`: source patch adapters for JavaScript dependencies.
 - `tools/patch-deps.mjs`, `tools/textures.mjs`, `tools/rcon*.mjs`, and `patches/`:
   current dependency, texture, and test-server infrastructure.
-- `blueprints/`: shared blueprint data. `state/` and `textures/` hold local runtime
-  data and assets; they are not part of the archive.
+- `blueprints/`: shared blueprint data. `worlds/` holds local world and body data;
+  `textures/` holds local rendering assets. Both stay out of git.
+- Frozen benchmark captures live under `engine/test/fixtures/pathfinding/` (local, ignored).
+
+Agent tools default to this repository’s `worlds/`, regardless of the shell’s
+working directory. Use `--worlds DIR` to select another worlds directory. The
+older `--state DIR` still means a parent containing `worlds/`; body and data
+migration launchers retain `--state-dir DIR` with the same legacy meaning.
+Choose one selector. Account caches are shared under `worlds/.accounts/`, and
+job request records are scoped by world and body under
+`worlds/<world>/agents/<body>/.commands/jobs/`.
+
+During the live migration, `state/worlds` and the existing `state/commands/<body>`
+paths remain compatibility links to the moved data. Old running builds can
+continue writing through those links. The remaining `state/` files (logs,
+screenshots, inspection reports, manifests, backups and manual notes) are
+retained for separate review; they are not required by current body storage.
 
 The current engine, dashboard, tools and tests do not import the archive.
 Rendering, asset and dependency patch helpers have current copies; the archive

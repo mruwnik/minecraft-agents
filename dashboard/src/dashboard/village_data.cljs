@@ -59,10 +59,10 @@
 
 (defn snapshot
   ([root places] (snapshot root places {:worlds (vec (distinct (keep :world places)))}))
-  ([root _places {:keys [worlds]}]
+  ([root _places {:keys [worlds worlds-dir]}]
    (try
      (let [results (for [world (map checked-world worlds)
-                         :let [dir (.join path root "state" "worlds" world "plans")]
+                         :let [dir (.join path (or worlds-dir (.join path root "worlds")) world "plans")]
                          file (data/files dir #"[A-Za-z0-9_.-]+\.edn")]
                      (try
                        (let [id (str/replace file #"\.edn$" "") p (data/read-file (.join path dir file))

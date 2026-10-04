@@ -1,5 +1,5 @@
 // The benchmark set of the language comparison: the frozen world queries (bench.mjs freeze) and the live tester's courses.
-// The frozen world is read from PLANNER_BENCH_DIR (default: state/bench/pathfinding/claude-1 under the repo root).
+// The frozen world is read from PLANNER_BENCH_DIR (default: engine/test/fixtures/pathfinding/claude-1 under the repo root).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,7 +8,7 @@ import { courseNames, courseSnapshot } from '../js/path/courses.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
-export const benchDir = () => process.env.PLANNER_BENCH_DIR ?? path.join(ROOT, 'state/bench/pathfinding/claude-1')
+export const benchDir = () => process.env.PLANNER_BENCH_DIR ?? path.join(ROOT, 'engine/test/fixtures/pathfinding/claude-1')
 
 const worldCourses = dir => {
   const queries = path.join(dir, 'queries.json')

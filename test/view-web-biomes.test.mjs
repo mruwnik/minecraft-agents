@@ -98,8 +98,8 @@ test('biomes: decoding a real 24-section column is fast', async () => {
   assert.ok(ms < 5)
 })
 
-test('biomes: the known dark_forest cell of state/worlds/claude/chunks/-124.-120.bin', async t => {
-  const file = fileURLToPath(new URL('../state/worlds/claude/chunks/-124.-120.bin', import.meta.url))
+test('biomes: the known dark_forest cell of worlds/claude/chunks/-124.-120.bin', async t => {
+  const file = fileURLToPath(new URL('../worlds/claude/chunks/-124.-120.bin', import.meta.url))
   if (!fs.existsSync(file)) return t.skip('no state file')
   const { header, sections } = parseColumnFile(await inflate(fs.readFileSync(file)))
   const decoded = decodeBiomes(sections, { ...columnFormat(header.mcVersion), numSections: header.worldHeight >> 4 })

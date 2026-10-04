@@ -34,8 +34,8 @@
 (def dashboard-dir (.join path repo-root "dashboard"))
 (def public-dir (.join path dashboard-dir "public"))
 (def js-dir (.join path dashboard-dir "out" "public" "js"))
-(def state-dir (.join path root "state"))
-(def worlds-dir (.join path root "state" "worlds"))
+(def state-dir (clj->js (bodies/storage-root {} root)))
+(def worlds-dir (bodies/worlds-dir state-dir))
 
 (def first-read-bytes (* 4 1024 1024)) ; ~10 minutes of debug-heavy engine events
 (def chat-tail-bytes (* 4 1024 1024))
@@ -438,7 +438,7 @@
                          (vec (mapcat (fn [world]
                                         (map #(assoc % :world (:name world)) (:places world)))
                                       worlds))
-                         {:worlds (mapv :name worlds) :blueprint-dir (.join path repo-root "blueprints")}))
+                         {:worlds (mapv :name worlds) :worlds-dir worlds-dir :blueprint-dir (.join path repo-root "blueprints")}))
 
 ;; ---------------------------------------------------------------- state
 (defn world-entry [bodies agent-names world]
@@ -859,7 +859,7 @@
   (blueprint-lib/library (.join path repo-root "blueprints")))
 
 ;; ---------------------------------------------------------------- plans (dashboard.plan-api)
-;; Plans are state/worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root (next to
+;; Plans are worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root (next to
 ;; the legacy .blueprint.json library). The block lookup over the dumped chunk columns is the JS glue js/worldblocks.mjs
 ;; (the view's column decoders); everything else is ClojureScript.
 (def worldblocks-module (or (.-WORLDBLOCKS_MODULE js/process.env) (.join path dashboard-dir "js" "worldblocks.mjs")))
@@ -872,7 +872,7 @@
 
 (defn blocks-for [module world-name]
   (or (get @blocks-by-world world-name)
-      (let [blocks ((.-createWorldBlocks module) #js {:stateDir (.join path root "state") :world world-name})]
+      (let [blocks ((.-createWorldBlocks module) #js {:stateDir state-dir :world world-name})]
         (swap! blocks-by-world assoc world-name blocks)
         blocks)))
 
@@ -915,7 +915,7 @@
 
 (defn tiles-for [module world-name]
   (or (get @world-tiles world-name)
-      (let [made ((.-createWorldTiles module) #js {:stateDir (.join path root "state") :world world-name})]
+      (let [made ((.-createWorldTiles module) #js {:stateDir state-dir :world world-name})]
         (swap! world-tiles assoc world-name made)
         made)))
 

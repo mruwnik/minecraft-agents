@@ -1,5 +1,6 @@
 // Why JavaScript: it sits on the binary chunk-column decoders and PNG encoder of tools/view (JS, binary formats and rendering).
-// blockAt over the chunk columns the bodies dumped: state/worlds/<world>/chunks/<cx>.<cz>.bin (cx = floor(x / 16)),
+import { worldsDir } from '../../engine/js/bodies.mjs'
+// blockAt over the chunk columns the bodies dumped: worlds/<world>/chunks/<cx>.<cz>.bin (cx = floor(x / 16)),
 // each read on first use and again when its mtime changes. The game version comes from the first column's header.
 // This is glue to the view's column decoders; everything about plans lives in the ClojureScript (dashboard.plan*).
 import fs from 'node:fs'
@@ -9,7 +10,7 @@ import { encodePng } from '../../tools/view/renderer.mjs'
 
 // -> {blockAt(x, y, z) -> {name, state: {property: value}} | null (no column dumped), close()}
 export function createWorldBlocks ({ stateDir, world }) {
-  const dir = path.join(stateDir, 'worlds', world, 'chunks')
+  const dir = path.join(worldsDir(stateDir), world, 'chunks')
   let columns = null
   const columnsFor = file => {
     if (columns) return columns
@@ -37,7 +38,7 @@ export function createWorldBlocks ({ stateDir, world }) {
 // -> {palette: [name], top, y, depth, floor} per cell index z * 16 + x: top/floor index palette, y is the top block's
 // height (the water surface for water), depth how many water blocks lie over the floor (0 when dry). null: not dumped.
 export function createWorldTiles ({ stateDir, world }) {
-  const dir = path.join(stateDir, 'worlds', world, 'chunks')
+  const dir = path.join(worldsDir(stateDir), world, 'chunks')
   const classes = new Map()
   const chunkClass = version => {
     if (!classes.has(version)) classes.set(version, makeChunkClass(version))

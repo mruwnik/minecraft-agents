@@ -15,8 +15,8 @@
 (def statuses #{"proposed" "active" "completed" "retired"})
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--status proposed|active|completed|retired] [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  status <id> --status proposed|active|completed|retired --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --state <dir> --repo <dir> --limit 1..100 --offset 0..10000\n  Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
-   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --state <dir> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by. Build once with `cd dashboard && npm run build-agent-tools`."})
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--status proposed|active|completed|retired] [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  status <id> --status proposed|active|completed|retired --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by. Build once with `cd dashboard && npm run build-agent-tools`."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
 
@@ -48,7 +48,7 @@
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
                                     [:world :by :revision :edn :status :limit :offset :query :inventory]))
-                       {:state {:type "string" :default (.join path repo-root "state")}
+                       {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}}
                        (into {} (map (fn [k] [k {:type "boolean" :default false}])
@@ -59,7 +59,7 @@
         commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "status" "validate" "check"}
                      #{"list" "find" "show" "save" "validate"})
         mutations #{"add" "edit" "save" "remove" "status"}
-        allowed (cond-> #{:world :state :repo}
+        allowed (cond-> #{:world :worlds :state :repo}
                   (#{"list" "find"} command) (into [:limit :offset :raw :large])
                   (and (= command "list") (= kind :plan)) (conj :status)
                   (= command "show") (into [:raw :geometry :large])
@@ -189,7 +189,7 @@
         (geometry-check! (:cells prepared) (:large req))
         (-> ((:load-worldblocks req))
             (.then (fn [worldblocks]
-                     (let [columns ((aget worldblocks "createWorldBlocks") #js {:stateDir (:state ctx) :world (:world ctx)})
+                     (let [columns ((aget worldblocks "createWorldBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx)})
                            blocks (atom {}) mtimes (atom {})
                            inventory (inventory-value (:inventory req))]
                        (try
@@ -266,7 +266,7 @@
     (cond-> output (:geometry req) (assoc :geometry (:cells result)))))
 
 (defn execute-plan [req write]
-  (let [ctx (data/context {:state (:state req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
+  (let [ctx (data/context {:state (:state req) :worlds (:worlds req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
     (cond
       (#{"list" "find"} command) (do (write (list-result :plan (current-docs ctx :plan) req)) 0)
       (#{"add" "edit" "remove" "status"} command) (mutate-plan req ctx write)
@@ -293,7 +293,7 @@
       :else (fail! :usage "unknown plan command"))))
 
 (defn execute-blueprint [req write]
-  (let [ctx (data/context {:state (:state req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
+  (let [ctx (data/context {:state (:state req) :worlds (:worlds req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
     (cond
       (#{"list" "find"} command) (do (write (list-result :blueprint (current-docs ctx :blueprint) req)) 0)
       (= command "show") (let [doc (data/read-document ctx :blueprint (:id req))]

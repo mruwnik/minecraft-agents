@@ -86,7 +86,7 @@ plans (outlined, coloured by completion; zoomed in, their elements too; a click 
 off screen gets an arrow on the edge, click it to pan there), `/plans` (plan files compared with the dumped chunks, see "Plans"), `/villages`,
 `/villagers`, `/blueprints`, `/jobs` (every job and trigger by category, with filter) serve `public/index.html`; static files come from
 `public/` and `out/public/js/` (at `/js/`). The chat panel on the right of every page has a composer: Enter sends as above.
-`?world=` is validated against the `state/worlds/*/world.json` listing (unknown -> 400 `{error, worlds}`; absent -> first world).
+`?world=` is validated against the `worlds/*/world.json` listing (unknown -> 400 `{error, worlds}`; absent -> first world).
 
 ## Differs from the old dashboard
 
@@ -104,8 +104,8 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 ## Plans
 
 A plan records the desired state of a piece of the world; the format is the one of `docs/design.md`, "Plans and blueprints". The
-dashboard compares it with the chunk columns the bodies dumped (`state/worlds/<world>/chunks/<cx>.<cz>.bin`, `cx = floor(x/16)`).
-One EDN file per plan, `state/worlds/<world>/plans/<id>.edn`, and one per blueprint, `blueprints/<id>.edn` at the repo root (next to
+dashboard compares it with the chunk columns the bodies dumped (`worlds/<world>/chunks/<cx>.<cz>.bin`, `cx = floor(x/16)`).
+One EDN file per plan, `worlds/<world>/plans/<id>.edn`, and one per blueprint, `blueprints/<id>.edn` at the repo root (next to
 legacy `.blueprint.json` files, which the dashboard ignores); the file name is the id. `plan.shape` (`../engine/src/plan/shape.cljc`, plain data, no
 IO, meant to be required by the engine's jobs too) is the only namespace that knows the format: checking (`plan-errors`,
 `blueprint-errors`), expansion into cells (`expand`, the later part winning a shared cell; blueprints placed and turned with `place`)

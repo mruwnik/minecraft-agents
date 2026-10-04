@@ -64,9 +64,8 @@ test('requestFor reads --state', () => {
   assert.equal(requestFor(['Bob', 'state', '--world', 'w', '--state', '/x/y']).state, '/x/y')
 })
 
-test('requestFor defaults state to <repo>/state', () => {
-  assert.equal(requestFor(['Bob', 'state', '--world', 'w']).state, defaultStateDir)
-  assert.equal(path.basename(defaultStateDir), 'state')
+test('requestFor defaults world data to <repo>/worlds', () => {
+  assert.deepEqual(requestFor(['Bob', 'state', '--world', 'w']).state, { worldsDir: path.join(defaultStateDir, 'worlds') })
 })
 
 test('socketPathFor builds the socket path of a body in its world', () => {

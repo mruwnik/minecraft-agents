@@ -109,7 +109,7 @@ test('compiled CLI sends submit options and cancel-all through the existing gene
   assert.equal(seen[1].op.key, 'cancel-all')
   assert.equal('id' in seen[1], false)
   for (const request of seen) assert.equal(request['generation-id'], 'generation')
-  assert.equal(readEDN(fs.readFileSync(path.join(state, 'commands', 'Bob', 'jobs', 'clear.edn'),'utf8'))['generation-id'], 'generation')
+  assert.equal(readEDN(fs.readFileSync(path.join(state, 'worlds', 'w', 'agents', 'Bob', '.commands', 'jobs', 'clear.edn'),'utf8'))['generation-id'], 'generation')
 })
 
 test('resolve sends one direct EDN request and does not snapshot, retry, or cancel a job', async t => {

@@ -1,5 +1,5 @@
-// What a body sees, drawn from the files it dumps: state/worlds/<world>/chunks/<cx>.<cz>.bin and
-// state/worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
+// What a body sees, drawn from the files it dumps: worlds/<world>/chunks/<cx>.<cz>.bin and
+// worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
 import fs from 'node:fs'
 import path from 'node:path'
 import { render, encodePng } from './renderer.mjs'
@@ -7,10 +7,10 @@ import { columnCache, makeChunkClass } from './columns.mjs'
 import { buildGrid } from './grid.mjs'
 import { cameraFromPose, entitiesFromPose } from './camera.mjs'
 import { makeBlockSource } from './blocks.mjs'
-import { bodyDir } from '../../engine/js/bodies.mjs'
+import { bodyDir, worldsDir } from '../../engine/js/bodies.mjs'
 
 const ROOT = path.join(import.meta.dirname, '../..')
-export const DEFAULT_STATE_DIR = path.join(ROOT, 'state')
+export const DEFAULT_STATE_DIR = { worldsDir: path.resolve(ROOT, 'worlds') }
 const TEXTURE_DIR = path.join(ROOT, 'textures')
 const UP = 48
 
@@ -47,7 +47,7 @@ export function renderView ({ world, agentName, width = 320, height = 180, fov =
   const poseDone = performance.now()
   const { columns, blocks } = forVersion(pose.mcVersion)
   const camera = { ...cameraFromPose(pose), ...override }
-  const chunkDir = path.join(stateDir, 'worlds', pose.world, 'chunks')
+  const chunkDir = path.join(worldsDir(stateDir), pose.world, 'chunks')
   let loaded = 0
   const grid = buildGrid({
     column: (cx, cz) => {

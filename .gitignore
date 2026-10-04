@@ -4,3 +4,7 @@ state/
 .superpowers/
 # the viewer cljs build (dashboard/shadow-cljs.edn :viewer; tools/view/build-cljs.mjs)
 tools/view/web/cljs/
+
+# Local world data and frozen benchmark captures (never commit account caches).
+worlds/
+engine/test/fixtures/pathfinding/

@@ -1,6 +1,7 @@
 (ns agent-tools.world-data
   (:refer-clojure :exclude [name])
-  (:require [cljs.reader :as reader]
+  (:require [engine.bodies :as bodies]
+            [cljs.reader :as reader]
             [clojure.string :as str]
             [clojure.set :as set]
             ["node:fs" :as fs]
@@ -117,12 +118,12 @@
   ([v] (js/JSON.stringify (to-json v)))
   ([v indent] (js/JSON.stringify (to-json v) nil indent)))
 
-(defn context [{:keys [state world repo-root]}]
+(defn context [{:keys [state worlds world repo-root]}]
   (when-not (and (string? world) (re-matches #"[A-Za-z0-9_-]{1,64}" world))
     (throw (fail :invalid-world "give an explicit valid --world")))
   (let [repo-root (.resolve path (or repo-root (.resolve path js/__dirname "../..")))
-        state (.resolve path state)
-        world-dir (.resolve path state "worlds" world)]
+        state (if (map? state) state (bodies/storage-root {:state state :worlds worlds} repo-root))
+        world-dir (.resolve path (bodies/worlds-dir state) world)]
     (when-not (.existsSync fs (.join path world-dir "world.json"))
       (throw (fail :world-not-found (str "no world " world))))
     {:state state :world world :repo-root repo-root :world-dir world-dir
@@ -367,7 +368,7 @@
                           (let [[l e] (add-event l obj op by source (:revision previous))
                                 l (update l :index (if (nil? value) dissoc assoc) (object-key kind id) obj)
                                 pending (if (= kind :blueprint) (.join path (:blueprint-dir ctx) ".agent-pending.edn") (.join path (:metadata-dir ctx) "pending.edn"))]
-                            (atomic-text pending (str (write-edn {:context (select-keys ctx [:state :world :repo-root]) :file file :kind kind :id id
+                            (atomic-text pending (str (write-edn {:context (select-keys ctx [:state :worlds :world :repo-root]) :file file :kind kind :id id
                                                                  :before (revision before) :after after :ledger l}) "\n"))
                             (if (nil? after) (when (.existsSync fs file) (.unlinkSync fs file)) (atomic-text file after))
                             (atomic-text (ledger-file ctx) (str (write-edn l) "\n"))

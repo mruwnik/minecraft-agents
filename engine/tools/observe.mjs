@@ -5,11 +5,11 @@ import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { readEDN, writeEDN, compactStatus, keyword, waitObserve } from './observe-lib.mjs'
 import { defaultStateDir } from './drive-lib.mjs'
-import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
+import { NAME, bodyDir, missingWorldError, storageRoot } from '../js/bodies.mjs'
 
 export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
-export const usage = `usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+export const usage = `usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]`
 
 async function inventorySummary (value, mode, slots) {
   const { default: tools } = await import('./agent-tools-loader.mjs')
@@ -23,7 +23,7 @@ export function unsupportedObserveRoute (response) {
 
 export function legacyEngineNotice (request) {
   const endpoint = request.path.split('?')[0]
-  const fallback = endpoint === '/inventory' ? '' : ` :fallback {:op :status :raw true :world ${JSON.stringify(request.world)} :state ${JSON.stringify(request.state)}}`
+  const fallback = endpoint === '/inventory' ? '' : ` :fallback {:op :status :raw true :world ${JSON.stringify(request.world)} :state ${writeEDN(request.state)}}`
   return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build${fallback}}`
 }
 
@@ -33,7 +33,7 @@ export function requestFor (argv) {
     parsed = parseArgs({
       args: argv,
       options: {
-        state: { type: 'string', default: defaultStateDir },
+        state: { type: 'string' }, worlds: { type: 'string' },
         world: { type: 'string' },
         limit: { type: 'string' },
         offset: { type: 'string' },
@@ -63,7 +63,9 @@ export function requestFor (argv) {
   const world = parsed.values.world
   if (world === undefined) return { error: missingWorldError('--world') }
   if (!NAME.test(world)) return { error: 'the world must be a name of letters, digits, _ and -' }
-  const state = path.resolve(parsed.values.state)
+  let state
+  try { state = storageRoot(parsed.values, defaultStateDir) }
+  catch (error) { return { error: error.message } }
   const params = new URLSearchParams()
   let endpoint
   if (op === 'status') {

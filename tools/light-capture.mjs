@@ -78,7 +78,7 @@ const summarize = ({ origin, size, states, sky, block }, bot) => {
 const main = async () => {
   const { values } = parseArgs({ options: { regions: { type: 'string' }, out: { type: 'string' } } })
   const regions = JSON.parse(fs.readFileSync(values.regions, 'utf8'))
-  const world = JSON.parse(fs.readFileSync(path.join(root, 'state/worlds/claude/world.json'), 'utf8'))
+  const world = JSON.parse(fs.readFileSync(path.join(root, 'worlds/claude/world.json'), 'utf8'))
   const bot = mineflayer.createBot({ host: world.host, port: world.port, username: BODY, auth: 'offline', viewDistance: 'far' })
   bot.on('error', e => console.error('bot error', e.message))
   await new Promise((resolve, reject) => { bot.once('spawn', resolve); bot.once('kicked', r => reject(new Error(`kicked ${JSON.stringify(r)}`))) })

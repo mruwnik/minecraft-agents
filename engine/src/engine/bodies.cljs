@@ -1,7 +1,7 @@
 (ns engine.bodies
-  "Where a body's folder is: state/worlds/<world>/agents/<name>. A name is unique only within a world, so the world
+  "Where a body's folder is: worlds/<world>/agents/<name>. A name is unique only within a world, so the world
   is always given; there is no search over worlds and no default. A real account's login cache is per account, shared
-  by every world: state/accounts/<name>. The JS twin is engine/js/bodies.mjs; keep the two alike."
+  by every world: worlds/.accounts/<name>. The JS twin is engine/js/bodies.mjs; keep the two alike."
   (:require ["fs" :as fs]
             ["path" :as path]))
 
@@ -13,15 +13,27 @@
     (throw (js/Error. (str "a body folder needs a " what " of letters, digits, _ and -, got " (pr-str value))))))
 
 (defn missing-world-error [flag]
-  (str "missing " flag " <world>: the world the body plays in (a folder under state/worlds/)"))
+  (str "missing " flag " <world>: the world the body plays in (a folder under worlds/)"))
 
-(defn worlds-dir [state-dir] (path/join state-dir "worlds"))
+(defn storage-root
+  "Canonical worlds directory, or an explicit legacy state parent. Both flags are mutually exclusive."
+  [{:keys [state worlds]} repo-root]
+  (when (and state worlds) (throw (js/Error. "choose --worlds or legacy --state, not both")))
+  (if state
+    (path/resolve state)
+    {:worldsDir (path/resolve (or worlds (path/join repo-root "worlds")))}))
+
+(defn worlds-dir [state-dir]
+  (if (map? state-dir) (:worldsDir state-dir)
+      (if (and state-dir (.-worldsDir state-dir)) (.-worldsDir state-dir)
+          (path/join state-dir "worlds"))))
 
 (defn body-dir [state-dir world name]
   (path/join (worlds-dir state-dir) (checked "world" world) "agents" (checked "name" name)))
 
 (defn account-dir [state-dir name]
-  (path/join state-dir "accounts" (checked "name" name)))
+  (path/join (if (string? state-dir) (path/join state-dir "accounts")
+                (path/join (worlds-dir state-dir) ".accounts")) (checked "name" name)))
 
 (defn world-of-body-dir
   "The world of a body folder: the name of the folder two levels up."

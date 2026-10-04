@@ -27,31 +27,31 @@
 
 (defn fixture []
   (let [root (.mkdtempSync fs (.join path (.tmpdir os) "village-plan-migration-"))]
-    (put root "state/worlds/claude/world.json" {:name "claude"} true)
-    (put root "state/worlds/other/world.json" {:name "other"} true)
-    (put root "state/worlds/claude/places.json" [marker {:name "shelter" :kind "shelter" :x 0 :y 64 :z 0}] true)
+    (put root "worlds/claude/world.json" {:name "claude"} true)
+    (put root "worlds/other/world.json" {:name "other"} true)
+    (put root "worlds/claude/places.json" [marker {:name "shelter" :kind "shelter" :x 0 :y 64 :z 0}] true)
     (put root "state/village-inspections/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json" inspection true)
-    (put root "state/worlds/claude/plans/inspected-village.edn" existing false)
+    (put root "worlds/claude/plans/inspected-village.edn" existing false)
     root))
 
 (deftest dry-run-preflights-and-apply-preserves-existing-layout-with-exact-backup
   (let [root (fixture) opts {:root root :world "claude" :apply? false}
-        source (.readFileSync fs (.join path root "state/worlds/claude/places.json") "utf8")
-        original (data/read-text (.join path root "state/worlds/claude/plans/inspected-village.edn"))
+        source (.readFileSync fs (.join path root "worlds/claude/places.json") "utf8")
+        original (data/read-text (.join path root "worlds/claude/plans/inspected-village.edn"))
         dry (migration/execute opts)]
     (is (= 2 (:village-count dry)))
     (is (= #{:create :enrich} (set (map :status (:files dry)))))
-    (is (not (.existsSync fs (.join path root "state/worlds/claude/plans/old-village.edn"))))
-    (is (= original (data/read-text (.join path root "state/worlds/claude/plans/inspected-village.edn"))))
+    (is (not (.existsSync fs (.join path root "worlds/claude/plans/old-village.edn"))))
+    (is (= original (data/read-text (.join path root "worlds/claude/plans/inspected-village.edn"))))
     (let [applied (migration/execute (assoc opts :apply? true))
-          p (data/read-file (.join path root "state/worlds/claude/plans/inspected-village.edn"))
-          new (data/read-file (.join path root "state/worlds/claude/plans/old-village.edn"))
+          p (data/read-file (.join path root "worlds/claude/plans/inspected-village.edn"))
+          new (data/read-file (.join path root "worlds/claude/plans/old-village.edn"))
           backup (:backup (first (filter :backup (:files applied))))]
       (is (= #{:created :enriched} (set (map :status (:files applied)))))
       (is (= original (data/read-text backup)))
       (is (= (dissoc existing :metadata) (select-keys p (keys (dissoc existing :metadata))))))
-    (let [p (data/read-file (.join path root "state/worlds/claude/plans/inspected-village.edn"))
-          new (data/read-file (.join path root "state/worlds/claude/plans/old-village.edn"))]
+    (let [p (data/read-file (.join path root "worlds/claude/plans/inspected-village.edn"))
+          new (data/read-file (.join path root "worlds/claude/plans/old-village.edn"))]
       (is (= (dissoc existing :metadata) (select-keys p (keys (dissoc existing :metadata)))))
       (is (= "preserved" (get-in p [:metadata :native-extra])))
       (is (= inspection (get-in p [:metadata :legacy-inspection])))
@@ -63,22 +63,22 @@
       (is (= [] (shape/plan-errors p "inspected-village")))
       (is (= [] (shape/plan-errors new "old-village"))))
     (is (every? #(= :unchanged (:status %)) (:files (migration/execute (assoc opts :apply? true)))))
-    (is (= source (.readFileSync fs (.join path root "state/worlds/claude/places.json") "utf8")))
-    (is (not (.existsSync fs (.join path root "state/worlds/claude/notes"))))))
+    (is (= source (.readFileSync fs (.join path root "worlds/claude/places.json") "utf8")))
+    (is (not (.existsSync fs (.join path root "worlds/claude/notes"))))))
 
 (deftest metadata-conflicts-prevent-all-mutations
   (let [root (fixture)]
-    (put root "state/worlds/claude/plans/inspected-village.edn"
+    (put root "worlds/claude/plans/inspected-village.edn"
          (assoc existing :metadata {:population {:target 99}}) false)
     (is (thrown-with-msg? js/Error #"metadata conflicts" (migration/execute {:root root :world "claude" :apply? true})))
-    (is (not (.existsSync fs (.join path root "state/worlds/claude/plans/old-village.edn"))))
-    (is (not (.existsSync fs (.join path root "state/worlds/claude/.migration-backups"))))))
+    (is (not (.existsSync fs (.join path root "worlds/claude/plans/old-village.edn"))))
+    (is (not (.existsSync fs (.join path root "worlds/claude/.migration-backups"))))))
 
 (deftest edits-after-preflight-are-preserved
   (let [root (fixture) report (migration/prepare {:root root :world "claude"})
         write (first (filter #(= :enrich (:status %)) (:writes report)))
         changed (assoc existing :note "Later human edit")]
-    (put root "state/worlds/claude/plans/inspected-village.edn" changed false)
+    (put root "worlds/claude/plans/inspected-village.edn" changed false)
     (is (thrown-with-msg? js/Error #"after migration preflight" (migration/enrich! write)))
     (is (= changed (data/read-file (:file write))))
     (is (not (.existsSync fs (:file (:backup write)))))))

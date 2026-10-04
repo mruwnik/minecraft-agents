@@ -7,7 +7,7 @@ import zlib from 'node:zlib'
 import { promisify } from 'node:util'
 import prismarineRegistry from 'prismarine-registry'
 import { lightTable, relightBox } from './light.mjs'
-import { bodyDir } from './bodies.mjs'
+import { bodyDir, worldsDir } from './bodies.mjs'
 
 const deflate = promisify(zlib.deflate)
 
@@ -30,8 +30,8 @@ const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 
 // ---- files ----
 
-export const columnFile = (stateDir, world, cx, cz) => path.join(stateDir, 'worlds', world, 'chunks', `${cx}.${cz}.bin`)
-export const biomesFile = (stateDir, world) => path.join(stateDir, 'worlds', world, 'biomes.json')
+export const columnFile = (stateDir, world, cx, cz) => path.join(worldsDir(stateDir), world, 'chunks', `${cx}.${cz}.bin`)
+export const biomesFile = (stateDir, world) => path.join(worldsDir(stateDir), world, 'biomes.json')
 export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
 export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
 
