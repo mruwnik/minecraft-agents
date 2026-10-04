@@ -1,3 +1,4 @@
+// Why JavaScript: tests the engine/tools launchers, which stay JS; a JS test is the honest check of a JS entry point (process, argv, exit code).
 // Node filesystem/socket boundary tests; application path selection lives in CLJS.
 import test from 'node:test'
 import assert from 'node:assert/strict'

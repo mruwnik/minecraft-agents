@@ -1,3 +1,4 @@
+// Why JavaScript: tests viewmount.mjs, which stays JS (mounts the JS view server).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

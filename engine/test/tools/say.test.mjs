@@ -1,3 +1,4 @@
+// Why JavaScript: tests the engine/tools launchers, which stay JS; a JS test is the honest check of a JS entry point (process, argv, exit code).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

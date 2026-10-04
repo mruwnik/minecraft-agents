@@ -1,3 +1,4 @@
+// Why JavaScript: tests vehicle.mjs, which stays JS (Mineflayer boundary).
 // Mineflayer boundary only; cache identity, TTL and bounds are tested in CLJS.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

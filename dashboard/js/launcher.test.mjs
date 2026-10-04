@@ -1,3 +1,4 @@
+// Why JavaScript: tests launcher.mjs, which stays JS because it must run when the cljs build is broken.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {

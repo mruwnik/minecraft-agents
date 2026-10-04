@@ -1,3 +1,4 @@
+// Why JavaScript: tests worldblocks.mjs, which stays JS (binary chunk sections and typed arrays).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

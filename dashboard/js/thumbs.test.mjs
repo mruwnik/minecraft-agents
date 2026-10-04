@@ -1,3 +1,4 @@
+// Why JavaScript: tests thumbs.mjs, which stays JS (worker_threads render of body previews).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

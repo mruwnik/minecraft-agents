@@ -1,3 +1,4 @@
+// Why JavaScript: tests light.mjs against captured real-server fixtures; binary data that stays JS.
 // Oracle: the light model (light.mjs) against light captured from a live server (tools/light-capture.mjs).
 // Each fixture is relit from its states with the interior wiped; the one-cell shell stays as captured (fixed sources).
 import { test } from 'node:test'

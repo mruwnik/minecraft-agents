@@ -1,3 +1,4 @@
+// Why JavaScript: tests the Mineflayer adapter code for vehicles, which stays JS (Mineflayer boundary).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'

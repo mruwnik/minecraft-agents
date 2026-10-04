@@ -1,3 +1,4 @@
+// Why JavaScript: tests the engine/tools launchers, which stay JS; a JS test is the honest check of a JS entry point (process, argv, exit code).
 // Black-box Node/Unix-socket boundary tests for the compiled CLJS generator.
 import test from 'node:test'
 import assert from 'node:assert/strict'

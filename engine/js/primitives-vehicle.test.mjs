@@ -1,3 +1,4 @@
+// Why JavaScript: tests the Mineflayer adapter primitives.mjs, which stays JS (Mineflayer boundary).
 // The vehicle primitives as createPrimitivesFromBot wires them: sensing fields, mount, dismount, and the walking
 // primitives refusing while aboard. vehicle.test.mjs covers the rules themselves.
 import { test } from 'node:test'
