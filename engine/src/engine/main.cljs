@@ -1,5 +1,5 @@
 (ns engine.main
-  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--state-dir <dir>]"
+  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--worlds <dir>] [--state-dir <legacy-parent>]"
   (:require [engine.bodies :as bodies]
             [engine.core :as core]
             [engine.entity-observations :as entity-observations]
@@ -26,6 +26,7 @@
       (= a "--world") (recur more (assoc opts :world b))
       (= a "--scenario") (recur more (assoc opts :scenario b))
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
+      (= a "--worlds") (recur more (assoc opts :worlds b))
       (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
       (= a "--events-max-bytes") (recur more (assoc opts :events-max-bytes (or b "")))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
@@ -65,13 +66,13 @@
   []
   (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
-(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--state-dir <dir>]")
+(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--worlds <dir>] [--state-dir <legacy-parent>]")
 
 (defn preflight
   "Everything run needs before connecting, or {:error text}."
-  [{:keys [agent world scenario state-dir engine-root events-max-bytes]}]
+  [{:keys [agent world scenario state-dir worlds engine-root events-max-bytes]}]
   (let [root (or engine-root (js/process.cwd))
-        state-dir (or state-dir (path/resolve root ".." "state"))
+        state-dir (bodies/storage-root {:state state-dir :worlds worlds} (path/resolve root ".."))
         prims-file (path/join root "js" "primitives.mjs")
         names-ok? (and (string? agent) (string? world) (re-matches bodies/name-re agent) (re-matches bodies/name-re world))
         cfg (when names-ok? (load-agent state-dir world agent))
@@ -106,7 +107,7 @@
 
 (defn open-world
   "The body's world (engine.world: plans, blueprints, zones) with its notes store (engine.notes) as :notes, in
-  the world folder state/worlds/<world>; the body's notes are written as agent's."
+  the world folder worlds/<world>; the body's notes are written as agent's."
   [{:keys [state-dir world agent root emit]}]
   (let [dir (path/join (bodies/worlds-dir state-dir) world)]
     (assoc (world/open {:plans-dir (path/join dir "plans")
@@ -130,7 +131,7 @@
                           (core/emit! eng (-> (js->clj e :keywordize-keys true)
                                               (update :kind keyword) (update :source keyword) (update :level keyword)))))
         p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
-                                         :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
+                                         :view #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
                                                     :onEvent on-view-event}}))
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})

@@ -6,13 +6,13 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "world-changes.mjs --world WORLD [--cursor EDN | --observer NAME] [--wait --timeout 60s] [--raw] [--type TYPE --owner OWNER --status STATUS --text TEXT --center EDN --place NAME --radius 128 --limit 10 --state DIR]")
+(def usage "world-changes.mjs --world WORLD [--cursor EDN | --observer NAME] [--wait --timeout 60s] [--raw] [--type TYPE --owner OWNER --status STATUS --text TEXT --center EDN --place NAME --radius 128 --limit 10 --worlds DIR --state LEGACY_PARENT]")
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
                     (merge (zipmap [:world :repo-root :cursor :observer :timeout :poll-ms :center :place :radius :type :owner :status :text :limit]
                                    (repeat {:type "string"}))
-                           {:state {:type "string" :default map-tool/default-state-dir}}
+                           {:state {:type "string"} :worlds {:type "string"}}
                            (zipmap [:wait :raw] (repeat {:type "boolean"}))))
         v values
         observer (or (:observer v) "agent")
@@ -26,7 +26,7 @@
               (not (js/Number.isInteger poll-ms)) (< poll-ms 50) (> poll-ms 5000))
       (throw (data/fail :invalid-timeout "timeout10ms..60m and poll50..5000ms required")))
     (when (and (not (:wait v)) (or (:timeout v) (:poll-ms v))) (throw (data/fail :invalid-options "timeout/poll need --wait")))
-    (let [ctx (data/context (select-keys v [:state :world :repo-root]))]
+    (let [ctx (data/context (select-keys v [:state :worlds :world :repo-root]))]
       {:ctx ctx :filter (map-tool/filters ctx v) :observer observer
        :cursor (when (:cursor v) (map-tool/read-edn (:cursor v))) :explicit-cursor (boolean (:cursor v))
        :wait (boolean (:wait v)) :raw (boolean (:raw v)) :timeout-ms timeout-ms :poll-ms poll-ms})))

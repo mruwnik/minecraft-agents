@@ -1,5 +1,5 @@
 (ns engine.zones
-  "The world's zone file (state/worlds/<world>/zones.edn) checked and parsed; no IO. A zone is an inclusive box
+  "The world's zone file (worlds/<world>/zones.edn) checked and parsed; no IO. A zone is an inclusive box
   {:name \"farm\" :min [x y z] :max [x y z] :owner \"name\" :allow #{:dig :place :harvest} :note \"text\"} that keeps
   every action it does not :allow out (no :allow permits nothing; :note is optional). engine.access.rules reads them."
   (:require [cljs.reader :as reader]

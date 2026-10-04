@@ -1,5 +1,5 @@
 (ns engine.world
-  "The world's shared knowledge as a body reads it: the plans of its world (state/worlds/<world>/plans/<id>.edn) and
+  "The world's shared knowledge as a body reads it: the plans of its world (worlds/<world>/plans/<id>.edn) and
   the blueprints they place (blueprints/<id>.edn at the repo root), parsed with plan.parse and expanded with
   plan.shape. Bodies only read; nothing here writes a file.
 
@@ -9,7 +9,7 @@
   keeps its last good copy and is reported once, by a world.plan-unreadable (or world.blueprint-unreadable) warn; a
   file that was never readable answers as broken, not as absent.
 
-  The zone file (state/worlds/<world>/zones.edn, checked by engine.zones) is read the same way, with one difference:
+  The zone file (worlds/<world>/zones.edn, checked by engine.zones) is read the same way, with one difference:
   a missing file answers nil, like one never readable (warned once, by world.zones-missing, each time it goes), so a
   dig or place job declines; an empty vector is a valid \"no zones\". A bad edit keeps the last good copy
   (world.zones-unreadable).

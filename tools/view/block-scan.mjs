@@ -1,3 +1,4 @@
+import { worldsDir } from '../../engine/js/bodies.mjs'
 // Counts, per column file, the blocks the view draws wrong (the flagged names of block-issues.mjs) and where one was first
 // seen. The scan runs in a worker thread (block-scan-worker.mjs) so a server mounted in the dashboard never blocks.
 import fs from 'node:fs'
@@ -126,7 +127,7 @@ export function createTotals (world) {
 // ---------------------------------------------------------------- the main-thread side
 
 // track(world) starts a scan the first time a world is named; latest(world) resolves with its newest records once the first
-// scan is done (null for a world without a chunks directory). The worker also writes state/worlds/<w>/view-block-issues.json.
+// scan is done (null for a world without a chunks directory). The worker also writes worlds/<w>/view-block-issues.json.
 export function createBlockScanner ({ stateDir, textureDir, jar, sweepMs = 5000, writeMs = 5000 }) {
   let worker = null
   const worlds = new Map() // world -> { payload, waiters }
@@ -145,7 +146,7 @@ export function createBlockScanner ({ stateDir, textureDir, jar, sweepMs = 5000,
   }
   const track = world => {
     if (worlds.has(world)) return
-    if (!fs.existsSync(path.join(stateDir, 'worlds', world, 'chunks'))) return
+    if (!fs.existsSync(path.join(worldsDir(stateDir), world, 'chunks'))) return
     worlds.set(world, { payload: null, waiters: [] })
     start().postMessage({ type: 'track', world })
   }

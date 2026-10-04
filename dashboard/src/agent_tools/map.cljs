@@ -1,14 +1,15 @@
 (ns agent-tools.map
   "Agent map command: intent markers, access zones and expiring social claims."
-  (:require [cljs.tools.reader.edn :as edn]
+  (:require [engine.bodies :as bodies]
+            [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
             [clojure.string :as str]
             [agent-tools.world-data :as data]
             ["node:path" :as path]
             ["node:util" :refer [parseArgs]]))
 
-(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --state DIR]")
-(def default-state-dir (.resolve path js/__dirname "../../state"))
+(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]")
+(def default-state-dir (.resolve path js/__dirname "../.."))
 
 (defn coalesce [& values] (first (filter some? values)))
 
@@ -40,7 +41,7 @@
   (let [{:keys [positionals values]} (parse-options argv
            (merge (zipmap [:world :repo-root :data :revision :if-revision :by :for :center :place :radius :type :owner :status :text :limit :offset]
                           (repeat {:type "string"}))
-                  {:state {:type "string" :default default-state-dir}}
+                  {:state {:type "string"} :worlds {:type "string"}}
                   (zipmap [:dry-run :preview :raw] (repeat {:type "boolean"}))))
         [command kind id & extra] positionals
         command (keyword (or command "find"))
@@ -62,11 +63,11 @@
     (when (and (#{:renew :release} command) (not= kind :claim))
       (throw (data/fail :invalid-command "renew/release apply only to claims")))
     (doseq [key (keys v)]
-      (when-not ((into #{:world :state :repo-root} allowed) key)
+      (when-not ((into #{:world :worlds :state :repo-root} allowed) key)
         (throw (data/fail :invalid-option (str "--" (name key) " does not apply to " (name command))))))
     (when (and (:for v) (not= kind :claim))
       (throw (data/fail :invalid-option "--for applies only to claims")))
-    (let [ctx (data/context (select-keys v [:state :world :repo-root]))]
+    (let [ctx (data/context (select-keys v [:state :worlds :world :repo-root]))]
       (when (and (not (#{:find :show} command)) (or (nil? (:by v)) (str/blank? (:by v))))
         (throw (data/fail :actor-required "mutations require --by")))
       (when (and (not (#{:find :show :add} command)) (not (re-matches #"^[0-9a-f]{24}$" (or (:revision v) ""))))

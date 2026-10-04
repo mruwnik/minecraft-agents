@@ -9,7 +9,7 @@ import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
-import { bodyDir, listBodies } from '../../engine/js/bodies.mjs'
+import { bodyDir, listBodies, worldsDir } from '../../engine/js/bodies.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
@@ -79,11 +79,11 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const sendBlockIssues = async (res, world) => {
     scanner.track(world)
     const held = scanner.peek(world)
-    const file = path.join(stateDir, 'worlds', world, 'view-block-issues.json')
+    const file = path.join(worldsDir(stateDir), world, 'view-block-issues.json')
     const stored = held ? null : await readJson(file)
     const payload = held ?? stored ?? await scanner.latest(world)
     if (!payload) return notFound(res)
-    const doc = await readJson(path.join(stateDir, 'worlds', world, 'biomes.json'))
+    const doc = await readJson(path.join(worldsDir(stateDir), world, 'biomes.json'))
     send(res, 200, JSON.stringify(withBiomeIssues(world, biomeFallbackReason(doc) ? payload : withoutTintApproximate(payload))), { 'Content-Type': TYPES['.json'] })
   }
 
@@ -114,7 +114,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const biomeFallbackReason = doc => !doc?.biomes ? 'no biomes.json for this world' : doc.biomes.length > MAX_BIOMES ? `biomes.json lists ${doc.biomes.length} biomes, more than the ${MAX_BIOMES} ids the view holds` : null
   const biomeCache = new Map()
   const sendBiomes = async (res, world) => {
-    const worldDir = path.join(stateDir, 'worlds', world)
+    const worldDir = path.join(worldsDir(stateDir), world)
     if (!(await statOrNull(worldDir))?.isDirectory()) return notFound(res)
     const file = path.join(worldDir, 'biomes.json')
     const stat = await statOrNull(file)
@@ -161,7 +161,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const seen = new Map()
     const check = async (cx, cz) => {
       const key = `${cx}.${cz}`
-      const stat = await statOrNull(path.join(stateDir, 'worlds', world, 'chunks', `${key}.bin`))
+      const stat = await statOrNull(path.join(worldsDir(stateDir), world, 'chunks', `${key}.bin`))
       const mtime = stat?.mtimeMs ?? null
       const known = seen.has(key)
       const before = seen.get(key)
@@ -245,7 +245,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     let chunkWatcher = null
     if (push === 'watch') {
       try {
-        chunkWatcher = fs.watch(path.join(stateDir, 'worlds', first.world, 'chunks'), (_event, file) => watchColumns.file(file))
+        chunkWatcher = fs.watch(path.join(worldsDir(stateDir), first.world, 'chunks'), (_event, file) => watchColumns.file(file))
         chunkWatcher.on('error', () => chunkWatcher?.close())
       } catch {
         chunkWatcher = null // no directory yet: the poll covers it
@@ -313,7 +313,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     if (head === 'block-issues' && rest.length === 1 && NAME.test(rest[0])) return sendBlockIssues(res, rest[0])
     if (head === 'hud' && body) return sendFile(res, agentFile(body, 'hud.json'), TYPES['.json'])
     if (head === 'columns' && rest.length === 2 && NAME.test(rest[0]) && COLUMN_FILE.test(rest[1])) {
-      return sendFile(res, path.join(stateDir, 'worlds', rest[0], 'chunks', rest[1]), 'application/octet-stream')
+      return sendFile(res, path.join(worldsDir(stateDir), rest[0], 'chunks', rest[1]), 'application/octet-stream')
     }
     const versionOf = (dir, ext) => head === dir && rest.length === 1 ? new RegExp(`^([0-9.]+)\\.${ext}$`).exec(rest[0])?.[1] : null
     const tableVersion = versionOf('blocks', 'json')

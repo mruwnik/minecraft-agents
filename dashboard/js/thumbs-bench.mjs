@@ -6,7 +6,7 @@ import { createRenderer } from './thumbs.mjs'
 import { listBodies } from '../../engine/js/bodies.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const stateDir = path.resolve(process.argv[2] ?? path.join(repo, 'state'))
+const stateDir = path.resolve(process.argv[2] ?? repo)
 const bodies = listBodies(stateDir).filter(b => fs.existsSync(path.join(b.dir, 'view', 'pose.json')))
 const renderer = createRenderer({ stateDir })
 const started = performance.now()

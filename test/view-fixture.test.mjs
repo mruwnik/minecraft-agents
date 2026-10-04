@@ -135,7 +135,7 @@ test('the glass wall and its region do not overlap any other region', () => {
   for (const b of others) assert.ok(!overlap(wall, rects[b]), `glass wall overlaps ${b}`)
 })
 
-const live = JSON.parse(fs.readFileSync(new URL('../state/worlds/claude/biomes.json', import.meta.url), 'utf8')).biomes
+const live = JSON.parse(fs.readFileSync(new URL('../worlds/claude/biomes.json', import.meta.url), 'utf8')).biomes
 const liveId = name => live.find(b => b.name === name).id
 
 // biome of the 4x4x4 cell holding the block (x, y, z) of chunk 0.0, as the page reads the dump

@@ -1,6 +1,6 @@
 (ns dashboard.engine-events
   "What the dashboard knows about an ENGINE body: everything comes from the events it appends to
-  state/worlds/<world>/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
+  worlds/<world>/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
   (:require [clojure.string :as str]))
 
 ;; The longest gap between two events inside one run was ~10 s (a restart gap is 60 s+), so 30 s is 3x margin.

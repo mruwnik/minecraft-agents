@@ -1,5 +1,5 @@
 (ns dashboard.plan
-  "Reading plan and blueprint files: state/worlds/<world>/plans/<id>.edn, one plan per file, and blueprints/<id>.edn
+  "Reading plan and blueprint files: worlds/<world>/plans/<id>.edn, one plan per file, and blueprints/<id>.edn
   at the repo root, one blueprint per file (the .blueprint.json documents there are the legacy library's). Only the
   file side lives here; parsing the text is plan.parse, what plans and blueprints are is plan.shape."
   (:require ["fs" :as fs]

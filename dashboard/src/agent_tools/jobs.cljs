@@ -1,10 +1,11 @@
 (ns agent-tools.jobs
   "Job command validation and native EDN requests; HTTP remains a Node boundary."
-  (:require [agent-tools.map :as map-tool]
+  (:require [engine.bodies :as bodies]
+            [agent-tools.map :as map-tool]
             ["node:path" :as path]
             ["node:crypto" :as crypto]))
 
-(def usage "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold --front] | interrupt <EDN-spec> | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--state DIR]\nMutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion.")
+(def usage "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold --front] | interrupt <EDN-spec> | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\nMutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion.")
 
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))
@@ -17,7 +18,7 @@
 (defn request-for [argv]
   (try
     (let [{:keys [positionals values]} (map-tool/parse-options argv
-          {:state {:type "string" :default map-tool/default-state-dir} :world {:type "string"}
+          {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
            :reason {:type "string"} :hold {:type "boolean"} :front {:type "boolean"}})
           [body op arg & extra] positionals
@@ -28,7 +29,7 @@
       (when-not (and (string? body) (re-matches #"[A-Za-z0-9_-]{1,40}" body))
         (throw (js/Error. "body must be a valid name")))
       (when (nil? (:world values))
-        (throw (js/Error. "missing --world <world>: the world the body plays in (a folder under state/worlds/)")))
+        (throw (js/Error. "missing --world <world>: the world the body plays in (a folder under worlds/)")))
       (when-not (re-matches #"[A-Za-z0-9_-]{1,64}" (:world values))
         (throw (js/Error. "the world must be a name of letters, digits, _ and -")))
       (when-not (#{:list :show :submit :interrupt :cancel :cancel-all :retry :resolve} op)
@@ -49,9 +50,9 @@
         (throw (js/Error. "resolve requires --reason handled or condition-recovered")))
       (when (and (not= op :resolve) (:reason values))
         (throw (js/Error. "--reason requires resolve")))
-      (let [state (.resolve path (:state values))
-            base {:body body :state state
-                  :socketPath (.join path state "worlds" (:world values) "agents" body "engine" "events.sock")
+      (let [state (bodies/storage-root values map-tool/default-state-dir)
+            base {:body body :world (:world values) :state state
+                  :socketPath (.join path (bodies/worlds-dir state) (:world values) "agents" body "engine" "events.sock")
                   :mutating mutating?}]
         (cond
           (= op :list)

@@ -1,4 +1,4 @@
-Village intentions belong in `state/worlds/<world>/plans/<id>.edn`. The village
+Village intentions belong in `worlds/<world>/plans/<id>.edn`. The village
 page reads plans whose `:kind` is `:village`. `:at` records a map anchor; it does
 not claim an occupied region. Geometry remains in ordinary plan `:parts`.
 
@@ -12,7 +12,8 @@ node dashboard/out/migrate-data.cjs --root . --world claude --dry-run
 node dashboard/out/migrate-data.cjs --root . --world claude --apply
 ```
 
-`--state-dir /path/to/state` can select a separate state tree. `--world` and
+`--worlds /path/to/worlds` selects another worlds directory; legacy
+`--state-dir /path/to/state` selects a parent containing `worlds/`. `--world` and
 exactly one of `--dry-run` or `--apply` are required. This tool does not invoke a
 compiler or JVM at runtime.
 
@@ -40,7 +41,7 @@ observations and are never enrolled as plan members by this migration.
 Every source and destination is checked before applying. Existing plan updates
 take the native writer's per-file lock and compare the original text before an
 atomic replacement. Their exact original text is first backed up to
-`state/worlds/<world>/.migration-backups/village-plans/<id>.<sha256>.edn`.
+`worlds/<world>/.migration-backups/village-plans/<id>.<sha256>.edn`.
 New files and backups use atomic create-only links; nothing already present is
 overwritten by those operations. Repeating an unchanged migration produces
 `:unchanged` results. A concurrent edit causes refusal; if an earlier file was

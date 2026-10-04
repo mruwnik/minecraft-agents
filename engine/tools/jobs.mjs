@@ -40,7 +40,7 @@ export async function main (argv = process.argv.slice(2)) {
     } else if (r.mutating) {
       const snapshot = await get(r.socketPath, '/snapshot')
       if (snapshot.status !== 200 || !/^application\/edn(?:;|$)/i.test(snapshot.contentType ?? '')) throw new Error('snapshot unavailable')
-      const metaDir = path.join(r.state, 'commands', r.body, 'jobs')
+      const metaDir = path.join(path.dirname(path.dirname(r.socketPath)), '.commands', 'jobs')
       const metaFile = path.join(metaDir, `${r.request['request-id']}.edn`)
       fs.mkdirSync(metaDir, { recursive: true, mode: 0o700 })
       const cached = fs.existsSync(metaFile) ? readEDN(fs.readFileSync(metaFile, 'utf8')) : null

@@ -2,7 +2,7 @@
   "The recorded benchmark query set (the frozen world queries of bench-lang/courses.mjs and the live tester's courses)
   planned with the ClojureScript planner and checked against what the JS planner answered, recorded once in
   test/planner-bench.json as [status reason seconds risk end-cell expanded] per query (seconds and risk to 3 decimals).
-  The world queries need the frozen bench (state/bench/pathfinding/claude-1, or PLANNER_BENCH_DIR); without it they are skipped with a warning."
+  The world queries need the frozen bench (engine/test/fixtures/pathfinding/claude-1, or PLANNER_BENCH_DIR); without it they are skipped with a warning."
   (:require [cljs.test :refer [deftest is]]
             ["fs" :as fs]
             ["path" :as path]
@@ -44,7 +44,7 @@
     (is (= 144 (count names)))
     (is (= [] (disagreements names pf/course-plan (fn [n] (get-in @recorded [:course (keyword n)])))))))
 
-(defn bench-dir [] (or js/process.env.PLANNER_BENCH_DIR (path/join (js/process.cwd) "../state/bench/pathfinding/claude-1")))
+(defn bench-dir [] (or js/process.env.PLANNER_BENCH_DIR (path/resolve js/__dirname "../test/fixtures/pathfinding/claude-1")))
 
 (defn world-queries
   "[{:id :query :snapshot}] of the frozen world, [] with a warning when the frozen bench is not on this machine."

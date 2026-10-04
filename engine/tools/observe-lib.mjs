@@ -1,3 +1,4 @@
+import { worldsDir } from '../js/bodies.mjs'
 import edn from 'edn-data'
 import fs from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -123,7 +124,7 @@ function checkpoint (file, state) {
 export async function waitObserve (request, get, signal, deliver = async () => {}) {
   const opts = request.waitOptions
   // per body, and a name is unique only within a world
-  const dir = path.join(request.state, 'worlds', request.world, 'observers', request.agent)
+  const dir = path.join(worldsDir(request.state), request.world, 'observers', request.agent)
   const release = acquire(dir, opts.observer)
   const file = path.join(dir, `${opts.observer}.edn`)
   let saved

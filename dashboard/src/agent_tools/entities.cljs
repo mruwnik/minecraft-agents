@@ -6,7 +6,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--state DIR]")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)
@@ -33,12 +33,12 @@
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
-           (merge {:world {:type "string"} :state {:type "string" :default map-tool/default-state-dir}
+           (merge {:world {:type "string"} :state {:type "string"} :worlds {:type "string"}
                    :type {:type "string"} :player {:type "string"} :dimension {:type "string"}
                    :center {:type "string"} :radius {:type "string"} :limit {:type "string"} :offset {:type "string"}
                    :raw {:type "boolean"}}))
         [body & extra] positionals
-        allowed #{:world :state :type :player :dimension :center :radius :limit :offset :raw}
+        allowed #{:world :worlds :state :type :player :dimension :center :radius :limit :offset :raw}
         radius (number (or (:radius values) default-radius))
         limit (number (or (:limit values) default-limit))
         offset (number (or (:offset values) 0))
@@ -63,7 +63,7 @@
       (throw (data/fail :invalid-limit "--limit must be an integer from 1 to 50")))
     (when-not (and (some? offset) (js/Number.isInteger offset) (<= 0 offset max-offset))
       (throw (data/fail :invalid-offset "--offset must be an integer from 0 to 10000")))
-    (let [ctx (data/context (select-keys values [:state :world]))]
+    (let [ctx (data/context (select-keys values [:state :worlds :world]))]
       {:ctx ctx :body body :type (:type values) :player (:player values)
        :dimension dimension :center center :radius radius :limit limit :offset offset :raw? (true? (:raw values))})))
 

@@ -43,7 +43,7 @@
     (seq? v) #js {:list (into-array (map to-js v))}
     :else v))
 (defn- context-js [ctx]
-  (let [o (js-obj)] (doseq [[k x] ctx] (aset o (or (context-aliases k) (name k)) x)) o))
+  (let [o (js-obj)] (doseq [[k x] ctx] (aset o (or (context-aliases k) (name k)) (if (= k :state) (clj->js x) x))) o))
 (defn- legacy-record [d]
   (when d (-> d (update :kind data/name) (update :scope data/name))))
 (defn- legacy-query [result] (update result :items #(mapv legacy-record %)))

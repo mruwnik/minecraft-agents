@@ -1,6 +1,7 @@
+import { worldsDir } from '../../engine/js/bodies.mjs'
 // The scan thread of block-scan.mjs. Per tracked world: an initial scan of the chunk files, then incremental rescans of the
 // columns whose mtime changed (a directory watch, with a slow sweep as the fallback). It posts the merged records to the
-// main thread after every change and writes state/worlds/<world>/view-block-issues.json (atomically, rarely, on change).
+// main thread after every change and writes worlds/<world>/view-block-issues.json (atomically, rarely, on change).
 import fs from 'node:fs'
 import path from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -34,8 +35,8 @@ const writeAtomic = async (file, text) => {
 }
 
 const trackWorld = async world => {
-  const dir = path.join(stateDir, 'worlds', world, 'chunks')
-  const out = path.join(stateDir, 'worlds', world, 'view-block-issues.json')
+  const dir = path.join(worldsDir(stateDir), world, 'chunks')
+  const out = path.join(worldsDir(stateDir), world, 'view-block-issues.json')
   const totals = createTotals(world)
   const mtimes = new Map()
   const dirty = new Set()

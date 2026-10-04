@@ -1,13 +1,14 @@
 (ns dashboard.migrate-data
   "Explicit village plan migration, with create-only additions and guarded enrichment of existing native plans."
-  (:require ["fs" :as fs]
+  (:require [engine.bodies :as bodies]
+            ["fs" :as fs]
             ["path" :as path]
             ["crypto" :as crypto]
             [clojure.string :as str]
             [dashboard.edn-data :as data]
             [plan.shape :as shape]))
 
-(def usage "node dashboard/out/migrate-data.cjs --root REPO --world claude [--state-dir STATE] (--dry-run | --apply)")
+(def usage "node dashboard/out/migrate-data.cjs --root REPO --world claude [--worlds WORLDS] [--state-dir LEGACY_PARENT] (--dry-run | --apply)")
 
 (defn options [argv]
   (loop [args argv opts {:root (.cwd js/process)}]
@@ -21,9 +22,9 @@
           ("--dry-run" "--apply")
           (do (when (contains? opts :apply?) (throw (js/Error. "choose exactly one of --dry-run or --apply")))
               (recur (rest args) (assoc opts :apply? (= flag "--apply"))))
-          ("--root" "--world" "--state-dir")
+          ("--root" "--world" "--state-dir" "--worlds")
           (do (when (or (nil? value) (str/starts-with? value "--")) (throw (js/Error. usage)))
-              (recur (nnext args) (assoc opts ({"--root" :root "--world" :world "--state-dir" :state-dir} flag) value)))
+              (recur (nnext args) (assoc opts ({"--root" :root "--world" :world "--state-dir" :state-dir "--worlds" :worlds} flag) value)))
           (throw (js/Error. (str "unknown argument " flag "; " usage))))))))
 
 (defn json->edn [v]
@@ -79,8 +80,8 @@
               {:value value :source (source-ref state file)}))
           (data/files dir #"[a-f0-9]{32}\.json"))))
 
-(defn village-intents [state world]
-  (let [places-file (.join path state "worlds" world "places.json")
+(defn village-intents [state world storage]
+  (let [places-file (.join path (bodies/worlds-dir storage) world "places.json")
         places (if (.existsSync fs places-file) (read-json places-file) [])
         _ (when-not (and (vector? places) (<= (count places) 10000)) (throw (js/Error. "places must be a bounded vector")))
         markers (filter #(= "village" (:kind %)) places)
@@ -139,12 +140,13 @@
                :backup {:file backup :text before :value prior :exact? true}})
       :else {:file file :status :create :value value :text text})))
 
-(defn prepare [{:keys [root state-dir world]}]
+(defn prepare [{:keys [root state-dir worlds world]}]
   (when-not (and (string? world) (re-matches #"[A-Za-z0-9_-]{1,64}" world)) (throw (js/Error. "give an explicit valid world")))
   (let [state (.resolve path (or state-dir (.join path root "state")))
-        dir (.join path state "worlds" world)
+        storage (bodies/storage-root {:state state-dir :worlds worlds} root)
+        dir (.join path (bodies/worlds-dir storage) world)
         _ (when-not (.existsSync fs (.join path dir "world.json")) (throw (js/Error. (str "target world is missing: " world))))
-        plans (village-intents state world)
+        plans (village-intents state world storage)
         backup-dir (.join path dir ".migration-backups" "village-plans")
         writes (mapv #(planned-write (.join path dir "plans" (str (:id %) ".edn")) % backup-dir) plans)]
     {:world world :state-dir state :writes (vec writes)

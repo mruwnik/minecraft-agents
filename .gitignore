@@ -2,3 +2,7 @@ node_modules/
 textures/
 state/
 .superpowers/
+
+# Local world data and frozen benchmark captures (never commit account caches).
+worlds/
+engine/test/fixtures/pathfinding/

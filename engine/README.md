@@ -485,7 +485,7 @@ The single argument of a check and a round. Use the helpers in `engine.ctx`.
 | `(ctx/plan ctx id)` | the body's world's plan `id`, from memory: nil (no such file), `{:id :broken text}` (never readable), else `{:id :plan :status :cells :errors}` (`:cells` `[{:pos [x y z] :want :part}]` from `plan.shape/expand`), with `:error` while the file is bad and this is its last good copy |
 | `(ctx/warn-once! ctx key kind fields)` | a warn event, only the first time this job gives `key` in this body process; checks may call it |
 
-**World knowledge.** `engine.world` reads the plans of the body's world (`state/worlds/<world>/plans/<id>.edn`,
+**World knowledge.** `engine.world` reads the plans of the body's world (`worlds/<world>/plans/<id>.edn`,
 the world named in the agent's `config.json`) and the blueprints (`blueprints/<id>.edn` at the repo root), parses them
 with `plan.parse` and expands them with `plan.shape` (both under `src/plan/`, shared with the dashboard). Bodies only
 read. The files are stat-ed again at most every 3 s, by the first read after that, and only changed files are parsed
@@ -493,7 +493,7 @@ again. A file that turns unreadable or invalid keeps its last good copy and is r
 `world.plan-unreadable` / `world.blueprint-unreadable`, `:plan` or `:blueprint`, `:error`, `:kept`).
 
 **Notes.** What bodies saw, written by the bodies into the world's shared knowledge (`engine.notes`; plans stay
-read-only). Each body writes only its own file, `state/worlds/<world>/notes/<body>.edn` (`notes/paths`, the one place
+read-only). Each body writes only its own file, `worlds/<world>/notes/<body>.edn` (`notes/paths`, the one place
 that says so), `{:body :notes [note]}`, whole, to a temp file then renamed. A note is `{:kind :what :pos [x y z] :by :t
 :until}` (`:t`, `:until` wall-clock ms): `{:kind :seen :what "oak_log"}` a block seen there, with `:id` (uuid) for an
 entity, `{:kind :searched :what [names] :r n}` ground looked over for those names within `r` (XZ). One item per
@@ -551,7 +551,7 @@ a peer on the list, not a child.
 
 ## Memory
 
-One EDN store per body, `memory.edn` under `state/worlds/<world>/agents/<name>/engine/`,
+One EDN store per body, `memory.edn` under `worlds/<world>/agents/<name>/engine/`,
 read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
 `{:entries {kind [entry]} :policies {kind policy}}`:
 
@@ -878,7 +878,7 @@ it never removes it, and it alerts.
 ## Events
 
 The engine writes one EDN map per line to stdout and
-`state/worlds/<world>/agents/<name>/engine/events.edn`. The canonical contract is in
+`worlds/<world>/agents/<name>/engine/events.edn`. The canonical contract is in
 [`docs/event-stream.md`](../docs/event-stream.md). Event HTTP responses and
 requests also use `application/edn`; there is no JSON serialization boundary
 for engine events. Existing JSONL logs remain historical files and are not
@@ -923,7 +923,7 @@ required request remains in saved state even if its notification cannot be logge
 
 ### Local event API
 
-The engine exposes HTTP over `state/worlds/<world>/agents/<name>/engine/events.sock`, a local
+The engine exposes HTTP over `worlds/<world>/agents/<name>/engine/events.sock`, a local
 Unix socket with mode 0600. It is separate from manual driving's `control.sock`.
 All responses are EDN, including errors; mutation bodies must be EDN too.
 
@@ -946,7 +946,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 For example, read a snapshot without taking control of the body:
 
 ```sh
-curl --unix-socket state/worlds/claude/agents/Bob/engine/events.sock http://localhost/snapshot
+curl --unix-socket worlds/claude/agents/Bob/engine/events.sock http://localhost/snapshot
 ```
 
 On connection/reconnection or a history gap, reconcile outstanding requests
@@ -1091,7 +1091,7 @@ the same dedupe as the other ops: the same request id replays the result with `:
 ## Manual takeover
 
 For rescuing a stuck body by hand. The body listens on a unix socket,
-`state/worlds/<world>/agents/<name>/engine/control.sock` (mode 0600), created at start and removed at shutdown. If it
+`worlds/<world>/agents/<name>/engine/control.sock` (mode 0600), created at start and removed at shutdown. If it
 cannot listen (for example a path over 107 bytes) the body emits `system.control_unavailable` (error) and runs without it.
 
 The socket exposes `/drive` for direct movement (JSON) and `/world` for a small set of bounded primitive actions (EDN).
@@ -1128,7 +1128,7 @@ Where the rules live: `engine.lease` holds them, pure; `engine.takeover` applies
 Events: `system.takeover_started` `{who why}`; `system.takeover_ended` `{who reason held-ms}` with reason `released`,
 `forced`, `idle`, `offline` or `shutdown`; `system.drive_deadman`.
 
-CLI (`--state <dir>` is the state directory holding `agents/`, default the repo's `state/`; `--who` defaults to `claude`):
+CLI (`--worlds <dir>` selects the worlds directory, default the repo's `worlds/`; `--state <dir>` retains the legacy parent layout; `--who` defaults to `claude`):
 
 ```
 node engine/tools/drive.mjs ProbeDrive --world claude take --who claude --why "stuck in a pit"
@@ -1184,15 +1184,15 @@ EDN, read with `cljs.reader`:
 ```
 
 `npm run body -- --agent <name> --world <world> --scenario <file>` loads
-`state/worlds/<world>/agents/<name>/config.json` (`username`; the world is where the folder is, never a config field),
-the world's `state/worlds/<world>/world.json` (`host`, `port`), and `js/primitives.mjs`
+`worlds/<world>/agents/<name>/config.json` (`username`; the world is where the folder is, never a config field),
+the world's `worlds/<world>/world.json` (`host`, `port`), and `js/primitives.mjs`
 (`engine.bodies` and `js/bodies.mjs` are the one place that builds a body folder path).
 It refuses to start, with a message, when `--world` is missing or `js/primitives.mjs` does not exist.
-If `state/worlds/<world>/agents/<name>/engine/engine.edn` exists the saved list and register
+If `worlds/<world>/agents/<name>/engine/engine.edn` exists the saved list and register
 are restored and the scenario is ignored; pass `--fresh` to discard saved
 engine state and start from the scenario (memory is kept; job kinds of the
 discarded list are swept). The scenario is validated against the job
-registry and the triggers before connecting. `--state-dir <dir>` overrides the repo's `state/`.
+registry and the triggers before connecting. `--worlds <dir>` overrides the repo's `worlds/`; legacy `--state-dir <dir>` selects its parent.
 
 `test/engine/scenarios_test.cljs` runs `woodcutter.edn`, `pace-cuts.edn`
 and `survival.edn` end to end against the fake primitives. `survival.edn`
@@ -1608,8 +1608,8 @@ plans and walks with it one round at a time. Live (ProbeNight, 2026-10-04, scena
 
 ## Migrating old bots
 
-`npx shadow-cljs compile migrate`, then `node out/migrate.cjs --world <world> [--dry-run] [--state-dir <dir>] Name...` (default state
-dir: the repo's `state/`; default names: every folder under `state/worlds/<world>/agents/` with no `engine/`). `--dry-run` prints one
+`npx shadow-cljs compile migrate`, then `node out/migrate.cjs --world <world> [--dry-run] [--worlds <dir>] [--state-dir <legacy-parent>] Name...` (default state
+directory: the repo's `worlds/`; default names: every folder under `worlds/<world>/agents/` with no `engine/`). `--dry-run` prints one
 line per body and writes nothing. Write mode only touches bodies without `engine/`, creates `engine/memory.edn` and
 `view/pose.json`, never overwrites, moves or deletes, and refuses a body that looks connected (`engine/control.sock`, a
 live `body.pid`, or a listener on `127.0.0.1:<apiPort>`).
@@ -1655,7 +1655,7 @@ counts and at most four examples, with `:more?` when examples are omitted.
 The tool does not resolve attention requests or alter jobs/reflexes.
 
 Each named observer stores its EDN cursor and semantic attention signatures
-outside the engine state, in `state/observers/<body>/<observer>.edn`. The first
+outside the engine state, in `worlds/<world>/observers/<body>/<observer>.edn`. The first
 call establishes a baseline at the current event cursor, including outstanding
 attention; later calls replay intervening events. Different observers are
 independent; simultaneous waits using the same observer return `:observer-busy`.
@@ -1801,7 +1801,7 @@ bundle, built once with `cd dashboard && npm run build-agent-tools`; the Node
 entry point retains the existing HTTP transport boundary.
 
 The CLI retains original generation metadata for its latest 128 IDs under
-`state/commands/<body>/jobs/` (outside engine/observer state), so reuse after a
+`worlds/<world>/agents/<body>/.commands/jobs/` (outside engine/observer state), so reuse after a
 fresh engine reset is rejected instead of silently applying to a different
 body generation. Reusing an ID outside these bounded retention windows can
 execute again; never treat an old ID as an unlimited deduplication guarantee.

@@ -6,12 +6,12 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--state DIR --timeout 1200 --poll-ms 1000]")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]")
 (def stale-ms 90000)
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
-        {:world {:type "string"} :state {:type "string" :default map-tool/default-state-dir}
+        {:world {:type "string"} :state {:type "string"} :worlds {:type "string"}
          :timeout {:type "string"} :poll-ms {:type "string"}})
         [command & extra] positionals
         command (keyword (or command "clock"))
@@ -23,7 +23,7 @@
     (when-not (and (js/Number.isFinite timeout) (<= 0 timeout 3600)
                    (js/Number.isInteger poll-ms) (<= 10 poll-ms 10000))
       (throw (data/fail :invalid-option "timeout must be 0..3600 seconds; poll-ms must be 10..10000")))
-    {:ctx (data/context (select-keys values [:state :world])) :command command
+    {:ctx (data/context (select-keys values [:state :worlds :world])) :command command
      :timeout-ms (* 1000 timeout) :poll-ms poll-ms}))
 
 (defn report [ctx body now]

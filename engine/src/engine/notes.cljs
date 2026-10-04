@@ -1,6 +1,6 @@
 (ns engine.notes
   "Notes: what bodies saw, written by the bodies themselves into the world's shared knowledge (plans, by contrast,
-  are only read). Each body writes its own file, state/worlds/<world>/notes/<body>.edn (see paths), whole, to a temp
+  are only read). Each body writes its own file, worlds/<world>/notes/<body>.edn (see paths), whole, to a temp
   file and renamed, so a reader never sees half a file and nobody else ever writes it. Readers merge every body's
   file of the world.
 

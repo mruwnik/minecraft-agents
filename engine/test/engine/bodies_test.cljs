@@ -9,6 +9,15 @@
   (is (= (path/join "/s" "worlds" "claude" "agents" "Bob") (bodies/body-dir "/s" "claude" "Bob")))
   (is (not= (bodies/body-dir "/s" "a" "Bob") (bodies/body-dir "/s" "b" "Bob"))))
 
+(deftest canonical-worlds-and-legacy-state-selectors
+  (let [root (bodies/storage-root {} "/repo")
+        custom (bodies/storage-root {:worlds "/data/custom-name"} "/repo")]
+    (is (= "/repo/worlds/w/agents/Bob" (bodies/body-dir root "w" "Bob")))
+    (is (= "/data/custom-name/w/agents/Bob" (bodies/body-dir custom "w" "Bob")))
+    (is (= "/repo/worlds/.accounts/Bob" (bodies/account-dir root "Bob")))
+    (is (= "/legacy/worlds/w/agents/Bob" (bodies/body-dir (bodies/storage-root {:state "/legacy"} "/repo") "w" "Bob")))
+    (is (thrown-with-msg? js/Error #"choose" (bodies/storage-root {:state "/legacy" :worlds "/data"} "/repo")))))
+
 (deftest body-dir-refuses-a-missing-or-unsafe-part
   (are [world name pattern] (re-find pattern (try (bodies/body-dir "/s" world name) "" (catch :default e (ex-message e))))
     nil "Bob" #"world"

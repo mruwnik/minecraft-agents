@@ -5,7 +5,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { defaultStateDir, socketPathFor } from './drive-lib.mjs'
-import { NAME, missingWorldError } from '../js/bodies.mjs'
+import { NAME, missingWorldError, storageRoot } from '../js/bodies.mjs'
 
 const kw = name => ({ __keyword: name })
 const edn = value => {
@@ -21,7 +21,7 @@ const edn = value => {
   throw new Error('unsupported EDN value')
 }
 
-const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--state <dir>]
+const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]
   submit move-to <x> <y> <z> [--range <n>] [--timeout-s <1..10>] [--max-distance <1..64>]
   submit dig <x> <y> <z> | submit place <x> <y> <z> <item>
   submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]
@@ -30,7 +30,7 @@ const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who 
 Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.
 Submit returns immediately with a request-id; poll status while continuing to observe/chat.`
 
-const opts = { who: { type: 'string', default: 'claude' }, state: { type: 'string', default: defaultStateDir }, world: { type: 'string' },
+const opts = { who: { type: 'string', default: 'claude' }, state: { type: 'string' }, worlds: { type: 'string' }, world: { type: 'string' },
   range: { type: 'string' }, 'timeout-s': { type: 'string' }, 'max-distance': { type: 'string' },
   item: { type: 'string' }, face: { type: 'string' }, 'request-id': { type: 'string' } }
 const num = (s, name) => {
@@ -88,7 +88,7 @@ function requestForUnsafe (argv) {
     if (!/^[A-Za-z0-9._-]{1,80}$/.test(requestId)) throw new Error('--request-id must be 1..80 letters, digits, dot, _ or -')
     body = { op: kw('submit'), who, 'request-id': requestId, action: kw(actionNames[action]), args: argsMap }
   } else return { error: `unknown command ${command}` }
-  return { agent, world, state: path.resolve(state), who, body }
+  return { agent, world, state: storageRoot(parsed.values, defaultStateDir), who, body }
 }
 
 export function requestFor (argv) {
