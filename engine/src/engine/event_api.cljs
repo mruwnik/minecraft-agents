@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.expr :as expr]
             [engine.events :as events]
+            [engine.job-api :as job-api]
             ["fs" :as fs]
             ["http" :as http]
             ["net" :as net]
@@ -246,6 +247,26 @@
                           pathname (.-pathname url)
                           method (.-method req)]
                       (cond
+                        (and (= method "GET") (= pathname "/jobs"))
+                        (let [params (.-searchParams url)
+                              offset (number-param params "offset" 0 10000)
+                              limit (number-param params "limit" 8 32)]
+                          (if (and offset limit (pos? limit))
+                            (respond! res 200 (job-api/list-jobs eng offset limit))
+                            (bad! res 400 :bad-query)))
+
+                        (and (= method "POST") (= pathname "/jobs"))
+                        (if-not (.startsWith (or (aget (.-headers req) "content-type") "") "application/edn")
+                          (bad! res 415 :content-type-must-be-application-edn)
+                          (-> (read-body req)
+                              (.then (fn [text]
+                                       (let [{:keys [value error]} (parse-edn text)]
+                                         (if error (bad! res 400 error)
+                                           (let [result (job-api/mutate! eng value)]
+                                             (respond! res (if (:ok result) 200 409) result))))))
+                              (.catch (fn [e] (bad! res (if (= "body too large" (.-message e)) 413 400)
+                                                       (if (= "body too large" (.-message e)) :too-large :bad-request))))))
+
                         (and (= method "GET") (= pathname "/snapshot"))
                         (respond! res 200 (snapshot eng))
 

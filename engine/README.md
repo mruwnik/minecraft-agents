@@ -1399,3 +1399,63 @@ Subsequent waits use the saved cursor. Action completion returns
 reason and movement/outcome fields. Unwatched action events stay quiet. Addressed
 chat and required attention retain their normal wake behavior while tracking an
 action. Classification by a model remains deferred.
+
+Agent job management uses the existing engine scheduler through an EDN API;
+these commands return immediately, while `observe --wait --watch` handles wakeups:
+
+```bash
+node engine/tools/jobs.mjs Bob list
+node engine/tools/jobs.mjs Bob show j17
+node engine/tools/jobs.mjs Bob submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
+node engine/tools/jobs.mjs Bob interrupt '(jobs.movement.look-around {:every-ms 2000})'
+node engine/tools/jobs.mjs Bob cancel j17
+node engine/tools/jobs.mjs Bob retry j17
+node engine/tools/observe.mjs Bob --wait --watch j17
+```
+
+Specs are native EDN lists parsed by `engine.expr`, including existing `seq`,
+`any`, `repeat`, `hold` and `backoff` forms; they are never evaluated as code.
+The server validates names/shape before changing any job or reserving a command.
+Expressions are limited to 256 nodes/depth 24 and the CLI caps input at 12000
+bytes. `GET /jobs?limit=8&offset=0` lists at most 32 jobs per page; `show` reuses
+`GET /job` and removes bookkeeping metadata. `POST /jobs` handles only submit,
+interrupt, cancel and retry. The engine owns scheduling, interruption, native
+job/child memory and failure attention; the tool owns transport/request metadata.
+Trigger management is not included.
+
+An interrupt cuts a running listed job, queues the new job at the front holding
+the body, and preserves the predecessor for resumption. Reflexes retain their
+existing priority. If the interrupt fails, existing engine behavior parks it,
+creates required attention, and resumes the predecessor. Cancellation removes
+the native job's owned child memory; retry clears its failure and attention while
+preserving job memory. No failure policy was changed. An exclusive manual lease
+permits normal submit to queue but rejects interrupt with `:manual-control`.
+
+Mutation requests carry a generated request ID and engine generation, hidden
+from normal successful output. For deliberate retries, use the same
+`--request-id <ID>` and exactly the same operation/arguments. The engine saves a
+bounded ledger of the latest 128 command IDs with its normal state; it survives
+ordinary restart. Duplicate requests return the original job ID/current status
+without repeating the mutation; reuse with changed arguments is a conflict.
+Before mutation the engine saves a pending reservation. If a crash/save failure
+leaves it pending, retry returns `:request-uncertain` and does not execute again;
+inspect jobs/attention before deciding another command. This prevents automatic
+duplicate execution, rather than claiming an atomic transaction across memory
+and engine files.
+
+The CLI retains original generation metadata for its latest 128 IDs under
+`state/commands/<body>/jobs/` (outside engine/observer state), so reuse after a
+fresh engine reset is rejected instead of silently applying to a different
+body generation. Reusing an ID outside these bounded retention windows can
+execute again; never treat an old ID as an unlimited deduplication guarantee.
+Transport uncertainty prints the request ID and asks for a same-ID query/retry;
+it never automatically resubmits with a new ID.
+
+Live validation used an isolated `ObserveJobsTest` body: a repeat look-around
+job ran, a one-shot interrupt completed and woke observe, and the original job
+resumed. Cancellation stopped it. A go-to job without its target produced a
+real parked failure/required attention, then retry and cancel cleared it.
+Replaying the original submit ID created no additional job; the final queue was
+empty. The owned body stopped and its added whitelist entry was removed.
+Unit tests additionally verify saved dedupe across restore, pending uncertainty,
+ledger bounds, lease protection, and failed-interrupt predecessor resumption.
