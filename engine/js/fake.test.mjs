@@ -679,3 +679,43 @@ test('blockAt marks full cubes only', () => {
   assert.equal(p.blockAt(at(1, 64, 0)).fullCube, true)
   for (const x of [2, 3, 4, 9]) assert.equal('fullCube' in p.blockAt(at(x, 64, 0)), false)
 })
+// ---- place with a click: the state comes from face, cursor and look (js/placing.mjs) ----
+
+const builder = (blocks, inventory) => owned({ blocks, inventory: inventory.map(name => ({ name, count: 2 })) })
+
+test('place with a click sets the state the game would and reports it', async () => {
+  const p = builder({ '1,64,0': 'stone' }, ['oak_stairs'])
+  const click = { against: at(1, 64, 0), cursor: { x: 0, y: 0.75, z: 0.5 }, yaw: 1.5 * Math.PI, pitch: 0 }
+  const r = await p.place('t1', { pos: at(0, 64, 0), item: 'oak_stairs', click })
+  assert.equal(r.status, 'placed')
+  assert.equal(r.block, 'oak_stairs')
+  assert.deepEqual([r.placed.name, r.placed.properties.facing, r.placed.properties.half], ['oak_stairs', 'east', 'top'])
+  assert.deepEqual([p.blockAt(at(0, 64, 0)).properties.facing, p.blockAt(at(0, 64, 0)).properties.half], ['east', 'top'])
+})
+
+test('place with a click on air has no support and keeps the item', async () => {
+  const p = builder({}, ['oak_log'])
+  const r = await p.place('t1', { pos: at(0, 64, 0), item: 'oak_log', click: { against: at(0, 63, 0), cursor: { x: 0.5, y: 1, z: 0.5 } } })
+  assert.equal(r.status, 'no-support')
+  assert.equal(p.self().inventory[0].count, 2)
+})
+
+test('a door makes its upper half and a bed its head; a bed with no room is refused, the item kept', async () => {
+  const p = builder({ '0,63,0': 'stone', '2,63,0': 'stone', '2,64,1': 'stone' }, ['oak_door', 'white_bed'])
+  const down = { x: 0.5, y: 1, z: 0.5 }
+  await p.place('t1', { pos: at(0, 64, 0), item: 'oak_door', click: { against: at(0, 63, 0), cursor: down, yaw: 0, pitch: 0 } })
+  assert.deepEqual([p.blockAt(at(0, 65, 0)).name, p.blockAt(at(0, 65, 0)).properties.half], ['oak_door', 'upper'])
+  const bed = await p.place('t1', { pos: at(2, 64, 0), item: 'white_bed', click: { against: at(2, 63, 0), cursor: down, yaw: Math.PI, pitch: 0 } })
+  assert.equal(bed.status, 'failed')
+  assert.equal(p.blockAt(at(2, 64, 0)).name, 'air')
+  assert.equal(p.self().inventory.find(i => i.name === 'white_bed').count, 2)
+  await p.place('t1', { pos: at(2, 64, 0), item: 'white_bed', click: { against: at(2, 63, 0), cursor: down, yaw: 1.5 * Math.PI, pitch: 0 } })
+  assert.deepEqual([p.blockAt(at(3, 64, 0)).name, p.blockAt(at(3, 64, 0)).properties.part], ['white_bed', 'head'])
+})
+
+test('a plain place clicks the block below first, looking at it from the eye, and reports the state', async () => {
+  const p = owned({ self: { pos: at(0, 64, 3) }, blocks: { '0,63,0': 'stone' }, inventory: [{ name: 'oak_log', count: 1 }, { name: 'oak_stairs', count: 1 }] })
+  assert.deepEqual((await p.place('t1', { pos: at(0, 64, 0), item: 'oak_log' })).placed, { name: 'oak_log', properties: { axis: 'y' } })
+  const stairs = await p.place('t1', { pos: at(0, 65, 0), item: 'oak_stairs' })
+  assert.deepEqual([stairs.placed.properties.facing, stairs.placed.properties.half], ['north', 'bottom'])
+})

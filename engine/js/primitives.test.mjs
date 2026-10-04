@@ -1205,7 +1205,8 @@ const replaceable = ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 
 for (const name of replaceable) {
   test(`place puts a block into a ${name} cell`, async () => {
     const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': name }, items: [{ name: 'cobblestone', count: 1, slot: 36 }] })
-    assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' }), { status: 'placed', block: 'cobblestone' })
+    const { status, block } = await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })
+    assert.deepEqual({ status, block }, { status: 'placed', block: 'cobblestone' })
   })
 
   test(`a water bucket pours onto a ${name} cell`, async () => {
@@ -2299,4 +2300,84 @@ test('blockAt marks a block fullCube only when its collision shape fills the cel
   assert.equal(p.blockAt(at(1, 64, 0)).fullCube, true)
   for (const x of [2, 3, 4]) assert.equal('fullCube' in p.blockAt(at(x, 64, 0)), false)
   assert.equal('fullCube' in p.blockAt(at(9, 64, 0)), false)
+})
+// ---- place with a click: the face, cursor, look and sneak the caller chose, then the block read back ----
+
+const clickRig = (extra = {}) => {
+  const blocks = { '2,64,0': 'stone', '1,63,0': 'stone', ...extra.blocks }
+  const props = {}
+  const spec = { blocks, props, items: [{ name: 'oak_stairs', count: 2, slot: 36 }], ...extra.spec }
+  const bot = stubBot(spec)
+  const place = bot._placeBlockWithOptions
+  bot._placeBlockWithOptions = (ref, face, options) => {
+    const p = ref.position.plus(face)
+    blocks[`${p.x},${p.y},${p.z}`] = 'oak_stairs'
+    props[`${p.x},${p.y},${p.z}`] = { facing: 'east', half: 'top' }
+    return place(ref, face, options)
+  }
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  p.setOwner('t1')
+  return { bot, p }
+}
+const stairClick = { against: at(2, 64, 0), cursor: at(0, 0.75, 0.5), yaw: 1.5 * Math.PI, pitch: 0, sneak: true }
+
+test('place with a click sneaks, holds the look, clicks that face at that cursor without looking again, and reads the block back', async () => {
+  const { bot, p } = clickRig()
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click: stairClick }),
+    { status: 'placed', block: 'oak_stairs', placed: { name: 'oak_stairs', properties: { facing: 'east', half: 'top' } } })
+  const steps = bot.calls.filter(c => ['setControlState', 'look', 'lookAt', '_placeBlockWithOptions'].includes(c.name))
+  assert.deepEqual(steps.map(c => c.name), ['setControlState', 'look', '_placeBlockWithOptions', 'setControlState'])
+  assert.deepEqual(steps[0].args, ['sneak', true])
+  assert.deepEqual(steps[1].args, [1.5 * Math.PI, 0, true])
+  const [ref, face, options] = steps[2].args
+  assert.deepEqual([ref.position.x, ref.position.y, ref.position.z, face.x, face.y, face.z], [2, 64, 0, -1, 0, 0])
+  assert.deepEqual([options.forceLook, options.delta.x, options.delta.y, options.delta.z], ['ignore', 0, 0.75, 0.5])
+  assert.deepEqual(steps[3].args, ['sneak', false])
+})
+
+test('place with a click and no look looks at the cursor point; with only a pitch it keeps the yaw', async () => {
+  const { bot, p } = clickRig()
+  await p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click: { against: at(2, 64, 0), cursor: at(0, 0.5, 0.5) } })
+  const look = bot.calls.find(c => c.name === 'lookAt')
+  assert.deepEqual([look.args[0].x, look.args[0].y, look.args[0].z, look.args[1]], [2, 64.5, 0.5, true])
+  assert.ok(!bot.calls.some(c => c.name === 'setControlState'))
+  const down = clickRig()
+  down.bot.entity.yaw = 0.25
+  await down.p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click: { against: at(1, 63, 0), cursor: at(0.5, 1, 0.5), pitch: -Math.PI / 2 } })
+  assert.deepEqual(down.bot.calls.find(c => c.name === 'look').args, [0.25, -Math.PI / 2, true])
+})
+
+test('place with a click on air or a fluid has no support and equips nothing', async () => {
+  for (const name of [undefined, 'water']) {
+    const { bot, p } = clickRig({ blocks: name ? { '1,65,0': name } : {} })
+    assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click: { against: at(1, 65, 0), cursor: at(0.5, 0, 0.5) } }), { status: 'no-support' })
+    assert.ok(!names(bot).includes('equip'))
+  }
+})
+
+test('place refuses a click that is not on a neighbour or has a cursor off the block', async () => {
+  for (const click of [{ against: at(3, 64, 0), cursor: at(0, 0.5, 0.5) }, { against: at(2, 65, 0), cursor: at(0, 0.5, 0.5) }, { against: at(2, 64, 0), cursor: at(0, 1.5, 0.5) }, { against: at(2, 64, 0) }]) {
+    const { p } = clickRig()
+    await assert.rejects(p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click }), err => err.code === 'bad-args')
+  }
+})
+
+test('a cut while a sneaking click is out releases sneak', async () => {
+  const { bot, p } = clickRig({ spec: { hang: ['_placeBlockWithOptions'] } })
+  const call = p.place('t1', { pos: at(1, 64, 0), item: 'oak_stairs', click: stairClick })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  p.setOwner('t2')
+  await assert.rejects(call, err => err.code === 'cut')
+  assert.equal(bot.controlState.sneak, false)
+})
+
+test('a plain place reads the block back too', async () => {
+  const blocks = { '1,63,0': 'stone' }
+  const props = {}
+  const bot = stubBot({ blocks, props, items: [{ name: 'oak_log', count: 1, slot: 36 }] })
+  const place = bot.placeBlock
+  bot.placeBlock = (ref, face) => { blocks['1,64,0'] = 'oak_log'; props['1,64,0'] = { axis: 'y' }; return place(ref, face) }
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  p.setOwner('t1')
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_log' }), { status: 'placed', block: 'oak_log', placed: { name: 'oak_log', properties: { axis: 'y' } } })
 })

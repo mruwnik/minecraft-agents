@@ -56,18 +56,33 @@
           (is (= 1 (count (h/events-of seen :build.done))))
           (is (empty? (h/events-of seen :build.short))))))))
 
-(deftest a-gate-with-a-facing-is-placed-from-the-side-it-faces-away-from
+(deftest a-facing-no-click-gives-is-placed-from-the-side-it-faces-away-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (pen-plan :active) :parts conj {:id "eye" :cells [[3 65 2]] :want {:block "observer" :facing :north}})
+              {:keys [eng p]} (start {:inventory (conj kit {:name "observer" :count 1})} {"pen" plan})
+              body-z (atom nil)]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token args impl]
+                       (when (= "observer" (.-item args)) (reset! body-z (.-z (.-pos (.self p)))))
+                       (await (impl token args))))
+          (await (h/child-outcome eng job {:plan "pen"} 200))
+          (is (> @body-z 2.5)))))))
+
+(defn state-at [p pos] (js->clj (.-properties (.blockAt p (clj->js (zipmap [:x :y :z] pos)))) :keywordize-keys true))
+
+(defn clicks [p item] (mapv #(js->clj (.-click (.-args %)) :keywordize-keys true) (filter #(= item (.-item (.-args %))) (h/calls p "place"))))
+
+(deftest a-gate-is-placed-facing-its-way-from-wherever-the-body-stands
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan :active)})
-              body-z (atom nil)]
-          (.override (.-world p) "place"
-                     (fn ^:async f [token args impl]
-                       (when (= "oak_fence_gate" (.-item args)) (reset! body-z (.-z (.-pos (.self p)))))
-                       (await (impl token args))))
-          (await (h/child-outcome eng job {:plan "pen"} 200))
-          (is (> @body-z 2.5)))))))
+              result (await (h/child-outcome eng job {:plan "pen"} 200))]
+          (is (= "north" (:facing (state-at p [3 64 2]))))
+          (is (= [0] (mapv :yaw (clicks p "oak_fence_gate"))))
+          (is (= [] (:wrong result))))))))
 
 (deftest a-short-material-builds-what-it-can-and-says-what-is-missing
   (async done
@@ -173,6 +188,8 @@
     {:block "oak_fence_gate" :facing :north} #{} "oak_fence_gate"
     [:any "oak_fence" "spruce_fence"] #{"spruce_fence"} "spruce_fence"
     [:any "oak_fence" {:block "spruce_fence"}] #{} "oak_fence"
+    {:block "wall_torch" :facing :north} #{} "torch"
+    [:any {:block "wall_torch" :facing :east} "lantern"] #{"torch"} "torch"
     {:crop "wheat"} #{"wheat_seeds"} nil
     :clear #{} nil))
 
@@ -276,3 +293,83 @@
       (fn ^:async t []
         (is (= [9 []] (await (run-beside "lava" {:accept [:fluid-adjacent :lava-adjacent]}))))
         (is (= [8 [{:pos [4 64 3] :reason :hazard :hazards [:fluid-adjacent]}]] (await (run-beside "water" {:accept []}))))))))
+
+;; ---------------------------------------------------------------- block state (engine.placement)
+
+(defn ^:async build
+  "Build plan parts {:id .. :cells .. :want ..} over the blocks with the inventory: [result p seen]."
+  [parts blocks inventory]
+  (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} {"house" {:id "house" :status :active :parts parts}})
+        result (await (h/child-outcome eng job {:plan "house"} 200))]
+    [result p seen]))
+
+(def ground (into {} (for [x (range 0 6) z (range 0 6)] [(h/cell-key x 63 z) "stone"])))
+
+(deftest stairs-slabs-and-logs-get-the-state-the-plan-wants
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "step" :cells [[3 64 3]] :want {:block "oak_stairs" :facing :east :half :bottom}}
+                                        {:id "roof" :cells [[1 64 3]] :want {:block "oak_stairs" :facing :west :half :top}}
+                                        {:id "cover" :cells [[3 64 1]] :want {:block "oak_slab" :type :top}}
+                                        {:id "post" :cells [[1 64 1]] :want {:block "oak_log" :axis :y}}]
+                                       (assoc ground "1,65,3" "stone" "4,64,1" "stone")
+                                       [{:name "oak_stairs" :count 2} {:name "oak_slab" :count 1} {:name "oak_log" :count 1}]))]
+          (is (= [["east" "bottom"] ["west" "top"]] (mapv #(vals (select-keys (state-at p %) [:facing :half])) [[3 64 3] [1 64 3]])))
+          (is (= "top" (:type (state-at p [3 64 1]))))
+          (is (= "y" (:axis (state-at p [1 64 1]))))
+          (is (= {:placed 4 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
+(deftest a-door-and-a-bed-are-placed-once-their-other-half-comes-with-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "door" :cells [[2 64 2]] :want {:block "oak_door" :facing :north :half :lower}}
+                                        {:id "door-top" :cells [[2 65 2]] :want {:block "oak_door" :facing :north :half :upper}}
+                                        {:id "bed-head" :cells [[4 64 4]] :want {:block "white_bed" :facing :south :part :head}}
+                                        {:id "bed-foot" :cells [[4 64 3]] :want {:block "white_bed" :facing :south :part :foot}}]
+                                       ground [{:name "oak_door" :count 2} {:name "white_bed" :count 2}]))]
+          (is (= [[[2 64 2] "oak_door"] [[4 64 3] "white_bed"]] (sort (places p))))
+          (is (= ["upper" "head"] [(:half (state-at p [2 65 2])) (:part (state-at p [4 64 4]))]))
+          (is (= {:placed 2 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
+(deftest a-wall-torch-is-placed-with-a-torch-on-its-wall-and-a-floor-torch-looking-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "wall" :cells [[2 65 2]] :want {:block "wall_torch" :facing :north}}
+                                        {:id "floor" :cells [[4 64 4]] :want "torch"}]
+                                       (assoc ground "2,65,3" "stone" "4,64,5" "stone" "5,64,4" "stone")
+                                       [{:name "torch" :count 2}]))]
+          (is (= ["wall_torch" "north"] [(h/block-at p 2 65 2) (:facing (state-at p [2 65 2]))]))
+          (is (= "torch" (h/block-at p 4 64 4)))
+          (is (= {:placed 2 :wrong []} (select-keys result [:placed :wrong]))))))))
+
+(deftest a-state-no-neighbour-gives-is-given-up-with-its-reason-and-not-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (build [{:id "beam" :cells [[2 64 2]] :want {:block "oak_log" :axis :x}}
+                                             {:id "post" :cells [[4 64 4]] :want "oak_log"}]
+                                            ground [{:name "oak_log" :count 2}]))]
+          (is (= [[[4 64 4] "oak_log"]] (places p)))
+          (is (= {[2 64 2] :no-support} (:given-up result)))
+          (is (= [[2 64 2]] (:missing result)))
+          (is (= 1 (count (h/events-of seen :build.gave-up)))))))))
+
+(deftest a-block-that-comes-out-another-way-is-reported-wrong-never-dug-or-retried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:blocks ground :inventory [{:name "oak_stairs" :count 3}]}
+                                          {"house" {:id "house" :status :active
+                                                    :parts [{:id "step" :cells [[3 64 3]] :want {:block "oak_stairs" :facing :east}}]}})]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token args impl]
+                       (set! (.-yaw (.-click args)) 0)
+                       (await (impl token args))))
+          (let [result (await (h/child-outcome eng job {:plan "house"} 200))]
+            (is (= 1 (count (places p))))
+            (is (empty? (h/calls p "dig")))
+            (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
+            (is (= 1 (count (h/events-of seen :build.wrong))))))))))

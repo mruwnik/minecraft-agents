@@ -12,6 +12,7 @@ import { dragLeashed } from './fake-leash.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 import { fakeEnchant } from './fake-enchant.mjs'
+import { placedBlocks } from './placing.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -145,6 +146,31 @@ function defaultActs (s, emit) {
     return e
   }
 
+  // A block item takes the state the game gives it from the click (js/placing.mjs); without a click the face is the
+  // first solid neighbour's (below first, as the real place picks it), looked at from the eye. The game refusing it
+  // (no room for a door's upper half or a bed's head) places nothing and keeps the item.
+  const plainClick = (pos) => {
+    const against = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]
+      .map(([dx, dy, dz]) => ({ x: pos.x + dx, y: pos.y + dy, z: pos.z + dz })).find(p => !NO_SHAPE.has(blockName(p)))
+    if (!against) return null
+    const cursor = { x: 0.5 + (pos.x - against.x) / 2, y: 0.5 + (pos.y - against.y) / 2, z: 0.5 + (pos.z - against.z) / 2 }
+    const d = { x: against.x + cursor.x - s.self.pos.x, y: against.y + cursor.y - s.self.pos.y - EYE, z: against.z + cursor.z - s.self.pos.z }
+    return { against, cursor, yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z)) }
+  }
+  const placeBlock = (pos, item, click) => {
+    const c = click ?? plainClick(pos)
+    const face = c && [pos.x - c.against.x, pos.y - c.against.y, pos.z - c.against.z]
+    const r = c ? placedBlocks({ item, pos, face, cursor: c.cursor, yaw: c.yaw ?? s.yaw, pitch: c.pitch ?? s.pitch, blockAt: blockName }) : { blocks: [{ pos, name: item, properties: {} }] }
+    if (r.refused) return { status: 'failed', reason: `Server refused to place ${item} at (${pos.x}, ${pos.y}, ${pos.z}): ${r.refused}` }
+    takeItem(s.inventory, item, 1)
+    for (const b of r.blocks) {
+      s.blocks.set(key(b.pos), b.name)
+      if (Object.keys(b.properties).length) s.states.set(key(b.pos), b.properties)
+      else s.states.delete(key(b.pos))
+    }
+    return { status: 'placed', block: item, placed: { name: r.blocks[0].name, properties: r.blocks[0].properties } }
+  }
+
   // Where the body stands decides lava and water: lava is left by stepping out of it, water puts out fire.
   const settle = () => {
     const here = blockName(s.self.pos)
@@ -183,7 +209,7 @@ function defaultActs (s, emit) {
       return { status: 'dug', block: name, drops: drops.map(e => ({ id: e.id, name: e.item.name, count: e.item.count, pos: { ...e.pos } })) }
     },
 
-    async place (token, { pos, item }) {
+    async place (token, { pos, item, click }) {
       if (!near(pos)) return { status: 'unreachable' }
       if (item === 'bucket') { // scoops the water cell it is aimed at
         if (blockName(pos) !== 'water') return { status: 'missing' }
@@ -196,7 +222,9 @@ function defaultActs (s, emit) {
       if (CROPS[item] && blockName({ ...pos, y: pos.y - 1 }) !== 'farmland') {
         return { status: 'failed', reason: `Server refused to place ${item} at (${pos.x}, ${pos.y}, ${pos.z}): the block is still air` }
       }
-      if (takeItem(s.inventory, item, 1) === 0) return { status: 'no-item' }
+      if (!s.inventory.some(i => i.name === item)) return { status: 'no-item' }
+      if (click && NO_SHAPE.has(blockName(click.against))) return { status: 'no-support' }
+      if (CROPS[item] || item === 'water_bucket') takeItem(s.inventory, item, 1)
       if (CROPS[item]) { // a seed or tuber becomes the young crop
         s.blocks.set(key(pos), CROPS[item])
         s.ages.set(key(pos), 0)
@@ -208,9 +236,13 @@ function defaultActs (s, emit) {
         if (key(pos) === key(s.self.pos)) settle()
         return { status: 'placed', block: 'water' }
       }
-      if (item.endsWith('campfire')) s.states.set(key(pos), { lit: true })
-      s.blocks.set(key(pos), item)
-      return { status: 'placed', block: item }
+      if (item.endsWith('campfire')) {
+        takeItem(s.inventory, item, 1)
+        s.states.set(key(pos), { lit: true })
+        s.blocks.set(key(pos), item)
+        return { status: 'placed', block: item, placed: { name: item, properties: { lit: true } } }
+      }
+      return placeBlock(pos, item, click)
     },
 
     // Raises the body one block per placement: needs the item, something solid under the feet and the two cells

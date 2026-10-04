@@ -742,9 +742,33 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return { status: 'placed', block: scoop ? 'bucket' : item.name.replace('_bucket', '') }
   }
 
+  // A click chosen by the caller (engine.placement): sneak if asked, hold the look if one is given (else look at the
+  // clicked point), click the face of `against` that points into the cell at `cursor`, and never look again on the way.
+  const clickSupport = (click, p) => {
+    const ref = bot.blockAt(vec(click.against))
+    if (!ref || isAir(ref.name) || isLiquid(ref.name)) return null
+    return { ref, face: new Vec3(p.x - click.against.x, p.y - click.against.y, p.z - click.against.z) }
+  }
+  const clickPlace = async (ctx, { ref, face }, click) => {
+    const point = ref.position.offset(click.cursor.x, click.cursor.y, click.cursor.z)
+    const sneak = on => bot.setControlState('sneak', on)
+    if (click.sneak) { ctx.onAbort(() => sneak(false)); sneak(true) }
+    try {
+      await lookNow(() => isNum(click.yaw) || isNum(click.pitch) ? bot.look(click.yaw ?? bot.entity.yaw, click.pitch ?? bot.entity.pitch, true) : bot.lookAt(point, true))
+      ctx.alive()
+      await bot._placeBlockWithOptions(ref, face, { forceLook: 'ignore', delta: vec(click.cursor), swingArm: 'right' })
+    } finally {
+      if (click.sneak) sneak(false)
+    }
+  }
+  const isClick = (c, p) => Boolean(c) && isPos(c.against) && isPos(c.cursor) &&
+    Math.abs(c.against.x - p.x) + Math.abs(c.against.y - p.y) + Math.abs(c.against.z - p.z) === 1 &&
+    [c.cursor.x, c.cursor.y, c.cursor.z].every(v => v >= 0 && v <= 1)
+
   const place = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos) && typeof a.item === 'string', 'place needs pos {x, y, z} and item')
+    need(a.click == null || isClick(a.click, cell(a.pos)), 'place click needs against {x, y, z} beside pos and cursor {x, y, z} within 0..1')
     const p = cell(a.pos)
     return act(token, { boundS: 5 }, async ctx => {
       if (isBucket(a.item)) {
@@ -755,14 +779,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied' }
       const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-item' }
-      const support = supportFor(p)
+      const support = a.click ? clickSupport(a.click, p) : supportFor(p)
       if (!support) return { status: 'no-support' }
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
       ctx.alive()
       await bot.equip(item, 'hand')
       ctx.alive()
-      await bot.placeBlock(support.ref, support.face)
-      return { status: 'placed', block: a.item }
+      if (a.click) await clickPlace(ctx, support, a.click)
+      else await bot.placeBlock(support.ref, support.face)
+      const now = bot.blockAt(vec(p))
+      return { status: 'placed', block: a.item, placed: { name: now?.name, properties: now ? stateProperties(now) : {} } }
     })
   }
 

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.placement :as placement]
             [plan.shape :as shape]))
 
 (def doc
@@ -12,12 +13,17 @@
   never dug, and :clear cells, crops and trees are not this job's. Each round re-reads the plan and the world and
   takes the first step that applies: (1) place every buildable cell within :reach of the eye, lowest first (a cell
   is buildable when its block is carried, the cell below it is not itself still owed, it is not the body's own
-  feet or head cell, and, for a want with a :facing, the body looks the way it should face, standing on the far
-  side); (2) else walk to a stand cell two blocks beside the nearest buildable cell (for a :facing want, on the
-  side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
-  finish. A cell whose place is refused (anything but placed, occupied or
+  feet or head cell, and engine.placement finds a click that gives its state: the neighbour, face, cursor, look and
+  sneak go with the place, from wherever the body stands; a :facing want that engine.placement places plainly is
+  placed only while the body looks the way it should face, standing on the far side); (2) else walk to a stand
+  cell two blocks beside the nearest buildable cell (for such a plain :facing want, on the side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
+  finish. A cell whose state no neighbour gives now (or a door's upper half, a bed's head: the other part makes them)
+  waits; still missing at the end it is given up with engine.placement's reason (:no-support, :no-room,
+  :other-half, :opened, :double-slab). A placed block whose reported state is not the want is listed under :wrong
+  with :placed true and the state it came out in; it is never dug or placed again. A cell whose place is refused (anything but placed, occupied or
   no-item) or whose stand cell cannot be walked to :give-up times is given up. It finishes with a result {:placed n
-  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded} :wrong [{:pos :found :want}] :refused [...]}
+  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded|reason} :wrong [{:pos :found :want}]
+  :refused [...]}
   and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
   build.wrong (warn). The check declines, with one build.declined warn naming the plan and the reason, while the
   plan is missing, not :active, unreadable or has no cells to build (in :part), and, before the job has begun,
@@ -42,14 +48,21 @@
 ;; ------------------------------------------------------------------ pure helpers
 
 (defn item-for
-  "The item to place for want: the block it names, for an :any the first choice carried (else the first); nil for
-  :clear, crops and trees."
+  "The item to place for want: the block it names (a wall torch with a torch), for an :any the first choice carried
+  (else the first); nil for :clear, crops and trees."
   [want carried]
   (cond
-    (string? want) want
-    (vector? want) (let [names (map #(if (string? %) % (:block %)) (rest want))]
+    (string? want) (placement/item-of want)
+    (vector? want) (let [names (map #(placement/item-of (if (string? %) % (:block %))) (rest want))]
                      (or (first (filter carried names)) (first names)))
-    (and (map? want) (:block want)) (:block want)))
+    (and (map? want) (:block want)) (placement/item-of (:block want))))
+
+(defn block-want
+  "The block want that item places: for an :any the choice placed with it."
+  [want item]
+  (if (vector? want)
+    (or (first (filter #(= item (placement/item-of (if (string? %) % (:block %)))) (rest want))) item)
+    want))
 
 (def facing-step {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
 
@@ -70,6 +83,8 @@
           along (+ (* sx dx) (* sz dz))
           across (js/Math.abs (+ (* sz dx) (* sx dz)))]
       (and (pos? along) (>= along across)))))
+
+(defn eye [body] {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)})
 
 (defn eye-dist [body [x y z]]
   (u/dist {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}))
@@ -186,6 +201,37 @@
                            :text (str "build declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
+(defn how
+  "How the cell is placed from where the body stands (engine.placement/click)."
+  [c {:keys [pos want item]}]
+  (placement/click (block-want want item) pos (eye (u/self-pos c)) (partial world-block (:primitives c))))
+
+(defn placeable
+  "The cells of todo a click places now, each with its :click (nil: placed plainly); the others are booked under
+  :unplaceable with the reason, which only says why at the end."
+  [c todo]
+  (let [decided (map (juxt identity #(how c %)) todo)]
+    (ctx/update-mem! c assoc :unplaceable (into {} (keep (fn [[cell d]] (when (:refused d) [(:pos cell) (:refused d)]))) decided))
+    (into [] (keep (fn [[cell d]] (when-not (:refused d) (assoc cell :click (:click d))))) decided)))
+
+(defn js-click [{:keys [against cursor] :as click}]
+  (merge (select-keys click [:yaw :pitch :sneak])
+         {:against (zipmap [:x :y :z] against) :cursor (zipmap [:x :y :z] cursor)}))
+
+(defn placed-block
+  "The block a place result reports, in plan.shape's shape, or nil."
+  [r]
+  (when-let [b (.-placed r)]
+    {:name (.-name b) :state (js->clj (.-properties b) :keywordize-keys true)}))
+
+(defn misplaced
+  "The text of what was placed (the want's state keys only) when block does not hold want, else nil."
+  [want item block]
+  (when (and block (= :wrong (shape/judge want block)))
+    (let [wanted (block-want want item)
+          ks (when (map? wanted) (keys (dissoc wanted :block)))]
+      (shape/want-text (into {:block (:name block)} (select-keys (:state block) ks))))))
+
 (defn missing [cells] (filterv #(and (= :missing (:answer %)) (:item %)) cells))
 
 (defn unseen
@@ -236,16 +282,22 @@
       (assoc-in m [:fails pos] n))))
 
 (defn ^:async place-one!
-  "Place the cell's item after asking the access rules once more; a refusal is booked, nothing is placed."
-  [c {:keys [pos item]}]
-  (let [d (decide (rules-input c) (:accept (:args c)) pos)]
+  "Place the cell's item after asking the access rules and engine.placement once more; a refusal is booked, nothing
+  is placed."
+  [c {:keys [pos item want] :as cell}]
+  (let [d (decide (rules-input c) (:accept (:args c)) pos)
+        h (how c cell)]
     (cond
       (vector? d) (ctx/update-mem! c refuse pos (second d))
       (not= :place d) nil
+      (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
-      (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] pos) :item item})))]
+      (let [r (await (ctx/act c :place (clj->js (cond-> {:pos (zipmap [:x :y :z] pos) :item item}
+                                                  (:click h) (assoc :click (js-click (:click h)))))))
+            wrong (misplaced want item (placed-block r))]
         (case (.-status r)
-          "placed" (ctx/update-mem! c update :placed (fnil inc 0))
+          "placed" (ctx/update-mem! c #(cond-> (update % :placed (fnil inc 0))
+                                         wrong (assoc-in [:misplaced pos] wrong)))
           ("occupied" "no-item") nil
           (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))))
 
@@ -257,7 +309,7 @@
     (->> todo
          (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c)))
                        (not (mine (:pos %)))
-                       (facing-ok? (facing-of (:want %)) (:pos %) body)))
+                       (or (:click %) (facing-ok? (facing-of (:want %)) (:pos %) body))))
          (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
 
 (defn ^:async walk-to!
@@ -267,7 +319,8 @@
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
-        stands (remove bad (stand-cells (:pos cell) (js/Math.floor (:y body)) (facing-of (:want cell)) planned))
+        facing (when-not (:click cell) (facing-of (:want cell)))
+        stands (remove bad (stand-cells (:pos cell) (js/Math.floor (:y body)) facing planned))
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand
@@ -285,10 +338,13 @@
 (defn finish! [c cells]
   (let [m (ctx/mem c)
         p (:primitives c)
-        given-up (:given-up m {})
         left (owed cells)
+        given-up (merge (select-keys (:unplaceable m) (map :pos left)) (:given-up m {}))
         short (shortage left (carried-counts p))
-        wrong (mapv (fn [{:keys [pos found want]}] {:pos pos :found found :want (shape/want-text want)})
+        wrong (mapv (fn [{:keys [pos found want]}]
+                      (if-let [placed (get-in m [:misplaced pos])]
+                        {:pos pos :found placed :want (shape/want-text want) :placed true}
+                        {:pos pos :found found :want (shape/want-text want)}))
                     (filter #(#{:wrong :extra} (:answer %)) cells))
         refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
         result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong
@@ -320,7 +376,7 @@
       :declined
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
           (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
-                todo (permitted c (buildable cells (carried-counts (:primitives c)) (closed)))
+                todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
                 given-up (closed)
                 near (in-reach c todo)
                 nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
