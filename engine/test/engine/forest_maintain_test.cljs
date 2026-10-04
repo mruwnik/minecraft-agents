@@ -30,13 +30,18 @@
 
 (defn item [name n] {:name name :count n})
 
+(def test-zones
+  "The zone list of the worlds start makes (nil: never readable)."
+  (atom []))
+
 (defn start
-  "An engine over the fake world spec with the plans {id plan} as its world data, on dir when given."
+  "An engine over the fake world spec with the plans {id plan} as its world data and the zones in test-zones, on dir
+  when given."
   ([spec plans] (start spec plans (tu/tmp-dir)))
   ([spec plans dir] (start spec plans dir (tu/fake spec)))
   ([spec plans dir p]
    (let [[seen sink] (tu/legacy-capture-sink)
-         w (world/of-data plans {})
+         w (world/of-data plans {} @test-zones)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref h/clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                            :world w})]
@@ -305,30 +310,40 @@
 
 ;; ------------------------------------------------------------------ access
 
-(defn ^:async with-seam
-  "Run the async thunk f with the access seam's zones and footprints; the seam is restored after."
-  [zones footprints f]
-  (let [old @maintain/seam]
-    (reset! maintain/seam {:zones (fn [_c] zones) :footprints (fn [_c _plan] footprints)})
-    (try (await (f))
-         (finally (reset! maintain/seam old)))))
+(defn ^:async with-zones
+  "Run the async thunk f with zones as the zone list of the worlds start makes; restored after."
+  [zones f]
+  (reset! test-zones zones)
+  (try (await (f))
+       (finally (reset! test-zones []))))
+
+(def other-plan
+  "Another active plan claiming the cell over the second log of the tree at x 3."
+  {:id "other" :status :active :parts [{:id "o" :cells [[3 66 0]] :want "stone"}]})
 
 (deftest a-log-over-another-plans-footprint-or-a-zone-leaves-the-whole-tree-standing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones footprints reason] [[[] #{[3 66 0]} :footprint]
-                                           [[{:name "vault" :min [3 65 0] :max [3 65 0] :allow #{:place}}] #{} :zone]]]
-          (let [{:keys [p seen]} (await (with-seam zones footprints
-                                          #(run oak-world {"forest" oak-cell} {:plan "forest"} 20)))]
+        (doseq [[zones plans reason] [[[] {"forest" oak-cell "other" other-plan} :footprint]
+                                      [[{:name "vault" :min [3 65 0] :max [3 65 0] :allow #{:place}}] {"forest" oak-cell} :zone]]]
+          (let [{:keys [p seen]} (await (with-zones zones #(run oak-world plans {:plan "forest"} 20)))]
             (is (= [] (digs p)) (str reason))
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why reason}] (warns seen :forest.left)))))))))
+
+(deftest the-plans-own-footprint-does-not-refuse-its-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (assoc-in oak-cell [:parts 0 :cells] [[3 64 0]])
+              {:keys [p]} (await (run oak-world {"forest" plan} {:plan "forest"} 40))]
+          (is (= 4 (count (digs p)))))))))
 
 (deftest a-zone-that-forbids-placing-keeps-the-sapling-in-the-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (with-seam [{:name "vault" :min [3 64 0] :max [3 64 0] :allow #{:dig}}] #{}
+        (let [{:keys [p seen]} (await (with-zones [{:name "vault" :min [3 64 0] :max [3 64 0] :allow #{:dig}}]
                                         #(run {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]}
                                               {"forest" oak-cell} {:plan "forest"} 20)))]
           (is (= [] (places p)))
@@ -338,7 +353,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (with-seam nil #{} #(run oak-world {"forest" oak-cell} {:plan "forest"} 10)))]
+        (let [{:keys [p seen]} (await (with-zones nil #(run oak-world {"forest" oak-cell} {:plan "forest"} 10)))]
           (is (= [] (vec (.-calls (.-world p)))))
           (is (= ["no zone list"] (mapv :reason (h/events-of seen :forest.declined)))))))))
 
@@ -370,20 +385,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [claimed (atom #{})
-              old @maintain/seam]
-          (reset! maintain/seam {:zones (fn [_c] []) :footprints (fn [_c _plan] @claimed)})
-          (try
-            (let [s (start oak-world {"forest" oak-cell})]
-              (.override (.-world (:p s)) "dig"
-                         (fn ^:async f [token args impl]
-                           (swap! claimed conj [3 66 0])
-                           (await (impl token args))))
-              (core/submit! (:eng s) (list job {:plan "forest"}) {})
-              (await (ticks (:eng s) 30))
-              (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the two logs of the first round, then it stops")
-              (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left))))
-            (finally (reset! maintain/seam old))))))))
+        (let [s (start oak-world {"forest" oak-cell})]
+          (.override (.-world (:p s)) "dig"
+                     (fn ^:async f [token args impl]
+                       (world/set-data! (:w s) {"forest" oak-cell "other" other-plan} {})
+                       (await (impl token args))))
+          (core/submit! (:eng s) (list job {:plan "forest"}) {})
+          (await (ticks (:eng s) 30))
+          (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the two logs of the first round, then it stops")
+          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left))))))))
 
 ;; ------------------------------------------------------------------ restart
 

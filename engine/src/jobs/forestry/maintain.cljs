@@ -37,17 +37,7 @@
             :default #{:fluid-adjacent :falling-block}}
    :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :default 8}})
 
-;; ------------------------------------------------------------------ access seam
-
-(def seam
-  "How the job reads the zones and the other plans' footprints: {:zones (fn [ctx] zones-or-nil)
-  :footprints (fn [ctx plan-id] #{[x y z]})}. One place to wire (and to fake in tests)."
-  (atom {:zones (fn [_c] [])
-         :footprints (fn [_c _plan-id] #{})}))
-
-(defn zones [c] ((:zones @seam) c))
-
-(defn footprints [c plan-id] ((:footprints @seam) c plan-id))
+;; ------------------------------------------------------------------ access
 
 (defn cell-vec [{:keys [x y z]}] [x y z])
 
@@ -62,8 +52,8 @@
     {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
      :cell (cell-vec pos)
      :feet (feet-cell c)
-     :zones (zones c)
-     :footprints (set (footprints c (:plan (:args c))))
+     :zones (ctx/zones c)
+     :footprints (ctx/footprints c {:except (:plan (:args c))})
      :ledger #{}}))
 
 (defn refusal
@@ -161,7 +151,7 @@
         answer (ctx/plan c plan)
         trees (tree-cells answer part)
         trouble (or (plan-trouble answer trees)
-                    (when (nil? (zones c)) "no zone list"))]
+                    (when (nil? (ctx/zones c)) "no zone list"))]
     (if-not trouble
       {:trees trees}
       (do (ctx/warn-once! c [plan trouble] :forest.declined
