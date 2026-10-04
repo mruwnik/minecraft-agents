@@ -1,7 +1,9 @@
 (ns agent-tools.say
   "Fast control-adjacent public chat and whisper command validation."
   (:require [engine.bodies :as bodies]
+            [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
+            [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:path" :as path]))
 
@@ -32,3 +34,37 @@
         {:body body :world world :message cleaned :to to :state state
          :socketPath (.join path (bodies/worlds-dir state) world "agents" body "engine" "events.sock")}))
     (catch :default error {:error (.-message error)})))
+
+(def chat-timeout-ms 10000)
+(def max-response-bytes 65536)
+
+(defn failure-for [error]
+  (if (contains? #{"EPERM" "EACCES"} (aget error "code"))
+    {:ok false :reason :socket-access-denied
+     :message "Permission denied connecting to the body event socket; the message was not sent."}
+    {:ok false :reason (if (contains? #{"ENOENT" "ECONNREFUSED"} (aget error "code")) :no-running-body :transport-error)
+     :confirmation :unknown
+     :message "Chat confirmation is unknown; inspect server chat before sending again."}))
+
+(defn print-edn! [value] (.write (.-stdout js/process) (str (data/write-edn value) "\n")))
+
+(defn send! [{:keys [socketPath message to]}]
+  (http/request {:socket-path socketPath :method "POST" :path "/chat" :label "say"
+                 :headers {"content-type" "application/edn"}
+                 :body (data/write-edn (cond-> {:message message} to (assoc :to to)))
+                 :timeout-ms chat-timeout-ms :max-bytes max-response-bytes}))
+
+(defn deliver! [{:keys [status content-type text]}]
+  (when-not (http/edn-response? content-type) (throw (js/Error. "unexpected response format")))
+  (.write (.-stdout js/process) (if (str/ends-with? text "\n") text (str text "\n")))
+  (if (= 200 status) 0 1))
+
+(defn main!
+  ([] (main! (vec (.slice (.-argv js/process) 2))))
+  ([argv]
+   (let [request (request-for argv)]
+     (if (:error request)
+       (do (print-edn! {:ok false :reason :bad-args :message (:error request)}) (js/Promise.resolve 2))
+       (-> (send! request)
+           (.then deliver!)
+           (.catch (fn [error] (print-edn! (failure-for error)) 2)))))))
