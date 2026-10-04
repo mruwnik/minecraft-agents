@@ -2,18 +2,21 @@
   "Compatibility boundary for the existing Node entry points and black-box tests.
    Tool implementations use native ClojureScript values internally."
   (:require [agent-tools.workspace]
+            [clojure.set]
             [agent-tools.changes :as changes]
             [agent-tools.drive :as drive]
             [agent-tools.entities :as entities]
             [agent-tools.inventory :as inventory]
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
+            [agent-tools.observe :as observe]
             [agent-tools.plans :as plans]
             [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
             [agent-tools.triggers :as triggers]
             [agent-tools.world :as world]
-            [agent-tools.storage-compat :as compat]))
+            [agent-tools.storage-compat :as compat]
+            [agent-tools.world-data :as data]))
 
 (defn map-filters [ctx values]
   (compat/to-js (map-tool/filters (compat/from-js ctx) (compat/from-js values))))
@@ -72,6 +75,11 @@
 (defn jobs-request-for [argv] (compat/to-js (jobs/request-for (vec argv))))
 (defn jobs-main [argv] (jobs/main! (vec argv)))
 
+(def observe-usage observe/usage)
+(defn observe-request-for [argv]
+  (compat/to-js (clojure.set/rename-keys (observe/request-for (vec argv)) {:socket-path :socketPath})))
+(defn observe-main [argv] (observe/main! (vec argv)))
+
 (def triggers-usage triggers/usage)
 (defn triggers-request-for [argv] (compat/to-js (triggers/request-for (vec argv))))
 (defn triggers-main [argv] (triggers/main! (vec argv)))
@@ -93,3 +101,7 @@
 (def world-usage (clj->js world/usage))
 (defn world-main [argv] (world/main! (vec argv)))
 (defn world-request-for [argv] (compat/to-js (world/request-for (vec argv))))
+
+;; EDN for the JavaScript callers that remain (workspace.mjs and the tests): keyword wrappers in, keyword wrappers out.
+(defn edn-write [value] (data/write-edn (compat/from-js value)))
+(defn edn-read [text] (compat/to-js (data/read-edn text)))

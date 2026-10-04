@@ -6,7 +6,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { clock, options, execute } from '../../tools/time.mjs'
-import { readEDN } from '../../tools/observe-lib.mjs'
+import { readEDN } from './edn.mjs'
 
 const cli = fileURLToPath(new URL('../../tools/time.mjs', import.meta.url))
 function fixture(t) {

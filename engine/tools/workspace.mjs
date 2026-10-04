@@ -4,7 +4,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tools from './agent-tools-loader.mjs'
-import { writeEDN } from './observe-lib.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -13,7 +12,7 @@ export async function runBound (context, command, argv) {
     const args = tools.workspaceRoute(fileURLToPath(context), command, argv)
     const module = await import(new URL(`./${command}.mjs`, import.meta.url))
     if (argv.length === 1 && ['--help', '-h'].includes(argv[0])) {
-      const usage = command === 'drive' ? (await import('./drive-lib.mjs')).usage
+      const usage = command === 'drive' ? tools.driveUsage
         : command === 'plans' || command === 'blueprints' ? tools.planUsage[command] : module.usage
       process.stdout.write(`Workspace ${command}: omit the body and --world/--worlds/--state/--repo/--repo-root shown below; these are supplied from context.edn.\n${usage}\n`)
       return 0
@@ -30,7 +29,7 @@ export async function main (argv = process.argv.slice(2)) {
     return 0
   }
   try {
-    process.stdout.write(`${writeEDN(tools.workspaceGenerate(argv, repo))}\n`)
+    process.stdout.write(`${tools.ednWrite(tools.workspaceGenerate(argv, repo))}\n`)
     return 0
   } catch (error) {
     process.stderr.write(`${error.message}\n`)

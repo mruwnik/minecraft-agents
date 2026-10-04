@@ -39,6 +39,11 @@
                                :jobsUsage agent-tools.api/jobs-usage
                                :jobsRequestFor agent-tools.api/jobs-request-for
                                :jobsMain agent-tools.api/jobs-main
+                               :observeUsage agent-tools.api/observe-usage
+                               :observeRequestFor agent-tools.api/observe-request-for
+                               :observeMain agent-tools.api/observe-main
+                               :ednWrite agent-tools.api/edn-write
+                               :ednRead agent-tools.api/edn-read
                                :triggersUsage agent-tools.api/triggers-usage
                                :triggersRequestFor agent-tools.api/triggers-request-for
                                :triggersMain agent-tools.api/triggers-main

@@ -6,7 +6,7 @@ import path from 'node:path'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { readEDN } from '../../tools/observe-lib.mjs'
+import { readEDN } from './edn.mjs'
 
 test('say CLI sends a single chat request to the correct body and world', async t => {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), 'say-cli-'))

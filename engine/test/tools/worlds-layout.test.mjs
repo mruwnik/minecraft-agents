@@ -8,12 +8,13 @@ import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { requestFor as observe } from '../../tools/observe.mjs'
-import { requestFor as drive, socketPathFor } from '../../tools/drive-lib.mjs'
+const drive = argv => tools.driveRequestFor(argv)
+const socketPathFor = request => tools.driveSocketPathFor(request)
 import { requestFor as world } from '../../tools/world.mjs'
 import { requestFor as triggers } from '../../tools/triggers.mjs'
 import tools from '../../tools/agent-tools-loader.mjs'
 import { context } from '../../tools/world-data.mjs'
-import { readEDN, writeEDN } from '../../tools/observe-lib.mjs'
+import { readEDN, writeEDN } from './edn.mjs'
 
 function fixture (t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'world-layout-'))

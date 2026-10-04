@@ -7,7 +7,7 @@ import http from 'node:http'
 import { spawnSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import tools from '../../tools/agent-tools-loader.mjs'
-import { readEDN } from '../../tools/observe-lib.mjs'
+import { readEDN } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')

@@ -1,0 +1,543 @@
+(ns agent-tools.observe-test
+  (:require [cljs.test :refer [deftest is async]]
+            [agent-tools.fake-socket :as fake]
+            [agent-tools.observe :as observe]
+            [agent-tools.world-data :as data]
+            [clojure.string :as str]
+            ["node:fs" :as fs]
+            ["node:os" :as os]
+            ["node:path" :as path]))
+
+(defn request [& args] (observe/request-for (vec args)))
+
+(defn finish!
+  "Report an unexpected rejection as a failure, then end the async test."
+  [done promise]
+  (-> promise
+      (.catch (fn [error] (is false (str "rejected: " error))))
+      (.then (fn [_] (done)))))
+
+(defn rejects
+  "A promise of the error a promise rejects with (or of ::resolved)."
+  [promise]
+  (-> promise (.then (fn [_] ::resolved)) (.catch identity)))
+
+(defn series
+  "Run promise-returning thunks one after the other: a promise of the vector of their results."
+  [thunks]
+  (reduce (fn [acc thunk] (.then acc (fn [done] (.then (thunk) (fn [value] (conj done value))))))
+          (js/Promise.resolve []) thunks))
+
+;; Requests
+
+(def socket-of #(.join path % "worlds" "w" "agents" "ProbeBody" "engine" "events.sock"))
+
+(def unsupported-cases
+  [[{:status 404 :content-type "application/edn; charset=utf-8" :text "{:ok false, :reason :not-found}"} true]
+   [{:status 404 :content-type "application/edn" :text "{:ok false, :reason :job-not-found}"} false]
+   [{:status 404 :content-type "application/edn" :text "{:extra {:reason :not-found}}"} false]
+   [{:status 404 :content-type "text/plain" :text "not found"} false]])
+
+(deftest observe-distinguishes-an-older-engine-missing-the-projection-routes
+  (doseq [[response expected] unsupported-cases]
+    (is (= expected (observe/unsupported-route? response)) (pr-str response))))
+
+(deftest legacy-observe-guidance-preserves-a-nondefault-state-root
+  (let [notice (observe/legacy-notice (request "--world" "w" "ProbeBody" "--state" "/tmp/custom state"))]
+    (is (re-find #":reason :observe-unavailable" notice))
+    (is (re-find #":action :restart-with-current-build" notice))
+    (is (re-find #":fallback \{:op :status :raw true :world \"w\" :state \"/tmp/custom state\"\}" notice)))
+  (is (nil? (re-find #":fallback" (observe/legacy-notice (request "--world" "w" "ProbeBody" "inventory"))))))
+
+(deftest observe-defaults-to-bounded-status-and-targets-the-engine-event-socket
+  (is (= {:agent "ProbeBody" :world "w" :state (.resolve path "/tmp/state")
+          :socket-path (socket-of "/tmp/state") :path "/status"}
+         (request "--world" "w" "ProbeBody" "--state" "/tmp/state"))))
+
+(deftest observe-without-a-valid-world-is-an-error-naming-the-flag
+  (is (re-find #"missing --world <world>" (:error (request "ProbeBody"))))
+  (is (re-find #"world" (:error (request "ProbeBody" "--world" "a/b")))))
+
+(deftest observe-supports-detail-and-on-demand-capability-lookups
+  (doseq [[argv expected]
+          [[["status" "--limit" "4"] "/status?limit=4"]
+           [["status" "--raw"] "/snapshot"]
+           [["job" "j12"] "/job?id=j12"]
+           [["catalog" "job" "jobs.movement.go-to"] "/catalog?kind=job&name=jobs.movement.go-to"]
+           [["catalog" "trigger" "health-low"] "/catalog?kind=trigger&name=health-low"]
+           [["catalog" "jobs" "jobs.movement." "--limit" "5" "--offset" "10"]
+            "/catalog?kind=jobs&prefix=jobs.movement.&limit=5&offset=10"]
+           [["catalog" "triggers"] "/catalog?kind=triggers&prefix=&limit=20&offset=0"]]]
+    (is (= expected (:path (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
+(deftest inventory-and-equipment-are-read-only-observe-modes-with-explicit-raw-or-slot-detail
+  (is (= {:agent "ProbeBody" :world "w" :state (.resolve path "/tmp/state")
+          :inventory-mode :inventory :slots false :raw false
+          :socket-path (socket-of "/tmp/state") :path "/inventory"}
+         (request "--world" "w" "ProbeBody" "inventory" "--state" "/tmp/state")))
+  (is (true? (:slots (request "--world" "w" "ProbeBody" "inventory" "--slots"))))
+  (is (= :equipment (:inventory-mode (request "--world" "w" "ProbeBody" "equipment" "--raw"))))
+  (is (true? (:raw (request "--world" "w" "ProbeBody" "equipment" "--raw"))))
+  (is (nil? (:inventory-mode (request "--world" "w" "ProbeBody" "status"))))
+  (doseq [[argv pattern] [[["equipment" "--slots"] #"only valid for inventory"]
+                          [["inventory" "bread"] #"takes no positional arguments"]
+                          [["inventory" "--raw" "--slots"] #"redundant with --raw"]
+                          [["inventory" "--limit" "2"] #"not valid for inventory"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
+(deftest observe-rejects-malformed-names-and-limits-before-connecting
+  (doseq [[argv pattern] [[["bad/name"] #"body name"]
+                          [["ProbeBody" "status" "--limit" "100"] #"1 to 32"]
+                          [["ProbeBody" "status" "--offset" "1"] #"only valid for catalog lists"]
+                          [["ProbeBody" "job" "j12" "--offset" "1"] #"only valid for status and catalog lists"]
+                          [["ProbeBody" "catalog" "job" "jobs.x.y" "--limit" "2"] #"does not accept"]
+                          [["ProbeBody" "catalog" "job" "(eval foo)"] #"exact jobs namespace"]
+                          [["ProbeBody" "job" "j12" "extra"] #"one job ID"]
+                          [["ProbeBody" "frobnicate"] #"unknown operation"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" argv))) (pr-str argv))))
+
+;; The CLI over a fake socket
+
+(defn state-dir [] (.mkdtempSync fs (.join path (.tmpdir os) "observe-cli-")))
+
+(defn run-main! [argv handler]
+  (let [state (state-dir)
+        [request-fn seen] (fake/request-fn handler)
+        lines (atom [])]
+    (-> (observe/main! (into ["ProbeBody" "--world" "w" "--state" state] argv)
+                       {:request-fn request-fn :output #(swap! lines conj %)})
+        (.then (fn [code]
+                 (.rmSync fs state #js {:recursive true :force true})
+                 {:code code :out (apply str @lines) :seen @seen})))))
+
+(def inventory-reply
+  {:text "{:ok true :inventory [{:name \"bread\" :count 5 :slot 9} {:name \"iron_pickaxe\" :count 1 :slot 37}] :equipment {:head {:name \"iron_helmet\" :count 1 :durability 140}}}"})
+
+(def head {:head {:name "iron_helmet" :count 1 :durability 140}})
+
+(deftest inventory-and-equipment-emit-aggregate-raw-and-optional-slot-views-from-the-read-socket
+  (async done
+    (finish! done
+             (-> (series [#(run-main! ["inventory"] (constantly inventory-reply))
+                          #(run-main! ["inventory" "--slots"] (constantly inventory-reply))
+                          #(run-main! ["equipment"] (constantly inventory-reply))
+                          #(run-main! ["equipment" "--raw"] (constantly inventory-reply))
+                          #(run-main! ["inventory" "--raw"] (constantly inventory-reply))])
+                 (.then (fn [[summary slots equipment raw-equipment raw]]
+                          (is (= 0 (:code summary)))
+                          (is (= {:total-items 6 :kinds 2 :counts {"bread" 5 "iron_pickaxe" 1} :equipment head}
+                                 (data/read-edn (:out summary))))
+                          (is (= [{:name "bread" :count 5 :slot 9} {:name "iron_pickaxe" :count 1 :slot 37}]
+                                 (:slots (data/read-edn (:out slots)))))
+                          (is (= {:equipment head} (data/read-edn (:out equipment))))
+                          (is (= {:equipment head} (data/read-edn (:out raw-equipment))))
+                          (is (= {:name "bread" :count 5 :slot 9} (first (:inventory (data/read-edn (:out raw))))))
+                          (is (= head (:equipment (data/read-edn (:out raw)))))
+                          (is (= ["/inventory"] (map :path (:seen summary))))))))))
+
+(def outcome-cases
+  [["default status is compact" ["status"] {:text "{:mode :scheduled :current nil :health 20 :food 18}"} 0
+    "{:mode :scheduled :idle true :health 20 :food 18}\n"]
+   ["a verbose status is passed through" ["status" "--verbose"] {:text "{:mode :scheduled}"} 0 "{:mode :scheduled}\n"]
+   ["a non-success status is passed through with exit 1" ["job" "j1"] {:status 404 :text "{:ok false :reason :job-not-found}"} 1
+    "{:ok false :reason :job-not-found}\n"]
+   ["a refused inventory exits 1" ["inventory"] {:text "{:ok false :reason :nope}"} 1 "{:ok false :reason :nope}\n"]
+   ["an older engine gets the restart notice" ["status"] {:status 404 :text "{:ok false :reason :not-found}"} 2 nil]
+   ["a non-EDN answer is a bad response" ["status"] {:content-type "text/plain" :text "hi"} 1
+    "{:ok false :reason :bad-response :detail :unexpected-content-type}\n"]
+   ["a refused connection is no running body" ["status"] {:error "ECONNREFUSED"} 2 "{:ok false :reason :no-running-body :body \"ProbeBody\"}\n"]
+   ["a missing socket is no running body" ["status"] {:error "ENOENT"} 2 "{:ok false :reason :no-running-body :body \"ProbeBody\"}\n"]
+   ["a denied socket" ["status"] {:error "EACCES"} 2 "{:ok false :reason :socket-access-denied :body \"ProbeBody\"}\n"]
+   ["any other failure is a transport error" ["status"] {:error "EPIPE"} 2 "{:ok false :reason :transport-error :body \"ProbeBody\"}\n"]])
+
+(deftest main-reports-each-outcome-with-its-exit-code-and-reason
+  (async done
+    (finish! done
+             (-> (series (map (fn [[_ argv reply]] #(run-main! argv (constantly reply))) outcome-cases))
+                 (.then (fn [results]
+                          (doseq [[[label _ _ code out] result] (map vector outcome-cases results)]
+                            (is (= code (:code result)) label)
+                            (is (= (or out (:out result)) (:out result)) label))
+                          (is (re-find #":reason :observe-unavailable" (:out (nth results 4))))))))))
+
+(deftest observe-socket-reads-use-the-observe-label-and-a-finite-deadline
+  (async done
+    (finish! done
+             (-> (rejects (observe/get! "/unused" "/status" {:timeout-ms 5 :request-fn (fn [_ _] (fake/pending-request))}))
+                 (.then (fn [error]
+                          (is (= "ETIMEDOUT" (.-code error)))
+                          (is (= "observe request exceeded 5 ms" (.-message error)))))))))
+
+(deftest a-bad-request-prints-the-usage-and-exits-2
+  (async done
+    (finish! done
+             (-> (observe/main! ["ProbeBody"] {:output (fn [_])})
+                 (.then (fn [code] (is (= 2 code))))))))
+
+;; Compact status
+
+(def compact-cases
+  [["omits metadata and empty collections, rounds the position, keeps keywords"
+    "{:body \"Probe\" :generation-id \"uuid\" :cursor {} :mode :scheduled :current nil :position {:x 1.254 :y 70 :z -9.666} :health 20 :food 20 :jobs {:total 0 :items []} :failed {:total 0} :outstanding {:total 0}}"
+    "{:mode :scheduled :idle true :pos [1.3 70 -9.7] :health 20 :food 20}"]
+   ["lists queued jobs apart from the current one"
+    "{:mode :scheduled :current {:id \"j1\" :name \"gather\" :status :running} :jobs {:total 3 :more? true :items [{:id \"j1\" :name \"gather\" :status :running} {:id \"j2\" :name \"smelt\" :status :queued}]}}"
+    "{:mode :scheduled :current {:id \"j1\" :name \"gather\" :status :running} :jobs {:total 2 :items [{:id \"j2\" :name \"smelt\" :status :queued}] :more? true}}"]
+   ["reports failures and attention requests briefly"
+    "{:mode :scheduled :current nil :failed {:total 1 :items [{:id \"j3\" :error \"boom\"}]} :outstanding {:total 1 :items [{:request-id \"r1\" :job-id \"j3\" :reason :blocked :message \"help\"}]}}"
+    "{:mode :scheduled :idle true :failed {:total 1 :items [{:id \"j3\" :error \"boom\"}]} :attention {:total 1 :items [{:id \"r1\" :job \"j3\" :reason :blocked :message \"help\"}]}}"]
+   ["an error answer passes through"
+    "{:ok false :reason :nope}"
+    "{:ok false :reason :nope}"]])
+
+(deftest compact-status-is-bounded-and-keeps-edn-keywords
+  (doseq [[label text expected] compact-cases]
+    (is (= expected (data/write-edn (observe/compact-status (data/read-edn text)))) label)))
+
+;; Wake classification
+
+(def defaults {:chatter "addressed" :watch [] :danger false :disconnect false})
+
+(defn event [source kind & [data message]]
+  (cond-> {:source source :kind kind :data (or data {})} message (assoc :message message)))
+
+(def chat (event :body :chat {:from "Dan"} "Hello Probe!"))
+
+(def classify-cases
+  [["addressed chatter wakes" chat defaults :chat]
+   ["a longer name does not match" (assoc chat :message "ProbeExtra") defaults nil]
+   ["chatter all wakes on banter" (assoc chat :message "banter") (assoc defaults :chatter "all") :chat]
+   ["a sender filter applies" chat (assoc defaults :from "Other") nil]
+   ["a whisper wakes" (event :body :whisper {:from "Dan"} "hi") defaults :chat]
+   ["chatter none suppresses whispers" (event :body :whisper {} "hi") (assoc defaults :chatter "none") nil]
+   ["hurt is opt-in" (event :body :hurt) defaults nil]
+   ["disconnection is opt-in" (event :body :disconnected) defaults nil]
+   ["danger wakes when asked" (event :body :hurt) (assoc defaults :danger true) :danger]
+   ["disconnection wakes when asked" (event :body :disconnected) (assoc defaults :disconnect true) :disconnected]
+   ["exhausted reconnection always wakes" (event :body :reconnect-failed) defaults :reconnect-failed]
+   ["an unwatched job stays quiet" (assoc (event :job :completed) :context {:job-id "j1"}) defaults nil]
+   ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]])
+
+(deftest classify-wakes-only-for-what-was-asked
+  (doseq [[label e opts expected] classify-cases]
+    (is (= expected (:wake (observe/classify e opts "Probe"))) label)))
+
+(def action-done
+  (assoc (event :action :done {:status :arrived :result {:status "arrived" :pos {:x 1.234 :y 64 :z 2} :distance 1.234
+                                                          :drops (vec (repeat 10000 "wheat"))}})
+         :context {:action-id "move-1"}))
+
+(deftest an-explicitly-watched-action-completion-wakes-with-a-bounded-result
+  (let [opts (assoc defaults :watch-actions ["move-1"])]
+    (is (= {:wake :action-finished :action "move-1" :result {:status "arrived" :pos [1.2 64 2] :distance 1.2}}
+           (observe/classify action-done opts "Probe")))
+    (is (nil? (observe/classify (assoc action-done :source :job) opts "Probe")))
+    (is (nil? (observe/classify (assoc action-done :kind :started) opts "Probe")))
+    (is (nil? (observe/classify action-done (assoc opts :watch-actions ["other"]) "Probe")))
+    (is (nil? (observe/classify action-done defaults "Probe")))))
+
+;; Attention
+
+(def blocked {:job-id "j1" :reason :blocked :updated-at 123
+              :event {:kind :blocked :message "No food" :data {:pos {:x 1}}}})
+
+(deftest attention-deduplication-ignores-timestamps-and-position-and-reports-semantic-changes
+  (let [first-pass (observe/attention-changes {"r" blocked} {})]
+    (is (= 1 (count (:changed first-pass))))
+    (is (= 0 (count (:changed (observe/attention-changes
+                               {"r" (-> blocked (assoc :updated-at 456) (assoc-in [:event :data :pos] {:x 2}))}
+                               (:seen first-pass))))))
+    (is (= 1 (count (:changed (observe/attention-changes
+                               {"r" (assoc-in blocked [:event :message] "No tools")} (:seen first-pass))))))
+    (is (= {} (:seen (observe/attention-changes {} (:seen first-pass)))))
+    (is (= [{:id "r" :job "j1" :reason :blocked :message "No food"}] (:changed first-pass)))))
+
+(deftest attention-is-delivered-four-at-a-time-until-all-are-seen
+  (doseq [n [10 129]]
+    (let [requests (into {} (map (fn [i] [(str "r" i) {:reason :blocked :event {:message "help"}}])) (range n))
+          [delivered _] (loop [seen {} delivered 0 passes 0]
+                          (let [{:keys [changed] :as pass} (observe/attention-changes requests seen)]
+                            (if (or (empty? changed) (> passes 100))
+                              [delivered passes]
+                              (recur (:seen pass) (+ delivered (count changed)) (inc passes)))))]
+      (is (= n delivered)))))
+
+(deftest keyword-keyed-requests-are-reported-by-their-name
+  (is (= "r1" (:id (first (:changed (observe/attention-changes {:r1 blocked} {})))))))
+
+(deftest too-many-attention-requests-fail-with-a-code
+  (let [many (into {} (map (fn [i] [(str "r" i) blocked])) (range 4097))]
+    (is (= "EATTENTIONLIMIT" (try (observe/attention-changes many {}) nil (catch :default e (.-code e)))))))
+
+;; The signature digests are stored in observer checkpoint files: they must not change.
+(def digest-cases
+  [[blocked "9542dc93064cfc366b307a0cca64e500308add1cc6df7fa550fc85c1ab7c8a7c"]
+   [(data/read-edn "{:job-id \"j7\" :reason :stuck :event {:kind :stuck :message \"caf\\u00e9 \\\"quoted\\\"\\n line\" :data {:time-ms 5 :pos {:x 1.5} :item \"wheat\" :count 3 :tags [:a :b] :ratio 0.25 :zz nil :flag true}}}")
+    "a2b482cc7c04eb641969e21870bf94ec89abe08e60f523c4f7c60f29ab1060ec"]
+   [{:reason :x} "73aa11d87b89e036ee79ec1ea9b84fc67dbb279d112303b434a96cb1ca580526"]])
+
+(deftest attention-signatures-keep-the-digests-saved-checkpoints-hold
+  (doseq [[r digest] digest-cases]
+    (is (= {"q" digest} (:seen (observe/attention-changes {"q" r} {}))))))
+
+;; Summaries
+
+(deftest summaries-are-bounded-and-discard-routine-ticks
+  (let [summary (atom {:counts {} :items [] :more false})]
+    (dotimes [_ 1000] (swap! summary observe/collect (event :body :physics-tick)))
+    (is (= {} (:counts @summary)))
+    (dotimes [_ 1000] (swap! summary observe/collect (event :body :picked-up {:item "wheat" :count 1})))
+    (is (= 4 (count (:items @summary))))
+    (is (= 1000 (get-in @summary [:counts :picked-up])))
+    (is (true? (:more @summary)))
+    (is (= {:event :picked-up :item "wheat" :count 1} (first (:items @summary))))))
+
+(deftest an-action-completion-is-not-summarised
+  (is (= {} (:counts (observe/collect {:counts {} :items [] :more false} action-done)))))
+
+;; The wait loop
+
+(defn fixture
+  ([] (fixture "30ms"))
+  ([timeout]
+   (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "observe-unit-"))
+         req (request "--world" "w" "Probe" "--state" dir "--wait" "--timeout" timeout "--poll-ms" "50")
+         world (atom {:generation "g" :outstanding {} :events [] :gap false})
+         get! (fn [_socket endpoint _options]
+                (let [{:keys [generation outstanding events gap]} @world
+                      cursor {:stream-id "s" :seq (count events)}
+                      value (cond
+                              (= "/snapshot" endpoint) {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
+                              (= "/status" endpoint) {:mode :scheduled :current nil}
+                              :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" endpoint))) "after"))]
+                                      {:gap? gap :stream-id "s" :latest-seq (count events) :cursor cursor
+                                       :events (filterv #(> (:seq %) after) events)}))]
+                  (js/Promise.resolve {:status 200 :content-type "application/edn" :text (data/write-edn value)})))]
+     {:dir dir :req req :world world :get! get!
+      :file (.join path dir "worlds" "w" "observers" "Probe" "agent.edn")
+      :cleanup #(.rmSync fs dir #js {:recursive true :force true})
+      :wait! (fn [& [signal deliver]] (observe/wait-observe req get! signal (or deliver (fn [_] (js/Promise.resolve nil)))))})))
+
+(defn with-fixture
+  "Run (body fixture), a promise; clean up and end the async test whatever happens."
+  [fixture-args body]
+  (async done
+    (let [f (apply fixture fixture-args)]
+      (-> (js/Promise.resolve nil)
+          (.then #(body f))
+          (.catch (fn [error] (is false (str "rejected: " error))))
+          (.then (fn [_] ((:cleanup f)) (done)))))))
+
+(defn saved [f] (data/read-edn (.readFileSync fs (:file f) "utf8")))
+
+(defn push! [f & events] (swap! (:world f) update :events into events))
+
+(deftest wait-persists-between-invocations-reports-quiet-changes-and-does-not-miss-between-call-chat
+  (with-fixture []
+    (fn [f]
+      (-> ((:wait! f))
+          (.then (fn [result]
+                   (is (= {:wake :timeout :changed false} result))
+                   (push! f (assoc (event :body :picked-up {:item "wheat" :count 2}) :seq 1))
+                   ((:wait! f))))
+          (.then (fn [quiet]
+                   (is (= :timeout (:wake quiet)))
+                   (is (= 1 (get-in quiet [:summary :counts :picked-up])))
+                   (push! f (assoc (event :body :chat {:from "Dan"} "Probe come home") :seq 2))
+                   ((:wait! f))))
+          (.then (fn [woken]
+                   (is (= :chat (:wake woken)))
+                   (is (= 2 (get-in (saved f) [:cursor :seq])))
+                   ((:wait! f))))
+          (.then (fn [quiet] (is (false? (:changed quiet)))))))))
+
+(deftest outstanding-requests-remain-unresolved-wake-once-and-wake-again-on-change
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] {:job-id "j1" :reason :blocked :event {:message "help"}})
+      (-> ((:wait! f))
+          (.then (fn [first-wake]
+                   (is (= :attention (:wake first-wake)))
+                   ((:wait! f))))
+          (.then (fn [quiet]
+                   (is (= :timeout (:wake quiet)))
+                   (is (= 1 (count (:outstanding @(:world f)))))
+                   (swap! (:world f) assoc-in [:outstanding :r :event :message] "different help")
+                   ((:wait! f))))
+          (.then (fn [again] (is (= :attention (:wake again)))))))))
+
+(deftest a-checkpoint-written-by-the-previous-tool-still-silences-an-unchanged-request
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] blocked)
+      (.mkdirSync fs (.dirname path (:file f)) #js {:recursive true})
+      (.writeFileSync fs (:file f)
+                      (str "{:cursor {:stream-id \"s\" :seq 0} :generation \"g\" :seen {:r \"9542dc93064cfc366b307a0cca64e500308add1cc6df7fa550fc85c1ab7c8a7c\"} :pending []}\n"))
+      (-> ((:wait! f))
+          (.then (fn [result] (is (= {:wake :timeout :changed false} result))))))))
+
+(deftest checkpoints-keep-their-layout
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] blocked)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (is (= "{:cursor {:stream-id \"s\" :seq 0} :generation \"g\" :seen {:r \"9542dc93064cfc366b307a0cca64e500308add1cc6df7fa550fc85c1ab7c8a7c\"} :pending [] :lookup true}\n"
+                          (.readFileSync fs (:file f) "utf8")))))))))
+
+(deftest cancellation-and-failed-delivery-do-not-checkpoint-concurrent-observer-rejected-restart-and-gap-explicit
+  (with-fixture ["1s"]
+    (fn [f]
+      (let [controller (js/AbortController.)
+            pending (rejects ((:wait! f) (.-signal controller)))]
+        (-> (rejects ((:wait! f)))
+            (.then (fn [busy]
+                     (is (= "EOBSERVERBUSY" (.-code busy)))
+                     (.abort controller)
+                     pending))
+            (.then (fn [cancelled]
+                     (is (= "ABORT_ERR" (.-code cancelled)))
+                     (is (= 0 (get-in (saved f) [:cursor :seq])))
+                     (observe/wait-observe (assoc-in (:req f) [:wait-options :timeout-ms] 20) (:get! f) nil
+                                           (fn [_] (js/Promise.reject (js/Error. "stdout failed"))))))
+            (.then (fn [_] (is false "resolved")))
+            (.catch (fn [error] (is (re-find #"stdout failed" (.-message error)))))
+            (.then (fn [_]
+                     (is (= 0 (get-in (saved f) [:cursor :seq])))
+                     ((:wait! f))))
+            (.then (fn [_]
+                     (swap! (:world f) assoc :generation "g2")
+                     ((:wait! f))))
+            (.then (fn [restarted]
+                     (is (= :engine-restarted (:reason restarted)))
+                     (swap! (:world f) assoc :gap true)
+                     ((:wait! f))))
+            (.then (fn [gap] (is (= :event-gap (:reason gap))))))))))
+
+(deftest wait-validates-policies-durations-and-observer-names
+  (is (= 60000 (get-in (request "--world" "w" "Probe" "--wait") [:wait-options :timeout-ms])))
+  (is (= 1500 (get-in (request "--world" "w" "Probe" "--wait" "--timeout" "1.5s") [:wait-options :timeout-ms])))
+  (doseq [argv [["--wait" "--observer" "../bad"]
+                ["--wait" "--chatter" "classified"]
+                ["--wait" "--watch" "j1,bad"]
+                ["--wait" "--timeout" "infinity"]
+                ["--wait" "--timeout" "5ms"]
+                ["--wait" "--poll-ms" "10"]
+                ["--wait" "--from" "bad/name"]
+                ["--wait" "--raw"]
+                ["--wait" "--verbose"]
+                ["--timeout" "1s"]
+                ["--danger"]
+                ["--watch-action" "move-1"]
+                ["--wait" "--watch-action" "bad/name"]
+                ["--wait" "--watch-action" (str/join "," (repeat 33 "move-1"))]]]
+    (is (string? (:error (apply request "--world" "w" "Probe" argv))) (pr-str argv)))
+  (is (string? (:error (request "--world" "w" "Probe" "inventory" "--wait")))))
+
+(deftest watchers-accept-repeated-and-comma-separated-options
+  (let [r (request "--world" "w" "Probe" "--wait" "--watch-action" "move-1,place-1" "--watch-action" "dig-1"
+                   "--watch" "j1,j2" "--watch" "j3")]
+    (is (= ["move-1" "place-1" "dig-1"] (get-in r [:wait-options :watch-actions])))
+    (is (= ["j1" "j2" "j3"] (get-in r [:wait-options :watch])))))
+
+(deftest the-first-cancelled-wait-preserves-the-baseline-so-events-before-retry-are-not-missed
+  (with-fixture ["1s"]
+    (fn [f]
+      (let [controller (js/AbortController.)
+            pending (rejects ((:wait! f) (.-signal controller)))]
+        (-> (js/Promise. (fn [resolve _] (js/setTimeout resolve 5)))
+            (.then (fn [_] (.abort controller) pending))
+            (.then (fn [cancelled]
+                     (is (some? (.-code cancelled)))
+                     (push! f (assoc (event :body :chat {:from "Dan"} "Probe hello") :seq 1))
+                     ((:wait! f))))
+            (.then (fn [woken] (is (= :chat (:wake woken))))))))))
+
+(deftest a-deadline-during-a-read-returns-a-quiet-summary-and-an-engine-start-notification-does-not-repeat
+  (with-fixture ["20ms"]
+    (fn [f]
+      (let [stalled (fn [socket endpoint options]
+                      (if (str/starts-with? endpoint "/events")
+                        (-> (js/Promise. (fn [resolve _] (js/setTimeout resolve 25)))
+                            (.then (fn [_] (throw (doto (js/Error. "deadline") (aset "code" "ETIMEDOUT"))))))
+                        ((:get! f) socket endpoint options)))]
+        (-> (observe/wait-observe (:req f) stalled nil (fn [_] (js/Promise.resolve nil)))
+            (.then (fn [result]
+                     (is (= :timeout (:wake result)))
+                     (push! f (assoc (event :system :restored) :seq 1))
+                     ((:wait! f))))
+            (.then (fn [restarted]
+                     (is (= :engine-restarted (:reason restarted)))
+                     ((:wait! f))))
+            (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
+
+(deftest an-explicitly-watched-action-completion-wakes-once-through-the-loop
+  (with-fixture []
+    (fn [f]
+      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["move-1"])
+            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
+        (-> ((:wait! f))
+            (.then (fn [_]
+                     (push! f (assoc action-done :seq 1))
+                     (wait!)))
+            (.then (fn [result]
+                     (is (= :action-finished (:wake result)))
+                     (is (= "move-1" (:action result)))
+                     (wait!)))
+            (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
+
+(deftest first-use-catches-recently-completed-watched-actions-while-ignoring-historical-chat
+  (with-fixture []
+    (fn [f]
+      (push! f (assoc (event :body :chat {:from "Dan"} "Probe historical chat") :seq 1 :generation-id "g")
+             (assoc (event :action :done {:status :dug}) :context {:action-id "dig-1"} :seq 2 :generation-id "g")
+             (assoc (event :action :done {:status :placed}) :context {:action-id "place-1"} :seq 3 :generation-id "g"))
+      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["dig-1" "place-1"])
+            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
+        (-> (series [wait! wait! wait!])
+            (.then (fn [[first-wake second-wake third]]
+                     (is (= "dig-1" (:action first-wake)))
+                     (is (= "place-1" (:action second-wake)))
+                     (is (= :timeout (:wake third)))
+                     (is (= 3 (get-in (saved f) [:cursor :seq]))))))))))
+
+(deftest historical-lookup-ignores-prior-generations-and-newly-started-attempts-and-reports-unavailable-history
+  (with-fixture []
+    (fn [f]
+      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["move-1"])
+            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))
+            done-event (assoc (event :action :done {:status :arrived}) :context {:action-id "move-1"} :seq 1)]
+        (push! f (assoc done-event :generation-id "older"))
+        (-> (wait!)
+            (.then (fn [result]
+                     (is (= :timeout (:wake result)))
+                     (.unlinkSync fs (:file f))
+                     (swap! (:world f) assoc :events [(assoc done-event :generation-id "g")
+                                                      (assoc (event :action :started) :context {:action-id "move-1"} :seq 2 :generation-id "g")])
+                     (wait!)))
+            (.then (fn [result]
+                     (is (= :timeout (:wake result)))
+                     (.unlinkSync fs (:file f))
+                     (swap! (:world f) assoc :gap true)
+                     (wait!)))
+            (.then (fn [result] (is (= :history-unavailable (:reason result))))))))))
+
+(deftest resolved-attention-does-not-wake-again
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] {:reason :blocked :event {:message "help"}})
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :attention :resolved) :request-id "r" :seq 1))
+                   ((:wait! f))))
+          (.then (fn [result] (is (= :timeout (:wake result)))))))))
+
+(deftest a-second-observer-name-keeps-its-own-checkpoint
+  (with-fixture []
+    (fn [f]
+      (let [other (assoc-in (:req f) [:wait-options :observer] "builder")]
+        (-> ((:wait! f))
+            (.then (fn [_] (observe/wait-observe other (:get! f) nil (fn [_] (js/Promise.resolve nil)))))
+            (.then (fn [_]
+                     (is (.existsSync fs (.join path (.dirname path (:file f)) "builder.edn")))
+                     (is (.existsSync fs (:file f))))))))))

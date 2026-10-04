@@ -6,7 +6,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createControl } from '../../js/control.mjs'
-import { socketPathFor } from '../../tools/drive-lib.mjs'
+import tools from '../../tools/agent-tools-loader.mjs'
+const socketPathFor = request => tools.driveSocketPathFor(request)
 
 const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../tools/drive.mjs')
 const run = (args) => new Promise((resolve) => {

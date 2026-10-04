@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { execute } from '../../tools/plan-tools-lib.mjs'
-import { readEDN, keyword } from '../../tools/observe-lib.mjs'
+import { readEDN, keyword } from './edn.mjs'
 import { revision } from '../../tools/world-data.mjs'
 
 function fixture () {
