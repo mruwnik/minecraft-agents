@@ -1,6 +1,7 @@
 (ns jobs.apiary.harvest
   (:require [engine.ctx :as ctx]
             [engine.jobs.apiary :as apiary]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -18,7 +19,12 @@
   {pos reason} :collected n}; :reason is :harvested (some taken, nothing more to
   do), :limit (:max reached), :no-tool, :no-hive, :not-ripe, :not-smoked,
   :open-fire, :unreachable, or :gave-up after 3 fruitless hives in a row. Declines and
-  give-ups also emit a warn apiary.gave-up.")
+  give-ups also emit a warn apiary.gave-up.
+
+  Zones and claims are a rule the job consults: a hive in a zone or claim of another owner, or in a plan's footprint,
+  is not one to take honey from (:harvest of the zone rules), left out of the survey (all refused ends :no-hive) and
+  asked again right before the click. One apiary.declined warn per job names the zones, claims and plans ({:reason
+  :refused ...}); without a zone list it declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
 
 (def args
   {:with {:doc ":shears, :bottle or :either (shears first when both are carried)" :default :either}
@@ -26,7 +32,8 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :default nil}
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :default 12}
    :max {:doc "hives to harvest in one run, at most" :default 8}
-   :walk-timeout-s {:doc "bound of one walk towards a hive" :default 8}})
+   :walk-timeout-s {:doc "bound of one walk towards a hive" :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-level 5)
 (def reach 3)
@@ -47,16 +54,24 @@
       (and (within :x) (within :y) (within :z)))
     (<= (u/dist center pos) radius)))
 
+(defn hive-allowed?
+  "Whether the job may take honey from the hive at pos (one warn per job when refused)."
+  [c pos]
+  (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos))
+
 (defn hives
-  "Every hive in the area as {:pos :ripe}, nearest to the body first."
+  "Every hive in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the body first."
   [c center]
   (let [p (:primitives c)
         me (u/self-pos c)
         {:keys [radius box] :as a} (:args c)
-        search (if box 64 (+ radius (u/dist me center)))]
-    (->> (array-seq (.blocks p #js {:radius search :names hive-names :properties true :max 64}))
-         (map (fn [b] {:pos (u/pos-of (.-pos b)) :ripe (ripe? b)}))
-         (filter #(in-area? a center radius (:pos %)))
+        search (if box 64 (+ radius (u/dist me center)))
+        found (->> (array-seq (.blocks p #js {:radius search :names hive-names :properties true :max 64}))
+                   (map (fn [b] {:pos (u/pos-of (.-pos b)) :ripe (ripe? b)}))
+                   (filter #(in-area? a center radius (:pos %))))
+        ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found)))]
+    (->> found
+         (filter #(ok (:pos %)))
          (sort-by #(u/dist me (:pos %))))))
 
 (defn tool-for
@@ -134,7 +149,9 @@
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :continue)
-      (let [r (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face "up"})))
+      (let [r (if (hive-allowed? c pos)
+                (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face "up"})))
+                #js {:status "refused"})
             level (some-> r .-after .-properties .-honey_level)]
         (if (and (= "used" (.-status r)) (< (or level ripe-level) ripe-level))
           (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))

@@ -8,6 +8,7 @@
             [engine.jobs.apiary :as apiary]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.apiary.guard :as guard]))
 
 (defn setup [world]
@@ -15,6 +16,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -63,7 +65,7 @@
 
 (defn check-of [p args]
   ((:check (get registry/jobs job))
-   {:primitives p :args (merge {:radius 16 :max 12 :box nil :center nil} args) :view (fn [] {:data {} :now 0})}))
+   {:primitives p :args (merge {:radius 16 :max 12 :box nil :center nil} args) :view (fn [] {:data {} :now 0}) :engine {:world (ew/of-data {} {} [])}}))
 
 (deftest an-open-fire-gets-a-carpet
   (async done
@@ -232,3 +234,46 @@
     {} {:left {} :fires 0} :no-fire
     {} {:left {} :fires 3} :safe
     {:skipped {"2,2,2" :on-fire}} {:left {} :fires 1} :on-fire))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(def zone-over-fire {:name "bees" :min [2 60 0] :max [2 70 0]})
+
+(defn ^:async run-guard
+  "Submit the job with args over world w, tick n times; the setup map."
+  [w args n]
+  (let [s (setup w)]
+    (core/submit! (:eng s) (list job args) {})
+    (dotimes [_ n]
+      (await (core/tick! (:eng s))))
+    s))
+
+(deftest a-fire-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra block declined] [["Fake" {} "white_carpet" []] ["FAKE" {} "white_carpet" []]
+                                              ["Miles" {} "air" [{:reason :refused :zones ["bees"]}]]
+                                              ["Miles" {:ignore-zones? true} "white_carpet" []]]]
+          (let [w (assoc (fire-world {:inventory (inv "white_carpet" 2)}) :zones [(assoc zone-over-fire :owner owner)])
+                {:keys [p seen]} (await (run-guard w extra 12))]
+            (is (= block (block-name p 2 65 0)) (pr-str [owner extra]))
+            (is (= declined (mapv #(select-keys % [:reason :zones]) (kinds seen :apiary.guard-declined))) (pr-str [owner extra]))))))))
+
+(deftest a-sink-in-a-foreign-zone-digs-and-places-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "campfire" 1 "white_carpet" 1)}) (open-side "3,64,0")
+                    (assoc :zones [(assoc zone-over-fire :owner "Miles")]))
+              {:keys [p]} (await (run-guard w {} 12))]
+          (is (empty? (calls p "dig")))
+          (is (empty? (calls p "place"))))))))
+
+(deftest no-zone-list-declines-the-guard
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-guard (assoc (fire-world {:inventory (inv "white_carpet" 2)}) :zones nil) {} 12))]
+          (is (empty? (calls p "place")))
+          (is (= [:no-zones] (mapv :reason (kinds seen :apiary.guard-declined)))))))))

@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.apiary.harvest :as harvest]))
 
 (defn setup [world]
@@ -14,6 +15,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -196,3 +198,30 @@
               result (await (child-outcome eng job {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}} 40))]
           (is (= :no-hive (:reason result)))
           (is (empty? (calls p "useOn"))))))))
+
+;; ------------------------------------------------------------------ zones and claims
+
+(def zone-over-hive {:name "bees" :min [2 60 0] :max [2 70 0]})
+
+(deftest a-hive-follows-its-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra harvested reason declined] [["Fake" {} 1 :harvested []] ["FAKE" {} 1 :harvested []]
+                                                         ["Miles" {} 0 :no-hive [{:reason :refused :zones ["bees"]}]]
+                                                         ["Miles" {:ignore-zones? true} 1 :harvested []]]]
+          (let [{:keys [eng p seen]} (setup (assoc (world {:inventory (inv "shears" 1)}) :zones [(assoc zone-over-hive :owner owner)]))
+                result (await (child-outcome eng job extra 40))]
+            (is (= [harvested reason] [(:harvested result) (:reason result)]) (pr-str [owner extra]))
+            (is (= harvested (count (calls p "useOn"))) (pr-str [owner extra]))
+            (is (= declined (mapv #(select-keys % [:reason :zones]) (kinds seen :apiary.declined))) (pr-str [owner extra]))))))))
+
+(deftest no-zone-list-declines-the-harvest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc (world {:inventory (inv "shears" 1)}) :zones nil))
+              result (await (child-outcome eng job {} 40))]
+          (is (= :no-hive (:reason result)))
+          (is (empty? (calls p "useOn")))
+          (is (= [:no-zones] (mapv :reason (kinds seen :apiary.declined)))))))))

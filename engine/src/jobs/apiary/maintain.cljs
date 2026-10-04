@@ -32,7 +32,8 @@
   summary}} (info maintain.done) and ends :done, also when every step was
   skipped after the first. Summaries: guard {:sunk :carpeted :reason :left},
   harvest {:harvested :reason :declined}, breed {:fed :reason}, deposit
-  {:gave-up :reason}.")
+  {:gave-up :reason}. Guard and harvest consult the zones and claims (see their docs); :ignore-zones? is passed to
+  them.")
 
 (def args
   {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :default nil}
@@ -41,7 +42,8 @@
    :with {:doc "harvest tool: :shears, :bottle or :either (shears first)" :default :either}
    :target {:doc "bees wanted in the area (babies count); nil: no breeding" :default nil}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :default nil}
-   :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :default {}}})
+   :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :default false}})
 
 (def steps [:guard :harvest :breed :deposit])
 
@@ -164,7 +166,8 @@
   "The args a child gets: the area for guard and harvest, as decided for the rest."
   [c step center decided]
   (case step
-    (:guard :harvest) (merge (area c center) (when (= :harvest step) {:with (:with (:args c))}))
+    (:guard :harvest) (merge (area c center) (when (= :harvest step) {:with (:with (:args c))})
+                             (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
     (:args decided)))
 
 (defn plan

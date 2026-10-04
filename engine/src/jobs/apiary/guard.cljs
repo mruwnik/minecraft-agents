@@ -1,6 +1,7 @@
 (ns jobs.apiary.guard
   (:require [engine.ctx :as ctx]
             [engine.jobs.apiary :as apiary]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -19,13 +20,32 @@
   :no-fire, :no-carpet, :no-campfire (nothing to do it with), a skip reason
   such as :unreachable, :on-fire, :occupied, :cannot or :place-failed, or
   :gave-up after 3 fruitless fires in a row. Every end but :guarded and :limit
-  also emits a warn apiary.guard-gave-up.")
+  also emits a warn apiary.guard-gave-up.
+
+  Zones and claims are a rule the job consults: a fire in a zone or claim of another owner, or in a plan's footprint,
+  is left out of the survey (all refused ends :no-fire), and each dig and place of a sink and each carpet is asked
+  again right before it (a refusal skips the fire, :refused). One apiary.guard-declined warn per job names the zones,
+  claims and plans ({:reason :refused ...}); without a zone list it declines with {:reason :no-zones}.
+  :ignore-zones? acts regardless.")
 
 (def args
   {:box {:doc "{:from pos :to pos}, fires inside it only; overrides :center and :radius" :default nil}
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :default 16}
-   :max {:doc "actions (sinks and carpets) in one run, at most" :default 12}})
+   :max {:doc "actions (sinks and carpets) in one run, at most" :default 12}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+
+(defn permitted?
+  "Whether the job may do action (:dig or :place) at pos (one warn per job when refused)."
+  [c action pos]
+  (gate/allowed? c :apiary.guard-declined "apiary guard" action pos))
+
+(defn permitted-fires
+  "The fires of the area whose cell the job may dig and the cell over it place on."
+  [c fires]
+  (let [dig (set (gate/allowed c :apiary.guard-declined "apiary guard" :dig (map :pos fires)))
+        place (set (gate/allowed c :apiary.guard-declined "apiary guard" :place (map #(update (:pos %) :y inc) fires)))]
+    (filterv #(and (dig (:pos %)) (place (update (:pos %) :y inc))) fires)))
 
 (def reach 3)
 (def max-strikes 3)
@@ -52,7 +72,7 @@
         block-at (apiary/block-at-fn p)
         inventory (u/inventory p)
         skipped (:skipped (ctx/mem c) {})
-        all (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))})
+        all (permitted-fires c (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))}))
         plans (->> all
                    (remove #(contains? skipped (apiary/pos-key (:pos %))))
                    (keep #(plan-fire block-at inventory %)))]
@@ -122,10 +142,12 @@
 
 (defn ^:async carpet!
   [c pos item]
-  (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
-    (if (= "placed" (.-status r))
-      (booked! c :carpeted)
-      (skip! c pos (keyword (.-status r))))))
+  (if-not (permitted? c :place (update pos :y inc))
+    (skip! c pos :refused)
+    (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
+      (if (= "placed" (.-status r))
+        (booked! c :carpeted)
+        (skip! c pos (keyword (.-status r)))))))
 
 ;; ------------------------------------------------------------------ sink
 
@@ -177,14 +199,18 @@
         (case op
           :done (await (finish-sink! c s))
           :abort (do (abandon! c fire :cannot) :continue)
-          :dig (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
-                 (if (contains? #{"dug" "missing"} status)
-                   (recur)
-                   (do (abandon! c fire (keyword status)) :continue)))
-          :place (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
-                   (if (= "placed" status)
-                     (await (finish-sink! c s))
-                     (do (abandon! c fire :place-failed) :continue))))))))
+          :dig (if-not (permitted? c :dig pos)
+                 (do (abandon! c fire :refused) :continue)
+                 (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
+                   (if (contains? #{"dug" "missing"} status)
+                     (recur)
+                     (do (abandon! c fire (keyword status)) :continue))))
+          :place (if-not (permitted? c :place pos)
+                   (do (abandon! c fire :refused) :continue)
+                   (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
+                     (if (= "placed" status)
+                       (await (finish-sink! c s))
+                       (do (abandon! c fire :place-failed) :continue)))))))))
 
 (defn start-sink!
   "Remember the sink so a cut resumes it, then run it."
@@ -229,7 +255,7 @@
              block-at (apiary/block-at-fn p)
              {:keys [box radius]} (:args c)
              center (or (:center (:args c)) (u/self-pos c))]
-         (some #(seq (apiary/needs block-at (:pos %))) (apiary/fires p {:box box :center center :radius radius}))))))
+         (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius})))))))
 
 (defn ^:async round
   "One bounded step: resume a sink; else survey the fires and finish when the

@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.gate :as gate]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [jobs.survival.dig-in :as dig-in]))
@@ -52,6 +53,9 @@
   dig phase :refused, or, before the first round, declines; either way one mine.declined warn per job names the zones
   and plans ({:reason :refused :zones :plans}). No zone list (zones.edn missing or never valid) declines the check
   with one mine.declined warn {:reason :no-zones}, also in the middle of the job; nothing is dug or placed then.
+  The mend asks the zone rules too: an owed cell in a zone or claim of another owner that does not let others place
+  (the dig was allowed, e.g. :allow #{:dig}) is not filled (one mine.declined warn {:reason :refused}), and a mend
+  with no cell left to fill ends as one with nothing owed.
   With :buried false and only buried blocks in range the check also declines, with one mine.declined warn
   {:reason :no-exposed}; the job stays queued (an exposed one may turn up) and nothing is dug.
   Buried targets (:buried, on by default; false: exposed blocks only): a block with no air face is a buried target when the rules permit
@@ -413,13 +417,21 @@
 
 (defn mend-fail! [c] (ctx/update-mem! c update :mend-failures (fnil inc 0)))
 
+(defn mend-permitted
+  "The owed cells ({:pos ..}) the job may place on (zones and claims; one mine.declined warn per job when refused)."
+  [c cells]
+  (let [ok (set (gate/allowed c :mine.declined "mine" :place (map :pos cells)))]
+    (filterv #(ok (:pos %)) cells)))
+
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) mend-reach)
                  (await (u/walk-near! c pos reach))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) :continue)
-      (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
+      (let [status (if (gate/allowed? c :mine.declined "mine" :place pos)
+                     (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))
+                     "refused")]
         (cond
           (= "placed" status) (ctx/update-mem! c #(-> % (assoc :mend-failures 0) (update :mended (fnil inc 0))))
           (= "occupied" status) (ctx/update-mem! c assoc :mend-failures 0)
@@ -461,7 +473,7 @@
                 (wrap-up! c)))))
 
 (defn ^:async mend-round! [c]
-  (let [cells (owed c)
+  (let [cells (mend-permitted c (owed c))
         item (when (seq cells) (filler c))
         pos (mend-target c cells)]
     (cond
@@ -481,6 +493,7 @@
   [c]
   (let [{:keys [start]} (ctx/mem c)
         walked (await (u/walk-near! c start 0))]
+    (js/console.error "DBGS6 home" (pr-str start walked (u/self-pos c)))
     (when (not= :there walked)
       (ctx/emit! c :mine.not-home :info {:to (access/cell start) :walk walked :text (str "mine did not get back to " (pr-str (access/cell start)) ": " (name walked))}))
     (finish! c)))

@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.jobs.tools :as tools]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -44,6 +45,7 @@
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
+(defn moved [{:keys [eng]}] (mapv :data (mem/entries (mem/view (:store eng)) :moved)))
 (defn dig-count [s] (count (calls s "dig")))
 (defn block-at [{:keys [p]} x y z] (some-> (.blockAt p (tu/pos x y z)) .-name))
 
@@ -181,13 +183,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks {"9,64,0" "sand"}}})]
-          (.override (.-world (:p s)) "moveTo" (fn ^:async f [_ _ _] #js {:status "partial"}))
+        (let [s (start {:world {:blocks {"15,64,0" "sand"}}})]
+          (tu/short-walks! (:p s) 7)
           (core/submit! (:eng s) (spec {:block "sand"}) {})
           (await (run-ticks s 1))
           (is (zero? (:failures (job-mem s))) "failures start at 0")
           (await (run-ticks s 20))
-          (is (= 3 (count (calls s "moveTo"))))
+          (is (= ["partial" "partial" "partial"] (mapv :status (moved s))) "three walks, each cut short")
           (is (zero? (dig-count s)))
           (is (= :none (:reason (done-event s))))
           (is (finished? s)))))))
@@ -326,20 +328,18 @@
                                 (.push (.-inventory (world-state s)) #js {:name "dirt" :count 1})
                                 (set-pos! s 10 64 0)
                                 r))))
-          ;; a walk to a cell leaves the body two blocks beside it
-          (.override (.-world p) "moveTo"
-                     (fn [_ args _]
-                       (set-pos! s (+ 2 (.-x (.-pos args))) 64 (.-z (.-pos args)))
-                       (js/Promise.resolve #js {:status "arrived"})))
-          (core/submit! (:eng s) (spec {:block "dirt" :count 1}) {})
-          (await (run-ticks s 40))
+          ;; how many walks to the owed cell (y 63) were made when the first place came
+          (let [walks-at-place (atom nil)]
+            (.override (.-world p) "place"
+                       (fn [token args impl]
+                         (swap! walks-at-place #(or % (count (filter (fn [t] (= 63 (:y t))) (tu/walked-to (:eng s))))))
+                         (impl token args)))
+            (core/submit! (:eng s) (spec {:block "dirt" :count 1}) {})
+            (await (run-ticks s 40))
+            (is (pos? @walks-at-place) "walked to the owed cell before placing"))
           (let [names (mapv #(.-name %) (.-calls (.-world p)))
-                first-place (.indexOf (clj->js names) "place")
-                walk-to-ground (first (keep-indexed (fn [i call] (when (and (= "moveTo" (.-name call)) (= 63 (.-y (.-pos (.-args call))))) i))
-                                                    (.-calls (.-world p))))]
+                first-place (.indexOf (clj->js names) "place")]
             (is (<= 0 first-place))
-            (is (some? walk-to-ground) "walked to the owed cell")
-            (is (< walk-to-ground first-place) "before placing")
             (is (= 1 (:mended (done-event s))))
             (is (= "dirt" (block-at s 0 63 0)))))))))
 
@@ -564,7 +564,7 @@
       (fn ^:async t []
         (let [w (ew/of-data {} {} [])
               p (tu/fake {:blocks {"6,64,0" "sand"}})
-              _ (.override (.-world p) "moveTo"
+              _ (.override (.-world p) "steer"
                            (fn [token args impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                              (impl token args)))
               s (start {:p p :shared w})]
@@ -778,3 +778,15 @@
         (let [s (await (zoned {:block "sand" :count 2 :mend false :ignore-zones? true} {:blocks two-in-two-out}
                               (ew/of-data {} {} nil) 40))]
           (is (= 2 (count (dug-cells s)))))))))
+
+(deftest the-mend-follows-the-zone-owner-and-the-opt-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra mended-some declined] [["Fake" {} true []] ["FAKE" {} true []]
+                                                   ["Miles" {} false [{:reason :refused :zones ["farm"]}]]
+                                                   ["Miles" {:ignore-zones? true} true []]]]
+          (let [zone {:name "farm" :min [-2 60 -2] :max [2 70 2] :owner owner :allow #{:dig}}
+                s (await (zoned (merge {:block "dirt" :count 4} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
+            (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))
+            (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of s :mine.declined))) (pr-str [owner extra]))))))))
