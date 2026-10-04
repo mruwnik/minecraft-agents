@@ -51,7 +51,7 @@
   dig phase :refused, or, before the first round, declines; either way one mine.declined warn per job names the zones
   and plans ({:reason :refused :zones :plans}). No zone list (zones.edn missing or never valid) declines the check
   with one mine.declined warn {:reason :no-zones}, also in the middle of the job; nothing is dug or placed then.
-  Buried targets (:buried true; off by default): a block with no air face is a buried target when the rules permit
+  Buried targets (:buried, on by default; false: exposed blocks only): a block with no air face is a buried target when the rules permit
   its dig (a zone or plan refusal counts among the refused as above). When no exposed target is left, the nearest
   buried one is visited: from where the body stands, jobs.access.tunnel (child :tunnel, :max-length :tunnel-max)
   cuts a straight stair and run to stand beside it; then it is dug as above (judged again right before the dig) and
@@ -60,7 +60,7 @@
   info mine.not-home). The visit is in job memory (:visit {:target :from :entry :stage :in|:dig|:out|:home}), so a
   cut or a restart goes on from its stage. A tunnel that stops skips the target and counts a failure (it walks back
   to its entry itself; the walk up to the entry runs only when the tunnel says the body is still :inside); a walk
-  out that does not arrive ends the job :trapped (warn mine.trapped). Tunnels are left open: info mine.tunnel {:target
+  out that does not arrive ends the job :trapped (warn mine.trapped). The way out of a tunnel is jobs.access.leave-tunnel (child :out, the mined item as :spare): the torches the tunnel hung come back and the mouth is sealed; its stop ends the job :trapped. Info mine.tunnel {:target
   :entry :dug n} per reached target, and the result carries :tunnels [{:target :entry :dug n}].")
 
 (def args
@@ -73,7 +73,7 @@
    :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
    :max-failures {:doc "failures in a row before giving up" :default 3}
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
-   :buried {:doc "also tunnel to blocks with no air face (jobs.access.tunnel) once no exposed one is left" :default false}
+   :buried {:doc "also tunnel to blocks with no air face (jobs.access.tunnel) once no exposed one is left; false: exposed blocks only" :default true}
    :tunnel-max {:doc "longest tunnel line to a buried block, in blocks" :default 24}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
@@ -279,6 +279,11 @@
                 :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
                           (await (dig! c pos))))))))
 
+(defn tunnel-of
+  "What the way out of a tunnel needs of its result."
+  [res]
+  (select-keys res [:line :dug :torches :keep]))
+
 (defn ^:async tunnel-in!
   "The tunnel child's round toward the visit's target: reached, the dig stage next; stopped, skip the target, count
   a failure and walk out."
@@ -290,26 +295,45 @@
       (= :done (:status res))
       (let [t {:target target :entry (:entry res) :dug (count (:dug res))}]
         (ctx/emit! c :mine.tunnel :info (assoc t :text (str "mine tunnelled to " (pr-str target) " from " (pr-str (:entry res)))))
-        (ctx/update-mem! c #(-> % (update :tunnels (fnil conj []) t) (update :visit assoc :stage :dig :entry (:entry res)))))
+        (ctx/update-mem! c #(-> % (update :tunnels (fnil conj []) t)
+                                   (update :visit assoc :stage :dig :entry (:entry res) :tunnel (tunnel-of res)))))
       :else (do (skip-failed! c (zipmap [:x :y :z] target))
-                (ctx/update-mem! c update :visit assoc :stage :out :entry (when (:inside res) (:entry res)))))
+                (ctx/update-mem! c update :visit assoc :stage :out :entry (when (:inside res) (:entry res))
+                                 :tunnel (when (:inside res) (tunnel-of res)))))
     :continue))
 
-(defn ^:async walk-out!
-  "Walk back up the tunnel to its entry over its own stair (jobs.debug.walk-plan); not arriving ends the job
-  :trapped. Then the home stage."
-  [c {:keys [entry]}]
-  (let [here (access/cell (cell-of (u/self-pos c)))
-        r (when (and entry (not= entry here)) (await (ctx/call-child c :out 'jobs.debug.walk-plan {:to entry})))
+(defn trapped!
+  "End the job :trapped: the way out did not arrive."
+  [c here to res]
+  (ctx/emit! c :mine.trapped :warn {:at here :to to :walk res :text (str "mine could not walk back out to " (pr-str to))})
+  (ctx/update-mem! c #(-> % (dissoc :visit) (assoc :reason :trapped)))
+  (finish! c))
+
+(defn ^:async leave-out!
+  "A dead-end tunnel's way out: jobs.access.leave-tunnel (torches back, mouth sealed, the mined item spared); its
+  stop ends the job :trapped."
+  [c {:keys [tunnel entry]}]
+  (let [r (await (ctx/call-child c :out 'jobs.access.leave-tunnel {:tunnel tunnel :spare [(item-name (:args c))]}))
         res (when (= :done r) (ctx/child-result c :out))]
     (cond
-      (or (nil? entry) (= entry here)) (do (ctx/update-mem! c assoc-in [:visit :stage] :home) :continue)
       (nil? res) :continue
-      (= :arrived (:status res)) :continue
-      :else (do (ctx/emit! c :mine.trapped :warn {:at here :to entry :walk res
-                                                  :text (str "mine could not walk back out to " (pr-str entry))})
-                (ctx/update-mem! c #(-> % (dissoc :visit) (assoc :reason :trapped)))
-                (finish! c)))))
+      (= :done (:status res)) (do (ctx/update-mem! c assoc-in [:visit :stage] :home) :continue)
+      :else (trapped! c (access/cell (cell-of (u/self-pos c))) entry res))))
+
+(defn ^:async walk-out!
+  "Leave the tunnel: a dead end through jobs.access.leave-tunnel, a kept one walking back up to its entry over its own
+  stair (jobs.debug.walk-plan); not arriving ends the job :trapped. Then the home stage."
+  [c {:keys [entry tunnel] :as visit}]
+  (if (and tunnel (not (:keep tunnel)))
+    (await (leave-out! c visit))
+    (let [here (access/cell (cell-of (u/self-pos c)))
+          r (when (and entry (not= entry here)) (await (ctx/call-child c :out 'jobs.debug.walk-plan {:to entry})))
+          res (when (= :done r) (ctx/child-result c :out))]
+      (cond
+        (or (nil? entry) (= entry here)) (do (ctx/update-mem! c assoc-in [:visit :stage] :home) :continue)
+        (nil? res) :continue
+        (= :arrived (:status res)) :continue
+        :else (trapped! c here entry res)))))
 
 (defn ^:async walk-home!
   "From the tunnel's entry back to where the visit began, on the surface (moveTo, as mine walks to targets); the

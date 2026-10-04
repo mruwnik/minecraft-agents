@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [engine.placement :as placement]
             [jobs.debug.walk-plan :as walk-plan]))
 
 (def doc
@@ -23,7 +24,7 @@
   (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name (:hazard, lava beside is :lava-adjacent)
   keeps the entry open. A walk with no plan holds the cell :unreachable at once; :give-up walks that end out of reach
   hold it :out-of-reach, :give-up failed digs :dig-failed. Ends by collecting the removed items' drops
-  (jobs.forestry.collect-drops, filtered to those items) and hands over {:removed [{:cell :item}] :dropped [{:cell
+  (jobs.forestry.collect-drops, filtered to the items they drop: a wall torch gives the torch) and hands over {:removed [{:cell :item}] :dropped [{:cell
   :item :found}] :open [{:cell :item :reason ...}] :collected n}, info cleanup.done, warn cleanup.left while :open;
   the open cells are held (:scaffold-held, 10 minutes) so the check and the scaffold-left trigger do not offer them
   again at once. The check declines while nothing is offered and, with one cleanup.declined warn, while no zone list
@@ -172,7 +173,7 @@
 
 (defn ^:async collect! [c removed]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (collect-radius c removed) :filter (vec (distinct (map :item removed)))}))]
+                                 {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))}))]
     (when (= :done r)
       (ctx/update-mem! c #(-> % (dissoc :collect) (assoc :collected (:collected (ctx/child-result c :collect) 0)))))
     :continue))

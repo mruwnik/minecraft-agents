@@ -119,7 +119,7 @@
                  [{:block "sand"} {} "nothing at all"]
                  [{:block "sand"} {:blocks {"2,64,0" "dirt"}} "other blocks"]
                  [{:block "sand" :radius 5} {:blocks {"9,64,0" "sand"}} "outside the radius"]
-                 [{:block "stone"} {:blocks (merge (into {} (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+                 [{:block "stone" :buried false} {:blocks (merge (into {} (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
                                                               [(str (+ 4 dx) "," (+ 64 dy) "," dz) "dirt"]))
                                                    {"4,64,0" "stone"})}
                   "buried"]]]
@@ -627,12 +627,12 @@
           (is (= 1 (count (events-of s :mine.tunnel))))
           (is (= 1 (count (:tunnels (done-event s))))))))))
 
-(deftest buried-targets-wait-for-the-buried-arg
+(deftest buried-targets-wait-for-the-buried-arg-turned-off
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world buried-world})]
-          (core/submit! eng (spec {:block "iron_ore" :count 1}) {})
+          (core/submit! eng (spec {:block "iron_ore" :count 1 :buried false}) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (.-calls (.-world p))))))))))
 
@@ -689,3 +689,34 @@
           (is (= [:walk-in-failed] (map :reason (events-of s :tunnel.stopped))))
           (is (empty? (events-of s :mine.trapped)) "the body never went in")
           (is (empty? (calls s "dig"))))))))
+
+(deftest buried-is-on-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :mend false} buried-world 300))]
+          (is (finished? s))
+          (is (= 1 (:got (done-event s))))
+          (is (= "air" (block-at s 0 60 0)))
+          (is (= 1 (count (events-of s :mine.tunnel))))
+          (is (= [0 65 0] (feet s))))))))
+
+(def lit-world
+  (assoc buried-world :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8} {:name "cobblestone" :count 10}]
+         :drops {"iron_ore" "raw_iron" "stone" "cobblestone" "wall_torch" "torch"}))
+
+(deftest a-buried-visit-takes-its-torches-back-and-seals-the-mouth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :mend false} lit-world 600))
+              ground (for [x (range -12 13) z (range -3 4)] (block-at s x 64 z))]
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (= 1 (:got (done-event s))))
+          (is (= 8 (get (inv s) "torch")) "every torch is back")
+          (is (not-any? #{"air"} ground) "the mouth of the tunnel is closed")
+          (is (= 1 (count (events-of s :leave-tunnel.done))))
+          (is (empty? (events-of s :mine.trapped)))
+          (is (= 1 (get (inv s) "raw_iron")))
+          (is (= [0 65 0] (feet s))))))))

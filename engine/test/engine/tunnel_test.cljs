@@ -1,9 +1,11 @@
 (ns engine.tunnel-test
   "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.access.ledger :as ledger]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
@@ -94,6 +96,54 @@
   (let [trench (into {} (for [x (range -12 -1) y [61 62 63 64] z (range -12 13)] [[x y z] "air"]))
         a (approach (assoc trench [-1 63 0] "gravel") [0 61 0])]
     (is (not= :east (:heading a)) "the run under gravel is not taken")))
+
+
+(deftest the-line-cells-run-from-the-entry-to-the-stand-then-the-target
+  (let [plan {:entry [0 65 0] :heading :north :dir :down :steps 2 :run 1 :target [0 63 -4]}
+        cells (tunnel/line-cells plan)]
+    (is (= [[0 65 0] [0 64 -1] [0 63 -2] [0 63 -3] [0 63 -4]] cells))
+    (is (= 5 (count cells)) "n + 2 cells: 0..n and the target")))
+
+(deftest taxicab-distance
+  (are [a b d] (= d (tunnel/taxi a b))
+    [0 0 0] [0 0 0] 0
+    [0 0 0] [1 -2 3] 6
+    [5 5 5] [4 6 3] 4))
+
+(deftest light-falls-one-a-step-from-the-farther-of-head-and-feet
+  (let [plan {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 24 :target [25 61 0]}]
+    (are [s k light] (= light (tunnel/torch-light plan s k))
+      0 0 13
+      0 1 12
+      0 12 1
+      0 13 0
+      11 12 12)))
+
+(def sites-plans
+  {:straight-down {:entry [0 65 0] :heading :north :dir :down :steps 5 :run 0 :target [0 60 -6]}
+   :eight-down {:entry [6 65 9] :heading :north :dir :down :steps 8 :run 0 :target [6 57 0]}
+   :flat-run {:entry [-12 61 0] :heading :east :dir :down :steps 0 :run 24 :target [13 61 0]}
+   :mixed {:entry [0 65 0] :heading :south :dir :down :steps 4 :run 9 :target [0 61 14]}
+   :up {:entry [0 60 0] :heading :west :dir :up :steps 7 :run 2 :target [-10 67 0]}
+   :one-run-step {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 1 :target [2 61 0]}
+   :nothing {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 0 :target [1 61 0]}})
+
+(deftest torch-sites-of-known-lines
+  (are [k sites] (= sites (tunnel/torch-sites (sites-plans k)))
+    :straight-down [0]
+    :eight-down [0 5]
+    :flat-run [0 11 22]
+    :one-run-step [0]
+    :nothing []))
+
+(deftest sites-light-every-cell-and-each-site-is-lit-by-the-one-before
+  (doseq [[k plan] (dissoc sites-plans :nothing)
+          :let [sites (tunnel/torch-sites plan)
+                n (+ (:steps plan) (:run plan))]]
+    (is (every? (fn [cell] (some #(pos? (tunnel/torch-light plan % cell)) sites)) (range 0 (+ n 2)))
+        (str k " every cell lit"))
+    (is (every? (fn [[before s]] (pos? (tunnel/torch-light plan before (inc s)))) (partition 2 1 sites))
+        (str k " the standing cell of a site is lit by the site before"))))
 
 ;; ---------------------------------------------------------------- the fake world
 
@@ -289,3 +339,168 @@
               {:keys [out p]} (await (tunnel! {:blocks trench :self {:pos {:x -5 :y 61 :z 0}}} {:target [0 61 0]} prep))]
           (is (= :no-way-back (:reason @out)))
           (is (= [-1 61 0] (feet p))))))))
+
+;; ---------------------------------------------------------------- torches
+
+(def torches [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}])
+(def lit-blocks #{"torch" "wall_torch"})
+(def eight-down (assoc ground "6,57,0" "iron_ore"))
+
+(defn carried [p item]
+  (reduce + (map #(.-count %) (filter #(= item (.-name %)) (array-seq (.-inventory (.self p)))))))
+
+(defn places [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
+                       (filter #(= "place" (.-name %)) (.-calls (.-world p)))))
+
+(defn lit-from-standing
+  "The feet cells of the line of result whose light from a torch that stands is under 1."
+  [res]
+  (let [plan (:line res)
+        sites (map :site (:torches res))]
+    (remove (fn [k] (some #(pos? (tunnel/torch-light plan % k)) sites))
+            (range 0 (+ 2 (:steps plan) (:run plan))))))
+
+(deftest torches-are-hung-on-the-way-in-one-per-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory torches} {:target [6 57 0]} (fn [_])))
+              res @out
+              sites (tunnel/torch-sites (:line res))]
+          (is (= :reached (:reason res)))
+          (is (= [5 57 0] (feet p)))
+          (is (= 22 (count (:dug res))) "torches never cost a dig")
+          (is (= sites (mapv :site (:torches res))))
+          (is (every? #(contains? lit-blocks (block-at p (:cell %))) (:torches res)))
+          (is (= (mapv :block (:torches res)) (mapv #(block-at p (:cell %)) (:torches res))))
+          (is (= (- 8 (count sites)) (carried p "torch")))
+          (is (empty? (:unlit res)))
+          (is (empty? (lit-from-standing res)) "every feet cell of the line is lit by a torch that stands")
+          (is (false? (:keep res))))))))
+
+(deftest a-dead-end-books-its-torches-in-the-ledger-a-kept-tunnel-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[keep? n] [[false 2] [true 0]]]
+          (let [{:keys [out eng]} (await (tunnel! {:blocks eight-down :inventory torches}
+                                                  {:target [6 57 0] :keep keep?} (fn [_])))
+                l (ledger/open-entries (mem/view (:store eng)))]
+            (is (= :reached (:reason @out)) (str keep?))
+            (is (= keep? (:keep @out)) (str keep?))
+            (is (= n (count l)) (str keep?))
+            (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
+            (is (= (set (map :cell l)) (set (when-not keep? (map :cell (:torches @out))))) (str keep?))))))))
+
+(deftest no-torches-digs-on-and-books-every-site-unlit-with-one-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (tunnel! {:blocks eight-down} {:target [6 57 0]} (fn [_])))
+              res @out]
+          (is (= :reached (:reason res)))
+          (is (= 22 (count (:dug res))))
+          (is (empty? (:torches res)))
+          (is (= (tunnel/torch-sites (:line res)) (mapv :site (:unlit res))))
+          (is (every? #(= :no-torches (:reason %)) (:unlit res)))
+          (is (= [:no-torches] (mapv :reason (events-of s :tunnel.unlit)))))))))
+
+(deftest too-few-torches-light-the-first-site-and-book-the-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (tunnel! {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 1}]}
+                                                    {:target [6 57 0]} (fn [_])))
+              res @out]
+          (is (= :reached (:reason res)))
+          (is (= [0] (mapv :site (:torches res))))
+          (is (= [5] (mapv :site (:unlit res))))
+          (is (= [:no-torches] (mapv :reason (:unlit res))))
+          (is (= 0 (carried p "torch")))
+          (is (= 1 (count (events-of s :tunnel.unlit)))))))))
+
+(deftest a-zone-that-forbids-placing-leaves-that-site-unlit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "no-torch" :min [2 60 0] :max [2 61 0] :allow #{:dig}}
+              {:keys [out p]} (await (tunnel! {:blocks eight-down :inventory torches :zones [zone]}
+                                              {:target [6 57 0]} (fn [_])))
+              res @out]
+          (is (= :reached (:reason res)))
+          (is (= [0] (mapv :site (:torches res))))
+          (is (= [[5 :zone]] (mapv (juxt :site :reason) (:unlit res))))
+          (is (= 7 (carried p "torch")) "one torch used")
+          (is (not-any? #(= {:x 2 :y 61 :z 0} %) (places p))))))))
+
+(deftest a-restart-with-torches-hangs-no-site-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              spec {:blocks eight-down :inventory torches}
+              {:keys [eng p]} (setup spec {:target [6 57 0]} (fn [_]) :dir dir)]
+          (dotimes [_ 20] (await (core/tick! eng)))
+          (let [again (await (tick-out! (setup spec {:target [6 57 0]} (fn [_]) :dir dir :p p)))
+                res @(:out again)
+                hung (places p)]
+            (is (= :reached (:reason res)))
+            (is (= (count hung) (count (distinct hung))) "no cell placed twice")
+            (is (= (count (tunnel/torch-sites (:line res))) (count (:torches res))))
+            (is (empty? (lit-from-standing res)))
+            (is (= (count (digs p)) (count (distinct (digs p)))))))))))
+
+;; ---------------------------------------------------------------- the way out
+
+(def with-cobble [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8} {:name "cobblestone" :count 10}])
+
+(defn lava-ahead
+  "A prep: the fourth dig puts lava beside the stair further on; a collect leaves the body where it stands."
+  [p]
+  (let [world (.-world p)
+        n (atom 0)]
+    (.override world "dig"
+               (fn ^:async f [token a impl]
+                 (when (= 4 (swap! n inc)) (set-block! p "3,61,1" "lava"))
+                 (await (impl token a))))
+    (.override world "collect"
+               (fn ^:async f [token a impl]
+                 (let [at (.. world -state -self -pos)
+                       r (await (impl token a))]
+                   (set! (.. world -state -self -pos) at)
+                   r)))))
+
+(deftest a-stop-in-a-dead-end-takes-the-torches-back-and-seals-the-mouth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng] :as s} (await (tunnel! {:blocks eight-down :inventory with-cobble
+                                                         :drops {"wall_torch" "torch" "stone" "cobblestone"}}
+                                                        {:target [6 57 0]} lava-ahead))
+              res @out]
+          (is (= :hazard (:reason res)))
+          (is (= :stopped (:status res)))
+          (is (= [-3 65 0] (feet p)) "back at the entry")
+          (is (true? (:out res)))
+          (is (= :sealed (:reason (:leave res))))
+          (is (= 8 (carried p "torch")) "the torches came back")
+          (is (= 1 (count (:taken (:leave res)))))
+          (is (empty? (:torches res)) "none stands now")
+          (is (every? #(= "cobblestone" (block-at p %)) [[-2 64 0] [-1 64 0] [0 64 0]]) "the mouth is closed")
+          (is (= [] (ledger/open-entries (mem/view (:store eng)))))
+          (is (= 1 (count (events-of s :tunnel.stopped)))))))))
+
+(deftest a-stop-in-a-kept-tunnel-walks-out-and-leaves-the-torches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory with-cobble
+                                               :drops {"wall_torch" "torch" "stone" "cobblestone"}}
+                                              {:target [6 57 0] :keep true} lava-ahead))
+              res @out]
+          (is (= :hazard (:reason res)))
+          (is (some? (:walk-out res)) "the plain walk to the entry (the fake cannot step onto the floor torch at the entry)")
+          (is (nil? (:leave res)) "no leave-tunnel")
+          (is (= 7 (carried p "torch")) "the torch stays")
+          (is (= 10 (carried p "cobblestone")))
+          (is (= ["torch"] (distinct (map #(if (lit-blocks (block-at p (:cell %))) "torch" "gone") (:torches res))))))))))

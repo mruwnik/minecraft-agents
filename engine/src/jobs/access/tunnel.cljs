@@ -1,8 +1,12 @@
 (ns jobs.access.tunnel
-  (:require [engine.access.rules :as rules]
+  (:require [engine.access.ledger :as ledger]
+            [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
-            [jobs.access.stair :as stair]))
+            [engine.jobs.util :as u]
+            [engine.placement :as placement]
+            [jobs.access.stair :as stair]
+            [jobs.build.from-plan :as from-plan]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, the target the next cell ahead at feet
@@ -27,16 +31,33 @@
   :no-tool, :inventory-full, :refills, :dig-failed). Before each further run step, and at the stand, the way back to
   the entry is planned on a fresh pathWorld and must be whole and walkable (else :no-way-back, and the body stays
   where it is). Any other stop after the body has entered walks it back to the entry first (:out true when it
-  arrived). The body's cell is the progress: on the stair line the stair child goes on, on the run line the run, at
+  arrived): a dead end (:keep false) through jobs.access.leave-tunnel as a child (the torches taken back, the mouth
+  sealed; its result in :leave), a kept tunnel by the plain walk. The body's cell is the progress: on the stair line the stair child goes on, on the run line the run, at
   the stand it is done; anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
-  Dug cells are left and recorded. A nil zone list declines the check (one tunnel.declined warn). Hands over
-  {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug [{:cell :block}]
-  :inside bool} (:inside: the body is off the entry, on the way in; false when it never got there) plus detail, also as a :tunnel.done info or :tunnel.stopped warn event.")
+  Dug cells are left and recorded. A nil zone list declines the check (one tunnel.declined warn).
+  Torches go in on the way: the line's cells are numbered 0 (entry) to n (stand), the target n+1, and a torch site is
+  a cell index s whose torch hangs in the head cell of s on a side wall (a wall torch; else a floor torch in the feet
+  cell), placed from cell s+1 so the body is never in its own place. Sites are chosen when the line is: 0, then each
+  time the farthest s whose cell s+1 the torch before still lights (light 14 less the taxicab distance, from the
+  nearer of head and feet), until every cell 0..n+1 is lit: a flat run every 11 cells, a stair every 5 steps, none
+  when the entry is the stand. The stair is cut in segments up to cell s+1 of the next site so the torch goes in
+  between them (the way back to the entry is planned before each segment). A site is placed when due (the body on
+  s+1, nothing hanging in its cells: the world is the record, so a restart does not hang it twice); a site the body
+  already passed is :unlit :passed. With no torch carried, or the place refused (engine.access.rules may-place?,
+  no wall or floor to hang on: :no-support) or failed (:place-failed), the site is :unlit with its reason and the
+  tunnel goes on dark, one tunnel.unlit warn for the first. :keep (default false: a dead end) writes each torch to
+  the scaffold ledger (purpose :tunnel-torch, before the place) for jobs.access.leave-tunnel to take back; :keep true
+  leaves them and the tunnel as they are.
+  Hands over {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug [{:cell
+  :block}] :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target} :torches [{:cell :site
+  :block}] (those standing now, from the world) :unlit [{:cell :site :reason}]} (:inside: the body is off the entry,
+  on the way in; false when it never got there) plus detail, also as a :tunnel.done info or :tunnel.stopped warn event.")
 
 (def args
   {:target {:doc "the buried block [x y z]" :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target" :default 24}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}})
+   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
+   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}})
 
 (def heading-order [:north :east :south :west])
 
@@ -87,6 +108,37 @@
                     (map (fn [f] [f (run-cells f heading)]) (butlast run-feet)))
      :end end
      :stand (last run-feet)}))
+
+(defn line-cells
+  "The feet cells of the line of plan: index 0 the entry to n (steps + run) the stand, then the target as n+1."
+  [plan]
+  (let [{:keys [steps stand]} (line plan)]
+    (-> (mapv first steps) (conj stand) (conj (:target plan)))))
+
+(defn taxi [a b] (reduce + (map #(js/Math.abs (- %1 %2)) a b)))
+
+(defn light-between
+  "The light of a torch for site s at cell k of cells: 14 less the taxicab distance, from the nearer of head and feet."
+  [cells s k]
+  (let [feet (cells s)]
+    (- 14 (max (taxi (stair/add feet [0 1 0]) (cells k)) (taxi feet (cells k))))))
+
+(defn torch-light [plan s k] (light-between (line-cells plan) s k))
+
+(defn torch-sites
+  "The site indices of the torches of plan: [] when the entry is the stand, else 0 and each time the largest s after
+  the last whose cell s+1 the last still lights (s up to n-1), until every cell 0..n+1 has light."
+  [plan]
+  (let [cells (line-cells plan)
+        n (- (count cells) 2)
+        lit? (fn [sites k] (some #(pos? (light-between cells % k)) sites))
+        dark? (fn [sites] (not-every? #(lit? sites %) (range 0 (+ n 2))))]
+    (if (zero? n)
+      []
+      (loop [sites [0]]
+        (let [at (peek sites)
+              nxt (last (filter #(pos? (light-between cells at (inc %))) (range (inc at) n)))]
+          (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
 
 (defn line-stop
   "The first stop on the line of plan, or nil when every step and the target may be cut."
@@ -145,13 +197,32 @@
 
 (defn feet-of [c] (stair/feet-of c))
 
+(def torch-blocks #{"torch" "wall_torch"})
+
+(defn head-of [cell] (stair/add cell [0 1 0]))
+
+(defn torch-cell
+  "The cell of site s (head, then feet) that holds a torch in the world, or nil."
+  [block-at cells s]
+  (first (filter #(torch-blocks (block-at %)) [(head-of (cells s)) (cells s)])))
+
+(defn standing-torches
+  "[{:cell :site :block}] for the sites of plan whose torch stands now."
+  [block-at plan]
+  (let [cells (line-cells plan)]
+    (vec (keep (fn [s] (when-let [cell (torch-cell block-at cells s)] {:cell cell :site s :block (block-at cell)}))
+               (:sites plan)))))
+
 (defn finish!
   "Hand the result over and end: :done when reached, else :stopped (warn)."
   [c reason detail]
-  (let [{:keys [plan dug]} (ctx/mem c)
+  (let [{:keys [plan dug unlit]} (ctx/mem c)
         feet (feet-of c)
-        result (merge {:status (if (= :reached reason) :done :stopped) :reason reason :target (:target (:args c))
-                       :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))}
+        result (merge (cond-> {:status (if (= :reached reason) :done :stopped) :reason reason :target (:target (:args c))
+                               :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))
+                               :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
+                        plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
+                                    :torches (standing-torches (:block-at (stair/rules-in c feet)) plan)))
                       (select-keys plan [:entry :heading :stand])
                       detail)]
     (ctx/result! c result)
@@ -202,58 +273,173 @@
           :reached
           (await (stair/dig! c in over cut accept))))))
 
+(defn line-index
+  "The index of feet on the line of cells (0..n), or nil."
+  [cells feet]
+  (first (keep-indexed (fn [i cell] (when (and (= cell feet) (< i (dec (count cells)))) i)) cells)))
+
+(defn segment-end
+  "The line index the stair child cuts to from k: the standing cell (s+1) of the next site s >= k, else the stair's end."
+  [{:keys [sites steps]} k]
+  (min steps (or (some #(when (>= % k) (inc %)) sites) steps)))
+
 (defn ^:async stair-part!
-  "One round of the stair child, also its last one at the stair's end (it hands over what it dug): :continue, or a
-  stop map when the stair stopped."
-  [c {:keys [heading dir target]}]
-  (let [r (await (ctx/call-child c :stair 'jobs.access.stair
-                                 {:dir dir :heading heading :y (target 1) :accept (set (:accept (:args c)))}))]
+  "One round of the stair child over the segment from line index k, also its last one at the segment's end (it hands
+  over what it dug): :continue, or a stop map when the stair stopped. :stair-done once the body stands at the stair's
+  end."
+  [c {:keys [heading dir] :as plan} k]
+  (let [cells (line-cells plan)
+        r (await (ctx/call-child c :stair 'jobs.access.stair
+                                 {:dir dir :heading heading :y ((cells (segment-end plan k)) 1)
+                                  :accept (set (:accept (:args c)))}))]
     (if (not= :done r)
       :continue
-      (let [res (ctx/child-result c :stair)]
-        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res)) (assoc :stair-done (= :done (:status res)))))
-        (if (= :done (:status res))
+      (let [res (ctx/child-result c :stair)
+            done? (= :done (:status res))]
+        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res))
+                                (assoc :stair-done (and done? (= (cells (:steps plan)) (feet-of c))))))
+        (if done?
           :continue
           (assoc (select-keys res [:cell :hazards :zone :plan :fluid :block :tool :walk :why]) :reason (:reason res)
                  :in :stair))))))
+
+(defn segment-start?
+  "Whether no stair child is in flight: the next call cuts a new segment."
+  [c]
+  (empty? (get-in (ctx/mem c) [:children :stair])))
+
+(defn book-unlit!
+  "Book site s as :unlit with reason; the first of the tunnel warns."
+  [c plan s reason]
+  (let [cell (head-of ((line-cells plan) s))
+        first? (empty? (:unlit (ctx/mem c)))]
+    (ctx/update-mem! c update :unlit (fnil conj []) {:cell cell :site s :reason reason})
+    (when first?
+      (ctx/emit! c :tunnel.unlit :warn {:reason reason :cell cell
+                                        :text (str "tunnel torch left out at " (pr-str cell) ": " (name reason))}))
+    nil))
+
+(defn side-dirs
+  "The unit steps to the left and to the right of heading."
+  [heading]
+  (let [[dx dz] (stair/headings heading)] [[dz 0 (- dx)] [(- dz) 0 dx]]))
+
+(defn facing-name [d] (some (fn [[n v]] (when (= v d) n)) placement/steps))
+
+(defn torch-choice
+  "How to hang the torch of site s from the eye: a wall torch in the head cell on the first side wall (left, then
+  right of the heading) that takes it, else a floor torch in the feet cell: {:cell :block :click}, or {:refused
+  :no-support}."
+  [plan s eye block-at]
+  (let [cells (line-cells plan)
+        feet (cells s)
+        head (head-of feet)
+        world (fn [cell] (some->> (block-at cell) (hash-map :name)))
+        wall (fn [d] (assoc (placement/click {:block "wall_torch" :facing (facing-name (mapv - d))} head eye world)
+                            :cell head :block "wall_torch"))
+        floor (assoc (placement/click "torch" feet eye world) :cell feet :block "torch")]
+    (or (first (remove :refused (map wall (side-dirs (:heading plan)))))
+        (if (:refused floor) {:refused :no-support} floor))))
+
+(defn torches-carried [p]
+  (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory p)))))
+
+(defn ^:async hang!
+  "Hang the torch of site s from the body's place, or book the site :unlit with why not. The ledger entry (a dead
+  end) is written before the place and confirmed when the cell holds the torch. :continue after a place."
+  [c in plan s]
+  (let [p (:primitives c)
+        block-at (:block-at in)
+        choice (torch-choice plan s (from-plan/eye (u/self-pos c)) block-at)
+        cell (:cell choice)
+        verdict (when cell (rules/may-place? (assoc in :cell cell)))
+        reason (cond (zero? (torches-carried p)) :no-torches
+                     (:refused choice) (:refused choice)
+                     (not (:ok verdict)) (:reason verdict))]
+    (if reason
+      (book-unlit! c plan s reason)
+      (let [keep? (:keep (:args c))
+            intended (ledger/intend (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
+                                    {:cell cell :item (:block choice) :before "air" :job (:id c) :purpose :tunnel-torch})
+            _ (when-not keep? (ledger/remember! c intended))
+            r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+                                                 :click (from-plan/js-click (:click choice))})))
+            held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]
+        (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
+        (when-not held? (book-unlit! c plan s :place-failed))
+        :continue))))
+
+(defn ^:async torch-step!
+  "With the body on line index k: book the sites it passed without a torch, and hang the one due (site k-1, not
+  :unlit, nothing hanging in its cells). :continue after a place, else nil."
+  [c k]
+  (let [{:keys [plan unlit]} (ctx/mem c)
+        in (stair/rules-in c (feet-of c))
+        cells (line-cells plan)
+        booked (set (map :site unlit))
+        pending (remove #(or (booked %) (torch-cell (:block-at in) cells %)) (filter #(<= (inc %) k) (:sites plan)))]
+    (doseq [s (filter #(< (inc %) k) pending)] (book-unlit! c plan s :passed))
+    (when-let [due (first (filter #(= (inc %) k) pending))]
+      (await (hang! c in plan due)))))
 
 (defn ^:async work!
   "One bounded piece of the way from the body's place: :reached, :continue or a stop map."
   [c]
   (let [{:keys [plan checked stair-done]} (ctx/mem c)
         {:keys [entry heading dir steps run]} plan
+        cells (line-cells plan)
         {:keys [end stand]} (line plan)
         feet (feet-of c)
+        k (line-index cells feet)
         j (run-index end feet heading run)
         i (when (pos? steps) (stair/stair-index entry feet dir heading steps))]
     (ctx/update-mem! c stair/record-dug (:block-at (stair/rules-in c feet)))
-    (cond
-      (and i (not stair-done)) (await (stair-part! c plan))
-      j (if-let [stop (when (and (not= feet entry) (not= j checked)) (stair/way-back c entry))]
-          stop
-          (do (ctx/update-mem! c assoc :checked j)
-              (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
-      :else (let [r (await (walk-to! c :in entry))]
-              (cond
-                (= :continue r) :continue
-                (and (= :arrived (:status r)) (= entry (feet-of c))) :continue
-                :else {:reason :walk-in-failed :cell entry :walk r :outside true})))))
+    (or (when k (await (torch-step! c k)))
+        (cond
+          (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
+          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (stair/way-back c entry))]
+            stop
+            (do (when (segment-start? c) (ctx/update-mem! c assoc :checked i))
+                (await (stair-part! c plan i))))
+          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (stair/way-back c entry))]
+              stop
+              (do (ctx/update-mem! c assoc :checked (+ steps j))
+                  (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
+          :else (let [r (await (walk-to! c :in entry))]
+                  (cond
+                    (= :continue r) :continue
+                    (and (= :arrived (:status r)) (= entry (feet-of c))) :continue
+                    :else {:reason :walk-in-failed :cell entry :walk r :outside true}))))))
+
+(defn way-out
+  "What jobs.access.leave-tunnel needs of the tunnel so far: {:line :dug :torches}."
+  [c]
+  (let [{:keys [plan dug]} (ctx/mem c)]
+    {:line (select-keys plan [:entry :heading :dir :steps :run :stand :target]) :dug (or dug [])
+     :torches (standing-torches (:block-at (stair/rules-in c (feet-of c))) plan)}))
 
 (defn ^:async retreat!
-  "Walk back to the entry after a stop, then finish with it."
+  "Leave after a stop: a dead end through jobs.access.leave-tunnel (torches back, mouth sealed), a kept tunnel by the
+  plain walk back to the entry; then finish with the stop."
   [c]
-  (let [{:keys [stop plan]} (ctx/mem c)
-        r (await (walk-to! c :out (:entry plan)))]
-    (if (= :continue r)
-      :continue
-      (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :walk-out r)))))
+  (let [{:keys [stop plan way-out]} (ctx/mem c)
+        keep? (:keep (:args c))
+        r (if keep?
+            (await (walk-to! c :out (:entry plan)))
+            (if (= :done (await (ctx/call-child c :out 'jobs.access.leave-tunnel {:tunnel way-out})))
+              (ctx/child-result c :out)
+              :continue))]
+    (cond
+      (= :continue r) :continue
+      keep? (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :walk-out r))
+      :else (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :leave r)))))
 
 (defn stop!
   "After a stop: finish where the body is (outside, at the entry, or no way back), else walk out first."
   [c {:keys [reason outside] :as stop}]
   (if (or outside (= :no-way-back reason) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
     (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
-    (do (ctx/update-mem! c assoc :stop stop) :continue)))
+    (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :continue)))
 
 (defn bad-target? [t] (not (and (vector? t) (= 3 (count t)) (every? int? t))))
 
@@ -266,7 +452,7 @@
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
       (let [a (approach (dissoc (stair/rules-in c feet) :feet) target feet max-length (set accept))]
         (if (:entry a)
-          (do (ctx/update-mem! c assoc :plan a :dug [])
+          (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
               (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                   ", " (:steps a) " steps, run " (:run a))))
               :continue)
