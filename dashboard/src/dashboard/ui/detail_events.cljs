@@ -27,7 +27,9 @@
      :outstanding (or (:outstanding data) {})
      :notices (->> events (filter #(= :notice (:attention %))) (take-last 5) reverse vec)}))
 
-(defn drive-url [name] (str "/drive/" (js/encodeURIComponent name)))
+;; a body is <world>/<name>; the popup's body is always of the page's world
+(defn drive-url [world name] (str "/drive/" (js/encodeURIComponent world) "/" (js/encodeURIComponent name)))
+(defn body-path [db name] (str (js/encodeURIComponent (db/current-world db)) "/" (js/encodeURIComponent name)))
 
 (defn body-url [body]
   (logic/with-body (.-pathname js/location) (.-search js/location) body))
@@ -52,7 +54,7 @@
      (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
               :replace-url (body-url nil)
               :stop-timers [:detail-log :detail-drive]}
-       (and name driving?) (assoc :drive-invoke {:op :release :name name :request (drive/release-request (:drive db) (:who db)) :both? true})))))
+       (and name driving?) (assoc :drive-invoke {:op :release :world (db/current-world db) :name name :request (drive/release-request (:drive db) (:who db)) :both? true})))))
 
 ;; Esc: stop driving first, close when nobody is driven by us
 (rf/reg-event-fx
@@ -70,7 +72,7 @@
      (let [{:keys [stream-id seq]} (:detail-stream db)
            query (cond-> {:limit log-limit}
                    stream-id (assoc :stream-id stream-id :after (or seq 0)))]
-       {:fetch-edn {:key :detail-log :url (logic/api-url (str "/api/events/" name) nil query)
+       {:fetch-edn {:key :detail-log :url (logic/api-url (str "/api/events/" (body-path db name)) nil query)
                     :on-ok [:detail-log-ok name] :on-err [:detail-log-err name]}}))))
 
 (rf/reg-event-fx
@@ -92,7 +94,7 @@
  :attention-resolve
  (fn [{:keys [db]} [_ request-id]]
    (when-let [name (:detail-body db)]
-     {:post-edn {:url (str "/api/attention/" (js/encodeURIComponent name) "/resolve")
+     {:post-edn {:url (str "/api/attention/" (body-path db name) "/resolve")
                  :body {:request-id request-id :reason :handled}
                  :on-ok [:attention-resolved name]
                  :on-err [:attention-resolve-error name]}})))
@@ -117,7 +119,7 @@
  :poll-drive
  (fn [{:keys [db]} _]
    (when-let [name (:detail-body db)]
-     {:fetch-json {:key :detail-drive :url (drive-url name)
+     {:fetch-json {:key :detail-drive :url (drive-url (db/current-world db) name)
                    :on-ok [:drive-poll-ok name] :on-err [:drive-poll-err name]}})))
 
 (rf/reg-event-db
@@ -139,12 +141,12 @@
  :drive-take
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:drive :error] nil)
-    :drive-invoke {:op :take :name (:detail-body db) :request (drive/take-request (:who db))}}))
+    :drive-invoke {:op :take :world (db/current-world db) :name (:detail-body db) :request (drive/take-request (:who db))}}))
 
 (rf/reg-event-fx
  :drive-release
  (fn [{:keys [db]} _]
-   {:drive-invoke {:op :release :name (:detail-body db) :request (drive/release-request (:drive db) (:who db))}}))
+   {:drive-invoke {:op :release :world (db/current-world db) :name (:detail-body db) :request (drive/release-request (:drive db) (:who db))}}))
 
 (rf/reg-event-fx
  :drive-reply
@@ -187,17 +189,17 @@
   []
   (some-> (js/document.getElementById frame-id) .-contentWindow .-__drive))
 
-(defn post-request! [name request]
-  (api/post-json! {:url (drive-url name) :body (clj->js request) :on-ok [:drive-reply] :on-err [:drive-error]}))
+(defn post-request! [world name request]
+  (api/post-json! {:url (drive-url world name) :body (clj->js request) :on-ok [:drive-reply] :on-err [:drive-error]}))
 
 ;; the view page's own __drive.take/release when it has them (it then knows it is driving), else the socket via the proxy
 (rf/reg-fx
  :drive-invoke
- (fn [{:keys [op name request both?]}]
+ (fn [{:keys [op world name request both?]}]
    (let [page (frame-drive)
          f (when page (aget page (clojure.core/name op)))]
      (when (fn? f) (.call f page))
-     (when (or both? (not (fn? f))) (post-request! name request)))))
+     (when (or both? (not (fn? f))) (post-request! world name request)))))
 
 (defn on-message
   "A window message: only the view page in our own iframe is believed."

@@ -22,14 +22,15 @@
             [dashboard.thumbs :as thumbs]
             [dashboard.tiles :as tiles]
             [dashboard.view-info :as view-info]
-            [dashboard.worlds :as worlds]))
+            [dashboard.worlds :as worlds]
+            [engine.bodies :as bodies]))
 
 (def repo-root (.resolve path js/__dirname ".." ".."))
 (def root (or (.-DASHBOARD_ROOT js/process.env) repo-root))
 (def dashboard-dir (.join path repo-root "dashboard"))
 (def public-dir (.join path dashboard-dir "public"))
 (def js-dir (.join path dashboard-dir "out" "public" "js"))
-(def agents-dir (.join path root "state" "agents"))
+(def state-dir (.join path root "state"))
 (def worlds-dir (.join path root "state" "worlds"))
 
 (def first-read-bytes (* 4 1024 1024)) ; ~10 minutes of debug-heavy engine events
@@ -100,22 +101,27 @@
   (worlds/world-choice (world-names) (.get query "world")))
 
 ;; ---------------------------------------------------------------- engine bodies
+;; A body is addressed by {:world :name} (a name is unique only within a world); agent entries carry both, and every
+;; cache below is keyed by (body-key body).
+(defn body-key [body] (select-keys body [:world :name]))
+(defn body-dir [{:keys [world name]}] (bodies/body-dir state-dir world name))
+
 ;; Per body: how far into events.jsonl we have read, the folded state, and the bytes of a line still being written.
 (def engines (atom {}))
 (def edn-cache (atom {}))
 (def tails (atom {}))
 
-(defn engine-dir [name] (.join path agents-dir name "engine"))
-(defn events-file [name] (.join path (engine-dir name) "events.jsonl"))
-(defn canonical-events-file [name] (.join path (engine-dir name) "events.edn"))
-(defn events-socket [name] (.join path (engine-dir name) "events.sock"))
-(defn engine-folder? [name]
-  (or (file-exists? (.join path (engine-dir name) "engine.edn"))
-      (file-exists? (canonical-events-file name))
-      (file-exists? (events-socket name))
-      (file-exists? (events-file name))))
-(defn canonical-engine? [name]
-  (or (file-exists? (canonical-events-file name)) (file-exists? (events-socket name))))
+(defn engine-dir [body] (.join path (body-dir body) "engine"))
+(defn events-file [body] (.join path (engine-dir body) "events.jsonl"))
+(defn canonical-events-file [body] (.join path (engine-dir body) "events.edn"))
+(defn events-socket [body] (.join path (engine-dir body) "events.sock"))
+(defn engine-folder? [body]
+  (or (file-exists? (.join path (engine-dir body) "engine.edn"))
+      (file-exists? (canonical-events-file body))
+      (file-exists? (events-socket body))
+      (file-exists? (events-file body))))
+(defn canonical-engine? [body]
+  (or (file-exists? (canonical-events-file body)) (file-exists? (events-socket body))))
 
 ;; The engine owns event ordering, retention and the durable attention inbox. Dashboard caches only the last
 ;; serialized snapshot and its fold; every request refreshes from the socket before exposing live state.
@@ -129,12 +135,12 @@
 (defn edn-response [text]
   (try (reader/read-string text) (catch :default e (throw (js/Error. (str "bad EDN from engine: " (ex-message e)))))))
 
-(defn event-socket-request! [name method request-path body]
+(defn event-socket-request! [target method request-path body]
   (js/Promise.
    (fn [resolve reject]
      (let [text (when (some? body) (pr-str body))
            headers (when text #js {"content-type" "application/edn" "content-length" (js/Buffer.byteLength text)})
-           options #js {:socketPath (events-socket name) :method method :path request-path :headers (or headers #js {})}
+           options #js {:socketPath (events-socket target) :method method :path request-path :headers (or headers #js {})}
            req (.request
                 http options
                 (fn [res]
@@ -151,8 +157,8 @@
        (.setTimeout req event-socket-timeout-ms #(.destroy req (js/Error. "engine event API timed out")))
        (.end req text)))))
 
-(defn event-page! [name stream-id after limit]
-  (event-socket-request! name "GET"
+(defn event-page! [body stream-id after limit]
+  (event-socket-request! body "GET"
                          (str "/events?stream-id=" (js/encodeURIComponent stream-id)
                               "&after=" after "&limit=" limit)
                          nil))
@@ -161,22 +167,22 @@
   (let [cursor (:cursor snapshot)]
     {:stream-id (:stream-id cursor) :seq (or (:seq cursor) 0)}))
 
-(defn read-live-tail! [name snapshot after]
+(defn read-live-tail! [body snapshot after]
   (let [{:keys [stream-id seq]} (state-cursor snapshot)
         after (max 0 after)]
-    (-> (event-page! name stream-id after event-page-size)
+    (-> (event-page! body stream-id after event-page-size)
         (.then (fn [page]
                  (if-not (:gap? page)
                    {:page page :after after :snapshot snapshot :reset? false}
                    ;; Retention or a replaced stream: take a fresh snapshot, reconcile its inbox, then read a
                    ;; retained tail from the same stream rather than pretending the missing range was delivered.
-                   (-> (event-socket-request! name "GET" "/snapshot" nil)
+                   (-> (event-socket-request! body "GET" "/snapshot" nil)
                        (.then (fn [fresh]
                                 (let [{new-stream :stream-id head :seq} (state-cursor fresh)
                                       oldest (or (:oldest-seq page) 1)
                                       newest (or (:latest-seq page) head)
                                       tail-after (max (dec oldest) (- newest (dec event-page-size)))]
-                                  (-> (event-page! name new-stream tail-after event-page-size)
+                                  (-> (event-page! body new-stream tail-after event-page-size)
                                       (.then (fn [tail] {:page tail :after tail-after :snapshot fresh :reset? true})))))))))))))
 
 (defn advance-engine
@@ -191,18 +197,20 @@
       (let [{:keys [acc rest]} (reduce-lines file from size (and fresh? (pos? from)) (:rest previous) ee/fold-text (:state previous))]
         {:offset size :state acc :rest rest}))))
 
-(defn read-engine [name]
-  (let [entry (advance-engine (get @engines name) (events-file name))]
-    (swap! engines assoc name entry)
+(defn read-engine [body]
+  (let [k (body-key body)
+        entry (advance-engine (get @engines k) (events-file body))]
+    (swap! engines assoc k entry)
     (:state entry)))
 
 (defn last-seq [events fallback]
   (or (:seq (peek (vec events))) fallback 0))
 
-(defn refresh-live-engine! [name]
-  (or (get @live-refreshing name)
-      (let [promise
-            (-> (event-socket-request! name "GET" "/snapshot" nil)
+(defn refresh-live-engine! [body]
+  (or (get @live-refreshing (body-key body))
+      (let [name (body-key body)
+            promise
+            (-> (event-socket-request! body "GET" "/snapshot" nil)
                 (.then (fn [snapshot]
                          (let [previous (get @live-engines name)
                                cursor (state-cursor snapshot)
@@ -212,7 +220,7 @@
                                after (if local-reset?
                                        (max 0 (- (:seq cursor) (dec event-page-size)))
                                        (get-in previous [:cursor :seq] 0))]
-                           (-> (read-live-tail! name snapshot after)
+                           (-> (read-live-tail! body snapshot after)
                                (.then (fn [{:keys [page snapshot] gap-reset? :reset?}]
                                         (let [events (:events page)
                                               actual-reset? (or local-reset? gap-reset?)
@@ -235,25 +243,26 @@
         promise)))
 
 (defn refresh-live-engines! []
-  (let [names (->> (agent-entries) (map :name) (filter canonical-engine?) vec)]
-    (js/Promise.all (clj->js (map refresh-live-engine! names)))))
+  (let [targets (->> (agent-entries) (map body-key) (filter canonical-engine?) vec)]
+    (js/Promise.all (clj->js (map refresh-live-engine! targets)))))
 
 ;; engine.edn is re-read when its mtime or size changed
-(defn read-edn-text [name]
-  (let [file (.join path agents-dir name "engine" "engine.edn")]
+(defn read-edn-text [body]
+  (let [file (.join path (engine-dir body) "engine.edn")
+        k (body-key body)]
     (try
       (let [st (.statSync fs file)
             stamp [(.-mtimeMs st) (.-size st)]
-            cached (get @edn-cache name)]
+            cached (get @edn-cache k)]
         (if (= stamp (:stamp cached))
           (:text cached)
           (let [text (.readFileSync fs file "utf8")]
-            (swap! edn-cache assoc name {:stamp stamp :text text})
+            (swap! edn-cache assoc k {:stamp stamp :text text})
             text)))
       (catch :default _ nil))))
 
-(defn edn-fields [name now]
-  (let [summary (engine-edn/summarize (read-edn-text name) now)]
+(defn edn-fields [body now]
+  (let [summary (engine-edn/summarize (read-edn-text body) now)]
     (if (:error summary)
       {:edn-error (:error summary)}
       summary)))
@@ -262,7 +271,7 @@
 ;; Each file is re-read only when its mtime changed; a missing or unreadable file is nil.
 (def view-cache (atom {}))
 
-(defn view-file [name file] (.join path agents-dir name "view" file))
+(defn view-file [body file] (.join path (body-dir body) "view" file))
 
 (defn parse-js [text] (try (js/JSON.parse text) (catch :default _ nil)))
 
@@ -272,41 +281,42 @@
     {:t (.-t o) :status (.-status o) :dimension (.-dimension o) :pos (js->clj (.-pos o) :keywordize-keys true)
      :villagers (view-info/villagers (js->clj (.-entities o) :keywordize-keys true))}))
 
-(defn read-view-file [name file convert]
-  (let [full (view-file name file)]
+(defn read-view-file [body file convert]
+  (let [full (view-file body file)
+        k (body-key body)]
     (try
       (let [mtime (.-mtimeMs (.statSync fs full))
-            cached (get-in @view-cache [name file])]
+            cached (get-in @view-cache [k file])]
         (if (= mtime (:mtime cached))
           cached
           (let [entry {:mtime mtime :value (convert (parse-js (.readFileSync fs full "utf8")))}]
-            (swap! view-cache assoc-in [name file] entry)
+            (swap! view-cache assoc-in [k file] entry)
             entry)))
       (catch :default _ nil))))
 
-(defn read-view [name]
-  (let [pose (read-view-file name "pose.json" pose-fields)
-        hud (read-view-file name "hud.json" #(some-> % (js->clj :keywordize-keys true)))]
+(defn read-view [body]
+  (let [pose (read-view-file body "pose.json" pose-fields)
+        hud (read-view-file body "hud.json" #(some-> % (js->clj :keywordize-keys true)))]
     (view-info/summarize (:value pose) (:value hud) (:mtime pose))))
 
 (defn engine-body [agent now]
-  (let [name (:name agent)
-        live (get @live-engines name)
-        canonical? (canonical-engine? name)
-        live-error (get @live-errors name)
+  (let [body (body-key agent)
+        live (get @live-engines body)
+        canonical? (canonical-engine? body)
+        live-error (get @live-errors body)
         persisted-state (when canonical?
-                          (let [{:keys [value]} (engine-edn/read-edn (read-edn-text name))]
+                          (let [{:keys [value]} (engine-edn/read-edn (read-edn-text body))]
                             (when (map? value) value)))
         folded (if canonical?
                  (or (:folded live) ee/empty-engine)
-                 (try (read-engine name) (catch :default _ ee/empty-engine)))
+                 (try (read-engine body) (catch :default _ ee/empty-engine)))
         engine-view (ee/engine-view folded now)
-        pose-view (read-view name)
+        pose-view (read-view body)
         snap (:snapshot live)
         authoritative-state (if (and snap (not live-error)) (:state snap) persisted-state)
         scheduler-summary (if (and canonical? (map? authoritative-state))
                             (engine-edn/summarize (pr-str authoritative-state) now)
-                            (edn-fields name now))
+                            (edn-fields body now))
         outstanding (if (and snap (not live-error))
                       (or (:outstanding snap) {})
                       (or (:attention persisted-state) {}))
@@ -327,13 +337,15 @@
            :outstanding outstanding
            :view pose-view)))
 
+;; every body folder of every world: {:world :name :text raw config.json}
 (defn agent-entries []
-  (mapv (fn [n] {:name n :text (read-text (.join path agents-dir n "config.json"))}) (dir-names agents-dir)))
+  (mapv (fn [{:keys [world name dir]}] {:world world :name name :text (read-text (.join path dir "config.json"))})
+        (bodies/list-bodies state-dir)))
 
 (defn bodies [now]
   (let [entries (agent-entries)
-        engine? (filter #(engine-folder? (:name %)) entries)
-        other (remove #(engine-folder? (:name %)) entries)]
+        engine? (filter engine-folder? entries)
+        other (remove engine-folder? entries)]
     (vec (concat (map #(engine-body % now) (ee/parse-engine-agents engine?))
                  (map ee/unsupported-body (ee/parse-engine-agents other))))))
 
@@ -406,25 +418,26 @@
                                          keep-last (if fresh? [] (:lines cached)))]
     {:size size :rest rest :lines acc}))
 
-(defn chat-lines [name]
-  (let [canonical? (canonical-engine? name)
-        file (if canonical? (canonical-events-file name) (events-file name))
+(defn chat-lines [body]
+  (let [canonical? (canonical-engine? body)
+        file (if canonical? (canonical-events-file body) (events-file body))
         size (.-size (.statSync fs file))
-        cached (get @tails name)]
+        k (body-key body)
+        cached (get @tails k)]
     (if (= size (:size cached))
       (:lines cached)
       (let [tail (read-chat-tail file (if canonical? edn-talk-lines-of talk-lines-of) cached)]
-        (swap! tails assoc name tail)
+        (swap! tails assoc k tail)
         (:lines tail)))))
 
 (def chat-sender (chat-send/configured-sender (.-DASHBOARD_CHAT_AS js/process.env)))
 
 (defn chat-log [limit world-name]
-  (let [agents (filterv #(= world-name (:world %)) (ee/parse-engine-agents (filter #(engine-folder? (:name %)) (agent-entries))))]
+  (let [agents (ee/parse-engine-agents (filter #(and (= world-name (:world %)) (engine-folder? %)) (agent-entries)))]
     {:at (js/Date.now)
      :sender chat-sender
      :agents (agent-names agents)
-     :messages (chat/merge-chat (mapv (fn [a] {:agent (:name a) :lines (try (chat-lines (:name a)) (catch :default _ []))}) agents) limit)}))
+     :messages (chat/merge-chat (mapv (fn [a] {:agent (:name a) :lines (try (chat-lines a) (catch :default _ []))}) agents) limit)}))
 
 ;; ---------------------------------------------------------------- responses
 (def content-types
@@ -479,15 +492,15 @@
    :stats (fn [] {:error "thumbnailer unavailable"})
    :close (fn [])})
 
-(defn pose-mtime [name]
-  (try (.-mtimeMs (.statSync fs (.join path agents-dir name "view" "pose.json")))
+(defn pose-mtime [body]
+  (try (.-mtimeMs (.statSync fs (view-file body "pose.json")))
        (catch :default _ nil)))
 
 (defn load-thumbnailer []
   (-> (import-esm (.-href (.pathToFileURL url thumbs-module)))
       (.then (fn [m]
-               (let [r ((.-createRenderer m) #js {:stateDir (.join path root "state")})
-                     t (thumbs/make {:render (fn [name] (-> (.render r name)
+               (let [r ((.-createRenderer m) #js {:stateDir state-dir})
+                     t (thumbs/make {:render (fn [{:keys [world name]}] (-> (.render r world name)
                                                             (.then (fn [x] (when x {:png (.-png x) :ms (.-ms x) :loaded (.-loaded x)})))))
                                      :pose-mtime pose-mtime
                                      :recycle #(.recycle r)
@@ -502,12 +515,12 @@
 ;; one thumbnailer for the process, created on the first request
 (defonce thumbnailer (delay (load-thumbnailer)))
 
-(defn send-thumb! [res name]
+(defn send-thumb! [res body]
   (-> @thumbnailer
-      (.then (fn [t] ((:get t) name)))
+      (.then (fn [t] ((:get t) (body-key body))))
       (.then (fn [thumb]
                (if-not thumb
-                 (send-json! res 404 {:error (str "no view for " name)})
+                 (send-json! res 404 {:error (str "no view for " (:name body) " in world " (:world body))})
                  (do (.writeHead res 200 #js {"content-type" "image/png" "cache-control" "no-store"
                                               "x-pose-mtime" (str (:pose-mtime-ms thumb))})
                      (.end res (:png thumb))))))
@@ -526,7 +539,7 @@
 
 (defn load-view-mount []
   (-> (import-esm (.-href (.pathToFileURL url viewmount-module)))
-      (.then (fn [m] (reset! view-mount ((.-mountView m) #js {:repo repo-root :stateDir (.join path root "state")}))))
+      (.then (fn [m] (reset! view-mount ((.-mountView m) #js {:repo repo-root :stateDir state-dir}))))
       (.catch (fn [e] (js/console.error (str "live view disabled: " (ex-message e)))))))
 
 (defn view-request? [req]
@@ -544,17 +557,18 @@
   (let [n (js/parseInt text 10)]
     (if (and (not (js/isNaN n)) (pos? n)) (min n max-log-limit) default-log-limit)))
 
-(defn read-log [name]
-  (let [file (events-file name)
+(defn read-log [body]
+  (let [file (events-file body)
         size (.-size (.statSync fs file))
-        cached (get @log-cache name)]
+        k (body-key body)
+        cached (get @log-cache k)]
     (if (= size (:size cached))
       (:events cached)
       (let [start (max 0 (- size log-tail-bytes))
             bytes (read-range file start size)
             whole (if (pos? start) (ee/drop-torn-head bytes) bytes)
             events (mapv ee/log-entry (filter ee/log-worthy? (ee/parse-event-lines (ee/decode-bytes whole))))]
-        (swap! log-cache assoc name {:size size :events events})
+        (swap! log-cache assoc k {:size size :events events})
         events))))
 
 (defn query-int [query key fallback]
@@ -564,8 +578,8 @@
 (defn cursor-for-page [stream-id after page]
   {:stream-id stream-id :seq (or (:seq (peek (vec (:events page)))) after 0)})
 
-(defn canonical-feed! [name query]
-  (-> (event-socket-request! name "GET" "/snapshot" nil)
+(defn canonical-feed! [body query]
+  (-> (event-socket-request! body "GET" "/snapshot" nil)
       (.then (fn [initial]
                (let [{:keys [stream-id seq]} (state-cursor initial)
                      limit (min event-page-size (log-limit (.get query "limit")))
@@ -574,30 +588,30 @@
                      after (if (and requested-stream (not (neg? requested-after)))
                              requested-after
                              (max 0 (- seq limit)))]
-                 (-> (event-page! name (or requested-stream stream-id) after limit)
+                 (-> (event-page! body (or requested-stream stream-id) after limit)
                      (.then (fn [page]
                               (if-not (:gap? page)
                                 {:snapshot initial :page page :after after :gap? false}
-                                (-> (event-socket-request! name "GET" "/snapshot" nil)
+                                (-> (event-socket-request! body "GET" "/snapshot" nil)
                                     (.then (fn [fresh]
                                              (let [{fresh-stream :stream-id fresh-seq :seq} (state-cursor fresh)
                                                    oldest (or (:oldest-seq page) 1)
                                                    newest (or (:latest-seq page) fresh-seq)
                                                    tail-after (max 0 (max (dec oldest) (- newest limit)))]
-                                               (-> (event-page! name fresh-stream tail-after limit)
+                                               (-> (event-page! body fresh-stream tail-after limit)
                                                    (.then (fn [tail]
                                                             {:snapshot fresh :page tail :after tail-after :gap? true}))))))))))))))))
 
-(defn send-events! [res name query]
+(defn send-events! [res body query]
   (cond
-    (not (engine-folder? name))
-    (send-edn! res 404 {:error (str "no engine body called " name)})
+    (not (engine-folder? body))
+    (send-edn! res 404 {:error (str "no engine body called " (:name body) " in world " (:world body))})
 
-    (canonical-engine? name)
-    (-> (canonical-feed! name query)
+    (canonical-engine? body)
+    (-> (canonical-feed! body query)
         (.then (fn [{:keys [snapshot page after gap?]}]
                  (let [cursor (cursor-for-page (:stream-id (state-cursor snapshot)) after page)]
-                   (send-edn! res 200 {:body name
+                   (send-edn! res 200 {:body (:name body)
                                        :generation-id (:generation-id snapshot)
                                        :stream-id (:stream-id cursor)
                                        :cursor cursor
@@ -609,18 +623,18 @@
                           (send-edn! res 503 {:error (ee/socket-failure-text e)})))))
 
     ;; Compatibility for old running bodies only. A body with events.edn/events.sock never also reads JSONL.
-    (not (file-exists? (events-file name)))
+    (not (file-exists? (events-file body)))
     (send-edn! res 404 {:error "no event stream"})
 
     :else
-    (send-edn! res 200 {:body name :generation-id "legacy" :stream-id "legacy"
-                        :cursor {:stream-id "legacy" :seq (or (:seq (peek (read-log name))) 0)}
-                        :events (vec (take-last (log-limit (.get query "limit")) (read-log name)))
+    (send-edn! res 200 {:body (:name body) :generation-id "legacy" :stream-id "legacy"
+                        :cursor {:stream-id "legacy" :seq (or (:seq (peek (read-log body))) 0)}
+                        :events (vec (take-last (log-limit (.get query "limit")) (read-log body)))
                         :outstanding {} :gap? false :more? false})))
 
 (declare port read-body)
 
-(defn resolve-attention! [req res name]
+(defn resolve-attention! [req res body]
   (let [headers (.-headers req)
         refused (or (guard/method-refusal (.-method req))
                     (guard/refusal {:host (.-host headers) :origin (.-origin headers)
@@ -628,7 +642,7 @@
                                     :content-types ["application/edn"]}))]
     (cond
       refused (send-edn! res (:status refused) {:error (:error refused)})
-      (not (canonical-engine? name)) (send-edn! res 404 {:error "no canonical engine event service"})
+      (not (canonical-engine? body)) (send-edn! res 404 {:error "no canonical engine event service"})
       :else
       (read-body req guard/max-body-bytes
                  (fn [text]
@@ -637,7 +651,7 @@
                      (let [request (try (reader/read-string text) (catch :default _ nil))]
                        (if-not (and (map? request) (string? (:request-id request)) (= :handled (:reason request)))
                          (send-edn! res 400 {:error "expected {:request-id string :reason :handled}"})
-                         (-> (event-socket-request! name "POST" "/attention/resolve" request)
+                         (-> (event-socket-request! body "POST" "/attention/resolve" request)
                              (.then #(send-edn! res 200 %))
                              (.catch (fn [e] (when-not (.-headersSent res)
                                                (send-edn! res 503 {:error (ee/socket-failure-text e)})))))))))))))
@@ -704,11 +718,11 @@
              (.then (fn [_] (send-json! res 200 {:ok true :command command})))
              (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
 
-(defn send-whisper! [req res target]
+(defn send-whisper! [req res {target :name world :world}]
   (guarded-post!
    req res guard/max-body-bytes
    (fn [text]
-     (let [engine-bodies (filter :engine (bodies (js/Date.now)))
+     (let [engine-bodies (filter #(and (:engine %) (= world (:world %))) (bodies (js/Date.now)))
            {:keys [status json command stamps]} (chat-send/plan-whisper
                                                  target text
                                                  {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)
@@ -889,12 +903,12 @@
       (case kind
         :page (send-file! res (.join path public-dir "index.html"))
         :static (serve-static! res request-path)
-        :thumb (send-thumb! res blueprint-name)
+        :thumb (send-thumb! res (body-key route))
         :item-icon (send-item-icon! res blueprint-name)
-        :events (send-events! res blueprint-name query)
-        :attention-resolve (resolve-attention! req res blueprint-name)
+        :events (send-events! res (body-key route) query)
+        :attention-resolve (resolve-attention! req res (body-key route))
         :chat-send (send-chat! req res)
-        :whisper-send (send-whisper! req res blueprint-name)
+        :whisper-send (send-whisper! req res (body-key route))
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
         :tile (send-tile! res (:world route) (:cx route) (:cz route))

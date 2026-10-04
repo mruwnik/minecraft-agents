@@ -186,7 +186,7 @@ export const bedtime = s => s.night && !s.busy && !s.asleep && (s.bedNear || s.b
 // somebody else's body. clock and dawn need a home too: the clock they read is that agent's world's; only incidents
 // (every agent's folder) needs none.
 
-export const noHomeError = (home, action) => home || action === 'incidents' ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
+export const noHomeError = (home, action) => home || action === 'incidents' ? null : `no agent chosen: this is the shared bot/ folder, and its mc drives nobody. Run YOUR OWN wrapper with its full path: ${BOT_ROOT}/state/worlds/<world>/agents/<YourName>/mc <action> ... (your shell has probably drifted out of your folder: cd back into it)`
 
 // clock.json as read from disk; null when it was caught mid-write (the next look, a few seconds on, finds it whole)
 export function parseClock (text) {

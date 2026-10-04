@@ -28,44 +28,50 @@ test('observe distinguishes an older engine missing the projection routes', () =
 })
 
 test('legacy observe guidance preserves a nondefault state root', () => {
-  const request = requestFor(['ProbeBody', '--state', '/tmp/custom state'])
+  const request = requestFor(['--world', 'w', 'ProbeBody', '--state', '/tmp/custom state'])
   const notice = legacyEngineNotice(request)
   assert.match(notice, /:reason :observe-unavailable/)
   assert.match(notice, /:action :restart-with-current-build/)
-  assert.match(notice, /:fallback \{:op :status :raw true :state "\/tmp\/custom state"\}/)
+  assert.match(notice, /:fallback \{:op :status :raw true :world "w" :state "\/tmp\/custom state"\}/)
 })
 
 test('observe defaults to bounded status and targets the engine event socket', () => {
-  const request = requestFor(['ProbeBody', '--state', '/tmp/state'])
+  const request = requestFor(['--world', 'w', 'ProbeBody', '--state', '/tmp/state'])
   assert.deepEqual(request, {
     agent: 'ProbeBody',
+    world: 'w',
     state: path.resolve('/tmp/state'),
-    socketPath: path.join('/tmp/state', 'agents', 'ProbeBody', 'engine', 'events.sock'),
+    socketPath: path.join('/tmp/state', 'worlds', 'w', 'agents', 'ProbeBody', 'engine', 'events.sock'),
     path: '/status'
   })
 })
 
+test('observe without --world is an error naming the flag', () => {
+  assert.match(requestFor(['ProbeBody']).error, /missing --world <world>/)
+  assert.match(requestFor(['ProbeBody', '--world', 'a/b']).error, /world/)
+})
+
 test('observe supports detail and on-demand capability lookups', () => {
-  assert.equal(requestFor(['ProbeBody', 'status', '--limit', '4']).path, '/status?limit=4')
-  assert.equal(requestFor(['ProbeBody', 'job', 'j12']).path, '/job?id=j12')
-  assert.equal(requestFor(['ProbeBody', 'catalog', 'job', 'jobs.movement.go-to']).path,
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'status', '--limit', '4']).path, '/status?limit=4')
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'job', 'j12']).path, '/job?id=j12')
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'job', 'jobs.movement.go-to']).path,
     '/catalog?kind=job&name=jobs.movement.go-to')
-  assert.equal(requestFor(['ProbeBody', 'catalog', 'trigger', 'health-low']).path,
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'trigger', 'health-low']).path,
     '/catalog?kind=trigger&name=health-low')
-  assert.equal(requestFor(['ProbeBody', 'catalog', 'jobs', 'jobs.movement.', '--limit', '5', '--offset', '10']).path,
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'jobs', 'jobs.movement.', '--limit', '5', '--offset', '10']).path,
     '/catalog?kind=jobs&prefix=jobs.movement.&limit=5&offset=10')
-  assert.equal(requestFor(['ProbeBody', 'catalog', 'triggers']).path,
+  assert.equal(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'triggers']).path,
     '/catalog?kind=triggers&prefix=&limit=20&offset=0')
 })
 
 test('observe rejects malformed names and limits before connecting', () => {
-  assert.match(requestFor(['bad/name']).error, /body name/)
-  assert.match(requestFor(['ProbeBody', 'status', '--limit', '100']).error, /1 to 32/)
-  assert.match(requestFor(['ProbeBody', 'status', '--offset', '1']).error, /only valid for catalog lists/)
-  assert.match(requestFor(['ProbeBody', 'job', 'j12', '--offset', '1']).error, /only valid for status and catalog lists/)
-  assert.match(requestFor(['ProbeBody', 'catalog', 'job', 'jobs.x.y', '--limit', '2']).error, /does not accept/)
-  assert.match(requestFor(['ProbeBody', 'catalog', 'job', '(eval foo)']).error, /exact jobs namespace/)
-  assert.match(requestFor(['ProbeBody', 'job', 'j12', 'extra']).error, /one job ID/)
+  assert.match(requestFor(['--world', 'w', 'bad/name']).error, /body name/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'status', '--limit', '100']).error, /1 to 32/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'status', '--offset', '1']).error, /only valid for catalog lists/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'job', 'j12', '--offset', '1']).error, /only valid for status and catalog lists/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'job', 'jobs.x.y', '--limit', '2']).error, /does not accept/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'catalog', 'job', '(eval foo)']).error, /exact jobs namespace/)
+  assert.match(requestFor(['--world', 'w', 'ProbeBody', 'job', 'j12', 'extra']).error, /one job ID/)
 })
 
 test('observe socket reads have a finite total deadline', async () => {

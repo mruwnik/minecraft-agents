@@ -89,14 +89,14 @@ that, so conditions become small JSON objects (section 4) and the EDN parser is 
 An **action** is one verb the body does now, written in JS (a primitive in `src/body/actions/`, a composite in
 `library/`); it returns one result line or fails with a reason, and it does one round of its work, never a day loop.
 A **goal** is a JSON document saying what must become true (`until`) and which actions to run each round until it is;
-while live it is `state/agents/<name>/goal.json`, and templates ship in `roles/<role>/<name>.goal.json`.
+while live it is `state/worlds/<world>/agents/<name>/goal.json`, and templates ship in `roles/<role>/<name>.goal.json`.
 A **role** is a folder `roles/<role>/` holding `ROLE.md` for the driver and the goal templates it ships; `./mc goal
 start name=farmer/bread` binds one to this body, and that binding is the `role` field of the live goal.
 A **reflex** is what the body does unasked (eat, flee, fight, sleep when idle, dig out, hole up); the goal engine is
 written on the assumption that reflexes interrupt it, and resumes after them.
 
 Where each lives: actions in `src/body/actions/` and `library/`; the engine in `src/goal/`; the live goal in
-`state/agents/<name>/goal.json`; templates in `roles/`; reflexes in `src/body/reflexes.mjs`, `src/body/bedtime.mjs`
+`state/worlds/<world>/agents/<name>/goal.json`; templates in `roles/`; reflexes in `src/body/reflexes.mjs`, `src/body/bedtime.mjs`
 and `src/survival/`.
 
 ## 4. The goal document
@@ -199,7 +199,7 @@ full and night; it loses `days`, `count` stays for `hunt`/`mine.get`, `until` mi
 
 ## 7. Persistence
 
-`state/agents/<name>/goal.json` holds the document plus: `status` (`running`, `paused`, `done`), `started`, `round`,
+`state/worlds/<world>/agents/<name>/goal.json` holds the document plus: `status` (`running`, `paused`, `done`), `started`, `round`,
 `step` (index of the step in flight), `outcomes` (the last round's result line per step), `failed` (`[{round, step,
 why}]`, the stuck watch's `failedSteps` renamed), `unknown` (facts that could not be read, per round), `paused_why`,
 `digest` (the last one-line digest). It is written with the shelf's tmp-and-rename (src/job-shelf.mjs:41-47) after

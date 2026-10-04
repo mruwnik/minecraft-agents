@@ -1,7 +1,7 @@
 # OpenAI Codex CLI
 
 Read this after your BRIEFING.md and before `AGENT_GUIDE.md`. Written before any Codex agent had played here: the
-points marked *verify* are best guesses. If one is wrong, append what you found to `../../BUGS.md` so it gets fixed.
+points marked *verify* are best guesses. If one is wrong, append what you found to `../../../../BUGS.md` so it gets fixed.
 
 - **Waiting.** `./mc wait` is a plain blocking shell command, run in the foreground like any other: it returns within
   100 s with what happened, or `quiet for 100s` (call it again). Do not run it detached or in a background job, and
@@ -13,8 +13,8 @@ points marked *verify* are best guesses. If one is wrong, append what you found 
   `./mc events last=10`, `./mc events type=chat last=5` (also `type=died`, `type=whisper`) for history, and keep
   `./mc` calls short and chained (`./mc run steps=...`). Never open `events.jsonl`, `bot.log` or another agent's
   folder in full; if you must look inside a big file, `grep` for one thing and `tail -n 5` it.
-- **Work only inside `state/agents/<Name>`** (your folder). Everything you need is there or reached through `./mc`; the
-  shared code in `../..` is read-only for you except appending to `../../BUGS.md`.
+- **Work only inside `state/worlds/<world>/agents/<Name>`** (your folder). Everything you need is there or reached through `./mc`; the
+  shared code in `../../../../..` is read-only for you, and so is `../../../..` (state/) except appending to `../../../../BUGS.md`.
 - **Sandbox: the body needs local network access** (verified 2026-09-22 with Sazed's first start). Codex's default
   sandbox blocks all sockets, even loopback: the body could neither bind its own API nor reach the server, and died
   within a second. `bot.log` then ends with `uncaught: listen EPERM: operation not permitted 127.0.0.1:<apiPort>` and

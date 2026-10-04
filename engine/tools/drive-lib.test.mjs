@@ -22,7 +22,7 @@ for (const [argv, expected] of [
   [['Bob', 'state'], { method: 'GET', path: '/drive', body: null }]
 ]) {
   test(`requestFor ${argv.join(' ')}`, () => {
-    const r = requestFor(argv)
+    const r = requestFor([...argv, '--world', 'w'])
     assert.equal(r.error, undefined)
     assert.equal(r.agent, 'Bob')
     assert.deepEqual({ method: r.method, path: r.path, body: r.body }, expected)
@@ -44,21 +44,33 @@ for (const argv of [
   ['Bob', 'take', '--bogus']
 ]) {
   test(`requestFor rejects ${JSON.stringify(argv)}`, () => {
-    assert.equal(typeof requestFor(argv).error, 'string')
+    assert.equal(typeof requestFor([...argv, '--world', 'w']).error, 'string')
   })
 }
 
+test('requestFor reads --world', () => {
+  assert.equal(requestFor(['Bob', 'state', '--world', 'w2']).world, 'w2')
+})
+
+test('requestFor without --world is an error naming the flag', () => {
+  assert.match(requestFor(['Bob', 'state']).error, /missing --world <world>/)
+})
+
+test('requestFor refuses a world that is not a name', () => {
+  assert.match(requestFor(['Bob', 'state', '--world', '../x']).error, /world/)
+})
+
 test('requestFor reads --state', () => {
-  assert.equal(requestFor(['Bob', 'state', '--state', '/x/y']).state, '/x/y')
+  assert.equal(requestFor(['Bob', 'state', '--world', 'w', '--state', '/x/y']).state, '/x/y')
 })
 
 test('requestFor defaults state to <repo>/state', () => {
-  assert.equal(requestFor(['Bob', 'state']).state, defaultStateDir)
+  assert.equal(requestFor(['Bob', 'state', '--world', 'w']).state, defaultStateDir)
   assert.equal(path.basename(defaultStateDir), 'state')
 })
 
-test('socketPathFor builds the per-agent socket path', () => {
-  assert.equal(socketPathFor({ state: '/s', agent: 'Bob' }), '/s/agents/Bob/engine/control.sock')
+test('socketPathFor builds the socket path of a body in its world', () => {
+  assert.equal(socketPathFor({ state: '/s', world: 'w', agent: 'Bob' }), '/s/worlds/w/agents/Bob/engine/control.sock')
 })
 
 for (const [reply, code] of [
@@ -75,6 +87,6 @@ for (const [reply, code] of [
 
 for (const argv of [['Bob', 'take', '--idle-s', 'abc'], ['Bob', 'take', '--idle-s', '']]) {
   test(`requestFor ${argv.join(' ')} is an error`, () => {
-    assert.match(requestFor(argv).error, /idle-s/)
+    assert.match(requestFor([...argv, '--world', 'w']).error, /idle-s/)
   })
 }

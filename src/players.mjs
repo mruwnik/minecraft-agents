@@ -2,10 +2,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-// The agent bodies playing in this world: every folder under state/agents that holds a config.json
-export const agentNames = stateDir =>
-  fs.readdirSync(path.join(stateDir, 'agents'))
-    .filter(name => fs.existsSync(path.join(stateDir, 'agents', name, 'config.json')))
+// The agent bodies playing in a world: every folder under <worldDir>/agents (state/worlds/<world>/agents) that holds a config.json
+export const agentNames = worldDir =>
+  fs.readdirSync(path.join(worldDir, 'agents'))
+    .filter(name => fs.existsSync(path.join(worldDir, 'agents', name, 'config.json')))
 
 // Splits a `players` map ({name: pos|'out of sight'}) into the agent bodies and the human players it names
 export const splitPlayers = (players, agents) => {

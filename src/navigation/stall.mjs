@@ -92,6 +92,6 @@ export function frozenAdvice ({ exact, facing, ahead = [], near = [], server }) 
   if (wall && facing && facing.degrees > 45) return `the head faces ${facing.degrees} degrees off the next node (${facing.node}) and the legs push into ${wallText}: something else is turning the head (a lookAt in the task, or the fence nudge)`
   if (wall && facing) return `the next node (${facing.node}) lies beyond ${wallText}: the path was planned from a cell the body is not really in. goto two blocks back the way it came, then retry`
   if (near.length) return `nothing solid ahead but ${near.join(', ')} is pressed against the body: it is being pushed back as fast as it walks. Step sideways first (goto), then retry`
-  if (server) return `the server placed the body at ${server.x},${server.y},${server.z} ${Math.round(server.agoMs / 100) / 10} s ago while the client walks from ${exact.join(',')}: the two disagree on where it stands. Copy this into ../../BUGS.md`
-  return 'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../BUGS.md'
+  if (server) return `the server placed the body at ${server.x},${server.y},${server.z} ${Math.round(server.agoMs / 100) / 10} s ago while the client walks from ${exact.join(',')}: the two disagree on where it stands. Copy this into ../../../../BUGS.md`
+  return 'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../../../BUGS.md'
 }

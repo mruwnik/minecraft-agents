@@ -10,8 +10,9 @@ export { parsePlan, parsePlacePlan }
 
 // polls: { <agent name>: { ok, state, error, at } }. A port that does not answer is a body that is down, which is
 // the ordinary state of most folders here, not a failure of the dashboard.
+// polls are keyed <world>/<name>: a name is unique only within a world
 export const mergeBodies = (agents, polls) => agents.map(agent => {
-  const poll = polls[agent.name]
+  const poll = polls[`${agent.world}/${agent.name}`]
   if (!poll) return { ...agent, up: false, error: 'not polled yet', state: null, at: null }
   if (!poll.ok) return { ...agent, up: false, error: poll.error ?? 'no answer', state: null, at: poll.at ?? null }
   return { ...agent, up: true, error: null, state: poll.state, at: poll.at ?? null }

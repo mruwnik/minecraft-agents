@@ -13,6 +13,7 @@ const numberParam = (name, fallback) => {
   const value = Number(params.get(name))
   return params.has(name) && Number.isFinite(value) && value > 0 ? value : fallback
 }
+// the body is <world>/<name>: a name is unique only within a world
 const agentName = params.get('agent')
 const radius = Math.min(32, Math.round(numberParam('radius', 8)))
 const fov = numberParam('fov', 70)
@@ -157,9 +158,9 @@ const fillPicker = async () => {
   const agents = await fetch('/agents').then(r => r.json()).catch(() => [])
   picker.replaceChildren(...[{ name: '', world: '' }, ...agents].map(a => {
     const option = document.createElement('option')
-    option.value = a.name
-    option.textContent = a.name ? `${a.name} (${a.status})` : '- agent -'
-    option.selected = a.name === (agentName ?? '')
+    option.value = a.name ? `${a.world}/${a.name}` : ''
+    option.textContent = a.name ? `${a.name} (${a.world}, ${a.status})` : '- agent -'
+    option.selected = option.value === (agentName ?? '')
     return option
   }))
 }

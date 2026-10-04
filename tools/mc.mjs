@@ -118,9 +118,14 @@ if (action === 'wait') {
 
 // what went wrong across every agent since a time (autopilot card); tools/incidents.mjs is loaded only for this action,
 // so a fault in it breaks nothing but this answer
+// the incidents of this body's own world (its folder's siblings); without a home, world=<name> says which
 if (action === 'incidents') {
+  const worldAgents = process.env.MC_HOME
+    ? path.resolve(process.env.MC_HOME, '..')
+    : /^[A-Za-z0-9_-]{1,64}$/.test(args.world ?? '') ? path.join(import.meta.dirname, '..', 'state', 'worlds', args.world, 'agents') : null
+  if (!worldAgents) { console.error('FAIL incidents without a home needs world=<name> (a folder under state/worlds/)'); process.exit(1) }
   import('./incidents.mjs')
-    .then(({ incidentsReport }) => console.log(incidentsReport(path.join(import.meta.dirname, '..', 'state', 'agents'), args.since)))
+    .then(({ incidentsReport }) => console.log(incidentsReport(worldAgents, args.since)))
     .catch(e => { console.error(`FAIL ${e.message}`); process.exit(1) })
 }
 

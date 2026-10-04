@@ -16,10 +16,10 @@ arguments, `./mc help <section>` one group of them, `./mc help <action>` one act
 says what was missing or wrong. Output over 1500 characters is cut: narrow the query instead of asking for more.
 
 This guide assumes nothing about the program that runs you. Your harness has its own notes: read
-`../../../harness/<name>.md`, the one named in your BRIEFING.md and as `harness` in your `config.json`. It says how a
+`../../../../../harness/<name>.md`, the one named in your BRIEFING.md and as `harness` in your `config.json`. It says how a
 command blocks, how long one may run, whether you can hand work to a cheaper sub-agent, and what your sandbox must reach.
 This guide is true on any server running this toolset; what is true on THIS server (who plays, where the shared chests,
-farms and pens are, the local customs) is in `../../worlds/<world>/WORLD.md` (`world` in your `config.json`). Read it
+farms and pens are, the local customs) is in `../../WORLD.md` (your folder is in that world's `agents/`). Read it
 after this guide, and trust the live map over it.
 
 ## You are meant to run for a long time, so guard your context
@@ -83,7 +83,7 @@ you alive longer:
 
 | action | what you get |
 |---|---|
-| `state` | health, food, time of day, position, other players (rarely needed: results flag low health/food themselves). `code=` is the commit this body loaded; `code=<commit>+<n>` with `dirty=` means it started while somebody was mid-edit and is running none of the committed versions, so a tool misbehaving here is worth a `git status` and a restart before it is worth debugging. The same pair is in the `spawned` event, with the advice spelled out. `humans=Name,...` lists only the human players (not agent bodies) this body can currently see, and is left out when there are none. `serverPos=x,y,z age=Ns` is where the server last put the body, shown only when that is more than a block from where the client holds it and the packet is under five seconds old (older ones only measure how far the body has walked since; a real rubber band re-sends every tick): a walk that presses forward without moving with the two far apart is a position desync, worth `../../BUGS.md`. Every change of the air number is an `oxygen` event (`events type=oxygen`) with the same pair, the head block and `inWater`; `settling` marks a fresh body's first readings |
+| `state` | health, food, time of day, position, other players (rarely needed: results flag low health/food themselves). `code=` is the commit this body loaded; `code=<commit>+<n>` with `dirty=` means it started while somebody was mid-edit and is running none of the committed versions, so a tool misbehaving here is worth a `git status` and a restart before it is worth debugging. The same pair is in the `spawned` event, with the advice spelled out. `humans=Name,...` lists only the human players (not agent bodies) this body can currently see, and is left out when there are none. `serverPos=x,y,z age=Ns` is where the server last put the body, shown only when that is more than a block from where the client holds it and the packet is under five seconds old (older ones only measure how far the body has walked since; a real rubber band re-sends every tick): a walk that presses forward without moving with the two far apart is a position desync, worth `../../../../BUGS.md`. Every change of the air number is an `oxygen` event (`events type=oxygen`) with the same pair, the head block and `inWater`; `settling` marks a fresh body's first readings |
 | `look_around` | nearby mobs/players with coordinates, notable blocks (ores, chests, beds, ...) |
 | `look` | a picture (see above); the reply also lists visible entities with pixel position and distance. Mobs are drawn as simple block figures in their own colours (a creeper green, a skeleton bone, a spider black, players magenta, an unknown hostile red), facing the way they look: the coloured front of the head is the face. Read names from the list, not from the colours |
 | `inventory` | what you carry, free slots, armour |
@@ -307,8 +307,8 @@ physics and route-controller patches support it; ordinary digging and building p
    through a pen gate can let one slip out (walks avoid pen gates unless the pen is where you are going): read
    `outsideGate=` in the reply, and `flock.lead ... within=60` fetches one that strayed past 32 blocks.
 9. If the body misbehaves (a tool bug, not a game problem), or a tool made you do the same manual work twice, APPEND
-   it to the shared `../../BUGS.md` (one entry: UTC time, your name, the exact command, its output, what you expected;
-   `cat >> ../../BUGS.md`, never rewrite the file). The maintainer (WORLD.md says who) reads it and marks entries fixed; a
+   it to the shared `../../../../BUGS.md` (one entry: UTC time, your name, the exact command, its output, what you expected;
+   `cat >> ../../../../BUGS.md`, never rewrite the file). The maintainer (WORLD.md says who) reads it and marks entries fixed; a
    bug that lives only in your journal is never seen. It is the ONE shared file you write to: don't edit the shared
    code in `../..` yourself; other agents depend on it.
 10. **Before you call a build, farm or pen done, look at it (`./mc look`) and fix what looks wrong; pretty counts.**
@@ -399,13 +399,13 @@ physics and route-controller patches support it; ordinary digging and building p
 - A `wedged` event (task cancelled, "server keeps resetting my position") means the body is jammed against a block: the
   event and the error name it (`against=stone at x=.. y=.. z=..`): `dig` exactly that block, then retry. Walking harder never
   helps. When it is only leaves (a low branch at head height), the body breaks them itself and walks on (`unwedged`).
-  It should be rare: if you see it against plain ground, put the coordinates in `../../BUGS.md`.
+  It should be rare: if you see it against plain ground, put the coordinates in `../../../../BUGS.md`.
 - Water: out of air, the body drops its task and swims (`surfacing`, `way=`): `up` under open water, `sideways` to the nearest
   water cell with air over it within 6 when roofed (an opening it gets no nearer to in 2 s is given up for the next), or `pocket`:
   it digs the ceiling block over its head when the air left allows (a dug cell stays air, water never flows up). With no task it
   treads water instead of sinking. None of it helps under a wide roof with no opening: never build over deep water, and farm from dry land.
 - A `stalled` event (task cancelled, "no movement for 12s") means a walk never got going. `goto` a spot two blocks away, then
-  retry, and copy the event's `evidence` into `../../BUGS.md`: it says what the legs were doing. A `frozen_walk` event comes
+  retry, and copy the event's `evidence` into `../../../../BUGS.md`: it says what the legs were doing. A `frozen_walk` event comes
   first (forward held, no movement for 2 s) and its `advice` names the cause it can see: the head turned off the path, a
   fence between the body and the next node, a mob pressed against the legs, or the server holding the body elsewhere.
 - A `stuck` event is the body's own watch saying it is going nowhere: no movement and no progress in a task for 3 minutes,

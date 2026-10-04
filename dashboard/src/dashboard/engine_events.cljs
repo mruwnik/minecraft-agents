@@ -1,6 +1,6 @@
 (ns dashboard.engine-events
   "What the dashboard knows about an ENGINE body: everything comes from the events it appends to
-  state/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
+  state/worlds/<world>/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
   (:require [clojure.string :as str]))
 
 ;; The longest gap between two events inside one run was ~10 s (a restart gap is 60 s+), so 30 s is 3x margin.
@@ -234,14 +234,15 @@
   (trim-warns state (transduce (comp (remove empty?) (mapcat parse-fold-line)) (completing fold-one) state (.split text "\n"))))
 
 ;; ---------------------------------------------------------------- agents and bodies
-;; entries: [{:name :text raw config.json}]. No apiPort is needed (the engine serves none).
+;; entries: [{:name :world :text raw config.json}], the world being where the folder is (config.json names none).
+;; No apiPort is needed (the engine serves none).
 (defn parse-engine-agents [entries]
   (->> entries
-       (map (fn [{:keys [name text]}]
+       (map (fn [{:keys [name world text]}]
               (let [cfg (let [c (try (js->clj (js/JSON.parse text) :keywordize-keys true) (catch :default _ nil))]
                           (when (map? c) c))]
-                {:name name :username (or (:username cfg) name) :world (:world cfg)})))
-       (sort-by :name)
+                {:name name :username (or (:username cfg) name) :world world})))
+       (sort-by (juxt :world :name))
        vec))
 
 ;; the shape every body in /api/state has, so scoping, grouping and the map treat all alike

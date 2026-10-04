@@ -5,6 +5,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { defaultStateDir, socketPathFor } from './drive-lib.mjs'
+import { NAME, missingWorldError } from '../js/bodies.mjs'
 
 const kw = name => ({ __keyword: name })
 const edn = value => {
@@ -20,16 +21,16 @@ const edn = value => {
   throw new Error('unsupported EDN value')
 }
 
-const usage = `usage: world.mjs <agent> <command> [args] [--who claude] [--state <dir>]
+const usage = `usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--state <dir>]
   submit move-to <x> <y> <z> [--range <n>] [--timeout-s <1..10>] [--max-distance <1..64>]
   submit dig <x> <y> <z> | submit place <x> <y> <z> <item>
   submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]
   submit interact <entity-id> [--item <item>] [--request-id <id>]
   status <request-id> | cancel <request-id> | inventory
-Acquire the body first with drive.mjs <agent> take --who <same-name> --idle-s <seconds>.
+Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.
 Submit returns immediately with a request-id; poll status while continuing to observe/chat.`
 
-const opts = { who: { type: 'string', default: 'claude' }, state: { type: 'string', default: defaultStateDir },
+const opts = { who: { type: 'string', default: 'claude' }, state: { type: 'string', default: defaultStateDir }, world: { type: 'string' },
   range: { type: 'string' }, 'timeout-s': { type: 'string' }, 'max-distance': { type: 'string' },
   item: { type: 'string' }, face: { type: 'string' }, 'request-id': { type: 'string' } }
 const num = (s, name) => {
@@ -47,7 +48,9 @@ function requestForUnsafe (argv) {
   const [agent, command, action, ...args] = parsed.positionals.map(unhide)
   if (!agent || !/^[A-Za-z0-9_-]{1,40}$/.test(agent)) return { error: 'agent must be a body name (letters, digits, _ or -, max 40)' }
   if (!command) return { error: 'need <agent> and <command>' }
-  const { who, state, range, 'timeout-s': timeoutS, 'max-distance': maxDistance, item, face } = parsed.values
+  const { who, state, world, range, 'timeout-s': timeoutS, 'max-distance': maxDistance, item, face } = parsed.values
+  if (world === undefined) return { error: missingWorldError('--world') }
+  if (!NAME.test(world)) return { error: 'the world must be a name of letters, digits, _ and -' }
   const requestIdOption = parsed.values['request-id']
   if (typeof who !== 'string' || who.length < 1 || who.length > 80) return { error: '--who must be 1..80 characters' }
   if (requestIdOption !== undefined && command !== 'submit') return { error: '--request-id is only valid for submit' }
@@ -85,7 +88,7 @@ function requestForUnsafe (argv) {
     if (!/^[A-Za-z0-9._-]{1,80}$/.test(requestId)) throw new Error('--request-id must be 1..80 letters, digits, dot, _ or -')
     body = { op: kw('submit'), who, 'request-id': requestId, action: kw(actionNames[action]), args: argsMap }
   } else return { error: `unknown command ${command}` }
-  return { agent, state: path.resolve(state), who, body }
+  return { agent, world, state: path.resolve(state), who, body }
 }
 
 export function requestFor (argv) {

@@ -42,16 +42,17 @@ const describeCharacter = c => c?.name ? `${c.name}${c.source ? ` (${c.source})`
 
 // entries: [{ name: <folder name>, text: <raw config.json> }]. A folder we cannot read, or one with no apiPort,
 // is not an agent we can poll: leave it out rather than show a row that can never come up.
+// entries: [{ name, world, text }], world being where the folder is (config.json names none)
 export const parseAgents = entries => entries
-  .map(({ name, text }) => ({ name, cfg: parseConfig(text) }))
+  .map(({ name, world, text }) => ({ name, world, cfg: parseConfig(text) }))
   .filter(({ cfg }) => Number.isFinite(cfg?.apiPort))
-  .map(({ name, cfg }) => ({
+  .map(({ name, world, cfg }) => ({
     name,
     username: cfg.username ?? name,
     apiPort: cfg.apiPort,
     harness: cfg.harness ?? null,
     character: describeCharacter(cfg.character),
-    world: cfg.world ?? null
+    world: world ?? null
   }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -361,8 +362,8 @@ export const scopeSnapshot = (snapshot, worldName) => {
 export const scopeChatSources = (sources, agents, worldName) => sources
   .filter(({ agent }) => agents.some(a => a.name === agent && a.world === worldName))
 
-// per-agent endpoints: with no world asked they behave as before; with one, the agent must play in it
+// per-agent endpoints: a name is unique only within a world, so the world is always given and the agent must play in it
 export const agentInWorld = (agents, name, worldName) => {
-  if (worldName === null || worldName === undefined) return true
+  if (worldName === null || worldName === undefined) return false
   return agents.some(a => a.name === name && a.world === worldName)
 }

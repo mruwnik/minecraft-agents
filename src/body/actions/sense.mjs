@@ -7,7 +7,7 @@ import { blockName } from '../../navigation/stall.mjs'
 import { stuckField } from '../../navigation/stuck.mjs'
 import { serverPosNote } from '../../survival/airlog.mjs'
 import { horseState } from '../riding.mjs'
-import { ROOT, cfg } from '../home.mjs'
+import { cfg, WORLD_DIR } from '../home.mjs'
 import { readPlaces, recent } from '../events.mjs'
 import { matcher, inventoryCounts, vecOf, cellAt, findBlockByName, containerAt } from '../helpers.mjs'
 import { goals, Vec3, reportPerformance, bot, task, pos, roundVec } from '../state.mjs'
@@ -67,7 +67,7 @@ export const senseQuick = {
   state () {
     const others = Object.values(bot.players).filter(p => p.username !== bot.username)
     const playersSeen = Object.fromEntries(others.map(p => [p.username, p.entity ? roundVec(p.entity.position) : 'out of sight']))
-    const { humans } = splitPlayers(playersSeen, agentNames(path.join(ROOT, 'state')))
+    const { humans } = splitPlayers(playersSeen, agentNames(WORLD_DIR))
     const chattiness = cfg.chat?.chattiness ?? 1
     return {
       hp: Math.round(bot.health),

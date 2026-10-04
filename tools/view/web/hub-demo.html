@@ -41,7 +41,7 @@ const cards = agents.map(agent => {
   const caption = document.createElement('figcaption')
   figure.append(canvas, caption)
   grid.append(figure)
-  const scene = hub.addScene({ agent: agent.name, radius: number('radius', 2) })
+  const scene = hub.addScene({ agent: `${agent.world}/${agent.name}`, radius: number('radius', 2) })
   scene.attach(canvas, { width, height })
   return { agent, scene, caption }
 })

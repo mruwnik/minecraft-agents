@@ -11,7 +11,7 @@ import { createControl } from '../engine/js/control.mjs'
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-'))
 const stateDir = path.join(root, 'state')
 const webDir = path.join(root, 'web')
-const engineDir = path.join(stateDir, 'agents', 'Bob', 'engine')
+const engineDir = path.join(stateDir, 'worlds', 'w', 'agents', 'Bob', 'engine')
 // Canned control replies: the proxy is under test here, not the takeover rules. The stub remembers the
 // last take and set so GET can echo them.
 const held = { manual: null }
@@ -52,21 +52,21 @@ after(async () => {
 })
 
 test('take, set, then GET reflects the controls; who defaults to view', async () => {
-  const taken = await (await post('/drive/Bob', { op: 'take', why: 'test' })).json()
+  const taken = await (await post('/drive/w/Bob', { op: 'take', why: 'test' })).json()
   assert.equal(taken.manual.who, 'view')
-  const set = await post('/drive/Bob', { op: 'set', controls: { forward: true } })
+  const set = await post('/drive/w/Bob', { op: 'set', controls: { forward: true } })
   assert.equal(set.status, 200)
-  const state = await (await fetch(`${base}/drive/Bob`)).json()
+  const state = await (await fetch(`${base}/drive/w/Bob`)).json()
   assert.equal(state.manual.controls.forward, true)
   assert.equal(state.manual.who, 'view')
-  await post('/drive/Bob', { op: 'release' })
-  assert.equal((await (await fetch(`${base}/drive/Bob`)).json()).manual, null)
+  await post('/drive/w/Bob', { op: 'release' })
+  assert.equal((await (await fetch(`${base}/drive/w/Bob`)).json()).manual, null)
 })
 
 test('an explicit who is kept', async () => {
-  const taken = await (await post('/drive/Bob', { op: 'take', who: 'claude', why: 'x' })).json()
+  const taken = await (await post('/drive/w/Bob', { op: 'take', who: 'claude', why: 'x' })).json()
   assert.equal(taken.manual.who, 'claude')
-  await post('/drive/Bob', { op: 'release', who: 'claude' })
+  await post('/drive/w/Bob', { op: 'release', who: 'claude' })
 })
 
 const forbidden = [
@@ -75,7 +75,7 @@ const forbidden = [
 ]
 for (const [name, headers] of forbidden) {
   test(`403 for ${name}`, async () => {
-    const res = await post('/drive/Bob', { op: 'take', why: 'x' }, headers)
+    const res = await post('/drive/w/Bob', { op: 'take', why: 'x' }, headers)
     assert.equal(res.status, 403)
     assert.equal((await res.json()).reason, 'forbidden')
   })
@@ -83,7 +83,7 @@ for (const [name, headers] of forbidden) {
 
 test('403 for a foreign Host header', async () => {
   const status = await new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/Bob', method: 'POST', headers: { Host: 'evil.example', 'Content-Type': 'application/json' } }, res => { res.resume(); resolve(res.statusCode) })
+    const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/w/Bob', method: 'POST', headers: { Host: 'evil.example', 'Content-Type': 'application/json' } }, res => { res.resume(); resolve(res.statusCode) })
     req.on('error', reject)
     req.end('{"op":"take"}')
   })
@@ -91,15 +91,16 @@ test('403 for a foreign Host header', async () => {
 })
 
 test('503 when no body runs', async () => {
-  const res = await post('/drive/Nobody', { op: 'take', why: 'x' })
+  const res = await post('/drive/w/Nobody', { op: 'take', why: 'x' })
   assert.equal(res.status, 503)
-  assert.deepEqual(await res.json(), { ok: false, reason: 'no-body', text: 'no running body Nobody' })
+  assert.deepEqual(await res.json(), { ok: false, reason: 'no-body', text: 'no running body Nobody in world w' })
 })
 
 test('GET with a bad name is 404', async () => {
-  assert.equal((await fetch(`${base}/drive/bad.name`)).status, 404)
+  assert.equal((await fetch(`${base}/drive/w/bad.name`)).status, 404)
+  assert.equal((await fetch(`${base}/drive/Bob`)).status, 404)
 })
 
-test('POST to anything but /drive/<name> is 405', async () => {
+test('POST to anything but /drive/<world>/<name> is 405', async () => {
   assert.equal((await post('/agents', {})).status, 405)
 })

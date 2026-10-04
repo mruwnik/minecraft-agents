@@ -1,11 +1,11 @@
 # View rendering: performance and the browser renderer
 
 A body dumps what it sees (`docs/view-format.md`): chunk columns in `state/worlds/<world>/chunks/`, plus `pose.json`
-and `hud.json` in `state/agents/<Name>/view/`. There are two renderers for those files.
+and `hud.json` in `state/worlds/<world>/agents/<Name>/view/`. There are two renderers for those files.
 
 ## 1. Node PNG path (snapshots)
 
-`node tools/view-render.mjs <Name> [--width --height --fov --dist --watch ms --bench s]` loads the columns with
+`node tools/view-render.mjs <Name> --world <world> [--width --height --fov --dist --watch ms --bench s]` loads the columns with
 prismarine-chunk, builds a block grid around the eye and raycasts on the CPU with `src/vision/renderer.mjs`. Textured,
 and good for an agent that wants a snapshot every couple of seconds.
 
@@ -30,10 +30,10 @@ dumped sky light does not depend on the time of day.
 
 Server (`tools/view/serve.mjs`, no dependencies beyond the repo's own):
 - `GET /agents`: the agents that have a pose file.
-- `GET /pose/<Name>?radius=R`: SSE. It polls the files' mtimes every 50 ms and sends `pose` `{mtime, sentAt, pose}`,
+- `GET /pose/<world>/<Name>?radius=R`: SSE. It polls the files' mtimes every 50 ms and sends `pose` `{mtime, sentAt, pose}`,
   `hud` `{mtime, hud}`, and `column` `{cx, cz, mtime}` when a column file within R of the eye changes. Columns are
   polled every 250 ms.
-- `GET /columns/<world>/<cx>.<cz>.bin`: the raw deflated file. `GET /hud/<Name>`.
+- `GET /columns/<world>/<cx>.<cz>.bin`: the raw deflated file. `GET /hud/<world>/<Name>`.
 - `GET /blocks/<mcVersion>.json`: the material table, ~700 KB for 26.1 (29873 states, 3441 materials). It maps each
   state id to a material, deduplicated by content. A material has a `kind` (cube/box/cross/water/lava), `tex` (texture
   layer for top, side and bottom, -1 when there is no texture file), `box` (bounding box of the collision shapes in

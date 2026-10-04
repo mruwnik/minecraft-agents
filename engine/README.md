@@ -20,7 +20,7 @@ npm install
 npm test                                   # cljs tests, then node --test js/**/*.test.mjs
 npm run test:cljs                          # cljs only
 npm run test:js                            # JS only
-npm run body -- --agent <name> --scenario <file.edn>
+npm run body -- --agent <name> --world <world> --scenario <file.edn>
 ```
 
 Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
@@ -548,7 +548,7 @@ a peer on the list, not a child.
 
 ## Memory
 
-One EDN store per body, `memory.edn` under `state/agents/<name>/engine/`,
+One EDN store per body, `memory.edn` under `state/worlds/<world>/agents/<name>/engine/`,
 read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
 `{:entries {kind [entry]} :policies {kind policy}}`:
 
@@ -814,7 +814,7 @@ it never removes it, and it alerts.
 ## Events
 
 The engine writes one EDN map per line to stdout and
-`state/agents/<name>/engine/events.edn`. The canonical contract is in
+`state/worlds/<world>/agents/<name>/engine/events.edn`. The canonical contract is in
 [`docs/event-stream.md`](../docs/event-stream.md). Event HTTP responses and
 requests also use `application/edn`; there is no JSON serialization boundary
 for engine events. Existing JSONL logs remain historical files and are not
@@ -859,7 +859,7 @@ required request remains in saved state even if its notification cannot be logge
 
 ### Local event API
 
-The engine exposes HTTP over `state/agents/<name>/engine/events.sock`, a local
+The engine exposes HTTP over `state/worlds/<world>/agents/<name>/engine/events.sock`, a local
 Unix socket with mode 0600. It is separate from manual driving's `control.sock`.
 All responses are EDN, including errors; mutation bodies must be EDN too.
 
@@ -880,7 +880,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 For example, read a snapshot without taking control of the body:
 
 ```sh
-curl --unix-socket state/agents/Bob/engine/events.sock http://localhost/snapshot
+curl --unix-socket state/worlds/claude/agents/Bob/engine/events.sock http://localhost/snapshot
 ```
 
 On connection/reconnection or a history gap, reconcile outstanding requests
@@ -889,19 +889,19 @@ observational stream, not an event-sourced database. State and memory snapshots
 remain authoritative. The ClojureScript dashboard uses this API and offers a
 read-only historical fallback for offline engines and old logs.
 
-For a compact terminal/agent read, `node engine/tools/observe.mjs <agent>`
+For a compact terminal/agent read, `node engine/tools/observe.mjs <agent> --world <world>`
 prints the status projection as EDN. It reads the same private event socket and
 does not contact or disturb Mineflayer. Use `job <id>` or `catalog job|trigger
-<name>` only when the summary needs detail; `--state <dir>` selects another
+<name>` only when the summary needs detail; `--world` is required (a name is unique only within a world); `--state <dir>` selects another
 state root and `--limit <n>` bounds the listed queue rows.
 
 ```sh
-node engine/tools/observe.mjs Bob
-node engine/tools/observe.mjs Bob --raw
-node engine/tools/observe.mjs Bob job j17
-node engine/tools/observe.mjs Bob catalog jobs jobs.farm. --limit 10
-node engine/tools/observe.mjs Bob catalog job jobs.forestry.harvest-wood
-node engine/tools/observe.mjs Bob catalog trigger hostile-near
+node engine/tools/observe.mjs Bob --world claude
+node engine/tools/observe.mjs Bob --world claude --raw
+node engine/tools/observe.mjs Bob --world claude job j17
+node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10
+node engine/tools/observe.mjs Bob --world claude catalog job jobs.forestry.harvest-wood
+node engine/tools/observe.mjs Bob --world claude catalog trigger hostile-near
 ```
 
 The default status contains body identity, generation and event cursor,
@@ -926,7 +926,7 @@ enable the projection, stop that body normally and start it from
 the current engine build; from the repository's `engine/` directory:
 
 ```sh
-npm run body -- --agent Bob
+npm run body -- --agent Bob --world claude
 ```
 
 That script compiles `out/body.cjs` from the current ClojureScript source
@@ -981,8 +981,8 @@ the instance.
 ## Manual takeover
 
 For rescuing a stuck body by hand. The body listens on a unix socket,
-`state/agents/<name>/engine/control.sock` (mode 0600), created at start and removed at shutdown. If it
-cannot listen (for example a path over 100 bytes) the body emits `system.control_unavailable` (error) and runs without it.
+`state/worlds/<world>/agents/<name>/engine/control.sock` (mode 0600), created at start and removed at shutdown. If it
+cannot listen (for example a path over 107 bytes) the body emits `system.control_unavailable` (error) and runs without it.
 
 The socket exposes `/drive` for direct movement (JSON) and `/world` for a small set of bounded primitive actions (EDN).
 There are no list or register edits through it. It relates to
@@ -1021,14 +1021,14 @@ Events: `system.takeover_started` `{who why}`; `system.takeover_ended` `{who rea
 CLI (`--state <dir>` is the state directory holding `agents/`, default the repo's `state/`; `--who` defaults to `claude`):
 
 ```
-node engine/tools/drive.mjs ProbeDrive take --who claude --why "stuck in a pit"
-node engine/tools/drive.mjs ProbeDrive look 270 0 --who claude        # face east
-node engine/tools/drive.mjs ProbeDrive hold forward,jump 2000 --who claude
-node engine/tools/drive.mjs ProbeDrive turn 90 --who claude
-node engine/tools/drive.mjs ProbeDrive jump --who claude
-node engine/tools/drive.mjs ProbeDrive stop --who claude
-node engine/tools/drive.mjs ProbeDrive state
-node engine/tools/drive.mjs ProbeDrive release --who claude           # --force reclaims another driver's hold
+node engine/tools/drive.mjs ProbeDrive --world claude take --who claude --why "stuck in a pit"
+node engine/tools/drive.mjs ProbeDrive --world claude look 270 0 --who claude        # face east
+node engine/tools/drive.mjs ProbeDrive --world claude hold forward,jump 2000 --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude turn 90 --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude jump --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude stop --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude state
+node engine/tools/drive.mjs ProbeDrive --world claude release --who claude           # --force reclaims another driver's hold
 ```
 
 World actions keep the same exclusive lease and use the engine's existing owner-token primitives; they do not create a
@@ -1043,12 +1043,12 @@ in memory for the latest 32 actions and are not durable across restart. `status`
 `cancel` requires the current lease. Inventory is compact and capped at 40 stacks.
 
 ```
-node engine/tools/drive.mjs ProbeDrive take --who claude --why "move to the gate" --idle-s 30
-node engine/tools/world.mjs ProbeDrive submit move-to -5 64 -7 --who claude
-node engine/tools/world.mjs ProbeDrive status <request-id> --who claude
-node engine/tools/world.mjs ProbeDrive cancel <request-id> --who claude
-node engine/tools/world.mjs ProbeDrive inventory --who claude
-node engine/tools/drive.mjs ProbeDrive release --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude take --who claude --why "move to the gate" --idle-s 30
+node engine/tools/world.mjs ProbeDrive --world claude submit move-to -5 64 -7 --who claude
+node engine/tools/world.mjs ProbeDrive --world claude status <request-id> --who claude
+node engine/tools/world.mjs ProbeDrive --world claude cancel <request-id> --who claude
+node engine/tools/world.mjs ProbeDrive --world claude inventory --who claude
+node engine/tools/drive.mjs ProbeDrive --world claude release --who claude
 ```
 
 `move-to` accepts `--range`, `--max-distance` (up to 64 blocks), and `--timeout-s` (1..10). `dig`, `place`, `use-on`, and
@@ -1073,11 +1073,12 @@ EDN, read with `cljs.reader`:
             (hold (jobs.time.wait-for-day))]}
 ```
 
-`npm run body -- --agent <name> --scenario <file>` loads
-`state/agents/<name>/config.json` (`username`, `world`), the world's
-`state/worlds/<world>/world.json` (`host`, `port`), and `js/primitives.mjs`.
-It refuses to start, with a message, when `js/primitives.mjs` does not exist.
-If `state/agents/<name>/engine/engine.edn` exists the saved list and register
+`npm run body -- --agent <name> --world <world> --scenario <file>` loads
+`state/worlds/<world>/agents/<name>/config.json` (`username`; the world is where the folder is, never a config field),
+the world's `state/worlds/<world>/world.json` (`host`, `port`), and `js/primitives.mjs`
+(`engine.bodies` and `js/bodies.mjs` are the one place that builds a body folder path).
+It refuses to start, with a message, when `--world` is missing or `js/primitives.mjs` does not exist.
+If `state/worlds/<world>/agents/<name>/engine/engine.edn` exists the saved list and register
 are restored and the scenario is ignored; pass `--fresh` to discard saved
 engine state and start from the scenario (memory is kept; job kinds of the
 discarded list are swept). The scenario is validated against the job
@@ -1340,8 +1341,8 @@ may carry `:instance` later).
 `js/primitives.mjs` exports `createPrimitives({host, port, username, auth, version?})` as the contract says, plus
 `createPrimitivesFromBot(bot, {timeScale = 1})` over an already spawned bot (the tests use it with
 `js/stub-bot.mjs`; `timeScale` shrinks every time bound). `js/connect.mjs` exports `readAgentConfig({stateDir,
-agent})` (defaults, then `state/agents/<name>/config.json`, then the world's `{host, port}`; defaults copied from
-`src/config.mjs`), `connectBot(cfg)` and `connectAgent({stateDir, agent})` (`{bot, disconnect}`). Nothing connects on
+world, agent})` (defaults, then `state/worlds/<world>/agents/<name>/config.json`, then the world's `{host, port}`; defaults copied from
+`src/config.mjs`), `connectBot(cfg)` and `connectAgent({stateDir, world, agent})` (`{bot, disconnect}`). Nothing connects on
 import. `mineflayer`, `mineflayer-pathfinder` and `vec3` resolve from the repo root `node_modules`; the engine's own
 `package.json` does not list them yet.
 
@@ -1415,8 +1416,8 @@ do not use it. Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.e
 
 ## Migrating old bots
 
-`npx shadow-cljs compile migrate`, then `node out/migrate.cjs [--dry-run] [--state-dir <dir>] Name...` (default state
-dir: the repo's `state/`; default names: every folder under `state/agents/` with no `engine/`). `--dry-run` prints one
+`npx shadow-cljs compile migrate`, then `node out/migrate.cjs --world <world> [--dry-run] [--state-dir <dir>] Name...` (default state
+dir: the repo's `state/`; default names: every folder under `state/worlds/<world>/agents/` with no `engine/`). `--dry-run` prints one
 line per body and writes nothing. Write mode only touches bodies without `engine/`, creates `engine/memory.edn` and
 `view/pose.json`, never overwrites, moves or deletes, and refuses a body that looks connected (`engine/control.sock`, a
 live `body.pid`, or a listener on `127.0.0.1:<apiPort>`).
@@ -1438,10 +1439,10 @@ body names, cursors and generation UUIDs are omitted. `--verbose` retains the
 bounded machine status; `--raw` retains the complete engine snapshot.
 
 ```bash
-node engine/tools/observe.mjs Bob --wait
-node engine/tools/observe.mjs Bob --wait --timeout 30s --watch j17
-node engine/tools/observe.mjs Bob --wait --chatter all --from Dan --observer builder
-node engine/tools/observe.mjs Bob --wait --chatter none --danger --disconnect
+node engine/tools/observe.mjs Bob --world claude --wait
+node engine/tools/observe.mjs Bob --world claude --wait --timeout 30s --watch j17
+node engine/tools/observe.mjs Bob --world claude --wait --chatter all --from Dan --observer builder
+node engine/tools/observe.mjs Bob --world claude --wait --chatter none --danger --disconnect
 ```
 
 The external tool polls the existing EDN event API locally (250 ms default,
@@ -1498,8 +1499,8 @@ operation emits its action completion event. Both watcher flags accept repeated
 options or comma-separated IDs (maximum 32 per kind):
 
 ```bash
-node engine/tools/world.mjs Bob submit move-to 10 64 20 --request-id move-home
-node engine/tools/observe.mjs Bob --wait --watch-action move-home
+node engine/tools/world.mjs Bob --world claude submit move-to 10 64 20 --request-id move-home
+node engine/tools/observe.mjs Bob --world claude --wait --watch-action move-home
 ```
 
 On a first-ever observer, explicitly watched job/action IDs are checked against
@@ -1516,13 +1517,13 @@ Agent job management uses the existing engine scheduler through an EDN API;
 these commands return immediately, while `observe --wait --watch` handles wakeups:
 
 ```bash
-node engine/tools/jobs.mjs Bob list
-node engine/tools/jobs.mjs Bob show j17
-node engine/tools/jobs.mjs Bob submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
-node engine/tools/jobs.mjs Bob interrupt '(jobs.movement.look-around {:every-ms 2000})'
-node engine/tools/jobs.mjs Bob cancel j17
-node engine/tools/jobs.mjs Bob retry j17
-node engine/tools/observe.mjs Bob --wait --watch j17
+node engine/tools/jobs.mjs Bob --world claude list
+node engine/tools/jobs.mjs Bob --world claude show j17
+node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
+node engine/tools/jobs.mjs Bob --world claude interrupt '(jobs.movement.look-around {:every-ms 2000})'
+node engine/tools/jobs.mjs Bob --world claude cancel j17
+node engine/tools/jobs.mjs Bob --world claude retry j17
+node engine/tools/observe.mjs Bob --world claude --wait --watch j17
 ```
 
 Specs are native EDN lists parsed by `engine.expr`, including existing `seq`,

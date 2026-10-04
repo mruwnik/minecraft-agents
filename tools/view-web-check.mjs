@@ -14,12 +14,12 @@ import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createViewServer } from './view/serve.mjs'
 import { biomeTable } from './view/biome-colors.mjs'
-import { FIXTURE, writeFixture, AGENT } from './view/fixture.mjs'
+import { FIXTURE, writeFixture, AGENT, WORLD } from './view/fixture.mjs'
 import { withPage, freePort } from './view/headless.mjs'
 import { cameraBasis } from './view/web/camera.mjs'
 import { faceRegion } from './view/project.mjs'
 import { regionStats, luminance } from './view/stats.mjs'
-import { PLACES, AGENT as GHOST_AGENT, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
+import { PLACES, AGENT as GHOST_AGENT, WORLD as GHOST_WORLD, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
 import { decodePng, encodePng } from '../src/vision/renderer.mjs'
 import { ENTITY_REGIONS, VIEWS as ENTITY_VIEWS, WIDTH as ENTITY_WIDTH, HEIGHT as ENTITY_HEIGHT, FOV as ENTITY_FOV, AGENT as ENTITY_AGENT, writeEntityWorld } from './view/entity-fixture.mjs'
 import { MODELS, CUBES, EYE as MODEL_EYE, AGENT as MODEL_AGENT, writeModelWorld } from './view/model-fixture.mjs'
@@ -31,7 +31,7 @@ const WIDTH = 640
 const HEIGHT = 360
 const FOV = 70
 const SETTLE_MS = 1000
-const BASE_QUERY = `agent=${AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64`
+const BASE_QUERY = `agent=${WORLD}/${AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64`
 // the page's overlay and buttons would cover the top of the wall regions
 const HIDE_CHROME = "for (const id of ['overlay', 'agents', 'free']) document.getElementById(id)?.style.setProperty('display', 'none', 'important'); true"
 const Z_FACE_SHADE = 0.8
@@ -161,7 +161,7 @@ const shoot = ({ port, run, outDir }) => withPage({ url: `http://127.0.0.1:${por
 const GHOST_MEAN_MAX = 0.5
 const GHOST_DIFF_LEVEL = 8
 const GHOST_FRACTION_MAX = 0.001
-const GHOST_QUERY = `agent=${GHOST_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0&time=6000`
+const GHOST_QUERY = `agent=${GHOST_WORLD}/${GHOST_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0&time=6000`
 
 // the page has drawn the pose at `place` with every wanted column loaded
 const arrivedAt = place => `(() => { const t = window.__view?.camTrace.at(-1); return !!t && Math.abs(t.x - ${place.cx * 16 + 8}) < 1 && Math.abs(t.z - ${place.cz * 16 + 8}) < 1 && window.__view.ready === true })()`
@@ -245,7 +245,7 @@ const MODEL_CHECKS = [
     test: s => s.fraction(isGreen) > 0.4 && s.mean[1] < 100, describe: s => `green ${s.fraction(isGreen).toFixed(2)} vs > 0.4, mean g ${s.mean[1].toFixed(0)} vs < 100 (mean ${fmt(s.mean)})` }
 ]
 
-const modelQuery = `agent=${MODEL_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0`
+const modelQuery = `agent=${WORLD}/${MODEL_AGENT}&radius=1&w=${WIDTH}&h=${HEIGHT}&fov=${FOV}&dist=64&interp=0`
 
 const shootWorld = async ({ outDir, which, blockJar, name }) => {
   const stateDir = path.join(outDir, `state-${which}`)
@@ -312,7 +312,7 @@ const entityVerdicts = {
   lighter: (s, against) => ({ ok: lum(s) >= lum(against) + LIGHTER_MIN, text: `luminance ${lum(s).toFixed(0)} vs ${lum(against).toFixed(0)} + ${LIGHTER_MIN}` })
 }
 
-const entityQuery = `agent=${ENTITY_AGENT}&radius=1&w=${ENTITY_WIDTH}&h=${ENTITY_HEIGHT}&fov=${ENTITY_FOV}&dist=64&interp=0`
+const entityQuery = `agent=${WORLD}/${ENTITY_AGENT}&radius=1&w=${ENTITY_WIDTH}&h=${ENTITY_HEIGHT}&fov=${ENTITY_FOV}&dist=64&interp=0`
 
 const shootEntities = async ({ outDir, blockJar, name, view }) => {
   const stateDir = path.join(outDir, 'state-entities')

@@ -1,6 +1,7 @@
-// What went wrong across every agent since a time: died, body_down, kicked, routine_stopped and stuck out of every
-// state/agents/*/events.jsonl, newest last, one line each. `./mc incidents [since=<minutes|ISO>]` (the default is the
-// last hour), or `node tools/incidents.mjs [since]` on its own. Imports nothing but src/cli.mjs (#148).
+// What went wrong across every agent of a world since a time: died, body_down, kicked, routine_stopped and stuck out of
+// every state/worlds/<world>/agents/*/events.jsonl, newest last, one line each. `./mc incidents [since=<minutes|ISO>]`
+// (your own world; the default is the last hour; world=<name> without a home), or
+// `node tools/incidents.mjs --world <world> [since]` on its own. Imports nothing but src/cli.mjs (#148).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +19,11 @@ export function incidentsReport (agentsDir, since, now = Date.now()) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const [given] = process.argv.slice(2)
+  const [flag, world, given] = process.argv.slice(2)
+  if (flag !== '--world' || !/^[A-Za-z0-9_-]{1,64}$/.test(world ?? '')) {
+    console.error('missing --world <world>: the world the bodies play in (a folder under state/worlds/)\nusage: node tools/incidents.mjs --world <world> [since]')
+    process.exit(2)
+  }
   const since = given === undefined ? undefined : (Number.isNaN(Number(given)) ? given : Number(given))
-  console.log(incidentsReport(path.join(import.meta.dirname, '..', 'state', 'agents'), since))
+  console.log(incidentsReport(path.join(import.meta.dirname, '..', 'state', 'worlds', world, 'agents'), since))
 }

@@ -14,7 +14,7 @@ const realTextures = path.join(path.dirname(fileURLToPath(import.meta.url)), '..
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-'))
 const stateDir = path.join(root, 'state')
 const webDir = path.join(root, 'web')
-const viewDir = path.join(stateDir, 'agents', 'Bob', 'view')
+const viewDir = path.join(stateDir, 'worlds', 'w1', 'agents', 'Bob', 'view')
 const chunkDir = path.join(stateDir, 'worlds', 'w1', 'chunks')
 const pose = { v: 1, t: 5, world: 'w1', status: 'online', eye: { x: 8, y: 70, z: 8 }, yaw: 0, pitch: 0 }
 const hud = { v: 1, health: 20 }
@@ -56,8 +56,8 @@ before(async () => {
   fs.mkdirSync(viewDir, { recursive: true })
   fs.mkdirSync(chunkDir, { recursive: true })
   fs.mkdirSync(webDir)
-  fs.mkdirSync(path.join(stateDir, 'agents', 'Broken', 'view'), { recursive: true })
-  fs.writeFileSync(path.join(stateDir, 'agents', 'Broken', 'view', 'pose.json'), '{nope')
+  fs.mkdirSync(path.join(stateDir, 'worlds', 'w1', 'agents', 'Broken', 'view'), { recursive: true })
+  fs.writeFileSync(path.join(stateDir, 'worlds', 'w1', 'agents', 'Broken', 'view', 'pose.json'), '{nope')
   writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000)
   writeAt(path.join(viewDir, 'hud.json'), JSON.stringify(hud), 1000)
   for (const name of ['0.0', '1.0', '20.20', '-1.-1']) writeAt(path.join(chunkDir, `${name}.bin`), columnBytes, 1000)
@@ -100,8 +100,12 @@ for (const [p, status] of [
   ['/columns/a/b/0.0.bin', 404],
   ['/columns/w1/0.0.bin%00', 404],
   ['/hud/..%2FBob', 404],
-  ['/hud/a/b', 404],
-  ['/hud/Nobody', 404],
+  ['/hud/a/b/c', 404],
+  ['/hud/Bob', 404],
+  ['/hud/w1/..%2FBob', 404],
+  ['/pose/w1/..%2FBob', 404],
+  ['/hud/w1/Nobody', 404],
+  ['/hud/w2/Bob', 404],
   ['/pose/..%2FBob', 404],
   ['/web/..%2Fsecret.txt', 404],
   ['/web/secret.txt', 404],
@@ -118,7 +122,7 @@ for (const [p, status] of [
 }
 
 test('GET /hud returns hud.json', async () => {
-  const response = await get('/hud/Bob')
+  const response = await get('/hud/w1/Bob')
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), hud)
 })
@@ -134,7 +138,7 @@ test('GET / and /web/<file> serve the web dir with content types', async () => {
 })
 
 test('SSE sends the pose and hud on connect, then a pose event on change', async () => {
-  const response = await get('/pose/Bob?radius=2')
+  const response = await get('/pose/w1/Bob?radius=2')
   assert.equal(response.headers.get('content-type'), 'text/event-stream')
   setTimeout(() => writeAt(path.join(viewDir, 'pose.json'), JSON.stringify({ ...pose, t: 6 }), 2000), 100)
   const started = Date.now()
@@ -150,7 +154,7 @@ test('SSE sends the pose and hud on connect, then a pose event on change', async
 })
 
 test('SSE sends column events for changed columns inside the radius only', async () => {
-  const response = await get('/pose/Bob?radius=2')
+  const response = await get('/pose/w1/Bob?radius=2')
   setTimeout(() => {
     writeAt(path.join(chunkDir, '20.20.bin'), columnBytes, 3000)
     writeAt(path.join(chunkDir, '1.0.bin'), columnBytes, 3000)
@@ -161,10 +165,10 @@ test('SSE sends column events for changed columns inside the radius only', async
 })
 
 test('SSE for an offline pose without an eye sends it and no column events', async () => {
-  fs.mkdirSync(path.join(stateDir, 'agents', 'Off', 'view'), { recursive: true })
+  fs.mkdirSync(path.join(stateDir, 'worlds', 'w1', 'agents', 'Off', 'view'), { recursive: true })
   const offline = { v: 1, t: 9, world: 'w1', status: 'offline' }
-  fs.writeFileSync(path.join(stateDir, 'agents', 'Off', 'view', 'pose.json'), JSON.stringify(offline))
-  const response = await get('/pose/Off')
+  fs.writeFileSync(path.join(stateDir, 'worlds', 'w1', 'agents', 'Off', 'view', 'pose.json'), JSON.stringify(offline))
+  const response = await get('/pose/w1/Off')
   setTimeout(() => writeAt(path.join(chunkDir, '0.0.bin'), columnBytes, 4000), 100)
   const events = await collect(response, { ms: 500 })
   assert.deepEqual(events.map(e => e.event), ['pose'])
@@ -172,7 +176,7 @@ test('SSE for an offline pose without an eye sends it and no column events', asy
 })
 
 test('SSE for an unknown agent is 404', async () => {
-  assert.equal((await get('/pose/Nobody')).status, 404)
+  assert.equal((await get('/pose/w1/Nobody')).status, 404)
 })
 
 test('GET /blocks/<version>.json serves the material table', async () => {
@@ -196,7 +200,7 @@ test('GET /textures/<version>.bin serves the packed texture layers', async () =>
 // ---- push: 'watch' ----
 
 const watchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'view-serve-watch-'))
-const watchView = path.join(watchRoot, 'agents', 'Wat', 'view')
+const watchView = path.join(watchRoot, 'worlds', 'w1', 'agents', 'Wat', 'view')
 const atomicWrite = (file, value) => {
   const tmp = `${file}.tmp.${process.pid}`
   fs.writeFileSync(tmp, JSON.stringify(value))
@@ -219,7 +223,7 @@ const watchCases = [
 for (const { name, file, event, value, read, expected } of watchCases) {
   test(`watch: a rewritten ${name} (tmp + rename) is delivered within 30 ms with the fallback poll off`, async () => {
     const { watched, url } = await startWatchServer()
-    const response = await fetch(`${url}/pose/Wat?radius=1`)
+    const response = await fetch(`${url}/pose/w1/Wat?radius=1`)
     const received = collect(response, { ms: 2000, done: es => es.filter(e => e.event === event).length >= 2 })
     await sleep(100)
     const wrote = Date.now()
@@ -235,7 +239,7 @@ for (const { name, file, event, value, read, expected } of watchCases) {
 
 test('watch: no events while the files are unchanged', async () => {
   const { watched, url } = await startWatchServer()
-  const response = await fetch(`${url}/pose/Wat?radius=1`)
+  const response = await fetch(`${url}/pose/w1/Wat?radius=1`)
   const events = await collect(response, { ms: 400 })
   watched.closeAllConnections()
   watched.close()
@@ -246,7 +250,7 @@ test('watch: the watcher is closed when the client disconnects', async () => {
   const { watched, url } = await startWatchServer()
   await sleep(100)
   const before = fsEvents()
-  const response = await fetch(`${url}/pose/Wat?radius=1`)
+  const response = await fetch(`${url}/pose/w1/Wat?radius=1`)
   await sleep(100)
   const during = fsEvents()
   await response.body.cancel()
@@ -261,7 +265,7 @@ after(() => fs.rmSync(watchRoot, { recursive: true, force: true }))
 test('a column replaced by rename reaches the stream within 100 ms with the poll at 10 s', async () => {
   const watched = createViewServer({ stateDir, textureDir: realTextures, webDir, pollMs: 20, columnPollMs: 10000 })
   await new Promise(resolve => watched.listen(0, '127.0.0.1', resolve))
-  const response = await fetch(`http://127.0.0.1:${watched.address().port}/pose/Bob?radius=2`)
+  const response = await fetch(`http://127.0.0.1:${watched.address().port}/pose/w1/Bob?radius=2`)
   let wroteAt = 0
   setTimeout(() => {
     const tmp = path.join(chunkDir, '1.0.bin.tmp')
@@ -434,53 +438,54 @@ for (const p of ['/biomes/nope.json', '/biomes/..%2Fw1.json', '/biomes/a.b.json'
 }
 
 const writeAgent = (name, value, hudValue) => {
-  const dir = path.join(stateDir, 'agents', name, 'view')
+  const dir = path.join(stateDir, 'worlds', 'w1', 'agents', name, 'view')
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'pose.json'), JSON.stringify(value))
   if (hudValue) fs.writeFileSync(path.join(dir, 'hud.json'), JSON.stringify(hudValue))
 }
 
-test('/poses sends every agent\'s pose and hud tagged with its name, one stream', async () => {
+test('/poses sends every agent\'s pose and hud tagged with its world/name, one stream', async () => {
   writeAgent('Two', { ...pose, t: 7 }, { v: 1, health: 11 })
-  const response = await get('/poses?agents=Bob,Two&radius=2')
+  const response = await get('/poses?agents=w1/Bob,w1/Two&radius=2')
   assert.equal(response.headers.get('content-type'), 'text/event-stream')
-  const events = await collect(response, { ms: 1500, done: es => es.filter(e => e.event === 'pose').length >= 2 && es.some(e => e.event === 'hud' && e.data.agent === 'Two') })
+  const events = await collect(response, { ms: 1500, done: es => es.filter(e => e.event === 'pose').length >= 2 && es.some(e => e.event === 'hud' && e.data.agent === 'w1/Two') })
   const poses = events.filter(e => e.event === 'pose')
-  assert.deepEqual(poses.map(e => [e.data.agent, e.data.pose.t]).sort(), [['Bob', 5], ['Two', 7]])
-  assert.deepEqual(events.find(e => e.event === 'hud' && e.data.agent === 'Two').data.hud, { v: 1, health: 11 })
+  assert.deepEqual(poses.map(e => [e.data.agent, e.data.pose.t]).sort(), [['w1/Bob', 5], ['w1/Two', 7]])
+  assert.deepEqual(events.find(e => e.event === 'hud' && e.data.agent === 'w1/Two').data.hud, { v: 1, health: 11 })
 })
 
 test('/poses sends a pose change and a column change with the agent', async () => {
   writeAgent('Two', { ...pose, t: 7 })
-  const response = await get('/poses?agents=Two&radius=1')
+  const response = await get('/poses?agents=w1/Two&radius=1')
   setTimeout(() => {
     writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000) // not watched: Bob is not in the stream
-    writeAt(path.join(stateDir, 'agents', 'Two', 'view', 'pose.json'), JSON.stringify({ ...pose, t: 8 }), 5000)
+    writeAt(path.join(stateDir, 'worlds', 'w1', 'agents', 'Two', 'view', 'pose.json'), JSON.stringify({ ...pose, t: 8 }), 5000)
     writeAt(path.join(chunkDir, '1.0.bin'), columnBytes, 6000)
   }, 150)
   const events = await collect(response, { ms: 1200, done: es => es.some(e => e.event === 'column') && es.filter(e => e.event === 'pose').length >= 2 })
-  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => [e.data.agent, e.data.pose.t]), [['Two', 7], ['Two', 8]])
-  assert.deepEqual(events.find(e => e.event === 'column').data, { agent: 'Two', cx: 1, cz: 0, mtime: 6000 * 1000 })
+  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => [e.data.agent, e.data.pose.t]), [['w1/Two', 7], ['w1/Two', 8]])
+  assert.deepEqual(events.find(e => e.event === 'column').data, { agent: 'w1/Two', cx: 1, cz: 0, mtime: 6000 * 1000 })
 })
 
 test('/poses skips agents without a pose and still streams the others', async () => {
-  const response = await get('/poses?agents=Nobody,Bob')
+  const response = await get('/poses?agents=w1/Nobody,w1/Bob')
   const events = await collect(response, { ms: 600, done: es => es.some(e => e.event === 'pose') })
-  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => e.data.agent), ['Bob'])
+  assert.deepEqual(events.filter(e => e.event === 'pose').map(e => e.data.agent), ['w1/Bob'])
 })
 
 const badQueries = [
   ['no agents', '/poses'],
   ['empty list', '/poses?agents='],
-  ['a bad name', '/poses?agents=Bob,..%2FBob'],
-  ['a path name', '/poses?agents=Bob,a/b'],
-  ['more than 32 agents', `/poses?agents=${Array.from({ length: 33 }, (_, i) => `A${i}`).join(',')}`]
+  ['a bad name', '/poses?agents=w1/Bob,w1/..%2FBob'],
+  ['a name without its world', '/poses?agents=w1/Bob,Bob'],
+  ['a deeper path', '/poses?agents=w1/Bob,a/b/c'],
+  ['more than 32 agents', `/poses?agents=${Array.from({ length: 33 }, (_, i) => `w1/A${i}`).join(',')}`]
 ]
 for (const [name, url] of badQueries) {
   test(`/poses with ${name} is 400`, async () => assert.equal((await get(url)).status, 400))
 }
 
 test('/poses is a GET only and /pose/<Name> still works', async () => {
-  assert.equal((await get('/poses?agents=Bob', { method: 'POST' })).status, 405)
-  assert.equal((await get('/pose/Bob')).status, 200)
+  assert.equal((await get('/poses?agents=w1/Bob', { method: 'POST' })).status, 405)
+  assert.equal((await get('/pose/w1/Bob')).status, 200)
 })

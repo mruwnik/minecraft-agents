@@ -36,17 +36,22 @@
 ;; ---------------------------------------------------------------- whispers to one body (the popup's box)
 (def minecraft-name #"[A-Za-z0-9_]{3,16}")
 
+(def world-name #"[A-Za-z0-9_-]{1,64}")
+
+(defn whisper-name? [name] (boolean (and (string? name) (re-matches minecraft-name name))))
+
 (defn whisper-url
-  "POST target for a whisper to `name`, nil unless it is a well-formed Minecraft name."
-  [name]
-  (when (and (string? name) (re-matches minecraft-name name))
-    (str "/api/whisper/" name)))
+  "POST target for a whisper to body `name` of `world`, nil unless the name is a well-formed Minecraft name and the
+  world a folder name."
+  [world name]
+  (when (and (whisper-name? name) (string? world) (re-matches world-name world))
+    (str "/api/whisper/" world "/" name)))
 
 (defn whisper-block-reason [online? _state]
   (when-not online? "offline: nobody would hear it"))
 
 (defn whisper-sendable? [online? state name]
-  (boolean (and (sendable? state) (nil? (whisper-block-reason online? state)) (whisper-url name))))
+  (boolean (and (sendable? state) (nil? (whisper-block-reason online? state)) (whisper-name? name))))
 
 (defn whisper-caption [{:keys [status] :as state} online? name]
   (or (whisper-block-reason online? state)

@@ -50,7 +50,7 @@ test('summaries are bounded and discard routine ticks', () => {
 })
 function fixture (timeout = '30ms') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'observe-unit-'))
-  const req = requestFor(['Probe', '--state', dir, '--wait', '--timeout', timeout, '--poll-ms', '50'])
+  const req = requestFor(['--world', 'w', 'Probe', '--state', dir, '--wait', '--timeout', timeout, '--poll-ms', '50'])
   const state = { generation: 'g', outstanding: {}, events: [], gap: false }
   const get = async (_socket, endpoint) => {
     let value
@@ -59,7 +59,7 @@ function fixture (timeout = '30ms') {
     else { const after = Number(new URL(endpoint, 'http://x').searchParams.get('after')); value = { 'gap?': state.gap, 'stream-id': 's', 'latest-seq': state.events.length, cursor: { 'stream-id': 's', seq: state.events.length }, events: state.events.filter(e => e.seq > after) } }
     return { status: 200, contentType: 'application/edn', text: writeEDN(value) }
   }
-  return { dir, req, state, get, file: path.join(dir, 'observers', 'Probe', 'agent.edn'), cleanup: () => fs.rmSync(dir, { recursive: true }) }
+  return { dir, req, state, get, file: path.join(dir, 'worlds', 'w', 'observers', 'Probe', 'agent.edn'), cleanup: () => fs.rmSync(dir, { recursive: true }) }
 }
 test('wait persists between invocations, reports quiet changes and does not miss between-call chat', async () => {
   const f = fixture()
@@ -103,13 +103,13 @@ test('cancellation and failed delivery do not checkpoint; concurrent observer re
   } finally { f.cleanup() }
 })
 test('wait CLI validates policies, durations and observer names', () => {
-  assert.equal(requestFor(['Probe', '--wait']).waitOptions.timeoutMs, 60000)
-  assert.equal(requestFor(['Probe', '--wait', '--timeout', '1.5s']).waitOptions.timeoutMs, 1500)
-  assert.ok(requestFor(['Probe', '--wait', '--observer', '../bad']).error)
-  assert.ok(requestFor(['Probe', '--wait', '--chatter', 'classified']).error)
-  assert.ok(requestFor(['Probe', '--wait', '--watch', 'j1,bad']).error)
-  assert.ok(requestFor(['Probe', '--wait', '--timeout', 'infinity']).error)
-  assert.ok(requestFor(['Probe', '--timeout', '1s']).error)
+  assert.equal(requestFor(['--world', 'w', 'Probe', '--wait']).waitOptions.timeoutMs, 60000)
+  assert.equal(requestFor(['--world', 'w', 'Probe', '--wait', '--timeout', '1.5s']).waitOptions.timeoutMs, 1500)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--observer', '../bad']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--chatter', 'classified']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--watch', 'j1,bad']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--timeout', 'infinity']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--timeout', '1s']).error)
 })
 
 test('attention beyond the first128 entries is delivered, and resolved snapshots do not re-wake', async () => {
@@ -173,12 +173,12 @@ test('explicitly watched action completion wakes with bounded result; other acti
   } finally { f.cleanup() }
 })
 test('action watchers accept repeated/comma options, validate limits, require wait', () => {
-  const r = requestFor(['Probe', '--wait', '--watch-action', 'move-1,place-1', '--watch-action', 'dig-1', '--watch', 'j1,j2', '--watch', 'j3'])
+  const r = requestFor(['--world', 'w', 'Probe', '--wait', '--watch-action', 'move-1,place-1', '--watch-action', 'dig-1', '--watch', 'j1,j2', '--watch', 'j3'])
   assert.deepEqual(r.waitOptions.watchActions, ['move-1', 'place-1', 'dig-1'])
   assert.deepEqual(r.waitOptions.watch, ['j1', 'j2', 'j3'])
-  assert.ok(requestFor(['Probe', '--watch-action', 'move-1']).error)
-  assert.ok(requestFor(['Probe', '--wait', '--watch-action', 'bad/name']).error)
-  assert.ok(requestFor(['Probe', '--wait', '--watch-action', Array(33).fill('move-1').join(',')]).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--watch-action', 'move-1']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--watch-action', 'bad/name']).error)
+  assert.ok(requestFor(['--world', 'w', 'Probe', '--wait', '--watch-action', Array(33).fill('move-1').join(',')]).error)
 })
 test('first use catches recently completed watched actions while ignoring historical chat; later results retained', async () => {
   const f = fixture()

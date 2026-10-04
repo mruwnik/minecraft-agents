@@ -1,11 +1,13 @@
 # The agents' Minecraft bodies
 
-`src/bot.mjs` joins the server its agent's world names. `state/agents/<Name>/config.json` (made by
-`node tools/new-agent.mjs <Name> --world <world>`) carries `world` and `auth`, never `host`/`port` directly;
-`state/worlds/<world>/world.json` holds `host`, `port` (default localhost:25565) and optionally `version`.
+`src/bot.mjs` joins the server of the world its agent folder is in. `state/worlds/<world>/agents/<Name>/config.json`
+(made by `node tools/new-agent.mjs <Name> --world <world>`) carries `auth`, never `host`/`port` or the world: the folder
+it is in says the world, and `state/worlds/<world>/world.json` holds `host`, `port` (default localhost:25565) and
+optionally `version`. A name is unique within its world; the same name may play in two worlds with different state.
 `auth: "offline"` (the default) is for an offline-mode server, where whitelisting the name is all it takes.
 `auth: "microsoft"` is for an online-mode server: the name is a real account's profile name, and a human signs in
-once with `node tools/login.mjs <Name>` (a device code in the browser); the body then refreshes its own tokens, and
+once with `node tools/login.mjs <Name> --world <world>` (a device code in the browser; the tokens are kept per account
+in `state/accounts/<Name>/`, shared by every world); the body then refreshes its own tokens, and
 reports `login_needed` if that ever stops working. Without a config.json the body refuses to start, so a stray run
 can never log in under another agent's name.
 Mineflayer speaks protocol 26.1; a server newer than that needs ViaVersion + ViaBackwards to bridge it, either as
@@ -14,7 +16,7 @@ beside the body: point its `viaproxy.yml` at the server (`target-version` the se
 Microsoft account added in its window) and give that world's `world.json` `host: 127.0.0.1`, `port: 25568`
 (its agents keep `auth: "offline"`).
 
-- Start: `cd state/agents/<Name> && ./start`; it returns once the body is launched (the body reconnects every 10s if the server is down).
+- Start: `cd state/worlds/<world>/agents/<Name> && ./start`; it returns once the body is launched (the body reconnects every 10s if the server is down).
 - `./restart` stops a running body cleanly and starts it again. It is for the operator, not drivers: a driver that
   wants its body back decides for itself when it is safe (`./mc quit`, then `./start`) rather than being signalled mid-task.
 - Reflexes handled in-process: eating, armour, fighting nearby hostiles, running from creepers.
@@ -27,7 +29,9 @@ Microsoft account added in its window) and give that world's `world.json` `host:
 
 Never move or rename a folder under `state/` (or `state/` itself) while a body runs from it: the body appends
 events by an absolute path fixed at start, so the first write after the move kills it. `./mc quit` every body
-first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down this way).
+first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down this way). The body folders moved again,
+into their worlds (`state/worlds/<world>/agents/`), with `tools/move-bodies.mjs` (dry run first, refuses while a body
+runs, writes a manifest that `--reverse` undoes).
 
     src/        the body: bot.mjs (the process: wires body/ together and connects), body/ (reflexes, primitives in
                 body/actions/, the job wiring, the composite runner, the HTTP API), lib.mjs (pure helpers, tested),
@@ -35,19 +39,20 @@ first (moving `agents/` to `state/agents/` on 2026-09-22 took two bodies down th
     library/    one composite action per file: library/<folder>/<file>.mjs is `./mc <folder>.<file>`
     tools/      mc.mjs (the CLI behind ./mc), start-body (behind an agent's ./start), restart-body (behind ./restart),
                 new-agent.mjs, patch-deps.mjs, textures.mjs (both run at every body start), rcon.mjs,
-                migrate-worlds.mjs (one-time move from the old flat state/ layout to state/worlds/<world>/)
+                move-bodies.mjs (one-time move of state/agents/<Name> into state/worlds/<world>/agents/<Name>)
     test/       every *.test.mjs; `npm test` runs them all (`node --test test/*.test.mjs`)
     state/      everything these worlds made, and the only folder besides node_modules/ and textures/ that git ignores:
-                agents/<Name>/ (one folder per agent: config.json names its world, plus BRIEFING.md, journal.md,
-                events.jsonl, snapshots/, its own ./mc and ./start), worlds/<world>/ (world.json: the server this
-                world runs on - host, port, optionally version; places.json the shared map; zones.json protected
-                boxes; clock.json the world's time; gates.log who opened which gate; WORLD.md) and BUGS.md
+                worlds/<world>/ (world.json: the server this world runs on - host, port, optionally version;
+                places.json the shared map; zones.json protected boxes; clock.json the world's time; gates.log who
+                opened which gate; WORLD.md; agents/<Name>/, one folder per agent of that world: config.json,
+                BRIEFING.md, journal.md, events.jsonl, snapshots/, its own ./mc and ./start), accounts/<Name>/ (a
+                real account's login cache, shared by every world) and BUGS.md
     roles/      knowledge and routines an agent can read on demand; harness/ notes per program that runs an agent
     textures/   block textures for `./mc look`, item/ ones for the dashboard's inventory (not checked in; see Vision below)
 
 `./mc`, `./play` and `AGENT_GUIDE.md` stay at the top, with `harness/`: they are true on any server. What belongs to
-one world is under `state/worlds/<world>/`, `WORLD.md` included, so an agent reads `../../worlds/<world>/WORLD.md`
-from its folder (`BUGS.md` stays directly under `state/`, shared across worlds).
+one world is under `state/worlds/<world>/`, `WORLD.md` and its agents' folders included, so an agent reads
+`../../WORLD.md` from its folder (`BUGS.md` stays directly under `state/`, shared across worlds: `../../../../BUGS.md`).
 
 ## Keeping the driver's context small
 
@@ -143,7 +148,7 @@ Blocks without a texture (newer than the jar, or entity-rendered like signs) get
     node tools/dashboard.mjs          # http://127.0.0.1:3700 (PORT= to move it)
 
 A browser page that shows where every body is and what it is doing, for whoever is watching rather than playing.
-It reads `state/agents/*/config.json`, polls each body's `state` every 2 seconds and draws a top-down map (x east,
+It reads `state/worlds/*/agents/*/config.json`, polls each body's `state` every 2 seconds and draws a top-down map (x east,
 z south): a dot per body with its name, health, food and current task, each human as a diamond wherever a body can see them,
 protected zones as boxes and marked places as crosses. Click a body and its name appears beside the map; "watch"
 streams its view there live, the button becoming "pause" until clicked again, and the picture doubles as a button
@@ -159,7 +164,7 @@ that agent's driver nothing - no tokens are spent by looking. A port that does n
 down. Its own API, for scripts: `/api/state` (every body, plus per world its bodies, humans, places and zones; one map is drawn per world) and `/api/look/<Name>` (a PNG; what
 the body saw comes back in the `x-look-view`, `x-look-seen` and `x-look-blocked` headers) and
 `/api/screen/<Name>` (the `screen` action as JSON: HUD, inventory slots and the open container) and
-`POST /api/whisper/<Name>` (`{"message": "..."}`, whispered to that body's driver from `dashboard`).
+`POST /api/whisper/<Name>?world=<world>` (`{"message": "..."}`, whispered to that body's driver from `dashboard`).
 
 The map arithmetic is in `tools/dashboard/map.mjs`, which has no node imports so the page and `npm test` use the
 same code; `tools/dashboard/lib.mjs` reads the folders and routes.
@@ -177,9 +182,9 @@ is `tools/dashboard/blueprint.mjs`, pure like the map module.
     node tools/new-agent.mjs Lightsong --world main   # Minecraft username), or takes the one given; --world <world> is required (a folder under state/worlds/)
     node tools/new-agent.mjs Nona --world main --harness codex   # the program that will run it: a notes file in harness/ (default claude-code)
 
-creates `state/agents/<Name>/` with everything that agent owns:
+creates `state/worlds/<world>/agents/<Name>/` with everything that agent owns:
 
-    config.json    username, its own apiPort, its harness, the world it joins, and the character the name comes from
+    config.json    username, its own apiPort, its harness, and the character the name comes from (the world is the folder's)
     BRIEFING.md    who the agent is, how its folder works and what to read next; hand this to a new agent as its first read
     journal.md     the agent's own memory between sessions
     start, mc      start its body / drive it (`./mc look pano=true`), no ports or paths to remember
@@ -194,21 +199,17 @@ within seconds) and `textures/`.
 Each name must be whitelisted once, on the server console: `whitelist add <Name>`.
 
 Adding a world: make `state/worlds/<name>/world.json` (`{"host": "...", "port": ...}`, optionally `version`), then
-point new agents at it with `--world <name>`. The one-time move from the old flat `state/` layout into
-`state/worlds/main/` is `node tools/migrate-worlds.mjs main` (`--state <dir>` to run it against a different copy);
-it refuses (exit 3) if a body is still running for an agent in that state dir, (exit 2) if a world file already
-exists at both the old flat location and the new one, or (exit 2) if `state/worlds/main/world.json` is missing and
-no agent config.json has a `host`/`port` left to seed it from.
+point new agents at it with `--world <name>`.
 
 ## Starting an agent with one command
 
-- `./play [Name] [claude options]` in a terminal: creates the agent if needed (whitelists it through `tools/rcon.mjs`; if that fails, prints the `whitelist add` line and waits),
+- `./play --world <world> [Name] [claude options]` in a terminal: creates the agent if needed (whitelists it through `tools/rcon.mjs`; if that fails, prints the `whitelist add` line and waits),
   then starts a Claude Code session in the agent's folder with its opening instructions. One long-running session per agent.
 - Inside any Claude Code session under the bot/ folder of this repo: the `/minecraft-agent [Name]` skill does the same
   from within (`.claude/skills/minecraft-agent/SKILL.md`).
 - From another agent's session: spawn a named sonnet subagent (see the skill's last paragraph). The humans prefer this over headless,
   because the subagent shows up in their session.
-- Without a terminal (from a script): `./play Aviendha -p --model sonnet --permission-mode auto --max-budget-usd 3`
+- Without a terminal (from a script): `./play --world claude Aviendha -p --model sonnet --permission-mode auto --max-budget-usd 3`
   runs the session headless until it stops or the budget is spent. Tried 2026-09-19: works; the agent found its body already
   running, greeted in chat and went on building. Only ever one driver per body.
 

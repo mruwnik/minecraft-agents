@@ -45,11 +45,13 @@
 
 (def draft {:draft "hi" :status :idle :error nil :ack-id 0})
 
-(deftest whisper-url-only-for-minecraft-names
-  (are [n expected] (= expected (cs/whisper-url n))
-    "Pacer" "/api/whisper/Pacer"
-    "a_1" "/api/whisper/a_1"
-    "abcdefghijklmnop" "/api/whisper/abcdefghijklmnop"
+(deftest whisper-url-only-for-minecraft-names-in-a-world
+  (is (nil? (cs/whisper-url nil "Pacer")))
+  (is (nil? (cs/whisper-url "a/b" "Pacer")))
+  (are [n expected] (= expected (cs/whisper-url "claude" n))
+    "Pacer" "/api/whisper/claude/Pacer"
+    "a_1" "/api/whisper/claude/a_1"
+    "abcdefghijklmnop" "/api/whisper/claude/abcdefghijklmnop"
     "" nil
     nil nil
     "ab" nil

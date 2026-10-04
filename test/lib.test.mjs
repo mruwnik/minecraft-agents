@@ -2362,7 +2362,7 @@ for (const [name, home, action, expected] of [
 ]) {
   test(`noHomeError: ${name}`, () => assert.equal(Boolean(noHomeError(home, action)), expected))
 }
-test('noHomeError: says where to go', () => assert.match(noHomeError(undefined, 'goto'), /state\/agents\/<YourName>\/mc/))
+test('noHomeError: says where to go', () => assert.match(noHomeError(undefined, 'goto'), /state\/worlds\/<world>\/agents\/<YourName>\/mc/))
 
 // "all" of an item: tidying rubble into a chest asked for 64 of everything and was called a failure for carrying 20
 test('withdrawPlan: "all" takes what there is and is never short', () =>

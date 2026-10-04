@@ -274,7 +274,7 @@ test('pose writes only on change, but at least every 2 seconds', async () => {
   const bot = fakeBot()
   let clock = 10000
   const { view, dir } = makeView(bot, { now: () => clock })
-  const file = path.join(dir, 'agents', 'Bob', 'view', 'pose.json')
+  const file = path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')
   await view.tickPose()
   assert.equal(readJson(file).t, 10000)
   clock += 100
@@ -293,7 +293,7 @@ test('hud writes only on change', async () => {
   const bot = fakeBot()
   let clock = 1
   const { view, dir } = makeView(bot, { now: () => clock })
-  const file = path.join(dir, 'agents', 'Bob', 'view', 'hud.json')
+  const file = path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'hud.json')
   await view.tickHud()
   clock = 5000
   await view.tickHud()
@@ -307,7 +307,7 @@ test('detach writes one offline pose and stops pose writes; attach resumes', asy
   const bot = fakeBot()
   let clock = 1
   const { view, dir } = makeView(bot, { now: () => clock })
-  const file = path.join(dir, 'agents', 'Bob', 'view', 'pose.json')
+  const file = path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')
   await view.tickPose()
   clock = 500
   await view.detach()
@@ -330,7 +330,7 @@ test('detach before any pose was written writes the short offline record', async
   const bot = fakeBot()
   const { view, dir } = makeView(bot, { now: () => 7 })
   await view.detach()
-  assert.deepEqual(readJson(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')),
+  assert.deepEqual(readJson(path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')),
     { v: 1, t: 7, world: 'w', status: 'offline', mcVersion: VERSION })
 })
 
@@ -340,7 +340,7 @@ test("the bot's own end event writes the offline pose", async () => {
   await view.tickPose()
   bot.emit('end', 'timeout')
   await view.idle()
-  assert.equal(readJson(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')).status, 'offline')
+  assert.equal(readJson(path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')).status, 'offline')
 })
 
 test('attaching a new bot unhooks the old one', async () => {
@@ -455,7 +455,7 @@ test('stats report pose ms and bytes apart from column ms', async () => {
   await view.tickPose()
   const s = view.stats()
   assert.equal(s.poses, 1)
-  assert.equal(s.poseBytes, fs.statSync(path.join(dir, 'agents', 'Bob', 'view', 'pose.json')).size)
+  assert.equal(s.poseBytes, fs.statSync(path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')).size)
   assert.ok(s.poseMs > 0)
   assert.equal(s.ms, 0)
 })

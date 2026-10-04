@@ -25,7 +25,7 @@
       :dimension "overworld"
       :world "w1"
       :last-seen "2s ago"
-      :iframe-src "/view?agent=Bob&embed=1&who=dashboard-k3x9ab"
+      :iframe-src "/view?agent=w1/Bob&embed=1&who=dashboard-k3x9ab"
       :offline-text nil)))
 
 (deftest offline-model

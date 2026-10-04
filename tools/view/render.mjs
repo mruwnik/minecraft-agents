@@ -1,5 +1,5 @@
 // What a body sees, drawn from the files it dumps: state/worlds/<world>/chunks/<cx>.<cz>.bin and
-// state/agents/<name>/view/pose.json. Nothing here touches a body or a server.
+// state/worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
 import fs from 'node:fs'
 import path from 'node:path'
 import { render, encodePng } from '../../src/vision/renderer.mjs'
@@ -7,6 +7,7 @@ import { columnCache, makeChunkClass } from './columns.mjs'
 import { buildGrid } from './grid.mjs'
 import { cameraFromPose, entitiesFromPose } from './camera.mjs'
 import { makeBlockSource } from './blocks.mjs'
+import { bodyDir } from '../../engine/js/bodies.mjs'
 
 const ROOT = path.join(import.meta.dirname, '../..')
 export const DEFAULT_STATE_DIR = path.join(ROOT, 'state')
@@ -23,7 +24,7 @@ const forVersion = version => {
   return made
 }
 
-export const viewDir = (agentName, stateDir) => path.join(stateDir, 'agents', agentName, 'view')
+export const viewDir = (world, agentName, stateDir) => path.join(bodyDir(stateDir, world, agentName), 'view')
 
 export class PoseError extends Error {
   name = 'PoseError'
@@ -32,17 +33,17 @@ export class PoseError extends Error {
 const finite = v => typeof v === 'number' && Number.isFinite(v)
 const hasPosition = pose => ['x', 'y', 'z'].every(k => finite(pose.eye?.[k])) && finite(pose.yaw) && finite(pose.pitch)
 
-export function readPose (agentName, stateDir = DEFAULT_STATE_DIR) {
-  const file = path.join(viewDir(agentName, stateDir), 'pose.json')
+export function readPose (world, agentName, stateDir = DEFAULT_STATE_DIR) {
+  const file = path.join(viewDir(world, agentName, stateDir), 'pose.json')
   if (!fs.existsSync(file)) throw new Error(`no pose.json for ${agentName} (looked at ${file})`)
   const pose = JSON.parse(fs.readFileSync(file, 'utf8'))
   if (!hasPosition(pose)) throw new PoseError('pose has no position; body never fully started')
   return pose
 }
 
-export function renderView ({ agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {}, noPng = false }) {
+export function renderView ({ world, agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {}, noPng = false }) {
   const started = performance.now()
-  const pose = readPose(agentName, stateDir)
+  const pose = readPose(world, agentName, stateDir)
   const poseDone = performance.now()
   const { columns, blocks } = forVersion(pose.mcVersion)
   const camera = { ...cameraFromPose(pose), ...override }

@@ -12,8 +12,8 @@ const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viewmount-'))
 const mount = mountView({ repo, stateDir })
 
 const handlesCases = [
-  ['/view', true], ['/view/', true], ['/pose/Bob', true], ['/web/app.mjs', true], ['/columns/w/0.0.bin', true],
-  ['/blocks/1.21', true], ['/textures/x', true], ['/hud/Bob', true], ['/drive/Bob', true], ['/agents', true],
+  ['/view', true], ['/view/', true], ['/pose/w/Bob', true], ['/web/app.mjs', true], ['/columns/w/0.0.bin', true],
+  ['/blocks/1.21', true], ['/textures/x', true], ['/hud/w/Bob', true], ['/drive/w/Bob', true], ['/agents', true],
   ['/poses', true], ['/elements/1.21.bin', true], ['/biomes/w.json', true], ['/posesx', false],
   ['/', false], ['/nope', false], ['/viewer', false], ['/agents/x', false], ['/api/bodies', false], ['/webx', false]
 ]
@@ -38,8 +38,8 @@ const fetchFrom = async (server, url) => {
 }
 
 const routes = [
-  ['/view?agent=X', 200, /\/web\/app\.mjs/],
-  ['/view/?agent=X', 200, /\/web\/app\.mjs/],
+  ['/view?agent=w/X', 200, /\/web\/app\.mjs/],
+  ['/view/?agent=w/X', 200, /\/web\/app\.mjs/],
   ['/web/app.mjs', 200, /import|export|const/],
   ['/agents', 200, /^\[/],
   ['/nope', 404, /not handled/]
@@ -70,10 +70,10 @@ const driveCases = [
   ['form content type', { 'content-type': 'application/x-www-form-urlencoded' }, 403]
 ]
 for (const [name, headers, status] of driveCases) {
-  test(`POST /drive/ProbeWater with ${name} is refused`, async () => {
+  test(`POST /drive/claude/ProbeWater with ${name} is refused`, async () => {
     const server = await listen()
     const res = await new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/ProbeWater', method: 'POST', headers }, resolve)
+      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/claude/ProbeWater', method: 'POST', headers }, resolve)
       req.on('error', reject)
       req.end('{"cmd":"stop"}')
     })

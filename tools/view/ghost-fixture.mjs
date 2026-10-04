@@ -93,7 +93,7 @@ export const poseAt = (place, now) => {
 }
 
 export const writePose = (stateDir, place) => {
-  const file = poseFile(stateDir, AGENT)
+  const file = poseFile(stateDir, WORLD, AGENT)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.tmp`
   fs.writeFileSync(tmp, JSON.stringify(poseAt(place, Date.now())))
@@ -115,5 +115,5 @@ export const writeGhostWorld = (stateDir, start = PLACES.A) => {
     }
   }
   writePose(stateDir, start)
-  fs.writeFileSync(hudFile(stateDir, AGENT), JSON.stringify({ v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null }))
+  fs.writeFileSync(hudFile(stateDir, WORLD, AGENT), JSON.stringify({ v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null }))
 }

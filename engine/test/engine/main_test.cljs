@@ -1,14 +1,15 @@
 (ns engine.main-test
   (:require [cljs.test :refer [deftest is async]]
+            [engine.bodies :as bodies]
             [engine.main :as main]
             [engine.test-util :as tu]
             ["fs" :as fs]
             ["path" :as path]))
 
 (deftest parse-args-reads-flags
-  (is (= {:agent "Claude" :scenario "s.edn" :fresh? true :state-dir nil :drive-idle-s 15 :events-max-bytes nil}
-         (main/parse-args ["--agent" "Claude" "--scenario" "s.edn" "--fresh"])))
-  (is (= {:agent nil :scenario nil :fresh? false :state-dir "/x" :drive-idle-s 15 :events-max-bytes nil}
+  (is (= {:agent "Claude" :world "claude" :scenario "s.edn" :fresh? true :state-dir nil :drive-idle-s 15 :events-max-bytes nil}
+         (main/parse-args ["--agent" "Claude" "--world" "claude" "--scenario" "s.edn" "--fresh"])))
+  (is (= {:agent nil :world nil :scenario nil :fresh? false :state-dir "/x" :drive-idle-s 15 :events-max-bytes nil}
          (main/parse-args ["--state-dir" "/x"])))
   (is (= 5 (:drive-idle-s (main/parse-args ["--drive-idle-s" "5"]))))
   (is (= "4096" (:events-max-bytes (main/parse-args ["--events-max-bytes" "4096"]))))
@@ -23,15 +24,22 @@
 
 (deftest load-agent-reads-config-and-world
   (let [dir (agent-state-dir)]
-    (is (= {:username "Bob" :host "h" :port 7 :world "w" :events-max-bytes nil :engine-dir (path/join dir "agents" "Bob" "engine")}
-           (main/load-agent dir "Bob")))
-    (is (= :no-config (:error (main/load-agent dir "Nobody"))))))
+    (is (= {:username "Bob" :host "h" :port 7 :world "w" :events-max-bytes nil
+            :engine-dir (path/join dir "worlds" "w" "agents" "Bob" "engine")}
+           (main/load-agent dir "w" "Bob")))
+    (is (= :no-config (:error (main/load-agent dir "w" "Nobody"))))
+    (is (= :no-config (:error (main/load-agent dir "other" "Bob"))))))
+
+(deftest the-world-comes-from-the-flag-not-the-config
+  (let [dir (agent-state-dir)]
+    (fs/writeFileSync (path/join (bodies/body-dir dir "w" "Bob") "config.json") "{\"username\":\"Bob\",\"world\":\"elsewhere\"}")
+    (is (= "w" (:world (main/load-agent dir "w" "Bob"))))))
 
 (defn agent-state-dir []
-  (let [dir (tu/tmp-dir)]
-    (fs/mkdirSync (path/join dir "agents" "Bob") #js {:recursive true})
-    (fs/mkdirSync (path/join dir "worlds" "w") #js {:recursive true})
-    (fs/writeFileSync (path/join dir "agents" "Bob" "config.json") "{\"username\":\"Bob\",\"world\":\"w\"}")
+  (let [dir (tu/tmp-dir)
+        body (bodies/body-dir dir "w" "Bob")]
+    (fs/mkdirSync body #js {:recursive true})
+    (fs/writeFileSync (path/join body "config.json") "{\"username\":\"Bob\"}")
     (fs/writeFileSync (path/join dir "worlds" "w" "world.json") "{\"host\":\"h\",\"port\":7}")
     dir))
 
@@ -40,7 +48,8 @@
     (tu/run-async done
       (fn ^:async t []
         (is (re-find #"usage" (:error (await (main/run {})))))
-        (is (re-find #"no config" (:error (await (main/run {:agent "Nobody" :state-dir (tu/tmp-dir)})))))
+        (is (re-find #"missing --world <world>" (:error (await (main/run {:agent "Bob" :state-dir (agent-state-dir)})))))
+        (is (re-find #"no config" (:error (await (main/run {:agent "Nobody" :world "w" :state-dir (tu/tmp-dir)})))))
         (is (re-find #"js/primitives.mjs.*refusing"
-                     (:error (await (main/run {:agent "Bob" :state-dir (agent-state-dir)
+                     (:error (await (main/run {:agent "Bob" :world "w" :state-dir (agent-state-dir)
                                                :engine-root (tu/tmp-dir)})))))))))

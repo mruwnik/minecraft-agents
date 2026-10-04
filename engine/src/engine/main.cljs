@@ -1,6 +1,7 @@
 (ns engine.main
-  "Entry point: npm run body -- --agent <name> --scenario <file> [--fresh] [--state-dir <dir>]"
-  (:require [engine.core :as core]
+  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--state-dir <dir>]"
+  (:require [engine.bodies :as bodies]
+            [engine.core :as core]
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
             [engine.registry :as registry]
@@ -15,10 +16,11 @@
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}]
+         opts {:agent nil :world nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))
+      (= a "--world") (recur more (assoc opts :world b))
       (= a "--scenario") (recur more (assoc opts :scenario b))
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
       (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
@@ -35,19 +37,21 @@
     (when (and valid-text? (js/Number.isSafeInteger n) (<= 1024 n)) n)))
 
 (defn load-agent
-  "Config for agent under state-dir: {:username :host :port :engine-dir}, or {:error kw :text}."
-  [state-dir agent]
-  (let [config (fsu/read-json (path/join state-dir "agents" agent "config.json"))
-        world (when config (fsu/read-json (path/join state-dir "worlds" (:world config) "world.json")))]
+  "Config for agent in world under state-dir: {:username :host :port :world :engine-dir}, or {:error kw :text}.
+  The world is where the body folder is, never a field of its config."
+  [state-dir world-name agent]
+  (let [dir (bodies/body-dir state-dir world-name agent)
+        config (fsu/read-json (path/join dir "config.json"))
+        world (when config (fsu/read-json (path/join (bodies/worlds-dir state-dir) world-name "world.json")))]
     (cond
-      (nil? config) {:error :no-config :text (str "no config for agent " agent " under " state-dir)}
-      (nil? world) {:error :no-world :text (str "no world.json for world " (:world config))}
+      (nil? config) {:error :no-config :text (str "no config for agent " agent " in world " world-name ": no " dir "/config.json")}
+      (nil? world) {:error :no-world :text (str "no world.json for world " world-name)}
       :else {:username (or (:username config) agent)
              :host (:host world)
              :port (:port world)
-             :world (:world config)
+             :world world-name
              :events-max-bytes (get-in config [:engine :events :maxBytes])
-             :engine-dir (path/join state-dir "agents" agent "engine")})))
+             :engine-dir (path/join dir "engine")})))
 
 (defn missing-primitives-message [file]
   (str "engine: " file " does not exist. The body needs the real primitives layer"
@@ -58,20 +62,23 @@
   []
   (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
-(def usage "usage: npm run body -- --agent <name> --scenario <file> [--fresh] [--state-dir <dir>]")
+(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--state-dir <dir>]")
 
 (defn preflight
   "Everything run needs before connecting, or {:error text}."
-  [{:keys [agent scenario state-dir engine-root events-max-bytes]}]
+  [{:keys [agent world scenario state-dir engine-root events-max-bytes]}]
   (let [root (or engine-root (js/process.cwd))
         state-dir (or state-dir (path/resolve root ".." "state"))
         prims-file (path/join root "js" "primitives.mjs")
-        cfg (when agent (load-agent state-dir agent))
+        names-ok? (and (string? agent) (string? world) (re-matches bodies/name-re agent) (re-matches bodies/name-re world))
+        cfg (when names-ok? (load-agent state-dir world agent))
         max-bytes (when-not (:error cfg) (event-cap events-max-bytes (:events-max-bytes cfg)))
         plan (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
         issues (when plan (scenario/problems registry/jobs (body-triggers) plan))]
     (cond
       (nil? agent) {:error usage}
+      (nil? world) {:error (str (bodies/missing-world-error "--world") "\n" usage)}
+      (not names-ok?) {:error "--agent and --world take names of letters, digits, _ and -"}
       (:error cfg) {:error (:text cfg)}
       (not (fs/existsSync prims-file)) {:error (missing-primitives-message prims-file)}
       (nil? max-bytes) {:error "engine: --events-max-bytes and engine.events.maxBytes must be safe integers >= 1024"}

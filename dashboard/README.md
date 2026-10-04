@@ -19,7 +19,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 `/api/plans?world=` (every plan file of the world with its totals, cached 10 s), `/api/plan/<id>?world=` (full comparison: elements, per-layer grids, errors),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
 
-- `/api/thumb/<body>.png`: the fallback still of a body's latest view (software-rendered from `pose.json`, `x-pose-mtime`
+- `/api/thumb/<world>/<body>.png`: the fallback still of a body's latest view (software-rendered from `pose.json`, `x-pose-mtime`
   header; 404 when the body has no view), used only when the browser has no WebGL2 or the page has `?nogl=1`.
   `dashboard.thumbs` (cljs) decides: cached by pose mtime, a newer pose is re-rendered only once the cached still is 2 s old, one render
   at a time, the render worker replaced once it holds more than 400 columns. `js/thumbs.mjs` renders one still on request in a
@@ -29,9 +29,9 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body shows the server's still
   (`/api/thumb`, greyed by CSS) with no scene. Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
-- `/api/events/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming. Legacy bodies without `events.edn` or an event socket may use their old `events.jsonl` as historical best-effort input.
-- `POST /api/whisper/<body>` `{"text": ...}`: a private message to one body, sent through RCON as `tellraw <body>` of the vanilla whisper line from the chat sender (the body records it as a `whisper` event; the chat panel reads it from `events.edn`). The target must match `[A-Za-z0-9_]{3,16}` (400), be an engine body (404) and be up (409); the text is cleaned and cut like chat; the rate limit is shared with `POST /api/chat/send`. The body popup has the input.
-- `POST /api/attention/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
+- `/api/events/<world>/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming. Legacy bodies without `events.edn` or an event socket may use their old `events.jsonl` as historical best-effort input.
+- `POST /api/whisper/<world>/<body>` `{"text": ...}`: a private message to one body, sent through RCON as `tellraw <body>` of the vanilla whisper line from the chat sender (the body records it as a `whisper` event; the chat panel reads it from `events.edn`). The target must match `[A-Za-z0-9_]{3,16}` (400), be an engine body (404) and be up (409); the text is cleaned and cut like chat; the rate limit is shared with `POST /api/chat/send`. The body popup has the input.
+- `POST /api/attention/<world>/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
 - `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job
   namespace of `engine/src/jobs/**/*.cljs` (`kind` job, `id` `jobs.<dir>.<name>`) and every trigger of
@@ -49,12 +49,12 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
   `^[A-Za-z0-9_]{1,16}$`, checked at startup). Rate limit 1 per second and 5 per 30 s (429). Replies `{ok, command}`, 400 `{error}`,
   502 `{error}` when RCON fails. `DASHBOARD_CHAT_DRY=1` logs the command instead of sending. Code: `dashboard.chat-send`
   (pure), `dashboard.rcon` (socket, password read in-process).
-- Guard (`dashboard.guard`) on every state-changing route, including POST `/api/attention/<body>/resolve`, applies the loopback
+- Guard (`dashboard.guard`) on every state-changing route, including POST `/api/attention/<world>/<body>/resolve`, applies the loopback
   Host/Origin restrictions used by `tools/view/drive-proxy.mjs`; attention resolution requires `application/edn`. Existing
   mutation routes use JSON.
-  `/drive/<body>` goes through drive-proxy and keeps its own check.
+  `/drive/<world>/<body>` goes through drive-proxy and keeps its own check.
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
-  `/view`, `/agents`, `/pose/<body>`, `/hud/<body>`, `/drive/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
+  `/view?agent=<world>/<body>`, `/agents`, `/pose/<world>/<body>`, `/hud/<world>/<body>`, `/drive/<world>/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
   `/blocks/`, `/textures/`.
 
 Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view and takeover), `/map` (places, zones,

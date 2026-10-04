@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import edn from 'edn-data'
 import { defaultStateDir } from './drive-lib.mjs'
+import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
 import { get } from './observe.mjs'
 import { readEDN, writeEDN, keyword } from './observe-lib.mjs'
 
-export const usage = `usage: jobs.mjs <body> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> | interrupt <EDN-spec> | cancel <jID> | retry <jID> [--state DIR] [--request-id ID]
-  jobs.mjs Bob submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
-  jobs.mjs Bob interrupt '(jobs.movement.look-around {:every-ms 2000})'
-Mutations return immediately; observe.mjs Bob --wait --watch jID tracks completion.`
+export const usage = `usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> | interrupt <EDN-spec> | cancel <jID> | retry <jID> [--state DIR] [--request-id ID]
+  jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
+  jobs.mjs Bob --world claude interrupt '(jobs.movement.look-around {:every-ms 2000})'
+Mutations return immediately; observe.mjs Bob --world claude --wait --watch jID tracks completion.`
 export function specFor (text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 12000) throw new Error('spec must be EDN text, at most 12000 bytes')
   const outer = edn.parseEDNString(`(${text})`)
@@ -23,18 +24,20 @@ export function specFor (text) {
 export function requestFor (argv) {
   try {
     const p = parseArgs({ args: argv, allowPositionals: true, options: {
-      state: { type: 'string', default: defaultStateDir }, 'request-id': { type: 'string' },
+      state: { type: 'string', default: defaultStateDir }, world: { type: 'string' }, 'request-id': { type: 'string' },
       limit: { type: 'string' }, offset: { type: 'string' }
     } })
     const [body, op = 'list', arg, ...extra] = p.positionals
     if (!body || !/^[A-Za-z0-9_-]{1,40}$/.test(body)) throw new Error('body must be a valid name')
+    if (p.values.world === undefined) throw new Error(missingWorldError('--world'))
+    if (!NAME.test(p.values.world)) throw new Error('the world must be a name of letters, digits, _ and -')
     if (!['list', 'show', 'submit', 'interrupt', 'cancel', 'retry'].includes(op)) throw new Error('unknown operation')
     if (extra.length || (op === 'list' ? arg !== undefined : arg === undefined)) throw new Error(op === 'list' ? 'list takes no argument' : `${op} needs exactly one argument`)
     const mutating = ['submit', 'interrupt', 'cancel', 'retry'].includes(op)
     if (!mutating && p.values['request-id'] !== undefined) throw new Error('--request-id requires a mutation')
     if (op !== 'list' && (p.values.limit !== undefined || p.values.offset !== undefined)) throw new Error('--limit and --offset require list')
     const state = path.resolve(p.values.state)
-    const socketPath = path.join(state, 'agents', body, 'engine', 'events.sock')
+    const socketPath = path.join(bodyDir(state, p.values.world, body), 'engine', 'events.sock')
     if (op === 'list') {
       const limit = Number(p.values.limit ?? 8), offset = Number(p.values.offset ?? 0)
       if (!Number.isInteger(limit) || limit < 1 || limit > 32 || !Number.isInteger(offset) || offset < 0 || offset > 10000) throw new Error('list limit must be1..32 and offset0..10000')

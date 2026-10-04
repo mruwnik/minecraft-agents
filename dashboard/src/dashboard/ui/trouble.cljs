@@ -101,9 +101,9 @@
     "offline"
     (str "offline " (str/replace (logic/time-ago-text age-ms) " ago" ""))))
 
-(defn thumb-src [name view]
-  (when-let [v (:poseMtimeMs view)]
-    (str "/api/thumb/" name ".png?v=" v)))
+(defn thumb-src [world name view]
+  (when-let [v (and world (:poseMtimeMs view))]
+    (str "/api/thumb/" world "/" name ".png?v=" v)))
 
 (def stale-thumb-ms 10000)
 
@@ -122,18 +122,19 @@
 (defn card-model
   "Everything a body card shows, as plain data. `who`: this page load's name, to tell its own takeover from another's."
   ([body now] (card-model body now nil))
-  ([{:keys [name up engine view] :as body} now who]
+  ([{:keys [name world up engine view] :as body} now who]
   (let [st (status body now)
         top (first (reasons body now))
         last-event (peek (vec (:recent engine)))
         edn-job (first (filter :current? (:jobs engine)))]
     {:name name
+     :world world
      :status st
      :reason (:text top)
      :manual (manual-text body)
      :mine? (mine? body who)
      :severity (:severity top)
-     :thumb (thumb-src name view)
+     :thumb (thumb-src world name view)
      :pose-mtime (:poseMtimeMs view)
      :thumb-age (thumb-age-mark up (:poseMtimeMs view) now)
      :health (get-in view [:hud :health])

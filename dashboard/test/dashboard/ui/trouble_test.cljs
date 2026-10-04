@@ -73,7 +73,7 @@
     (is (= expected (t/offline-text age)))))
 
 (def full-body
-  {:name "Hazel" :up true
+  {:name "Hazel" :world "claude" :up true
    :engine {:age-ms 800 :job {:id "j1" :name "jobs.combat.attack"} :recent [{:t (- now 12000) :level "warn" :text "went wrong"}]
             :jobs [{:id "j1" :label "attack" :round 3 :current? true}] :signals {:hurt-t (- now 3000)}}
    :view {:poseMtimeMs 555 :hud {:health 14 :food 20}}})
@@ -82,14 +82,14 @@
   (doseq [[title b expected]
           [["a working body in trouble"
             full-body
-            {:name "Hazel" :status :trouble :reason "hurt 3s ago" :severity :warn :thumb "/api/thumb/Hazel.png?v=555" :pose-mtime 555
+            {:name "Hazel" :world "claude" :status :trouble :reason "hurt 3s ago" :severity :warn :thumb "/api/thumb/claude/Hazel.png?v=555" :pose-mtime 555
              :health 14 :food 20 :job "attack, round 3" :event "went wrong" :event-age "12s ago" :event-attention :none :offline nil}]
            ["an idle body without a view or events"
             {:name "Bob" :up true :engine {:recent []}}
-            {:name "Bob" :status :idle :reason nil :severity nil :thumb nil :pose-mtime nil :health nil :food nil :job nil :event nil :event-age nil :event-attention :none :offline nil}]
+            {:name "Bob" :world nil :status :idle :reason nil :severity nil :thumb nil :pose-mtime nil :health nil :food nil :job nil :event nil :event-age nil :event-attention :none :offline nil}]
            ["an offline body"
             (assoc full-body :up false :engine {:age-ms 10800000 :recent [] :job nil})
-            {:name "Hazel" :status :offline :reason nil :severity nil :thumb "/api/thumb/Hazel.png?v=555"
+            {:name "Hazel" :world "claude" :status :offline :reason nil :severity nil :thumb "/api/thumb/claude/Hazel.png?v=555"
              :health 14 :food 20 :job nil :event nil :event-age nil :event-attention :none :offline "offline 3h"}]
            ]]
     (testing title

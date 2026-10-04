@@ -122,7 +122,8 @@ function checkpoint (file, state) {
 /** Tool-owned cursor and attention state. Caller writes the returned compact EDN. */
 export async function waitObserve (request, get, signal, deliver = async () => {}) {
   const opts = request.waitOptions
-  const dir = path.join(request.state, 'observers', request.agent)
+  // per body, and a name is unique only within a world
+  const dir = path.join(request.state, 'worlds', request.world, 'observers', request.agent)
   const release = acquire(dir, opts.observer)
   const file = path.join(dir, `${opts.observer}.edn`)
   let saved

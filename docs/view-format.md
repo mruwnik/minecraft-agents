@@ -12,8 +12,8 @@ Disable everything with `BODY_VIEW=0` (no directories are created). Enabled by d
 | --- | --- | --- |
 | `state/worlds/<world>/chunks/<cx>.<cz>.bin` | every body in the world | on chunk load and block update |
 | `state/worlds/<world>/biomes.json` | every body in the world | on attach, only if the content differs from the file |
-| `state/agents/<name>/view/pose.json` | one agent | a write attempt on every physics tick (about 20 a second), only if changed, at least every 2 s; `BODY_VIEW_POSE_HZ` > 0 switches to a timer at that rate |
-| `state/agents/<name>/view/hud.json` | one agent | on change, at most once per second |
+| `state/worlds/<world>/agents/<name>/view/pose.json` | one agent | a write attempt on every physics tick (about 20 a second), only if changed, at least every 2 s; `BODY_VIEW_POSE_HZ` > 0 switches to a timer at that rate |
+| `state/worlds/<world>/agents/<name>/view/hud.json` | one agent | on change, at most once per second |
 
 `biomes.json` is `{"v":1,"mcVersion":...,"biomes":[{"id":0,"name":"badlands"},...]}`, sorted by id, names without the
 `minecraft:` prefix. It is the server's own biome registry (from its login `registry_data`), which the biome ids inside
@@ -147,7 +147,7 @@ hung request cannot hold the queue (a queued stop must not sit behind it); the b
   or null, `expiresAt` epoch ms or null), target origin `location.origin`. `window.__drive` offers `take()`, `release()`
   and `state()`.
 
-Server route `GET|POST /drive/<name>` relays to the body's control socket (`engine/README.md`, Manual takeover); `who`
+Server route `GET|POST /drive/<world>/<name>` relays to the body's control socket (`engine/README.md`, Manual takeover); `who`
 defaults to `view`. It is the first write route of the view server. The server stays bound to 127.0.0.1 and answers 403 to
 a Host that is not 127.0.0.1, localhost or [::1], to an Origin that is not `http://<Host>`, and to a POST whose
 Content-Type is not `application/json` (this blocks cross-site form posts and DNS rebinding). It answers 503 `no-body`

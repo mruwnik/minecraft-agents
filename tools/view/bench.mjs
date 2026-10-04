@@ -9,7 +9,7 @@ const summary = values => {
   return { mean: round(values.reduce((a, b) => a + b, 0) / values.length), p50: round(at(0.5)), p95: round(at(0.95)) }
 }
 
-export function runBench ({ agentName, seconds, maxFrames = Infinity, width = 320, height = 180, fov = 70, dist = 64, stateDir, noPng = false, onFrame = () => {} }) {
+export function runBench ({ world, agentName, seconds, maxFrames = Infinity, width = 320, height = 180, fov = 70, dist = 64, stateDir, noPng = false, onFrame = () => {} }) {
   const frames = []
   const started = performance.now()
   let last = null
@@ -17,7 +17,7 @@ export function runBench ({ agentName, seconds, maxFrames = Infinity, width = 32
   let lastPng = null
   while (frames.length < maxFrames && (performance.now() - started) / 1000 < seconds) {
     onFrame(frames.length)
-    const r = renderView({ agentName, width, height, fov, maxDist: dist, stateDir, noPng })
+    const r = renderView({ world, agentName, width, height, fov, maxDist: dist, stateDir, noPng })
     if (last !== null && r.pose.t !== last) poseChanges++
     last = r.pose.t
     lastPng = r.png ?? lastPng

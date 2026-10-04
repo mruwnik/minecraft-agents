@@ -3,14 +3,15 @@
 
 (def blueprint-re #"^/api/blueprint/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 (def unsupported-re #"^/api/(?:look|screen|actions|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
-(def whisper-send-re #"^/api/whisper/([A-Za-z0-9_-]{1,64})$")
-(def thumb-re #"^/api/thumb/([A-Za-z0-9_-]+)\.png$")
+;; a body is <world>/<name>: a name is unique only within a world
+(def whisper-send-re #"^/api/whisper/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})$")
+(def thumb-re #"^/api/thumb/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})\.png$")
 (def tile-re #"^/api/tile/([A-Za-z0-9_-]+)/(-?\d+)\.(-?\d+)\.png$")
 (def tiles-re #"^/api/tiles/([A-Za-z0-9_-]+)$")
 (def item-icon-re #"^/api/item-icon/([a-z0-9_]+)\.png$")
 (def plan-re #"^/api/plan/([A-Za-z0-9_-]+)$")
-(def events-re #"^/api/events/([A-Za-z0-9_-]+)$")
-(def attention-resolve-re #"^/api/attention/([A-Za-z0-9_-]+)/resolve$")
+(def events-re #"^/api/events/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})$")
+(def attention-resolve-re #"^/api/attention/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})/resolve$")
 (def static-re #"^/[A-Za-z0-9_./-]+\.(?:js|css|map|png|svg|ico|json|html|txt|woff2?)$")
 
 (def exact
@@ -39,19 +40,23 @@
 (defn pathname [url]
   (.-pathname (js/URL. url "http://dashboard")))
 
+(defn body-route [re path kind]
+  (when-let [[_ world name] (re-find re path)]
+    {:kind kind :world world :name name}))
+
 (defn route [url]
   (let [path (pathname url)]
     (or (exact path)
         (some->> (re-find blueprint-re path) second (assoc {:kind :blueprint} :name))
-        (some->> (re-find thumb-re path) second (assoc {:kind :thumb} :name))
+        (body-route thumb-re path :thumb)
         (when-let [[_ world cx cz] (re-find tile-re path)]
           {:kind :tile :world world :cx (js/parseInt cx 10) :cz (js/parseInt cz 10)})
         (some->> (re-find tiles-re path) second (assoc {:kind :tiles} :world))
         (some->> (re-find item-icon-re path) second (assoc {:kind :item-icon} :name))
         (some->> (re-find plan-re path) second (assoc {:kind :plan-api} :name))
-        (some->> (re-find attention-resolve-re path) second (assoc {:kind :attention-resolve} :name))
-        (some->> (re-find events-re path) second (assoc {:kind :events} :name))
-        (some->> (re-find whisper-send-re path) second (assoc {:kind :whisper-send} :name))
+        (body-route attention-resolve-re path :attention-resolve)
+        (body-route events-re path :events)
+        (body-route whisper-send-re path :whisper-send)
         (when (re-find unsupported-re path) {:kind :unsupported})
         (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})
         {:kind :unknown})))

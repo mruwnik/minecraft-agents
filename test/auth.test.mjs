@@ -7,9 +7,10 @@ import { authDir, profileFile, profileMismatch, loginAdvice, AUTHFLOW_OPTIONS } 
 
 const { Titles } = prismarineAuth
 
-test('the token cache and the sign-in marker live under the agent folder', () => {
-  assert.equal(authDir('/agents/Zed'), '/agents/Zed/auth')
-  assert.equal(profileFile('/agents/Zed'), '/agents/Zed/auth/profile.json')
+test('the token cache and the sign-in marker live per account under state/accounts, outside every world', () => {
+  assert.equal(authDir('/s/state/worlds/w/agents/Zed'), '/s/state/accounts/Zed')
+  assert.equal(authDir('/s/state/worlds/other/agents/Zed'), '/s/state/accounts/Zed')
+  assert.equal(profileFile('/s/state/worlds/w/agents/Zed'), '/s/state/accounts/Zed/profile.json')
 })
 
 // minecraft-protocol builds its Authflow with exactly these (src/client/microsoftAuth.js validateOptions); the login
@@ -40,5 +41,5 @@ for (const [what, profile, message] of mismatches) {
 }
 
 test('the advice names the login tool and this agent', () => {
-  assert.match(loginAdvice('/x/state/agents/AmethystFan7865'), /node tools\/login\.mjs AmethystFan7865/)
+  assert.match(loginAdvice('/x/state/worlds/claude/agents/AmethystFan7865'), /node tools\/login\.mjs AmethystFan7865 --world claude/)
 })

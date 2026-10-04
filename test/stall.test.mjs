@@ -86,11 +86,11 @@ for (const [name, evidence, expected] of [
   ['a mob against the legs', { facing: { degrees: 3, node: '119.5,72,-64.5' }, ahead: ['air@119,72,-65', 'air@119,73,-65'], near: ['cow 0.5m'], server: null },
     'nothing solid ahead but cow 0.5m is pressed against the body: it is being pushed back as fast as it walks. Step sideways first (goto), then retry'],
   ['the server put it somewhere else', { facing: { degrees: 3, node: '119.5,72,-64.5' }, ahead: ['air@119,72,-65', 'air@119,73,-65'], near: [], server: { x: 109.4, y: 72, z: -61.5, agoMs: 900 } },
-    'the server placed the body at 109.4,72,-61.5 0.9 s ago while the client walks from 119.5,72,-65.7: the two disagree on where it stands. Copy this into ../../BUGS.md'],
+    'the server placed the body at 109.4,72,-61.5 0.9 s ago while the client walks from 119.5,72,-65.7: the two disagree on where it stands. Copy this into ../../../../BUGS.md'],
   ['nothing at all', { facing: { degrees: 3, node: '119.5,72,-64.5' }, ahead: ['air@119,72,-65', 'air@119,73,-65'], near: [], server: null },
-    'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../BUGS.md'],
+    'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../../../BUGS.md'],
   ['no path node at all', { facing: null, ahead: ['air@119,72,-65', 'air@119,73,-65'], near: [], server: null },
-    'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../BUGS.md']
+    'nothing solid ahead, nothing near, no server correction: the physics itself is not moving the body (a speed of 0 from the server?). Copy this into ../../../../BUGS.md']
 ]) {
   test(`frozenAdvice: ${name}`, () => assert.equal(frozenAdvice({ exact: [119.5, 72, -65.7], ...evidence }), expected))
 }

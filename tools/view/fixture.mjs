@@ -180,8 +180,8 @@ export const writeWorld = ({ stateDir, world = WORLD, agent = AGENT, blockAt, li
     fs.writeFileSync(file, zlib.deflateSync(raw, { level: 1 }))
   }
   if (biomes) writeJson(biomesFile(stateDir, world), { v: 1, mcVersion: MC_VERSION, biomes: biomes.map((name, id) => ({ id, name })) })
-  writeJson(poseFile(stateDir, agent), poseFor(Date.now(), { ...camera, world }))
-  writeJson(hudFile(stateDir, agent), { v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null })
+  writeJson(poseFile(stateDir, world, agent), poseFor(Date.now(), { ...camera, world }))
+  writeJson(hudFile(stateDir, world, agent), { v: 1, t: Date.now(), health: 20, food: 20, saturation: 5, oxygen: 20, xp: { level: 0, points: 0, progress: 0 }, effects: [], held: null, inventory: [], window: null })
 }
 
 export const writeFixture = stateDir => writeWorld({

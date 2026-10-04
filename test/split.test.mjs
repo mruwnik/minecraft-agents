@@ -34,12 +34,12 @@ test('src/bot.mjs links: every name it or a module under it imports is exported 
 // src/body/ is one folder deeper than bot.mjs was: ROOT is still the bot folder, and HOME the body's own
 const bodyModule = (file, expr) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'split-home-'))
-  const home = path.join(root, 'agents', 'Tester')
+  const home = path.join(root, 'worlds', 'main', 'agents', 'Tester')
   const worldDir = path.join(root, 'worlds', 'main')
   fs.mkdirSync(home, { recursive: true })
   fs.mkdirSync(worldDir, { recursive: true })
   fs.writeFileSync(path.join(worldDir, 'world.json'), JSON.stringify({ host: '127.0.0.1', port: 25568 }))
-  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: 'Tester', world: 'main' }))
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ username: 'Tester' }))
   const script = `const m = await import(${JSON.stringify(path.join(ROOT, file))}); console.log(JSON.stringify(${expr})); process.exit(0)`
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', script, 'argv1', home], { cwd: home, encoding: 'utf8' })
   fs.rmSync(root, { recursive: true })
@@ -58,7 +58,7 @@ test('src/body/events.mjs evaluates on its own, and emit writes to HOME/events.j
 
 test('src/body/events.mjs keeps the shared files in the world directory', () => {
   const { worldDir, out } = bodyModule('src/body/events.mjs', "(m.saveZones(), m.savePlaces([]), { gates: m.GATES_FILE, files: (await import('node:fs')).readdirSync((await import('node:path')).dirname(m.GATES_FILE)).sort() })")
-  assert.deepEqual(out, { gates: path.join(worldDir, 'gates.log'), files: ['places.json', 'world.json', 'zones.json'] })
+  assert.deepEqual(out, { gates: path.join(worldDir, 'gates.log'), files: ['agents', 'places.json', 'world.json', 'zones.json'] })
 })
 
 // bot.mjs used to be the body; its parts now import each other in cycles, which is safe only while no module reads an

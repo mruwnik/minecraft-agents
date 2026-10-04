@@ -1,4 +1,4 @@
-// Makes the mineflayer bot for an agent: reads state/agents/<name>/config.json and the world it names, creates the
+// Makes the mineflayer bot for an agent: reads state/worlds/<world>/agents/<name>/config.json and the world's world.json, creates the
 // client, loads the pathfinder, resolves once spawned. Nothing here runs on import: no connection is made until
 // connectBot or connectAgent is called.
 import fs from 'node:fs'
@@ -6,6 +6,7 @@ import path from 'node:path'
 import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
+import { bodyDir } from './bodies.mjs'
 
 const { pathfinder } = pf
 
@@ -16,15 +17,13 @@ export const SPAWN_TIMEOUT_MS = 60000
 
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 
-// the merged connection settings for an agent: defaults, then its config.json, then the world's {host, port}
-export function readAgentConfig ({ stateDir, agent }) {
-  const file = path.join(stateDir, 'agents', agent, 'config.json')
-  if (!fs.existsSync(file)) throw new Error(`no ${file}: the agent has no config`)
-  const config = readJson(file)
-  if (!config.world) throw new Error(`${file} names no world: add "world": "<name>", a folder under state/worlds/`)
-  const worldFile = path.join(stateDir, 'worlds', config.world, 'world.json')
-  if (!fs.existsSync(worldFile)) throw new Error(`${file} names world "${config.world}", but there is no ${worldFile}`)
-  const cfg = { ...DEFAULTS, ...config, ...readJson(worldFile) }
+// the merged connection settings for an agent in a world: defaults, then its config.json, then the world's {host, port}
+export function readAgentConfig ({ stateDir, world, agent }) {
+  const file = path.join(bodyDir(stateDir, world, agent), 'config.json')
+  if (!fs.existsSync(file)) throw new Error(`no ${file}: the agent has no config in world "${world}"`)
+  const worldFile = path.join(stateDir, 'worlds', world, 'world.json')
+  if (!fs.existsSync(worldFile)) throw new Error(`no ${worldFile}: world "${world}" has no server`)
+  const cfg = { ...DEFAULTS, ...readJson(file), ...readJson(worldFile), world }
   if (!cfg.username) throw new Error(`${file} names no username`)
   if (!AUTH_MODES.includes(cfg.auth)) throw new Error(`${file}: auth "${cfg.auth}" is not one of ${AUTH_MODES.join(', ')}`)
   return cfg
@@ -63,8 +62,8 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
   })
 }
 
-// the whole thing from an agent name: { bot, disconnect }
-export async function connectAgent ({ stateDir, agent }) {
-  const bot = await connectBot(readAgentConfig({ stateDir, agent }))
+// the whole thing from a world and an agent name: { bot, disconnect }
+export async function connectAgent ({ stateDir, world, agent }) {
+  const bot = await connectBot(readAgentConfig({ stateDir, world, agent }))
   return { bot, disconnect: () => bot.quit() }
 }

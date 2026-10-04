@@ -1,8 +1,8 @@
-// Replays a recorded pose stream (tools/view-pose-record.mjs) as agent "Replay" in a temp state dir, so the browser view
+// Replays a recorded pose stream (tools/view-pose-record.mjs) as body "Replay" of the recorded world (<world>/Replay) in a temp state dir, so the browser view
 // can be measured on a deterministic input. Prints the state dir; serve it with `node tools/view-serve.mjs --state <dir>`.
 //   node tools/view-pose-replay.mjs --in poses.jsonl [--hz 20] [--synthetic walk|teleport|sprint] [--state state] [--seconds N] [--touch-ms 2000]
 // --synthetic ignores the recording except for its first pose (a bare --synthetic is walk):
-//   walk: a straight walk at 4.317 blocks/s, 20 blocks each way, at --hz, in the recorded place with the world symlinked.
+//   walk: a straight walk at 4.317 blocks/s, 20 blocks each way, at --hz, in the recorded place with the world's chunks and biomes.json symlinked.
 //   teleport: stands still and every 6 s jumps between two places >= 1000 blocks apart that both have column files.
 //   sprint: 5.6 blocks/s along +x for 200 blocks and back, through the best-covered stretch of column files.
 // teleport and sprint COPY the column files they need (within radius 9 of the path) into the temp state dir, so nothing in --state is
@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { bodyDir } from '../engine/js/bodies.mjs'
 
 const TWO_PI = 2 * Math.PI
 const HEARTBEAT_MS = 2000
@@ -178,15 +179,18 @@ const main = () => {
   if (!sequence) throw new Error(`unknown --synthetic ${mode}`)
   const period = sequence.at(-1).rel + (sequence[1].rel - sequence[0].rel)
 
-  const viewDir = path.join(dir, 'agents', 'Replay', 'view')
+  const viewDir = path.join(bodyDir(dir, world, 'Replay'), 'view')
   fs.mkdirSync(viewDir, { recursive: true })
-  fs.mkdirSync(path.join(dir, 'worlds'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'worlds', world), { recursive: true })
   if (copying) {
     const cells = picked.flatMap(p => (mode === 'sprint' ? along(SPRINT_BLOCKS) : around)(p.cx, p.cz))
     const copied = copyColumns(sourceChunks, chunksDir, cells, have)
     console.log(`places: ${JSON.stringify(picked.map(p => ({ ...p, coverage: Math.round(p.coverage * 100) / 100 })))}, copied ${copied} column files`)
   } else {
-    fs.symlinkSync(path.join(values.state, 'worlds', world), path.join(dir, 'worlds', world))
+    // only the chunks and biomes are linked: the body folder lives inside the world folder, and nothing here may write into --state
+    fs.symlinkSync(sourceChunks, chunksDir)
+    const biomes = path.join(values.state, 'worlds', world, 'biomes.json')
+    if (fs.existsSync(biomes)) fs.symlinkSync(biomes, path.join(dir, 'worlds', world, 'biomes.json'))
   }
   console.log(`replay state dir: ${dir}`)
 

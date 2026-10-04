@@ -15,8 +15,8 @@ export class RenderError extends Error {
   }
 }
 
-// createRenderer({stateDir, width, height, maxDist}) -> {render(name), recycle(), close()}
-//   render(name) -> Promise<{png: Buffer, ms, loaded} | null>   (null: the body has no usable pose; other failures reject)
+// createRenderer({stateDir, width, height, maxDist}) -> {render(world, name), recycle(), close()}
+//   render(world, name) -> Promise<{png: Buffer, ms, loaded} | null>   (null: the body has no usable pose; other failures reject)
 //   recycle()     ends the worker; the next render starts a fresh one with an empty column cache
 //   close()       ends the worker
 // `loaded` is the number of columns the worker's cache holds after the render.
@@ -46,11 +46,11 @@ export function createRenderer ({ stateDir, width = 320, height = 180, maxDist =
     w.on('exit', () => fail(w, new Error('thumbnail worker exited')))
   }
 
-  const render = name => new Promise((resolve, reject) => {
+  const render = (world, name) => new Promise((resolve, reject) => {
     if (!worker) start()
     const id = nextId++
     pending.set(id, { resolve, reject })
-    worker.postMessage({ id, name, stateDir, width, height, maxDist })
+    worker.postMessage({ id, world, name, stateDir, width, height, maxDist })
   })
   const close = () => {
     const w = worker

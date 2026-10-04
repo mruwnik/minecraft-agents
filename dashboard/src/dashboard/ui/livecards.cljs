@@ -111,9 +111,10 @@
       :component-did-mount
       (fn [this]
         (let [canvas (:canvas @state)
-              {:keys [name]} (r/props this)
+              {:keys [name world]} (r/props this)
+              ;; the view hub addresses a body as <world>/<name>
               scene (some-> (view-hub)
-                            (.addScene #js {:agent name :radius 2 :fov 70 :interp true}))]
+                            (.addScene #js {:agent (str world "/" name) :radius 2 :fov 70 :interp true}))]
           (some-> scene (.attach canvas (clj->js canvas-size)))
           (swap! state assoc
                  :canvas canvas
@@ -138,9 +139,9 @@
   "The canvas plus the fps label for a card; `stats` is a ratom per card holding the latest scene stats."
   [{:keys [name flags]}]
   (let [stats (r/atom nil)]
-    (fn [{:keys [name flags]}]
+    (fn [{:keys [name world flags]}]
       [:<>
-       [live-canvas {:name name :shown? (show-canvas? @stats) :on-stats #(reset! stats %)}]
+       [live-canvas {:name name :world world :shown? (show-canvas? @stats) :on-stats #(reset! stats %)}]
        (when (and @stats (no-world-data? @stats))
          [:div.nodata "no world data yet"])
        (when (:fps? flags)

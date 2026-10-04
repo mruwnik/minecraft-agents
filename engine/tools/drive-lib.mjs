@@ -1,21 +1,23 @@
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
 
 const CONTROLS = ['forward', 'back', 'left', 'right', 'jump', 'sneak', 'sprint']
 
 export const defaultStateDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'state')
 
-export const usage = `usage: drive.mjs <agent> <op> [args] [--who claude] [--state <dir>]
+export const usage = `usage: drive.mjs <agent> <op> [args] --world <world> [--who claude] [--state <dir>]
   take --why "<text>" [--idle-s <n>] | hold <control>[,<control>...] <ms> | look <yaw> <pitch>
   turn <dyaw> [dpitch] | jump | stop | ping | state | release [--force]
   controls: ${CONTROLS.join(' ')}`
 
-export const socketPathFor = ({ state, agent }) => path.join(state, 'agents', agent, 'engine', 'control.sock')
+export const socketPathFor = ({ state, world, agent }) => path.join(bodyDir(state, world, agent), 'engine', 'control.sock')
 
 const options = {
   who: { type: 'string', default: 'claude' },
   state: { type: 'string', default: defaultStateDir },
+  world: { type: 'string' },
   why: { type: 'string', default: '' },
   force: { type: 'boolean', default: false },
   'idle-s': { type: 'string' }
@@ -73,10 +75,12 @@ export function requestFor (argv) {
   }
   const [agent, op, ...args] = parsed.positionals.map(unhide)
   if (agent === undefined || op === undefined) return { error: 'need <agent> and <op>' }
+  if (parsed.values.world === undefined) return { error: missingWorldError('--world') }
+  if (!NAME.test(parsed.values.world) || !NAME.test(agent)) return { error: 'the agent and --world must be names of letters, digits, _ and -' }
   if (!Object.hasOwn(builders, op)) return { error: `unknown op ${op}` }
   const req = builders[op]({ ...parsed.values, args })
   if (req.error) return req
-  return { agent, state: parsed.values.state, ...req }
+  return { agent, world: parsed.values.world, state: parsed.values.state, ...req }
 }
 
 export const exitCodeFor = ({ status, json }) => (status >= 200 && status < 300 && json?.ok === true ? 0 : 1)

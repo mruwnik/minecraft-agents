@@ -162,15 +162,22 @@
   (is (= "héllo" (ee/decode-bytes (enc "héllo")))))
 
 (deftest parse-engine-agents-tolerates-bad-config
-  (is (= [{:name "Broken" :username "Broken" :world nil}
-          {:name "NoConfig" :username "NoConfig" :world nil}
+  (is (= [{:name "Broken" :username "Broken" :world "claude"}
+          {:name "NoConfig" :username "NoConfig" :world "claude"}
           {:name "NoPort" :username "NoPort" :world "claude"}
           {:name "ProbeWater" :username "PW" :world "claude"}]
          (ee/parse-engine-agents
-          [{:name "ProbeWater" :text "{\"username\":\"PW\",\"world\":\"claude\",\"apiPort\":3804}"}
-           {:name "NoPort" :text "{\"world\":\"claude\"}"}
-           {:name "NoConfig" :text ""}
-           {:name "Broken" :text "{"}]))))
+          [{:name "ProbeWater" :world "claude" :text "{\"username\":\"PW\",\"apiPort\":3804}"}
+           {:name "NoPort" :world "claude" :text "{}"}
+           {:name "NoConfig" :world "claude" :text ""}
+           {:name "Broken" :world "claude" :text "{"}]))))
+
+(deftest parse-engine-agents-takes-the-world-from-the-folder-not-the-config
+  (is (= [{:name "Bob" :username "Bob" :world "a"}
+          {:name "Bob" :username "Bob" :world "b"}]
+         (ee/parse-engine-agents
+          [{:name "Bob" :world "b" :text "{\"world\":\"elsewhere\"}"}
+           {:name "Bob" :world "a" :text "{}"}]))))
 
 (deftest engine-body-shape
   (let [agent {:name "P" :username "P" :world "claude"}
@@ -371,7 +378,7 @@
 
 (deftest socket-failure-text-names-the-cause-without-the-path
   (are [e expected] (= expected (ee/socket-failure-text e))
-    (error-with-code "connect ENOENT /home/x/state/agents/B/engine/events.sock" "ENOENT")
+    (error-with-code "connect ENOENT /home/x/state/worlds/w/agents/B/engine/events.sock" "ENOENT")
     "engine event service unavailable: ENOENT"
     (error-with-code "connect ECONNREFUSED /a/b.sock" "ECONNREFUSED")
     "engine event service unavailable: ECONNREFUSED"

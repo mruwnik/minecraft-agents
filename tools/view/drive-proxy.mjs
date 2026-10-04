@@ -2,6 +2,7 @@
 // and DNS rebinding (the page and its server are loopback only).
 import http from 'node:http'
 import path from 'node:path'
+import { bodyDir } from '../../engine/js/bodies.mjs'
 
 const MAX_BODY = 16 * 1024
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\]):\d+$/
@@ -44,11 +45,11 @@ const guard = (req) => {
 }
 
 export function createDriveProxy ({ stateDir }) {
-  return async (req, res, name) => {
+  return async (req, res, { world, name }) => {
     if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { ok: false, reason: 'method-not-allowed' })
     const refused = guard(req)
     if (refused) return forbidden(res, refused)
-    const socketPath = path.join(stateDir, 'agents', name, 'engine', 'control.sock')
+    const socketPath = path.join(bodyDir(stateDir, world, name), 'engine', 'control.sock')
     let payload = null
     if (req.method === 'POST') {
       const raw = await readBody(req).catch(e => e)
@@ -63,7 +64,7 @@ export function createDriveProxy ({ stateDir }) {
       payload = JSON.stringify({ ...msg, who: msg.who ?? 'view' })
     }
     const reply = await toSocket(socketPath, req.method, payload).catch(() => null)
-    if (!reply) return json(res, 503, { ok: false, reason: 'no-body', text: `no running body ${name}` })
+    if (!reply) return json(res, 503, { ok: false, reason: 'no-body', text: `no running body ${name} in world ${world}` })
     res.writeHead(reply.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' })
     res.end(reply.text)
   }

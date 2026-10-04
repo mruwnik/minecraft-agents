@@ -87,12 +87,12 @@ test('every cell of a whole row decodes to its intended light (vanilla nibble or
 })
 
 test('pose and hud files are written', () => {
-  const pose = JSON.parse(fs.readFileSync(path.join(stateDir, 'agents', 'Fixture', 'view', 'pose.json'), 'utf8'))
+  const pose = JSON.parse(fs.readFileSync(path.join(stateDir, 'worlds', 'fixture', 'agents', 'Fixture', 'view', 'pose.json'), 'utf8'))
   assert.equal(pose.world, 'fixture')
   assert.equal(pose.mcVersion, '26.1')
   assert.deepEqual(pose.eye, FIXTURE.eye)
   assert.equal(pose.yaw, FIXTURE.yaw)
-  assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, 'agents', 'Fixture', 'view', 'hud.json'), 'utf8')).v, 1)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, 'worlds', 'fixture', 'agents', 'Fixture', 'view', 'hud.json'), 'utf8')).v, 1)
 })
 
 test('every region is fully on screen at 640x360 fov 70', () => {

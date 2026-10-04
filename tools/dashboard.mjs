@@ -15,11 +15,12 @@ import { parsePlacePlan } from '../src/lib/plan.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, parseWorldList, resolveWorld, scopeSnapshot, scopeChatSources, agentInWorld, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
+import { parseAgents, snapshotFile, streamFrames, inventoryIcon, route, parseEventLines, mergeChat, chatLimit, actionLog, parseScan, scanBoxes, nearestBody, groupWorlds, findPlace, parseWorldList, resolveWorld, scopeSnapshot, agentInWorld, unsureWater, blueprintDetail, blueprintBuilds, blueprintDocumentDetail } from './dashboard/lib.mjs'
 import { mergeBodies, parsePlan } from './dashboard/map.mjs'
 import { foldEngine, engineView, emptyEngine, parseEngineAgents, engineBody, completeLines, dropTornHead, parseEngineLines, decodeBytes } from './dashboard/engine.mjs'
 import { scanCap } from '../src/lib.mjs'
 import { renderView, PoseError } from './view/render.mjs'
+import { bodyDir, listBodies } from '../engine/js/bodies.mjs'
 import { decodePng, encodePng, tintOf } from '../src/vision/renderer.mjs'
 import { BLUEPRINT_DIR } from '../src/blueprint/build.mjs'
 import { loadBlueprintDocuments } from '../src/blueprint/source.mjs'
@@ -30,7 +31,7 @@ import { listVillageInspections } from '../src/villager/inspection.mjs'
 import { villageViews, attachVillageStatus } from './dashboard/villages.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const AGENTS_DIR = path.join(ROOT, 'state', 'agents')
+const STATE_DIR = path.join(ROOT, 'state')
 const WORLDS_DIR = path.join(ROOT, 'state', 'worlds')
 const PAGE = path.join(import.meta.dirname, 'dashboard', 'index.html')
 const MAP_MODULE = path.join(import.meta.dirname, 'dashboard', 'map.mjs')
@@ -67,17 +68,17 @@ const readText = file => {
 
 const readJson = (file, fallback) => parseJson(readText(file)) ?? fallback
 
+// a body is <world>/<name> (a name is unique only within a world); its folder is state/worlds/<world>/agents/<name>
+const keyOf = agent => `${agent.world}/${agent.name}`
+const folderOf = agent => bodyDir(STATE_DIR, agent.world, agent.name)
 // an agent folder is an ENGINE body when engine/events.jsonl exists: it serves no HTTP API, so it is never polled
-const isEngineFolder = name => fs.existsSync(path.join(AGENTS_DIR, name, 'engine', 'events.jsonl'))
-const engineEventsFile = name => path.join(AGENTS_DIR, name, 'engine', 'events.jsonl')
+const isEngineFolder = agent => fs.existsSync(path.join(folderOf(agent), 'engine', 'events.jsonl'))
+const engineEventsFile = agent => path.join(folderOf(agent), 'engine', 'events.jsonl')
 
 // re-read every cycle: a new agent folder appears while this runs, and an agent is cheap to describe
-const agentEntries = () => {
-  const dirs = fs.existsSync(AGENTS_DIR) ? fs.readdirSync(AGENTS_DIR, { withFileTypes: true }).filter(e => e.isDirectory()) : []
-  return dirs.map(e => ({ name: e.name, text: readText(path.join(AGENTS_DIR, e.name, 'config.json')) }))
-}
-const readAgents = () => parseAgents(agentEntries().filter(e => !isEngineFolder(e.name)))
-const readEngineAgents = () => parseEngineAgents(agentEntries().filter(e => isEngineFolder(e.name)))
+const agentEntries = () => listBodies(STATE_DIR).map(({ world, name, dir }) => ({ name, world, text: readText(path.join(dir, 'config.json')) }))
+const readAgents = () => parseAgents(agentEntries().filter(e => !isEngineFolder(e)))
+const readEngineAgents = () => parseEngineAgents(agentEntries().filter(e => isEngineFolder(e)))
 
 // re-read every ask, like the agents: a world appears while this runs. A folder is a world once it holds world.json.
 const readWorlds = () => (fs.existsSync(WORLDS_DIR) ? fs.readdirSync(WORLDS_DIR, { withFileTypes: true }) : [])
@@ -129,9 +130,9 @@ const pollOnce = async () => {
   await Promise.all(agents.map(async agent => {
     const r = await ask(agent.apiPort, 'state', {}, 1500)
     const at = Date.now()
-    if (!r.ok) { polls[agent.name] = { ok: false, error: r.error ?? r.answer?.error ?? 'down', at }; return }
+    if (!r.ok) { polls[keyOf(agent)] = { ok: false, error: r.error ?? r.answer?.error ?? 'down', at }; return }
     const { ok, ...state } = r.answer
-    polls[agent.name] = { ok: true, state, at }
+    polls[keyOf(agent)] = { ok: true, state, at }
   }))
 }
 
@@ -151,10 +152,10 @@ const readRange = (file, start, end) => {
   }
 }
 
-const readEngine = name => {
-  const file = engineEventsFile(name)
+const readEngine = agent => {
+  const file = engineEventsFile(agent)
   const size = fs.statSync(file).size
-  const cached = engines[name]
+  const cached = engines[keyOf(agent)]
   const fresh = !cached || size < cached.offset
   const from = fresh ? Math.max(0, size - ENGINE_FIRST_READ_BYTES) : cached.offset
   const previous = fresh ? { state: emptyEngine, rest: new Uint8Array(0) } : cached
@@ -162,13 +163,13 @@ const readEngine = name => {
   const chunk = readRange(file, from, size)
   const { complete, rest } = completeLines(previous.rest, fresh && from > 0 ? dropTornHead(chunk) : chunk)
   const state = foldEngine(previous.state, parseEngineLines(decodeBytes(complete)))
-  engines[name] = { offset: size, state, rest }
+  engines[keyOf(agent)] = { offset: size, state, rest }
   return state
 }
 
 const engineBodies = now => readEngineAgents().map(agent => {
   try {
-    return engineBody(agent, engineView(readEngine(agent.name), now))
+    return engineBody(agent, engineView(readEngine(agent), now))
   } catch (error) {
     return engineBody(agent, { ...engineView(emptyEngine, now), error: `events unreadable: ${error.message}` })
   }
@@ -226,22 +227,23 @@ const readTail = file => {
   }
 }
 
+// agent: { world, name }
 const eventsTail = agent => {
-  const file = path.join(AGENTS_DIR, agent, 'events.jsonl')
+  const file = path.join(folderOf(agent), 'events.jsonl')
   const size = fs.existsSync(file) ? fs.statSync(file).size : -1
   if (size < 0) return []
-  if (tails[agent]?.size === size) return tails[agent].lines
+  if (tails[keyOf(agent)]?.size === size) return tails[keyOf(agent)].lines
   const tail = readTail(file)
   const lines = parseEventLines(tail.text, tail.torn)
-  tails[agent] = { size: tail.size, lines }
+  tails[keyOf(agent)] = { size: tail.size, lines }
   return lines
 }
 
 // the folders are read afresh (not taken from `agents`): a folder with no config.json still holds the whispers
 // its body received, and the log is about who said what, not about which bodies can be polled
 const chatLog = (limit, worldName) => {
-  const dirs = fs.existsSync(AGENTS_DIR) ? fs.readdirSync(AGENTS_DIR, { withFileTypes: true }).filter(e => e.isDirectory()) : []
-  return mergeChat(scopeChatSources(dirs.map(e => ({ agent: e.name, lines: eventsTail(e.name) })), agents, worldName), limit)
+  const folders = worldName ? listBodies(STATE_DIR, worldName) : []
+  return mergeChat(folders.map(b => ({ agent: b.name, lines: eventsTail(b) })), limit)
 }
 
 // ---------------------------------------------------------------- what stands on a plan's footprint
@@ -314,13 +316,13 @@ const sendJson = (res, code, value) => send(res, code, 'application/json', JSON.
 const lookFrame = async (agent, args) => {
   const r = await ask(agent.apiPort, 'look', args, 30000)
   if (!r.ok) return { code: 503, error: r.error ?? r.answer?.error ?? 'the body did not answer' }
-  const file = snapshotFile(path.join(AGENTS_DIR, agent.name), r.answer.file)
+  const file = snapshotFile(folderOf(agent), r.answer.file)
   if (!file || !fs.existsSync(file)) return { code: 502, error: `the body rendered ${r.answer.file}, which is not a file I may serve` }
   return { png: fs.readFileSync(file), at: r.answer.at ?? null, view: r.answer.view ?? '', seen: r.answer.seen ?? [], marks: r.answer.marks ?? [], blocked: r.answer.blocked ?? '' }
 }
 
-const serveLook = async (res, name, query) => {
-  const agent = agents.find(a => a.name === name)
+const serveLook = async (res, name, query, worldName) => {
+  const agent = agents.find(a => a.name === name && a.world === worldName)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
   const args = { file: LOOK_FILE, ...(query.get('dir') ? { dir: query.get('dir') } : {}) }
   const frame = await lookFrame(agent, args)
@@ -334,8 +336,8 @@ const serveLook = async (res, name, query) => {
 
 // one body's screen: HUD numbers, inventory slots and the container it has open. `screen` is a quick action
 // (src/body/actions/sense.mjs): it reads the bot's own state, so this never interrupts whatever the body is doing.
-const serveScreen = async (res, name) => {
-  const agent = agents.find(a => a.name === name)
+const serveScreen = async (res, name, worldName) => {
+  const agent = agents.find(a => a.name === name && a.world === worldName)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
   const r = await ask(agent.apiPort, 'screen', {}, 5000)
   if (!r.ok) return sendJson(res, 503, { error: r.error ?? r.answer?.error ?? 'the body did not answer' })
@@ -345,17 +347,18 @@ const serveScreen = async (res, name) => {
 // one body's recent actions, read straight from its events.jsonl tail (the same source the chat log reads). A
 // folder with no config.json still counts, same as the chat log: the reader wants what the body did, not whether
 // it currently answers.
-const serveActions = (res, name) => {
-  if (!fs.existsSync(path.join(AGENTS_DIR, name))) return sendJson(res, 404, { error: `no agent folder called ${name}` })
-  return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(name)) })
+const serveActions = (res, name, worldName) => {
+  const agent = { world: worldName, name }
+  if (!fs.existsSync(folderOf(agent))) return sendJson(res, 404, { error: `no agent folder called ${name} in ${worldName}` })
+  return sendJson(res, 200, { at: Date.now(), name, entries: actionLog(eventsTail(agent)) })
 }
 
 // a line typed into the popup goes to the body as the whisper it stands for: the body's `hear` appends it to its own
 // events.jsonl (it owns that file and its seq numbers), so the driver reads it exactly as one whispered in game
 const WHISPER_FROM = 'dashboard'
-const serveWhisper = async (req, res, name) => {
+const serveWhisper = async (req, res, name, worldName) => {
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST {"message": "..."} to whisper' })
-  const agent = agents.find(a => a.name === name)
+  const agent = agents.find(a => a.name === name && a.world === worldName)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
   let body = ''
   for await (const chunk of req) body += chunk
@@ -370,8 +373,8 @@ const serveWhisper = async (req, res, name) => {
 // half-written frame.
 const LIVE_SIZE = { width: 320, height: 180 }
 let liveStreams = 0
-const streamLook = async (req, res, name) => {
-  const agent = agents.find(a => a.name === name)
+const streamLook = async (req, res, name, worldName) => {
+  const agent = agents.find(a => a.name === name && a.world === worldName)
   if (!agent) return sendJson(res, 404, { error: `no agent folder called ${name}` })
   const file = `dashboard-live-${++liveStreams}.png`
   const args = { file, marks: true, ...LIVE_SIZE }
@@ -386,7 +389,7 @@ const streamLook = async (req, res, name) => {
     minMs: 100,
     retryMs: 1000
   })
-  fs.rmSync(path.join(AGENTS_DIR, agent.name, 'snapshots', file), { force: true })
+  fs.rmSync(path.join(folderOf(agent), 'snapshots', file), { force: true })
 }
 
 // textures/ as tools/textures.mjs fills it, tinted as the look pictures are; an animated one is its frames stacked, so
@@ -454,20 +457,24 @@ const handlers = {
   chat: (res, query, r, worldName) => sendJson(res, 200, { at: Date.now(), agents: agentNames(), messages: chatLog(chatLimit(query.get('limit')), worldName) }),
   script: (res) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(MAP_MODULE)),
   srclib: (res, query, r) => send(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(SRC_DIR, r.name))),
-  screen: (res, query, r) => serveScreen(res, r.name),
-  actions: (res, query, r) => serveActions(res, r.name),
+  screen: (res, query, r, worldName) => serveScreen(res, r.name, worldName),
+  actions: (res, query, r, worldName) => serveActions(res, r.name, worldName),
   icon: (res, query, r) => serveIcon(res, r.name),
-  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name> (state, chat, world and villages take ?world=<name>, default the first world), /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> or /api/icon/<item>' })
+  unknown: (res) => sendJson(res, 404, { error: 'try /, /villagers, /villages, /blueprints, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, /api/world?place=<name> (state, chat, world and villages take ?world=<name>, default the first world), /api/blueprints, /api/blueprint/<name>, /api/look/<Name>, /api/look/<Name>/live, /api/screen/<Name>, /api/actions/<Name>, POST /api/whisper/<Name> (each of these with ?world=<name>), /api/view/<Name>.png?world=<name> or /api/icon/<item>' })
 }
 
 // one PNG of what a body sees, drawn from the view files it dumps (tools/view-render.mjs), not through the body
-const serveView = (res, name) => {
-  try { return send(res, 200, 'image/png', renderView({ agentName: name }).png) } catch (e) { return sendJson(res, e instanceof PoseError ? 409 : 404, { error: e.message }) }
+const serveView = (res, name, worldName) => {
+  if (!worldName) return sendJson(res, 400, { error: 'missing ?world=<world>: a name is unique only within a world' })
+  try { return send(res, 200, 'image/png', renderView({ world: worldName, agentName: name }).png) } catch (e) { return sendJson(res, e instanceof PoseError ? 409 : 404, { error: e.message }) }
 }
 
 http.createServer(async (req, res) => {
   const view = /^\/api\/view\/(\w+)\.png(\?|$)/.exec(req.url)
-  if (view) return serveView(res, view[1])
+  if (view) {
+    const world = new URL(req.url, 'http://dashboard').searchParams.get('world')
+    return serveView(res, view[1], /^[A-Za-z0-9_-]{1,64}$/.test(world ?? '') ? world : null)
+  }
   const r = route(req.url)
   if (r.kind === 'bppreview') {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST a structured plan to preview' })
@@ -480,14 +487,15 @@ http.createServer(async (req, res) => {
   // world data is scoped to ?world= (default: the first world); an invalid name is a 400, never a path
   const choice = worldChoice(query)
   if (WORLD_KINDS.has(r.kind) && choice.error) return sendJson(res, 400, choice)
-  // a per-agent endpoint keeps working without ?world=; with it, the agent must play in that world
-  if (AGENT_KINDS.has(r.kind) && query.has('world')) {
+  // a per-agent endpoint needs ?world=: a name is unique only within a world, and the agent must play in it
+  if (AGENT_KINDS.has(r.kind)) {
+    if (!query.has('world')) return sendJson(res, 400, { error: 'missing ?world=<world>: a name is unique only within a world' })
     if (choice.error) return sendJson(res, 400, choice)
     if (!agentInWorld(agents, r.name, choice.name)) return sendJson(res, 404, { error: `${r.name} does not play in ${choice.name}` })
   }
-  if (r.kind === 'look') return serveLook(res, r.name, query).catch(e => sendJson(res, 500, { error: e.message }))
-  if (r.kind === 'whisper') return serveWhisper(req, res, r.name).catch(e => sendJson(res, 500, { error: e.message }))
-  if (r.kind === 'live') return streamLook(req, res, r.name).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'look') return serveLook(res, r.name, query, choice.name).catch(e => sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'whisper') return serveWhisper(req, res, r.name, choice.name).catch(e => sendJson(res, 500, { error: e.message }))
+  if (r.kind === 'live') return streamLook(req, res, r.name, choice.name).catch(e => res.headersSent ? res.end() : sendJson(res, 500, { error: e.message }))
   return Promise.resolve(handlers[r.kind](res, query, r, choice.name)).catch(e => sendJson(res, 500, { error: e.message }))
 }).listen(PORT, '127.0.0.1', async () => {
   await pollOnce()

@@ -7,6 +7,7 @@ import zlib from 'node:zlib'
 import { promisify } from 'node:util'
 import prismarineRegistry from 'prismarine-registry'
 import { lightTable, relightBox } from './light.mjs'
+import { bodyDir } from './bodies.mjs'
 
 const deflate = promisify(zlib.deflate)
 
@@ -31,8 +32,8 @@ const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 
 export const columnFile = (stateDir, world, cx, cz) => path.join(stateDir, 'worlds', world, 'chunks', `${cx}.${cz}.bin`)
 export const biomesFile = (stateDir, world) => path.join(stateDir, 'worlds', world, 'biomes.json')
-export const poseFile = (stateDir, agent) => path.join(stateDir, 'agents', agent, 'view', 'pose.json')
-export const hudFile = (stateDir, agent) => path.join(stateDir, 'agents', agent, 'view', 'hud.json')
+export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
+export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
 
 // write to <file>.tmp.<pid> then rename, so a reader never sees half a file
 let writeCounter = 0
@@ -640,8 +641,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     return track(Promise.all(writes))
   }
 
-  const writePose = coalescedWriter(poseFile(stateDir, agent), err => reportError(err))
-  const writeHud = coalescedWriter(hudFile(stateDir, agent), err => reportError(err))
+  const writePose = coalescedWriter(poseFile(stateDir, world, agent), err => reportError(err))
+  const writeHud = coalescedWriter(hudFile(stateDir, world, agent), err => reportError(err))
 
   // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
   const tickPose = () => {

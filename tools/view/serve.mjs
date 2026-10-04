@@ -10,6 +10,7 @@ import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
+import { bodyDir, listBodies } from '../../engine/js/bodies.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
@@ -17,6 +18,11 @@ const COLUMN_FILE = /^(-?\d+)\.(-?\d+)\.bin$/
 const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8' }
 const PING_MS = 15000
 const MAX_STREAM_AGENTS = 32
+// a body is addressed as <world>/<name>: a name is unique only within a world
+const bodyOfKey = key => {
+  const parts = (key ?? '').split('/')
+  return parts.length === 2 && parts.every(p => NAME.test(p)) ? { world: parts[0], name: parts[1] } : null
+}
 
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'Cache-Control': 'no-cache', ...headers })
@@ -53,7 +59,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const jarPath = blockJar === undefined ? findClientJar() : blockJar
   const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
   const driveProxy = createDriveProxy({ stateDir })
-  const agentFile = (name, file) => path.join(stateDir, 'agents', name, 'view', file)
+  const agentFile = ({ world, name }, file) => path.join(bodyDir(stateDir, world, name), 'view', file)
   const builds = new Map()
   // one build per version serves both the table and the texture bytes
   const buildFor = version => {
@@ -142,9 +148,9 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   }
 
   const listAgents = async res => {
-    const names = await fs.promises.readdir(path.join(stateDir, 'agents')).catch(() => [])
-    const poses = await Promise.all(names.filter(n => NAME.test(n)).map(async name => [name, await readJson(agentFile(name, 'pose.json'))]))
-    const agents = poses.filter(([, pose]) => pose).map(([name, pose]) => ({ name, world: pose.world, status: pose.status, t: pose.t }))
+    // every body of every world; the world is where its folder is
+    const poses = await Promise.all(listBodies(stateDir).map(async body => [body, await readJson(agentFile(body, 'pose.json'))]))
+    const agents = poses.filter(([, pose]) => pose).map(([{ world, name }, pose]) => ({ name, world, status: pose.status, t: pose.t }))
     send(res, 200, JSON.stringify(agents), { 'Content-Type': 'application/json' })
   }
 
@@ -184,8 +190,8 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     return poll
   }
 
-  // watches one agent's pose, hud and nearby columns (first: its pose already read); calls send(event, data) for every change; returns stop()
-  const watchAgent = (name, first, radius, send) => {
+  // watches one body's ({world, name}) pose, hud and nearby columns (first: its pose already read); calls send(event, data) for every change; returns stop()
+  const watchAgent = (body, first, radius, send) => {
     let closed = false
     const emit = (event, data) => closed || send(event, data)
     let pose = first
@@ -195,9 +201,9 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       let last = null
       let running = Promise.resolve() // checks run one at a time, so a watch event and a poll never send the same mtime twice
       const check = async () => {
-        const stat = await statOrNull(agentFile(name, file))
+        const stat = await statOrNull(agentFile(body, file))
         if (!stat || stat.mtimeMs === last) return
-        const value = await readJson(agentFile(name, file))
+        const value = await readJson(agentFile(body, file))
         if (!value) return
         last = stat.mtimeMs
         onValue?.(value)
@@ -224,7 +230,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const startWatch = () => {
       if (watcher || closed || push !== 'watch') return
       try {
-        watcher = fs.watch(path.dirname(agentFile(name, 'pose.json')), (_event, file) => {
+        watcher = fs.watch(path.dirname(agentFile(body, 'pose.json')), (_event, file) => {
           if (file === 'hud.json') return checkHud()
           if (file === 'pose.json') return checkPose()
         })
@@ -264,12 +270,12 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const sseHead = res => res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
   const sseWrite = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
 
-  const streamAgent = async (req, res, name, radius) => {
-    const first = await readJson(agentFile(name, 'pose.json'))
+  const streamAgent = async (req, res, body, radius) => {
+    const first = await readJson(agentFile(body, 'pose.json'))
     if (!first) return notFound(res)
     scanner.track(first.world)
     sseHead(res)
-    const stop = watchAgent(name, first, radius, (event, data) => sseWrite(res, event, data))
+    const stop = watchAgent(body, first, radius, (event, data) => sseWrite(res, event, data))
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
     req.on('close', () => {
       clearInterval(ping)
@@ -277,13 +283,13 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     })
   }
 
-  // one stream for several agents; every event's data carries `agent`. Agents without a pose file are left out.
-  const streamAgents = async (req, res, names, radius) => {
-    const firsts = await Promise.all(names.map(async name => [name, await readJson(agentFile(name, 'pose.json'))]))
+  // one stream for several bodies (keys <world>/<name>); every event's data carries `agent`, the key. Bodies without a pose file are left out.
+  const streamAgents = async (req, res, keys, radius) => {
+    const firsts = await Promise.all(keys.map(async key => [key, await readJson(agentFile(bodyOfKey(key), 'pose.json'))]))
     sseHead(res)
-    const stops = firsts.filter(([, first]) => first).map(([name, first]) => {
+    const stops = firsts.filter(([, first]) => first).map(([key, first]) => {
       scanner.track(first.world)
-      return watchAgent(name, first, radius, (event, data) => sseWrite(res, event, { agent: name, ...data }))
+      return watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data }))
     })
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
     req.on('close', () => {
@@ -296,23 +302,24 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const url = new URL(req.url, 'http://localhost')
     const parts = url.pathname.split('/').slice(1)
     const [head, ...rest] = parts
-    if (head === 'drive' && rest.length === 1 && NAME.test(rest[0])) return driveProxy(req, res, rest[0])
+    const body = rest.length === 2 ? bodyOfKey(rest.join('/')) : null
+    if (head === 'drive' && body) return driveProxy(req, res, body)
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     if (url.pathname === '/') return serveStatic(res, 'index.html')
     if (head === 'web' && rest.length === 1 && /^[A-Za-z0-9_.-]+$/.test(rest[0]) && !rest[0].startsWith('.')) return serveStatic(res, rest[0])
     if (url.pathname === '/agents') return listAgents(res)
-    if (head === 'pose' && rest.length === 1 && NAME.test(rest[0])) {
+    if (head === 'pose' && body) {
       const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))
-      return streamAgent(req, res, rest[0], radius)
+      return streamAgent(req, res, body, radius)
     }
     if (url.pathname === '/poses') {
-      const names = (url.searchParams.get('agents') ?? '').split(',')
-      if (names.length > MAX_STREAM_AGENTS || !names.every(n => NAME.test(n))) return send(res, 400, `agents: 1 to ${MAX_STREAM_AGENTS} names of letters, digits, _ and -`, { 'Content-Type': 'text/plain' })
+      const keys = (url.searchParams.get('agents') ?? '').split(',')
+      if (keys.length > MAX_STREAM_AGENTS || !keys.every(bodyOfKey)) return send(res, 400, `agents: 1 to ${MAX_STREAM_AGENTS} bodies as <world>/<name>, each of letters, digits, _ and -`, { 'Content-Type': 'text/plain' })
       const radius = Math.min(32, Math.max(1, Number.parseInt(url.searchParams.get('radius') ?? '8', 10) || 8))
-      return streamAgents(req, res, names, radius)
+      return streamAgents(req, res, keys, radius)
     }
     if (head === 'block-issues' && rest.length === 1 && NAME.test(rest[0])) return sendBlockIssues(res, rest[0])
-    if (head === 'hud' && rest.length === 1 && NAME.test(rest[0])) return sendFile(res, agentFile(rest[0], 'hud.json'), TYPES['.json'])
+    if (head === 'hud' && body) return sendFile(res, agentFile(body, 'hud.json'), TYPES['.json'])
     if (head === 'columns' && rest.length === 2 && NAME.test(rest[0]) && COLUMN_FILE.test(rest[1])) {
       return sendFile(res, path.join(stateDir, 'worlds', rest[0], 'chunks', rest[1]), 'application/octet-stream')
     }

@@ -1,5 +1,5 @@
 (ns dashboard.view-info
-  "The small summary of a body's view (state/agents/<name>/view/pose.json and hud.json) that /api/state carries.")
+  "The small summary of a body's view (state/worlds/<world>/agents/<name>/view/pose.json and hud.json) that /api/state carries.")
 
 (defn villagers
   "The villagers among a pose's entities, as {:id :x :y :z}; the rest of the entity list is dropped."

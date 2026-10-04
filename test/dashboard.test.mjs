@@ -20,13 +20,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // ---------------------------------------------------------------- reading the agent folders
 const config = (username, apiPort, extra = {}) => JSON.stringify({ username, apiPort, harness: 'claude-code', ...extra })
 
-test('parseAgents: one entry per readable config, sorted by name', () => {
+test('parseAgents: one entry per readable config, sorted by name; the world is the folder\'s, not the config\'s', () => {
   assert.deepEqual(parseAgents([
-    { name: 'Mariel', text: config('Mariel', 3790) },
-    { name: 'Claude', text: config('Claude', 3777, { world: 'main', character: { name: 'Claude', source: 'chosen by hand' } }) }
+    { name: 'Mariel', world: 'test', text: config('Mariel', 3790) },
+    { name: 'Claude', world: 'main', text: config('Claude', 3777, { world: 'elsewhere', character: { name: 'Claude', source: 'chosen by hand' } }) }
   ]), [
     { name: 'Claude', username: 'Claude', apiPort: 3777, harness: 'claude-code', character: 'Claude (chosen by hand)', world: 'main' },
-    { name: 'Mariel', username: 'Mariel', apiPort: 3790, harness: 'claude-code', character: null, world: null }
+    { name: 'Mariel', username: 'Mariel', apiPort: 3790, harness: 'claude-code', character: null, world: 'test' }
   ])
 })
 
@@ -46,13 +46,13 @@ test('parseAgents: a config without username falls back to the folder name', () 
 
 // ---------------------------------------------------------------- merging the polls
 const agents = [
-  { name: 'Claude', username: 'Claude', apiPort: 3777, harness: 'claude-code', character: null },
-  { name: 'Perrin', username: 'Perrin', apiPort: 3789, harness: 'claude-code', character: null }
+  { name: 'Claude', username: 'Claude', apiPort: 3777, harness: 'claude-code', character: null, world: 'main' },
+  { name: 'Perrin', username: 'Perrin', apiPort: 3789, harness: 'claude-code', character: null, world: 'main' }
 ]
 const claudeState = { hp: 20, food: 15, pos: { x: 60.5, y: 65, z: -151.6 }, doing: 'goto 2s', players: {} }
 
 test('mergeBodies: a body that answered is up and carries its state', () => {
-  assert.deepEqual(mergeBodies(agents, { Claude: { ok: true, state: claudeState, at: 1000 } })[0], {
+  assert.deepEqual(mergeBodies(agents, { 'main/Claude': { ok: true, state: claudeState, at: 1000 } })[0], {
     ...agents[0], up: true, error: null, state: claudeState, at: 1000
   })
 })
@@ -62,13 +62,18 @@ const missing = [
   ['refused the connection', { ok: false, error: 'connect ECONNREFUSED 127.0.0.1:3789', at: 900 }, 'connect ECONNREFUSED 127.0.0.1:3789']
 ]
 missing.forEach(([why, poll, error]) => test(`mergeBodies: a body that ${why} is down, not an error`, () => {
-  const row = mergeBodies(agents, { Perrin: poll })[1]
+  const row = mergeBodies(agents, { 'main/Perrin': poll })[1]
   assert.deepEqual([row.name, row.up, row.error, row.state], ['Perrin', false, error, null])
 }))
 
 test('mergeBodies: a body that answered ok:false is down with the body its own reason', () => {
   const poll = { ok: false, error: 'bot is not connected to the server (retrying every 10s)', at: 5 }
-  assert.equal(mergeBodies(agents, { Claude: poll })[0].up, false)
+  assert.equal(mergeBodies(agents, { 'main/Claude': poll })[0].up, false)
+})
+
+test('mergeBodies: the same name in two worlds is two bodies, each with its own poll', () => {
+  const twins = [{ name: 'Claude', world: 'main' }, { name: 'Claude', world: 'test' }]
+  assert.deepEqual(mergeBodies(twins, { 'test/Claude': { ok: true, state: claudeState, at: 1 } }).map(b => b.up), [false, true])
 })
 
 test('mergeBodies: every agent gets a row, in the order given', () => {
@@ -187,7 +192,7 @@ test('onCanvas: a mark just inside the margin is drawn', () => {
 })
 
 // ---------------------------------------------------------------- serving files and routes
-const home = '/srv/bots/state/agents/Claude'
+const home = '/srv/bots/state/worlds/main/agents/Claude'
 
 test('snapshotFile: a look answer resolves under the body home', () => {
   assert.equal(snapshotFile(home, 'snapshots/look-009.png'), path.join(home, 'snapshots/look-009.png'))
@@ -1098,7 +1103,7 @@ chatScopes.forEach(([why, world, expected]) => test(`scopeChatSources: ${why}`, 
 }))
 
 const membership = [
-  ['no world asked keeps the agent', 'Claude', null, true],
+  ['no world asked is no agent: the world is always given', 'Claude', null, false],
   ['the agent\'s world', 'Claude', 'main', true],
   ['another world', 'Claude', 'test', false],
   ['an unknown agent', 'Nobody', 'main', false],

@@ -1,8 +1,8 @@
 (ns engine.migrate-cli
-  "Command line for engine.migrate: node out/migrate.cjs [--dry-run]
+  "Command line for engine.migrate: node out/migrate.cjs --world <world> [--dry-run]
   [--state-dir <dir>] Name...
 
-  Reads state/agents/<Name>/config.json and events.jsonl and the world's
+  Reads state/worlds/<world>/agents/<Name>/config.json and events.jsonl and the world's
   places.json, converts, and prints one line per body (--dry-run) or writes
   engine/memory.edn and view/pose.json. It writes only where engine/ is
   absent, never overwrites a file, never moves or deletes, and refuses a body
@@ -10,6 +10,7 @@
   listening on 127.0.0.1:<apiPort>). The IO lives here, the logic in
   engine.migrate."
   (:require [clojure.string :as str]
+            [engine.bodies :as bodies]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [engine.migrate :as migrate]
@@ -20,10 +21,14 @@
 ;; ------------------------------------------------------------------ pure
 
 (defn parse-args [args]
-  (loop [[a & more] args, opts {:dry-run false :state-dir nil :names []}]
+  (loop [[a & more] args, opts {:dry-run false :state-dir nil :world nil :names []}]
     (cond
+      (and (nil? a) (nil? (:world opts))) {:error (bodies/missing-world-error "--world")}
       (nil? a) opts
       (= a "--dry-run") (recur more (assoc opts :dry-run true))
+      (= a "--world") (if (empty? more)
+                        {:error (bodies/missing-world-error "--world")}
+                        (recur (rest more) (assoc opts :world (first more))))
       (= a "--state-dir") (if (empty? more)
                             {:error "--state-dir needs a directory"}
                             (recur (rest more) (assoc opts :state-dir (first more))))
@@ -107,11 +112,12 @@
     (str "kept existing " file)
     (do (write!) (str "wrote " file))))
 
-(defn load-body [state-dir name]
-  (let [agent-dir (path/join state-dir "agents" name)
-        config (parse-json-file (path/join agent-dir "config.json"))
-        world (when (map? config) (:world config))
-        places-file (when world (path/join state-dir "worlds" world "places.json"))]
+(defn load-body [state-dir world name]
+  (let [agent-dir (bodies/body-dir state-dir world name)
+        raw (parse-json-file (path/join agent-dir "config.json"))
+        ;; the world is where the folder is, not a field of the config
+        config (if (and (map? raw) (not (:parse-error raw))) (assoc raw :world world) raw)
+        places-file (path/join (bodies/worlds-dir state-dir) world "places.json")]
     {:agent-dir agent-dir
      :input {:name name
              :config config
@@ -132,8 +138,8 @@
 
 (defn migrate-body
   "A promise of the output lines for one body."
-  [state-dir dry-run name]
-  (let [{:keys [agent-dir input]} (load-body state-dir name)
+  [state-dir world dry-run name]
+  (let [{:keys [agent-dir input]} (load-body state-dir world name)
         result (migrate/convert input)
         port (get-in input [:config :apiPort])]
     (cond
@@ -148,8 +154,8 @@
                        (fs/existsSync (path/join agent-dir "engine")) [(str name ": has engine/, left alone")]
                        :else (into [(summary-line result)] (map #(str "  " %) (write-body! agent-dir result)))))))))
 
-(defn default-names [state-dir]
-  (let [agents (path/join state-dir "agents")]
+(defn default-names [state-dir world]
+  (let [agents (path/join (bodies/worlds-dir state-dir) world "agents")]
     (->> (fs/readdirSync agents)
          sort
          (filter #(and (.isDirectory (fs/statSync (path/join agents %)))
@@ -158,21 +164,21 @@
 (defn migrate-all
   "A promise of the output lines for names, one body after another (a refused
   body does not stop the rest)."
-  [state-dir names dry-run]
+  [state-dir world names dry-run]
   (reduce (fn [p name]
             (.then p (fn [lines]
-                       (-> (migrate-body state-dir dry-run name)
+                       (-> (migrate-body state-dir world dry-run name)
                            (.then #(into lines %))))))
           (js/Promise.resolve [])
           names))
 
 (defn main [& args]
-  (let [{:keys [error dry-run state-dir names]} (parse-args args)]
+  (let [{:keys [error dry-run state-dir world names]} (parse-args args)]
     (when error
-      (.write js/process.stderr (str "migrate: " error "\nusage: node out/migrate.cjs [--dry-run] [--state-dir <dir>] Name...\n"))
+      (.write js/process.stderr (str "migrate: " error "\nusage: node out/migrate.cjs --world <world> [--dry-run] [--state-dir <dir>] Name...\n"))
       (js/process.exit 2))
     (let [state-dir (path/resolve (or state-dir (path/join js/__dirname ".." ".." "state")))
-          names (if (seq names) names (default-names state-dir))]
-      (-> (migrate-all state-dir names dry-run)
+          names (if (seq names) names (default-names state-dir world))]
+      (-> (migrate-all state-dir world names dry-run)
           (.then (fn [lines] (doseq [l lines] (println l))))
           (.catch (fn [e] (.write js/process.stderr (str "migrate: " (.-stack e) "\n")) (js/process.exit 1)))))))

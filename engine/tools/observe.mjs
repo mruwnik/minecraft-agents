@@ -5,10 +5,11 @@ import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { readEDN, writeEDN, compactStatus, waitObserve } from './observe-lib.mjs'
 import { defaultStateDir } from './drive-lib.mjs'
+import { NAME, bodyDir, missingWorldError } from '../js/bodies.mjs'
 
 export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
-export const usage = `usage: observe.mjs <agent> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+export const usage = `usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
 
 export function unsupportedObserveRoute (response) {
   return response.status === 404 && /^application\/edn(?:;|$)/i.test(response.contentType ?? '') &&
@@ -17,7 +18,7 @@ export function unsupportedObserveRoute (response) {
 
 export function legacyEngineNotice (request) {
   const endpoint = request.path.split('?')[0]
-  return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build :fallback {:op :status :raw true :state ${JSON.stringify(request.state)}}}`
+  return `{:ok false :reason :observe-unavailable :body ${JSON.stringify(request.agent)} :endpoint ${JSON.stringify(endpoint)} :action :restart-with-current-build :fallback {:op :status :raw true :world ${JSON.stringify(request.world)} :state ${JSON.stringify(request.state)}}}`
 }
 
 export function requestFor (argv) {
@@ -27,6 +28,7 @@ export function requestFor (argv) {
       args: argv,
       options: {
         state: { type: 'string', default: defaultStateDir },
+        world: { type: 'string' },
         limit: { type: 'string' },
         offset: { type: 'string' },
         raw: { type: 'boolean', default: false },
@@ -50,6 +52,9 @@ export function requestFor (argv) {
   const [agent, requestedOp, kindOrId, ...rest] = parsed.positionals
   const op = requestedOp ?? 'status'
   if (!agent || !/^[A-Za-z0-9_-]{1,40}$/.test(agent)) return { error: 'agent must be a body name' }
+  const world = parsed.values.world
+  if (world === undefined) return { error: missingWorldError('--world') }
+  if (!NAME.test(world)) return { error: 'the world must be a name of letters, digits, _ and -' }
   const state = path.resolve(parsed.values.state)
   const params = new URLSearchParams()
   let endpoint
@@ -127,10 +132,11 @@ export function requestFor (argv) {
   const query = params.toString()
   return {
     agent,
+    world,
     state,
     ...(waitOptions ? { waitOptions } : {}),
     ...(v.verbose ? { verbose: true } : {}),
-    socketPath: path.join(state, 'agents', agent, 'engine', 'events.sock'),
+    socketPath: path.join(bodyDir(state, world, agent), 'engine', 'events.sock'),
     path: query ? `${endpoint}?${query}` : endpoint
   }
 }

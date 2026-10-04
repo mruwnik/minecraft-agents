@@ -1,5 +1,5 @@
-// Telling a human player from an agent body, in generic terms: an agent is any name with a folder under
-// state/agents/ holding a config.json; everyone else seen in a `players` map is a human
+// Telling a human player from an agent body, in generic terms: an agent is any name with a folder under the world's
+// agents/ (state/worlds/<world>/agents/) holding a config.json; everyone else seen in a `players` map is a human
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'fs'
@@ -9,13 +9,17 @@ import { agentNames, splitPlayers } from '../src/players.mjs'
 
 const agentTree = (agents, extras = []) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'players-'))
-  fs.mkdirSync(path.join(root, 'state', 'agents'), { recursive: true })
+  const world = path.join(root, 'state', 'worlds', 'w')
+  fs.mkdirSync(path.join(world, 'agents'), { recursive: true })
   for (const name of agents) {
-    fs.mkdirSync(path.join(root, 'state', 'agents', name), { recursive: true })
-    fs.writeFileSync(path.join(root, 'state', 'agents', name, 'config.json'), '{}')
+    fs.mkdirSync(path.join(world, 'agents', name), { recursive: true })
+    fs.writeFileSync(path.join(world, 'agents', name, 'config.json'), '{}')
   }
-  for (const name of extras) fs.mkdirSync(path.join(root, 'state', 'agents', name), { recursive: true })
-  return path.join(root, 'state')
+  for (const name of extras) fs.mkdirSync(path.join(world, 'agents', name), { recursive: true })
+  // a body of another world is not on this world's roster
+  fs.mkdirSync(path.join(root, 'state', 'worlds', 'other', 'agents', 'Elsewhere'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'state', 'worlds', 'other', 'agents', 'Elsewhere', 'config.json'), '{}')
+  return world
 }
 
 for (const [name, agents, extras, expected] of [

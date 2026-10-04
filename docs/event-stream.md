@@ -16,7 +16,7 @@ stream, not this engine API.
 ## Encoding
 
 Use one canonical **EDN map per line** in
-`state/agents/<name>/engine/events.edn`. This matches the engine's EDN state
+`state/worlds/<world>/agents/<name>/engine/events.edn`. This matches the engine's EDN state
 and scenario files and the design's preference for EDN on disk. Event APIs, snapshots, attention
 requests, and dashboard event responses also use EDN (`application/edn`).
 ClojureScript clients read EDN directly; there is no JSON conversion boundary
@@ -192,7 +192,7 @@ sufficient. The dashboard exposes the same EDN representation to its client.
 ## Runtime configuration
 
 Keep appender policy out of job scenarios. Put per-body settings in the
-agent's existing `state/agents/<name>/config.json`, under a runtime section,
+agent's existing `state/worlds/<world>/agents/<name>/config.json`, under a runtime section,
 for example:
 
 ```json

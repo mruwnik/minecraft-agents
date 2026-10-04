@@ -28,8 +28,8 @@ const stateWith = pose => {
   for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) column.setBlockStateId({ x, y: 63, z }, stone)
   column.setBlockStateId({ x: 8, y: 65, z: 4 }, stone) // a block ahead (north) of an eye at 8.5, 65.62, 8.5
   writeColumn(dir, 0, 0, column)
-  fs.mkdirSync(path.join(dir, 'agents/Bob/view'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'agents/Bob/view/pose.json'), JSON.stringify({ v: 1, t: 1, world: 'w', status: 'online', mcVersion: VERSION, pos: { x: 8.5, y: 64, z: 8.5 }, eye: { x: 8.5, y: 65.62, z: 8.5 }, yaw: 0, pitch: 0, entities: [], timeOfDay: 6000, ...pose }))
+  fs.mkdirSync(path.join(dir, 'worlds/w/agents/Bob/view'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'worlds/w/agents/Bob/view/pose.json'), JSON.stringify({ v: 1, t: 1, world: 'w', status: 'online', mcVersion: VERSION, pos: { x: 8.5, y: 64, z: 8.5 }, eye: { x: 8.5, y: 65.62, z: 8.5 }, yaw: 0, pitch: 0, entities: [], timeOfDay: 6000, ...pose }))
   return dir
 }
 
@@ -41,26 +41,26 @@ const pixel = (png, x, y) => {
 
 test('the centre pixel facing a wall block is not the sky; looking up it is', async () => {
   const stateDir = stateWith({})
-  const wall = await renderView({ agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir })
+  const wall = await renderView({ world: 'w', agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir })
   assert.equal(wall.columns, 1)
-  const sky = await renderView({ agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir, override: { pitch: 1.2 } })
+  const sky = await renderView({ world: 'w', agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir, override: { pitch: 1.2 } })
   assert.notDeepEqual(pixel(wall.png, 32, 18), pixel(sky.png, 32, 18))
 })
 
 test('looking down shows the floor, not the sky', async () => {
   const stateDir = stateWith({ pitch: -1.2 })
-  const down = await renderView({ agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir })
-  const up = await renderView({ agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir, override: { pitch: 1.2 } })
+  const down = await renderView({ world: 'w', agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir })
+  const up = await renderView({ world: 'w', agentName: 'Bob', width: 64, height: 36, fov: 70, stateDir, override: { pitch: 1.2 } })
   assert.notDeepEqual(pixel(down.png, 32, 18), pixel(up.png, 32, 18))
 })
 
 test('readPose says what is wrong when there is no pose', () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'view-render-'))
-  assert.throws(() => readPose('Nobody', stateDir), /pose\.json/)
+  assert.throws(() => readPose('w', 'Nobody', stateDir), /pose\.json/)
 })
 
 test('the PNG has the asked size', async () => {
-  const { png } = await renderView({ agentName: 'Bob', width: 40, height: 30, fov: 70, stateDir: stateWith({}) })
+  const { png } = await renderView({ world: 'w', agentName: 'Bob', width: 40, height: 30, fov: 70, stateDir: stateWith({}) })
   const img = decodePng(png)
   assert.deepEqual([img.width, img.height], [40, 30])
 })
@@ -72,19 +72,19 @@ for (const [name, pose] of [
 ]) {
   test(`renderView refuses a pose with ${name}, with a clear PoseError`, () => {
     const stateDir = stateWith({ status: 'offline', ...pose })
-    assert.throws(() => renderView({ agentName: 'Bob', width: 8, height: 8, stateDir }), e => e.name === 'PoseError' && /pose has no position; body never fully started/.test(e.message))
+    assert.throws(() => renderView({ world: 'w', agentName: 'Bob', width: 8, height: 8, stateDir }), e => e.name === 'PoseError' && /pose has no position; body never fully started/.test(e.message))
   })
 }
 
 test('an offline pose that has a position still renders', () => {
-  const r = renderView({ agentName: 'Bob', width: 8, height: 8, stateDir: stateWith({ status: 'offline' }) })
+  const r = renderView({ world: 'w', agentName: 'Bob', width: 8, height: 8, stateDir: stateWith({ status: 'offline' }) })
   assert.equal(r.pose.status, 'offline')
 })
 
 test('runBench renders back to back and summarises per-phase timings', async () => {
   const { runBench } = await import('../tools/view/bench.mjs')
   const stateDir = stateWith({})
-  const s = runBench({ agentName: 'Bob', seconds: 5, maxFrames: 3, width: 32, height: 18, dist: 64, stateDir })
+  const s = runBench({ world: 'w', agentName: 'Bob', seconds: 5, maxFrames: 3, width: 32, height: 18, dist: 64, stateDir })
   assert.equal(s.frames, 3)
   assert.ok(s.fps > 0)
   assert.deepEqual([s.width, s.height, s.dist], [32, 18, 64])
@@ -97,16 +97,16 @@ test('runBench renders back to back and summarises per-phase timings', async () 
 
 test('runBench with noPng spends no time encoding', async () => {
   const { runBench } = await import('../tools/view/bench.mjs')
-  const s = runBench({ agentName: 'Bob', seconds: 5, maxFrames: 2, width: 16, height: 9, stateDir: stateWith({}), noPng: true })
+  const s = runBench({ world: 'w', agentName: 'Bob', seconds: 5, maxFrames: 2, width: 16, height: 9, stateDir: stateWith({}), noPng: true })
   assert.equal(s.ms.png.mean, 0)
 })
 
 test('runBench counts frames whose pose t changed', async () => {
   const { runBench } = await import('../tools/view/bench.mjs')
   const stateDir = stateWith({})
-  const file = path.join(stateDir, 'agents/Bob/view/pose.json')
+  const file = path.join(stateDir, 'worlds/w/agents/Bob/view/pose.json')
   const s = runBench({
-    agentName: 'Bob', seconds: 5, maxFrames: 3, width: 16, height: 9, stateDir,
+    world: 'w', agentName: 'Bob', seconds: 5, maxFrames: 3, width: 16, height: 9, stateDir,
     onFrame: i => fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), t: 100 + i }))
   })
   assert.equal(s.poseChanges, 2)

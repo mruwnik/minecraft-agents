@@ -1,5 +1,5 @@
 // What the dashboard knows about an ENGINE body: it has no HTTP API, so everything comes from the events it appends
-// to state/agents/<name>/engine/events.jsonl. Pure, and free of node builtins: fs access stays in tools/dashboard.mjs.
+// to state/worlds/<world>/agents/<name>/engine/events.jsonl. Pure, and free of node builtins: fs access stays in tools/dashboard.mjs.
 
 // The longest gap between two events inside one run was ~10 s (a restart gap is 60 s+), so 30 s is 3x margin.
 export const ENGINE_UP_MS = 30_000
@@ -111,9 +111,9 @@ const parseJson = text => {
 
 // entries: [{ name, text: raw config.json }] for the folders that hold an engine. No apiPort is needed (the engine serves none).
 export const parseEngineAgents = entries => entries
-  .map(({ name, text }) => {
+  .map(({ name, world, text }) => {
     const cfg = parseJson(text)
-    return { name, username: cfg?.username ?? name, world: cfg?.world ?? null }
+    return { name, username: cfg?.username ?? name, world: world ?? null }
   })
   .sort((a, b) => a.name.localeCompare(b.name))
 

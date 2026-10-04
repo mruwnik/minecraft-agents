@@ -10,7 +10,7 @@ const ERROR_MS = 3000
 const SENT_KEEP = 200
 
 const params = new URLSearchParams(location.search)
-const agent = params.get('agent')
+const agent = params.get('agent') // <world>/<name>
 const ME = whoFrom(location.search)
 const EMBED = params.get('embed') === '1'
 const timedFetch = withTimeout(fetch, REQUEST_TIMEOUT_MS)

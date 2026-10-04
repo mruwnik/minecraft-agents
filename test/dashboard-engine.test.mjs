@@ -143,16 +143,16 @@ test('parseEngineLines skips unparseable lines and blanks', () => {
 })
 
 // ---------------------------------------------------------------- agents and bodies
-test('parseEngineAgents: world and username from config, apiPort not needed, missing config tolerated', () => {
+test('parseEngineAgents: world from the folder, username from config, apiPort not needed, missing config tolerated', () => {
   const entries = [
-    { name: 'ProbeWater', text: JSON.stringify({ username: 'PW', world: 'claude', apiPort: 3804 }) },
-    { name: 'NoPort', text: JSON.stringify({ world: 'claude' }) },
-    { name: 'NoConfig', text: '' },
-    { name: 'Broken', text: '{' }
+    { name: 'ProbeWater', world: 'claude', text: JSON.stringify({ username: 'PW', world: 'elsewhere', apiPort: 3804 }) },
+    { name: 'NoPort', world: 'claude', text: JSON.stringify({}) },
+    { name: 'NoConfig', world: 'claude', text: '' },
+    { name: 'Broken', world: 'claude', text: '{' }
   ]
   assert.deepEqual(parseEngineAgents(entries), [
-    { name: 'Broken', username: 'Broken', world: null },
-    { name: 'NoConfig', username: 'NoConfig', world: null },
+    { name: 'Broken', username: 'Broken', world: 'claude' },
+    { name: 'NoConfig', username: 'NoConfig', world: 'claude' },
     { name: 'NoPort', username: 'NoPort', world: 'claude' },
     { name: 'ProbeWater', username: 'PW', world: 'claude' }
   ])

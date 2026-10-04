@@ -24,7 +24,7 @@
 
 (defn page-flags [] (live/flags (.-search js/location)))
 
-(defn preview [{:keys [name thumb thumb-age status offline]}]
+(defn preview [{:keys [name world thumb thumb-age status offline]}]
   (let [flags (page-flags)
         mode (live/current-mode flags)
         view (live/card-view mode (live/card-plan flags status) (some? thumb))]
@@ -33,7 +33,7 @@
        :blank nil
        :img [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
        :noview [:div.noview "no view"]
-       :live [live/live-preview {:name name :flags flags}])
+       :live [live/live-preview {:name name :world world :flags flags}])
      (when (= status :offline) [:span.offline-tag offline])
      (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
      [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))

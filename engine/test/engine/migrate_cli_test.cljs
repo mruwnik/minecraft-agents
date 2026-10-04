@@ -9,8 +9,10 @@
             ["path" :as path]))
 
 (deftest parse-args-reads-flags-and-names
-  (is (= {:dry-run true :state-dir "/s" :names ["A" "B"]} (cli/parse-args ["--dry-run" "--state-dir" "/s" "A" "B"])))
-  (is (= {:dry-run false :state-dir nil :names []} (cli/parse-args [])))
+  (is (= {:dry-run true :state-dir "/s" :world "w" :names ["A" "B"]} (cli/parse-args ["--dry-run" "--state-dir" "/s" "--world" "w" "A" "B"])))
+  (is (= {:dry-run false :state-dir nil :world "w" :names []} (cli/parse-args ["--world" "w"])))
+  (is (re-find #"missing --world <world>" (:error (cli/parse-args ["A"]))))
+  (is (some? (:error (cli/parse-args ["--world"]))))
   (is (some? (:error (cli/parse-args ["--bogus"]))))
   (is (some? (:error (cli/parse-args ["--state-dir"])))))
 
@@ -37,11 +39,11 @@
   (fs/writeFileSync file text))
 
 (defn make-body!
-  "state/agents/<name> with a config (port), an event with a position and, when bed is given, the world's places."
+  "state/worlds/w/agents/<name> with a config (port, no world: the folder says it), an event with a position and, when bed is given, the world's places."
   [root name port]
-  (write-file! (path/join root "agents" name "config.json")
-               (js/JSON.stringify (clj->js {:username name :apiPort port :world "w"})))
-  (write-file! (path/join root "agents" name "events.jsonl")
+  (write-file! (path/join root "worlds" "w" "agents" name "config.json")
+               (js/JSON.stringify (clj->js {:username name :apiPort port})))
+  (write-file! (path/join root "worlds" "w" "agents" name "events.jsonl")
                (str (js/JSON.stringify (clj->js {:seq 1 :t "2026-09-27T17:00:00.000Z" :type "x" :pos {:x 1 :y 2 :z 3}})) "\n")))
 
 (defn make-root!
@@ -64,7 +66,7 @@
 
 (defn written [before after] (sort (keys (apply dissoc after (keys before)))))
 
-(defn run-all [root names] (cli/migrate-all root names false))
+(defn run-all [root names] (cli/migrate-all root "w" names false))
 
 (deftest write-mode-writes-memory-and-pose-and-nothing-else
   (async done
@@ -72,17 +74,17 @@
       (tu/run-async done
         (fn [] (.then (run-all root ["Ann"])
                       (fn [_]
-                        (is (= ["agents/Ann/engine/memory.edn" "agents/Ann/view/pose.json"] (written before (tree root))))
+                        (is (= ["worlds/w/agents/Ann/engine/memory.edn" "worlds/w/agents/Ann/view/pose.json"] (written before (tree root))))
                         (is (= before (select-keys (tree root) (keys before))) "nothing existing changed")
                         (is (= {:x 1 :y 64 :z 2}
-                               (mem/place (mem/view (mem/open (path/join root "agents" "Ann" "engine") {:now js/Date.now})) :bed)))
+                               (mem/place (mem/view (mem/open (path/join root "worlds" "w" "agents" "Ann" "engine") {:now js/Date.now})) :bed)))
                         (is (= {:v 1 :world "w" :status "offline" :pos {:x 1 :y 2 :z 3}}
-                               (dissoc (tu/read-json (path/join root "agents" "Ann" "view" "pose.json")) :t)))))))))) 
+                               (dissoc (tu/read-json (path/join root "worlds" "w" "agents" "Ann" "view" "pose.json")) :t)))))))))) 
 
 (deftest a-folder-with-engine-is-left-untouched
   (async done
     (let [root (make-root!)]
-      (write-file! (path/join root "agents" "Ann" "engine" "engine.edn") "{}")
+      (write-file! (path/join root "worlds" "w" "agents" "Ann" "engine" "engine.edn") "{}")
       (let [before (tree root)]
         (tu/run-async done
           (fn [] (.then (run-all root ["Ann"])
@@ -93,13 +95,13 @@
 (deftest an-existing-pose-is-kept-and-reported-the-memory-is-still-written
   (async done
     (let [root (make-root!)
-          pose-file (path/join root "agents" "Ann" "view" "pose.json")]
+          pose-file (path/join root "worlds" "w" "agents" "Ann" "view" "pose.json")]
       (write-file! pose-file "{\"mine\":true}")
       (tu/run-async done
         (fn [] (.then (run-all root ["Ann"])
                       (fn [lines]
                         (is (= "{\"mine\":true}" (fs/readFileSync pose-file "utf8")))
-                        (is (fs/existsSync (path/join root "agents" "Ann" "engine" "memory.edn")))
+                        (is (fs/existsSync (path/join root "worlds" "w" "agents" "Ann" "engine" "memory.edn")))
                         (is (str/includes? (str/join "\n" lines) "kept existing")))))))))
 
 (defn refuses-and-others-convert
@@ -111,21 +113,21 @@
                     (cleanup!)
                     (let [text (str/join "\n" lines)]
                       (is (str/includes? text (str "Ann: refused, " why)))
-                      (is (not (fs/existsSync (path/join root "agents" "Ann" "engine" "memory.edn"))))
-                      (is (not (fs/existsSync (path/join root "agents" "Ann" "view"))))
-                      (is (fs/existsSync (path/join root "agents" "Bob" "engine" "memory.edn")))
-                      (is (fs/existsSync (path/join root "agents" "Bob" "view" "pose.json")))))))))
+                      (is (not (fs/existsSync (path/join root "worlds" "w" "agents" "Ann" "engine" "memory.edn"))))
+                      (is (not (fs/existsSync (path/join root "worlds" "w" "agents" "Ann" "view"))))
+                      (is (fs/existsSync (path/join root "worlds" "w" "agents" "Bob" "engine" "memory.edn")))
+                      (is (fs/existsSync (path/join root "worlds" "w" "agents" "Bob" "view" "pose.json")))))))))
 
 (deftest a-control-socket-refuses
   (async done
     (let [root (make-root!)]
-      (write-file! (path/join root "agents" "Ann" "engine" "control.sock") "")
+      (write-file! (path/join root "worlds" "w" "agents" "Ann" "engine" "control.sock") "")
       (refuses-and-others-convert done root "engine/control.sock exists" identity))))
 
 (deftest a-live-body-pid-refuses
   (async done
     (let [root (make-root!)]
-      (write-file! (path/join root "agents" "Ann" "body.pid") (str js/process.pid))
+      (write-file! (path/join root "worlds" "w" "agents" "Ann" "body.pid") (str js/process.pid))
       (refuses-and-others-convert done root "body.pid names a live process" identity))))
 
 (deftest a-listener-on-the-api-port-refuses
