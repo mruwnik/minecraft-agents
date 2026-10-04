@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import zlib from 'node:zlib'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { columnFormat } from '../tools/view/web-format.mjs'
-import { scanColumn, createTotals } from '../tools/view/block-scan.mjs'
+import { scanColumn, createTotals, missingFrom } from '../tools/view/block-scan.mjs'
 
 const VERSION = '1.21.4'
 const Chunk = makeChunkClass(VERSION)
@@ -47,4 +47,11 @@ test('totals merge unknown ids into one record per contiguous range, replace a r
   assert.deepEqual(seen.get('state:11-13').firsts.map(p => p.agent), ['Ann', 'Ann', 'Ann', 'Bob'])
   totals.set('0.0.bin', scan(0, 0, 'Ann', [[0, 70, 0, 12]]))
   assert.deepEqual([...totals.seen()].map(([name, v]) => [name, v.count]), [['state:5-5', 1], ['state:12-13', 2]])
+})
+
+test('missingFrom names the known files that are no longer listed, and none that stay', () => {
+  const known = new Map([['0.0.bin', 1], ['1.0.bin', 2], ['2.0.bin', 3]])
+  assert.deepEqual(missingFrom(known, ['0.0.bin', '2.0.bin', '5.5.bin']), ['1.0.bin'])
+  assert.deepEqual(missingFrom(known, ['0.0.bin', '1.0.bin', '2.0.bin']), [])
+  assert.deepEqual(missingFrom(known, []), ['0.0.bin', '1.0.bin', '2.0.bin'])
 })

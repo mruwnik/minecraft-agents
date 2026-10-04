@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
-import { classifyReal, flaggedLookup, scanColumn, createTotals, versionFormat } from './block-scan.mjs'
+import { classifyReal, flaggedLookup, scanColumn, createTotals, versionFormat, missingFrom } from './block-scan.mjs'
 import { decodeColumnFile } from './columns.mjs'
 import { mergeSeen } from './block-issues.mjs'
 
@@ -116,7 +116,7 @@ const trackWorld = async world => {
 
   const sweep = async () => {
     const names = await readDir(dir)
-    const gone = [...mtimes.keys()].filter(name => !names.includes(name))
+    const gone = missingFrom(mtimes, names)
     if (!built) {
       version = await detectVersion(names)
       if (version) built = staticFor(version)
