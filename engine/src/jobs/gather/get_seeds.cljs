@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -194,7 +195,7 @@
 (defn ^:async dig-one!
   "Walk to pos and dig it: :dug, :missing or :skipped (a blocked or partial walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (u/walk-near! c pos reach))]
+  (let [walked (await (near/walk-near! c pos reach))]
     (if (contains? #{:blocked :partial} walked)
       (do (skip! c pos) :skipped)
       (let [v (access/may-dig? (access/rules-input c) pos)

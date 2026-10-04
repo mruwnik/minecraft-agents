@@ -18,7 +18,7 @@
   ([spec plans] (start spec plans []))
   ([spec plans zones]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake spec)
+        p (tu/fake-on-floor spec)
         w (world/of-data plans {} zones)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
@@ -61,7 +61,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (update (pen-plan) :parts conj {:id "eye" :cells [[3 65 2]] :want {:block "observer" :facing :north}})
-              {:keys [eng p]} (start {:inventory (conj kit {:name "observer" :count 1})} {"pen" plan})
+              ;; the body starts south of the pen, the side the observer is placed from (a walk round the ring would
+              ;; hug a fence side, which the fake's block-wise steer cannot walk: card aef2106d)
+              {:keys [eng p]} (start {:inventory (conj kit {:name "observer" :count 1}) :self {:pos {:x 3 :y 64 :z 7}}} {"pen" plan})
               body-z (atom nil)]
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]
@@ -151,7 +153,7 @@
         (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:inventory kit :unloaded ["40,64,0"]} {"far" plan})
               result (await (h/child-outcome eng job {:plan "far"} 200))]
-          (is (seq (h/calls p "moveTo")))
+          (is (seq (tu/walk-calls p)))
           (is (= {[40 64 0] :unloaded} (:given-up result)))
           (is (= [[40 64 0]] (:missing result))))))))
 

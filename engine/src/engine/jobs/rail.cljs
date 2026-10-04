@@ -14,6 +14,7 @@
   (:require [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.build.from-plan :as build]
             [plan.rail :as rail]))
 
@@ -113,7 +114,7 @@
         give-up (:give-up (:args c))]
     (if-not stand
       (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
-      (let [w (await (u/walk-near! c (zipmap [:x :y :z] stand) 0))]
+      (let [w (await (near/walk-near! c (zipmap [:x :y :z] stand) 0))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (build/count-fail % (:pos cell) :unreachable give-up)
                                   (update :bad-stands (fnil conj []) stand))))

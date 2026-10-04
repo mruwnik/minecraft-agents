@@ -19,7 +19,7 @@
   [{:keys [world p dir clock shared]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake world))
+        p (or p (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -563,14 +563,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [])
-              p (tu/fake {:blocks {"6,64,0" "sand"}})
+              p (tu/fake-on-floor {:blocks {"6,64,0" "sand"}})
               _ (.override (.-world p) "steer"
                            (fn [token args impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                              (impl token args)))
               s (start {:p p :shared w})]
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :mend false}) {})
           (await (run-ticks s 20))
-          (is (= 1 (count (calls s "moveTo"))))
+          (is (= 1 (count (moved s))) "one walk, then the zone refuses the dig")
           (is (empty? (calls s "dig")))
           (is (= :refused (:reason (done-event s)))))))))
 
@@ -615,7 +615,7 @@
   "The fake over world whose collect leaves the body where it stands, as the real one does for an item in pickup
   reach (the fake's walks onto the item's cell, here the 1-high cell the ore left)."
   [world]
-  (let [p (tu/fake world)
+  (let [p (tu/fake-on-floor world)
         w (.-world p)]
     (.override w "collect" (fn ^:async f [token a impl]
                              (let [at (.. w -state -self -pos)

@@ -5,6 +5,7 @@
             [engine.jobs.gate :as gate]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
@@ -299,7 +300,7 @@
       (do (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
           (to-mend! c :refused))
       (nil? pos) (to-mend! c (if (and wet? (not wet)) :wet :none))
-      :else (let [walked (await (u/walk-near! c pos reach))]
+      :else (let [walked (await (near/walk-near! c pos reach))]
               (cond
                 (= :blocked walked) (do (skip-failed! c pos) :continue)
                 (= :partial walked) (partial! c pos)
@@ -364,11 +365,23 @@
         (= :arrived (:status res)) :continue
         :else (trapped! c here entry res)))))
 
+(defn ^:async surface-walk!
+  "Walk to pos (range 0) on the surface after a tunnel: :there, :partial or :blocked. Kept on moveTo (the old walker)
+  while card c97285bf is open: the walk driver gets stuck climbing out of the tunnel stair in the fake."
+  [c pos]
+  (if (u/within? (u/self-pos c) pos 0)
+    :there
+    (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range 0})))]
+      (case (.-status r)
+        "arrived" :there
+        "partial" :partial
+        :blocked))))
+
 (defn ^:async walk-home!
   "From the tunnel's entry back to where the visit began, on the surface (moveTo, as mine walks to targets); the
   visit ends either way, an info mine.not-home when the walk did not arrive."
   [c {:keys [from]}]
-  (let [walked (await (u/walk-near! c (zipmap [:x :y :z] from) 0))]
+  (let [walked (await (surface-walk! c (zipmap [:x :y :z] from)))]
     (when (not= :there walked)
       (ctx/emit! c :mine.not-home :info {:to from :walk walked :text (str "mine did not get back to " (pr-str from) ": " (name walked))}))
     (ctx/update-mem! c dissoc :visit)
@@ -425,7 +438,7 @@
 
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) mend-reach)
-                 (await (u/walk-near! c pos reach))
+                 (await (near/walk-near! c pos reach))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) :continue)
@@ -492,8 +505,7 @@
   open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
   [c]
   (let [{:keys [start]} (ctx/mem c)
-        walked (await (u/walk-near! c start 0))]
-    (js/console.error "DBGS6 home" (pr-str start walked (u/self-pos c)))
+        walked (await (surface-walk! c start))]
     (when (not= :there walked)
       (ctx/emit! c :mine.not-home :info {:to (access/cell start) :walk walked :text (str "mine did not get back to " (pr-str (access/cell start)) ": " (name walked))}))
     (finish! c)))

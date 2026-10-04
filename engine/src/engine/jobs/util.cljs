@@ -1,6 +1,6 @@
 (ns engine.jobs.util
-  "Helpers the library jobs share: reading positions off JS, walking in reach,
-  and bounded failure counting."
+  "Helpers the library jobs share: reading positions off JS, distances, the
+  inventory and bounded failure counting. Walking in reach is engine.path.near/walk-near!."
   (:require [engine.ctx :as ctx]))
 
 (def max-failures 3)
@@ -42,18 +42,6 @@
   "Empty main and hotbar slots of primitives p, at least 0."
   [p]
   (max 0 (- inventory-slots (.-length (.-inventory (.self p))))))
-
-(defn ^:async walk-near!
-  "Walk until within range of pos, skipping the walk when already there.
-  Resolves to :there, :partial (closer, call again) or :blocked."
-  [c pos range]
-  (if (within? (self-pos c) pos range)
-    :there
-    (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))]
-      (case (.-status r)
-        "arrived" :there
-        "partial" :partial
-        :blocked))))
 
 (defn fail!
   "Count a failed round in job memory. Returns :continue until max-failures,

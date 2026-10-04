@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds,
@@ -204,7 +205,7 @@
       (if-let [[pos n] (target c allowed)]
         (if (and n (= :hazard (first (verdict c pos))))
           (do (bump! c pos :hazard) :continue)
-          (let [w (await (u/walk-near! c pos 3))]
+          (let [w (await (near/walk-near! c pos 3))]
             (case w
               :partial :continue
               :blocked (do (bump! c pos :unreachable) :continue)

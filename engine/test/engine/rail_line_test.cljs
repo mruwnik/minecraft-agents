@@ -298,11 +298,11 @@
    :self {:pos {:x 0 :y (inc (top-of 0)) :z 3}}})
 
 (defn ^:async build-route!
-  "Build the plan of the waypoints over the world: [result seen p]."
+  "Build the plan of the waypoints over the world: [result seen p eng]."
   [waypoints opts world args & [zones]]
   (let [{:keys [eng p seen]} (b/start world {"line" (route-plan waypoints opts)} (or zones []))
         result (await (h/child-outcome eng job (merge {:plan "line"} args) 900))]
-    [result seen p]))
+    [result seen p eng]))
 
 (defn shape-of [p [x y z]] (:shape (props p [x y z])))
 
@@ -364,8 +364,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[_ _ p] (await (build-route! slope-route {} (route-world slope-route {} up-top) {}))
-              stands (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (h/calls p "moveTo")))
+        (let [[_ _ _ eng] (await (build-route! slope-route {} (route-world slope-route {} up-top) {}))
+              stands (set (map (juxt :x :y :z) (tu/walked-to eng)))
               rails (set (map :pos (rail/line (:cells (shape/expand (route-plan slope-route {}) {})))))]
           (is (some #(and (<= 19 (first %) 25) (rails %)) stands) "a stand on a climbing rail")
           (is (some #(and (<= 5 (first %) 15) (rails %)) stands) "a stand on a flat rail"))))))

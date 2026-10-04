@@ -77,7 +77,7 @@
           (let [{:keys [eng p]} (h/setup world)]
             (core/submit! eng (spec args) {})
             (is (nil? (core/tick! eng)) note)
-            (is (zero? (count (h/calls p "moveTo"))) note)
+            (is (zero? (count (tu/walked-to eng))) note)
             (is (zero? (dig-count {:p p})) note)))))))
 
 (deftest the-check-passes-with-only-a-chest
@@ -113,7 +113,7 @@
               warns (events-of s :get-seeds.gave-up)]
           (is (= :none (:reason (done-event s))))
           (is (zero? (count warns)))
-          (is (<= (count (h/calls (:p s) "moveTo")) 6) "each cell is tried once")
+          (is (<= (count (tu/walked-to (:eng s))) 6) "each cell is tried once")
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
@@ -186,11 +186,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:blocks {"6,64,0" "short_grass" "9,64,0" "short_grass"} :drops seed-drops})]
-          (.override (.-world p) "moveTo"
-                     (fn [token args impl]
-                       (if (= 6 (.-x (.-pos args)))
-                         (js/Promise.resolve #js {:status "partial" :pos #js {:x 0 :y 64 :z 0} :distance 6})
-                         (impl token args))))
+          (tu/short-walks! p 8 1) ; the first walk, to the nearer cell at x 6, ends partial
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 40 700))
           (is (= [9] (mapv #(.-x (.-pos (.-args %))) (h/calls p "dig"))) "only the reachable cell is dug")
@@ -202,10 +198,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cells (patch "short_grass" (range 5 16) (range 0 6))
-              far "15,64,5"
+        ;; every patch cell is unreachable (the fake walls in the cells round each); the one beyond them, at z 9, is not
+              far "11,64,9"
               s (await (scenario {:count 1 :per-round 8}
-                                 {:blocks cells :drops seed-drops :unreachable (vec (remove #{far} (keys cells)))} 200))]
-          (is (= 1 (dig-count s)) "the one reachable cell, beyond 64 skipped ones, is dug")
+                                 {:blocks (assoc cells far "short_grass") :drops seed-drops :unreachable (vec (keys cells))} 200))]
+          (is (= 1 (dig-count s)) "the one reachable cell, past the skipped ones, is dug")
           (is (= :count (:reason (done-event s)))))))))
 
 ;; ------------------------------------------------------------------ worlds with zones and plans
@@ -223,7 +220,7 @@
 (defn ^:async in-world
   "Submit the job with args over a fake of world sharing w; run n ticks; the setup map."
   [args world w n]
-  (let [s (start {:p (tu/fake world) :shared w})]
+  (let [s (start {:p (tu/fake-on-floor world) :shared w})]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -304,7 +301,7 @@
                               [(ew/of-data {"pad" (plan-over "pad" [9 65 0] "sugar_cane")} {} []) {:zones [] :plans ["pad"]}]]]
           (let [s (await (in-world {:item "sugar_cane"} {:blocks (stand "sugar_cane" 9 0 3)} w 20))]
             (is (empty? (dug-cells s)))
-            (is (zero? (count (h/calls (:p s) "moveTo"))) "no walk to a refused cell")
+            (is (zero? (count (tu/walked-to (:eng s)))) "no walk to a refused cell")
             (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
             (is (= :refused (:reason (done-event s))))
             (is (= 0 (:got (done-event s))))
@@ -359,8 +356,8 @@
         (doseq [[args world] [[{:item "sugar_cane" :count 1} {:blocks (stand "sugar_cane" 6 0 3)}]
                               [{:count 1} {:blocks (patch "short_grass" [6] [0])}]]]
           (let [w (ew/of-data {} {} [])
-                p (tu/fake world)
-                _ (.override (.-world p) "moveTo"
+                p (tu/fake-on-floor world)
+                _ (.override (.-world p) "steer"
                              (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                                (impl token a)))
                 s (start {:p p :shared w})]
@@ -374,7 +371,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))})
+              p (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))})
               s (start {:p p :dir dir})]
           (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3}) {})
           (await (run-ticks s 3 700))
@@ -408,7 +405,7 @@
                                         [{:count 1 :accept #{:fluid-adjacent}} [[9 64 0]] pos?]]]
           (let [s (await (scenario args {:blocks {"9,64,0" "short_grass" "9,64,1" "lava"} :drops seed-drops} 20))]
             (is (= expected (dug-cells s)))
-            (is (walks? (count (h/calls (:p s) "moveTo"))))))))))
+            (is (walks? (count (tu/walked-to (:eng s)))))))))))
 
 ;; ------------------------------------------------------------------ roots: from a chest only
 

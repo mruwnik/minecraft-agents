@@ -14,7 +14,7 @@
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -155,7 +155,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [far {:from {:x 30 :y 64 :z 30} :to {:x 31 :y 64 :z 30}}
-              {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"}
+              {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
                                       :unloaded ["30,64,30" "31,64,30"]})
               out (atom :not-done)
               parent {:check (constantly true)
@@ -167,7 +167,7 @@
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
           (is (= :not-done @out) "unloaded cells are not an empty box")
-          (is (pos? (count (calls p "moveTo"))))
+          (is (pos? (count (tu/walk-calls p))))
           (is (empty? (calls p "dig")))
           (.clear (.. p -world -state -unloaded))
           (await (run-until-empty eng 12))
@@ -253,7 +253,7 @@
         (let [w (ew/of-data {} {} [])
               {:keys [eng p]} (setup {:blocks {"9,64,1" "dirt"}} w)
               args {:from {:x 9 :y 64 :z 1} :to {:x 9 :y 64 :z 1}}]
-          (.override (.-world p) "moveTo"
+          (.override (.-world p) "steer"
                      (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [9 64 1] :max [9 64 1])]) (impl token a)))
           (is (= {:dug 0 :skipped {{:x 9 :y 64 :z 1} :zone} :kept 0 :fluids {}} (await (child-outcome eng job args 8))))
           (is (empty? (calls p "dig"))))))))
