@@ -123,6 +123,24 @@
                    (.close h)
                    (done)))))))
 
+(defn thrown-or-value
+  "(f)'s value, or the error it threw."
+  [f]
+  (try (f) (catch :default e e)))
+
+(deftest a-snapshot-whose-draw-fails-rejects-instead-of-throwing
+  (async done
+    (let [calls (volatile! [])
+          surface (fake-surface calls)
+          _ (set! (.-draw surface) (fn [& _] (throw (js/Error. "draw failed"))))
+          ^js h (hub/hub #js {:fps 6 :maxScenes 3 :openStream (fake-source (volatile! []))} surface)
+          ^js s (.addScene h #js {:agent "w/a"})
+          result (thrown-or-value #(.snapshot s #js {:width 8 :height 4}))]
+      (is (instance? js/Promise result) "a failure comes back as a rejected promise, not a throw")
+      (-> result
+          (.then (fn [_] (is false "the snapshot must reject")) (fn [e] (is (= "draw failed" (.-message e)))))
+          (.then (fn [] (.close h) (done)))))))
+
 (deftest one-stream-for-all-scenes-its-events-go-to-the-scenes-of-their-agent-and-replay-to-a-later-one
   (async done
     (let [calls (volatile! [])

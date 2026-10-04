@@ -9,9 +9,15 @@
   []
   (js/Promise. (fn [resolve] (js/setTimeout resolve 0))))
 
-(defn fake-world [calls]
+(defn burn
+  "Busy-waits ms (a slow GPU upload)."
+  [ms]
+  (let [end (+ (js/performance.now) ms)]
+    (while (< (js/performance.now) end))))
+
+(defn fake-world [calls burn-ms]
   #js {:allocate (fn [n height] (vswap! calls conj [:allocate n height]))
-       :uploadColumn (fn [sx sz] (vswap! calls conj [:upload sx sz]))
+       :uploadColumn (fn [sx sz] (burn burn-ms) (vswap! calls conj [:upload sx sz]))
        :clearSlot (fn [sx sz] (vswap! calls conj [:clear sx sz]))
        :setBiomes (fn [_] true)
        :dispose (fn [] (vswap! calls conj [:dispose]))})
@@ -40,9 +46,9 @@
       (= column-status :never) (js/Promise. (fn [_ _]))
       :else (js/Promise.resolve (response column-status)))))
 
-(defn make-scene [{:keys [radius decode column-status calls urls] :or {radius 1 decode :now column-status 200}}]
+(defn make-scene [{:keys [radius decode column-status calls urls burn-ms] :or {radius 1 decode :now column-status 200 burn-ms 0}}]
   (scene/create-scene #js {:agent "w/Bob" :radius radius :interp false :ownStream false
-                           :world (fake-world calls) :decoder (fake-decoder decode calls)
+                           :world (fake-world calls burn-ms) :decoder (fake-decoder decode calls)
                            :tables #js {:ensure (fn [_] (js/Promise.resolve #js {}))}
                            :fetch (fake-fetch column-status urls)
                            :cameraBasis (fn [cam] cam) :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))
@@ -188,3 +194,36 @@
       (.set columns k #js {:status status}))
     (is (= 2 (scene/loaded-count columns)))
     (is (= 0 (scene/loaded-count (js/Map.))))))
+
+(deftest the-upload-step-stops-at-its-budget-on-the-initial-fill
+  (async done
+    (let [calls (volatile! []) urls (volatile! [])
+          ^js s (make-scene {:calls calls :urls urls :burn-ms 5})]
+      (.feed s "pose" (pose 8 8))
+      (-> (after-ticks 10)
+          (.then (fn []
+                   (is (= 9 (:uploads (counts s))) "all nine columns are decoded and waiting")
+                   (.frame s 0 nil)
+                   ;; each upload takes 5 ms, over the 4 ms budget: the first column is uploaded, the rest wait for the next frame
+                   (is (= 1 (count (filter #(= :upload (first %)) @calls))))
+                   (is (= 8 (:uploads (counts s))))
+                   (.close s)
+                   (done)))))))
+
+(deftest without-a-fetch-option-the-scene-uses-the-global-fetch
+  (async done
+    (let [urls (volatile! [])
+          original (.-fetch js/globalThis)
+          ^js s (do (set! (.-fetch js/globalThis) (fake-fetch 200 urls))
+                    (scene/create-scene #js {:agent "w/Bob" :radius 1 :interp false :ownStream false
+                                             :world (fake-world (volatile! []) 0) :decoder (fake-decoder :now (volatile! []))
+                                             :tables #js {:ensure (fn [_] (js/Promise.resolve #js {}))}
+                                             :cameraBasis (fn [cam] cam) :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))]
+      (.feed s "pose" (pose 8 8))
+      (-> (after-ticks 10)
+          (.then (fn []
+                   (set! (.-fetch js/globalThis) original)
+                   (is (= "/columns/w/0.0.bin" (first (filter #(.includes % "/columns/") @urls))))
+                   (is (some #(.includes % "/biomes/w.json") @urls))
+                   (.close s)
+                   (done)))))))

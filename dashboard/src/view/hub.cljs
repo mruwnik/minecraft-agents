@@ -223,20 +223,23 @@
                                        (fit-hidden!)
                                        (.placeholder surface canvas width height))))
                           ;; renders the scene now at width x height; waits no longer than the columns already decoded
+                          ;; a failure comes back as a rejected promise, never a throw, as the async function it replaced did
                           snapshot (fn [^js snapshot-options]
-                                     (let [width (option snapshot-options "width" 320)
-                                           height (option snapshot-options "height" 180)
-                                           now (perf-now)
-                                           params (loop [round 0]
-                                                    (let [params (.frame scene now)]
-                                                      (if (or (>= (inc round) SNAPSHOT-UPLOAD-ROUNDS)
-                                                              (zero? (.-uploads ^js (.counts scene))))
-                                                        params
-                                                        (recur (inc round)))))]
-                                       (if (nil? params)
-                                         (js/Promise.reject (js/Error. (str "scene of " agent " has nothing to draw yet")))
-                                         (do (draw-into! entry params width height nil)
-                                             (.then (.bitmap surface width height) (fn [bitmap] (.drew scene) bitmap))))))
+                                     (try
+                                       (let [width (option snapshot-options "width" 320)
+                                             height (option snapshot-options "height" 180)
+                                             now (perf-now)
+                                             params (loop [round 0]
+                                                      (let [params (.frame scene now)]
+                                                        (if (or (>= (inc round) SNAPSHOT-UPLOAD-ROUNDS)
+                                                                (zero? (.-uploads ^js (.counts scene))))
+                                                          params
+                                                          (recur (inc round)))))]
+                                         (if (nil? params)
+                                           (js/Promise.reject (js/Error. (str "scene of " agent " has nothing to draw yet")))
+                                           (do (draw-into! entry params width height nil)
+                                               (.then (.bitmap surface width height) (fn [bitmap] (.drew scene) bitmap)))))
+                                       (catch :default e (js/Promise.reject e))))
                           attaches (fn [now] (.map (values (.-targets entry)) #(attach-stats % now)))
                           stats (fn []
                                   (let [now (perf-now)]

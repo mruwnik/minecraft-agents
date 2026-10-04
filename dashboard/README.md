@@ -76,9 +76,9 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
   `/view?agent=<world>/<body>`, `/agents`, `/pose/<world>/<body>`, `/hud/<world>/<body>`, `/drive/<world>/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
   `/blocks/`, `/textures/`.
-- The view pages' ClojureScript (`src/view/`: pose interpolation, the drive rules as `tools/view/web/drive.mjs` calls them) is the
+- The view pages' ClojureScript (`src/view/`: pose interpolation (`interp`), the drive rules as `tools/view/web/drive.mjs` calls them (`drive`), the hub's scheduling and stream replay (`schedule`, `hub`), the scene's pose following and column fetch/upload (`scene`) and its toroidal column window (`window`)) is the
   `:viewer` build: `shadow-cljs release viewer` writes one ES module, `tools/view/web/cljs/viewer.mjs` (gitignored), imported by
-  `scene.mjs` and `drive.mjs` and served at `/web/cljs/viewer.mjs`. `node ../tools/view/build-cljs.mjs` builds it when a source
+  `hub.mjs`, `scene.mjs` and `drive.mjs` and served at `/web/cljs/viewer.mjs`. `node ../tools/view/build-cljs.mjs` builds it when a source
   is newer; `npm run build`, the launcher's restart and the root `npm test` (pretest) run that.
 
 Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view and takeover), `/map` (places, zones,
