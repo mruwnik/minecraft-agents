@@ -1,6 +1,6 @@
 (ns dashboard.shared-map
   "Canonical protection zones and authored social claim overlays. Claims are
-  labels on the common map; they do not grant or deny engine actions."
+  labels on the common map; the engine does not enforce them, jobs consult them (engine.jobs.access) and may be told to ignore them."
   (:require ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]

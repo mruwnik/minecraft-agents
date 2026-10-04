@@ -181,7 +181,7 @@
 (defn zones-warn-event [file {:keys [missing error kept]}]
   (if missing
     {:source :system :kind :world.zones-missing :level :warn :path file
-     :text (str "zone file " file " is missing; dig and place jobs decline until it is there")}
+     :text (str "zone file " file " is missing; dig, place and take jobs decline until it is there unless given :ignore-zones? true")}
     {:source :system :kind :world.zones-unreadable :level :warn :path file :error error :kept kept
      :text (str "zone file " file " cannot be read (" error ")"
                 (if kept "; the last good copy is still used" "; it was never readable, dig and place jobs decline"))}))
