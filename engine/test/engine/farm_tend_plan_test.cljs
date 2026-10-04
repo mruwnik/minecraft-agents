@@ -246,6 +246,18 @@
           (is (= "dirt" (block-at s 2 63 2)))
           (is (= #{[3 64 2]} (set (keys (placed s))))))))))
 
+(deftest tend-passes-the-zone-opt-out-to-its-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[extra hoed] [[{} "dirt"] [{:ignore-zones? true} "farmland"]]]
+          (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
+                s (await (run (merge {:plan "mix"} extra)
+                              (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+                                        {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
+                              {"mix" (plan-of)} [zone] 60))]
+            (is (= hoed (block-at s 2 63 2)) (pr-str extra))))))))
+
 (deftest a-plan-deleted-mid-job-is-not-worked-in-the-next-round
   (async done
     (tu/run-async done
@@ -423,8 +435,8 @@
                                       {:inventory [(item "wheat_seeds" 6)] :drops {"wheat" ["wheat" "wheat_seeds"]}})
                             {"mix" (plan-of)} [zone] 60))]
           (is (= #{[3 64 2]} (dug s)))
-          (is (= ["wheat" "air"] [(block-at s 2 64 2) (block-at s 3 64 2)]))
-          (is (= #{[2 64 2]} (set (keys (placed s))))))))))
+          (is (= ["wheat" "wheat"] [(block-at s 2 64 2) (block-at s 3 64 2)]))
+          (is (= #{[2 64 2] [3 64 2]} (set (keys (placed s))))))))))
 
 (deftest the-seed-of-a-crop-caps-the-beds-made-for-it
   (async done

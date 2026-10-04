@@ -19,7 +19,7 @@
   {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up :wrong :refused}}, :reason nil
   when closed, else :leak, :unbounded, :unloaded or :no-start (see jobs.animals.pen-check). The check declines with
   one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), no fence
-  cells, or no zone list has been read; it declines without a warn while nothing is missing and the pen already holds
+  cells, or no zone list has been read (unless :ignore-zones?); it declines without a warn while nothing is missing and the pen already holds
   (nothing to do, nothing is rebuilt or re-checked after a restart: the world is the memory), and through the
   builder's own build.declined while materials are not carried. Once begun the check stays true.")
 
@@ -29,7 +29,8 @@
    :reach {:doc "as jobs.build.from-plan" :default 4.2}
    :give-up {:doc "as jobs.build.from-plan" :default 3}
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
-   :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :default pen/default-max-cells}})
+   :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :default pen/default-max-cells}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :default false}})
 
 ;; ------------------------------------------------------------------ the pen from the plan
 
@@ -66,7 +67,7 @@
                 (build/judged p answer part (set (keys (build/carried-counts p)))))
         trouble (or (build/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
-                    (when (nil? (ctx/zones c)) "no zone list has been read"))]
+                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :pen-build.declined
@@ -86,7 +87,7 @@
        (:closed? (read-pen c cells))))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept]))
+  (select-keys (:args c) [:plan :part :reach :give-up :accept :ignore-zones?]))
 
 ;; ------------------------------------------------------------------ check
 

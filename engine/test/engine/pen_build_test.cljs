@@ -113,6 +113,15 @@
           (is (true? (:closed? result)))
           (is (empty? (kinds-of seen :pen-build.leaky))))))))
 
+(deftest ignore-zones-builds-without-a-zone-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start (spec kit) {"pen" (ring-plan)} nil)
+              result (await (h/child-outcome eng job {:plan "pen" :ignore-zones? true} 300))]
+          (is (true? (:closed? result)))
+          (is (= "oak_fence" (h/block-at p 4 64 3))))))))
+
 (deftest a-cell-in-another-plans-footprint-is-reported-not-forced
   (async done
     (tu/run-async done
