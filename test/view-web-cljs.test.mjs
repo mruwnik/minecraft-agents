@@ -7,7 +7,7 @@ import * as viewer from '../tools/view/web/cljs/viewer.mjs'
 const pose = (t, x, extra = {}) => ({ t, status: 'online', eye: { x, y: 65.62, z: 0 }, pos: { x, y: 64, z: 0 }, yaw: 1, pitch: 0, world: 'w', ...extra })
 
 test('every export drive.mjs and scene.mjs import is a function', () => {
-  for (const name of ['poseInterpolator', 'controlFor', 'lookStepFor', 'mouseLook', 'mergeLook', 'bannerText', 'serialQueue', 'whoFrom',
+  for (const name of ['poseInterpolator', 'viewHub', 'createSceneCore', 'decodePriority', 'controlFor', 'lookStepFor', 'mouseLook', 'mergeLook', 'bannerText', 'serialQueue', 'whoFrom',
     'shouldTakeOnClick', 'shouldReleaseOnEscape', 'leaveAction', 'withTimeout', 'isStale', 'shouldDrop']) {
     assert.equal(typeof viewer[name], 'function', name)
   }
@@ -27,6 +27,26 @@ test('poseInterpolator: methods by name, a blended pose keeps the fields of the 
   for (const name of ['interval', 'offset', 'underruns']) assert.equal(typeof interp[name](), 'number', name)
   assert.equal(typeof interp.playhead(7000), 'number')
   assert.equal(viewer.poseInterpolator().sample(0), null)
+})
+
+// view.scene over fakes, through the advanced build: the scene object and its metrics keep the names app.mjs, hub.mjs and the
+// measurement tools read
+test('createSceneCore: the scene and its metrics keep their property names', () => {
+  const world = { allocate () {}, uploadColumn () {}, clearSlot () {}, setBiomes: () => true, dispose () {} }
+  const scene = viewer.createSceneCore({ agent: 'w/Bob', radius: 1, ownStream: false, world, decoder: { decode: () => new Promise(() => {}), cancel () {} }, tables: { ensure: () => new Promise(() => {}) }, fetch: () => new Promise(() => {}) })
+  for (const name of ['frame', 'drew', 'stats', 'close', 'pose', 'hud', 'counts', 'isReady', 'feed']) assert.equal(typeof scene[name], 'function', name)
+  for (const name of ['latencies', 'shownLatencies', 'camTrace', 'decodeMs', 'lightMs', 'uploadMs', 'columnDrawn', 'retargetMs', 'slowUploads']) assert.ok(Array.isArray(scene.metrics[name]), name)
+  assert.deepEqual(scene.counts(), { inFlight: 0, decoding: 0, uploads: 0, needs: 0 })
+  assert.deepEqual(scene.stats(), { loaded: 0, wanted: 0, poseAge: null, status: 'connecting' })
+  assert.equal(scene.frame(0), null)
+  assert.equal(viewer.decodePriority(`${scene.id}|0.0`), Infinity)
+  scene.close()
+})
+
+test('viewHub without a surface: the unsupported hub', () => {
+  const hub = viewer.viewHub({}, null)
+  assert.equal(hub.supported, false)
+  assert.deepEqual(hub.stats(), { supported: false, scenes: {} })
 })
 
 test('drive rules take and give JS values', () => {

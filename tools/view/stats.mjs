@@ -1,3 +1,5 @@
+// Why JavaScript (for now): pixel maths of the Node headless pixel check (tools/view-web-check.mjs); it moves to cljs with the
+// check's other maths (card d26c903c).
 // Pixel statistics over a rectangle {x0, y0, x1, y1} (inclusive) of a decoded image {width, height, rgba}.
 export const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b
 

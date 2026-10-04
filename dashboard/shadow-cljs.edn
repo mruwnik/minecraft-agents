@@ -70,6 +70,9 @@
            :output-dir "../tools/view/web/cljs"
            :modules {:viewer {:output-name "viewer.mjs" ; .mjs: the repo package is commonjs, Node tests import it too
                               :exports {poseInterpolator view.interp/pose-interpolator
+                                        viewHub view.hub/view-hub
+                                        createSceneCore view.scene/create-scene
+                                        decodePriority view.scene/decode-priority
                                         controlFor view.drive/control-for
                                         lookStepFor view.drive/look-step-for
                                         mouseLook view.drive/mouse-look
