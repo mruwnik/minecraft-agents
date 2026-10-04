@@ -1,0 +1,6 @@
+;; live (swimming in the path executor): the body idles; cases are submitted one at a time with tools/jobs.mjs
+;; (jobs.debug.walk-plan) after an RCON tp onto ponds, channels and tunnels filled by console near x 8300, z 8300;
+;; only the breathe reflex is registered (cut mid-swim, drowning checks)
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}]
+ :queue []}
