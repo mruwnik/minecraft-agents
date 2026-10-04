@@ -14,7 +14,7 @@
 (def reserved
   "Memory kinds the engine writes for its own use. A place may not take one of these names: the write would replace
   the kind's own cap and ttl. (A kind that exists in memory and is not a place is refused too, see foreign-kind?.)"
-  #{:hurt :died :chat :whisper :woke :spawned :respawned :online :offline :disconnected :error :reconnect-failed
+  #{:hurt :died :chat :whisper :woke :player-joined :player-left :spawned :respawned :online :offline :disconnected :error :reconnect-failed
     :dependency-patches-missing :world-not-loaded :physics-stalled :picked-up
     :restart :moved :slept :fed :hungry :hostile :hazard :stuck :looked :recovered :breathe :extinguish :log-out
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :no-craft :notify :bed-unreachable :chest-unusable

@@ -1195,6 +1195,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
       whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
       wake: () => emit({ kind: 'woke' }),
+      playerJoined: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-joined', player: player.username }) },
+      playerLeft: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-left', player: player.username }) },
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return
         const item = collected && droppedItem(target, collected)

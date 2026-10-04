@@ -14,6 +14,7 @@
             [engine.triggers.scaffold-left :as scaffold-left]
             [engine.triggers.stuck :as stuck]
             [engine.triggers.mounted :as mounted]
+            [engine.triggers.player-joined :as player-joined]
             [engine.triggers.died :as died]))
 
 (def default-health 7)
@@ -96,4 +97,4 @@
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
          night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
-         inventory-nearly-full every-interval scaffold-left/trigger mounted/trigger]))
+         inventory-nearly-full every-interval scaffold-left/trigger mounted/trigger player-joined/trigger]))

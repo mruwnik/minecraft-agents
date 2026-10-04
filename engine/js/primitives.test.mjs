@@ -370,6 +370,17 @@ test('body events: health drop is hurt, death and respawn are forwarded, unsubsc
   assert.deepEqual(seen[4], { kind: 'chat', from: 'Ann', message: 'hi' })
 })
 
+test('body events: another player joining or leaving is reported, the body itself is not', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('playerJoined', { username: 'Ann', uuid: 'u1' })
+  bot.emit('playerJoined', { username: 'Stub' })
+  bot.emit('playerLeft', { username: 'Ann' })
+  bot.emit('playerLeft', { username: 'Stub' })
+  assert.deepEqual(seen, [{ kind: 'player-joined', player: 'Ann' }, { kind: 'player-left', player: 'Ann' }])
+})
+
 test('close quits the bot', async () => {
   const { bot, p } = rig(world)
   await p.close()
