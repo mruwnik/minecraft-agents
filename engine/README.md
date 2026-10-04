@@ -1227,6 +1227,32 @@ queues `(repeat (jobs.movement.look-around))`, so the body looks around
 the body, and checks that recover, respond-to-hostile and recover-drops fire
 in turn and that the body goes back to looking around.
 
+## Zones and claims
+
+Zones (`worlds/<world>/zones.edn`) and claims (`claims.edn`) are a social rule that jobs consult, never one the engine
+enforces: `act!` and the primitives check neither, and a job may ignore them (the rules of the game allow it). The helper
+is `engine.jobs.access` (`may?` for `:dig :place :sow :harvest :take :put`, `choose` and `trespass!` for survival jobs,
+`container-refusal` for chests and furnaces) over the pure `engine.access.zones/verdict`. The verdict, first match wins:
+
+1. no zone list read: `:no-zones`;
+2. the cell is in another active plan's footprint (the plan the job builds is left out): `:footprint`;
+3. a zone holds the cell, its `:owner` is not the body (compared ignoring case; `"unknown"` counts as foreign) and its
+   `:allow` lacks the action: `:zone`. `:allow` is what OTHERS may do there (`:dig :place :harvest :take :put`); the
+   owner may always act;
+4. an active, unexpired claim of another owner holds the cell (a claim has no `:allow`): `:claim`;
+5. else ok: `:own-zone`, `:own-claim` or `:open`.
+
+Three decisions are named defaults at the top of `engine.access.zones`, one line each: `deposit-into-foreign-chest?`
+(false: `:put` into another's chest is refused), `plan-footprint-beats-zone?` (true: a plan's own builder works over a
+foreign zone), `unknown-owner-foreign?` (true).
+
+Every job that digs, places or takes accepts `:ignore-zones? true` (default false: act regardless of zones and claims).
+By default a job skips a target the verdict refuses, with one warn naming the zone, claim or plan; `withdraw`, `deposit`,
+`smelt` and the jobs built on them give up `:refused {:zones :claims}` on a foreign container. Survival jobs (`breathe`,
+`extinguish`, `dig-in`, `maintenance.unstick`, the crop dig of `get-food`) take a permitted option first and break
+another's block only as a last resort, with one `<job>.trespass-last-resort` warn; they never take from a foreign
+container (`get-food` skips such a chest). A missing zone list never blocks a survival job.
+
 ## Job library
 
 Jobs live under `src/jobs/`, helpers in `engine.jobs.util` and
