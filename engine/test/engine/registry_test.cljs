@@ -19,7 +19,7 @@
      jobs.items.enchant
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
      jobs.access.pillar
-     jobs.explore.search
+     jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
