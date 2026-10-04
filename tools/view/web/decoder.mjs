@@ -1,3 +1,4 @@
+// Why JavaScript: worker; queues column decode jobs over browser workers.
 // Decodes column files off the main thread. Jobs wait in a queue here, and whenever a worker is idle the queued job with
 // the lowest priority(key) is sent to it, evaluated at that moment, so the camera's current position drives the order.
 // Without workers (makeWorker throws, or ?worker=0 passes makeWorker: null) the same queue runs decodeColumn on the main

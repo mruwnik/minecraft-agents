@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; locates the client jar and reads its block texture atlas.
 // The client jar: where the launcher keeps it, known release order and reading its block texture atlas.
 import path from 'node:path'
 

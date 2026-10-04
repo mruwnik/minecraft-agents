@@ -1,3 +1,4 @@
+// Why JavaScript: thin launcher for the JS view server (tools/view/serve.mjs), which serves binary column files and the WebGL page.
 // Serves the browser view: node tools/view-serve.mjs [--port 3702] [--state dir] [--host 127.0.0.1] [--push watch|poll] [--poll-ms 50]
 import path from 'node:path'
 import { storageRoot, worldsDir } from '../engine/js/bodies.mjs'

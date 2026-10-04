@@ -1,3 +1,4 @@
+// Why JavaScript: tests bed.mjs, which stays JS: Mineflayer boundary; calls the bot's bed/sleep API.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { leaveBed, ensureAwake } from './bed.mjs'

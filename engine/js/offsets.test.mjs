@@ -1,3 +1,4 @@
+// Why JavaScript: tests offsets.mjs, which stays JS: shared with the per-tick physics wrapper (offset-shapes.mjs, Mineflayer boundary) and the path code; vanilla per-position offset hash.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blockOffset, OFFSET_MAX } from './offsets.mjs'

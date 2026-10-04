@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; calls the bot's bed/sleep API.
 // Leaving a bed. mineflayer's bot.wake() writes entity_action with a numeric actionId that this protocol maps to
 // stop_sprinting, so the server never lets the body up; the packet is sent by name instead.
 export const leaveBed = bot => bot._client.write('entity_action', { entityId: bot.entity.id, actionId: 'leave_bed', jumpBoost: 0 })

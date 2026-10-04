@@ -1,3 +1,4 @@
+// Why JavaScript: data for source patches of mineflayer-pathfinder in node_modules (Mineflayer boundary).
 // The three mineflayer-pathfinder monkey-patches (gate shift/guard, goto-empty-path, parkour scan) as data.
 
 // mineflayer-pathfinder 2.4.5, monitorMovement: after opening a gate it takes the next thing to place, and when there is none "placing" stays true:

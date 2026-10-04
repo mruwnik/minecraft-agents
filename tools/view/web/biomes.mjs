@@ -1,3 +1,4 @@
+// Why JavaScript: WebGL/binary; reorders biome ids for the GPU in the browser.
 // Biome ids of a dumped column come from decodeSections (decode.mjs); this only reorders them for the GPU.
 
 // section order to a 3D texture of 4 x (numSections * 4) x 4 cells: index (z4 * (numSections * 4) + y4global) * 4 + x4

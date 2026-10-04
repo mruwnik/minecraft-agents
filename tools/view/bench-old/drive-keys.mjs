@@ -1,3 +1,4 @@
+// Why JavaScript: verbatim copy of old JS kept as a bench baseline (cljs-vs-js comparison).
 // 2db6cef8^:tools/view/web/drive-keys.mjs, the JS drive.keys / view.drive replaced. Verbatim.
 // Pure key and look mapping for driving a body from the view page (Minecraft degrees: positive dyaw turns right,
 // negative dpitch looks up). Ctrl is not a control: Ctrl+W closes the tab.

@@ -1,3 +1,4 @@
+// Why JavaScript: graphics/performance; software raycaster over chunk data.
 // Eyes for the bot: a small software raycaster over the chunk data mineflayer already holds.
 // Everything here is pure (no bot, no disk) so it can be tested without a server; the body feeds it the world.
 import zlib from 'node:zlib'

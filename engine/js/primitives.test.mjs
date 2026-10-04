@@ -1,3 +1,4 @@
+// Why JavaScript: tests primitives.mjs, which stays JS: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'

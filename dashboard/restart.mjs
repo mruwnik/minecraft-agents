@@ -1,3 +1,4 @@
+// Why JavaScript: thin launcher; a tiny HTTP client for `npm run restart` that must work when the cljs server is down or rebuilding.
 // `npm run restart`: asks the running dashboard (started by `npm start`) to rebuild and restart the server, then waits for
 // the new server (a different build-id on /api/build-id) and says whether it came up. Plain JS: a tiny HTTP client.
 const port = Number(process.env.PORT || 3701)

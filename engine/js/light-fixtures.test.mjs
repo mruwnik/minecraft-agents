@@ -1,3 +1,4 @@
+// Why JavaScript: tests light-fixtures.mjs, which stays JS: binary data; light oracle fixtures captured from a real server, used by the light tests.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

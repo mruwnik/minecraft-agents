@@ -1,3 +1,4 @@
+// Why JavaScript: patches Mineflayer's own JS source in node_modules (Mineflayer boundary).
 // mineflayer 4.39.0 lib/plugins/entities.js: the air_supply in EVERY entity's metadata packet lands in bot.oxygenLevel
 // (the old breath.js checked the entity id first; the move into entities.js dropped that). Beside a pond a body reads a
 // glow squid's air (8) and a swimmer's (20) by turns while its own head is dry: the "drain on dry land" of card

@@ -1,3 +1,4 @@
+// Why JavaScript: browser; DOM key/mouse handling for manual takeover from the view page.
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
 import { isAgentKey } from './agent-key.mjs'

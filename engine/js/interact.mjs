@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; entity use/attack calls and the refusal guard before the click.
 // Using an item (or the empty hand) on an entity: feed, shear, lead, unleash. The server answers none of these with a
 // result, so the call watches for what changed and reports it.
 import vec3 from 'vec3'

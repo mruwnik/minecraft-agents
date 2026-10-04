@@ -1,3 +1,4 @@
+// Why JavaScript: patches JS dependency sources in node_modules (Mineflayer boundary).
 // Dependency source patch adapters copied from the previous terrain integration.
 export function patchTerrainWaypoints (source) {
   const marker = '// terrain-aware waypoint adapter'

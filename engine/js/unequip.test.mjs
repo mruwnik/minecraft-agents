@@ -1,3 +1,4 @@
+// Why JavaScript: tests unequip.mjs, which stays JS: Mineflayer boundary; calls bot.unequip.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { emptyHand, hasRoom } from './unequip.mjs'

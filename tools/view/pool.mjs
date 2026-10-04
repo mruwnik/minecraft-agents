@@ -1,3 +1,4 @@
+// Why JavaScript: worker threads; draws terrain bands into shared memory.
 // Terrain drawn by a pool of worker threads, in bands of rows into shared memory; the caller draws entities after
 // (raycaster.mjs drawEntities). render() is synchronous: it blocks the calling thread in Atomics.wait until every worker
 // has reported done, which Node allows on the main thread and which leaves the workers' message delivery unaffected.

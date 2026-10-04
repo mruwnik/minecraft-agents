@@ -1,3 +1,4 @@
+// Why JavaScript: binary/browser; decodes column files in the page with no node imports.
 // Decodes the chunk column files a body dumps (docs/view-format.md) in a browser: no node imports. A port of what
 // prismarine-chunk's 1.18 ChunkColumn.load reads, keeping block state ids and biome ids.
 

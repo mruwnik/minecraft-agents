@@ -1,3 +1,4 @@
+// Why JavaScript: worker thread; builds one version's view assets off the main thread and transfers the buffers.
 // The build thread of view-assets.mjs: builds one version's assets, posts them (the buffers are transferred, not copied) and exits.
 import { parentPort, workerData } from 'node:worker_threads'
 import { buildAssets, transferable } from './view-assets.mjs'

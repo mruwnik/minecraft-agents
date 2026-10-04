@@ -1,3 +1,4 @@
+// Why JavaScript: WebGL/browser; light curve and face orientation shared by shader inputs, runs in the page.
 // Light curve, sky darkening and face orientation of Minecraft Java's client (vanilla 1.20-1.21), each as a JS function
 // and as GLSL ES 3.00 in SHADING_GLSL mirroring it (same names and constants). No node imports: served as-is to the page.
 

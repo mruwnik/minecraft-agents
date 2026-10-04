@@ -1,4 +1,4 @@
-// Why JavaScript: Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
+// Why JavaScript: stable entry point for the AOT cljs tools (compilation is a build step, never command startup); Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)

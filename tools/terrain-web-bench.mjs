@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Why JavaScript: drives headless Chromium over CDP to measure the terrain map (browser/GPU).
 // Repeatable, read-only terrain-map benchmark over Chrome DevTools Protocol.
 // No browser/server is launched and no dashboard API is mutated.
 

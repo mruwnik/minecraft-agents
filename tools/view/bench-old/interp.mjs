@@ -1,3 +1,4 @@
+// Why JavaScript: verbatim copy of old JS kept as a bench baseline (cljs-vs-js comparison).
 // 2db6cef8^:tools/view/web/interp.mjs, the JS view.interp replaced. Verbatim.
 // Pose interpolation for the browser view. Pure: time is passed in, there are no globals.
 // Poses arrive a little late and unevenly; the camera plays them back `delay` ms behind the body clock, blended between

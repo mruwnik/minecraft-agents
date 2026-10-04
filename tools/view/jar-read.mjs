@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; reads entries from a zip (the client jar).
 // Reads files out of a client jar (a zip): the central directory at the tail lists every entry and where its bytes begin.
 // Only what the view tools need: list the names, read one entry.
 import fs from 'node:fs'

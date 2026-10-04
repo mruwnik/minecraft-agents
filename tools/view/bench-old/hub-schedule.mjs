@@ -1,3 +1,4 @@
+// Why JavaScript: verbatim copy of old JS kept as a bench baseline (cljs-vs-js comparison).
 // Verbatim from 8d0327d9^:tools/view/web/hub.mjs lines 25-96 (scheduling, eventCache, percentile, keep), the JS view.schedule replaced,
 // plus streamKey: the key computation inlined in that file's syncStream (lines 267-270), made a function. Used by tools/view/bench-cljs-vs-js.mjs.
 // ---- scheduling (pure) ----

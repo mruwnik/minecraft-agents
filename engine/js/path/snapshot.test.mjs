@@ -1,3 +1,4 @@
+// Why JavaScript: tests snapshot.mjs, which stays JS: binary data; section id arrays and prismarine chunk loading.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vec3 from 'vec3'

@@ -1,3 +1,4 @@
+// Why JavaScript: tests movements.mjs, which stays JS: Mineflayer boundary; the cost policy has to run inside mineflayer-pathfinder's getNeighbors.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

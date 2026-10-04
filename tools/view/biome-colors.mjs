@@ -1,3 +1,4 @@
+// Why JavaScript: GPU data; biome tint colours packed for the WebGL shader tables.
 // Per-biome tint colours for the browser view: per biome name (map to ids through the world's own biome registry: biomeTable) four RGB
 // triples: grass, foliage, dry foliage, water. From the client jar's colormaps and worldgen biome json by vanilla's rules, else
 // from minecraft-data's tints.json (source 'fallback').

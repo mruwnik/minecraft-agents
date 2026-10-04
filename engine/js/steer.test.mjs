@@ -1,3 +1,4 @@
+// Why JavaScript: tests steer.mjs, which stays JS: Mineflayer boundary; applies controls and reports pose on the bot.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vec3 from 'vec3'

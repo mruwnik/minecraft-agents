@@ -1,3 +1,4 @@
+// Why JavaScript: GPU/binary; builds the float32 element table texture the shader reads.
 // The model element table the shader reads: a float32 RGBA texture, TABLE_WIDTH texels wide, row after row. Served as raw little-endian
 // float32 (the page uploads it as RGBA32F, rows = data.length / 4 / TABLE_WIDTH).
 //

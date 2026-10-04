@@ -1,3 +1,4 @@
+// Why JavaScript: worker thread (worker_threads) that renders body previews with the JS view renderer off the main thread.
 // Renders body previews off the main thread: {id, world, name, ...opts} in, {id, png, ms} or {id, error, errorName} out.
 import { parentPort } from 'node:worker_threads'
 import { renderView, columnStats } from '../../tools/view/render.mjs'

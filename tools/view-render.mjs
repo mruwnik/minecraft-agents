@@ -1,3 +1,4 @@
+// Why JavaScript: binary/graphics; CLI over the software raycaster tools/view/render.mjs.
 // Draws what a body sees from the files it dumps, no server and no GPU:
 //   node tools/view-render.mjs <AgentName> --world <world> [--out file.png] [--width 320] [--height 180] [--fov 70] [--dist 64] [--watch ms] [--state dir] [--bench seconds [--no-png]]
 // Default out: worlds/<world>/agents/<Name>/view/frame.png. --bench <seconds> renders flat out and prints one JSON timing line (--no-png skips PNG encoding). --watch redraws whenever pose.json changes, writing atomically.

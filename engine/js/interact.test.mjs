@@ -1,3 +1,4 @@
+// Why JavaScript: tests interact.mjs, which stays JS: Mineflayer boundary; entity use/attack calls and the refusal guard before the click.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'

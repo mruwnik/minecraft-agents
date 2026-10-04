@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; captures real light from a live server through a body ProbeView.
 // Captures real light from a live server as oracle fixtures (engine/js/light-fixtures.mjs), acting only as the body ProbeView.
 //   node tools/light-capture.mjs --regions regions.json --out engine/js/fixtures/light
 // regions.json: [{name, center: [x, y, z], size: [sx, sy, sz]}]. Light is read from column.dumpLight() decoded in vanilla order

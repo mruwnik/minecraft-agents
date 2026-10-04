@@ -1,3 +1,4 @@
+// Why JavaScript: browser boundary; headless Chromium over CDP with global fetch and WebSocket, no dependencies.
 // Headless Chromium over CDP with no dependencies (global fetch and WebSocket); the approach of tools/view-web-bench.mjs.
 // withPage({url, width, height}, async page => ...) -> page {evaluate, waitUntil, screenshot, logs}; always cleans up.
 import { spawn } from 'node:child_process'

@@ -1,3 +1,4 @@
+// Why JavaScript: tests view.mjs, which stays JS: binary/graphics; column encoding, light overlay and atomic writers for the view dumps.
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

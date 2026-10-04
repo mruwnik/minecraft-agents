@@ -1,3 +1,4 @@
+// Why JavaScript: CLI harness that times the JS view renderer (graphics); no app logic.
 // node dashboard/js/thumbs-bench.mjs [stateDir]: render every body with a view once and print the cost.
 import fs from 'node:fs'
 import path from 'node:path'

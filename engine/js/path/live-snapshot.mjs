@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; lazy copy over Mineflayer's world.
 // The planner's snapshot over a mineflayer world, copied lazily: a section's 4096 ids are read (sectionIds) the first
 // time stateAt, setState or sectionHas touches it. A fresh snapshot is made per plan, so no block-update listener is
 // needed and the cost is one section copy per section the plan touches. A column or section the world lacks is

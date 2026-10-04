@@ -1,3 +1,4 @@
+// Why JavaScript: binary/web boundary; HTTP and server-sent-event server for the WebGL view and the dumped column files.
 // HTTP server for the browser view: static pages, the dumped column files, and a server-sent event stream that
 // pushes an agent's pose, hud and changed columns. Reads state/ (the body writes it atomically) and also proxies
 // driving commands to a body's control socket.

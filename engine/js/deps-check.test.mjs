@@ -1,3 +1,4 @@
+// Why JavaScript: tests deps-check.mjs, which stays JS: inspects patch markers in JS node_modules sources (Mineflayer dependencies); must run before any cljs is built.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'

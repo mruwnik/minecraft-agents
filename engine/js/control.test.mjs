@@ -1,3 +1,4 @@
+// Why JavaScript: tests control.mjs, which stays JS: thin adapter; HTTP framing of the body's control socket, the rules live in cljs (engine.lease).
 // control.mjs is a stateless HTTP adapter over a unix socket: these tests cover the framing only.
 // The takeover rules are engine.lease (test/engine/lease_test.cljs), applied by engine.takeover
 // (test/engine/takeover_test.cljs, which also runs test/contract/drive-contract.json).

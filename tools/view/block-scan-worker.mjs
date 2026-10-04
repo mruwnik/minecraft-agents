@@ -1,3 +1,4 @@
+// Why JavaScript: worker thread; scans chunk files for undrawable blocks off the main thread.
 import { worldsDir } from '../../engine/js/bodies.mjs'
 // The scan thread of block-scan.mjs. Per tracked world: an initial scan of the chunk files, then incremental rescans of the
 // columns whose mtime changed (a directory watch, with a slow sweep as the fallback). It posts the merged records to the

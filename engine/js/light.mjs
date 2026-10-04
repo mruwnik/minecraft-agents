@@ -1,3 +1,4 @@
+// Why JavaScript: measured performance and binary data; light propagation over typed arrays in a hot loop for the view dump.
 // Pure Minecraft light propagation. Region recompute: the one-cell shell of a
 // box keeps its values and acts as fixed sources; the interior is rebuilt from
 // emitters plus the shell using vanilla flood-fill rules. No bot access.

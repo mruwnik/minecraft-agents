@@ -1,3 +1,4 @@
+// Why JavaScript: thin CLI over headless Chromium via tools/view/headless.mjs (GPU/browser boundary).
 // Screenshot a page in headless Chromium: node tools/shot.mjs <url> <out.png> [--width 1920 --height 1080] [--click <css selector>]
 // Loads the url, waits 2 s for the page to settle, optionally clicks one element, waits again, saves a PNG.
 // Dialogs are never opened by this script; the page is only loaded, clicked and photographed.

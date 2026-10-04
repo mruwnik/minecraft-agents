@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; decodes and drives the villager trade window.
 // Trading with a villager: open the window, read the offers or buy, close. One short visit per call; it never walks
 // and never judges whether a trade is worth it.
 import vec3 from 'vec3'

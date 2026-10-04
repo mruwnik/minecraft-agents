@@ -1,3 +1,4 @@
+// Why JavaScript: tests offset-shapes.mjs, which stays JS: Mineflayer boundary; patches bot.blockAt for the physics engine.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import vec3 from 'vec3'

@@ -1,3 +1,4 @@
+// Why JavaScript: tests use-on.mjs, which stays JS: Mineflayer boundary; block use/activate calls and the safety guards before the click.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitivesFromBot } from './primitives.mjs'

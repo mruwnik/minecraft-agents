@@ -1,3 +1,4 @@
+// Why JavaScript: graphics; converts pose files into the renderer's camera numbers.
 // A pose file's numbers as the renderer wants them. The renderer takes mineflayer's own yaw and pitch in radians
 // (directionFor: yaw 0 faces north, 90 degrees west, 180 south, 270 east; pitch > 0 looks up), which is what the old
 // eyes.mjs passed it as bot.entity.yaw/pitch, so the conversion is the identity plus the eye.

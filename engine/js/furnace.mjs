@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; drives the furnace window and its bar packets, which are collected before Mineflayer listens.
 // One visit to a furnace, blast furnace or smoker: open, act, settle, close. It never waits for the cooking and decides
 // nothing (what to load, when to come back); refusals come back as data. See engine/README.md, primitive `furnace`.
 import vec3 from 'vec3'

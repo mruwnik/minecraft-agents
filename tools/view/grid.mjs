@@ -1,3 +1,4 @@
+// Why JavaScript: binary/graphics; fills the renderer's block grid from chunk columns.
 // The renderer's grid, filled from loaded chunk columns: a box `across` blocks out each way and `up` above and below
 // the eye (centred, as a ray starts from inside it). Reads the palette sections directly, not getBlockStateId per
 // cell, and skips sections that hold nothing.

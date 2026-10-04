@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; reads the zlib-framed chunk column files a body dumps.
 // Reads the chunk column files a body dumps (format v1, see docs): zlib( u32le headerLength, JSON header, parts... ).
 // `sections` is exactly what prismarine-chunk's ChunkColumn.dump() returned, so column.load(sections) restores it.
 import fs from 'node:fs'

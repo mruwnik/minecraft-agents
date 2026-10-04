@@ -1,3 +1,4 @@
+// Why JavaScript: GPU data; tint groups and stage-1 colours the shader multiplies by.
 // The tint group of a model face with a `tintindex`, for one block state, and the stage-1 colours the shader multiplies by: a single
 // fixed biome (plains) for the colormap groups. minecraft-data's tints.json gives the constant tints by block name, redstone by power
 // and water for plains; its plains grass and foliage entries are 0 (the game reads them from the colormap), so those two are the

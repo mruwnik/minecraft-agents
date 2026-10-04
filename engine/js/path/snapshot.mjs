@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; section id arrays and prismarine chunk loading.
 // The planner's view of the world: 16x16x16 sections of block state ids, read with no allocation per lookup.
 import fs from 'node:fs'
 import prismarineChunk from 'prismarine-chunk'

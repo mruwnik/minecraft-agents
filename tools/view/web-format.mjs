@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; wire-format numbers for the browser column decoder.
 // The numbers the browser decoder needs about a column's wire format, as prismarine-chunk's 1.18 ChunkColumn works them out
 // for a version (see decodeSections in web/decode.mjs). numSections comes from the file header's worldHeight (>> 4).
 import { makeChunkClass } from './columns.mjs'

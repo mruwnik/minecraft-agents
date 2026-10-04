@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; applies controls and reports pose on the bot.
 // steer: a cljs executor holds the body's controls for a while. Every physics tick `decide(pose)` answers either
 // {done: <plain object>} or {controls: {name: bool}, yaw?, pitch?}; JS only reports the pose and applies the answer.
 // pathWorld: the planner's inputs (snapshot over the live world, block table, space) for one plan.

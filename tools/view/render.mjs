@@ -1,3 +1,4 @@
+// Why JavaScript: graphics/binary; draws what a body sees from its dumped chunk files.
 // What a body sees, drawn from the files it dumps: worlds/<world>/chunks/<cx>.<cz>.bin and
 // worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
 import fs from 'node:fs'

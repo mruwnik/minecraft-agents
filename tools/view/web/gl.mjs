@@ -1,3 +1,4 @@
+// Why JavaScript: WebGL/GPU; WebGL2 ray marcher for the block window.
 // WebGL2 side of the browser view: the block window as a 3D texture, a two-level DDA ray marcher in a full-screen
 // fragment shader, entity boxes. Coordinates in the shader are relative to the window origin (a chunk-aligned corner).
 import { SHADING_GLSL } from './shading.mjs'

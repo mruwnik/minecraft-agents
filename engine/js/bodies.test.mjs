@@ -1,3 +1,4 @@
+// Why JavaScript: tests bodies.mjs, which stays JS: JS twin of engine.bodies; the JS view/render/drive tools and view.mjs need the body path rules without loading the cljs bundle.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

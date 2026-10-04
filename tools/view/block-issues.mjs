@@ -1,3 +1,4 @@
+// Why JavaScript: view build pipeline; compares the JS material table against block names, shares code with the block scan worker.
 // Which blocks the browser view cannot draw properly. Pure: it compares what the view's material table does with a block
 // (a kind, one texture per face, a box) against the block's real visual model from the client jar, and merges the result
 // with what was seen in the world. Nothing is fixed here; the output is a durable list for whoever fixes them later.

@@ -1,3 +1,4 @@
+// Why JavaScript: test data for the WebGL jar-model pixel checks (JS view stack).
 // Worlds for the pixel checks of the jar-modelled blocks (tools/view-web-check.mjs --models):
 //  MODELS: a row of blocks the old renderer draws wrong (leaf litter, a stair, a fence, two dispensers, a grass block), each with a red wool
 //          wall right behind it, so a gap in the shape shows red.

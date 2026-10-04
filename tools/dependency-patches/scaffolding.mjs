@@ -1,3 +1,4 @@
+// Why JavaScript: patches JS physics dependency sources in node_modules (Mineflayer boundary).
 // Context-dependent scaffold collision follows ScaffoldingBlock#getCollisionShape:
 // https://github.com/mahtomedi/minecraft/blob/main/src/main/java/net/minecraft/world/level/block/ScaffoldingBlock.java
 // A player above the deck collides unless descending; inside the column the

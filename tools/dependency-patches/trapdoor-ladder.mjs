@@ -1,3 +1,4 @@
+// Why JavaScript: patches prismarine-physics source in node_modules (Mineflayer boundary).
 // prismarine-physics 1.11.1 index.js: vanilla (1.9 and on, 26.1 too) climbs an open trapdoor that sits directly over a
 // ladder of its own facing (LivingEntity.trapdoorUsableAsLadder), and isOnLadder has that rule, but only behind the
 // climbableTrapdoor feature, whose version list stops at 1.20. On 26.1 the client never climbed such a hatch: the body

@@ -1,3 +1,4 @@
+// Why JavaScript: shared with the per-tick physics wrapper (offset-shapes.mjs, Mineflayer boundary) and the path code; vanilla per-position offset hash.
 // Vanilla's per-position horizontal block offset (bamboo, pointed dripstone), shared by the pathfinder and client physics.
 // The server shifts these blocks' collision by a hash of the block position, so the box moves cell to cell.
 

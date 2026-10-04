@@ -1,3 +1,4 @@
+// Why JavaScript: measured performance of the JS renderer; times frames per phase.
 // Back-to-back frames with no sleep, for as long as asked (or `maxFrames`), summarised per phase.
 import { columnStats, renderView } from './render.mjs'
 

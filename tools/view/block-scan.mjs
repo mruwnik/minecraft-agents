@@ -1,3 +1,4 @@
+// Why JavaScript: worker/binary; schedules the block-scan worker over chunk column files.
 import { worldsDir } from '../../engine/js/bodies.mjs'
 // Counts, per column file, the blocks the view draws wrong (the flagged names of block-issues.mjs) and where one was first
 // seen. The scan runs in a worker thread (block-scan-worker.mjs) so a server mounted in the dashboard never blocks.

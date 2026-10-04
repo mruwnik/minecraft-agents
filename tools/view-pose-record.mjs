@@ -1,3 +1,4 @@
+// Why JavaScript: thin dev tool of the JS view stack; records pose.json changes to JSONL.
 // Records an agent's pose.json changes to JSONL, one {mtime, pose} per change. Reads only.
 //   node tools/view-pose-record.mjs --agent ProbeMove --world claude --seconds 45 --out poses.jsonl [--state state] [--poll 10]
 import fs from 'node:fs'

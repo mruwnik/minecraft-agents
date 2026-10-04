@@ -1,3 +1,4 @@
+// Why JavaScript: drives headless Chromium over CDP to measure the WebGL view (browser/GPU).
 // Measures the browser view in headless Chromium over CDP.
 //   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub]
 // --beside-hub <hub url>: the url is a single view; measures its fps alone, then again with a hub page (own window, same browser) running beside it, and the hub's per-card rates.

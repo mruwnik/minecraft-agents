@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; calls bot.unequip.
 // Emptying the main hand. mineflayer's unequip('hand') tosses the stack on the ground when nothing has room,
 // so room is checked first and a full inventory is reported instead.
 const HOTBAR_START = 36

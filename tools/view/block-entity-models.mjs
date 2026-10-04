@@ -1,3 +1,4 @@
+// Why JavaScript: binary/graphics; block entity models drawn by the WebGL view.
 // Block entities (chests, beds, signs, banners, heads, shulker boxes, decorated pots, the bell) are drawn by the game's Java entity-model
 // code, not by blockstate JSON. This draws them in a static pose as baked elements in block-bake's format.
 //

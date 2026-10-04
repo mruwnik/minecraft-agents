@@ -1,3 +1,4 @@
+// Why JavaScript: browser/binary; fetches the per-version block tables once for every scene.
 // The per-version block tables (materials, textures, elements, tints) of one renderer, fetched once and shared by every scene
 // that draws with it. The decoder pool is told the same table. One renderer holds one version (gl.mjs claimTable).
 const ISSUE_LEVELS = ['missing', 'wrong', 'approximate']

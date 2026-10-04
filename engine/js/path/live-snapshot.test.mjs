@@ -1,3 +1,4 @@
+// Why JavaScript: tests live-snapshot.mjs, which stays JS: Mineflayer boundary; lazy copy over Mineflayer's world.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vec3 from 'vec3'

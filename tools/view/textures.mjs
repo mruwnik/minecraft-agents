@@ -1,3 +1,4 @@
+// Why JavaScript: GPU/binary; packs the browser texture array with its mip chain.
 // The browser's texture array: 16x16 RGBA layers with a mip chain, packed level-major (all layers of level 0, then 1...).
 import fs from 'node:fs'
 import path from 'node:path'

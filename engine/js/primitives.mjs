@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
 // The mineflayer layer of the engine: a small set of time-bounded operations, each a cut point. The contract is in
 // engine/README.md (Primitives). Ideas copied from src/body/actions/*.mjs; nothing here imports from src/.
 import { readFileSync } from 'node:fs'

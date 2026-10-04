@@ -1,3 +1,4 @@
+// Why JavaScript: drives headless Chromium over CDP for the WebGL pixel check (browser/GPU).
 // Headless pixel regression check of the browser view against a synthetic world (tools/view/fixture.mjs).
 //   node tools/view-web-check.mjs [--out dir] [--keep] [--lighting] [--ghost] [--models] [--entities] [--web dir]
 // --web: serve the page from this directory instead of tools/view/web (e.g. a copy with the shader changed, to prove a check can fail)

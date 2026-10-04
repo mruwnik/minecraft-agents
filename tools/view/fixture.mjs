@@ -1,3 +1,4 @@
+// Why JavaScript: test data for the WebGL pixel regression check (JS view stack).
 // A tiny synthetic world for the pixel regression check (tools/view-web-check.mjs): a stone floor, a wall of stripes
 // at z=4 (lit stone, shaded stone, leaves over red wool, diamond ore) and explicit light in every cell.
 import fs from 'node:fs'

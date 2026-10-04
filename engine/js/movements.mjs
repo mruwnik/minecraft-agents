@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; the cost policy has to run inside mineflayer-pathfinder's getNeighbors.
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 

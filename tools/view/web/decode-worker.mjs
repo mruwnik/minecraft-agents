@@ -1,3 +1,4 @@
+// Why JavaScript: worker thread; column decoder worker in the browser.
 // Worker thread of the column decoder (decoder.mjs). {type: 'table', format, materialOf} stores the block table;
 // {type: 'job', id, key, bytes} decodes one column file and answers {id, result, ms} with the result buffers transferred,
 // or {id, error}.

@@ -1,3 +1,4 @@
+// Why JavaScript: binary/graphics; bakes block models from the client jar into the element table the GPU reads.
 // Bakes a block state into model elements the way the game does: the blockstate JSON picks a variant (or the multipart parts that
 // apply), the model JSON gives elements (parents followed, texture variables resolved), and the blockstate's x/y rotation turns
 // the elements, their faces and their uv. Pure: it takes the blockstate and model maps tools/view/block-models.mjs loads.

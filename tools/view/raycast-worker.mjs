@@ -1,3 +1,4 @@
+// Why JavaScript: worker thread; draws bands of rows into shared memory.
 // A raycast pool worker: draws bands of rows of each frame the pool posts it, into shared memory. Rows are claimed from a
 // shared counter, so a thread that drew cheap sky rows comes back for more while another is still on the ground.
 import { parentPort, workerData } from 'node:worker_threads'

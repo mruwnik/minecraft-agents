@@ -1,3 +1,4 @@
+// Why JavaScript: inspects patch markers in JS node_modules sources (Mineflayer dependencies); must run before any cljs is built.
 // Are the source patches in node_modules (tools/patch-deps.mjs) still there? An npm install silently undoes them.
 // [path from the repo root, marker substring, title]
 export const PATCHES = Object.freeze([

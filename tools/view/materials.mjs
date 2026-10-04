@@ -1,3 +1,4 @@
+// Why JavaScript: GPU data; the material table the WebGL renderer uses.
 // The material table the browser renders with: every block state id maps to a material index, and a material is a
 // block name plus a shape kind with one average colour per face direction (top, side, bottom).
 import fs from 'node:fs'

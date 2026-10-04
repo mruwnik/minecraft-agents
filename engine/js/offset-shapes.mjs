@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; patches bot.blockAt for the physics engine.
 // Server-true collision for bamboo and pointed dripstone: minecraft-data has one fixed box, vanilla shifts it per position.
 import { OFFSET_MAX, blockOffset } from './offsets.mjs'
 

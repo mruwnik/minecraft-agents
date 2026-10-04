@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; drives the enchanting-table window.
 // One visit to an enchanting table: open, read the three offers or enchant with one of them, close. It never walks and
 // decides nothing (which offer is worth it); refusals come back as data and the result is measured from what is carried
 // and the body's level after the window is closed. See engine/README.md, primitive `enchant`.

@@ -1,3 +1,4 @@
+// Why JavaScript: graphics/performance; software raycaster split so worker threads can draw terrain bands.
 // The renderer's picture split in two so terrain can be drawn by worker threads in bands and entities after, on the
 // main thread: renderBand() is render()'s per-pixel terrain work for a range of rows, drawEntities() its mob work on a
 // picture already drawn. Copied from src/vision/renderer.mjs because its render() cannot draw a band; keep it in step.

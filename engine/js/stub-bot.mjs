@@ -1,3 +1,4 @@
+// Why JavaScript: test stand-in for Mineflayer's bot shape, used by the JS adapter tests.
 // A minimal stand-in for a mineflayer bot, enough for primitives.mjs tests. Never connects to anything.
 // Every method that talks to the world is recorded in `calls`; methods listed in `hang` never settle and
 // methods named in `reject` ({name: message}) reject with an Error carrying that message.

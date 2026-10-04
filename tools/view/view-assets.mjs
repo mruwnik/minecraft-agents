@@ -1,3 +1,4 @@
+// Why JavaScript: worker/binary; builds the material, texture and element tables (about 150 MB of heap) in a worker.
 // The view's material table, texture layers and element table for one Minecraft version. Building them costs ~150 MB of heap and several
 // seconds, so the server builds them in a worker thread that exits afterwards (its heap goes back to the system) and keeps only the bytes.
 import { Worker } from 'node:worker_threads'

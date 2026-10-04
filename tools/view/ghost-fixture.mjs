@@ -1,3 +1,4 @@
+// Why JavaScript: test data for the WebGL no-ghost pixel check (JS view stack).
 // A two-place world for the no-ghost check (tools/view-web-check.mjs --ghost). At radius 1 the window is 3x3 columns and a
 // column lives in slot (cx mod 3, cz mod 3); the places A (chunk 10,10) and B (chunk 130,130) are 120 chunks apart and
 // their windows share every slot, so a slot that kept A's voxels or light when the view jumps to B would show A inside B.

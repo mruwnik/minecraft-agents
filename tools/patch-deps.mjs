@@ -1,3 +1,4 @@
+// Why JavaScript: bootstrapping; edits JS dependency sources in node_modules during install, before any cljs exists.
 // fixes to node_modules that cannot be made from outside: run when preparing installed dependencies, so an npm install cannot quietly undo them
 import fs from 'node:fs'
 import path from 'node:path'

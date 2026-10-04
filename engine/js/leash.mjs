@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; tracks leash packets that Mineflayer drops.
 // Who holds an entity's lead. 26.1 sends it only in the attach_entity packet (holder 0 on release), not in metadata,
 // so the packets are tracked per bot from the moment it is adopted.
 const holders = new WeakMap()

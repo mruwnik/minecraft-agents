@@ -1,3 +1,4 @@
+// Why JavaScript: tests furnace.mjs, which stays JS: Mineflayer boundary; drives the furnace window and its bar packets, which are collected before Mineflayer listens.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { stubBot } from './stub-bot.mjs'

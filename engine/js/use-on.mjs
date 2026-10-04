@@ -1,3 +1,4 @@
+// Why JavaScript: Mineflayer boundary; block use/activate calls and the safety guards before the click.
 // useOn: right-click a block with an item (or an empty hand) and report what changed.
 import vec3 from 'vec3'
 

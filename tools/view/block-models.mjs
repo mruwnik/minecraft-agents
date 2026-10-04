@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; reads blockstate and model JSON out of the client jar.
 // The visual models in a client jar: assets/minecraft/blockstates/<name>.json and assets/minecraft/models/block/<x>.json,
 // as the maps tools/view/block-issues.mjs reads. Parent resolution happens there (resolveModel).
 import fs from 'node:fs'

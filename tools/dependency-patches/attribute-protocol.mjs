@@ -1,3 +1,4 @@
+// Why JavaScript: patches protocol handling in JS dependency sources in node_modules (Mineflayer boundary).
 // ViaVersion 5.12 identifiers-26.1.nbt uses identity IDs 0..34 from its
 // identifier-table.nbt. These match the negotiated 26.1 attribute registry;
 // Paper 26.2 has a different table and must not be used for bridged packets.

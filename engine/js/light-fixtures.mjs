@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; light oracle fixtures captured from a real server, used by the light tests.
 // Light fixtures: a captured box of block states plus the server's sky and block light, for oracle tests of the light model.
 // File: zlib deflate of uint32le header length, JSON header, states (uint16le per cell), sky (u8), block (u8).
 // Cells are indexed (y * sz + z) * sx + x, relative to the box's low corner `origin`.

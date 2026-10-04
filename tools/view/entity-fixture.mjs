@@ -1,3 +1,4 @@
+// Why JavaScript: test data for the WebGL pixel checks (JS view stack).
 // A world for the pixel checks of the block-entity models (tools/view-web-check.mjs --entities): a row of block entities in front of a
 // lime wool wall and floor, seen from the south and a little above. Each region is a rectangle on a plane, in sixteenths of its block
 // ("z16" is how far into the block's cell the plane lies), chosen so that a part drawn one or two sixteenths off lands in the

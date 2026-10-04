@@ -1,3 +1,4 @@
+// Why JavaScript: tests light.mjs, which stays JS: measured performance and binary data; light propagation over typed arrays in a hot loop for the view dump.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

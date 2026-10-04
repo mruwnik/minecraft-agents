@@ -1,3 +1,4 @@
+// Why JavaScript: verbatim copy of old JS kept as a bench baseline (cljs-vs-js comparison).
 // 8d0327d9^:tools/view/web/scene.mjs, imports repointed for the bench: camera and shading from ../web, tables is a stub, and
 // poseInterpolator comes from the bench build (as it did in the original, where it was already cljs). Body unchanged.
 // One scene of the browser view: follows an agent's pose over server-sent events, keeps a toroidal window of chunk columns

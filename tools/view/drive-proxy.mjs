@@ -1,3 +1,4 @@
+// Why JavaScript: thin adapter; relays view-page driving commands to a body's control socket for the JS view server.
 // Relays driving commands from the view page to a body's control socket, guarded against cross-site posts
 // and DNS rebinding (the page and its server are loopback only).
 import http from 'node:http'

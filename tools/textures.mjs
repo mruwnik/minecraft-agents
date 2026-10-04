@@ -1,3 +1,4 @@
+// Why JavaScript: binary data; extracts textures from the client jar for the view.
 // textures/ is Mojang's art, so it is not checked in: this fills it (blocks, and items under item/) from a client jar the first time a body starts
 // without it. tools/start-body runs it beside patch-deps.mjs. It never stops a body from starting: with no textures
 // `./mc look` still draws, colouring every block by a hash of its name instead of its picture.

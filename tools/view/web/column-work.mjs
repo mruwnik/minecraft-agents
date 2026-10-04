@@ -1,3 +1,4 @@
+// Why JavaScript: binary/worker; inflates and decodes column files before the GPU, in a browser worker.
 // Everything the view does to a column file before the GPU: inflate, parse, decode block ids, map them to materials and
 // unpack the light. Pure, so it runs in a worker (decode-worker.mjs) or on the main thread. Every output is a typed array
 // that owns its whole buffer, so it can be transferred.

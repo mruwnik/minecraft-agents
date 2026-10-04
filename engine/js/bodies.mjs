@@ -1,3 +1,4 @@
+// Why JavaScript: JS twin of engine.bodies; the JS view/render/drive tools and view.mjs need the body path rules without loading the cljs bundle.
 // Where a body's folder is: worlds/<world>/agents/<name>. A name is unique only within a world, so the world is
 // always given; there is no search over worlds and no default. A real account's login cache is per account, shared by
 // every world: worlds/.accounts/<name>. The ClojureScript twin is engine/src/engine/bodies.cljs; keep the two alike.
