@@ -191,17 +191,33 @@
           (is (= "lava" (:fluid (first (:hazards @out)))))
           (is (= 1 (count (events-of s :stair.stopped)))))))))
 
-(deftest water-beside-is-taken-by-default-and-refused-with-an-empty-accept
+(deftest water-beside-stops-by-default-and-is-taken-only-when-named
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [wet (assoc ground "2,63,1" "water")
-              taken (:out (await (stair! {:blocks wet} east (fn [_]))))
-              refused (:out (await (stair! {:blocks wet} (assoc east :accept #{}) (fn [_]))))]
-          (is (= :done (:status @taken)))
-          (is (= :stopped (:status @refused)))
-          (is (= :hazard (:reason @refused)))
-          (is (= [2 63 0] (:cell @refused))))))))
+              refused (await (stair! {:blocks wet} east (fn [_])))
+              taken (:out (await (stair! {:blocks wet} (assoc east :accept #{:water}) (fn [_]))))]
+          (is (= :hazard (:reason @(:out refused))))
+          (is (= [2 63 0] (:cell @(:out refused))))
+          (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs (:p refused))) "the cell beside the water is not opened")
+          (is (= :done (:status @taken))))))))
+
+(deftest water-let-into-the-cut-stops-the-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))
+                                          {:keys [x y z]} (js->clj (.-pos a) :keywordize-keys true)]
+                                      (.set (.. world -state -blocks) (str x "," y "," z) "water")
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} (assoc east :accept #{:water}) prep))]
+          (is (= :fluid-in-cut (:reason @out)))
+          (is (= [1 64 0] (:cell @out))))))))
 
 (deftest air-under-the-next-floor-stops
   (async done

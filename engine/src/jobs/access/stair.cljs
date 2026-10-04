@@ -19,9 +19,10 @@
   a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :footprint,
   :not-loaded, :no-zones). Hazards are engine.access.rules' (one per fluid beside) plus one the stair adds for its
   geometry: a falling block over the top cut of the next column, the column the body walks into. Accepted hazards
-  (:accept, a set of :water :lava :falling-block :under-feet) default to #{:water}: water beside the cut is taken,
-  lava never is, a falling block would land on the body or refill the cut, and :under-feet never comes up (the stair
-  never digs the block it stands on), so seeing it is a bug to stop on.
+  (:accept, a set of :water :lava :falling-block :under-feet) default to #{}: water beside the cut is not taken
+  (live, it flowed into the cut and onto the body's cell, which the walker cannot leave: no swimming; named, the
+  stair digs and stops :fluid-in-cut a round later), lava never is, a falling block would land on the body or refill
+  the cut, and :under-feet never comes up (the stair never digs the block it stands on), so seeing it is a bug.
   A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
   room stops :inventory-full; a cell refilled 3 times stops :refills. The body's cell is the progress: a resumed
   round finds its step from where the body stands on the stair line (off it: :off-stair). Dug cells are left and
@@ -33,7 +34,7 @@
    :heading {:doc ":north :east :south or :west" :default nil}
    :steps {:doc "steps to cut; or give :y" :default nil}
    :y {:doc "feet height to end at, instead of :steps" :default nil}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{:water}}})
+   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})

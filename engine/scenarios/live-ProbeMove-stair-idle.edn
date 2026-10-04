@@ -1,0 +1,4 @@
+;; live (jobs.access.stair): the body idles; cases are submitted one at a time with tools/jobs.mjs after an RCON tp
+;; onto the courses at x 7996..8020, z 9000..9042 (stone to y 74, lanes cut at y 71..73 from x 7997 to 8002)
+{:register []
+ :queue []}
