@@ -183,19 +183,22 @@
 (defn body-at [c] (let [pos (.-pos (.self (:primitives c)))] [(.-x pos) (.-y pos) (.-z pos)]))
 
 (defn ^:async walk!
-  "Follow steps (a plan that may open things) once, segment by segment: [done ms] as engine.path.walk/walk! answers, or
-  {:status :door-stuck :cells [...]} for blocks that would not open. A walk that ends off its plan or stuck still shuts what
+  "Follow steps (a plan that may open things) once, segment by segment: [done ms] as engine.path.walk/walk! answers (its
+  :step counted in steps), or {:status :door-stuck :cells [...]} for blocks that would not open. watch, when given, is the
+  look-ahead (engine.path.walk/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
+  its :ahead. A walk that ends off its plan or stuck still shuts what
   it can; what it cannot (the body is in its column, or the walk was cut) keeps its :opened entry."
-  [c steps {:keys [timeout-s doors]}]
+  [c steps {:keys [timeout-s doors watch]}]
   (let [last-i (dec (count steps))]
     (loop [steps (with-climbs steps) s 0 pending [] ms 0]
       (let [{e :end k :open} (segment steps s pending)
-            [done seg-ms] (if (> e s) (await (walk/walk! c (subvec steps s (inc e)) timeout-s)) [nil 0])
+            seg-watch (when (and watch (empty? pending)) (assoc watch :ahead (subvec steps (inc e))))
+            [done seg-ms] (if (> e s) (await (walk/walk! c (subvec steps s (inc e)) timeout-s seg-watch)) [nil 0])
             ms (+ ms seg-ms)
             pending (if done (await (shut-ready! c pending)) pending)]
         (cond
           (and done (not= :arrived (:status done)))
-          [done ms]
+          [(cond-> done (:step done) (update :step + s)) ms]
 
           (and (= e last-i) (nil? k))
           [(or done {:status :arrived :at (body-at c)}) ms]
