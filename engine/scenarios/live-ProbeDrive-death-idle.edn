@@ -1,0 +1,5 @@
+;; ProbeDrive live test of a death dropping every job: idle (look-around), no survival reflexes except the died trigger (recover-drops);
+;; jobs and triggers submitted with jobs.mjs / triggers.mjs; the body is killed through RCON.
+{:register [{:trigger :died :persistence :cooldown :cooldown-s 30
+             :job (jobs.survival.recover-drops {:collect-radius 6})}]
+ :queue [(repeat (jobs.movement.look-around))]}
