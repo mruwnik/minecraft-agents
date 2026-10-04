@@ -8,14 +8,17 @@
   :min-dist (2) from it, and that has been so for :open-s (4) seconds. A job that opened a gate on purpose
   (leading animals through, standing in the doorway) is therefore left alone: it is at the gate, or passing it, and the
   clock restarts whenever the body is near again. A gate the job gave up on (a gate-gave-up entry in memory, written by
-  jobs.animals.shut-gate) is not looked at again for :quiet-s (10 min)."
+  jobs.animals.shut-gate) is not looked at again for :quiet-s (10 min).
+
+  A gate cell with a :gate-held entry younger than :held-s (30) is not looked at; a job that leads animals through
+  writes it before opening the gate and drops it after shutting."
   (:require [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
             [engine.memory :as mem]
             [engine.world :as world]
             [clojure.string :as str]))
 
-(def defaults {:radius 8 :min-dist 2 :open-s 4 :quiet-s 600})
+(def defaults {:radius 8 :min-dist 2 :open-s 4 :quiet-s 600 :held-s 30})
 
 (def gap-ms
   "A clock whose last look is older than this was not watched in between: it starts again."
@@ -100,24 +103,31 @@
 
 ;; ------------------------------------------------------------------ the trigger
 
+(defn held-cells
+  "The gates a job holds open on purpose, by a :gate-held entry younger than held-ms: a set of [x y z]."
+  [view held-ms]
+  (into #{} (keep (fn [{:keys [t data]}] (when (< (- (:now view) t) held-ms) (some-> (:cell data) vec))))
+        (mem/entries view :gate-held)))
+
 (defonce clocks (js/WeakMap.))
 
 (defn holds?
   "Whether a planned gate near the body has stood open, with the body away, for :open-s seconds."
   [p view args kn]
-  (let [{:keys [open-s quiet-s] :as args} (merge defaults args)
+  (let [{:keys [open-s quiet-s held-s] :as args} (merge defaults args)
         gates (some-> (gate-index kn) keys)]
     (if (empty? gates)
       false
       (let [self (let [pos (.-pos (.self p))] {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
             quiet (quiet-cells view (* 1000 quiet-s))
-            open (open-cells (apiary/block-at-fn p) (remove quiet gates))
+            held (held-cells view (* 1000 held-s))
+            open (open-cells (apiary/block-at-fn p) (remove (some-fn quiet held) gates))
             clock (track (.get clocks kn) (:now view) (candidates self open args))]
         (.set clocks kn clock)
         (boolean (seq (settled clock (:now view) (* 1000 open-s))))))))
 
 (def trigger
-  "Holds when holds? says so; args :radius :min-dist :open-s :quiet-s. The job it starts shuts the gate."
+  "Holds when holds? says so; args :radius :min-dist :open-s :quiet-s :held-s. The job it starts shuts the gate."
   {:name :pen-gate
    :when (fn [world view args kn]
            (if kn (holds? world view args kn) false))

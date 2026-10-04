@@ -3,6 +3,7 @@
 // A led animal is dragged in a straight line and does not path: anything at its feet but open air (a fence, a gate
 // open or shut: a cow jams in a 1-wide gateway, measured live) stops it on its side.
 import { walkLine, openAir } from './fake-walkline.mjs'
+import { pathFollow } from './fake-lead-path.mjs'
 
 const FOLLOW_GAP = 2
 
@@ -41,6 +42,8 @@ export function tieToPost (s, pos) {
 // same; a second click on the animal then drops the lead). Returns how many animals changed.
 export function untieKnot (s, knot) {
   const tied = s.entities.filter(e => e.leashHolder === knot.id)
+    const followed = pathFollow(s, e)
+    if (followed) { e.pos = followed; continue }
   tied.forEach(e => Object.assign(e, { leashedToMe: true, leashHolder: null }))
   s.entities.splice(s.entities.indexOf(knot), 1)
   return tied.length

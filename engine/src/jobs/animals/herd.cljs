@@ -3,14 +3,17 @@
             [engine.jobs.animals :as animals]
             [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.triggers.pen-gate :as pg]))
 
 (def doc
   "Bring grown animals of the mob type :mob into the pen :box until it holds
-  :target of them: leads bring them to the gate, their food lures them through
-  it. One convergent run that can be repeated. The check declines while the box
-  already holds :target adults (a cheap count by the box's bounds), so a run
-  with nothing to do never starts; a started run always passes, so a cut job
+  :target of them, one animal at a time on a lead, the body stepping through the
+  gate one cell at a time: a led animal that is dragged in one long walk jams in
+  a 1-wide gate, one that the body leaves 6 or fewer blocks behind walks by its
+  own path to rest 3.3 behind it, through an open gate. The check declines while
+  the box already holds :target adults (a cheap count by the box's bounds), so a
+  run with nothing to do never starts; a started run always passes, so a cut job
   resumes. A body further than 16 blocks from the pen first walks within 12 of
   it (a pen out of sight is never counted). The pen is read with
   engine.jobs.pen over :box: an unreadable one ends :no-pen, a leak other than
@@ -18,48 +21,47 @@
   else the pen's gate nearest the body, and must have pen floor on one side and
   free floor straight across (a corner gate has not): else :no-gate. Adults
   standing on the pen's cells count; when they already make :target it ends
-  :full. With no breeding food of :mob carried (engine.jobs.animals/breeding-food)
-  it ends :no-food before any lead is used. Then, one per round,
-  jobs.animals.leash (radius :radius) puts a lead on the nearest adult outside
-  the pen (babies, animals in the pen and those given up on are skipped) until
-  the missing number is led or leashing ends (:no-lead, :none, :unreachable
-  ...: with nobody led that is the reason, else the run goes on with fewer).
-  The body walks to the cell outside the gate and lets every led animal go
-  there (jobs.animals.unleash by uuid, leads picked up): a dragged animal does
-  not path and jams in a 1-wide gate. A pen with no animals of :mob opens its
-  gate first (jobs.access.toggle, one empty-hand click read back; :gate-stuck
-  when it did not open) while they are still on the lead; one with animals
-  keeps it shut, they would follow the food out. Every click empties the hand,
-  so after the release the body goes back to the outside cell and takes the
-  food in hand, and waits up to 15 s for every animal let go to stand within 4
-  of it (they strolled off and circled the fence instead of using the gate).
-  It opens the gate if that is not done, walks to the lure cell (the pen cell
-  farthest from the gate within 5 of it, 2 or more off the line through the
-  gate when the pen has one), keeps the food in hand there and the animals walk
-  in by their own path and stop about 2.5 short of the body, inside. It waits
-  up to :settle-s for every led animal to stand on a pen cell, the food away 5 s
-  after every 10 s that did not do it (animals jammed side by side in the gate
-  come apart), then goes round the far side of the animals (the mirror of the
-  lure cell across the gate line: they trail the body, never between it and
-  the gate, where it pushed them into the gate cell) to the cell inside the
-  gate with the food still in hand, empties the hand there (unequip; with no
-  free slot one warn herd.hand-full and it goes on), opens the gate again if it
-  was shut meanwhile, walks out and shuts it from outside: the body ends
-  outside, the gate shut, the hand empty. Animals of :mob within about 10 blocks that were not led may
-  follow the food in too. Before each step until the gate, an animal seen off
-  this body's lead is given up on (:lead-broke), one not seen at all too
-  (:lost); when that leaves nobody led, the leads lying within 8 are picked up
+  :full. The four cells outside the gate straight across (out-4 .. out-1) must be
+  free floor (else :no-gate with :why :no-approach), and the pen must hold 5
+  cells in a straight line from the cell inside the gate along its axis (else
+  :too-shallow). No food is needed. Each animal gets one round trip, phases
+  :leash (jobs.animals.leash, radius :radius, one animal: the nearest adult outside
+  the pen, babies, animals in the pen and those given up on skipped), :approach
+  (go-to out-4, range 0, :doors :never, then looks every 500 ms until the animal
+  is at rest: within 3.6 and moved under 0.25, at most 8 s), :clear-out (no adult of
+  :mob within 2.5 of the cell inside the gate, else up to 10 s and one info
+  herd.crowded-gate), :line-up (out-3, out-2, out-1, each walk and settle), :open
+  (jobs.access.toggle :open; :gate-stuck when it did not open), :step (the
+  gate cell, then the pen cells in line, 5 deep: each a go-to and a settle of at
+  most 6 s; an animal still beyond 3.6 after 6 s is pinned: the body steps back
+  one position and again, twice, then walks out to out-4 and starts over once,
+  then gives up on the animal :jammed: it is let go at out-3 and the gate shut),
+  :shut-behind (the gate is shut only while no adult of :mob overlaps its cell:
+  looks up to 6 s, then once from the deepest cell, else as pinned; the body steps
+  back one cell and toggles :closed with :reach 4), :deep (go-to the pen cell
+  farthest from the gate, off the axis when one is as far, the animal following by
+  its path; jobs.animals.unleash by key, leads picked up; the animal counts as
+  brought when it stands on a pen cell), :exit (walk to the cell inside the gate,
+  wait up to 10 s while an adult of :mob is within 2 of it or overlaps the gate
+  cell, open the gate, walk to out-1, shut it under the same overlap check: 4
+  looks, then once more from the cell inside, else the gate is left open with one
+  warn herd.gate-open). While the gate is open a :gate-held memory entry
+  {:cell [x y z]} is written before each open and kept fresh every round, dropped
+  after each shut, so the pen-gate trigger leaves the gate alone. The body ends
+  outside, the gate shut. Before each step with an animal on the lead, one seen off
+  this body's lead is given up on (:lead-broke), one not seen at all too (:lost);
+  with nobody led the open gate is shut, the leads lying within 8 are picked up
   (jobs.forestry.collect-drops) and leashing starts again once, with the
-  :lead-broke ones forgiven; a second time ends :lost. :timeout after
-  :timeout-s from the first round, counted until the gate. A run that gives up
-  with animals on the lead unleashes them where it stands first. Done (info
-  herd.done, and one warn herd.gave-up unless the reason is :brought or :full;
-  hands over {:reason :inside n :target :brought [keys] :given-up {key reason}
-  :gate pos}, :inside counted on the pen's cells at the end) with :reason
-  :brought (the pen holds :target), :short (fewer: some came, or none and no
-  other reason), :full, :no-pen, :leaky, :no-gate, :no-food, :unreachable (a
-  walk was blocked), :gate-stuck, :lost, :timeout, or the leash reason when
-  nobody could be led.")
+  :lead-broke ones forgiven; a second time ends :lost. :timeout after :timeout-s
+  from an animal's lead on until it is let go. An end with an animal on the lead
+  unleashes it where the body stands and shuts the open gate from the side the
+  body is on (same overlap check). Done (info herd.done, and one warn
+  herd.gave-up unless the reason is :brought or :full; hands over {:reason
+  :inside n :target :brought [keys] :given-up {key reason} :gate pos}, :inside
+  counted on the pen's cells at the end) with :reason :brought (the pen holds
+  :target), :short (fewer: some came, or none and no other reason), :full, :no-pen,
+  :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck,
+  :lost, :timeout, or the leash reason when nobody could be led.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -67,8 +69,7 @@
    :target {:doc "grown animals of :mob the pen should hold" :default 2}
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
-   :settle-s {:doc "seconds to wait at the lure cell, food in hand (put away for 5 s after every 10 s that did not do it), for the animals let go to walk in" :default 40}
-   :timeout-s {:doc "seconds from the first round until the job gives up, counted until the gate" :default 300}})
+   :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}})
 
 (def near-pen 16)
 (def approach-range 12)
@@ -76,12 +77,26 @@
 (def release-radius 8)
 (def regather-radius 8)
 (def settle-ms 500)
-(def lure-reach 5)
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def leading
-  "The phases in which animals are on the lead: watched before each step, bound by :timeout-s."
-  #{:leash :to-gate :at-gate :open-first})
+  "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound
+  by :timeout-s."
+  #{:approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :retry-out
+    :give-up-walk :deep})
+
+(def out-1 "Index in the axis cells of the cell outside the gate." 3)
+(def gate-index "Index in the axis cells of the gate cell." 4)
+(def in-1 "Index in the axis cells of the cell inside the gate." 5)
+(def deepest "Index in the axis cells of the last position the body steps to (in-5)." 9)
+
+(def settle-out-ms "How long the body waits for the animal to rest at a position outside the gate." 8000)
+(def crowd-ms "How long the cells inside the gate may stay crowded before the body goes on." 10000)
+(def shut-look-ms "How long a shut waits for the animals to clear the gate cell." 6000)
+(def exit-shut-ms "How long the shut from outside waits before stepping back in." 2000)
+(def crowd-out-radius 2.5)
+(def crowd-in-radius 2.0)
+(def held-policy {:cap 4 :ttl 60000})
 
 (defn cell [{:keys [x y z]}] [x y z])
 
@@ -128,16 +143,32 @@
   [c]
   (filterv #(some-> (animal-now c %) animals/led-by-me?) (:led (ctx/mem c))))
 
-(defn food-in-hand?
-  "True when the hand holds the food of :mob."
-  [c]
-  (let [p (:primitives c)
-        food (animals/food-carried p (:mob (:args c)))]
-    (boolean (and food (= food (.-held (.self p)))))))
+(def transient-keys "Memory of one wait or walk, dropped when the phase or position moves on." [:walked :settle-from :last-seen :wait-from])
 
-(defn set-phase! [c phase]
-  (ctx/update-mem! c assoc :phase phase)
-  :continue)
+(defn set-phase!
+  "Go to phase (the walk and wait state dropped), merging more into the memory."
+  ([c phase] (set-phase! c phase nil))
+  ([c phase more]
+   (ctx/update-mem! c #(-> (apply dissoc % transient-keys) (merge more) (assoc :phase phase)))
+   :continue))
+
+(defn gate-cell [c] (cell (:gate (ctx/mem c))))
+
+(defn gate-open? [c]
+  (boolean (seq (pg/open-cells (apiary/block-at-fn (:primitives c)) [(gate-cell c)]))))
+
+(defn same-cell? [g entry-cell] (= g (some-> entry-cell vec)))
+
+(defn hold-gate!
+  "Tell the pen-gate trigger the open gate is open on purpose: a fresh :gate-held entry, the old one replaced."
+  [c]
+  (let [g (gate-cell c)]
+    (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))
+    (ctx/remember! c :gate-held {:cell g :by (:id c)} held-policy)))
+
+(defn drop-gate! [c]
+  (let [g (gate-cell c)]
+    (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))))
 
 ;; ------------------------------------------------------------------ the end
 
@@ -147,7 +178,7 @@
   (let [m (ctx/mem c)
         target (:target (:args c))
         inside (set (map animals/key-of (in-pen-adults c (read-pen c))))
-        brought (filterv inside (:led m))
+        brought (filterv inside (:brought m))
         reason (or reason
                    (cond (>= (count inside) target) :brought
                          (seq brought) :short
@@ -155,6 +186,7 @@
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m)}
                       extra)]
+    (when (:gate m) (drop-gate! c))
     (ctx/emit! c :herd.done :info (assoc result :text (str "herd done: " (name reason) ", " (count inside) " of " target " in the pen")))
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
@@ -162,11 +194,26 @@
     :done))
 
 (defn end!
-  "Give up with reason; animals still on the lead are let go first, and food in the hand is put away."
+  "Give up with reason: the animal on the lead is let go where the body stands, then an open gate shut."
   [c reason]
-  (if (or (seq (led-now c)) (food-in-hand? c))
-    (do (ctx/update-mem! c assoc :phase :let-go :ending reason) :continue)
-    (finish! c reason)))
+  (ctx/update-mem! c assoc :ending reason)
+  (cond
+    (seq (led-now c)) (set-phase! c :let-go)
+    (gate-open? c) (set-phase! c :shut-gate)
+    :else (finish! c reason)))
+
+(defn shut-failed!
+  "The gate cannot be shut: it is left to the pen-gate trigger, with one warn, and the run ends."
+  [c]
+  (ctx/emit! c :herd.gate-open :warn {:text "the gate could not be shut and stays open"})
+  (finish! c (:ending (ctx/mem c))))
+
+(defn after-shut!
+  "The gate is shut (or was not open): end the run when it is ending, else leash again."
+  [c]
+  (if-let [reason (:ending (ctx/mem c))]
+    (finish! c reason)
+    (set-phase! c :regather)))
 
 (defn ^:async release-step!
   "One round of unleashing (jobs.animals.unleash by key, kept on one animal until that child is done, which
@@ -213,32 +260,99 @@
          (sort-by #(u/dist here (:gate %)))
          first)))
 
-(defn lure-cell
-  "The pen cell farthest from gate g within lure-reach of it, off the line through the gate (the cell inside it is
-  in) by 2 or more when the pen has one: lured animals stop about 2.5 short of the body, so they stand inside, the
-  ones let go outside the gate stay within the food's pull of about 10, and on the way out the body does not walk
-  through them (a cow pushed into the gate cell was shut out with the gate)."
-  [inside g in]
-  (let [[gx _ gz] (cell g)
-        [ix _ iz] in
-        [dx dz] [(- gx ix) (- gz iz)]
-        far (fn [[x _ z]] (+ (* (- x gx) (- x gx)) (* (- z gz) (- z gz))))
-        off-line (fn [[x _ z]] (js/Math.abs (- (* (- x gx) dz) (* (- z gz) dx))))]
-    (->> inside
-         (filter #(<= (far %) (* lure-reach lure-reach)))
-         (sort-by (juxt #(if (>= (off-line %) 2) 0 1) (comp - far) identity))
-         first)))
+(def min-depth
+  "Pen cells in a straight line from in-1 the gate's axis needs: the body on in-5 puts a led animal 2.2 cells
+  inside the gate cell; on in-4 it still overlaps it."
+  5)
 
-(defn via-cell
-  "The lure cell mirrored across the line through the gate (the cell inside it is in), when that is a pen cell and
-  not the lure cell itself: the animals let in stand between the lure cell and the gate, so the body goes round to
-  the far side of them on its way out instead of pushing them into the gate cell."
-  [inside g in lure]
-  (let [[gx _ gz] (cell g)
-        [ix _ iz] in
-        [lx ly lz] lure
-        mirrored (if (= gz iz) [lx ly (- (* 2 gz) lz)] [(- (* 2 gx) lx) ly lz])]
-    (when (and (not= mirrored lure) (contains? inside mirrored)) mirrored)))
+(def max-axis-depth "Pen cells of the axis the steps use." 6)
+
+(def approach-cells "Cells out-1..out-4 outside the gate that must be free floor." 4)
+
+(def overlap-margin "Added to half-width + 0.5 when asking whether an entity overlaps a cell." 0.1)
+
+(def settled-dist "An animal this close (or closer) to the body is at rest behind it." 3.6)
+
+(def settled-move "An animal that moved less than this since the last look has stopped." 0.25)
+
+(def pinned-ms "How long a far animal may stay far before it counts as pinned." 6000)
+
+(def max-backs "Steps back a pinned animal gets before the walk out and retry." 2)
+
+(def half-widths
+  "Half the width of the mob's box, by name; mobs not listed use default-half-width."
+  {"cow" 0.45 "mooshroom" 0.45 "sheep" 0.45 "goat" 0.45 "pig" 0.45 "chicken" 0.2})
+
+(def default-half-width 0.45)
+
+(defn half-width [mob] (get half-widths mob default-half-width))
+
+(defn axis-dir
+  "The unit step [dx dz] from the gate cell g to the pen cell in beside it."
+  [g in]
+  (let [[gx _ gz] g [ix _ iz] in]
+    [(- ix gx) (- iz gz)]))
+
+(defn shift
+  "Cell moved k steps of d = [dx dz]."
+  [[x y z] [dx dz] k]
+  [(+ x (* k dx)) y (+ z (* k dz))])
+
+(defn axis-cells
+  "The cells of the line out -> gate -> in, in walking order: out-4 .. out-1 (out is out-1), the gate cell g,
+  in-1 .. in-n (in is in-1) with n = depth at most max-axis-depth."
+  [g in out depth]
+  (let [d (axis-dir g in)]
+    (vec (concat (map #(shift out d (- %)) (reverse (range approach-cells)))
+                 [g]
+                 (map #(shift in d %) (range (min depth max-axis-depth)))))))
+
+(defn depth
+  "How many pen cells lie in a straight line from in (in-1) along the gate's axis."
+  [inside g in]
+  (let [d (axis-dir g in)]
+    (count (take-while inside (iterate #(shift % d 1) in)))))
+
+(defn overlaps-cell?
+  "True when an entity centre pos {:x :z} is within 0.5 + half-width + overlap-margin of the middle of cell on both
+  axes (flat): its box touches the cell, or nearly."
+  [{:keys [x z]} half-width [cx _ cz]]
+  (let [limit (+ 0.5 half-width overlap-margin)]
+    (and (<= (js/Math.abs (- x (+ cx 0.5))) limit)
+         (<= (js/Math.abs (- z (+ cz 0.5))) limit))))
+
+(defn settle-step
+  "What a look at a led animal says: :settled (within settled-dist of the body and moved less than settled-move),
+  :pinned (farther, and waited-ms has reached pinned-ms) or :wait."
+  [dist moved waited-ms]
+  (cond
+    (and (<= dist settled-dist) (< moved settled-move)) :settled
+    (and (> dist settled-dist) (>= waited-ms pinned-ms)) :pinned
+    :else :wait))
+
+(defn step-in-step
+  "How the stepping goes on for a pinned animal at position index: :back (fewer than max-backs backs made: the
+  body steps back one position), :retry-from-out (backs made, not retried yet: walk out to out-4 and start over)
+  or :give-up."
+  [_index backs retried]
+  (cond
+    (< backs max-backs) :back
+    (not retried) :retry-from-out
+    :else :give-up))
+
+(defn let-go-cell
+  "The pen cell farthest (flat) from the gate cell g, off the axis through g and in when one is as far."
+  [inside g in]
+  (let [[gx _ gz] g
+        [dx dz] (axis-dir g in)
+        far (fn [[x _ z]] (+ (* (- x gx) (- x gx)) (* (- z gz) (- z gz))))
+        off-axis? (fn [[x _ z]] (not (zero? (- (* (- x gx) dz) (* (- z gz) dx)))))]
+    (first (sort-by (juxt (comp - far) #(if (off-axis? %) 0 1) identity) inside))))
+
+(defn approach-free?
+  "True when out-1..out-4 (out is out-1) are all free floor."
+  [p g in out]
+  (every? #(free-floor? p %) (take approach-cells (axis-cells g in out 0))))
 
 (defn other-leaks
   "The leaks of the pen but the chosen gate standing open."
@@ -246,7 +360,7 @@
   (filterv #(not= (cell (:pos %)) (cell g)) (:leaks answer)))
 
 (defn ^:async survey! [c]
-  (let [{:keys [mob box target]} (:args c)
+  (let [{:keys [box target]} (:args c)
         centre (box-centre box)]
     (if (> (u/dist (u/self-pos c) centre) near-pen)
       (if (= :blocked (await (u/walk-near! c centre approach-range)))
@@ -259,32 +373,128 @@
         (cond
           (#{:no-start :unloaded} (:reason answer)) (finish! c :no-pen)
           (nil? chosen) (finish! c :no-gate)
+          (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
           (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
           (>= inside target) (finish! c :full)
-          (nil? (animals/food-carried (:primitives c) mob)) (finish! c :no-food)
-          :else (let [lure (lure-cell (:inside answer) gate in)
-                      via (via-cell (:inside answer) gate in lure)]
-                  (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
-                                   :pen-empty (zero? inside) :lure (cell-pos lure) :via (some-> via cell-pos) :wanted (- target inside))
-                  :continue))))))
+          (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)
+          :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
+                                     :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in))
+                                     :wanted (- target inside))
+                    :continue))))))
 
 (defn ^:async set-gate!
-  "Put the gate into state (:open or :closed) with jobs.access.toggle, then go to phase next; :gate-stuck when the
-  toggle did not get it there."
-  [c state next]
-  (let [r (await (ctx/call-child c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state}))]
+  "Put the gate into state (:open or :closed) with jobs.access.toggle (within :reach), then go to phase next, merging
+  :then into the memory; :gate-stuck when it did not open, shut-failed! when it did not shut. The :gate-held entry is
+  written before an open and dropped after a shut."
+  [c state next & [{:keys [reach then] :or {reach 3}}]]
+  (when (= :open state) (hold-gate! c))
+  (let [r (await (ctx/call-child c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
     (cond
       (not= :done r) :continue
-      (= :done (:status (ctx/child-result c :gate))) (set-phase! c next)
-      :else (end! c :gate-stuck))))
+      (= :done (:status (ctx/child-result c :gate)))
+      (do (when (= :closed state) (drop-gate! c))
+          (set-phase! c next then))
+      (= :open state) (end! c :gate-stuck)
+      :else (shut-failed! c))))
 
-(defn ^:async walk-to!
-  "Walk within range of pos, then go to phase next; a blocked walk gives up :unreachable."
-  [c pos range next]
-  (case (await (u/walk-near! c pos range))
-    :there (set-phase! c next)
-    :partial :continue
-    (end! c :unreachable)))
+(defn ^:async go!
+  "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
+  [c cell]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (cell-pos cell) :range 0 :doors :never}))]
+    (cond
+      (not= :done r) nil
+      (:arrived (ctx/child-result c :walk)) :arrived
+      :else :failed)))
+
+(defn ^:async go-then!
+  "Walk to the cell, then to phase next (merging more); a blocked walk gives up :unreachable."
+  [c cell next & [more]]
+  (case (await (go! c cell))
+    :arrived (set-phase! c next more)
+    :failed (end! c :unreachable)
+    :continue))
+
+(defn flat-dist [a b]
+  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
+
+(defn cell-middle [[x _ z]] {:x (+ x 0.5) :z (+ z 0.5)})
+
+(defn animal-pos [c]
+  (some-> (animal-now c (:animal (ctx/mem c))) .-pos u/pos-of))
+
+(defn ^:async walk-settle!
+  "Walk to the cell, then look every 500 ms until the animal is at rest behind the body (settle-step). Nil while it
+  goes on, then :settled (also when max-ms ran out), :pinned (too far for too long) or :unreachable."
+  [c cell max-ms]
+  (let [m (ctx/mem c)]
+    (if-not (:walked m)
+      (case (await (go! c cell))
+        :arrived (do (ctx/update-mem! c assoc :walked true :settle-from (ctx/now c) :last-seen nil) nil)
+        :failed :unreachable
+        nil)
+      (if-let [there (animal-pos c)]
+        (let [moved (if-let [l (:last-seen m)] (flat-dist l there) 1.0)
+              waited (- (ctx/now c) (:settle-from m))]
+          (case (settle-step (flat-dist (u/self-pos c) there) moved waited)
+            :settled :settled
+            :pinned :pinned
+            (if (>= waited max-ms)
+              :settled
+              (do (ctx/update-mem! c assoc :last-seen there)
+                  (await (ctx/act c :wait #js {:ms settle-ms}))
+                  nil))))
+        :settled))))
+
+(defn ^:async settle-at!
+  "walk-settle! at axis cell i; (on-done :settled or :pinned), a blocked walk gives up :unreachable."
+  [c i max-ms on-done]
+  (let [r (await (walk-settle! c (nth (:axis (ctx/mem c)) i) max-ms))]
+    (case r
+      nil :continue
+      :unreachable (end! c :unreachable)
+      (on-done r))))
+
+(defn ^:async look-wait! [c]
+  (await (ctx/act c :wait #js {:ms settle-ms}))
+  :continue)
+
+(defn waited-ms
+  "Ms since this phase's first look (the clock starts on the first call)."
+  [c]
+  (let [now (ctx/now c)
+        from (or (:wait-from (ctx/mem c)) now)]
+    (ctx/update-mem! c assoc :wait-from from)
+    (- now from)))
+
+(defn crowded-near?
+  "True when an adult of :mob stands within r (flat) of the middle of cell."
+  [c cell r]
+  (boolean (some #(<= (flat-dist (u/pos-of (.-pos %)) (cell-middle cell)) r) (adults c))))
+
+(defn on-gate?
+  "True when an adult of :mob overlaps the gate cell."
+  [c]
+  (let [w (half-width (:mob (:args c)))
+        g (gate-cell c)]
+    (boolean (some #(overlaps-cell? (u/pos-of (.-pos %)) w g) (adults c)))))
+
+(defn ^:async wait-clear!
+  "on-clear when crowded? is false; else look again in 500 ms, and after limit-ms go on with one info herd.crowded-gate."
+  [c crowded? limit-ms where on-clear]
+  (cond
+    (not crowded?) (await (on-clear))
+    (>= (waited-ms c) limit-ms) (do (ctx/emit! c :herd.crowded-gate :info {:where where :text "the cells at the gate stayed crowded, going on"})
+                                    (await (on-clear)))
+    :else (await (look-wait! c))))
+
+(defn ^:async shut-when-clear!
+  "Shut the gate (:closed within reach, then to phase next with then) while no adult of :mob overlaps its cell, never
+  while one does: looks every 500 ms, then (on-crowded) after limit-ms."
+  [c reach limit-ms next then on-crowded]
+  (cond
+    (not (on-gate? c)) (await (set-gate! c :closed next {:reach reach :then then}))
+    (>= (waited-ms c) limit-ms) (await (on-crowded))
+    :else (await (look-wait! c))))
 
 ;; ------------------------------------------------------------------ the animals
 
@@ -299,19 +509,21 @@
           (animals/herd (:primitives c) mob (+ radius near-pen)))))
 
 (defn ^:async leash-next!
-  "Lead one more animal, or on to the gate once enough are led or none more can be."
+  "Lead one more animal and start its trip, or end when the pen holds enough or none more can be led."
   [c]
-  (let [{:keys [mob radius]} (:args c)
+  (let [{:keys [mob radius target]} (:args c)
         m (ctx/mem c)]
-    (if (>= (count (:led m)) (:wanted m))
-      (set-phase! c :to-gate)
+    (if (>= (count (in-pen-adults c (read-pen c))) target)
+      (finish! c nil)
       (let [r (await (ctx/call-child c :leash 'jobs.animals.leash {:mob mob :radius radius :skip (skip-keys c)}))
             res (when (= :done r) (ctx/child-result c :leash))]
         (cond
           (nil? res) :continue
-          (= :leashed (:reason res)) (do (ctx/update-mem! c update :led (fnil conj []) (:animal res)) :continue)
-          (empty? (:led m)) (finish! c (:reason res))
-          :else (do (ctx/update-mem! c assoc :trouble (:reason res)) (set-phase! c :to-gate)))))))
+          (= :leashed (:reason res))
+          (set-phase! c :approach {:animal (:animal res) :led [(:animal res)] :animal-started (ctx/now c)
+                                   :pos-index 0 :backs 0 :retried false :deepest-tried false})
+          (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (:reason res))
+          :else (finish! c nil))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);
@@ -328,143 +540,109 @@
     (count gone)))
 
 (defn regather-or-lose!
-  "Nobody is led any more: pick the leads up and start again once, else give up :lost."
+  "Nobody is led any more: shut the gate if it stands open, pick the leads up and start again once, else give up :lost."
   [c]
   (if (:regathered (ctx/mem c))
     (end! c :lost)
     (do (ctx/update-mem! c #(-> %
-                                (assoc :regathered true)
+                                (assoc :regathered true :animal nil)
                                 (update :given-up (fn [g] (into {} (remove (fn [[_ r]] (= :lead-broke r))) g)))))
-        (set-phase! c :regather))))
+        (set-phase! c (if (gate-open? c) :shut-gate :regather)))))
 
 (defn ^:async regather! [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius regather-radius :filter ["lead"]}))]
     (if (= :done r) (set-phase! c :leash) :continue)))
 
-(defn ^:async hold-food!
-  "Take the mob's food in hand unless it is there already (a resumed run may have lost it)."
-  [c]
-  (let [p (:primitives c)
-        food (animals/food-carried p (:mob (:args c)))]
-    (when (and food (not= food (.-held (.self p))))
-      (await (ctx/act c :equip #js {:item food})))))
+;; ------------------------------------------------------------------ the trip
 
-(def gather-s 15)
-(def gather-near 4)
+(defn released!
+  "The led animal is let go: booked :brought when it stands on a pen cell, else given up :outside; on to phase next."
+  [c next]
+  (let [k (:animal (ctx/mem c))
+        there (animal-pos c)
+        in? (boolean (and there (pen/in-pen? (read-pen c) there)))]
+    (ctx/update-mem! c #(-> %
+                            (dissoc :release-tried :releasing)
+                            (assoc :led [] :animal nil)
+                            (cond-> in? (update :brought (fnil conj []) k))
+                            (cond-> (and (not in?) (not (contains? (:given-up %) k))) (update :given-up assoc k :outside))))
+    (set-phase! c next)))
 
-(defn gather-step
-  "Next step of the wait for the animals let go to come round the body at the gate: :go once all are near or
-  gather-s seconds are used, else :wait."
-  [{:keys [gather-from]} now gather-s all-near?]
-  (if (or all-near? (>= (- now (or gather-from now)) (* 1000 gather-s))) :go :wait))
-
-(defn ^:async gather!
-  "Food in hand outside the gate: animals let go and then left alone strolled off and, from the far side of the
-  fence, circled it instead of using the gate. Wait up to gather-s for all of them to stand within gather-near of
-  the body, then on (:in for a pen whose gate is open, else :open-in; they follow the body in)."
-  [c]
+(defn pinned!
+  "The animal stays too far behind at position index idx: how the stepping goes on (step-in-step)."
+  [c idx]
   (let [m (ctx/mem c)
-        now (ctx/now c)
-        me (u/self-pos c)
-        near? #(some-> (animal-now c %) .-pos u/pos-of (u/dist me) (<= gather-near))]
-    (ctx/update-mem! c update :gather-from (fnil identity now))
-    (case (gather-step m now gather-s (every? near? (:led m)))
-      :go (set-phase! c (if (:pen-empty m) :in :open-in))
-      :wait (do (await (hold-food! c))
-                (await (ctx/act c :wait #js {:ms settle-ms}))
-                :continue))))
+        backs (:backs m 0)]
+    (case (step-in-step idx backs (boolean (:retried m)))
+      :back (set-phase! c :step {:pos-index (max out-1 (dec idx)) :back-step true :backs (inc backs) :deepest-tried false})
+      :retry-from-out (set-phase! c :retry-out {:backs 0 :retried true :deepest-tried false})
+      :give-up (set-phase! c :give-up-walk))))
 
-(def show-ms 10000)
-(def hide-ms 5000)
-
-(defn lure-step
-  "What the lure does next: :leave (all in, or :settle-s used up), :hide (the food has been out show-ms with some
-  animals still outside), :show (it has been away hide-ms) or :wait. Two animals pressing into a 1-wide gate at
-  once jam each other for as long as the food stays out; with it away they stroll apart and come one at a time."
-  [{:keys [settle-from cycle-from hidden-at]} now settle-s all-in?]
-  (cond
-    (or all-in? (>= (- now (or settle-from now)) (* 1000 settle-s))) :leave
-    hidden-at (if (>= (- now hidden-at) hide-ms) :show :wait)
-    (>= (- now (or cycle-from now)) show-ms) :hide
-    :else :wait))
-
-(defn ^:async lure!
-  "Food in hand at the lure cell, wait until every led animal stands on a pen cell, at most :settle-s; the food is
-  put away for hide-ms after every show-ms that did not bring them all in."
+(defn step-position!
+  "One round of the step through the gate: walk to the position and settle; settled goes on to the next one (the last
+  to the shut), pinned to pinned!, a position reached on a back-step to the one it backed from."
   [c]
-  (let [m (ctx/mem c)
-        now (ctx/now c)
-        answer (read-pen c)
-        in? #(some->> (animal-now c %) .-pos u/pos-of (pen/in-pen? answer))
-        step (lure-step m now (:settle-s (:args c)) (every? in? (:led m)))]
-    (ctx/update-mem! c #(-> % (update :settle-from (fnil identity now)) (update :cycle-from (fnil identity now))))
-    (case step
-      :leave (set-phase! c (if (:via m) :around :to-gate-in))
-      :hide (do (await (ctx/act c :unequip #js {}))
-                (ctx/update-mem! c assoc :hidden-at now)
-                :continue)
-      :show (do (await (hold-food! c))
-                (ctx/update-mem! c #(-> % (dissoc :hidden-at) (assoc :cycle-from now)))
-                :continue)
-      :wait (do (when-not (:hidden-at m) (await (hold-food! c)))
-                (await (ctx/act c :wait #js {:ms settle-ms}))
-                :continue))))
-
-(defn ^:async calm!
-  "Put the food away so nothing follows the body out; a hand that cannot be emptied is warned about once."
-  [c]
-  (let [r (await (ctx/act c :unequip #js {}))]
-    (when (= "full" (.-status r))
-      (ctx/emit! c :herd.hand-full :warn {:text "no free slot: the food stays in hand on the way out"}))
-    (set-phase! c :open-out)))
-
-;; ------------------------------------------------------------------ the round
+  (let [{:keys [pos-index back-step]} (ctx/mem c)]
+    (settle-at! c pos-index pinned-ms
+                #(cond
+                   back-step (set-phase! c :step {:pos-index (inc pos-index) :back-step false})
+                   (= :pinned %) (pinned! c pos-index)
+                   (= pos-index deepest) (set-phase! c :shut-behind)
+                   :else (set-phase! c :step {:pos-index (inc pos-index)})))))
 
 (defn ^:async step! [c phase]
-  (let [m (ctx/mem c)]
+  (let [m (ctx/mem c)
+        axis-cell #(nth (:axis m) %)]
     (case phase
       :survey (await (survey! c))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
-      :to-gate (await (walk-to! c (:outside-cell m) 0 :at-gate))
-      ;; a round of its own, so leads that broke on the walk are seen before the release
-      ;; a pen with no animals of its own opens first, while they are still on the lead: nothing can walk out after
-      ;; the food, and the animals let go are drawn straight in. A pen with animals of its own stays shut until
-      ;; the ones let go have gathered round the food (its own press to the fence inside), then opens
-      :at-gate (set-phase! c (if (:pen-empty m) :open-first :release-out))
-      :open-first (await (set-gate! c :open :release-out))
-      :release-out (await (release-step! c #(set-phase! c :back-out)))
-      ;; letting go walks to each animal wherever it stands: the food comes out at the gate, where they gather
-      :back-out (await (walk-to! c (:outside-cell m) 0 :hold-out))
-      ;; animals let go and left alone for ~15 s strolled off and, out of the food's range or on the far side of
-      ;; the fence, circled it instead of using the gate: letting go emptied the hand, so the food comes out again
-      :hold-out (do (await (hold-food! c)) (set-phase! c :gather))
-      :gather (await (gather! c))
-      :open-in (await (set-gate! c :open :in))
-      :in (await (walk-to! c (:lure m) 0 :lure))
-      :lure (await (lure! c))
-      ;; the food stays in hand round the animals let in, to the far side of them: they trail the body, never
-      ;; between it and the gate, where the body pushed them into the gate cell and shut them out. It goes away
-      ;; at the cell inside the gate (live: putting it away on the far side instead brought fewer in, 2 of 8 runs
-      ;; against 5 of 10)
-      :around (await (walk-to! c (:via m) 0 :to-gate-in))
-      :to-gate-in (await (walk-to! c (:inside-cell m) 0 :calm))
-      :calm (await (calm! c))
-      :open-out (await (set-gate! c :open :leave))
-      :leave (await (walk-to! c (:outside-cell m) 0 :shut))
-      :shut (await (set-gate! c :closed :census))
-      :census (finish! c nil)
-      :let-go (await (release-step! c #(set-phase! c :put-away)))
-      :put-away (do (when (food-in-hand? c) (await (ctx/act c :unequip #js {})))
-                    (finish! c (:ending (ctx/mem c)))))))
+      :approach (await (settle-at! c 0 settle-out-ms #(set-phase! c :clear-out)))
+      :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) crowd-out-radius) crowd-ms :out
+                                     #(set-phase! c :line-up {:pos-index 1})))
+      :line-up (let [i (:pos-index m)]
+                 (await (settle-at! c i settle-out-ms
+                                    #(if (= i out-1) (set-phase! c :open) (set-phase! c :line-up {:pos-index (inc i)})))))
+      :open (await (set-gate! c :open :step {:then {:pos-index gate-index :back-step false}}))
+      :step (await (step-position! c))
+      :retry-out (await (settle-at! c 0 settle-out-ms #(set-phase! c :line-up {:pos-index 1})))
+      ;; the animal is clear of the gate cell: step back one cell and shut; one that stays on it is waited for, then
+      ;; looked at once more from the deepest cell, else it is as good as pinned
+      :shut-behind (cond
+                     (not (on-gate? c)) (set-phase! c :shut-back)
+                     (< (waited-ms c) (if (:deepest-tried m) 0 shut-look-ms)) (await (look-wait! c))
+                     (:deepest-tried m) (pinned! c deepest)
+                     :else (set-phase! c :shut-deepest {:deepest-tried true}))
+      :shut-deepest (await (go-then! c (axis-cell deepest) :shut-behind))
+      :shut-back (await (go-then! c (axis-cell (dec deepest)) :shut-click))
+      :shut-click (await (shut-when-clear! c 4 shut-look-ms :deep nil #(set-phase! c :shut-behind)))
+      :deep (await (go-then! c (let-go-cell (:inside (read-pen c)) (gate-cell c) (cell (:inside-cell m))) :deep-release))
+      :deep-release (await (release-step! c #(released! c :exit)))
+      :exit (await (go-then! c (axis-cell in-1) :clear-in))
+      :clear-in (await (wait-clear! c (or (crowded-near? c (axis-cell in-1) crowd-in-radius) (on-gate? c)) crowd-ms :in
+                                    #(set-phase! c :exit-open)))
+      :exit-open (await (set-gate! c :open :exit-out))
+      :exit-out (await (go-then! c (axis-cell out-1) :shut-out))
+      :shut-out (await (shut-when-clear! c 3 exit-shut-ms :leash {:animal nil :stepped-back false}
+                                         #(if (:stepped-back m)
+                                            (shut-failed! c)
+                                            (set-phase! c :shut-back-in {:stepped-back true}))))
+      :shut-back-in (await (go-then! c (axis-cell in-1) :shut-out))
+      :give-up-walk (await (go-then! c (axis-cell 1) :give-up-unleash {:given-up (assoc (:given-up m) (:animal m) :jammed)}))
+      :give-up-unleash (await (release-step! c #(released! c :exit-out)))
+      :let-go (await (release-step! c #(set-phase! c :shut-gate)))
+      :shut-gate (if (gate-open? c)
+                   (await (shut-when-clear! c 3 shut-look-ms :shut-gate nil #(shut-failed! c)))
+                   (after-shut! c)))))
 
 (defn ^:async round [c]
   (let [now (ctx/now c)]
     (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [phase started]} (ctx/mem c)
+    (let [{:keys [phase animal-started gate]} (ctx/mem c)
           phase (or phase :survey)
           lead-phase? (contains? leading phase)]
+      (when (and gate (gate-open? c)) (hold-gate! c))
       (cond
-        (and lead-phase? (>= (- now started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
+        (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
         (and lead-phase? (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
         :else (await (step! c phase))))))

@@ -22,17 +22,17 @@ function openGates (s) {
 
 // Straight first, then each way through an open gate, both directions; the first that gets there, else the
 // straight walk as far as it went (pressed against the fence).
-function walkTo (s, e) {
+export function walkTo (s, e, stop = TEMPT_STOP) {
   const enters = walkable(s)
   const body = s.self.pos
-  const straight = walkLine([e.pos, body], enters, TEMPT_STOP)
+  const straight = walkLine([e.pos, body], enters, stop)
   if (straight.clear) return straight.pos
   const viaGates = openGates(s).flatMap(g => AXES.flatMap(([dx, dz]) => [
     [centre(g, -dx, -dz), centre(g), centre(g, dx, dz)],
     [centre(g, dx, dz), centre(g), centre(g, -dx, -dz)]
   ]))
   const through = viaGates
-    .map(way => walkLine([e.pos, ...way.map(p => ({ ...p, y: e.pos.y })), body], enters, TEMPT_STOP))
+    .map(way => walkLine([e.pos, ...way.map(p => ({ ...p, y: e.pos.y })), body], enters, stop))
     .find(r => r.clear)
   return (through ?? straight).pos
 }

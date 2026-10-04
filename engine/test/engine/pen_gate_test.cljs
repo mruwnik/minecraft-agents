@@ -106,6 +106,13 @@
     (is (= #{[20 64 0]} (pg/quiet-cells {:data data :now 600000} 300000)))
     (is (= #{[2 64 0] [20 64 0]} (pg/quiet-cells {:data data :now 600000} 700000)))))
 
+(deftest held-cells-are-the-gates-a-job-holds-open-on-purpose
+  (let [data (mem/add-entry mem/empty-data :gate-held {:t 0 :data {:cell [2 64 0]}} nil)]
+    (are [now held] (= held (pg/held-cells {:data data :now now} 30000))
+      10000 #{[2 64 0]}
+      29999 #{[2 64 0]}
+      31000 #{})))
+
 ;; ------------------------------------------------------------------ the trigger
 
 (def when-gate (:when pg/trigger))
@@ -314,3 +321,9 @@
           (is (some #(and (= :reflex (:source %)) (= :fired (:kind %)) (= :pen-gate (:reflex %))) @seen))
           (is (some #(= :shut-gate.done (:kind %)) @seen))
           (is (empty? (:list (core/state eng))) "the reflex job left the list"))))))
+
+(deftest a-gate-held-by-a-job-does-not-fire-until-the-entry-is-old
+  (let [data (mem/add-entry mem/empty-data :gate-held {:t 0 :data {:cell [2 64 0]}} nil)
+        ask (fn [ts] (holds-over (fake-at true 2 5) (knowledge pen-a) ts data))]
+    (is (= [false false false false false false false] (ask times)) "entry 0-6 s old: left alone")
+    (is (= [false false false false true true true] (ask (range 31000 38000 1000))) "entry 31 s old: fires after 4 s")))
