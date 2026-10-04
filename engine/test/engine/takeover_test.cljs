@@ -9,6 +9,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]
+            [cljs.reader :as reader]
             ["fs" :as fs]
             ["path" :as path]))
 
@@ -146,10 +147,13 @@
 (defn call
   "takeover/handle with a clj body (nil for none), the reply as clj {:status :json}."
   [eng method path body]
-  (let [r (takeover/handle eng opts method path (clj->js body))]
+  (let [r (takeover/handle eng opts method path (clj->js body) nil)]
     {:status (.-status r) :json (js->clj (.-json r) :keywordize-keys true)}))
 
 (defn post [eng body] (call eng "POST" "/drive" body))
+(defn world-call [eng body]
+  (let [r (takeover/handle eng opts "POST" "/world" (pr-str body) "application/edn")]
+    {:status (.-status r) :edn (reader/read-string (.-text r))}))
 
 (deftest handle-takes-drives-and-releases-through-the-wire
   (let [{:keys [eng seen state]} (setup {})
@@ -223,3 +227,98 @@
     (reset! clock (+ t0 5100))
     (is (= {:expiresAt 1020000 :idleLeftS 14.9} (select-keys (get-in (call eng "GET" "/drive" nil) [:json :manual])
                                                              [:expiresAt :idleLeftS])))))
+
+(deftest world-submit-is-async-idempotent-single-flight-and-cancellable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng world seen]} (setup {})]
+          (post eng {:op "take" :who "claude" :why "manual test" :idleS 30})
+          (.hold world "moveTo")
+          (let [request {:op :submit :who "claude" :request-id "move-1" :action :move-to
+                         :args {:pos {:x 10 :y 64 :z 0}}}
+                submitted (world-call eng request)
+                duplicate (world-call eng request)
+                overlap (world-call eng (assoc request :request-id "move-2" :args {:pos {:x 11 :y 64 :z 0}}))
+                blocked-drive (post eng {:op "set" :who "claude" :controls {:forward true}})]
+            (is (= [200 :running] [(:status submitted) (get-in submitted [:edn :operation :status])]))
+            (is (true? (get-in duplicate [:edn :duplicate])))
+            (is (= "action-running" (get-in overlap [:edn :reason])))
+            (is (= "action-running" (get-in blocked-drive [:json :reason])))
+            (let [cancelled (world-call eng {:op :cancel :who "claude" :request-id "move-1"})]
+              (is (= :cancelled (get-in cancelled [:edn :operation :status])))
+              (is (= :cancelled (get-in (world-call eng {:op :status :who "claude" :request-id "move-1"}) [:edn :operation :status]))))
+            (await (js/Promise.resolve))
+            (is (= 1 (count (filter #(and (= :action (:source %)) (= :done (:kind %))
+                                          (= "move-1" (:action-id %))) @seen))))))))))
+
+(deftest world-action-requires-owner-and-enough-bounded-lease-time
+  (let [{:keys [eng]} (setup {})
+        request {:op :submit :who "claude" :request-id "too-long" :action :move-to
+                 :args {:pos {:x 1 :y 64 :z 0} :timeoutS 10}}]
+    (is (= "not-taken" (get-in (world-call eng request) [:edn :reason])))
+    (post eng {:op "take" :who "claude" :why "short" :idleS 5})
+    (is (= "lease-too-short" (get-in (world-call eng request) [:edn :reason])))
+    (is (= "bad-args" (get-in (world-call eng (assoc request :request-id "bad" :args {:pos {:x 1 :y 64 :z 0} :unexpected true})) [:edn :reason])))))
+
+(deftest lease-expiry-cuts-an-inflight-world-action
+  (let [{:keys [eng world clock]} (setup {})]
+    (post eng {:op "take" :who "claude" :why "expiry" :idleS 2})
+    (.hold world "moveTo")
+    (world-call eng {:op :submit :who "claude" :request-id "expiring" :action :move-to
+                     :args {:pos {:x 10 :y 64 :z 0} :timeoutS 1}})
+    (swap! clock + 2000)
+    (takeover/tick! eng opts)
+    (is (false? (core/manual? eng)))
+    (is (= :cancelled (get-in (world-call eng {:op :status :who "claude" :request-id "expiring"}) [:edn :operation :status])))))
+
+(deftest world-submit-clears-prior-held-drive-controls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng state world clock seen]} (setup {})]
+          (post eng {:op "take" :who "claude" :why "clear controls" :idleS 30})
+          (post eng {:op "set" :who "claude" :controls {:forward true}})
+          (.hold world "moveTo")
+          (world-call eng {:op :submit :who "claude" :request-id "after-drive" :action :move-to
+                           :args {:pos {:x 10 :y 64 :z 0} :timeoutS 1}})
+          (is (= {} (js->clj (.-controls state) :keywordize-keys true)))
+          (swap! clock + 1100)
+          (takeover/tick! eng opts)
+          (is (empty? (kinds-of seen :drive_deadman)))
+          (world-call eng {:op :cancel :who "claude" :request-id "after-drive"})
+          (await (js/Promise.resolve)))))))
+
+(deftest late-world-completion-cannot-overwrite-a-reused-evicted-request-id
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})
+              old-resolve (atom nil)
+              new-resolve (atom nil)]
+          (set! (.-moveTo p)
+                (fn [_ args]
+                  (case (.-x (.-pos args))
+                    10 (js/Promise. (fn [resolve _] (reset! old-resolve resolve)))
+                    20 (js/Promise. (fn [resolve _] (reset! new-resolve resolve)))
+                    (js/Promise.resolve #js {:status "arrived"}))))
+          (post eng {:op "take" :who "claude" :why "stale completion" :idleS 30})
+          (world-call eng {:op :submit :who "claude" :request-id "reused" :action :move-to
+                           :args {:pos {:x 10 :y 64 :z 0} :timeoutS 1}})
+          (world-call eng {:op :cancel :who "claude" :request-id "reused"})
+          (doseq [n (range 32)]
+            (world-call eng {:op :submit :who "claude" :request-id (str "evict-" n) :action :move-to
+                             :args {:pos {:x 1 :y 64 :z 0} :timeoutS 1}})
+            (await (js/Promise.resolve))
+            (await (js/Promise.resolve)))
+          (world-call eng {:op :submit :who "claude" :request-id "reused" :action :move-to
+                           :args {:pos {:x 20 :y 64 :z 0} :timeoutS 1}})
+          (is (= :running (get-in (world-call eng {:op :status :who "claude" :request-id "reused"}) [:edn :operation :status])))
+          (@old-resolve #js {:status "arrived"})
+          (await (js/Promise.resolve))
+          (await (js/Promise.resolve))
+          (is (= :running (get-in (world-call eng {:op :status :who "claude" :request-id "reused"}) [:edn :operation :status])))
+          (@new-resolve #js {:status "arrived"})
+          (await (js/Promise.resolve))
+          (await (js/Promise.resolve))
+          (is (= :done (get-in (world-call eng {:op :status :who "claude" :request-id "reused"}) [:edn :operation :status]))))))))

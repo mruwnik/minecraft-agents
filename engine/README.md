@@ -878,12 +878,12 @@ already running.
 
 ## Manual takeover
 
-For rescuing a stuck body by hand. Movement only: no dig, place or use yet. The body listens on a unix socket,
-`state/agents/<name>/engine/control.sock` (mode 0600, HTTP + JSON), created at start and removed at shutdown. If it
+For rescuing a stuck body by hand. The body listens on a unix socket,
+`state/agents/<name>/engine/control.sock` (mode 0600), created at start and removed at shutdown. If it
 cannot listen (for example a path over 100 bytes) the body emits `system.control_unavailable` (error) and runs without it.
 
-The control socket is the body's first outside input channel, and it is deliberately minimal: only the `/drive` routes.
-There are no list or register edits through it; whether to add any is a separate design decision. It relates to
+The socket exposes `/drive` for direct movement (JSON) and `/world` for a small set of bounded primitive actions (EDN).
+There are no list or register edits through it. It relates to
 `docs/design.md`'s assumption of a single input source ("There is a single input source. Which agent gets to call what is
 the agents' problem, not the engine's.") like this: while the driver lease is held it is that single source for movement,
 and who drives is decided by whoever holds the lease, first come (`take` is refused with `held-by <who>` otherwise).
@@ -928,6 +928,31 @@ node engine/tools/drive.mjs ProbeDrive stop --who claude
 node engine/tools/drive.mjs ProbeDrive state
 node engine/tools/drive.mjs ProbeDrive release --who claude           # --force reclaims another driver's hold
 ```
+
+World actions keep the same exclusive lease and use the engine's existing owner-token primitives; they do not create a
+second Mineflayer connection. `world.mjs` accepts `move-to`, `dig`, `place`, `use-on`, `interact`, and `inventory`. Mutating
+actions have finite primitive deadlines (at most 10 s), require a lease with at least one extra second of idle time, and
+run one at a time. Starting one clears held drive controls. While it runs, `/drive set` and `stop` are refused; cancel,
+release, lease expiry, or engine shutdown cuts the action. This socket is local access control, not per-`who` authentication:
+`who` is the lease label and the Unix socket's filesystem permissions govern access.
+
+Submission returns promptly with an operation ID. Reuse `--request-id` if a response is lost; operation IDs are retained
+in memory for the latest 32 actions and are not durable across restart. `status` can read a finished result after release;
+`cancel` requires the current lease. Inventory is compact and capped at 40 stacks.
+
+```
+node engine/tools/drive.mjs ProbeDrive take --who claude --why "move to the gate" --idle-s 30
+node engine/tools/world.mjs ProbeDrive submit move-to -5 64 -7 --who claude
+node engine/tools/world.mjs ProbeDrive status <request-id> --who claude
+node engine/tools/world.mjs ProbeDrive cancel <request-id> --who claude
+node engine/tools/world.mjs ProbeDrive inventory --who claude
+node engine/tools/drive.mjs ProbeDrive release --who claude
+```
+
+`move-to` accepts `--range`, `--max-distance` (up to 64 blocks), and `--timeout-s` (1..10). `dig`, `place`, `use-on`, and
+`interact` use the existing primitive's reach, item and interaction checks. `interact` takes an entity ID, not a name.
+`use-on` refuses beds, containers and its existing hazard list. The operation status describes what the primitive returned;
+it does not schedule jobs or alter the engine's queue.
 
 Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can drive too; see `docs/view-format.md`.
 
