@@ -3,11 +3,12 @@ import http from 'node:http'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { readEDN, writeEDN, compactStatus, waitObserve } from './observe-lib.mjs'
 import { defaultStateDir } from './drive-lib.mjs'
 
 export const REQUEST_TIMEOUT_MS = 3000
 export const MAX_RESPONSE_BYTES = 262144
-export const usage = `usage: observe.mjs <agent> [status [--raw] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
+export const usage = `usage: observe.mjs <agent> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | job <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--state <dir>]`
 
 export function unsupportedObserveRoute (response) {
   return response.status === 404 && /^application\/edn(?:;|$)/i.test(response.contentType ?? '') &&
@@ -28,7 +29,17 @@ export function requestFor (argv) {
         state: { type: 'string', default: defaultStateDir },
         limit: { type: 'string' },
         offset: { type: 'string' },
-        raw: { type: 'boolean', default: false }
+        raw: { type: 'boolean', default: false },
+        verbose: { type: 'boolean', default: false },
+        wait: { type: 'boolean', default: false },
+        timeout: { type: 'string' },
+        chatter: { type: 'string' },
+        observer: { type: 'string' },
+        watch: { type: 'string' },
+        from: { type: 'string' },
+        'poll-ms': { type: 'string' },
+        danger: { type: 'boolean', default: false },
+        disconnect: { type: 'boolean', default: false }
       },
       allowPositionals: true
     })
@@ -91,16 +102,37 @@ export function requestFor (argv) {
   } else {
     return { error: `unknown operation ${op}` }
   }
+  let waitOptions
+  const v = parsed.values
+  if (v.wait) {
+    if (op !== 'status' || v.raw || v.verbose || v.limit) return { error: '--wait is only valid with compact status' }
+    const match = /^(\d+(?:\.\d+)?)(ms|s|m)?$/.exec(v.timeout ?? '60s')
+    const timeoutMs = match ? Number(match[1]) * ({ ms: 1, s: 1000, m: 60000 }[match[2] ?? 's']) : NaN
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 10 || timeoutMs > 3600000) return { error: '--timeout must be between 10ms and 60m' }
+    const observer = v.observer ?? 'agent'
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(observer)) return { error: '--observer must be 1-40 letters, digits, underscores or hyphens' }
+    const chatter = v.chatter ?? 'addressed'
+    if (!['none', 'addressed', 'all'].includes(chatter)) return { error: '--chatter must be none, addressed, or all' }
+    const watch = v.watch ? v.watch.split(',') : []
+    if (watch.some(id => !/^j[0-9]+$/.test(id)) || watch.length > 32) return { error: '--watch needs up to 32 comma-separated job IDs' }
+    if (v.from && !/^[A-Za-z0-9_-]{1,40}$/.test(v.from)) return { error: '--from must be a player name' }
+    const pollMs = Number(v['poll-ms'] ?? 250)
+    if (!Number.isInteger(pollMs) || pollMs < 50 || pollMs > 5000) return { error: '--poll-ms must be 50-5000' }
+    waitOptions = { timeoutMs, observer, chatter, watch, pollMs, from: v.from, danger: v.danger, disconnect: v.disconnect }
+  } else if (['timeout', 'chatter', 'observer', 'watch', 'from', 'poll-ms'].some(k => v[k] !== undefined) || v.danger || v.disconnect) return { error: 'wait options require --wait' }
+  if (v.verbose && (op !== 'status' || v.raw)) return { error: '--verbose is only valid for status without --raw' }
   const query = params.toString()
   return {
     agent,
     state,
+    ...(waitOptions ? { waitOptions } : {}),
+    ...(v.verbose ? { verbose: true } : {}),
     socketPath: path.join(state, 'agents', agent, 'engine', 'events.sock'),
     path: query ? `${endpoint}?${query}` : endpoint
   }
 }
 
-export function get (socketPath, requestPath, { timeoutMs = REQUEST_TIMEOUT_MS, maxBytes = MAX_RESPONSE_BYTES, requestImpl = http.request } = {}) {
+export function get (socketPath, requestPath, { timeoutMs = REQUEST_TIMEOUT_MS, maxBytes = MAX_RESPONSE_BYTES, requestImpl = http.request, signal } = {}) {
   return new Promise((resolve, reject) => {
     let settled = false
     let timer
@@ -109,8 +141,10 @@ export function get (socketPath, requestPath, { timeoutMs = REQUEST_TIMEOUT_MS, 
       if (settled) return
       settled = true
       clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
       fn(value)
     }
+    const abort = () => { const error = Object.assign(new Error('observe cancelled'), { code: 'ABORT_ERR' }); finish(reject, error); req.destroy(error) }
     const req = requestImpl({ socketPath, method: 'GET', path: requestPath }, (res) => {
       let text = ''
       res.setEncoding('utf8')
@@ -140,7 +174,9 @@ export function get (socketPath, requestPath, { timeoutMs = REQUEST_TIMEOUT_MS, 
       finish(reject, error)
       req.destroy(error)
     }, timeoutMs)
-    req.end()
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    else req.end()
   })
 }
 
@@ -151,6 +187,18 @@ export async function main (argv = process.argv.slice(2)) {
     return 2
   }
   try {
+    if (request.waitOptions) {
+      const controller = new AbortController()
+      const cancel = () => controller.abort()
+      process.once('SIGINT', cancel)
+      process.once('SIGTERM', cancel)
+      try {
+        await waitObserve(request, get, controller.signal, result => new Promise((resolve, reject) => {
+          process.stdout.write(`${writeEDN(result)}\n`, error => error ? reject(error) : resolve())
+        }))
+        return 0
+      } finally { process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel) }
+    }
     const response = await get(request.socketPath, request.path)
     if (!/^application\/edn(?:;|$)/i.test(response.contentType ?? '')) {
       process.stdout.write(`{:ok false :reason :bad-response :detail :unexpected-content-type}\n`)
@@ -162,10 +210,19 @@ export async function main (argv = process.argv.slice(2)) {
         return 2
       }
     }
+    if (request.path.startsWith('/status') && !request.verbose && response.status === 200) {
+      process.stdout.write(`${writeEDN(compactStatus(readEDN(response.text)))}\n`)
+      return 0
+    }
     process.stdout.write(response.text.endsWith('\n') ? response.text : `${response.text}\n`)
     return response.status >= 200 && response.status < 300 ? 0 : 1
   } catch (error) {
-    const reason = error?.code === 'ETIMEDOUT' ? ':timeout'
+    const reason = error?.code === 'ABORT_ERR' ? ':cancelled'
+      : error?.code === 'EOBSERVERBUSY' ? ':observer-busy'
+      : error?.code === 'EOBSERVERLIMIT' ? ':observer-limit'
+      : error?.code === 'EATTENTIONLIMIT' ? ':attention-limit'
+      : error?.code === 'EOBSERVEUNAVAILABLE' ? ':observe-unavailable'
+      : error?.code === 'ETIMEDOUT' ? ':timeout'
       : error?.code === 'ERESPONSETOOLARGE' ? ':response-too-large'
         : ['ECONNREFUSED', 'ENOENT'].includes(error?.code) ? ':no-running-body'
           : error?.code === 'EACCES' ? ':socket-access-denied' : ':transport-error'
