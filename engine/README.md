@@ -1917,13 +1917,13 @@ explicitly supplied. Geometry is omitted by default; `--geometry --large`
 allows inspection up to the model's 200,000-cell limit.
 
 ```bash
-node engine/tools/plans.mjs --world claude list --status active
+node engine/tools/plans.mjs --world claude list
 node engine/tools/plans.mjs --world claude find home
 node engine/tools/plans.mjs --world claude show home --raw
-node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :status :proposed :parts []}'
+node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :parts []}'
 node engine/tools/plans.mjs --world claude check home --inventory '{:stone 24 :oak_planks 16}'
-node engine/tools/plans.mjs --world claude status home --status completed --by builder --revision <digest>
-node engine/tools/plans.mjs --world claude edit home --edn '{:id "home" :status :active :parts []}' --by builder --revision <digest>
+node engine/tools/plans.mjs --world claude remove home --by builder --revision <digest>
+node engine/tools/plans.mjs --world claude edit home --edn '{:id "home" :parts []}' --by builder --revision <digest>
 node engine/tools/blueprints.mjs --world claude find hut
 node engine/tools/blueprints.mjs --world claude show starter-hut --raw
 node engine/tools/blueprints.mjs --world claude validate hut --edn '{:id "hut" :front :north :key {"S" "stone" "." :clear} :layers [["S."]]}'
@@ -1931,13 +1931,14 @@ node engine/tools/blueprints.mjs --world claude save hut --edn '<blueprint-map>'
 ```
 
 Plan mutations are atomic compare-and-swap writes. `add` is create-only;
-`edit`, `status`, and `remove` require the digest shown by `list` or `show`, so
+`edit` and `remove` require the digest shown by `list` or `show`, so
 the tool refuses to apply an intent based on stale observed data. Updating an
 existing blueprint also requires its shown digest; the first save creates it.
 `--dry-run` validates and previews without writing. Blueprint files are global across
 worlds, so every result marks `:scope :global`; plans mark `:scope :world`.
-`:completed` is separate from `:retired` and, like proposed/retired plans, does
-not participate in active-plan conflicts or engine footprints.
+Plans have no status: every submitted plan is active and takes part in conflicts
+and engine footprints, a draft stays local until it is submitted, and `remove`
+deletes a plan (there is no completed or retired state).
 
 `validate` checks EDN structure and blueprint references without saving.
 `check` compares a saved plan with previously dumped chunk columns. Its results

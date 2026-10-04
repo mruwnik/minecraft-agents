@@ -70,7 +70,7 @@ test('the status command and list --status are gone and say where to go instead'
     assert.equal(listed.code, 2)
     assert.deepEqual(listed.value.reason, keyword('bad-option'))
     const withStatus = await invoke('plan', fx, ['validate', 'home', '--edn', '{:id "home" :status :active :parts [{:id "base" :cells [[0 64 0]] :want "stone"}]}'])
-    assert.match(withStatus.output, /status/)
+    assert.match(withStatus.output, /unknown key :status/)
   } finally { fx.close() }
 })
 
