@@ -32,6 +32,18 @@
   "Dig statuses that leave the log standing, so the debt written ahead is void."
   #{"unreachable" "cannot"})
 
+(defn ^:async approach!
+  "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
+  of the column's foot (3 when that has no path: the foot may be the trunk itself). :there, :partial or :blocked."
+  [c pos]
+  (if (<= (eye-dist (u/self-pos c) pos) dig-reach)
+    :there
+    (let [foot (assoc pos :y (:y (:base (ctx/mem c))))
+          w (await (u/walk-near! c foot 2))]
+      (if (= :blocked w)
+        (await (u/walk-near! c foot 3))
+        w))))
+
 (defn ^:async dig-up!
   "Dig the logs in order, walking in reach first. Commits the replant debt
   before the base log is dug (write-ahead; withdrawn when the dig leaves the log standing). Resolves to :ok, :partial (the walk made progress
@@ -42,9 +54,7 @@
   (loop [[l & more] logs]
     (if-not l
       :ok
-      (let [w (if (<= (eye-dist (u/self-pos c) (:pos l)) dig-reach)
-                :there
-                (await (u/walk-near! c (assoc (:pos l) :y (:y (:base (ctx/mem c)))) 2)))]
+      (let [w (await (approach! c (:pos l)))]
         (case w
           :blocked :blocked
           :partial :partial

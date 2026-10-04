@@ -136,6 +136,21 @@
           (is (= [[6 64 0] [6 65 0] [6 66 0] [6 67 0] [6 68 0]] (digs p)))
           (is (= [[6 64 0]] (mapv pos-xyz (h/calls p "moveTo"))) "one walk, to the column's foot, none for the high logs"))))))
 
+(deftest fell-tree-tries-a-wider-stand-when-the-foot-of-the-column-has-no-path
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})
+              n (atom 0)]
+          (.override (.-world p) "moveTo"
+                     (fn ^:async f [token args impl]
+                       (if (= 1 (swap! n inc))
+                         #js {:status "blocked" :reason "noPath"}
+                         (await (impl token args)))))
+          (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (is (= 5 (count (digs p))))
+          (is (= [2 3] (mapv #(.-range (.-args %)) (h/calls p "moveTo")))))))))
+
 (deftest fell-tree-at-does-nothing-where-no-log-stands
   (async done
     (tu/run-async done
