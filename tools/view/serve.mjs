@@ -4,8 +4,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { textureBytes } from './materials.mjs'
-import { columnFormat } from './web-format.mjs'
+import { createAssetCache, buildAssetsInWorker } from './view-assets.mjs'
 import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
@@ -60,21 +59,14 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
   const driveProxy = createDriveProxy({ stateDir })
   const agentFile = ({ world, name }, file) => path.join(bodyDir(stateDir, world, name), 'view', file)
-  const builds = new Map()
-  // one build per version serves both the table and the texture bytes
-  const buildFor = version => {
-    if (builds.has(version)) return builds.get(version)
-    const { table, textures, elements } = textureBytes(version, textureDir, { jarPath })
-    const build = { table: JSON.stringify({ ...table, format: columnFormat(version) }), textures: Buffer.from(textures.bytes), elements: elements ? Buffer.from(elements.buffer, elements.byteOffset, elements.byteLength) : Buffer.alloc(0) }
-    builds.set(version, build)
-    return build
-  }
+  // one build per version (in a worker thread, see view-assets.mjs) serves both the table and the texture bytes
+  const buildFor = createAssetCache(version => buildAssetsInWorker(version, textureDir, jarPath))
 
   // ?debug=1 or 2: the table with `issue` (the worst severity) on every material whose block the view draws wrong (tools/view/block-issues.mjs)
   const debugTables = new Map()
-  const debugTableFor = version => {
+  const debugTableFor = async version => {
     if (debugTables.has(version)) return debugTables.get(version)
-    const table = JSON.parse(buildFor(version).table)
+    const table = JSON.parse((await buildFor(version)).table)
     const { records } = classifyReal({ version, textureDir, jarPath, table })
     const worst = new Map() // block name -> its worst severity
     const rank = severity => SEVERITIES.indexOf(severity)
@@ -326,15 +318,15 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const versionOf = (dir, ext) => head === dir && rest.length === 1 ? new RegExp(`^([0-9.]+)\\.${ext}$`).exec(rest[0])?.[1] : null
     const tableVersion = versionOf('blocks', 'json')
     if (tableVersion && VERSION.test(tableVersion)) {
-      const table = ['1', '2'].includes(url.searchParams.get('debug')) ? debugTableFor(tableVersion) : buildFor(tableVersion).table
+      const table = ['1', '2'].includes(url.searchParams.get('debug')) ? await debugTableFor(tableVersion) : (await buildFor(tableVersion)).table
       return send(res, 200, table, { 'Content-Type': 'application/json' })
     }
     const biomeWorld = head === 'biomes' && rest.length === 1 ? /^([A-Za-z0-9_-]+)\.json$/.exec(rest[0])?.[1] : null
     if (biomeWorld) return sendBiomes(res, biomeWorld)
     const textureVersion = versionOf('textures', 'bin')
-    if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, buildFor(textureVersion).textures, { 'Content-Type': 'application/octet-stream' })
+    if (textureVersion && VERSION.test(textureVersion)) return send(res, 200, (await buildFor(textureVersion)).textures, { 'Content-Type': 'application/octet-stream' })
     const elementVersion = versionOf('elements', 'bin')
-    if (elementVersion && VERSION.test(elementVersion)) return send(res, 200, buildFor(elementVersion).elements, { 'Content-Type': 'application/octet-stream' })
+    if (elementVersion && VERSION.test(elementVersion)) return send(res, 200, (await buildFor(elementVersion)).elements, { 'Content-Type': 'application/octet-stream' })
     notFound(res)
   }
 
