@@ -7,6 +7,7 @@
             [engine.notes :as notes]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.single :as single]
             [engine.takeover :as takeover]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
@@ -113,54 +114,72 @@
                         :emit emit})
            :notes (notes/open {:world-dir dir :body agent :emit emit}))))
 
+(defn ^:async start
+  "Open the body's files, log in and run, once the one-process guard is held (release frees it).
+  Resolves to {:engine eng :stop f}."
+  [{:keys [fresh?] :as opts} {:keys [root cfg plan state-dir events-max-bytes]} release]
+  (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
+        _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
+        restoring? (fs/existsSync engine-file)
+        create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
+        eng-ref (atom nil)
+        ;; the view dump's view.stats and view.error go straight to the event stream (docs/view-format.md)
+        on-view-event (fn [e]
+                        (when-let [eng @eng-ref]
+                          (core/emit! eng (-> (js->clj e :keywordize-keys true)
+                                              (update :kind keyword) (update :source keyword) (update :level keyword)))))
+        p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
+                                         :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
+                                                    :onEvent on-view-event}}))
+        world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
+                           :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
+        eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
+                          :body (:username cfg) :max-event-bytes events-max-bytes :world world})
+        _ (reset! eng-ref eng)]
+    (trigger-api/restore-conditions! eng)
+    (when (and plan (not restoring?)) (trigger-api/load-scenario! eng plan))
+    (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
+      (try
+        (await ((:listen event-socket)))
+        (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
+              control (await (start-control! root eng cfg lease-opts))
+              stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
+          {:engine eng :stop (fn [] (stop-ticks) (takeover/close! eng) (some-> control .close)
+                               ((:close event-socket)) (core/shutdown! eng) (.close p) (release))})
+        (catch :default e
+          ((:close event-socket))
+          (core/shutdown! eng)
+          (await (.close p))
+          (throw e))))))
+
 (defn ^:async run
-  "Start a body. Resolves to {:engine eng :stop f} or {:error text}."
-  [{:keys [fresh?] :as opts}]
-  (let [{:keys [error root cfg plan state-dir events-max-bytes]} (preflight opts)]
+  "Start a body. Resolves to {:engine eng :stop f}, or {:error text}; :exit-code 3 when the body already runs.
+  The one-process guard (engine.single) is taken right after the read-only preflight: before any file in the body's
+  folder is opened, truncated or deleted (--fresh included) and before the login."
+  [opts]
+  (let [{:keys [error cfg] :as pre} (preflight opts)]
     (if error
       {:error error}
-      (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
-            _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
-            restoring? (fs/existsSync engine-file)
-            create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
-            eng-ref (atom nil)
-            ;; the view dump's view.stats and view.error go straight to the event stream (docs/view-format.md)
-            on-view-event (fn [e]
-                            (when-let [eng @eng-ref]
-                              (core/emit! eng (-> (js->clj e :keywordize-keys true)
-                                                  (update :kind keyword) (update :source keyword) (update :level keyword)))))
-            p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
-                                             :view #js {:stateDir state-dir :agent (:agent opts) :world (:world cfg)
-                                                        :onEvent on-view-event}}))
-            world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
-                               :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
-            eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
-                              :body (:username cfg) :max-event-bytes events-max-bytes :world world})
-            _ (reset! eng-ref eng)]
-        (trigger-api/restore-conditions! eng)
-        (when (and plan (not restoring?)) (trigger-api/load-scenario! eng plan))
-        (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
+      (let [sock (single/socket-path (:engine-dir cfg))
+            claim (await (single/claim! sock {:pid js/process.pid :world (:world cfg) :body (:agent opts)}))]
+        (if-let [running (:running claim)]
+          {:error (single/refusal (:world cfg) (:agent opts) sock running) :exit-code single/exit-code}
           (try
-            (await ((:listen event-socket)))
-            (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
-                  control (await (start-control! root eng cfg lease-opts))
-                  stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
-              {:engine eng :stop (fn [] (stop-ticks) (takeover/close! eng) (some-> control .close)
-                                   ((:close event-socket)) (core/shutdown! eng) (.close p))})
+            (await (start opts pre (:held claim)))
             (catch :default e
-              ((:close event-socket))
-              (core/shutdown! eng)
-              (await (.close p))
+              (await ((:held claim)))
               (throw e))))))))
 
-(defn fail! [text]
-  (.write js/process.stderr (str text "\n"))
-  (js/process.exit 2))
+(defn fail!
+  ([text] (fail! text 2))
+  ([text code]
+   (.write js/process.stderr (str text "\n"))
+   (js/process.exit code)))
 
 (defn main [& args]
   (-> (run (parse-args args))
-      (.then (fn [{:keys [error stop]}]
-               (when error (fail! error))
+      (.then (fn [{:keys [error stop exit-code]}]
+               (when error (fail! error (or exit-code 2)))
                (let [shutdown (fn [] (stop) (js/setTimeout #(js/process.exit 0) 200))]
                  (.on js/process "SIGINT" shutdown)
                  (.on js/process "SIGTERM" shutdown))))
