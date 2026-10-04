@@ -16,14 +16,14 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 out/server.cjs` with inherited stdio, so the server's output stays in your terminal. Start it once; you do not restart it by hand.
 
 To pick up new code, run `npm --prefix dashboard run restart` (or `POST /api/restart`, accepted from loopback peers only,
-403 otherwise, 202 at once with the current `build-id`; `npm run restart` then polls `GET /api/build-id` and reports the new id, or exits 2 after `RESTART_WAIT_MS` (default 6 min) if it never changed, i.e. the build failed or was refused). The server tells the launcher over its IPC channel, and the launcher:
+403 otherwise, 202 at once with the current `build-id`; `npm run restart` then polls the launcher's `out/launcher-<port>.json` (idle, build count moved) and `GET /api/build-id`: it reports the new id, exits 2 at once when the launcher reports the build failed or refused, and exits 2 after `RESTART_WAIT_MS` (default 6 min) with no outcome; every request times out after `RESTART_FETCH_MS`, default 10 s; a restart that coalesced into a later build waits for the whole chain). The server tells the launcher over its IPC channel, and the launcher:
 
 - refuses when `MemAvailable` in `/proc/meminfo` is under 3500 MB (message printed, old server kept);
 - builds FIRST while the old server keeps running; requests that arrive during a build coalesce into one more build;
 - on a **failed build**: prints the compiler output, keeps the old server running, and is done;
 - on a good build: sends SIGTERM to the old server, waits for it to exit (SIGKILL after 5 s), starts the new one.
 
-Ctrl-C kills a running build (whole process group) and stops the server; a restart request pending during a build is dropped. A server exit nobody asked for ends the launcher with the server's exit code
+Ctrl-C kills a running build (whole process group: SIGTERM, SIGKILL after 5 s) and stops the server; a restart request pending during a build is dropped. A server exit nobody asked for ends the launcher with the server's exit code
 (no restart loops). An open page reloads itself when the `build-id` in `/api/state` changes (`dashboard.ui.buildid`).
 If the server runs without the launcher, `/api/restart` answers 409.
 

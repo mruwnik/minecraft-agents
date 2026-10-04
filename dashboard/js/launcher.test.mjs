@@ -3,6 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  terminateGroup, launcherStatus, restartVerdict,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -117,4 +118,54 @@ for (const [step, expected] of [
   ['server', ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'server']]]
 ]) {
   test(`stepCommand ${step}`, () => assert.deepEqual(stepCommand(step), expected))
+}
+
+const fakeGroup = ({ diesOn }) => {
+  const signals = []
+  let exit
+  const exited = new Promise((r) => { exit = r })
+  const kill = (signal) => { signals.push(signal); if (signal === diesOn) exit() }
+  return { signals, kill, exited }
+}
+const never = new Promise(() => {})
+const instant = () => Promise.resolve()
+
+test('terminateGroup: a build that obeys TERM is not killed', async () => {
+  const g = fakeGroup({ diesOn: 'SIGTERM' })
+  await terminateGroup({ kill: g.kill, exited: g.exited, grace: () => never })
+  assert.deepEqual(g.signals, ['SIGTERM'])
+})
+
+test('terminateGroup: a build that ignores TERM gets SIGKILL after the grace', async () => {
+  const g = fakeGroup({ diesOn: 'SIGKILL' })
+  await terminateGroup({ kill: g.kill, exited: g.exited, grace: instant })
+  assert.deepEqual(g.signals, ['SIGTERM', 'SIGKILL'])
+})
+
+test('terminateGroup: an already gone group does not throw', async () => {
+  const kill = () => { throw new Error('ESRCH') }
+  await terminateGroup({ kill, exited: Promise.resolve(), grace: () => never })
+})
+
+const base = { phase: 'idle', pending: false, seq: 3, last: 'ok', failed: null }
+
+test('launcherStatus records the phase, pending flag and last result', () => {
+  assert.deepEqual(
+    launcherStatus({ phase: 'building', pending: true }, { seq: 2, last: 'failed', failed: 'ui' }),
+    { phase: 'building', pending: true, seq: 2, last: 'failed', failed: 'ui' })
+})
+
+for (const [name, status, expected, now = 'old'] of [
+  ['no status yet waits', null, { kind: 'wait' }],
+  ['a build still running waits', { ...base, phase: 'building', seq: 3 }, { kind: 'wait' }],
+  ['a settled state older than the request waits', { ...base, seq: 2 }, { kind: 'wait' }],
+  ['a failure after the request fails at once', { ...base, last: 'failed', failed: 'server' }, { kind: 'failed', failed: 'server' }],
+  ['a refusal after the request fails at once', { ...base, last: 'refused', failed: null }, { kind: 'failed', failed: null }],
+  ['a failure while a further build is pending still waits', { ...base, last: 'failed', phase: 'building', pending: false }, { kind: 'wait' }],
+  ['a good build with the same build id waits for the swap', { ...base }, { kind: 'wait' }],
+  ['a good build with a new build id is success', { ...base }, { kind: 'ok', id: 'new' }, 'new'],
+]) {
+  test(`restartVerdict: ${name}`, () => {
+    assert.deepEqual(restartVerdict(status, { seq0: 2, old: 'old', now }), expected)
+  })
 }

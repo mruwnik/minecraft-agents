@@ -68,3 +68,27 @@ export const parseMemAvailableMb = (meminfo) => {
 }
 
 export const enoughMemory = (availableMb) => availableMb !== null && availableMb >= minMemoryMb
+
+// SIGTERM to a process group, then SIGKILL if it has not exited when `grace()` resolves (a JVM may ignore TERM and would
+// be orphaned). kill(signal) signals the group; exited resolves when it is gone. Resolves once the group is gone or killed.
+export const terminateGroup = async ({ kill, exited, grace }) => {
+  const signal = (name) => { try { kill(name) } catch { /* already gone */ } }
+  signal('SIGTERM')
+  const gone = await Promise.race([exited.then(() => true), grace().then(() => false)])
+  if (!gone) signal('SIGKILL')
+}
+
+// What the launcher publishes (out/launcher-<port>.json) so `npm run restart` learns the outcome of a build.
+// done: {seq, last, failed}: seq counts finished builds, last is 'ok' | 'failed' | 'refused'.
+export const launcherStatus = (state, done) => ({
+  phase: state.phase, pending: state.pending, seq: done.seq, last: done.last, failed: done.failed,
+})
+
+// What restart.mjs should do given the launcher status read after its request. seq0: seq before the request. The state is
+// settled only when idle with no pending build and seq moved: coalesced requests are covered by the chain of builds.
+// old/now: build ids from before the request and now; a good build is only success once the new server answers.
+export const restartVerdict = (status, { seq0, old, now }) => {
+  if (!status || status.phase !== 'idle' || status.pending || status.seq <= seq0) return { kind: 'wait' }
+  if (status.last !== 'ok') return { kind: 'failed', failed: status.failed }
+  return now !== null && now !== old ? { kind: 'ok', id: now } : { kind: 'wait' }
+}

@@ -5,11 +5,11 @@
 // {type:"restart"}, sent by POST /api/restart) builds FIRST while the old server keeps running; only a good build replaces it.
 // Ctrl-C stops both; a server exit nobody asked for ends the launcher with the server's exit code.
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -19,15 +19,31 @@ const say = (text) => console.log(`[launcher] ${text}`)
 let state = initial
 let server = null
 let build = null
+let done = { seq: 0, last: null, failed: null }
+const statusFile = join(dir, 'out', `launcher-${process.env.PORT || 3701}.json`)
+
+// Published for `npm run restart`; a write failure only costs it the early exit.
+const publishStatus = () => {
+  try {
+    mkdirSync(dirname(statusFile), { recursive: true })
+    writeFileSync(statusFile, JSON.stringify(launcherStatus(state, done)))
+  } catch (e) { say(`could not write ${statusFile}: ${e.message}`) }
+}
 
 const availableMb = () => {
   try { return parseMemAvailableMb(readFileSync('/proc/meminfo', 'utf8')) } catch { return null }
 }
 
-// Detached, so the whole group (flock, npx, the shadow-cljs JVM) can be killed with one signal.
+// Detached, so the whole group (flock, npx, the shadow-cljs JVM) can be killed with one signal. TERM first, SIGKILL after
+// killAfterMs if the group is still there. Resolves when the group has exited or been killed.
 const killBuild = () => {
-  if (!build) return
-  try { process.kill(-build.pid, 'SIGTERM') } catch { /* already gone */ }
+  const b = build
+  if (!b) return Promise.resolve()
+  const exited = new Promise((resolve) => b.once('exit', resolve))
+  return terminateGroup({
+    kill: (signal) => process.kill(-b.pid, signal), exited,
+    grace: () => new Promise((resolve) => setTimeout(resolve, killAfterMs)),
+  })
 }
 
 const runStep = (step) => new Promise((resolve) => {
@@ -45,6 +61,7 @@ const runBuild = async () => {
   const mb = availableMb()
   if (!enoughMemory(mb)) {
     say(`refusing to build: ${mb} MB available, ${minMemoryMb} MB needed`)
+    done = { seq: done.seq + 1, last: 'refused', failed: null }
     return false
   }
   const codes = []
@@ -55,6 +72,7 @@ const runBuild = async () => {
   const { ok, failed, warned } = buildOutcome(codes)
   warned.forEach((step) => say(`warning: the ${step} build failed; the dashboard goes on without it`))
   if (!ok) say(`build failed at the ${failed} step`)
+  done = { seq: done.seq + 1, last: ok ? 'ok' : 'failed', failed }
   return ok
 }
 
@@ -78,6 +96,7 @@ const stopServer = (why) => {
 
 const run = ({ state: next, actions }) => {
   state = next
+  publishStatus()
   for (const action of actions) perform(action)
 }
 
@@ -88,10 +107,7 @@ const perform = (action) => {
   else if (action === 'start') startServer()
   else if (action === 'kill-build') killBuild()
   else if (action === 'stop-server') stopServer('quit')
-  else if (action.startsWith('exit:')) {
-    killBuild()
-    process.exit(Number(action.slice(5)))
-  }
+  else if (action.startsWith('exit:')) killBuild().then(() => process.exit(Number(action.slice(5))))
 }
 
 const request = () => {
@@ -105,9 +121,11 @@ process.on('SIGTERM', quit)
 
 // First start: a failed build or too little memory ends the launcher (there is no old server to keep).
 state = { ...state, phase: 'building' }
+publishStatus()
 runBuild().then((ok) => {
   if (!ok) { say('first build failed'); process.exit(1) }
   if (state.quitting) return
   state = { ...state, phase: 'idle' }
+  publishStatus()
   startServer()
 })
