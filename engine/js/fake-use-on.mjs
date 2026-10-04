@@ -1,6 +1,8 @@
 // The fake's useOn: right-click a block with an item (or an empty hand), applying the few rules the jobs rely on.
 // Mirrors the result shape of use-on.mjs: { status, before, after, consumed }, `missing` carrying only the status.
 
+import { tieToPost } from './fake-leash.mjs'
+
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const REACH = 4.5
 const MAX_AGE = { wheat: 7, carrots: 7, potatoes: 7, beetroots: 3 }
@@ -43,6 +45,9 @@ export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
   const setLevel = (n) => s.states.set(k, { ...s.states.get(k), level: n })
   const here = name()
 
+  if (/_fence$/.test(here) && (item === 'lead' || item === undefined)) {
+    return result(tieToPost(s, pos) > 0 ? 'used' : 'unchanged')
+  }
   if (item?.endsWith('_hoe') && TILLABLE.has(here) && face !== 'down' && !s.blocks.has(key({ ...pos, y: pos.y + 1 }))) {
     s.blocks.set(k, 'farmland')
     return result('used')

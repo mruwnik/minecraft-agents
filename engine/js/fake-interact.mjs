@@ -1,5 +1,6 @@
 // The fake's `interact` primitive: use an item (or an empty hand) on an entity.
 import { refusal } from './interact.mjs'
+import { untieKnot } from './fake-leash.mjs'
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 
@@ -57,12 +58,12 @@ export function fakeInteract (s) {
   const leash = (e) => {
     if (e.leashed) return none
     const consumed = takeOne('lead')
-    e.leashed = true
+    Object.assign(e, { leashed: true, leashedToMe: true })
     return { ...none, consumed, leash: 'attached' }
   }
 
   const unleash = (e) => {
-    e.leashed = false
+    Object.assign(e, { leashed: false, leashedToMe: false })
     spawnItem(e.pos, 'lead')
     return { ...none, leash: 'detached' }
   }
@@ -72,7 +73,8 @@ export function fakeInteract (s) {
     if (item && (BREEDING_FOOD[e.name] ?? []).includes(item)) return feed(e, item)
     if (item === 'shears') return shear(e)
     if (item === 'lead') return leash(e)
-    if (!item && e.leashed) return unleash(e)
+    if (!item && e.leashedToMe) return unleash(e)
+    if (!item && e.name === 'leash_knot') return untieKnot(s, e) > 0 ? { ...none, changed: { tied: [true, false] } } : none
     return none
   }
 

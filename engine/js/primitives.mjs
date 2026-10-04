@@ -14,6 +14,7 @@ import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
 import { interactWith, mobFields } from './interact.mjs'
+import { leashFields, trackLeashes } from './leash.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { missingPatches } from './deps-check.mjs'
@@ -202,6 +203,7 @@ const gained = (before, after) => Object.entries(after)
 // enables `offline`; without it `offline` is unsupported.
 export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, pending = [] } = {}) {
   let bot = initialBot
+  trackLeashes(bot)
   view?.attach(bot)
   let closed = false
   let owner = null
@@ -492,6 +494,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         pos: xyz(e.position),
         distance,
         ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
+        ...(k !== 'item' && k !== 'player' && leashFields(bot, e)),
         ...(k === 'hostile' && { visible: canSee(e) }),
         ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
@@ -1159,6 +1162,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const adopt = fresh => {
     unbind()
     bot = fresh
+    trackLeashes(bot)
     unbind = bindEvents(bot)
     view?.attach(bot)
     down = false

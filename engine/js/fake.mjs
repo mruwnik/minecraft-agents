@@ -7,6 +7,7 @@ import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
+import { dragLeashed } from './fake-leash.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 
@@ -156,10 +157,12 @@ function defaultActs (s, emit) {
       if (d <= range) return { status: 'arrived', pos: { ...s.self.pos }, distance: d }
       if (d > maxDistance) {
         s.self.pos = stepToward(s.self.pos, pos, maxDistance)
+        dragLeashed(s)
         return { status: 'partial', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       }
       s.self.pos = { ...pos }
       settle()
+      dragLeashed(s)
       return { status: 'arrived', pos: { ...pos }, distance: 0 }
     },
 

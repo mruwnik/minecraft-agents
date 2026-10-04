@@ -1,0 +1,4 @@
+;; prim-leash live case: leash a cow within 8 blocks
+{:register []
+ :queue [(jobs.animals.leash {:mob "cow"})
+         (repeat (jobs.movement.look-around))]}

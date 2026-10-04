@@ -18,7 +18,7 @@ const cases = [
   { label: 'shear sheep', held: 'shears', ent: [{ ...cow, name: 'sheep', sheared: false }], inv: [{ name: 'shears', count: 1 }], args: { id: 1, item: 'shears' }, status: 'used', worn: 1, changed: { sheared: [false, true] }, field: ['sheared', true], spawned: 'white_wool' },
   { label: 'shear sheared', held: 'shears', ent: [{ ...cow, name: 'sheep', sheared: true }], inv: [{ name: 'shears', count: 1 }], args: { id: 1, item: 'shears' }, status: 'no-effect' },
   { label: 'lead', held: 'lead', ent: [cow], inv: [{ name: 'lead', count: 1 }], args: { id: 1, item: 'lead' }, status: 'used', consumed: 1, leash: 'attached', field: ['leashed', true] },
-  { label: 'empty hand unleashes', ent: [{ ...cow, leashed: true }], args: { id: 1 }, status: 'used', leash: 'detached', held: null, field: ['leashed', false], spawned: 'lead' },
+  { label: 'empty hand unleashes', ent: [{ ...cow, leashed: true, leashedToMe: true }], args: { id: 1 }, status: 'used', leash: 'detached', held: null, field: ['leashed', false], spawned: 'lead' },
   { label: 'empty hand with no room is full', held: 'wheat', ent: [cow], inv: Array.from({ length: 36 }, (_, i) => ({ name: `item_${i}`, count: 1 })), args: { id: 1 }, status: 'full', start: 'wheat', held: 'wheat' },
   { label: 'refused villager', ent: [{ ...cow, name: 'villager' }], args: { id: 1 }, status: 'cannot', reason: 'opens-window' },
   { label: 'refused horse before no-item', ent: [{ ...cow, name: 'horse' }], args: { id: 1, item: 'saddle' }, status: 'cannot', reason: 'mounts' },

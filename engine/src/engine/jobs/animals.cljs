@@ -41,3 +41,18 @@
   reload), else its id."
   [e]
   (or (.-uuid e) (.-id e)))
+
+(defn leashed?
+  "True when the sensing says the animal is on a lead (to anyone)."
+  [e]
+  (true? (.-leashed e)))
+
+(defn led-by-me?
+  "True when the animal is on this body's lead."
+  [e]
+  (true? (.-leashedToMe e)))
+
+(defn find-by-key
+  "The member of the herd tracked by key, or nil."
+  [p mob radius k]
+  (first (filter #(= k (key-of %)) (herd p mob radius))))

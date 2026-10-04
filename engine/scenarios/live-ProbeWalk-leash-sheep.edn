@@ -1,0 +1,4 @@
+;; prim-leash live case: leash a sheep (none near)
+{:register []
+ :queue [(jobs.animals.leash {:mob "sheep"})
+         (repeat (jobs.movement.look-around))]}

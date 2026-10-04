@@ -276,6 +276,21 @@ test('entities carry baby and uuid for a mob', () => {
   assert.equal('baby' in p.entities({}).find(e => e.id === 8), false)
 })
 
+test('entities say whether a mob is on a lead and whether the body holds it', () => {
+  const cow = id => ({ id, name: 'cow', type: 'passive', position: at(2, 64, 0), height: 1.4 })
+  const bot = stubBot({ ...world, entities: { ...world.entities, 9: cow(9), 10: cow(10), 11: cow(11) } })
+  bot.entity.id = 4
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  bot._client.emit('attach_entity', { entityId: 9, vehicleId: bot.entity.id })
+  bot._client.emit('attach_entity', { entityId: 10, vehicleId: bot.entity.id + 50 })
+  const found = id => p.entities({}).find(e => e.id === id)
+  assert.deepEqual([found(9).leashed, found(9).leashedToMe], [true, true])
+  assert.deepEqual([found(10).leashed, found(10).leashedToMe], [true, false])
+  assert.equal('leashed' in found(11), false)
+  bot._client.emit('attach_entity', { entityId: 9, vehicleId: 0 })
+  assert.equal('leashed' in found(9), false)
+})
+
 test('entities filters by kind and sorts by distance', () => {
   const { p } = rig(world)
   const all = p.entities({})
