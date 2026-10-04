@@ -734,7 +734,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const scoop = item.name === 'bucket'
     const there = bot.blockAt(vec(p))
     if (scoop && !(there && isLiquid(there.name))) return { status: 'missing' }
-    if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied' }
+    if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied', block: there.name }
     const aim = scoop ? there : supportFor(p)?.ref
     if (!aim) return { status: 'no-support' }
     if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
@@ -795,7 +795,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         return bucket ? useBucket(ctx, bucket, p) : { status: 'no-item' }
       }
       const there = bot.blockAt(vec(p))
-      if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied' }
+      if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied', block: there.name }
       const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-item' }
       const support = a.click ? clickSupport(a.click, p) : supportFor(p)

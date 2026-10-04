@@ -41,7 +41,7 @@
 (def replaceable
   "Names a placed block takes the place of: air, fluids (plugging a source, bridging water, sealing a leak) and the
   plants and snow a placement overwrites."
-  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen"}))
+  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots"}))
 
 (def not-a-floor
   "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."

@@ -1261,7 +1261,7 @@ test('a call whose owner is cut while waiting for the reconnect rejects with cut
 
 // ---- replaceable cells: the game replaces them, so place treats them as free ----
 
-const replaceable = ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow']
+const replaceable = ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow', 'leaf_litter', 'fern', 'large_fern', 'dead_bush', 'vine', 'glow_lichen', 'hanging_roots']
 
 for (const name of replaceable) {
   test(`place puts a block into a ${name} cell`, async () => {
@@ -1278,6 +1278,11 @@ for (const name of replaceable) {
 
 test('place into a cell of a solid block, or a plant that is not replaceable, stays occupied', async () => {
   for (const name of ['stone', 'oak_sapling']) {
+test('occupied names the block that holds the cell', async () => {
+  const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': 'oak_sapling' }, items: [{ name: 'cobblestone', count: 1, slot: 36 }] })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' }), { status: 'occupied', block: 'oak_sapling' })
+})
+
     const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': name }, items: [{ name: 'cobblestone', count: 1, slot: 36 }] })
     assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })).status, 'occupied')
   }
