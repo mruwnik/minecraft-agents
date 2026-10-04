@@ -264,14 +264,14 @@
           (is (= [[14 65 0]] (dug-cells s)))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-stand-of-one-is-never-cut
+(deftest a-stand-of-one-is-never-cut-and-the-job-declines-once-naming-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (h/setup {:blocks (stand "sugar_cane" 3 0 1)})]
-          (core/submit! eng (spec {:item "sugar_cane"}) {})
-          (is (nil? (core/tick! eng)))
-          (is (zero? (dig-count {:p p}))))))))
+        (let [s (await (scenario {:item "sugar_cane"} {:blocks (stand "sugar_cane" 3 0 1)} 6))]
+          (is (zero? (dig-count s)))
+          (is (not (finished? s)))
+          (is (= [:too-short] (declined-reasons s))))))))
 
 (deftest two-stands-and-a-goal-of-more-end-none-with-what-was-cut
   (async done

@@ -51,6 +51,8 @@
   dig phase :refused, or, before the first round, declines; either way one mine.declined warn per job names the zones
   and plans ({:reason :refused :zones :plans}). No zone list (zones.edn missing or never valid) declines the check
   with one mine.declined warn {:reason :no-zones}, also in the middle of the job; nothing is dug or placed then.
+  With :buried false and only buried blocks in range the check also declines, with one mine.declined warn
+  {:reason :no-exposed}; the job stays queued (an exposed one may turn up) and nothing is dug.
   Buried targets (:buried, on by default; false: exposed blocks only): a block with no air face is a buried target when the rules permit
   its dig (a zone or plan refusal counts among the refused as above). When no exposed target is left, the nearest
   buried one is visited: from where the body stands, jobs.access.tunnel (child :tunnel, :max-length :tunnel-max)
@@ -139,22 +141,32 @@
     {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %))) vec)
      :buried (->> deep (filter #(= :ok (nth % 2))) (map first) (sort-by #(u/dist here %)) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) (concat judged deep))
-     :wet? (boolean (some #(= :wet (second %)) graded))}))
+     :wet? (boolean (some #(= :wet (second %)) graded))
+     :hidden? (boolean (and (not buried) (some #(= :buried (second %)) graded)))}))
 
 (defn off-ground?
   "Whether a target is not one of the ground snapshot's cells."
   [c pos]
   (not-any? #(= pos (:pos %)) (:ground (ctx/mem c))))
 
+(defn decline-no-exposed!
+  "One warn per job: the blocks in range are all buried and :buried is off. The job stays queued."
+  [c]
+  (ctx/warn-once! c [:access :no-exposed] :mine.declined
+                  {:reason :no-exposed
+                   :text "mine declined: the blocks in range are all buried and :buried is false"})
+  false)
+
 (defn check [c]
   (cond
     (nil? (ctx/zones c)) (access/decline! c :mine.declined "mine" {:reason :no-zones})
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) false
-    :else (let [{:keys [targets buried refused]} (scan c)]
+    :else (let [{:keys [targets buried refused hidden?]} (scan c)]
             (cond
               (or (seq targets) (seq buried)) true
               (seq refused) (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
+              hidden? (decline-no-exposed! c)
               :else false))))
 
 (defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})

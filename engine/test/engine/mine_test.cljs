@@ -627,14 +627,22 @@
           (is (= 1 (count (events-of s :mine.tunnel))))
           (is (= 1 (count (:tunnels (done-event s))))))))))
 
-(deftest buried-targets-wait-for-the-buried-arg-turned-off
+(deftest buried-targets-with-the-buried-arg-turned-off-decline-once-and-wait
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world buried-world})]
-          (core/submit! eng (spec {:block "iron_ore" :count 1 :buried false}) {})
-          (is (nil? (core/tick! eng)))
-          (is (zero? (count (.-calls (.-world p))))))))))
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :buried false} buried-world 6))]
+          (is (zero? (count (.-calls (.-world (:p s))))))
+          (is (not (finished? s)))
+          (is (= [:no-exposed] (map :reason (events-of s :mine.declined)))))))))
+
+(deftest nothing-in-range-at-all-waits-without-a-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "diamond_ore" :count 1 :buried false} buried-world 6))]
+          (is (not (finished? s)))
+          (is (empty? (events-of s :mine.declined))))))))
 
 (deftest a-buried-target-the-tunnel-declines-is-skipped-and-nothing-is-dug
   (async done
