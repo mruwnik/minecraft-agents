@@ -9,14 +9,32 @@
            :output-to "out/server.cjs"
            :output-dir "out/server-js"
            :compiler-options {:infer-externs false}}
-  :agent-plan-tools {:target :node-library
-                     :exports {:prepare dashboard.agent-plan-tools/prepare
+  :agent-tools {:target :node-library
+                     :exports {:storage agent-tools.storage-compat/api
+                               :mapFilters agent-tools.api/map-filters
+                               :mapSummary agent-tools.api/map-summary
+                               :mapValidateZone agent-tools.api/map-validate-zone
+                               :planUsage agent-tools.api/plan-usage
+                               :planOneForm agent-tools.api/plan-one-form
+                               :blueprintForm agent-tools.api/blueprint-form
+                               :planRequestFor agent-tools.api/plan-request-for
+                               :mapOptions agent-tools.api/map-options
+                               :mapExecute agent-tools.api/map-execute
+                               :mapMain agent-tools.api/map-main
+                               :mapTtl agent-tools.map/ttl
+                               :mapUsage agent-tools.map/usage
+                               :changesOptions agent-tools.api/changes-options
+                               :changesExecute agent-tools.api/changes-execute
+                               :changesMain agent-tools.api/changes-main
+                               :changesUsage agent-tools.changes/usage
+                               :planExecute agent-tools.plans/execute
+                               :prepare dashboard.agent-plan-tools/prepare
                                :score dashboard.agent-plan-tools/score
                                :validatePlan dashboard.agent-plan-tools/validate-plan
                                :validateBlueprint dashboard.agent-plan-tools/validate-blueprint}
-                     :output-to "out/agent-plan-tools.cjs"
-                     :output-dir "out/agent-plan-tools-js"
-                     :compiler-options {:infer-externs false}}
+                     :output-to "out/agent-tools.cjs"
+                     :output-dir "out/agent-tools-js"
+                     :compiler-options {:infer-externs true}}
   :ui {:target :browser
        :output-dir "out/public/js"
        :asset-path "/js"

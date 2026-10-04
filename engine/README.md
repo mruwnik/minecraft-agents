@@ -1709,8 +1709,21 @@ The owned body stopped and its temporary whitelist entry was removed.
 ## Plan and blueprint tools
 
 `plans.mjs` manages one world's EDN plans and `blueprints.mjs` manages the shared
-EDN blueprint library. Build their shared ClojureScript validator once with
-`cd dashboard && npm run build-agent-tools`; calls do not compile on demand.
+EDN blueprint library. All four shared-world commands (`map`, `world-changes`,
+`plans`, and `blueprints`) are implemented in ClojureScript under
+`dashboard/src/agent_tools/`. Build the optimized Node library once with
+`cd dashboard && npm run build-agent-tools`; calls do not compile on demand or
+start a JVM. For development, `npm run build-agent-tools:dev` creates an
+unoptimized build of the same library. Rebuild after changing its CLJS sources.
+The `.mjs` command paths remain stable, thin Node launchers; the existing Node
+regression tests exercise these public boundaries independently of CLJS. These
+tests live in `engine/test/tools/`; run them with
+`cd engine && npm run test:agent-tools` (builds the library, then tests it).
+
+The optimized build measured 41 ms median for a fresh Node process to load the
+library, 89 ms for map search, and 59 ms for plan detail (five runs each, warm
+filesystem cache). A saved-terrain check took 317 ms including its actual work.
+These are measurements on the development machine, not latency guarantees.
 Both tools require `--world`, return EDN, and cap ordinary pages at ten records
 (up to 100 with `--limit`; use `--offset` for the next page). `--raw` includes
 the exact stored EDN document and is capped at 64 KiB unless `--large` is

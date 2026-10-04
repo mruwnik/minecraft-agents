@@ -1,6 +1,5 @@
 (ns dashboard.agent-plan-tools
-  "Small Node bridge over the shared CLJS plan model. File IO and the chunk reader stay in the CLI; plan meaning,
-  validation, expansion, conflicts and answers stay in plan.shape/dashboard.plan-api."
+  "Shared native plan checks plus compatibility exports for the Node bridge."
   (:require [cljs.reader :as reader]
             [engine.zones :as zones]
             [plan.conflicts :as conflicts]
@@ -110,13 +109,13 @@
                              0))))
                (:parts plan))))
 
-(defn prepare
-  "Accept EDN source strings plus JSON arrays [{id,text}] and return parsed expansion and geometry checks.
-  zonesText nil means zones have never been saved; claimsJSON is the independent world-data social claim projection."
-  [plan-text id blueprints-json plans-json zones-text claims-json]
+(defn prepare-native
+  "Accept plan source and native document/claim maps; return expansion and geometry checks.
+  A nil zone source means zones have never been saved."
+  [plan-text id blueprint-docs plan-docs zones-text claims]
   (let [plan-result (parse/parse plan-text id)
-        blueprints-result (parse-docs (json-value blueprints-json "[]") parse/parse-blueprint :blueprint)
-        saved-result (parse-docs (json-value plans-json "[]") parse/parse :plan)
+        blueprints-result (parse-docs blueprint-docs parse/parse-blueprint :blueprint)
+        saved-result (parse-docs plan-docs parse/parse :plan)
         plan (:plan plan-result)
         bps (:values blueprints-result)
         plans (assoc (:values saved-result) id plan)
@@ -128,16 +127,15 @@
         expansion (when (and plan (empty? (:errors plan-result)) (not over-budget?)) (shape/expand plan bps))
         cells (:cells expansion)
         zone-result (parse-zone-text zones-text)
-        parsed-claims (json-value claims-json "[]")
+        parsed-claims claims
         pairs (when expansion (candidate-conflicts id plan plans bps))
         errors (vec (concat (:errors plan-result)
                             (when over-budget? ["plan geometry or aggregate active-plan conflict index exceeds 100000 estimated cells; reduce geometry or active plans"])
                             (map :error (:errors expansion))))]
-    (clj->js
-     (cond-> {:ok (empty? errors) :id id :errors errors
+    (cond-> {:ok (empty? errors) :id id :errors errors
               :blueprint-errors (:errors blueprints-result)
               :plan-errors (:errors saved-result)
-              :expansion-edn (when expansion (pr-str expansion))
+              :expansion expansion
               :cells (mapv :pos cells)
               :region (cmp/bounds cells)
               :spots (:spots expansion)
@@ -148,7 +146,7 @@
                        (:errors zone-result) {:state :invalid :errors (:errors zone-result)}
                        :else {:state :saved :overlaps (zone-overlaps cells (:zones zone-result))})
               :claims (claim-overlaps cells parsed-claims (js/Date.now))}
-       (seq errors) (dissoc :expansion-edn)))))
+       (seq errors) (dissoc :expansion))))
 
 (defn pos-key [[x y z]] (str x "," y "," z))
 (defn chunk-key [[x _ z]] (str (bit-shift-right x 4) "," (bit-shift-right z 4)))
@@ -181,27 +179,36 @@
      :unresolved (into {} (map (fn [[kind n]] [kind n]) unresolved))
      :unknown-cells unknown}))
 
-(defn score
-  "Compare an EDN expansion to a JSON map keyed x,y,z of known blocks and x,z of dumped-column mtimes."
-  [expansion-edn blocks-json mtimes-json inventory-json inventory-supplied offset limit]
-  (let [expansion (reader/read-string expansion-edn)
-        blocks (json-object blocks-json "{}")
-        mtimes (json-object mtimes-json "{}")
-        inventory (json-object inventory-json "{}")
-        block-at (fn [pos]
-                   (when-let [block (get blocks (pos-key pos))]
-                     {:name (get block "name") :state (get block "state")}))
-        judged (shape/plan-minus-world (:cells expansion) block-at)
+(defn score-native
+  "Compare a native expansion using block and column mtime accessors."
+  [expansion block-at mtime-of inventory inventory-supplied offset limit]
+  (let [judged (shape/plan-minus-world (:cells expansion) block-at)
         result (cmp/compare-plan expansion block-at)
-        checked (assoc (cmp/checked (:cells expansion) (fn [cx cz] (get mtimes (str cx "," cz))))
+        checked (assoc (cmp/checked (:cells expansion) mtime-of)
                        :now (js/Date.now))]
-    (clj->js {:counts (:counts result)
+    {:counts (:counts result)
               :elements (mapv #(select-keys % [:id :kind :content :count :bounds :counts :error]) (take limit (drop offset (:elements result))))
               :elements-total (count (:elements result))
               :elements-next-offset (when (< (+ offset limit) (count (:elements result))) (+ offset limit))
               :region (cmp/bounds (:cells expansion))
               :checked checked
-              :materials (material-summary judged inventory (true? inventory-supplied))})))
+              :materials (material-summary judged inventory (true? inventory-supplied))}))
+
+(defn prepare [plan-text id blueprints-json plans-json zones-text claims-json]
+  (let [result (prepare-native plan-text id (json-value blueprints-json "[]")
+                               (json-value plans-json "[]") zones-text (json-value claims-json "[]"))]
+    (clj->js (cond-> (dissoc result :expansion)
+               (:expansion result) (assoc :expansion-edn (pr-str (:expansion result)))))))
+
+(defn score [expansion-edn blocks-json mtimes-json inventory-json inventory-supplied offset limit]
+  (let [blocks (json-object blocks-json "{}")
+        mtimes (json-object mtimes-json "{}")
+        block-at (fn [pos]
+                   (when-let [block (get blocks (pos-key pos))]
+                     {:name (get block "name") :state (get block "state")}))]
+    (clj->js (score-native (reader/read-string expansion-edn) block-at
+                          (fn [cx cz] (get mtimes (str cx "," cz)))
+                          (json-object inventory-json "{}") inventory-supplied offset limit))))
 
 (defn validate-plan [text id]
   (clj->js (parse/parse text id)))
