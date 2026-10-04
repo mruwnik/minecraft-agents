@@ -1,0 +1,3 @@
+;; ProbeDrive live test of jobs.movement.go-to on the new walker: idle (look-around), no reflexes; jobs submitted with jobs.mjs.
+{:register []
+ :queue [(repeat (jobs.movement.look-around))]}
