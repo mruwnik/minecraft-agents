@@ -400,3 +400,24 @@
           (is (= "wall" (:plan @out)))
           (is (= [2 63 0] (:cell @out)))
           (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs p))))))))
+
+;; ---------------------------------------------------------------- way-back
+
+(defn way-back-of
+  "stair/way-back from (1 64 1) to origin over the block map."
+  [blocks origin]
+  (stair/way-back {:primitives (tu/fake {:blocks blocks :self {:pos {:x 1 :y 64 :z 1}}})} origin))
+
+(defn slab
+  "Stone at y for x in xs, z 0..2."
+  [y xs]
+  (into {} (for [x xs z (range 3)] [(str x "," y "," z) "stone"])))
+
+(deftest way-back-judges-the-plan-like-walk-plan
+  (let [level (merge (slab 63 (range 5)) (slab 63 (range 7 12)))]
+    (are [blocks origin expected] (= expected (some-> (way-back-of blocks origin) (dissoc :step)))
+      level [10 64 1] nil
+      (merge (slab 63 (range 5)) (slab 64 (range 7 12))) [10 65 1]
+      {:reason :no-way-back :why :refused :kind :gap-up}
+      (merge level (slab 66 (range 4 7))) [10 64 1]
+      {:reason :no-way-back :why :refused :kind :gap-low-ceiling})))

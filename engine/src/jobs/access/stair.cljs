@@ -180,7 +180,7 @@
             status (.-status r)]
         (if (not= "found" status)
           {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
-          (when-let [refused (executor/refusal (executor/steps-of (.-steps (.-path r))))]
+          (when-let [refused (executor/refusal executor/policy (walk-plan/plan-steps pw r))]
             {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)}))))))
 
 (defn ^:async dig!

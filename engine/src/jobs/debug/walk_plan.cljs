@@ -93,6 +93,15 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
+(defn plan-steps
+  "The executor's steps for a found plan r over pw: corner free sides and gap ceilings marked."
+  [pw r]
+  (let [solid? (solid-fn pw)]
+    (executor/with-gap-ceilings
+      executor/policy
+      (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
+      solid?)))
+
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer act."
@@ -141,11 +150,7 @@
               planner-status (.-status r)]
           (if (= "none" planner-status)
             (finish! c {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans} t0 walked walk-ms)
-            (let [solid? (solid-fn pw)
-                  steps (executor/with-gap-ceilings
-                          executor/policy
-                          (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
-                          solid?)
+            (let [steps (plan-steps pw r)
                   plan-len (path-length steps)]
               (if-let [refused (executor/refusal executor/policy steps)]
                 (finish! c (assoc refused :replans replans) t0 walked walk-ms)
