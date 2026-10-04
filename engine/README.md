@@ -1487,6 +1487,19 @@ by `bench-lang/fixtures-equal.test.mjs`. Build: `npx shadow-cljs compile planner
 release planner-bench-release` (bench). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
 
+An enclosed goal is found before any walking: for a `near` goal whose column is loaded, `step` first runs the backward goal
+flood with a small budget (`options.preFlood`, default 24 cells seen, capped by `goalFlood`; 0 turns it off). If the flood
+exhausts without meeting the start and the flooded cells have no cliff edge beside them (a free column with nothing to stand on
+within a drop: a goal on an island or above a drop is left to the search, which ends in a partial plan) the answer is
+`goal-enclosed`, `none`, no path, `expanded` 0. Otherwise the search goes on as
+before and the late flood (after `floodAfter` expansions, `goalFlood` cells) still covers bigger enclosed areas. The early
+pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`. Because it fires first, a
+goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search).
+
+A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
+top, so that slab must be free in the cell it leaves: stairs right behind a 2 high doorway are no way in (the head meets the lintel),
+behind a 3 high one they are. A ladder start, a tight cell (its mask judges) and a jump (which already checked) are as before.
+
 `engine.path.alternatives/plan-alternatives` (`planAlternatives(snapshot, query, options, k = 3)`) returns
 `{status, reason, paths, searches, ms}`: up to k paths, best first, each `{steps, cost, summary, total, differs}`
 (`total` = seconds + riskWeight × risk, the true cost of the walk; `differs` says what sets it apart, e.g. `on foot
