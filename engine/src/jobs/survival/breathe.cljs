@@ -49,12 +49,14 @@
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
 (defn surfaced-in-water?
-  "A swim surfaced earlier in this job and the body is still in water. A ctx
-  without job memory (no :view) has not surfaced."
+  "A swim surfaced earlier in this job and the body is still in water, or not standing yet: a body bobbing at the
+  surface or climbing out is out of the water for a moment on every crest. A ctx without job memory (no :view) has
+  not surfaced."
   [c]
   (boolean (and (:view c)
                 (:surfaced (ctx/mem c))
-                (.-inWater (.self (:primitives c))))))
+                (let [self (.self (:primitives c))]
+                  (or (.-inWater self) (not (.-onGround self)))))))
 
 (defn check [c]
   (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
@@ -111,6 +113,13 @@
     (boolean (and feet head below
                   (s/air? feet) (s/air? head)
                   (not (s/air? below)) (not (contains? unsafe-below below))))))
+
+(defn surface-pos
+  "pos with y raised to the feet cell at the top of the own water column (surface-in-column), so a body that has
+  sunk a few blocks below the surface still finds a bank flush with it; pos itself when the column has no surface."
+  [p pos reach]
+  (let [cell (surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
+    (if cell (assoc pos :y (:y cell)) pos)))
 
 (defn nearest-land
   "The nearest land cell within radius sideways of self-pos, feet y from one
@@ -182,17 +191,23 @@
             (await (ctx/act c :dig (clj->js {:pos above}))))
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
+(defn hold-decider
+  "A steer decide function for one hold: jump pressed on every tick, done after hold-ticks ticks, or at once when
+  the body stands out of the water (on a bank, jump held would only make it hop for ever)."
+  []
+  (let [ticks (volatile! 0)]
+    (fn [pose]
+      (if (or (>= (vswap! ticks inc) hold-ticks)
+              (and (.-onGround pose) (not (.-inWater pose))))
+        #js {:done #js {}}
+        #js {:controls #js {:jump true}}))))
+
 (defn ^:async hold-afloat!
   "Keep jump pressed for hold-ticks physics ticks (one steer act), which holds a body at the surface: with no input
   it sinks, and the drowning trigger would fire again. Returns :continue."
   [c]
-  (let [ticks (volatile! 0)
-        decide (fn [_pose]
-                 (if (>= (vswap! ticks inc) hold-ticks)
-                   #js {:done #js {}}
-                   #js {:controls #js {:jump true}}))]
-    (await (ctx/act c :steer (walk/steer-args hold-timeout-s decide)))
-    :continue))
+  (await (ctx/act c :steer (walk/steer-args hold-timeout-s (hold-decider))))
+  :continue)
 
 (defn afloat!
   "The body cannot get out of the water: remember it (later rounds only hold) and, when why is given, warn once."
@@ -206,7 +221,7 @@
   :continue after marking the body afloat (no land, no pathWorld, or the driver found no way)."
   [c]
   (let [p (:primitives c)
-        target (when (walk/path-world p) (nearest-land p (u/self-pos c) (:far-radius (:args c))))]
+        target (when (walk/path-world p) (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:far-radius (:args c))))]
     (if-not target
       (do (afloat! c :no-land-in-reach) :continue)
       (let [{:keys [result]} (await (walk/walk-to! c {:to [(:x target) (:y target) (:z target)] :range 0
@@ -222,7 +237,7 @@
   :far-radius; a body that cannot get out stays afloat. :done when out of the water."
   [c]
   (let [p (:primitives c)
-        target (nearest-land p (u/self-pos c) (:shore-radius (:args c)))]
+        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)))]
     (cond
       (:afloat (ctx/mem c)) (await (hold-afloat! c))
       (not target) (let [r (await (walk-to-far-land! c))]

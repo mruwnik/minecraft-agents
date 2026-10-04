@@ -5,6 +5,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [jobs.survival.breathe :as b]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -278,6 +279,47 @@
           (is (= ["steer"] (distinct (rest (call-names p)))) "after the surfacing swim every act is a hold")
           (is (= 5 (count (rest (call-names p)))) "one hold per round, no second swim"))))))
 
+(defn set-self!
+  "Set fields of the fake body's self sensing (a bob above the surface, standing on the ground)."
+  [p fields]
+  (doseq [[k v] fields]
+    (aset (.-self (.-state (.-world p))) k v)))
+
+(deftest an-afloat-body-that-bobs-out-of-the-water-is-still-afloat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
+          (core/register-reflex! eng {:trigger :suffocating})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (set-self! p {"inWater" false "onGround" false})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (empty? (filter #(= :ended (:kind %)) @seen)) "a crest above the water does not end the reflex")
+          (is (= 1 (count (filter #(= :afloat (:kind %)) @seen))))
+          (is (= "steer" (last (call-names p)))))))))
+
+(deftest an-afloat-body-that-stands-on-land-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
+          (core/register-reflex! eng {:trigger :suffocating})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (set-self! p {"inWater" false "onGround" true})
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(= :ended (:kind %)) @seen)))))))))
+
+(deftest hold-presses-jump-until-its-ticks-are-spent-or-the-body-stands-out-of-the-water
+  (doseq [[label pose ticks done?] [["in water, first tick" {:onGround false :inWater true} 1 false]
+                                    ["in water, last tick" {:onGround false :inWater true} 100 true]
+                                    ["crest above the water" {:onGround false :inWater false} 1 false]
+                                    ["standing on the bank" {:onGround true :inWater false} 1 true]
+                                    ["on the pond floor" {:onGround true :inWater true} 1 false]]]
+    (let [decide (b/hold-decider)
+          out (last (repeatedly ticks #(decide (clj->js pose))))]
+      (is (= done? (some? (.-done out))) label)
+      (is (= (not done?) (true? (some-> (.-controls out) .-jump))) label))))
+
 (def far-args (assoc defaults :shore-radius 2 :far-radius 10))
 
 (defn pond
@@ -291,6 +333,27 @@
   "Stone at y 61..64 for x from x0 to x1, z within r: land level with the water surface."
   [x0 x1 r]
   (into {} (for [x (range x0 (inc x1)) z (range (- r) (inc r)) y (range 61 65)] [(str x "," y "," z) "stone"])))
+
+(deftest a-body-sunk-below-the-surface-still-finds-a-bank-flush-with-the-surface
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 62 :z 0}}
+                                      :blocks (merge (pond 3) (bank 4 5 3))})]
+          (.override (.-world p) "swim"
+                     (fn ^:async f [_ args impl]
+                       (if (.-toward args)
+                         (await (impl _ args))
+                         (do (set-self! p {"oxygen" 20}) #js {:status "surfaced"}))))
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= {:x 4 :y 65 :z 0} (core/self-pos p)) "swam onto the ledge from three blocks below the surface")
+          (is (not (.-inWater (.self p)))))))))
+
+(deftest surface-pos-raises-the-body-to-the-top-of-its-water-column
+  (let [p (tu/fake {:blocks (pond 3)})]
+    (doseq [[y expected] [[62 65] [64 65] [65 65] [66 66]]]
+      (is (= {:x 0 :y expected :z 0} (b/surface-pos p {:x 0 :y y :z 0} 10)) (str "feet at " y)))))
 
 (defn swim-to-bank!
   "A steer that does what a working walk does, since the fake's walker cannot swim: the body ends on the bank cell

@@ -1,0 +1,6 @@
+;; live (breathe stays afloat): the body idles; ponds of several widths are filled by console near x 7800, z 7200 and
+;; the body is put in them with an RCON tp; only the breathe reflex is registered. jobs.debug.walk-plan is submitted
+;; with tools/jobs.mjs for the cut-mid-swim case.
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}]
+ :queue []}
