@@ -160,20 +160,20 @@
           (is (= [] (calls p "dig")))
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
-(deftest fell-tree-partials-reset-once-a-walk-succeeds
+(deftest fell-tree-partials-stop-counting-once-a-walk-succeeds
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 6)})
+        (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 4)})
               calls-made (atom 0)]
           (.override (.-world p) "moveTo"
                      (fn ^:async f [token args impl]
-                       (if (odd? (swap! calls-made inc))
+                       (if (<= (swap! calls-made inc) 2)
                          #js {:status "partial"}
                          (await (impl token args)))))
           (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 20}) {})
           (is (pos? (await (run-until-empty eng 30))))
-          (is (= 6 (count (calls p "dig"))) "alternating partials never reach three in a row")
+          (is (= 4 (count (calls p "dig"))) "two partials, then the walk arrives: the high logs are dug from the foot of the column")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
 (defn dig-unreachable-at

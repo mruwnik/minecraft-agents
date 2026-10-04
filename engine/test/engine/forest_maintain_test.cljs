@@ -127,6 +127,15 @@
           (is (= [6 6 6] (await (fell-at (assoc spec :self {:pos {:x 40 :y 64 :z 0}}) {:radius 10 :at {:x 6 :y 64 :z 0}})))
               "also from beyond the radius"))))))
 
+(deftest fell-tree-walks-to-the-foot-of-the-column-and-digs-high-logs-from-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})]
+          (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (is (= [[6 64 0] [6 65 0] [6 66 0] [6 67 0] [6 68 0]] (digs p)))
+          (is (= [[6 64 0]] (mapv pos-xyz (h/calls p "moveTo"))) "one walk, to the column's foot, none for the high logs"))))))
+
 (deftest fell-tree-at-does-nothing-where-no-log-stands
   (async done
     (tu/run-async done
@@ -303,10 +312,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (run {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 4)) :unreachable ["3,65,0"]}
-                                           {"forest" oak-cell} {:plan "forest"} 80))]
+        (let [{:keys [p seen]} (await (run {:blocks (merge (ground [[8 0]]) (lt/tree 8 0 "oak" 4)) :unreachable ["8,64,0"]}
+                                           {"forest" (forest-plan :active ["a" [[8 64 0]] "oak"])} {:plan "forest"} 80))]
           (is (= [] (places p)))
-          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :unreachable}] (warns seen :forest.left))))))))
+          (is (= [{:pos {:x 8 :y 64 :z 0} :reason :unreachable}] (warns seen :forest.left))))))))
 
 ;; ------------------------------------------------------------------ access
 

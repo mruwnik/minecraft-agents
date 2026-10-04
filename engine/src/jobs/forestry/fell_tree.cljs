@@ -1,7 +1,7 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
             [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
-                                          replant-policy default-radius logs-per-round max-partials]]
+                                          replant-policy default-radius logs-per-round max-partials eye-dist dig-reach]]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -42,7 +42,9 @@
   (loop [[l & more] logs]
     (if-not l
       :ok
-      (let [w (await (u/walk-near! c (:pos l) 3))]
+      (let [w (if (<= (eye-dist (u/self-pos c) (:pos l)) dig-reach)
+                :there
+                (await (u/walk-near! c (assoc (:pos l) :y (:y (:base (ctx/mem c)))) 2)))]
         (case w
           :blocked :blocked
           :partial :partial
