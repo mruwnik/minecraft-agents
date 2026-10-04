@@ -51,7 +51,7 @@
        "), import('node:url'), import('node:path')]).then(async ([{runBound}, {pathToFileURL}, {resolve, dirname}]) => {\n"
        "  process.exitCode = await runBound(pathToFileURL(resolve(dirname(process.argv[1]), '../context.edn')), "
        (js/JSON.stringify command) ", process.argv.slice(2));\n"
-       "}).catch(error => { process.stderr.write(error.message + '\\n'); process.exitCode = 2; });\n"))
+       "}).catch(error => { process.stderr.write(error.message + " (js/JSON.stringify "\n") "); process.exitCode = 2; });\n"))
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"
        "You operate body `" body "` in world `" world "`. Read `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"

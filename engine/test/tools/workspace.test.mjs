@@ -139,6 +139,35 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
   const listed = await runAsync(f.workspace, 'jobs', ['list'])
   assert.equal(listed.status, 0, listed.stderr)
   assert.match(requests.at(-1).url, /^\/jobs/)
+  const triggers = await runAsync(f.workspace, 'triggers', ['list'])
+  assert.equal(triggers.status, 0, triggers.stdout + triggers.stderr)
+  assert.equal(requests.at(-1).url, '/triggers')
+
+  const control = http.createServer((req, res) => {
+    let body = ''
+    req.on('data', data => { body += data })
+    req.on('end', () => {
+      requests.push({ url: req.url, body })
+      if (req.url === '/drive') {
+        res.setHeader('content-type', 'application/json')
+        res.end('{"ok":true}')
+      } else {
+        res.setHeader('content-type', 'application/edn')
+        res.end('{:ok true :world "w" :body "B" :online? true :now 1000 :ttl-ms 60000 :entities []}')
+      }
+    })
+  })
+  await new Promise((resolve, reject) => { control.once('error', reject); control.listen(path.join(engine, 'control.sock'), resolve) })
+  t.after(() => new Promise(resolve => control.close(resolve)))
+  for (const [command, args, endpoint] of [
+    ['drive', ['state'], '/drive'],
+    ['world', ['inventory'], '/world'],
+    ['entities', ['--center', '1,2,3', '--dimension', 'overworld'], '/entities']
+  ]) {
+    const result = await runAsync(f.workspace, command, args)
+    assert.equal(result.status, 0, command + result.stdout + result.stderr)
+    assert.equal(requests.at(-1).url, endpoint)
+  }
 })
 
 test('shared wrappers read their world independently of the caller cwd', t => {
