@@ -79,7 +79,8 @@
   [root eng cfg opts]
   (let [create-control (.-createControl ((createRequire (str root "/")) "./js/control.mjs"))
         control (create-control #js {:socketPath (path/join (:engine-dir cfg) "control.sock")
-                                     :handle (fn [method path body] (takeover/handle eng opts method path body))})]
+                                     :handle (fn [method path body content-type]
+                                               (takeover/handle eng opts method path body content-type))})]
     (try
       (await (.listen control))
       control

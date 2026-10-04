@@ -1109,6 +1109,7 @@
              :running (atom nil)
              :tokens (atom 0)
              :manual (atom nil)
+             :world-ops (atom {:active nil :records {} :order []})
              :acts (atom {})
              :said (atom [])
              :stalls (atom {})

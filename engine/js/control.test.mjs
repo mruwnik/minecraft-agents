@@ -11,8 +11,8 @@ import { createControl } from './control.mjs'
 
 const tmpSock = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ctl-')), 'control.sock')
 
-const request = (socketPath, method, urlPath, payload) => new Promise((resolve, reject) => {
-  const req = http.request({ socketPath, method, path: urlPath, headers: { 'content-type': 'application/json' } }, (res) => {
+const request = (socketPath, method, urlPath, payload, contentType = 'application/json') => new Promise((resolve, reject) => {
+  const req = http.request({ socketPath, method, path: urlPath, headers: { 'content-type': contentType } }, (res) => {
     let data = ''
     res.on('data', (c) => { data += c })
     res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], text: data }))
@@ -56,6 +56,23 @@ test('method, path (without the query) and parsed body reach handle; an empty bo
     await control.close()
   }
   assert.deepEqual(calls, [['POST', '/drive', { op: 'ping', n: [1] }], ['GET', '/drive', null]])
+})
+
+test('world EDN request text and EDN reply pass through without JSON conversion', async () => {
+  const socketPath = tmpSock()
+  const seen = []
+  const control = createControl({ socketPath, handle: async (method, p, body, type) => {
+    seen.push([method, p, body, type])
+    return { status: 202, contentType: 'application/edn', text: '{:ok true :status :running}\n' }
+  } })
+  await control.listen()
+  try {
+    const r = await request(socketPath, 'POST', '/world?x=1', '{:op :submit :args {:pos {:x 1}}}', 'application/edn')
+    assert.equal(r.status, 202)
+    assert.match(r.type, /application\/edn/)
+    assert.equal(r.text, '{:ok true :status :running}\n')
+    assert.deepEqual(seen, [['POST', '/world', '{:op :submit :args {:pos {:x 1}}}', 'application/edn']])
+  } finally { await control.close() }
 })
 
 test('invalid JSON is 400 bad-json and never reaches handle', async () => {

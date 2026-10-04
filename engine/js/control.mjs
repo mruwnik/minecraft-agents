@@ -1,5 +1,5 @@
-// The control socket: HTTP framing only. Every rule, clock and piece of state lives in ClojureScript
-// (engine.takeover over engine.lease); `handle(method, path, json)` returns { status, json }.
+// The control socket: HTTP framing only. Drive remains JSON for compatibility; world actions
+// pass bounded EDN text through to the ClojureScript owner-token handler.
 import fs from 'node:fs'
 import http from 'node:http'
 
@@ -7,8 +7,9 @@ const MAX_SOCKET_PATH = 100
 const MAX_BODY = 16 * 1024
 
 const reply = (json, status) => ({ status, json })
+const ednReply = (value, status) => ({ status, contentType: 'application/edn', text: `${value}\n` })
 
-const readJson = (req) => new Promise((resolve, reject) => {
+const readText = (req) => new Promise((resolve, reject) => {
   const chunks = []
   let size = 0
   req.on('data', (c) => {
@@ -19,33 +20,42 @@ const readJson = (req) => new Promise((resolve, reject) => {
   req.on('end', () => {
     const text = Buffer.concat(chunks).toString('utf8')
     if (text === '') return resolve(null)
-    try {
-      resolve(JSON.parse(text))
-    } catch {
-      reject(new Error('bad json'))
-    }
+    resolve(text)
   })
   req.on('error', reject)
 })
 
-const send = (res, { status, json }) => {
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify(json))
+const send = (res, result) => {
+  if (result.text !== undefined) {
+    res.writeHead(result.status, { 'content-type': result.contentType ?? 'application/edn' })
+    res.end(result.text)
+  } else {
+    res.writeHead(result.status, { 'content-type': 'application/json' })
+    res.end(JSON.stringify(result.json))
+  }
 }
 
 export function createControl ({ socketPath, handle }) {
   let server = null
 
   const onRequest = async (req, res) => {
-    const parsed = await readJson(req).then(v => ({ v }), e => ({ e }))
+    const path = (req.url ?? '').split('?')[0]
+    const edn = path === '/world'
+    const parsed = await readText(req).then(v => ({ v }), e => ({ e }))
     if (parsed.e?.tooLarge) {
-      send(res, reply({ ok: false, reason: 'too-large' }, 413))
+      send(res, edn ? ednReply('{:ok false :reason :too-large}', 413) : reply({ ok: false, reason: 'too-large' }, 413))
       req.destroy()
       return
     }
-    if (parsed.e) return send(res, reply({ ok: false, reason: 'bad-json' }, 400))
-    const path = (req.url ?? '').split('?')[0]
-    send(res, await handle(req.method, path, parsed.v))
+    if (parsed.e) return send(res, edn ? ednReply('{:ok false :reason :bad-body}', 400) : reply({ ok: false, reason: 'bad-body' }, 400))
+    if (!edn) {
+      let body = null
+      try { body = parsed.v === '' ? null : JSON.parse(parsed.v) } catch {
+        return send(res, reply({ ok: false, reason: 'bad-json' }, 400))
+      }
+      return send(res, await handle(req.method, path, body, req.headers['content-type'] ?? ''))
+    }
+    send(res, await handle(req.method, path, parsed.v, req.headers['content-type'] ?? ''))
   }
 
   const listen = async () => {
