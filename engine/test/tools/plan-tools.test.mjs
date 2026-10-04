@@ -4,9 +4,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { execute } from './plan-tools-lib.mjs'
-import { readEDN, keyword } from './observe-lib.mjs'
-import { revision } from './world-data.mjs'
+import { execute } from '../../tools/plan-tools-lib.mjs'
+import { readEDN, keyword } from '../../tools/observe-lib.mjs'
+import { revision } from '../../tools/world-data.mjs'
 
 function fixture () {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-plan-tools-'))
@@ -124,7 +124,7 @@ test('check pages part and score-element details with actionable offsets', async
 })
 
 test('score bridge preserves coordinate, material and block-property string keys', async () => {
-  const bridge = require('../../dashboard/out/agent-plan-tools.cjs')
+  const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const prepared = bridge.prepare(planText('score'), 'score', '[]', '[]', null, '[]')
   assert.equal(prepared.ok, true)
   const blocks = {
@@ -144,7 +144,7 @@ test('score bridge preserves coordinate, material and block-property string keys
 })
 
 test('proposed candidate checks report conflicts with active plans', () => {
-  const bridge = require('../../dashboard/out/agent-plan-tools.cjs')
+  const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const candidate = '{:id "candidate" :status :proposed :parts [{:id "a" :cells [[4 64 9]] :want "dirt"}]}'
   const active = '{:id "active" :status :active :parts [{:id "b" :cells [[4 64 9]] :want "stone"}]}'
   const prepared = bridge.prepare(candidate, 'candidate', '[]', JSON.stringify([{ id: 'active', text: active }]), null, '[]')
@@ -155,7 +155,7 @@ test('proposed candidate checks report conflicts with active plans', () => {
 })
 
 test('bridge rejects oversized plan geometry before expanding cells', () => {
-  const bridge = require('../../dashboard/out/agent-plan-tools.cjs')
+  const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const cells = Array.from({ length: 100001 }, (_, x) => `[${x} 64 0]`).join(' ')
   const plan = `{:id "large" :status :proposed :parts [{:id "all" :cells [${cells}] :want "stone"}]}`
   const result = bridge.prepare(plan, 'large', '[]', '[]', null, '[]')
@@ -165,7 +165,7 @@ test('bridge rejects oversized plan geometry before expanding cells', () => {
 })
 
 test('bridge estimates wide shallow blueprint placements by width before expansion', () => {
-  const bridge = require('../../dashboard/out/agent-plan-tools.cjs')
+  const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const row = 'S'.repeat(100001)
   const blueprint = `{:id "wide" :front :north :key {"S" "stone"} :layers [["${row}"]]}`
   const plan = '{:id "wide-plan" :status :proposed :parts [{:id "p" :blueprint "wide" :at [0 64 0]}]}'
@@ -173,4 +173,36 @@ test('bridge estimates wide shallow blueprint placements by width before expansi
   assert.equal(result.ok, false)
   assert.match(result.errors.join(' '), /exceeds 100000/)
   assert.equal(result.cells.length, 0)
+})
+
+test('compiled CLJS preserves trailing EDN comments and rejects additional forms', async () => {
+  const fx = fixture()
+  try {
+    const source = blueprintText('commented') + ' ; source comment'
+    const saved = await invoke('blueprints', fx, ['save', 'commented', '--edn', source, '--by', 'tester', '--raw'])
+    assert.equal(saved.code, 0, saved.output)
+    assert.match(saved.output, /:key \{"S" "stone"\}/)
+    assert.equal(fs.readFileSync(path.join(fx.repo, 'blueprints', 'commented.edn'), 'utf8').trim(), source)
+    const shown = await invoke('blueprints', fx, ['show', 'commented', '--raw'])
+    assert.equal(shown.value.document.id, 'commented')
+    for (const invalid of [source + '\n{}', blueprintText('bad') + ') {} (']) {
+      const result = await invoke('blueprints', fx, ['validate', 'bad', '--edn', invalid])
+      assert.equal(result.code, 2)
+      assert.deepEqual(result.value.reason, keyword('bad-edn'))
+    }
+  } finally { fx.close() }
+})
+
+test('native plan checks report overlapping saved claims', async () => {
+  const fx = fixture()
+  try {
+    assert.equal((await invoke('plan', fx, ['add', 'claimed', '--edn', planText('claimed'), '--by', 'tester'])).code, 0)
+    fs.writeFileSync(path.join(fx.state, 'worlds', 'fixture', 'claims.edn'),
+      `[{:id "extension" :owner "another-agent" :min [0 64 0] :max [2 64 0] :status :active :until ${Date.now() + 60000}}]`)
+    const checked = await invoke('plan', fx, ['check', 'claimed'])
+    assert.equal(checked.code, 0, checked.output)
+    assert.equal(checked.value.claims.total, 1)
+    assert.equal(checked.value.claims.items[0].id, 'extension')
+    assert.equal(checked.value.claims.items[0].count, 3)
+  } finally { fx.close() }
 })

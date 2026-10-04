@@ -6,9 +6,10 @@
   "scripts": {
     "test": "npm run test:cljs && npm run test:js",
     "test:cljs": "shadow-cljs compile test && node out/test.cjs",
-    "test:js": "node --test 'js/**/*.test.mjs' 'tools/**/*.test.mjs'",
+    "test:js": "node --test 'js/**/*.test.mjs' 'tools/**/*.test.mjs' 'test/tools/**/*.test.mjs'",
     "build": "shadow-cljs compile body",
-    "body": "shadow-cljs compile body && node out/body.cjs"
+    "body": "shadow-cljs compile body && node out/body.cjs",
+    "test:agent-tools": "npm --prefix ../dashboard run build-agent-tools && node --test 'test/tools/**/*.test.mjs'"
   },
   "devDependencies": {
     "shadow-cljs": "3.5.4",

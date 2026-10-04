@@ -4,11 +4,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {spawn,spawnSync} from 'node:child_process'
-import {readEDN,writeEDN,keyword as k} from './observe-lib.mjs'
-import {context,readDocument,listDocuments,mutateDocument,query,readChanges,revision,MAX_EVENTS,rawBound} from './world-data.mjs'
-import {options,execute as map,ttl} from './map.mjs'
-import {options as changeOptions,execute as changes} from './world-changes.mjs'
-const root=path.resolve(import.meta.dirname,'../..')
+import {readEDN,writeEDN,keyword as k} from '../../tools/observe-lib.mjs'
+import {context,readDocument,listDocuments,mutateDocument,query,readChanges,revision,MAX_EVENTS,rawBound} from '../../tools/world-data.mjs'
+import {options,execute as map,ttl} from '../../tools/map.mjs'
+import {options as changeOptions,execute as changes} from '../../tools/world-changes.mjs'
+const root=path.resolve(import.meta.dirname,'../../..')
 function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'agent-world-'));fs.mkdirSync(`${dir}/worlds/test`,{recursive:true});fs.writeFileSync(`${dir}/worlds/test/world.json`,'{}');fs.mkdirSync(`${dir}/blueprints`);t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return {dir,ctx:context({state:dir,world:'test',repoRoot:dir}),args:['--state',dir,'--world','test','--repo-root',dir]}}
 const marker=(id,x=0,by='Alice')=>({name:id,kind:'base',x,y:64,z:0,by,note:'',source:'intent'})
 async function add(ctx,id,x=0){return mutateDocument(ctx,{kind:'marker',id,expectedRevision:null,value:marker(id,x),by:'Alice'})}
@@ -27,3 +27,30 @@ test('global blueprint pending recovery precedes another world mutation and comm
 test('world-changes --raw returns bounded full event records from an explicit cursor',async t=>{const {ctx,args}=fixture(t),start=await readChanges(ctx);await add(ctx,'raw-event');let out;const req=changeOptions([...args,'--raw','--cursor',writeEDN(start.cursor)]);assert.equal(req.raw,true);const result=await changes(req,{output:async value=>{out=value}});assert.equal(result.items.length,1);assert.equal(out.items[0].id,'raw-event');assert.equal(out.items[0].source.key,'intent');assert.equal(out.items[0].revision,readDocument(ctx,'marker','raw-event').revision)})
 test('recovery refuses overwriting unrelated external edits; change limits cannot stall a cursor',async t=>{const {ctx}=fixture(t);const a=await add(ctx,'a'),d=readDocument(ctx,'marker','a'),before=fs.readFileSync(d.path,'utf8'),ledger=readEDN(fs.readFileSync(`${ctx.metadataDir}/changes.edn`,'utf8'));fs.writeFileSync(`${ctx.metadataDir}/pending.edn`,writeEDN({file:d.path,kind:'marker',id:'a',before:revision(before),after:JSON.stringify([marker('a',1)]),ledger}));fs.writeFileSync(d.path,JSON.stringify([marker('a',99)]));await assert.rejects(readChanges(ctx),{reason:'recovery-conflict'});assert.equal(JSON.parse(fs.readFileSync(d.path))[0].x,99);fs.unlinkSync(`${ctx.metadataDir}/pending.edn`);for(const limit of [0,-1,101,NaN])await assert.rejects(readChanges(ctx,{cursor:a.cursor,limit}),{reason:'invalid-page'})})
 test('concurrent processes reclaim a dead global lock once and serialize complete map writes',async t=>{const {ctx,args}=fixture(t);fs.writeFileSync(`${ctx.blueprintDir}/.agent-transactions.lock`,'2147483647\nold');const children=Array.from({length:4},(_,i)=>new Promise((resolve,reject)=>{const child=spawn('node',[`${root}/engine/tools/map.mjs`,...args,'add','marker',`m${i}`,'--by','Alice','--data',`{:x ${i} :y 64 :z 0}`]);let out='',err='';child.stdout.on('data',c=>out+=c);child.stderr.on('data',c=>err+=c);child.on('error',reject);child.on('exit',code=>code===0?resolve(readEDN(out)):reject(Error(out+err)))}));await Promise.all(children);assert.equal(listDocuments(ctx,'marker').length,4);assert.equal(fs.existsSync(`${ctx.blueprintDir}/.agent-transactions.lock`),false);assert.equal(fs.existsSync(`${ctx.blueprintDir}/.agent-transactions.lock.reaper`),false)})
+
+test('legacy EDN set order preserves collection revisions across reads and edits',async t=>{
+  const {ctx}=fixture(t)
+  const zone={name:'ordered',by:'Alice',min:[0,60,0],max:[3,70,3],allow:{set:[k('place'),k('trade'),k('harvest'),k('mine'),k('walk')]}}
+  fs.writeFileSync(`${ctx.worldDir}/zones.edn`,writeEDN([zone]))
+  const before=readDocument(ctx,'zone','ordered')
+  assert.equal(before.revision,revision(writeEDN(zone)))
+  assert.deepEqual(before.value.allow,zone.allow)
+  const value={...before.value,note:'edited'}
+  const result=await mutateDocument(ctx,{kind:'zone',id:'ordered',expectedRevision:before.revision,value,by:'Alice'})
+  const after=readDocument(ctx,'zone','ordered')
+  assert.equal(after.revision,result.revision)
+  assert.equal(after.revision,revision(writeEDN(value)))
+  assert.deepEqual(after.value.allow,zone.allow)
+})
+
+test('legacy marker JSON keys with slashes survive unrelated collection rewrites',async t=>{
+  const {ctx}=fixture(t)
+  const original={...marker('legacy'), 'extension/key':{nested:{'minecraft/stone':{value:'kept'},'namespace/flag':true}},structure:{legend:{'palette/stone':'stone'}}}
+  fs.writeFileSync(`${ctx.worldDir}/places.json`,JSON.stringify([original]))
+  const before=readDocument(ctx,'marker','legacy')
+  assert.deepEqual(before.value,original)
+  assert.equal(before.revision,revision(JSON.stringify(original)))
+  await add(ctx,'unrelated')
+  assert.deepEqual(JSON.parse(fs.readFileSync(`${ctx.worldDir}/places.json`,'utf8'))[0],original)
+  assert.deepEqual(readDocument(ctx,'marker','legacy').value,original)
+})
