@@ -42,6 +42,8 @@ export function dragLeashed (s, from = s.self.pos) {
     }
     // `trail` (a number on the spec): the animal stays where it is within that many blocks of the body, else it is
     // dragged to that far behind it, as a slow animal on a long lead trails a fast body.
+    const followed = pathFollow(s, e)
+    if (followed) { e.pos = followed; continue }
     const gap = e.trail ?? FOLLOW_GAP
     if (e.trail !== undefined && Math.hypot(e.pos.x - s.self.pos.x, e.pos.z - s.self.pos.z) <= gap) continue
     e.pos = walkLine([e.pos, { ...s.self.pos, x: s.self.pos.x - gap }], openAir(s)).pos
@@ -65,8 +67,6 @@ export function tieToPost (s, pos) {
 // same; a second click on the animal then drops the lead). Returns how many animals changed.
 export function untieKnot (s, knot) {
   const tied = s.entities.filter(e => e.leashHolder === knot.id)
-    const followed = pathFollow(s, e)
-    if (followed) { e.pos = followed; continue }
   tied.forEach(e => Object.assign(e, { leashedToMe: true, leashHolder: null }))
   s.entities.splice(s.entities.indexOf(knot), 1)
   return tied.length
