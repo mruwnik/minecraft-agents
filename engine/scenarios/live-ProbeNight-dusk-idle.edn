@@ -1,0 +1,2 @@
+;; ProbeNight live cases for jobs.time.wait-for-dusk: idle, jobs submitted with tools/jobs.mjs
+{:register [] :queue []}
