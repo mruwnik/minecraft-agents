@@ -135,3 +135,7 @@
                  (is (= 2 code))
                  (is (= {:ok false :reason :no-running-body} (data/read-edn out)))))
         (.then done))))
+
+(deftest a-predefined-trigger-without-job-leaves-the-job-to-the-trigger-default
+  (let [r (request "add" "health-watch" "--trigger" "health-low")]
+    (is (= {:op :put :id :health-watch :trigger :health-low :by "agent"} (:request r)))))

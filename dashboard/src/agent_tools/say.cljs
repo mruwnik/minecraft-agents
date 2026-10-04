@@ -39,11 +39,14 @@
 (def max-response-bytes 65536)
 
 (defn failure-for [error]
-  (if (contains? #{"EPERM" "EACCES"} (aget error "code"))
+  (case (aget error "code")
+    ("EPERM" "EACCES")
     {:ok false :reason :socket-access-denied
      :message "Permission denied connecting to the body event socket; the message was not sent."}
-    {:ok false :reason (if (contains? #{"ENOENT" "ECONNREFUSED"} (aget error "code")) :no-running-body :transport-error)
-     :confirmation :unknown
+    ("ENOENT" "ECONNREFUSED")
+    {:ok false :reason :no-running-body
+     :message "The body is not running (no event socket answers); the message was not sent."}
+    {:ok false :reason :transport-error :confirmation :unknown
      :message "Chat confirmation is unknown; inspect server chat before sending again."}))
 
 (defn print-edn! [value] (.write (.-stdout js/process) (str (data/write-edn value) "\n")))

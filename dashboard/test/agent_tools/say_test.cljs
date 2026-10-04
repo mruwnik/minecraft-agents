@@ -21,9 +21,16 @@
       (is (not (contains? denied :confirmation)))
       (is (re-find #"message was not sent" (:message denied))))))
 
+(deftest no-running-body-says-nothing-was-sent
+  (doseq [code ["ENOENT" "ECONNREFUSED"]]
+    (let [absent (say/failure-for (coded code))]
+      (is (= :no-running-body (:reason absent)) code)
+      (is (not (contains? absent :confirmation)))
+      (is (re-find #"not running" (:message absent)))
+      (is (re-find #"not sent" (:message absent))))))
+
 (deftest every-other-failure-leaves-delivery-unknown
-  (doseq [[code reason] [["ETIMEDOUT" :transport-error] ["ECONNRESET" :transport-error]
-                         ["ENOENT" :no-running-body] ["ECONNREFUSED" :no-running-body]]]
+  (doseq [[code reason] [["ETIMEDOUT" :transport-error] ["ECONNRESET" :transport-error]]]
     (let [uncertain (say/failure-for (coded code))]
       (is (= reason (:reason uncertain)) code)
       (is (= :unknown (:confirmation uncertain))))))
