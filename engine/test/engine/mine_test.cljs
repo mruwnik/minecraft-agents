@@ -713,6 +713,19 @@
   (assoc buried-world :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8} {:name "cobblestone" :count 10}]
          :drops {"iron_ore" "raw_iron" "stone" "cobblestone" "wall_torch" "torch"}))
 
+(deftest a-mouth-cell-a-zone-keeps-open-is-named-in-the-result
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground {:name "ground" :min [-12 64 -3] :max [12 64 3] :allow #{:dig}}
+              s (start {:p (buried-fake lit-world) :shared (ew/of-data {} {} [ground])})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :mend false}) {})
+          (await (run-ticks s 600))
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (seq (:open (done-event s))) "the result says the mouth was left open")
+          (is (every? #(= :zone (:reason %)) (:open (done-event s)))))))))
+
 (deftest a-buried-visit-takes-its-torches-back-and-seals-the-mouth
   (async done
     (tu/run-async done

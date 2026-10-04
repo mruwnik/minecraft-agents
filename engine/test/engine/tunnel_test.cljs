@@ -405,6 +405,15 @@
           (is (every? #(= :no-torches (:reason %)) (:unlit res)))
           (is (= [:no-torches] (mapv :reason (events-of s :tunnel.unlit)))))))))
 
+(deftest an-unlit-site-names-the-cell-its-torch-would-have-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (await (tunnel! {:blocks eight-down :inventory torches} {:target [6 57 0]} (fn [_])))
+              dark (await (tunnel! {:blocks eight-down} {:target [6 57 0]} (fn [_])))]
+          (is (= (map (juxt :site :cell) (:torches @(:out lit)))
+                 (map (juxt :site :cell) (:unlit @(:out dark))))))))))
+
 (deftest too-few-torches-light-the-first-site-and-book-the-rest
   (async done
     (tu/run-async done

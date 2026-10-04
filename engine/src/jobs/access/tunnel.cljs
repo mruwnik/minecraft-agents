@@ -309,9 +309,10 @@
   (empty? (get-in (ctx/mem c) [:children :stair])))
 
 (defn book-unlit!
-  "Book site s as :unlit with reason; the first of the tunnel warns."
-  [c plan s reason]
-  (let [cell (head-of ((line-cells plan) s))
+  "Book site s as :unlit with reason, at the cell its torch would take (cell, else the site's head cell); the first of
+  the tunnel warns."
+  [c plan s reason cell]
+  (let [cell (or cell (head-of ((line-cells plan) s)))
         first? (empty? (:unlit (ctx/mem c)))]
     (ctx/update-mem! c update :unlit (fnil conj []) {:cell cell :site s :reason reason})
     (when first?
@@ -357,7 +358,7 @@
                      (:refused choice) (:refused choice)
                      (not (:ok verdict)) (:reason verdict))]
     (if reason
-      (book-unlit! c plan s reason)
+      (book-unlit! c plan s reason cell)
       (let [keep? (:keep (:args c))
             intended (ledger/intend (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
                                     {:cell cell :item (:block choice) :before "air" :job (:id c) :purpose :tunnel-torch})
@@ -366,7 +367,7 @@
                                                  :click (from-plan/js-click (:click choice))})))
             held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]
         (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
-        (when-not held? (book-unlit! c plan s :place-failed))
+        (when-not held? (book-unlit! c plan s :place-failed cell))
         :continue))))
 
 (defn ^:async torch-step!
@@ -378,7 +379,7 @@
         cells (line-cells plan)
         booked (set (map :site unlit))
         pending (remove #(or (booked %) (torch-cell (:block-at in) cells %)) (filter #(<= (inc %) k) (:sites plan)))]
-    (doseq [s (filter #(< (inc %) k) pending)] (book-unlit! c plan s :passed))
+    (doseq [s (filter #(< (inc %) k) pending)] (book-unlit! c plan s :passed nil))
     (when-let [due (first (filter #(= (inc %) k) pending))]
       (await (hang! c in plan due)))))
 

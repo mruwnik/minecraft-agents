@@ -63,7 +63,8 @@
   cut or a restart goes on from its stage. A tunnel that stops skips the target and counts a failure (it walks back
   to its entry itself; the walk up to the entry runs only when the tunnel says the body is still :inside); a walk
   out that does not arrive ends the job :trapped (warn mine.trapped). The way out of a tunnel is jobs.access.leave-tunnel (child :out, the mined item as :spare): the torches the tunnel hung come back and the mouth is sealed; its stop ends the job :trapped. Info mine.tunnel {:target
-  :entry :dug n} per reached target, and the result carries :tunnels [{:target :entry :dug n}].")
+  :entry :dug n} per reached target, and the result carries :tunnels [{:target :entry :dug n}] and, when a mouth
+  cell was left open (a zone or no block to fill it), :open [{:cell :reason}] from jobs.access.leave-tunnel.")
 
 (def args
   {:block {:doc "name of the block to mine (required)" :default nil}
@@ -183,10 +184,11 @@
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
-  (let [{:keys [goal reason mended dig-reason resumes tunnels]} (ctx/mem c)
+  (let [{:keys [goal reason mended dig-reason resumes tunnels open]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) resumes (assoc :resumes resumes)
-              (seq tunnels) (assoc :tunnels tunnels))]
+              (seq tunnels) (assoc :tunnels tunnels)
+              (seq open) (assoc :open open))]
     (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0))}
                                          why))
@@ -329,7 +331,9 @@
         res (when (= :done r) (ctx/child-result c :out))]
     (cond
       (nil? res) :continue
-      (= :done (:status res)) (do (ctx/update-mem! c assoc-in [:visit :stage] :home) :continue)
+      (= :done (:status res)) (do (ctx/update-mem! c #(-> % (assoc-in [:visit :stage] :home)
+                                                          (update :open (fnil into []) (:open res))))
+                                  :continue)
       :else (trapped! c (access/cell (cell-of (u/self-pos c))) entry res))))
 
 (defn ^:async walk-out!
