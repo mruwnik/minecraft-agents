@@ -62,11 +62,18 @@
           (is (< 1 (count (tu/walked-to (:eng s)))) "at least one pull after the walk to the spot")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
+(deftest pulls-a-trailing-cow-by-walking-past-the-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6})]} 20))]
+          (is (< 30 (:x (second (tu/walked-to (:eng s))))) "the walk after the one to the spot goes on past it, so the lead drags the cow to it"))))))
+
 (deftest does-not-pull-a-cow-that-is-already-at-the-spot
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)]} 12))]
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 1})]} 12))]
           (is (= :unleashed (:reason (done-event s))))
           (is (= [goal] (tu/walked-to (:eng s))) "one walk to the spot, no pull"))))))
 

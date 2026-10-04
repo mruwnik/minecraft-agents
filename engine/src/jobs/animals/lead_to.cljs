@@ -31,9 +31,9 @@
   (:refused, :unreachable, :none, :timeout) when the lead would not come off.
   :gather (no :fence only): a body outwalks a led animal, which trails about
   a lead length behind it, so on arrival the animal is looked up and, when it
-  is farther than :gather-radius from :pos, the body walks on towards :pos by
-  the excess (range 1) so the lead pulls the animal that much nearer, then
-  looks again; at most :gather-tries pulls. A pull that did not arrive, or
+  is farther than :gather-radius from :pos, the body walks on past :pos (range
+  1) so the lead pulls the animal within :gather-radius, waiting for the animal
+  to settle between pulls; at most :gather-tries pulls. A pull that did not arrive, or
   running out of pulls, is no failure: the animal is let go where it is.
   The check always passes, so a cut job resumes and ends itself.")
 
@@ -103,18 +103,29 @@
 (defn flat-dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
 
+(def lead-length
+  "How far behind a walking body a led animal trails."
+  6)
+
+(def moved-eps
+  "An animal that moved less than this between two looks has settled."
+  0.25)
+
+(def max-settles
+  "Looks spent waiting for the animal to settle before a pull."
+  20)
+
 (defn pull-point
-  "Where the body walks to pull animal-pos nearer to pos by its excess over radius: the body's own
-  position moved along the line from the animal to pos (flat, the body's y kept), or nil when the
-  animal is close enough."
-  [body animal-pos pos radius]
+  "Where the body walks to pull the animal to within radius of pos: past pos, on the line from the
+  animal through pos, by the lead length less radius (flat, pos's y), or nil when the animal is
+  at pos."
+  [animal-pos pos radius]
   (let [d (flat-dist animal-pos pos)
-        excess (- d radius)]
-    (when (pos? excess)
-      (let [k (/ excess d)]
-        (assoc body
-               :x (+ (:x body) (* k (- (:x pos) (:x animal-pos))))
-               :z (+ (:z body) (* k (- (:z pos) (:z animal-pos)))))))))
+        k (/ (- lead-length radius) d)]
+    (when (pos? d)
+      (assoc pos
+             :x (+ (:x pos) (* k (- (:x pos) (:x animal-pos))))
+             :z (+ (:z pos) (* k (- (:z pos) (:z animal-pos))))))))
 
 (defn ^:async pull! [c target]
   (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open}))]
@@ -127,18 +138,21 @@
 
 (defn ^:async gather!
   "Without :fence: let the animal catch up. A pull in progress is carried on with its stored target;
-  otherwise the animal is looked at and either is near enough (or the pulls are spent: :arrive) or
-  starts a pull."
+  otherwise the animal is looked at: near enough (or the pulls spent) is :arrive, one still moving
+  is given time to settle (the animal lags the body), else a pull starts."
   [c a]
   (let [{:keys [pos gather-radius gather-tries]} (:args c)
-        {:keys [pull-target pulls] :or {pulls 0}} (ctx/mem c)
-        target (or pull-target
-                   (when (< pulls gather-tries)
-                     (pull-point (u/self-pos c) (u/pos-of (.-pos a)) pos gather-radius)))]
-    (if-not target
-      (do (set-phase! c :arrive) :continue)
-      (do (ctx/update-mem! c assoc :pull-target target)
-          (await (pull! c target))))))
+        {:keys [pull-target pulls gather-seen settles] :or {pulls 0 settles 0}} (ctx/mem c)
+        animal-pos (u/pos-of (.-pos a))]
+    (cond
+      pull-target (await (pull! c pull-target))
+      (or (<= (flat-dist animal-pos pos) gather-radius) (>= pulls gather-tries)) (do (set-phase! c :arrive) :continue)
+      (and (< settles max-settles) (or (nil? gather-seen) (> (flat-dist gather-seen animal-pos) moved-eps)))
+      (do (ctx/update-mem! c assoc :gather-seen animal-pos :settles (inc settles)) :continue)
+      :else (let [target (pull-point animal-pos pos gather-radius)]
+              (ctx/update-mem! c assoc :pull-target target :settles 0)
+              (ctx/update-mem! c dissoc :gather-seen)
+              (await (pull! c target))))))
 
 (defn ^:async let-go! [c]
   (set-phase! c :release)
