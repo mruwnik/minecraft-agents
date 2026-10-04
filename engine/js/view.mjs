@@ -356,16 +356,16 @@ export const MERGE_MAX_GROWTH = 1.5
 const overlaps = (a, b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1 && a.z0 <= b.z1 && b.z0 <= a.z1
 const volume = b => (b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1) * (b.z1 - b.z0 + 1)
 // yc0: the low end of the box without the downward sky extension (which does not count towards the height cap)
-const mergeBoxes = (a, b, top) => {
+const unionBounds = (a, b, top) => {
   const y1 = Math.max(a.y1, b.y1)
   return {
     x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), yc0: Math.min(a.yc0 ?? a.y0, b.yc0 ?? b.y0), y1,
-    z0: Math.min(a.z0, b.z0), z1: Math.max(a.z1, b.z1), virtualTop: y1 === top - 1, changes: [...a.changes, ...b.changes]
+    z0: Math.min(a.z0, b.z0), z1: Math.max(a.z1, b.z1), virtualTop: y1 === top - 1
   }
 }
 const mergeable = (a, b, top) => {
   if (!overlaps(a, b)) return false
-  const u = mergeBoxes(a, b, top)
+  const u = unionBounds(a, b, top)
   if (u.x1 - u.x0 + 1 > MERGE_MAX_XZ || u.z1 - u.z0 + 1 > MERGE_MAX_XZ || u.y1 - u.yc0 + 1 > MERGE_MAX_Y) return false
   return volume(u) <= MERGE_MAX_GROWTH * (volume(a) + volume(b))
 }
@@ -377,13 +377,18 @@ const mergeable = (a, b, top) => {
 // change's own box runs at least once after the change, recomputing its whole neighbourhood from the final states; a
 // cell near another box's shell that was briefly stale after the first run is inside some other change's box and is
 // fixed when that one runs. Each box joins the first kept box it can merge with, repeated while that still merges something.
+// Merges append in place to copies this function owns; the input boxes and their arrays are never mutated.
 export function mergeOverlapping (boxes, top) {
   const pass = list => {
     const out = []
     for (const box of list) {
       const at = out.findIndex(kept => mergeable(kept, box, top))
-      if (at < 0) out.push(box)
-      else out[at] = mergeBoxes(out[at], box, top)
+      if (at < 0) out.push({ ...box, changes: [...box.changes] })
+      else {
+        const kept = out[at]
+        Object.assign(kept, unionBounds(kept, box, top))
+        for (const change of box.changes) kept.changes.push(change)
+      }
     }
     return out
   }

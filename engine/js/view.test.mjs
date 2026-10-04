@@ -902,6 +902,26 @@ test('merging many overlapping boxes is fast and keeps every change exactly once
   for (const b of merged) assert.ok(b.x1 - b.x0 + 1 <= 48 && b.z1 - b.z0 + 1 <= 48)
 })
 
+test('mergeOverlapping leaves its input boxes unchanged', () => {
+  const boxes = [box(0, 10), box(20, 30, { changes: [20, 21] }), box(8, 22, { changes: [8, 9] }), box(100, 110)]
+  const before = structuredClone(boxes)
+  const merged = mergeOverlapping(boxes, 100)
+  assert.ok(merged.length < boxes.length)
+  assert.deepEqual(boxes, before)
+})
+
+test('a fill-sized burst of one box per cell keeps every change exactly once within the caps', () => {
+  const cells = []
+  for (let x = 0; x < 81; x++) for (let z = 0; z < 61; z++) for (let y = 0; y < 10; y++) cells.push([x, y, z])
+  const boxes = cells.map(([x, y, z], i) => ({ x0: x - 16, x1: x + 16, y0: y - 16, yc0: y - 16, y1: y + 16, z0: z - 16, z1: z + 16, virtualTop: false, changes: [i] }))
+  const merged = mergeOverlapping(boxes, 1000)
+  const seen = new Uint8Array(cells.length)
+  for (const b of merged) for (const c of b.changes) seen[c]++
+  assert.equal(merged.reduce((n, b) => n + b.changes.length, 0), cells.length)
+  assert.ok(seen.every(n => n === 1))
+  for (const b of merged) assert.ok(b.x1 - b.x0 + 1 <= 48 && b.z1 - b.z0 + 1 <= 48 && b.y1 - b.yc0 + 1 <= 64)
+})
+
 test('relight: a fill-like burst, a hollow 20x6x20 stone box with a torch inside, relights exactly in capped boxes one flush at a time', async () => {
   const world = makeWorld()
   lightWorld(world)
