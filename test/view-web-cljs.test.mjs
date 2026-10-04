@@ -8,7 +8,7 @@ const pose = (t, x, extra = {}) => ({ t, status: 'online', eye: { x, y: 65.62, z
 
 test('every export drive.mjs and scene.mjs import is a function', () => {
   for (const name of ['poseInterpolator', 'viewHub', 'createSceneCore', 'decodePriority', 'controlFor', 'lookStepFor', 'mouseLook', 'mergeLook', 'bannerText', 'serialQueue', 'whoFrom',
-    'shouldTakeOnClick', 'shouldReleaseOnEscape', 'leaveAction', 'withTimeout', 'isStale', 'shouldDrop']) {
+    'shouldTakeOnClick', 'shouldReleaseOnEscape', 'leaveAction', 'withTimeout', 'isStale', 'shouldDrop', 'createDriver', 'isAgentKey']) {
     assert.equal(typeof viewer[name], 'function', name)
   }
 })

@@ -1,21 +1,16 @@
-// Why JavaScript: browser; DOM key/mouse handling for manual takeover from the view page.
+// Why JavaScript: browser event wiring only: DOM listeners, pointer lock, setInterval and fetch are the page's own APIs. The
+// takeover state and every decision are view.takeover (dashboard/src/view/takeover.cljs, in cljs/viewer.mjs); this forwards events there and applies the view it renders.
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
-import { isAgentKey } from './agent-key.mjs'
-import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, isStale, shouldDrop } from './cljs/viewer.mjs' // view.drive (dashboard/src/view/drive.cljs)
+import { createDriver, isAgentKey, whoFrom, withTimeout } from './cljs/viewer.mjs'
 
 const REQUEST_TIMEOUT_MS = 1500
 const POLL_MS = 1000
 const PING_MS = 500
 const LOOK_FLUSH_MS = 50
-const ERROR_MS = 3000
-const SENT_KEEP = 200
 
 const params = new URLSearchParams(location.search)
 const agent = params.get('agent') // <world>/<name>
-const ME = whoFrom(location.search)
-const EMBED = params.get('embed') === '1'
-const timedFetch = withTimeout(fetch, REQUEST_TIMEOUT_MS)
 
 const start = () => {
   const bar = document.getElementById('bar')
@@ -25,177 +20,50 @@ const start = () => {
   button.id = 'drive'
   button.type = 'button'
   bar.appendChild(button)
+  const locked = () => document.pointerLockElement === canvas
 
-  let driving = false
-  let takeGen = 0 // bumped on every successful take; replies to requests started earlier are stale
-  let manual = null
-  let lastReply = null
-  let errorText = null
-  let errorTimer = null
-  let pendingLook = null
-  const sent = []
-  const enqueue = serialQueue() // requests reach the body in order: a keyup must never overtake its keydown
-
-  const render = () => {
-    const text = errorText ?? bannerText(manual, ME)
-    banner.textContent = text ?? ''
-    banner.hidden = text === null
-    const other = manual && manual.who !== ME
-    document.body.classList.toggle('driving', driving)
-    button.textContent = driving ? 'release (G)' : 'take over (G)'
-    button.disabled = Boolean(other)
-    button.title = other ? `driven by ${manual.who}` : ''
-    if (parent !== window) parent.postMessage({ type: 'drive', driving, manual, expiresAt: manual?.expiresAt ?? null }, location.origin)
+  const render = (view) => {
+    banner.textContent = view.text
+    banner.hidden = view.hidden
+    document.body.classList.toggle('driving', view.driving)
+    button.textContent = view.buttonText
+    button.disabled = view.disabled
+    button.title = view.title
+    if (parent !== window) parent.postMessage({ type: 'drive', ...view.message }, location.origin)
   }
 
-  const showError = (text) => {
-    errorText = text
-    clearTimeout(errorTimer)
-    errorTimer = setTimeout(() => { errorText = null; render() }, ERROR_MS)
-    render()
-  }
+  const driver = createDriver({
+    agent,
+    me: whoFrom(location.search),
+    embed: params.get('embed') === '1',
+    fetch,
+    timedFetch: withTimeout(fetch, REQUEST_TIMEOUT_MS),
+    render,
+    exitPointerLock: () => { if (locked()) document.exitPointerLock() },
+    requestPointerLock: () => canvas.requestPointerLock?.()
+  })
 
-  const dropDriving = () => {
-    driving = false
-    pendingLook = null
-    if (document.pointerLockElement === canvas) document.exitPointerLock()
-  }
-
-  // any reply (or a failed request) that shows this page no longer holds the body clears every marker of control
-  const checkHold = (reply, startedGen) => {
-    if (!shouldDrop({ driving, reply, me: ME, startedGen, currentGen: takeGen })) return
-    dropDriving()
-    render()
-  }
-
-  const post = async (msg, init = {}) => {
-    const startedGen = takeGen
-    sent.push({ t: performance.now(), op: msg.op })
-    if (sent.length > SENT_KEEP) sent.shift()
-    const reply = await timedFetch('/drive/' + agent, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(msg),
-      ...init
-    }).then(r => (r.headers.get('content-type')?.includes('json') ? r.json() : null), () => null)
-    if (isStale({ startedGen, currentGen: takeGen })) return reply
-    if (reply) {
-      lastReply = reply
-      if (reply.manual !== undefined) manual = reply.manual
-    }
-    checkHold(reply, startedGen)
-    if (!reply) return null
-    render()
-    return reply
-  }
-  const send = (msg) => enqueue(() => post(msg))
-
-  const poll = async () => {
-    const startedGen = takeGen
-    const reply = await fetch('/drive/' + agent).then(r => (r.headers.get('content-type')?.includes('json') ? r.json() : null), () => null)
-    if (isStale({ startedGen, currentGen: takeGen })) return
-    if (reply) {
-      lastReply = reply
-      manual = reply.manual ?? null
-    }
-    checkHold(reply, startedGen)
-    if (reply) render()
-  }
-
-  const take = async () => {
-    const reply = await send({ op: 'take', who: ME, why: 'driven from the view page' })
-    if (!reply) return showError('no running body ' + agent)
-    if (!reply.ok) return showError('cannot take over: ' + reply.reason)
-    takeGen += 1
-    driving = true
-    render()
-  }
-  const release = async () => {
-    dropDriving()
-    await send({ op: 'release', who: ME })
-    render()
-  }
-  const toggle = () => (driving ? release() : take())
-
-  const handled = (code) => controlFor(code) !== null || lookStepFor(code) !== null || code === 'KeyF'
-
-  addEventListener('keydown', (e) => {
-    if (e.code === 'KeyG' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (!manual || manual.who === ME) toggle()
-      return
-    }
-    if (shouldReleaseOnEscape({ code: e.code, driving, pointerLocked: document.pointerLockElement === canvas })) {
-      release()
-      return
-    }
-    if (!driving || !handled(e.code)) return
+  // a key the driver handles must not reach the page's own handlers
+  const swallow = (e, handled) => {
+    if (!handled) return
     e.preventDefault()
     e.stopImmediatePropagation()
-    const control = controlFor(e.code)
-    if (control && !e.repeat) send({ op: 'set', who: ME, controls: { [control]: true } })
-    const step = lookStepFor(e.code)
-    if (step) send({ op: 'set', who: ME, look: step })
-  }, true)
-
-  addEventListener('keyup', (e) => {
-    if (!driving || !handled(e.code)) return
-    e.preventDefault()
-    e.stopImmediatePropagation()
-    const control = controlFor(e.code)
-    if (control) send({ op: 'set', who: ME, controls: { [control]: false } })
-  }, true)
-
-  canvas.addEventListener('click', () => {
-    if (driving) canvas.requestPointerLock?.()
-    else if (shouldTakeOnClick({ embed: EMBED, driving, manual, me: ME })) take()
-  })
-  addEventListener('mousemove', (e) => {
-    if (!driving || document.pointerLockElement !== canvas) return
-    pendingLook = mergeLook(pendingLook ?? {}, mouseLook(e.movementX, e.movementY))
-  })
-
-  const onLeave = (event) => {
-    if (!driving) return
-    const action = leaveAction(event)
-    if (action === null) return
-    if (event === 'pagehide') {
-      post({ op: 'stop', who: ME }, { keepalive: true }) // not queued: the page is going away; no release
-      return
-    }
-    send({ op: 'stop', who: ME })
-    if (action === 'stop-release') release()
   }
-  addEventListener('blur', () => onLeave('blur'))
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') onLeave('hidden')
-    else poll()
-  })
-  let hadLock = false
-  document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement === canvas) { hadLock = true; return }
-    if (!hadLock) return
-    hadLock = false
-    onLeave('pointerlock-lost')
-  })
-  addEventListener('pagehide', () => onLeave('pagehide'))
-  addEventListener('beforeunload', () => onLeave('pagehide'))
-
-  setInterval(() => {
-    if (!driving) return
-    send({ op: 'ping', who: ME })
-  }, PING_MS)
-  setInterval(() => {
-    if (!driving || !pendingLook) return
-    const look = pendingLook
-    pendingLook = null
-    send({ op: 'set', who: ME, look })
-  }, LOOK_FLUSH_MS)
-  setInterval(poll, POLL_MS)
-
-  button.addEventListener('click', toggle)
-  window.__drive = { state: () => ({ driving, manual, lastReply, expiresAt: manual?.expiresAt ?? null }), sent, take, release }
-  render()
-  poll()
+  addEventListener('keydown', (e) => swallow(e, driver.keydown({ code: e.code, repeat: e.repeat, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, pointerLocked: locked() })), true)
+  addEventListener('keyup', (e) => swallow(e, driver.keyup({ code: e.code })), true)
+  canvas.addEventListener('click', () => driver.click())
+  addEventListener('mousemove', (e) => driver.mousemove(e.movementX, e.movementY, locked()))
+  addEventListener('blur', () => driver.leave('blur'))
+  document.addEventListener('visibilitychange', () => driver.visibilityChange(document.visibilityState === 'hidden'))
+  document.addEventListener('pointerlockchange', () => driver.pointerLockChange(locked()))
+  addEventListener('pagehide', () => driver.leave('pagehide'))
+  addEventListener('beforeunload', () => driver.leave('pagehide'))
+  setInterval(driver.ping, PING_MS)
+  setInterval(driver.flushLook, LOOK_FLUSH_MS)
+  setInterval(driver.poll, POLL_MS)
+  button.addEventListener('click', driver.toggle)
+  window.__drive = { state: driver.state, sent: driver.sent, take: driver.take, release: driver.release }
+  driver.start()
 }
 
 if (isAgentKey(agent)) start()

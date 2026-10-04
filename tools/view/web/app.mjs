@@ -1,7 +1,7 @@
 // Why JavaScript: WebGL/browser; the browser view entry, runs in the page.
 // The browser view: one scene (scene.mjs) of one agent drawn by the WebGL renderer (gl.mjs) every frame, with an overlay, a free
 // camera and the agent picker. window.__view exposes numbers for automated measurement. hub.mjs draws many scenes in one context.
-import { isAgentKey } from './agent-key.mjs'
+import { isAgentKey } from './cljs/viewer.mjs'
 import { directionFor } from './camera.mjs'
 import { createDecoder } from './decoder.mjs'
 import { createRenderer } from './gl.mjs'

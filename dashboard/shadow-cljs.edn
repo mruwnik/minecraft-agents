@@ -65,6 +65,9 @@
                                :entitiesUsage agent-tools.api/entities-usage
                                :entitiesOptions agent-tools.api/entities-options
                                :entitiesMain agent-tools.api/entities-main
+                               :jobResultProject agent-tools.job-results/js-project
+                               :jobResultRead agent-tools.job-results/js-read
+                               :jobResultHistory agent-tools.job-results/js-history
                                :inventorySummary agent-tools.api/inventory-summary
                                :planExecute agent-tools.plans/execute
                                :prepare dashboard.agent-plan-tools/prepare
@@ -102,7 +105,9 @@
                                         leaveAction view.drive/leave-action
                                         withTimeout view.drive/with-timeout
                                         isStale view.drive/is-stale
-                                        shouldDrop view.drive/should-drop}}}
+                                        shouldDrop view.drive/should-drop
+                                        createDriver view.takeover/create-driver
+                                        isAgentKey view.takeover/agent-key?}}}
            :compiler-options {:infer-externs :auto}}
   ;; The same viewer namespaces plus the hot functions the :viewer build does not export, release-optimized, for
   ;; tools/view/bench-cljs-vs-js.mjs: `shadow-cljs release viewer-bench`. Not shipped.
