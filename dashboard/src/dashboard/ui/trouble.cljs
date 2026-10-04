@@ -29,7 +29,7 @@
   (when (within? now hurt-t hurt-window-ms) (reason :warn (str "hurt " (ago now hurt-t)))))
 
 (defn backoff [{:keys [backoffs]} _ _]
-  (when (seq backoffs) (reason :warn (str "backoff: " (str/join ", " (sort (keys backoffs)))))))
+  (when (seq backoffs) (reason :warn (str "backoff: " (str/join ", " (sort-by str (keys backoffs)))))))
 
 (defn stuck [{:keys [stuck-open? stuck-t]} _ now]
   (when (or stuck-open? (within? now stuck-t stuck-window-ms)) (reason :warn "stuck")))

@@ -17,6 +17,7 @@
            ["died 2 minutes ago" (body {:signals {:died-t (- now 120000)}}) [{:severity :danger :text "died 2m ago"}]]
            ["died long ago" (body {:signals {:died-t (- now 301000)}}) []]
            ["a job in backoff" (body {:signals {:backoffs {"go-to" (- now 10000)}}}) [{:severity :warn :text "backoff: go-to"}]]
+           ["backoff keys mixing symbols and keywords" (body {:signals {:backoffs {'jobs.gather.mine 1 :suffocating 2 "go-to" 3}}}) [{:severity :warn :text "backoff: :suffocating, go-to, jobs.gather.mine"}]]
            ["several backoffs list all" (body {:signals {:backoffs {"a" 1 "b" 2}}}) [{:severity :warn :text "backoff: a, b"}]]
            ["stuck reflex still open" (body {:signals {:stuck-open? true :stuck-t (- now 900000)}}) [{:severity :warn :text "stuck"}]]
            ["unstick gave up recently" (body {:signals {:stuck-t (- now 100000)}}) [{:severity :warn :text "stuck"}]]
