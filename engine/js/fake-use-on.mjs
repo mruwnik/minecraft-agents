@@ -48,6 +48,10 @@ export function fakeUseOn (s, { pos, item, face = 'up' }, { spawnItem, near }) {
   if (/_fence$/.test(here) && (item === 'lead' || item === undefined)) {
     return result(tieToPost(s, pos) > 0 ? 'used' : 'unchanged')
   }
+  if (/_fence_gate$/.test(here) && item === undefined) {
+    s.states.set(k, { ...s.states.get(k), open: !s.states.get(k)?.open })
+    return result('used')
+  }
   if (item?.endsWith('_hoe') && TILLABLE.has(here) && face !== 'down' && !s.blocks.has(key({ ...pos, y: pos.y + 1 }))) {
     s.blocks.set(k, 'farmland')
     return result('used')

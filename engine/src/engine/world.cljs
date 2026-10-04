@@ -196,6 +196,7 @@
   [{:keys [now every-ms] :as opts}]
   {:state (atom {:plans {} :blueprints {}})
    :said (atom #{})
+   :derived (atom {})
    :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms default-every-ms))})
 
 (defn data-state [plans blueprints]
@@ -209,7 +210,8 @@
   memory, no files (tests)."
   ([plans blueprints] (of-data plans blueprints []))
   ([plans blueprints zones]
-   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones))) :said (atom #{}) :opts {}}))
+   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones))) :said (atom #{}) :derived (atom {})
+    :opts {}}))
 
 (defn set-data!
   "Replace the plans and blueprints of a world made with of-data; its zones stay."
@@ -233,6 +235,27 @@
   [w key]
   (let [[old _] (swap-vals! (:said w) conj key)]
     (not (contains? old key))))
+
+(defn answers
+  "The answers (see answer) of every plan in state, by id."
+  [state]
+  (keep #(answer state %) (sort (keys (:plans state)))))
+
+(defn derived
+  "(f answers) over the answers of all plans, kept under key k until a plan or blueprint changes: for a
+  reader asked every tick (a trigger) that must not rebuild its index per tick. nil for a nil world."
+  [w k f]
+  (when w
+    (refresh! w)
+    (let [{:keys [plans expanded] :as state} @(:state w)
+          kept (get @(:derived w) k)]
+      (cond
+        (and kept (identical? plans (:plans kept)) (identical? expanded (:expanded kept))) (:value kept)
+        (and kept (= plans (:plans kept)) (= expanded (:expanded kept)))
+        (do (swap! (:derived w) assoc k (assoc kept :plans plans :expanded expanded)) (:value kept))
+        :else (let [value (f (answers state))]
+                (swap! (:derived w) assoc k {:plans plans :expanded expanded :value value})
+                value)))))
 
 (defn zones
   "The world's zone list, or nil when the zone file is missing or was never readable (nil for a nil world)."

@@ -622,12 +622,13 @@
                             {:source :job :kind :yielded :level :info :status status}))))))
 
 (defn trigger-holds?
-  "Whether entry's trigger holds: (:when world view args), where view is a
-  memory view {:data :now} (see engine.memory) and args are the entry's args."
+  "Whether entry's trigger holds: (:when world view args plans), where view is a
+  memory view {:data :now} (see engine.memory), args are the entry's args and
+  plans is the engine's engine.world (read from memory; a trigger may ignore it)."
   [eng entry world view]
   (let [t (trigger-def eng (:trigger entry))]
     (boolean (call-guarded eng (str "trigger " (:trigger entry)) false
-                           #((:when t) world view (:args entry))))))
+                           #((:when t) world view (:args entry) (:world eng))))))
 
 (defn reflex-text
   "\"burning → jobs.survival.extinguish\": the reflex id and its job's label."

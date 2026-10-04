@@ -245,3 +245,12 @@ for (const [label, spec, item] of [
     assert.deepEqual(dropsOf(p), [])
   })
 }
+
+test('an empty-handed click on a fence gate toggles it open and shut', async () => {
+  const p = owned({ blocks: { '1,64,0': 'oak_fence_gate' } })
+  const opened = await p.useOn('t', { pos: P })
+  assert.equal(opened.status, 'used')
+  assert.deepEqual(opened.after, { name: 'oak_fence_gate', properties: { open: true } })
+  const shut = await p.useOn('t', { pos: P })
+  assert.deepEqual(shut.after, { name: 'oak_fence_gate', properties: { open: false } })
+})

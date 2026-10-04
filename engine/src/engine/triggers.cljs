@@ -8,6 +8,7 @@
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
             [engine.triggers.hungry :as hungry]
+            [engine.triggers.pen-gate :as pen-gate]
             [engine.triggers.night-unsafe :as night-unsafe]
             [engine.triggers.player-sleeping-nearby :as player-sleeping-nearby]
             [engine.triggers.stuck :as stuck]
@@ -92,5 +93,5 @@
   them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
-         night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died
+         night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
          inventory-nearly-full every-interval]))
