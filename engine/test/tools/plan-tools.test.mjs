@@ -23,7 +23,7 @@ async function invoke (kind, fx, args) {
   return { code, value: readEDN(output.trim()), output }
 }
 
-const planText = id => `{:id "${id}" :status :proposed :parts [{:id "base" :cells [[0 64 0] [1 64 0] [2 64 0]] :want "stone"}]}`
+const planText = id => `{:id "${id}" :parts [{:id "base" :cells [[0 64 0] [1 64 0] [2 64 0]] :want "stone"}]}`
 const blueprintText = id => `{:id "${id}" :front :north :key {"S" "stone"} :layers [ ["S"] ]}`
 const require = createRequire(import.meta.url)
 
@@ -39,7 +39,7 @@ test('plan parser rejects missing world, bad commands, and unsupported options a
   } finally { fx.close() }
 })
 
-test('plans use create-only, revision-checked mutations and preserve completed lifecycle', async () => {
+test('plans use create-only, revision-checked mutations; a retired plan is a deleted plan', async () => {
   const fx = fixture()
   try {
     const added = await invoke('plan', fx, ['add', 'home', '--edn', planText('home'), '--by', 'tester'])
@@ -48,22 +48,29 @@ test('plans use create-only, revision-checked mutations and preserve completed l
     const shown = await invoke('plan', fx, ['show', 'home'])
     assert.deepEqual(shown.value.scope, keyword('world'))
     assert.equal(shown.value.revision, revision(fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'home.edn'), 'utf8')))
-    const status = await invoke('plan', fx, ['status', 'home', '--status', 'completed', '--by', 'tester', '--revision', shown.value.revision])
-    assert.equal(status.code, 0)
-    const listed = await invoke('plan', fx, ['list', '--status', 'completed'])
-    assert.equal(listed.value.total, 1)
-    assert.deepEqual(listed.value.items[0].status, keyword('completed'))
-    const completedRevision = listed.value.items[0].revision
-    assert.equal((await invoke('plan', fx, ['status', 'home', '--status', 'active', '--by', 'tester'])).value.reason.key, 'revision-required')
-    const active = await invoke('plan', fx, ['status', 'home', '--status', 'active', '--by', 'tester', '--revision', completedRevision])
-    const activeRevision = active.value.revision
     const conflict = await invoke('plan', fx, ['edit', 'home', '--edn', planText('home'), '--by', 'tester', '--revision', '0'.repeat(24)])
     assert.deepEqual(conflict.value.reason, keyword('revision-conflict'))
-    const dry = await invoke('plan', fx, ['remove', 'home', '--by', 'tester', '--revision', activeRevision, '--dry-run'])
+    const dry = await invoke('plan', fx, ['remove', 'home', '--by', 'tester', '--revision', shown.value.revision, '--dry-run'])
     assert.equal(dry.value.preview, true)
     assert.equal((await invoke('plan', fx, ['show', 'home'])).code, 0)
-    assert.equal((await invoke('plan', fx, ['remove', 'home', '--by', 'tester', '--revision', activeRevision])).code, 0)
+    assert.equal((await invoke('plan', fx, ['remove', 'home', '--by', 'tester', '--revision', shown.value.revision])).code, 0)
     assert.equal((await invoke('plan', fx, ['show', 'home'])).code, 1)
+  } finally { fx.close() }
+})
+
+test('the status command and list --status are gone and say where to go instead', async () => {
+  const fx = fixture()
+  try {
+    const status = await invoke('plan', fx, ['status', 'home', '--status', 'active', '--by', 'tester', '--revision', '0'.repeat(24)])
+    assert.equal(status.code, 2)
+    assert.deepEqual(status.value.reason, keyword('usage'))
+    assert.match(status.value.message, /every submitted plan is active/)
+    assert.match(status.value.message, /remove/)
+    const listed = await invoke('plan', fx, ['list', '--status', 'active'])
+    assert.equal(listed.code, 2)
+    assert.deepEqual(listed.value.reason, keyword('bad-option'))
+    const withStatus = await invoke('plan', fx, ['validate', 'home', '--edn', '{:id "home" :status :active :parts [{:id "base" :cells [[0 64 0]] :want "stone"}]}'])
+    assert.match(withStatus.output, /status/)
   } finally { fx.close() }
 })
 
@@ -83,7 +90,7 @@ test('blueprint tools validate inline, report global scope, and save with CAS', 
     assert.match(rawList.output, /:key \{"S" "stone"\}/)
     const stored = fs.readFileSync(path.join(fx.repo, 'blueprints', 'stone.edn'), 'utf8')
     assert.match(stored, /:key \{"S" "stone"\}/)
-    const plan = '{:id "uses-stone" :status :proposed :parts [{:id "bp" :blueprint "stone" :at [0 64 0]}]}'
+    const plan = '{:id "uses-stone" :parts [{:id "bp" :blueprint "stone" :at [0 64 0]}]}'
     const planCheck = await invoke('plan', fx, ['validate', 'uses-stone', '--edn', plan])
     assert.equal(planCheck.value.ok, true)
     const valid = await invoke('blueprints', fx, ['validate', 'stone', '--edn', blueprintText('stone')])
@@ -112,7 +119,7 @@ test('check pages part and score-element details with actionable offsets', async
   const fx = fixture()
   try {
     const parts = Array.from({ length: 12 }, (_, i) => `{:id "p${i}" :cells [[${i} 64 0]] :want "stone"}`).join(' ')
-    await invoke('plan', fx, ['add', 'paged', '--edn', `{:id "paged" :status :proposed :parts [${parts}]}`, '--by', 'tester'])
+    await invoke('plan', fx, ['add', 'paged', '--edn', `{:id "paged" :parts [${parts}]}`, '--by', 'tester'])
     const checked = await invoke('plan', fx, ['check', 'paged', '--limit', '3', '--offset', '3'])
     assert.equal(checked.value.parts.total, 12)
     assert.equal(checked.value.parts.items.length, 3)
@@ -143,10 +150,10 @@ test('score bridge preserves coordinate, material and block-property string keys
   assert.equal(unknown.materials.availability, 'unknown')
 })
 
-test('proposed candidate checks report conflicts with active plans', () => {
+test('candidate checks report conflicts with every stored plan', () => {
   const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const candidate = '{:id "candidate" :status :proposed :parts [{:id "a" :cells [[4 64 9]] :want "dirt"}]}'
-  const active = '{:id "active" :status :active :parts [{:id "b" :cells [[4 64 9]] :want "stone"}]}'
+  const candidate = '{:id "candidate" :parts [{:id "a" :cells [[4 64 9]] :want "dirt"}]}'
+  const active = '{:id "active" :parts [{:id "b" :cells [[4 64 9]] :want "stone"}]}'
   const prepared = bridge.prepare(candidate, 'candidate', '[]', JSON.stringify([{ id: 'active', text: active }]), null, '[]')
   assert.equal(prepared.ok, true)
   assert.equal(prepared.conflicts.length, 1)
@@ -154,13 +161,22 @@ test('proposed candidate checks report conflicts with active plans', () => {
   assert.equal(prepared.conflicts[0].count, 1)
 })
 
+test('the aggregate cell budget counts every stored plan', () => {
+  const bridge = require('../../../dashboard/out/agent-tools.cjs')
+  const big = id => `{:id "${id}" :parts [{:id "all" :cells [${Array.from({ length: 60000 }, (_, x) => `[${x} 64 0]`).join(' ')}] :want "stone"}]}`
+  const candidate = '{:id "candidate" :parts [{:id "a" :cells [[0 70 0]] :want "dirt"}]}'
+  const prepared = bridge.prepare(candidate, 'candidate', '[]', JSON.stringify([{ id: 'one', text: big('one') }, { id: 'two', text: big('two') }]), null, '[]')
+  assert.equal(prepared.ok, false)
+  assert.match(prepared.errors.join(' '), /exceeds 100000/)
+})
+
 test('bridge rejects oversized plan geometry before expanding cells', () => {
   const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const cells = Array.from({ length: 100001 }, (_, x) => `[${x} 64 0]`).join(' ')
-  const plan = `{:id "large" :status :proposed :parts [{:id "all" :cells [${cells}] :want "stone"}]}`
+  const plan = `{:id "large" :parts [{:id "all" :cells [${cells}] :want "stone"}]}`
   const result = bridge.prepare(plan, 'large', '[]', '[]', null, '[]')
   assert.equal(result.ok, false)
-  assert.match(result.errors.join(' '), /aggregate active-plan conflict index exceeds 100000/)
+  assert.match(result.errors.join(' '), /aggregate plan conflict index exceeds 100000/)
   assert.equal(result.cells.length, 0)
 })
 
@@ -168,7 +184,7 @@ test('bridge estimates wide shallow blueprint placements by width before expansi
   const bridge = require('../../../dashboard/out/agent-tools.cjs')
   const row = 'S'.repeat(100001)
   const blueprint = `{:id "wide" :front :north :key {"S" "stone"} :layers [["${row}"]]}`
-  const plan = '{:id "wide-plan" :status :proposed :parts [{:id "p" :blueprint "wide" :at [0 64 0]}]}'
+  const plan = '{:id "wide-plan" :parts [{:id "p" :blueprint "wide" :at [0 64 0]}]}'
   const result = bridge.prepare(plan, 'wide-plan', JSON.stringify([{ id: 'wide', text: blueprint }]), '[]', null, '[]')
   assert.equal(result.ok, false)
   assert.match(result.errors.join(' '), /exceeds 100000/)

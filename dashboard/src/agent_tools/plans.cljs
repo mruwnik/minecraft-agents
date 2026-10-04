@@ -12,10 +12,9 @@
 
 (def raw-bytes 65536)
 (def names #"^[A-Za-z0-9_-]{1,100}$")
-(def statuses #{"proposed" "active" "completed" "retired"})
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--status proposed|active|completed|retired] [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  status <id> --status proposed|active|completed|retired --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by. Build once with `cd dashboard && npm run build-agent-tools`."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
@@ -56,21 +55,23 @@
         parsed (data/from-json (.parseArgs util #js {:args argv :allowPositionals true :options (clj->js options)}))
         [command id & extra] (:positionals parsed)
         v (:values parsed)
-        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "status" "validate" "check"}
+        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check"}
                      #{"list" "find" "show" "save" "validate"})
-        mutations #{"add" "edit" "save" "remove" "status"}
+        mutations #{"add" "edit" "save" "remove"}
         allowed (cond-> #{:world :worlds :state :repo}
                   (#{"list" "find"} command) (into [:limit :offset :raw :large])
-                  (and (= command "list") (= kind :plan)) (conj :status)
                   (= command "show") (into [:raw :geometry :large])
                   (= command "validate") (into [:edn :limit :offset :raw :geometry :large])
                   (and (= command "validate") (= kind :plan)) (conj :blueprint)
                   (= command "check") (into [:inventory :blueprint :raw :geometry :large :limit :offset])
                   (mutations command) (into [:by :revision :dry-run :raw :large])
-                  (#{"add" "edit" "save"} command) (conj :edn)
-                  (= command "status") (conj :status))]
+                  (#{"add" "edit" "save"} command) (conj :edn))]
     (when-not (and (:world v) (re-matches #"^[A-Za-z0-9_-]{1,64}$" (:world v)))
       (fail! :invalid-world "supply an explicit valid --world"))
+    (when (and (= kind :plan) (= command "status"))
+      (fail! :usage "plans have no status: every submitted plan is active, and a draft is a plan you keep locally; to retire a plan use `remove <id> --by <name> --revision <digest>`"))
+    (when (and (= kind :plan) (:status v))
+      (fail! :bad-option "plans have no status field; every submitted plan is active"))
     (when-not (commands command) (fail! :usage (str "unknown " (name kind) " command " command)))
     (when (or (seq extra) (if (= command "list") (some? id) (nil? id)))
       (fail! :usage (str command (if (= command "list") " takes no ID" (if (= command "find") " needs one search string" " needs exactly one ID")))))
@@ -88,12 +89,10 @@
     (when (and (#{"add" "edit" "save" "validate"} command) (nil? (:edn v))) (fail! :bad-option (str command " requires --edn")))
     (when (and (mutations command) (or (not (string? (:by v))) (str/blank? (:by v)) (> (count (:by v)) 80)))
       (fail! :actor-required "mutations require --by (up to 80 characters)"))
-    (when (and (= command "status") (not (statuses (:status v)))) (fail! :bad-status "--status must be proposed, active, completed, or retired"))
     (when (and (= command "add") (some? (:revision v))) (fail! :bad-option "add is create-only and does not take --revision"))
-    (when (and (#{"edit" "remove" "status"} command) (nil? (:revision v))) (fail! :revision-required (str command " requires the --revision from list/show")))
+    (when (and (#{"edit" "remove"} command) (nil? (:revision v))) (fail! :revision-required (str command " requires the --revision from list/show")))
     (when (and (seq (:blueprint v)) (not (and (= kind :plan) (#{"validate" "check"} command))))
       (fail! :bad-option "--blueprint is only valid for plan validate/check"))
-    (when (and (:status v) (not= command "status") (not (and (= kind :plan) (= command "list")))) (fail! :bad-option "--status is only valid for plan status/list"))
     (merge v {:kind kind :command command} (if (= command "find") {:search id} {:id id}))))
 
 (defn request-for [kind argv]
@@ -134,7 +133,7 @@
   ([errors offset limit] (page errors limit offset)))
 (defn current-docs [ctx kind] (vec (remove nil? (data/list-documents ctx kind))))
 (defn plan-summary [doc]
-  (let [p (:value doc)] {:id (:id doc) :revision (:revision doc) :status (:status p) :note (:note p) :parts (count (:parts p))}))
+  (let [p (:value doc)] {:id (:id doc) :revision (:revision doc) :note (:note p) :parts (count (:parts p))}))
 (defn blueprint-summary [doc errors]
   (let [bp (:value doc)]
     {:id (:id doc) :scope :global :revision (:revision doc) :title (:title bp) :front (:front bp)
@@ -154,8 +153,7 @@
 (defn list-result [kind records req]
   (let [search (some-> (:search req) str/lower-case)
         filtered (vec (filter (fn [{:keys [id value]}]
-                                (and (or (nil? (:status req)) (= (:status req) (some-> (:status value) name)))
-                                     (or (nil? search) (str/includes? (str/lower-case (str id " " (:note value) " " (:title value) " " (some-> (:status value) name))) search)))) records))
+                                (or (nil? search) (str/includes? (str/lower-case (str id " " (:note value) " " (:title value))) search))) records))
         limit (js/Number (or (:limit req) 10)) offset (js/Number (or (:offset req) 0))
         chosen (mapv (fn [doc]
                        (cond-> (if (= kind :plan) (plan-summary doc) (blueprint-summary doc []))
@@ -222,10 +220,10 @@
   (let [old (data/read-document ctx :plan (:id req))
         command (:command req)]
     (when (and (= command "add") old) (fail! :already-exists (str "plan " (:id req) " already exists; use edit")))
-    (when (and (#{"edit" "remove" "status"} command) (nil? old)) (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
+    (when (and (#{"edit" "remove"} command) (nil? old)) (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
     (validate-revision! (:revision req))
-    (let [value (cond (= command "remove") nil (= command "status") (assoc (:value old) :status (keyword (:status req))) :else (edn-value (:edn req) "edn"))
-          source (if (= command "status") (pr-str value) (:edn req))]
+    (let [value (if (= command "remove") nil (edn-value (:edn req) "edn"))
+          source (:edn req)]
       (when (and value (not= (:id value) (:id req))) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
       (-> (data/mutate-document ctx (cond-> {:kind :plan :id (:id req) :value value :by (:by req)
                                            :expected-revision (when-not (= command "add") (:revision req)) :dry-run (boolean (:dry-run req))}
@@ -269,7 +267,7 @@
   (let [ctx (data/context {:state (:state req) :worlds (:worlds req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
     (cond
       (#{"list" "find"} command) (do (write (list-result :plan (current-docs ctx :plan) req)) 0)
-      (#{"add" "edit" "remove" "status"} command) (mutate-plan req ctx write)
+      (#{"add" "edit" "remove"} command) (mutate-plan req ctx write)
       (= command "show") (let [doc (data/read-document ctx :plan (:id req))]
                             (when-not doc (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
                             (let [output (plan-output doc ctx (:raw req))]

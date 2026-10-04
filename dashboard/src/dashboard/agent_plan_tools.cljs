@@ -71,7 +71,7 @@
         by-pos (into {} (map (juxt :pos :want) candidate))]
     (->> plans
          (keep (fn [[other other-plan]]
-                 (when (and (not= id other) (= :active (:status other-plan)))
+                 (when (not= id other)
                    (let [expanded (shape/expand other-plan blueprints)
                          other-cells (into {} (map (juxt :pos :want) (:cells expanded)))
                          [different same] (reduce-kv (fn [[different same] pos want]
@@ -120,17 +120,16 @@
         bps (:values blueprints-result)
         plans (assoc (:values saved-result) id plan)
         total-cells (when plan (plan-cell-estimate plan bps))
-        active-cell-estimate (reduce + 0 (for [[_ active-plan] plans
-                                                :when (= :active (:status active-plan))]
-                                            (plan-cell-estimate active-plan bps)))
-        over-budget? (or (> (or total-cells 0) 100000) (> active-cell-estimate 100000))
+        stored-cell-estimate (reduce + 0 (for [[_ stored-plan] plans]
+                                            (plan-cell-estimate stored-plan bps)))
+        over-budget? (or (> (or total-cells 0) 100000) (> stored-cell-estimate 100000))
         expansion (when (and plan (empty? (:errors plan-result)) (not over-budget?)) (shape/expand plan bps))
         cells (:cells expansion)
         zone-result (parse-zone-text zones-text)
         parsed-claims claims
         pairs (when expansion (candidate-conflicts id plan plans bps))
         errors (vec (concat (:errors plan-result)
-                            (when over-budget? ["plan geometry or aggregate active-plan conflict index exceeds 100000 estimated cells; reduce geometry or active plans"])
+                            (when over-budget? ["plan geometry or aggregate plan conflict index exceeds 100000 estimated cells; reduce geometry or remove plans"])
                             (map :error (:errors expansion))))]
     (cond-> {:ok (empty? errors) :id id :errors errors
               :blueprint-errors (:errors blueprints-result)
