@@ -80,3 +80,10 @@ test('worldtiles: a missing column is null, a dumped one has 256 cells with a pa
   assert.deepEqual([...png.subarray(1, 4)], [80, 78, 71])
   tiles.close()
 })
+
+test('encodeTile: a tile owns its bytes, so a cached tile does not pin a Buffer pool slab', async () => {
+  const { encodeTile } = await import('./worldblocks.mjs')
+  const png = encodeTile(16, 16, new Uint8Array(16 * 16 * 4))
+  assert.equal(png.buffer.byteLength, png.byteLength)
+  assert.deepEqual([...png.subarray(1, 4)], [80, 78, 71])
+})

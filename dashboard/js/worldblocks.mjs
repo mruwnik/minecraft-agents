@@ -92,7 +92,9 @@ export function createWorldTiles ({ stateDir, world }) {
   return { column, close: () => classes.clear() }
 }
 
-// the view's own PNG encoder (src/vision/renderer.mjs), for 8-bit RGBA
+// the view's own PNG encoder (src/vision/renderer.mjs), for 8-bit RGBA. A tile is a few hundred bytes, which Buffer.concat
+// hands out as a slice of the 64 KB pool slab; the server caches thousands, and each would pin its slab (130 MB of
+// ArrayBuffers for 2048 tiles), so the tile gets bytes of its own.
 export function encodeTile (width, height, rgba) {
-  return encodePng(width, height, rgba)
+  return Buffer.from(new Uint8Array(encodePng(width, height, rgba)).buffer)
 }
