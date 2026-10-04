@@ -199,15 +199,16 @@ function defaultActs (s, emit) {
       if (s.noPath.has(key(pos))) return { status: 'blocked', reason: 'noPath', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       const d = dist(s.self.pos, pos)
       if (d <= range) return { status: 'arrived', pos: { ...s.self.pos }, distance: d }
+      const from = s.self.pos
       if (d > maxDistance) {
         s.self.pos = stepToward(s.self.pos, pos, maxDistance)
-        dragLeashed(s, maxDistance)
+        dragLeashed(s, from)
         temptFollow(s)
         return { status: 'partial', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       }
       s.self.pos = { ...pos }
       settle()
-      dragLeashed(s, d)
+      dragLeashed(s, from)
       temptFollow(s)
       return { status: 'arrived', pos: { ...pos }, distance: 0 }
     },

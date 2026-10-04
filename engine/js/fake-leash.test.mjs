@@ -51,22 +51,26 @@ test('a lead on a snapping animal breaks on the walk and drops as an item', asyn
   assert.equal(leads(p), 1)
 })
 
-test('a lead on an animal with breakAt breaks when a short walk ends farther than that from it; a long walk does not', async () => {
-  const p = fake({ ...fenced, blocks: {}, entities: [cow({ trail: 6, breakAt: 8 })], self: { pos: at(0, 64, 0) } })
+test('a lead on an animal with breakAt breaks when the body passes that distance from it during a walk, however long the walk', async () => {
+  const p = fake({ ...fenced, blocks: {}, entities: [cow({ trail: 6, breakAt: 8, pace: 0.5 })], self: { pos: at(0, 64, 0) } })
   await p.interact('t', { id: 1, item: 'lead' })
-  await p.moveTo('t', { pos: at(6, 64, 0), range: 1 })
-  assert.equal(cowOf(p).leashedToMe, true)
+  await p.moveTo('t', { pos: at(4, 64, 0), range: 1 })
+  assert.equal(cowOf(p).leashedToMe, true, 'a walk that stays within breakAt of it')
   await p.moveTo('t', { pos: at(30, 64, 0), range: 1 })
-  assert.equal(cowOf(p).leashedToMe, true, 'a 24-block walk: the animal keeps up')
-  await p.moveTo('t', { pos: at(31, 64, 0), range: 1 })
-  assert.equal(cowOf(p).leashedToMe, true, 'a short walk that leaves it within breakAt')
-  cowOf(p).pos.x = 20
-  await p.moveTo('t', { pos: at(36, 64, 0), range: 1 })
-  assert.equal(cowOf(p).leashedToMe, false)
+  assert.equal(cowOf(p).leashedToMe, false, 'a 26-block walk by a body twice as fast as the animal')
   assert.equal(leads(p), 1)
 })
 
-const knotOf =p => p.world.state.entities.find(e => e.name === 'leash_knot')
+test('a lead on an animal with breakAt that keeps up (pace 1) survives a long walk', async () => {
+  const p = fake({ ...fenced, blocks: {}, entities: [cow({ trail: 6, breakAt: 8 })], self: { pos: at(0, 64, 0) } })
+  await p.interact('t', { id: 1, item: 'lead' })
+  await p.moveTo('t', { pos: at(30, 64, 0), range: 1 })
+  assert.equal(cowOf(p).leashedToMe, true)
+  await p.moveTo('t', { pos: at(60, 64, 0), range: 1 })
+  assert.equal(cowOf(p).leashedToMe, true)
+})
+
+const knotOf = p => p.world.state.entities.find(e => e.name === 'leash_knot')
 const tie = async (p, item) => {
   await p.interact('t', { id: 1, item: 'lead' })
   return p.useOn('t', { pos: at(5, 64, 0), ...(item && { item }) })

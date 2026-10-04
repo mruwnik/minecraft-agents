@@ -119,7 +119,7 @@ export function fakeSteer (s, ownerOf, CutError) {
       let ticks = 0
       const finish = (settle, value) => {
         s.controls = {}
-        if (settle === resolve) { dragLeashed(s, Math.hypot(s.self.pos.x - from.x, s.self.pos.z - from.z)); temptFollow(s) } // as the fake moveTo, once the walk is over
+        if (settle === resolve) { dragLeashed(s, from); temptFollow(s) } // as the fake moveTo, once the walk is over
         settle(value)
       }
       const tick = () => {

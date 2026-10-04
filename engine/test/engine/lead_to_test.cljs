@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.memory :as mem]
             [engine.test-util :as tu]))
 
 (defn cow [id x & [more]]
@@ -83,7 +84,7 @@
       (fn ^:async t []
         (doseq [[label cow-spec gathered] [["at the spot" {} true]
                                            ["trailing, pulled in" {:trail 5} true]
-                                           ["too far out to pull" {:trail 9} false]]]
+                                           ["too far out to pull" {:trail 10} false]]]
           (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 cow-spec)]} 24))]
             (is (= :unleashed (:reason (done-event s))) label)
             (is (= gathered (:gathered (done-event s))) label)
@@ -93,7 +94,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9 :breakAt 10})]} 24))
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 10 :breakAt 12})]} 24))
               c (cow-of s 1)
               [short] (events-of s :lead-to.gather-short)]
           (is (= :unleashed (:reason (done-event s))) "no snap: the body did not walk on")
@@ -105,10 +106,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:gather-tries 1} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
+        (let [s (await (scenario {:gather-tries 1 :gather-radius 0.5} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
-          (is (= [30 32] (mapv :x (take 2 (tu/walked-to (:eng s))))) "the walk to the spot and one pull, no second")
+          (is (= [30 33] (mapv :x (take 2 (tu/walked-to (:eng s))))) "the walk to the spot and one pull, no second")
           (is (= 3 (count (tu/walked-to (:eng s)))) "the third walk is the body going to the cow to take the lead off")
           (is (= 1 (count (events-of s :lead-to.gather-short)))))))))
 
@@ -121,15 +122,42 @@
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
           (is (= 1 (count (events-of s :lead-to.gather-short))))
-          (is (= 3 (count (tu/walked-to (:eng s)))) "the walk to the spot, one failed pull, no retry, then the body goes to the cow to take the lead off"))))))
+          (is (= [30 32 32 32 22] (mapv :x (tu/walked-to (:eng s)))) "the walk to the spot, one pull that go-to gives up after its three fruitless rounds, no second pull, then the body goes to the cow to take the lead off"))))))
 
 (deftest a-lead-that-breaks-during-the-pull-is-reported
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6 :breakAt 7})]} 40))]
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6 :breakAt 7 :pace 0.5})]} 40))]
           (is (= :lead-broke (:reason (done-event s))))
           (is (false? (:gathered (done-event s)))))))))
+
+(deftest a-pull-still-going-after-20-s-is-given-up-and-its-child-dropped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
+              steers (atom 0)
+              pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
+          (.override (.-world p) "steer"
+                     (fn [token args impl]
+                       (if (< (.. p -world -state -self -pos -x) 27)
+                         (impl token args)
+                         (do (swap! steers inc)
+                             (set! (.. p -world -state -self -pos -x) (+ 0.5 (.. p -world -state -self -pos -x)))
+                             (js/Promise.resolve #js {:status "timeout" :pose #js {}})))))
+          (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+          (await (run-ticks s 6 700))
+          (is (some? (pull-slot)) "a pull is in progress")
+          (let [before @steers]
+            (swap! clock + 25000)
+            (await (core/tick! eng))
+            (is (= before @steers) "the late pull is not walked again")
+            (is (nil? (pull-slot)) "its child is dropped")
+            (await (run-ticks s 10 700))
+            (is (finished? s))
+            (is (= 1 (count (events-of s :lead-to.gather-short))))
+            (is (false? (:gathered (done-event s))))))))))
 
 (deftest a-cow-lost-during-the-pull-is-lost
   (async done

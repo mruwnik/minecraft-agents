@@ -7,11 +7,34 @@ import { pathFollow } from './fake-lead-path.mjs'
 
 const FOLLOW_GAP = 2
 
-// `walked` is how far the body just walked. `breakAt` (a number on the spec): the lead breaks when a walk shorter
-// than that ends farther than that from the animal, which had no time to follow (a long walk lets it keep up).
-export function dragLeashed (s, walked = Infinity) {
+const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
+
+// `breakAt` (a number on the spec): the lead breaks when, at any point of the walk, the body is farther than that
+// from the animal. The body goes from `from` to where it is now in one-block steps; the animal, once the body is
+// beyond its trail, closes in `pace` (spec, default 1: keeps up) blocks per block the body walks.
+function stretchesOnWalk (s, e, from) {
+  if (e.breakAt === undefined) return false
+  const to = s.self.pos
+  const total = flat(from, to)
+  const gap = e.trail ?? FOLLOW_GAP
+  const animal = { x: e.pos.x, z: e.pos.z }
+  for (let walked = 1; walked <= Math.ceil(total); walked++) {
+    const k = Math.min(walked, total) / total
+    const body = { x: from.x + (to.x - from.x) * k, z: from.z + (to.z - from.z) * k }
+    const d = flat(animal, body)
+    if (d > e.breakAt) return true
+    if (d <= gap) continue
+    const step = Math.min(e.pace ?? 1, d - gap)
+    animal.x += (body.x - animal.x) * step / d
+    animal.z += (body.z - animal.z) * step / d
+  }
+  return false
+}
+
+// `from` is where the body stood before the walk that just ended.
+export function dragLeashed (s, from = s.self.pos) {
   for (const e of s.entities.filter(x => x.leashedToMe)) {
-    const stretched = e.breakAt !== undefined && walked < e.breakAt && Math.hypot(e.pos.x - s.self.pos.x, e.pos.z - s.self.pos.z) > e.breakAt
+    const stretched = stretchesOnWalk(s, e, from)
     if (e.snaps || stretched) {
       Object.assign(e, { leashed: false, leashedToMe: false })
       s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...e.pos }, item: { name: 'lead', count: 1 } })

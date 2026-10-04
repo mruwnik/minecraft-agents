@@ -34,8 +34,9 @@
   is farther than :gather-radius from :pos, the body walks on past :pos (range
   1) so the lead pulls the animal within :gather-radius, waiting for the animal
   to settle between pulls; at most :gather-tries pulls. A pull goes no farther past :pos
-  than keeps the body within 9 blocks of the animal (the lead breaks at 10), and is given up
-  after 20 s. A pull that did not arrive, a pull given up, an animal too far out for a pull
+  than keeps the body within 11 blocks of the animal (the lead breaks past 12), and is given up
+  after 20 s (its child go-to is dropped). A cow 10 or more blocks out is never pulled: it is let go
+  where it is, :gathered false. A pull that did not arrive, a pull given up, an animal too far out for a pull
   or running out of pulls is no failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false in the result (:gathered
   is true when the animal was within :gather-radius, or tied).
@@ -121,8 +122,10 @@
   20)
 
 (def max-reach
-  "The farthest a pull takes the body from the animal: the vanilla lead breaks past 10 blocks, less a margin."
-  9)
+  "The farthest a pull's target lies from the animal. The lead breaks when the body is more than 12 blocks from
+  it (Leashable.LEASH_TOO_FAR_DIST on 26.1; 10 before the 1.21.6 rework). A pull walks with range 1, so the body
+  can end 1 beyond its target: 10 + 1 leaves a block to spare."
+  10)
 
 (def pull-timeout-s
   "A pull walk still going after this long (a detour round a wall, say) is given up."
@@ -147,6 +150,7 @@
   [c d]
   (ctx/update-mem! c assoc :gathered false :gather-dist d)
   (ctx/update-mem! c dissoc :pull-target :pull-started)
+  (ctx/update-mem! c update :children dissoc :pull)
   (set-phase! c :arrive)
   :continue)
 
