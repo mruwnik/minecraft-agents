@@ -1,0 +1,3 @@
+;; ProbeStuck live cases for jobs.animals.lead-to limits (the capped pull, :gathered, lead-to.gather-short): idle, jobs are submitted with tools/jobs.mjs
+{:register []
+ :queue []}
