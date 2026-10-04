@@ -368,6 +368,15 @@
           (is (= {:collected 0}
                  (await (child-outcome (:eng (setup {})) 'jobs.forestry.collect-drops {:radius 10} 3)))))))))
 
+(deftest collect-drops-counts-the-items-that-entered-the-inventory-not-the-entities
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stack (fn [id x n] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count n}})]
+          (is (= {:collected 7}
+                 (await (child-outcome (:eng (setup {:entities [(stack 1 2 5) (stack 2 3 2)]}))
+                                       'jobs.forestry.collect-drops {:radius 10} 8)))))))))
+
 ;; ------------------------------------------------------------ plant-sapling
 
 (deftest plant-sapling-reads-the-debt-places-and-clears-it

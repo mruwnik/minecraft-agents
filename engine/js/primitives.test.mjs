@@ -772,6 +772,57 @@ test('collect: a goto rejected with NoPath is unreachable', async () => {
   assert.equal(result.status, 'unreachable')
 })
 
+// A dropped item is picked up from about 1.4 blocks horizontally; a walk to within one cell of it can stop 1.5 away.
+const dropRig = (itemAt, onGoto) => {
+  const { bot, p } = rig({ ...world, pos: [0.5, 64, 0.5], entities: { 7: { id: 7, name: 'item', type: 'object', position: new Vec3(...itemAt), getDroppedItem: () => ({ name: 'stick', count: 1 }) } } })
+  const goals = []
+  bot.pathfinder.goto = goal => { goals.push(goal); onGoto(bot, goal, goals.length); return Promise.resolve() }
+  return { bot, p, goals }
+}
+const stepTo = (bot, goal) => { bot.entity.position = new Vec3(goal.x + 0.5, 64, goal.z + 0.5) }
+const pickUp = bot => { delete bot.entities[7]; bot.inventory.items().push({ name: 'stick', count: 1, slot: 38 }) }
+
+test('collect: an item still 1.5 away after the walk is approached once more, to its own cell', async () => {
+  const { bot, p, goals } = dropRig([1.99, 64, 0.5], (b, goal, n) => {
+    if (n < 2) return
+    stepTo(b, goal)
+    pickUp(b)
+  })
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(goals.length, 2)
+  assert.equal(goals[1].rangeSq, 0)
+  assert.equal(result.status, 'collected')
+  assert.deepEqual(result.gained, [{ name: 'stick', count: 1 }])
+})
+
+test('collect: an item that slid away while the body waited is followed', async () => {
+  const { bot, p, goals } = dropRig([2.9, 64, 0.5], (b, goal, n) => {
+    stepTo(b, goal)
+    if (n === 1) setTimeout(() => { b.entities[7].position = new Vec3(6.5, 64, 0.5) }, 5)
+    if (n === 2) pickUp(b)
+  })
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(goals[1].x, 6)
+  assert.equal(result.status, 'collected')
+})
+
+test('collect: an item in reach that is never picked up ends unreachable with a reason, quickly', async () => {
+  const { p } = dropRig([1.2, 64, 0.5], () => {})
+  const t0 = Date.now()
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(result.status, 'unreachable')
+  assert.equal(result.reason, 'not-picked-up')
+  assert.ok(Date.now() - t0 < 2000 * SCALE * 10)
+})
+
+test('collect: an item the body cannot get within reach of after the re-approaches ends unreachable out-of-reach', async () => {
+  const { p, goals } = dropRig([4.5, 64, 0.5], () => {})
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(result.status, 'unreachable')
+  assert.equal(result.reason, 'out-of-reach')
+  assert.equal(goals.length, 3)
+})
+
 test('moveTo: a goto that resolves with the body moved but short of the goal is partial', async () => {
   const { bot, p } = rig(world)
   bot.pathfinder.goto = () => { bot.entity.position = new Vec3(10, 64, 0); return Promise.resolve() }

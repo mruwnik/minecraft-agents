@@ -125,9 +125,9 @@
               "the died entry keeps the experience")
           (await (run-ticks eng clock 3 1000))
           (is (= [:health-low :hostile-near :died] (fired seen)) "a death fires recover-drops")
-          (is (= {:decision :collected :items 1}
+          (is (= {:decision :collected :items 2}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
-              "the drops lie at its feet, so the trip is worth it")
+              "the drops lie at its feet, so the trip is worth it; items counts the stack (two bread left after eating)")
           (is (= ["bread"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread is back")
           (is (not-any? #(and (#{:error :failed} (:kind %)) (not= :body (:source %))) @seen)
               "no errors besides the death itself"))))))

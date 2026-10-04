@@ -804,19 +804,40 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  // The server picks an item up when it lies within about 1.4 blocks (horizontally) of the body; a walk that ends within
+  // a cell of the item can stop 1.5 away, and an item can slide while the body waits. So the body judges the reach
+  // itself, re-reads the item's position, and walks into the item's own cell (MAX_APPROACHES walks in all).
+  const PICKUP_REACH = 1
+  const PICKUP_WAIT_S = 3 // an item in reach that is still there after this long is not going to be picked up (full inventory)
+  const MAX_APPROACHES = 3
+  const inPickupReach = e => Math.hypot(e.position.x - here().x, e.position.z - here().z) <= PICKUP_REACH && Math.abs(e.position.y - here().y) <= 1
+
   const collect = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'collect needs an entity id')
     const { id, timeoutS = 10 } = a
     const before = countsNow()
-    return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => ({ status: 'timeout', gained: gained(before, countsNow()) }) }, async ctx => {
+    const result = (status, reason) => ({ status, ...(reason && { reason }), gained: gained(before, countsNow()) })
+    return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => result('timeout') }, async ctx => {
       const target = bot.entities[id]
       if (!target || entityKind(target) !== 'item') return { status: 'gone' }
-      const { reached } = await walk(ctx, new goals.GoalNear(target.position.x, target.position.y, target.position.z, 1), { stall: false })
-      if (!reached && bot.entities[id]) return { status: 'unreachable', gained: gained(before, countsNow()) }
+      let approaches = 0
+      let inReachSince = null
       while (bot.entities[id]) {
-        await sleepMs(POLL_MS * timeScale)
-        ctx.alive()
+        const item = bot.entities[id]
+        if (inPickupReach(item)) {
+          inReachSince ??= Date.now()
+          if (Date.now() - inReachSince > PICKUP_WAIT_S * 1000 * timeScale) return result('unreachable', 'not-picked-up')
+          await sleepMs(POLL_MS * timeScale)
+          ctx.alive()
+          continue
+        }
+        inReachSince = null
+        if (approaches >= MAX_APPROACHES) return result('unreachable', 'out-of-reach')
+        const p = item.position
+        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false })
+        approaches++
+        if (!reached && bot.entities[id]) return result('unreachable')
       }
       const got = gained(before, countsNow())
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }

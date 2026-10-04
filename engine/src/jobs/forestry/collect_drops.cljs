@@ -4,8 +4,8 @@
 
 (def doc
   "Collect the nearest matching dropped item, one per round, until none are
-  left in radius. Hands over {:collected n}, the item entities it picked up
-  (ctx/result!).")
+  left in radius. Hands over {:collected n}, the items that entered the
+  inventory (the sum of the stack counts; ctx/result!).")
 
 (def args
   {:radius {:doc "search radius in blocks" :default default-radius}
@@ -13,10 +13,18 @@
 
 (defn check [_c] true)
 
+(defn gained-count
+  "The items an act result says entered the inventory."
+  [r]
+  (->> (array-seq (or (.-gained r) #js []))
+       (map #(.-count %))
+       (reduce + 0)))
+
 (defn ^:async round
   "args {:radius 16 :filter [item names] or nil}. Collects the nearest
-  matching dropped item, one per round. Items that could not be reached are
-  remembered in job memory and skipped, and :collected counts the pickups.
+  matching dropped item, one per round. Items that could not be reached (or
+  were in reach and not picked up) are remembered in job memory and skipped,
+  and :collected counts the items gained, also on a round that gave up.
   Done when none are left in radius."
   [c]
   (let [{:keys [radius]} (:args c)
@@ -30,8 +38,7 @@
       (do (ctx/result! c {:collected (:collected (ctx/mem c) 0)})
           :done)
       (let [r (await (ctx/act c :collect #js {:id (.-id item)}))]
-        (case (.-status r)
-          ("unreachable" "timeout") (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
-          "collected" (ctx/update-mem! c update :collected (fnil inc 0))
-          nil)
+        (ctx/update-mem! c update :collected (fnil + 0) (gained-count r))
+        (when (#{"unreachable" "timeout"} (.-status r))
+          (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))
         :continue))))
