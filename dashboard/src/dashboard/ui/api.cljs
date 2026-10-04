@@ -87,6 +87,10 @@
 (rf/reg-fx :replace-url
            (fn [url] (.replaceState js/history nil "" url)))
 
+;; the server was rebuilt and restarted (dashboard.ui.buildid)
+(rf/reg-fx :reload-page
+           (fn [_] (.reload js/location)))
+
 (rf/reg-fx :console-log
            (fn [text] (js/console.log text)))
 

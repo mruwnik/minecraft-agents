@@ -1,6 +1,7 @@
 (ns dashboard.ui.events
   (:require [re-frame.core :as rf]
             [dashboard.ui.api]
+            [dashboard.ui.buildid :as buildid]
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.drive :as drive]
@@ -57,14 +58,16 @@
                    :on-ok [:chat-ok world] :on-err [:state-err world]}})))
 
 ;; a response for a world the user has since left is dropped
-(rf/reg-event-db
+(rf/reg-event-fx
  :state-ok
- (fn [db [_ world data]]
+ (fn [{:keys [db]} [_ world data]]
    (if (not= world (:world db))
-     db
-     (db/apply-pending-show
-      (cond-> (assoc db :state data :status "connected")
-        (:detail-body db) (assoc :attention-outstanding (db/body-outstanding data (:detail-body db))))))))
+     {:db db}
+     (let [{:keys [known reload?]} (buildid/observe (:build-id db) (:build-id data))]
+       (cond-> {:db (db/apply-pending-show
+                     (cond-> (assoc db :state data :status "connected" :build-id known)
+                       (:detail-body db) (assoc :attention-outstanding (db/body-outstanding data (:detail-body db)))))}
+         reload? (assoc :reload-page true))))))
 
 (rf/reg-event-db
  :state-err

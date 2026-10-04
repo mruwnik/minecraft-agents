@@ -17,6 +17,7 @@
            ["/api/chat" {:kind :chat}]
            ["/api/chat?limit=50" {:kind :chat}]
            ["/api/chat/" {:kind :unknown}]
+           ["/api/restart" {:kind :restart}]
            ["/api/world?place=jizo-cane" {:kind :world}]
            ["/api/world/jizo-cane" {:kind :unknown}]
            ["/api/blueprints" {:kind :blueprints}]

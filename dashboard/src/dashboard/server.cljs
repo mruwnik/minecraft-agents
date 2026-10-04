@@ -14,6 +14,7 @@
             [dashboard.engine-events :as ee]
             [dashboard.entity-observations :as entities]
             [dashboard.guard :as guard]
+            [dashboard.restart :as restart]
             [dashboard.items :as items]
             [dashboard.jobs-registry :as jobs-registry]
             [dashboard.blueprint-library :as blueprint-lib]
@@ -476,7 +477,7 @@
 (defn send-state! [res world-name]
   (refresh-entities! world-name)
   (-> (refresh-live-engines!)
-      (.then (fn [_] (send-edn! res 200 (snapshot world-name))))
+      (.then (fn [_] (send-edn! res 200 (assoc (snapshot world-name) :build-id restart/build-id))))
       (.catch (fn [e]
                 (when-not (.-headersSent res)
                   (send-edn! res 500 {:error (str (ex-message e))}))))))
@@ -826,6 +827,18 @@
 (defn read-jobs [now]
   (jobs-registry/attach-usage jobs-registry/entries (jobs-registry/usage (bodies now))))
 
+;; ---------------------------------------------------------------- restart (POST /api/restart)
+;; Asks the launcher (start.mjs) to rebuild and replace this server; 202 at once, the build happens there.
+(defn request-restart! [req res]
+  (if-not (restart/loopback-address? (some-> req .-socket .-remoteAddress))
+    (send-json! res 403 {:error "restart is for loopback clients only"})
+    (guarded-post!
+     req res guard/max-body-bytes
+     (fn [_]
+       (if (restart/ask-launcher!)
+         (send-json! res 202 {:ok true :message "restart requested; the launcher builds first and keeps this server if the build fails"})
+         (send-json! res 409 {:error "no launcher: this server was not started by npm start"}))))))
+
 (defn preview! [req res]
   (guarded-post!
    req res max-preview-bytes
@@ -1004,6 +1017,7 @@
         :attention-resolve (resolve-attention! req res (body-key route))
         :chat-send (send-chat! req res)
         :whisper-send (send-whisper! req res (body-key route))
+        :restart (request-restart! req res)
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
         :tile (send-tile! res (:world route) (:cx route) (:cz route))

@@ -5,7 +5,27 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
     npm install
     npm test          # shadow-cljs compile test && node out/test.cjs
     npm run build     # compiles :server (out/server.cjs) and :ui (out/public/js)
-    npm start         # build, then PORT=3701 node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs   (127.0.0.1 only)
+    npm start         # launcher (start.mjs): build, then run out/server.cjs on PORT (default 3701, 127.0.0.1 only); stays in the foreground
+    npm run restart   # ask the running launcher to rebuild and restart the server (POST /api/restart)
+    node --test js/launcher.test.mjs   # the launcher's pure decisions
+
+### Start and restart
+
+`npm start` runs `start.mjs`, a small Node supervisor (plain JS: it only spawns processes). It builds with
+`flock /tmp/mc-compile.lock npx shadow-cljs compile server ui`, then runs `node --max-old-space-size=256 --max-semi-space-size=4
+out/server.cjs` with inherited stdio, so the server's output stays in your terminal. Start it once; you do not restart it by hand.
+
+To pick up new code, run `npm --prefix dashboard run restart` (or `POST /api/restart`, accepted from loopback peers only,
+403 otherwise, 202 at once). The server tells the launcher over its IPC channel, and the launcher:
+
+- refuses when `MemAvailable` in `/proc/meminfo` is under 3500 MB (message printed, old server kept);
+- builds FIRST while the old server keeps running; requests that arrive during a build coalesce into one more build;
+- on a **failed build**: prints the compiler output, keeps the old server running, and is done;
+- on a good build: sends SIGTERM to the old server, waits for it to exit (SIGKILL after 5 s), starts the new one.
+
+Ctrl-C stops the launcher and the server. A server exit nobody asked for ends the launcher with the server's exit code
+(no restart loops). An open page reloads itself when the `build-id` in `/api/state` changes (`dashboard.ui.buildid`).
+If the server runs without the launcher, `/api/restart` answers 409.
 
 The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because one compile must fit beside the game server on a 31 GB machine.
 

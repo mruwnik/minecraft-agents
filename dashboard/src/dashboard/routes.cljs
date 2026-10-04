@@ -34,6 +34,7 @@
    "/api/chat" {:kind :chat}
    "/api/chat/send" {:kind :chat-send}
    "/api/jobs" {:kind :jobs-api}
+   "/api/restart" {:kind :restart}
    "/api/world" {:kind :world}
    "/api/blueprints" {:kind :blueprints}
    "/api/blueprint-preview" {:kind :blueprint-preview}})

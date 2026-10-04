@@ -6,7 +6,8 @@
     "test": "shadow-cljs compile test && node out/test.cjs",
     "build": "shadow-cljs compile server ui",
     "build-agent-tools": "shadow-cljs release agent-tools",
-    "start": "shadow-cljs compile server ui && node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs",
+    "start": "node start.mjs",
+    "restart": "node restart.mjs",
     "build-agent-tools:dev": "shadow-cljs compile agent-tools",
     "build-migrate-data": "shadow-cljs release migrate-data"
   },
