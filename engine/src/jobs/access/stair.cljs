@@ -17,11 +17,11 @@
   Each step is judged when chosen and every cell again right before its dig: the next floor must be a solid floor
   (else :no-floor: this slice places nothing), the cell under it neither air nor fluid (:cave-below) and loaded;
   a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :footprint,
-  :not-loaded, :no-zones). Hazards are engine.access.rules' plus two the stair adds for its geometry: every fluid
-  beside a cut cell (not only the first) and a falling block over the top cut of the next column, the column the
-  body walks into. Accepted hazards (:accept, a set of :water :lava :falling-block :under-feet) default to #{:water}:
-  water beside the cut is taken, lava never is, a falling block would land on the body or refill the cut, and
-  :under-feet never comes up (the stair never digs the block it stands on), so seeing it is a bug to stop on.
+  :not-loaded, :no-zones). Hazards are engine.access.rules' (one per fluid beside) plus one the stair adds for its
+  geometry: a falling block over the top cut of the next column, the column the body walks into. Accepted hazards
+  (:accept, a set of :water :lava :falling-block :under-feet) default to #{:water}: water beside the cut is taken,
+  lava never is, a falling block would land on the body or refill the cut, and :under-feet never comes up (the stair
+  never digs the block it stands on), so seeing it is a bug to stop on.
   A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
   room stops :inventory-full; a cell refilled 3 times stops :refills. The body's cell is the progress: a resumed
   round finds its step from where the body stands on the stair line (off it: :off-stair). Dug cells are left and
@@ -73,17 +73,13 @@
   (if (= :fluid-adjacent reason) (if (= "lava" fluid) :lava :water) reason))
 
 (defn stair-hazards
-  "The hazards the stair adds to the rules' for cell: every fluid beside it, and a falling block over it unless that
-  cell is cut too."
+  "The hazard the stair adds to the rules' for cell: a falling block over it, unless that cell is cut too (the rules
+  see one only over the body's own column; the body walks into the next one)."
   [block-at cell cut]
   (let [above (add cell [0 1 0])
         n (block-at above)]
-    (concat
-     (keep (fn [d] (let [at (add cell d) f (block-at at)]
-                     (when (rules/fluids f) {:reason :fluid-adjacent :fluid f :at at})))
-           rules/neighbour-deltas)
-     (when (and (rules/falling? n) (not (some #{above} cut)))
-       [{:reason :falling-block :block n :at above}]))))
+    (when (and (rules/falling? n) (not (some #{above} cut)))
+      [{:reason :falling-block :block n :at above}])))
 
 (defn cell-verdict
   "The dig verdict of cell: the rules' refusal, else {:ok true :hazards [...]} with the stair's hazards added."
@@ -127,9 +123,9 @@
        (not-any? #(re-find #"_pickaxe$" (:name %)) (u/inventory p))))
 
 (defn access-world
-  "Seam until ctx/zones and ctx/footprints are in HEAD: {:zones :footprints} for the rules (zones nil = no list)."
+  "{:zones :footprints} for the rules: the world's zone list (nil: never read) and every active plan's cells."
   [c]
-  {:zones (:zones (:args c)) :footprints (set (:footprints (:args c)))})
+  {:zones (ctx/zones c) :footprints (ctx/footprints c)})
 
 (defn feet-of [c]
   (let [{:keys [x y z]} (u/self-pos c)]

@@ -8,6 +8,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as world]
             [jobs.access.stair :as stair]))
 
 (def job 'jobs.access.stair)
@@ -102,22 +103,24 @@
 
 (def ground (stone -3 12 50 64))
 (def pick [{:name "iron_pickaxe" :count 1}])
-(def east {:dir :down :heading :east :steps 3 :zones []})
+(def east {:dir :down :heading :east :steps 3})
 
 (defn setup
-  "An engine over the fake world; a recording parent runs the job as its child and keeps its result in :out."
-  [world args prep]
+  "An engine over the fake world and world data (zones, default none; nil: never read; plans); a recording parent runs
+  the job as its child and keeps its result in :out."
+  [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} world))
+        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans)))
         out (atom :not-done)
+        w (world/of-data (:plans spec {}) {} (get spec :zones []))
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
-                          :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
     (core/submit! eng '(recording-parent) {})
@@ -131,8 +134,8 @@
       (recur (inc i))))
   s)
 
-(defn ^:async stair! [world args prep]
-  (await (tick-out! (setup world args prep))))
+(defn ^:async stair! [spec args prep]
+  (await (tick-out! (setup spec args prep))))
 
 (defn digs [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
                      (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
@@ -159,7 +162,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (stair! {:blocks ground} {:dir :down :heading :north :y 63 :zones []} (fn [_])))]
+        (let [{:keys [out]} (await (stair! {:blocks ground} {:dir :down :heading :north :y 63} (fn [_])))]
           (is (= :done (:status @out)))
           (is (= [0 63 -2] (:at @out))))))))
 
@@ -169,7 +172,7 @@
       (fn ^:async t []
         (let [shaft (apply dissoc ground (for [y (range 59 65)] (str "0," y ",0")))
               {:keys [out]} (await (stair! {:blocks shaft :self {:pos {:x 0 :y 59 :z 0}}}
-                                           {:dir :up :heading :east :steps 6 :zones []} (fn [_])))]
+                                           {:dir :up :heading :east :steps 6} (fn [_])))]
           (is (= :done (:status @out)))
           (is (= [6 65 0] (:at @out)) "on the surface")
           (is (every? #(<= 59 (get-in % [:cell 1])) (:dug @out)) "never digs below the start"))))))
@@ -223,7 +226,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "garden" :min [3 50 -2] :max [6 70 2] :allow #{:place}}
-              {:keys [out p]} (await (stair! {:blocks ground} (assoc east :steps 5 :zones [zone]) (fn [_])))]
+              {:keys [out p]} (await (stair! {:blocks ground :zones [zone]} (assoc east :steps 5) (fn [_])))]
           (is (= :zone (:reason @out)))
           (is (= "garden" (:zone @out)))
           (is (= 2 (:steps @out)))
@@ -233,7 +236,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks ground} (dissoc east :zones) (fn [_])))]
+        (let [{:keys [out p]} (await (stair! {:blocks ground :zones nil} east (fn [_])))]
           (is (= :no-zones (:reason @out)))
           (is (= 0 (:steps @out)))
           (is (empty? (digs p))))))))
@@ -268,7 +271,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (stair! {:blocks ground} {:dir :down :zones []} (fn [_])))]
+        (let [{:keys [out]} (await (stair! {:blocks ground} {:dir :down} (fn [_])))]
           (is (= :bad-args (:reason @out)))
           (is (string? (:why @out))))))))
 
@@ -370,3 +373,14 @@
           (is (= :refills (:reason @out)))
           (is (= 3 (count (digs p))))
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
+
+(deftest another-plans-footprint-ahead-stops-and-names-the-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "wall" :status :active :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]}
+              {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))]
+          (is (= :footprint (:reason @out)))
+          (is (= "wall" (:plan @out)))
+          (is (= [2 63 0] (:cell @out)))
+          (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs p))))))))
