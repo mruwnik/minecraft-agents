@@ -1,3 +1,4 @@
+// Why JavaScript: runs the software renderer (tools/view/render.mjs) in a worker_threads Worker, which is a JS-only boundary.
 // Renders one still of a body's view on request, in a worker thread (tools/view/render.mjs, software rendering, the fallback for
 // browsers without WebGL2). No scheduling and no cache here: when to render, what to keep and when to replace the worker
 // are decided in dashboard.thumbs (cljs). Plumbing only: the worker handle and the pending requests.

@@ -1,3 +1,4 @@
+// Why JavaScript: it wraps tools/view/serve.mjs (the view http.Server, JS because it serves the WebGL view and binary chunks).
 import path from 'node:path'
 import { createViewServer } from '../../tools/view/serve.mjs'
 

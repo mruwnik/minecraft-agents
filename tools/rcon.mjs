@@ -1,3 +1,4 @@
+// Why JavaScript: a CLI that must start with no compile step, and tools/rcon-test.mjs shares its packet codec; the dashboard has its own copy in dashboard.rcon (cljs).
 // A deliberately narrow RCON client: the only command it can send is `whitelist add <valid player name>`.
 //   node tools/rcon.mjs Aviendha
 // Needs enable-rcon=true in server.properties and the password in ~/.config/minecraft-claude/rcon-password (chmod 600).

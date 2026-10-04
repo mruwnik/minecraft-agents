@@ -1,3 +1,4 @@
+// Why JavaScript: it sits on the binary chunk-column decoders and PNG encoder of tools/view (JS, binary formats and rendering).
 // blockAt over the chunk columns the bodies dumped: state/worlds/<world>/chunks/<cx>.<cz>.bin (cx = floor(x / 16)),
 // each read on first use and again when its mtime changes. The game version comes from the first column's header.
 // This is glue to the view's column decoders; everything about plans lives in the ClojureScript (dashboard.plan*).
