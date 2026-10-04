@@ -1751,3 +1751,81 @@ The check also reports active-plan conflicts, overlapping zones, and explicit
 social-claim overlaps. Social claims are independent annotations; they do not
 change engine access rules. Dashboard plan summaries can remain cached for up
 to ten seconds after a write.
+
+Shared planning tools work directly with world files; they require no body,
+engine, or running dashboard. Every command requires an explicit world. Mutations
+also require an explicit author; edits/removals require the current content
+revision from a read. Creation requires the ID to be absent.
+
+```bash
+node engine/tools/map.mjs --world claude find --type marker --text farm
+node engine/tools/map.mjs --world claude find --place spawn --radius 128 --owner Alice
+node engine/tools/map.mjs --world claude show marker home --raw
+node engine/tools/map.mjs --world claude add marker home --by Alice --data '{:kind "base" :x 10 :y 64 :z 20}' --raw
+node engine/tools/map.mjs --world claude edit marker home --by Alice --if-revision REV --data '{:note "shared supplies"}' --dry-run --raw
+node engine/tools/map.mjs --world claude add zone garden --by Alice --data '{:min [10 63 20] :max [20 70 30] :allow #{:harvest}}'
+node engine/tools/map.mjs --world claude add claim extension --by Alice --for 30m --data '{:min [21 63 20] :max [30 70 30]}'
+node engine/tools/map.mjs --world claude renew claim extension --by Alice --if-revision REV --for 1h
+node engine/tools/map.mjs --world claude release claim extension --by Alice --if-revision REV
+node engine/tools/map.mjs --world claude remove marker home --by Alice --if-revision REV
+node engine/tools/world-changes.mjs --world claude --wait --type claim --observer planner --timeout 30s --raw
+```
+
+`--revision` is an alias for `--if-revision`. `--preview` is an alias for
+`--dry-run`; both validate and report changed fields without changing the object
+or recording a mutation. Lists default to 10 and allow up to 100 with pagination.
+An explicit center (`--center '[x y z]'`) or named marker enables a default
+radius of 128 blocks; without a center the search has no implied body location.
+Filters include type, owner, status and text. `--raw` on a read or mutation includes
+the complete selected, current, proposed, or removed record, bounded to 64KiB
+output; it never widens a query or exposes internal paths. Summary notes stop at
+240 characters and set `:note-truncated?` when text was cut. Files are bounded to
+8MiB, directories to 1000 plan/blueprint files, and each shared scan/list to
+64MiB. Limits fail explicitly.
+
+Markers preserve the existing `places.json` format and ownership policy:
+substantive edits/removal belong to their author; another author may update a
+note without taking ownership or moving the marker. Existing embedded structures
+survive edits; this tool does not edit them. New markers declare `:source`
+`"intent"` by default; authors may explicitly record `"observation"`, which is an
+assertion they supply rather than a live-world verification. Existing unlabelled
+markers read as unknown source. Zones use the canonical strict `zones.edn` schema
+and engine permissions. The dashboard projects these to its map; `zones.json`
+remains a display fallback only when canonical EDN is absent.
+
+Claims are separate authored social intentions, not the engine's plan-derived
+cell protections or zones. They default to 30 minutes, allow 100ms..7 days, and
+retain explicit active/released status. An active claim overlapping another
+owner's active claim is refused with up to 10 IDs, owners, boxes and expiry,
+plus a total and `:more?` flag. The error includes a spatial `find --type claim`
+command for remaining claims. Only its owner may renew, release, edit or remove
+it. Expired/released claims stay
+inspectable but are hidden from default searches and dashboard overlays; use
+`--status expired` or `--status released` to find them. They do not authorize
+world actions. The dashboard labels live claims distinctly with owner; overlay
+records include expiry. Invalid canonical overlay files are reported through
+world `:map-errors` instead of silently falling back to divergent JSON.
+
+New tools hold a shared lock across read, revision check, validation and atomic
+rename. Content revisions detect external edits between commands. A small
+write-ahead journal recovers interrupted cooperating writes; global blueprints
+share a global lock/journal across worlds and explicitly report global scope.
+Manual file editors and legacy marker writers that lock only the final write
+are outside this concurrency guarantee. They can race new tools; no automatic
+mutation retries are performed. A recovery conflict preserves the external file
+and reports the pending journal for inspection. A crashed stale-lock reclamation
+guard requires inspection before removal. Dashboard plan summaries may take up
+to 10 seconds to refresh after file changes.
+
+`world-changes` stores a named cursor outside engine state, starts at the current
+baseline, and returns grouped changes for marker/zone/claim/plan/global blueprint
+objects. An explicit `--cursor EDN` avoids this saved observer state. Filters
+suppress unrelated changes while advancing the cursor. A wait returns on a
+matching change or its finite timeout; cancellation retains the prior checkpoint.
+`--raw` requests the full bounded change records; pages remain limited to 100
+result records. Changes include operation, revision, author, source and scope.
+External writes are detected on polling and labelled external; intermediate external edits
+between scans cannot be reconstructed. The ledger retains the latest 2048 changes
+and reports `:cursor-gap` after loss/reset, with a new cursor. Output precedes
+checkpointing, so crash ambiguity permits repeated delivery. This is a bounded
+change feed, not a complete event-sourced database.

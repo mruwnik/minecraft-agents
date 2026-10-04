@@ -23,6 +23,7 @@
             [dashboard.tiles :as tiles]
             [dashboard.view-info :as view-info]
             [dashboard.worlds :as worlds]
+            [dashboard.shared-map :as shared-map]
             [engine.bodies :as bodies]))
 
 (def repo-root (.resolve path js/__dirname ".." ".."))
@@ -89,10 +90,12 @@
 
 (defn read-worlds []
   (mapv (fn [n]
-          (let [dir (.join path worlds-dir n)]
+          (let [dir (.join path worlds-dir n)
+                overlays (shared-map/read-overlays dir (read-json (.join path dir "zones.json") []))]
             {:name n
              :places (worlds/readable-places (read-json (.join path dir "places.json") []))
-             :zones (read-json (.join path dir "zones.json") [])
+             :zones (:zones overlays)
+             :map-errors (:errors overlays)
              :clock (read-json (.join path dir "clock.json") nil)}))
         (world-names)))
 
