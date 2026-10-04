@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -77,11 +78,12 @@
 (defn keep-body-put!
   "The fake's collect moves the body onto the drop; the real one picks it up from where it stands."
   [p]
-  (let [w (.-world p)]
+  (let [w (.-world p)
+        st (fake/state p)]
     (.override w "collect" (fn ^:async f [token a impl]
-                             (let [at (.. w -state -self -pos)
+                             (let [at (get-in @st [:self :pos])
                                    r (await (impl token a))]
-                               (set! (.. w -state -self -pos) at)
+                               (swap! st assoc-in [:self :pos] at)
                                r)))))
 
 (defn setup
@@ -224,15 +226,13 @@
 (defn block-stair!
   "Stone in the middle of the stair, as a cave-in leaves it."
   [p]
-  (doseq [k ["4,58,0" "4,59,0"]] (.set (.. (.-world p) -state -blocks) k "stone")))
+  (doseq [k [[4 58 0] [4 59 0]]] (swap! (fake/state p) assoc-in [:blocks k] "stone")))
 
 (defn drop-pickaxe!
   "The stair is blocked and the pickaxe is gone: nothing can be dug out."
   [p]
   (block-stair! p)
-  (let [inv (.. (.-world p) -state -inventory)
-        i (.findIndex inv #(= "iron_pickaxe" (.-name %)))]
-    (.splice inv i 1)))
+  (swap! (fake/state p) update :inventory #(vec (remove (fn [i] (= "iron_pickaxe" (:name i))) %))))
 
 (deftest a-broken-stair-is-no-trap-the-body-digs-its-own-way-out
   (async done
