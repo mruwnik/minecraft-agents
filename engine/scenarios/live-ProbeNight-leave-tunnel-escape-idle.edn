@@ -1,0 +1,6 @@
+;; live (jobs.access.leave-tunnel escape, f9b03b41): the body idles; each case is submitted with tools/jobs.mjs after an RCON
+;; tp onto the course (stone x 9280..9320, y 50..69, z 7685..7715, surface feet y 70). Cases: gather.mine of a buried ore,
+;; the stair broken (creeper or /fill air) while the body is inside, then the way out; the straight-back heading blocked
+;; with bedrock; no pickaxe; every neighbouring rock inside a foreign zone.
+{:register []
+ :queue []}
