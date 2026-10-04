@@ -1607,3 +1607,55 @@ Replaying the original submit ID created no additional job; the final queue was
 empty. The owned body stopped and its added whitelist entry was removed.
 Unit tests additionally verify saved dedupe across restore, pending uncertainty,
 ledger bounds, lease protection, and failed-interrupt predecessor resumption.
+
+Trigger management uses the existing `GET/POST /triggers` API. The external
+command returns compact EDN immediately; the engine owns condition evaluation,
+priority, mute/order expiry, and scheduling. It adds no observer state or engine
+changes.
+
+```bash
+node engine/tools/triggers.mjs Bob --world claude list --limit 8
+node engine/tools/triggers.mjs Bob --world claude show hungry
+node engine/tools/triggers.mjs Bob --world claude add hungry --trigger hungry
+node engine/tools/triggers.mjs Bob --world claude put near-home --when '(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
+node engine/tools/triggers.mjs Bob --world claude mute hungry --for 10m
+node engine/tools/triggers.mjs Bob --world claude unmute hungry
+node engine/tools/triggers.mjs Bob --world claude move near-home --before hungry --for 5m
+node engine/tools/triggers.mjs Bob --world claude reset near-home --property position
+node engine/tools/triggers.mjs Bob --world claude remove near-home
+```
+
+`add` and `put` both create or replace a custom entry. Replacement follows the
+engine's upsert semantics: it retains existing mute/order changes but resets
+condition, latch, cooldown, and backoff state. Built-in entries cannot be
+replaced or removed; they can be muted or moved. Predefined triggers accept an
+optional native EDN `--job` and `--args` map. Ad hoc conditions require `--job`
+and take its arguments inside that list. Conditions use the engine's allowlisted
+EDN interpreter; unknown functions, invalid arity and types return structured
+refusals. They never evaluate arbitrary code. Missing facts leave a condition
+inactive; `show` includes its current term explanation, including `:unknown`.
+
+Mute prevents future activations and leaves a running reflex job alone. Removal
+also lets its current round finish; the engine drops the orphan before another
+round. `--for` accepts seconds or units such as `300ms`, `30s`, `10m`, `2h` and
+`1d`; omitting it leaves the entry or change without expiry. `unmute` clears the
+mute change, and `reset --property position` restores its original position.
+The list retains registration order and shows each active entry's effective
+`:priority` (1 fires first); muted entries have no firing priority.
+
+Lists default to eight entries, with `--limit` up to 32 and `--offset` for the
+next page. Pagination and compact projection happen in the tool: the current
+API still sends the complete register, subject to a 256 KiB response cap and a
+three-second request deadline. Detailed entries and compiler explanations are
+bounded too. Each mutation checks the current engine generation immediately
+before sending one request. This API does not deduplicate request IDs; the tool
+never automatically retries an uncertain mutation. If confirmation is unknown,
+inspect `show` or `list` before issuing it again, since a repeated put resets
+entry state.
+
+Live validation used an isolated `TriggerToolTest` body. Giving it bread fired
+an inventory condition; mute suppressed future firing without cancelling its
+active round, unmute resumed it, and mute expiry resumed it automatically.
+Ordering, reset, temporary order expiry, built-in removal protection, missing
+home explanations, invalid-condition refusal, and custom removal were verified.
+The owned body stopped and its temporary whitelist entry was removed.
