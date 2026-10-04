@@ -242,6 +242,19 @@ for (const [name, args] of badArgs) {
   })
 }
 
+const badTrades = [{}, { villager: '' }, { villager: 'v-1' }, { villager: 'v-1', op: 'sell' }, { villager: 'v-1', op: 'buy' }, { villager: 'v-1', op: 'buy', offer: -1 }, { villager: 'v-1', op: 'buy', offer: 0, times: 0 }, { villager: 'v-1', op: 'buy', offer: 0, times: 1.5 }]
+for (const args of badTrades) {
+  test(`trade with ${JSON.stringify(args)} rejects with bad-args`, async () => {
+    const { p } = rig(world)
+    await assert.rejects(p.trade('t1', args), err => err.code === 'bad-args')
+  })
+}
+
+test('trade with an unknown villager uuid resolves gone', async () => {
+  const { p } = rig(world)
+  assert.deepEqual(await p.trade('t1', { villager: 'nobody', op: 'offers' }), { status: 'gone' })
+})
+
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()

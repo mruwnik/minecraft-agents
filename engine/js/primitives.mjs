@@ -9,6 +9,7 @@ import { createView } from './view.mjs'
 import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable } from './blocks.mjs'
 import { craftItem } from './craft.mjs'
+import { tradeWith } from './trade.mjs'
 import { say, cleanMessage, PLAYER_NAME, CHAT_MAX } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
@@ -976,6 +977,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
   }
 
+  const trade = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
+    need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
+    need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
+    need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
+    return act(token, { boundS: 8 }, ctx => tradeWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
   const unequip = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
@@ -1239,7 +1249,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, unequip, sleep, look, swim, useOn, steer })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

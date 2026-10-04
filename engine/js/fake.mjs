@@ -6,6 +6,7 @@ import { isReplaceable } from './blocks.mjs'
 import { cleanMessage, PLAYER_NAME } from './chat.mjs'
 import { fakeInteract } from './fake-interact.mjs'
 import { fakeUnequip } from './fake-unequip.mjs'
+import { fakeTrade } from './fake-trade.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 import { dragLeashed } from './fake-leash.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
@@ -405,6 +406,7 @@ export function createFake (spec = {}) {
   const overrides = new Map()
   const acts = defaultActs(s, event => primitives.world.emit(event))
   acts.interact = fakeInteract(s)
+  acts.trade = fakeTrade(s)
   acts.unequip = fakeUnequip(s)
   acts.steer = fakeSteer(s, () => owner, CutError)
   acts.furnace = fakeFurnace(s, spec)
@@ -502,7 +504,7 @@ export function createFake (spec = {}) {
     entities ({ radius = 16, kind, names, max = 32 } = {}) {
       if (s.offline) return []
       return s.entities
-        .map(e => ({ ...clone(e), distance: dist(s.self.pos, e.pos), ...(e.kind === 'hostile' && { visible: e.visible ?? canSee(e) }) }))
+        .map(({ offers, busy, ...e }) => ({ ...clone(e), distance: dist(s.self.pos, e.pos), ...(e.kind === 'hostile' && { visible: e.visible ?? canSee(e) }) }))
         .map(e => (e.kind === 'item' || e.distance > HIT_RANGE ? e : { ...e, hittable: e.hittable ?? canHit(e) }))
         .filter(e => e.distance <= radius && (!kind || e.kind === kind) && (!names || names.includes(e.name)))
         .sort((a, b) => a.distance - b.distance)
