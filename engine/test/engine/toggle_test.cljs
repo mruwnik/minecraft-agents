@@ -103,7 +103,7 @@
         (let [{:keys [result p]} (await (run (world "oak_fence_gate" {:open false} 3 14) {:pos at :state :open}))]
           (is (= :changed (:reason result)))
           (is (true? (:open (props p at))))
-          (is (seq (calls p "moveTo"))))))))
+          (is (seq (tu/walk-calls p))))))))
 
 (deftest the-position-may-be-a-vector-and-the-state-a-string
   (async done
@@ -120,7 +120,7 @@
         (let [w (assoc (world "oak_fence_gate" {:open false} 7896.33 7592.32) :blocks (assoc (:blocks (world "oak_fence_gate" {:open false})) "7897,64,7595" "oak_fence_gate") :states (assoc {} "7897,64,7595" {:open false}))
               {:keys [result p]} (await (run w {:pos {:x 7897 :y 64 :z 7595} :state :open}))]
           (is (= :changed (:reason result)) "should change, not loop forever")
-          (is (empty? (calls p "moveTo")) "should not walk when within reach by Euclidean distance")
+          (is (empty? (tu/walk-calls p)) "should not walk when within reach by Euclidean distance")
           (is (= 1 (count (calls p "useOn"))) "should click exactly once"))))))
 
 ;; ------------------------------------------------------------------ declined before any walk or click
@@ -144,7 +144,7 @@
           (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
             (is (= {:status :declined :reason reason} (head result [:status :reason])) (str name args))
             (is (empty? (calls p "useOn")) (str name args))
-            (is (empty? (calls p "moveTo")) (str name args ": no walk"))
+            (is (empty? (tu/walk-calls p)) (str name args ": no walk"))
             (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
 
 (deftest an-unloaded-cell-is-declined-not-loaded
@@ -242,7 +242,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open false} 3 4))
-              _ (set! (.-moveTo p) (fn [_token _args] (js/Promise.resolve #js {:status "arrived" :distance 3.58})))
               result (await (child-outcome eng job {:pos at :state :open} 40))]
           (is (= :changed (:reason result)))
           (is (= 1 (count (calls p "useOn")))))))))

@@ -6,6 +6,8 @@ import { createSnapshot } from './path/snapshot.mjs'
 import { stateId } from './path/fixture.mjs'
 import { defaultStateTable } from './path/blocks.mjs'
 import * as space from './path/space.mjs'
+import { dragLeashed } from './fake-leash.mjs'
+import { temptFollow } from './fake-tempt.mjs'
 
 const MAX_TICKS = 2400
 const TICKS_PER_S = 20
@@ -18,16 +20,30 @@ const SLIP = 0.15
 const HEIGHT = 1.8
 const SCAN_DOWN = 4
 const FALL_LIMIT = 256
-const PASSABLE = new Set(['air', 'water', 'ladder', 'vine', 'short_grass', 'tall_grass'])
+const BURY = 3
+const PASSABLE = new Set(['air', 'water', 'ladder', 'vine', 'short_grass', 'tall_grass', 'rail', 'powered_rail', 'detector_rail', 'activator_rail'])
 const CLIMBABLE = new Set(['ladder', 'vine'])
 const key = (x, y, z) => `${x},${y},${z}`
 const round = n => Math.round(n * 1e6) / 1e6
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const badArgs = message => Object.assign(new Error(message), { code: 'bad-args', badArgs: true })
 
+// The old walker gave up on a target in spec.unreachable or spec.noPath whatever the range: the planner has no such
+// switch, so the cells within BURY of one (not the body's own) are stone in the planner's view, which leaves no spot to
+// stand on within a walk's range of it. Cells that hold a block already stay what they are.
+function buried (s) {
+  const body = s.self.pos
+  const bodyCell = (x, y, z) => x === body.x && z === body.z && (y === body.y || y === body.y + 1)
+  const span = Array.from({ length: 2 * BURY + 1 }, (_, i) => i - BURY)
+  return [...s.unreachable, ...s.noPath].flatMap(k => {
+    const [cx, cy, cz] = k.split(',').map(Number)
+    return span.flatMap(dx => span.flatMap(dy => span.map(dz => [cx + dx, cy + dy, cz + dz])))
+  }).filter(([x, y, z]) => !bodyCell(x, y, z) && !s.blocks.has(key(x, y, z))).map(c => [c, 'stone'])
+}
+
 export function fakePathWorld (s) {
   const snapshot = createSnapshot({})
-  const entries = [...s.blocks].map(([k, name]) => [k.split(',').map(Number), name])
+  const entries = [...[...s.blocks].map(([k, name]) => [k.split(',').map(Number), name]), ...buried(s)]
   const columns = new Set(entries.map(([[x, , z]]) => `${x >> 4},${z >> 4}`))
   columns.forEach(c => {
     const [cx, cz] = c.split(',').map(Number)
@@ -105,6 +121,7 @@ export function fakeSteer (s, ownerOf, CutError) {
       let ticks = 0
       const finish = (settle, value) => {
         s.controls = {}
+        if (settle === resolve) { dragLeashed(s); temptFollow(s) } // as the fake moveTo, once the walk is over
         settle(value)
       }
       const tick = () => {

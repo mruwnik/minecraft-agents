@@ -12,7 +12,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake (merge {:floor tu/walk-floor} world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -135,7 +135,7 @@
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 10))
           (is (= 18 (food p)) "eats until fed, as the eat job does")
-          (is (= [] (calls p "moveTo")))
+          (is (= [] (tu/walk-calls p)))
           (is (= [] (calls p "attack"))))))))
 
 (deftest get-food-declines-when-not-hungry
@@ -171,7 +171,7 @@
           (know-source! eng {:x 500 :y 64 :z 0} :farm)
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 10))
-          (is (= [] (calls p "moveTo"))))))))
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest get-food-takes-food-from-a-known-chest
   (async done
@@ -301,7 +301,7 @@
           (swap! clock + 60000)
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (core/tick! eng))
-          (is (= [] (calls p "moveTo")) "does not walk to remembered sources")
+          (is (= [] (tu/walk-calls p)) "does not walk to remembered sources")
           (is (= 1 (count (entries eng :hungry))))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
 
@@ -321,7 +321,7 @@
           (swap! clock + 1000)
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 20))
-          (is (seq (calls p "moveTo")) "walks to the new chest")
+          (is (seq (tu/walk-calls p)) "walks to the new chest")
           (is (= ["bread"] (call-args p "transfer" "item")))
           (is (= 20 (food p)) "eats the bread")
           (is (= 1 (count (entries eng :hungry))))
@@ -338,7 +338,7 @@
           (swap! clock + 60000)
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (core/tick! eng))
-          (is (= [] (calls p "moveTo")))
+          (is (= [] (tu/walk-calls p)))
           (is (= 1 (count (entries eng :hungry))))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
 
@@ -433,7 +433,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 12} :blocks {"22,64,0" "crafting_table"}
+        (let [{:keys [eng p]} (setup {:self {:food 12} :blocks {"21,64,0" "crafting_table"}
                                       :containers {"20,64,0" [{:name "cobblestone" :count 30} {:name "wheat" :count 12}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
           (await (run-food! eng))

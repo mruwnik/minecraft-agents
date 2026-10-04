@@ -26,7 +26,7 @@
   s)
 
 (defn ^:async scenario [args world n]
-  (await (submit (h/setup world) args n)))
+  (await (submit (h/setup (merge {:floor tu/walk-floor} world)) args n)))
 
 (defn done-event [{:keys [seen]}] (first (filter #(= :lead-to.done (:kind %)) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
@@ -45,7 +45,7 @@
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
-          (is (< (js/Math.abs (- 30 (.-x (.-pos c)))) 4) "the cow stands at the spot")
+          (is (<= (js/Math.abs (- 30 (.-x (.-pos c)))) 4) "the cow stands at the spot: the body stops within 2 and the cow is led 2 behind it")
           (is (not (true? (.-leashed c))))
           (is (= 1 (count-of s "lead")) "the lead is back in the inventory")
           (is (empty? (events-of s :lead-to.gave-up))))))))
@@ -75,7 +75,7 @@
           (let [s (await (scenario args world 5))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
-            (is (empty? (calls-of s "moveTo")) label)
+            (is (empty? (tu/walk-calls (:p s))) label)
             (is (= [:lead-to.gave-up] (mapv :kind (events-of s :lead-to.gave-up))) label)))))))
 
 (deftest a-lead-that-breaks-on-the-way-is-reported-not-succeeded
@@ -95,8 +95,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (h/setup {:inventory lead :entities [(cow 1 3)]})]
-          (.override (.-world p) "moveTo"
+        (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
+          (.override (.-world p) "steer"
                      (fn [token args impl]
                        (let [r (impl token args)]
                          (.splice (.. p -world -state -entities) 0 1)

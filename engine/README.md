@@ -540,7 +540,7 @@ round in which it finishes; the parent reads it with `(ctx/child-result ctx
 slot)` after the `call-child` that returned `:done`. A result from a round
 that returned `:continue` is discarded, and every result is gone when the
 parent's round ends; a check cannot hand one over. `jobs.movement.go-to`
-hands over `{:arrived true}` or `{:arrived false :reason :unreachable}`;
+hands over `{:arrived true}` or `{:arrived false :reason :unreachable :why? :kind?}`;
 `jobs.forestry.collect-drops` hands over `{:collected n}`.
 
 Children can call children, recursion included, with no depth cap. A cut anywhere ends the whole chain's round. Cancel and done take the
@@ -1173,7 +1173,7 @@ after three the job emits a warn and ends.
 
 | job | args | check | job memory | body memory |
 |---|---|---|---|---|
-| `jobs.movement.go-to` | `{:pos :range 1}` | always | `:blocked` count (consecutive walks without a new best distance, more than 1 below `:best`, the nearest any walk ended; a new best resets it), `:best` | none; hands over `{:arrived bool :reason?}`, also emitted as a `:result` info event |
+| `jobs.movement.go-to` | `{:pos :range 1 :doors :never}` | always | `:blocked` count (consecutive rounds without a new best distance, more than 1 below `:best`, the nearest any round ended; a new best resets it), `:best` | none; plans with the tuned planner and walks with the executor through `engine.path.walk`: a round is one plan and one walk (at most 60 s); a partial plan (goal unloaded or far) is walked as far as its steps can be undone and the next round plans on from there; three fruitless rounds give up (warn `unreachable` with `:why`, `:refused-kind`); `:range` is cells from the target's cell (`0` is standing in it, `1` next to it); `:doors` is accepted but only `:never` (shut doors and gates are walls) has an effect until the door slice, where `:shut` becomes the default and `:leave-open` is added; writes a `:moved` entry `{:from :to :status :target}` per walk (`arrived`, `partial`, `blocked`) that the stuck trigger and `unstick` read; a body without `pathWorld` is refused as `:unsupported`; hands over `{:arrived bool :reason? :why? :kind?}` (`:why` the planner's reason, `:kind` the refused step kind when the executor cannot walk the way there), also emitted as a `:result` info event (`:refused-kind` for `:kind`) |
 | `jobs.time.wait-for-day` | none | it is day | none | none |
 | `jobs.survival.eat` | `{:item nil :until 18 :allow-bad false}` | food below `:until` and something edible carried | none | writes `:fed` (cap 20, 6 h) |
 | `jobs.movement.look-around` | `{:every-ms 2000}` | always | none | writes `:looked` (cap 1, forever); looks in a random direction |
@@ -1538,8 +1538,8 @@ pressed on (`:collided`) is jumped: prismarine-physics lifts the body 0.6 where 
 lifted body meets a ceiling over the step (live: a 1/16 step under leaves 0.26 above the head). Stairs, slabs, staircases and a
 stair roof walk with no special case (`stairs_physics_test`, prismarine-physics). Result statuses: `:arrived`, `:refused`, `:no-path` (`:reason`), `:stuck` (`:why`, also a walk past `:timeout-s`), `:gave-up`
 (`:reason :replan-limit`), `:failed`, `:unsupported` (no `pathWorld`); all carry `:replans`. A body that ends off the plan (also a partial plan walked to
-its end short of the goal) is planned again, at most 5 times (`executor/policy`: every number the executor uses). `moveTo` and `jobs.movement.go-to`
-do not use it. Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.
+its end short of the goal) is planned again, at most 5 times (`executor/policy`: every number the executor uses). `moveTo` does not use it; `jobs.movement.go-to`
+plans and walks with it one round at a time. Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.
 
 ## Migrating old bots
 
